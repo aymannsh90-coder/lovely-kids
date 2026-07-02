@@ -1,14 +1,17 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { objectStorageClient } from "../lib/objectStorage";
+import { mkdir, writeFile } from "fs/promises";
+import { existsSync, createReadStream, statSync } from "fs";
+import { join } from "path";
 
 const router = Router();
 
-function getBucketAndDir() {
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-  const privateDir = process.env.PRIVATE_OBJECT_DIR ?? "";
-  if (!bucketId) throw new Error("Object storage not configured");
-  return { bucketId, privateDir };
+const UPLOADS_DIR = join(process.cwd(), "uploads");
+
+async function ensureUploadsDir() {
+  if (!existsSync(UPLOADS_DIR)) {
+    await mkdir(UPLOADS_DIR, { recursive: true });
+  }
 }
 
 // POST /api/images/upload
@@ -23,60 +26,54 @@ router.post("/images/upload", async (req, res) => {
   }
 
   try {
-    const { bucketId, privateDir } = getBucketAndDir();
-    const ext = mimeType.includes("png") ? "png" : "jpg";
-    const objectId = randomUUID();
-    const objectName = privateDir
-      ? `${privateDir.replace(/^gs:\/\/[^/]+\//, "").replace(/\/$/, "")}/images/${objectId}.${ext}`
-      : `images/${objectId}.${ext}`;
+    await ensureUploadsDir();
 
-    const bucket = objectStorageClient.bucket(bucketId);
-    const file = bucket.file(objectName);
+    const ext = mimeType.includes("png") ? "png" : mimeType.includes("gif") ? "gif" : mimeType.includes("webp") ? "webp" : "jpg";
+    const filename = `${randomUUID()}.${ext}`;
+    const filePath = join(UPLOADS_DIR, filename);
 
     const buffer = Buffer.from(base64, "base64");
+    await writeFile(filePath, buffer);
 
-    await file.save(buffer, {
-      contentType: mimeType,
-      resumable: false,
-    });
-
-    const objectPath = `/objects/images/${objectId}.${ext}`;
-
-    res.json({ objectPath, url: `/api/storage/objects/images/${objectId}.${ext}` });
+    const url = `/api/uploads/${filename}`;
+    res.json({ url, objectPath: url });
   } catch (err) {
     req.log?.error({ err }, "image upload failed");
     res.status(500).json({ error: "فشل رفع الصورة" });
   }
 });
 
-// GET /api/storage/objects/* — serve uploaded images
-router.get("/storage/objects/*path", async (req, res) => {
-  try {
-    const { bucketId, privateDir } = getBucketAndDir();
-    const rawPath = (req.params as Record<string, string>)["path"] ?? "";
+// GET /api/uploads/:filename — serve uploaded images
+router.get("/uploads/:filename", (req, res) => {
+  const { filename } = req.params;
 
-    const objectName = privateDir
-      ? `${privateDir.replace(/^gs:\/\/[^/]+\//, "").replace(/\/$/, "")}/${rawPath}`
-      : rawPath;
-
-    const bucket = objectStorageClient.bucket(bucketId);
-    const file = bucket.file(objectName);
-    const [exists] = await file.exists();
-
-    if (!exists) {
-      res.status(404).json({ error: "الصورة غير موجودة" });
-      return;
-    }
-
-    const [metadata] = await file.getMetadata();
-    const contentType = (metadata.contentType as string) || "image/jpeg";
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Cache-Control", "public, max-age=31536000");
-    file.createReadStream().pipe(res);
-  } catch (err) {
-    req.log?.error({ err }, "image serve failed");
-    res.status(500).json({ error: "فشل تحميل الصورة" });
+  if (!filename || filename.includes("..") || filename.includes("/")) {
+    res.status(400).json({ error: "اسم ملف غير صالح" });
+    return;
   }
+
+  const filePath = join(UPLOADS_DIR, filename);
+
+  if (!existsSync(filePath)) {
+    res.status(404).json({ error: "الصورة غير موجودة" });
+    return;
+  }
+
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+  };
+  const contentType = ext ? (mimeTypes[ext] ?? "image/jpeg") : "image/jpeg";
+
+  const stat = statSync(filePath);
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Length", stat.size);
+  res.setHeader("Cache-Control", "public, max-age=31536000");
+  createReadStream(filePath).pipe(res);
 });
 
 export default router;
