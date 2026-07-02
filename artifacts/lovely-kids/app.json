@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Lovely Kids",
+    "slug": "lovely-kids",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "lovely-kids",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#E91E8C"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lovelykids.nablus"
+    },
+    "android": {
+      "package": "com.lovelykids.nablus",
+      "backgroundColor": "#E91E8C",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#E91E8C"
+      },
+      "permissions": [],
+      "enableShrinkResources": true,
+      "enableProguardInRelease": true
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1217497b-a473-4af8-b6d4-54b6fde8b374"
+      }
+    }
+  }
+}

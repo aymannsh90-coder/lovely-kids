@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "Lovely Kids"
+version = "1.0.0"
+id = "artifacts/lovely-kids"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 21954
+
+[services.development]
+run = "pnpm --filter @workspace/lovely-kids run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lovely-kids", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/lovely-kids", "run", "serve" ]
+
+[services.env]
+PORT = "21954"
+BASE_PATH = "/"
