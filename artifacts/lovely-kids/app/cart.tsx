@@ -8,7 +8,6 @@ import {
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
@@ -25,7 +24,6 @@ import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 
 const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-const OWNER_WHATSAPP = "97292376808";
 
 type Step = "cart" | "checkout" | "payment" | "success";
 
@@ -45,16 +43,21 @@ export default function CartScreen() {
   const [orderId, setOrderId] = useState<number | null>(null);
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUploaded, setProofUploaded] = useState(false);
+  const [savedTotal, setSavedTotal] = useState(0);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
   const bank = settings.bankInfo;
   const hasBankInfo = bank.bankName || bank.accountNumber;
+  const whatsapp = settings.whatsappNumber || "97292376808";
 
   const handleCheckout = async () => {
     if (!name.trim() || !phone.trim() || !address.trim()) return;
     setLoading(true);
+
+    const currentTotal = totalPrice;
+    const currentItems = [...items];
 
     try {
       const res = await fetch(`${API_BASE}/api/orders`, {
@@ -65,7 +68,7 @@ export default function CartScreen() {
           customerPhone: phone.trim(),
           customerAddress: address.trim(),
           notes: notes.trim() || null,
-          items: items.map((i) => ({
+          items: currentItems.map((i) => ({
             id: i.id,
             name: i.name,
             price: i.price,
@@ -73,7 +76,7 @@ export default function CartScreen() {
             image: i.image,
             size: i.size,
           })),
-          totalPrice,
+          totalPrice: currentTotal,
           status: "new",
           paymentMethod,
           paymentStatus: paymentMethod === "cod" ? "pending" : "awaiting_transfer",
@@ -87,7 +90,7 @@ export default function CartScreen() {
       // ignore
     }
 
-    const itemsList = items
+    const itemsList = currentItems
       .map((i) => `• ${i.name} x${i.quantity} — ${i.price * i.quantity}₪${i.size ? ` (مقاس ${i.size})` : ""}`)
       .join("\n");
 
@@ -102,9 +105,10 @@ export default function CartScreen() {
       `\n──────────────\n` +
       `${itemsList}\n` +
       `──────────────\n` +
-      `💰 *الإجمالي: ${totalPrice}₪*`
+      `💰 *الإجمالي: ${currentTotal}₪*`
     );
 
+    setSavedTotal(currentTotal);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     clearCart();
     setLoading(false);
@@ -116,8 +120,8 @@ export default function CartScreen() {
     }
 
     setTimeout(() => {
-      Linking.openURL(`https://wa.me/${OWNER_WHATSAPP}?text=${message}`).catch(() => {});
-    }, 1000);
+      Linking.openURL(`https://wa.me/${whatsapp}?text=${message}`).catch(() => {});
+    }, 800);
   };
 
   const handleUploadProof = async () => {
@@ -201,7 +205,7 @@ export default function CartScreen() {
 
           <View style={[styles.amountRow, { backgroundColor: colors.primary + "15", borderRadius: 10 }]}>
             <Text style={[styles.amountLabel, { color: colors.foreground }]}>المبلغ المطلوب</Text>
-            <Text style={[styles.amountValue, { color: colors.primary }]}>{totalPrice}₪</Text>
+            <Text style={[styles.amountValue, { color: colors.primary }]}>{savedTotal}₪</Text>
           </View>
         </View>
 
@@ -275,11 +279,9 @@ export default function CartScreen() {
 
   // ── Checkout Form ──
   if (step === "checkout") {
+    const canSubmit = name.trim().length > 0 && phone.trim().length > 0 && address.trim().length > 0;
     return (
-      <KeyboardAvoidingView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
           <Pressable onPress={() => setStep("cart")}>
             <Ionicons name="arrow-forward" size={24} color={colors.foreground} />
@@ -289,7 +291,7 @@ export default function CartScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={[styles.formContent, { paddingBottom: bottomPadding }]}
+          contentContainerStyle={[styles.formContent, { paddingBottom: bottomPadding + 20 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -398,25 +400,32 @@ export default function CartScreen() {
             </Pressable>
           </View>
 
+          {/* Confirm Button */}
           <Pressable
             onPress={handleCheckout}
-            disabled={loading || !name.trim() || !phone.trim() || !address.trim()}
+            disabled={loading || !canSubmit}
             style={[
               styles.confirmBtn,
-              { backgroundColor: (!name.trim() || !phone.trim() || !address.trim()) ? colors.muted : colors.primary }
+              { backgroundColor: canSubmit ? colors.primary : colors.muted, opacity: loading ? 0.8 : 1 }
             ]}
           >
             {loading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Ionicons name={paymentMethod === "bank_transfer" ? "card-outline" : "logo-whatsapp"} size={20} color="#fff" />
+              <Ionicons name="logo-whatsapp" size={22} color="#fff" />
             )}
             <Text style={styles.confirmBtnText}>
-              {loading ? "جاري الإرسال..." : "تأكيد الطلب وإرساله عبر WhatsApp"}
+              {loading ? "جاري الإرسال..." : "تأكيد الطلب وإرساله عبر واتساب"}
             </Text>
           </Pressable>
+
+          {!canSubmit && (
+            <Text style={[styles.validationHint, { color: colors.mutedForeground }]}>
+              * يرجى ملء جميع الحقول المطلوبة
+            </Text>
+          )}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     );
   }
 
@@ -596,8 +605,9 @@ const styles = StyleSheet.create({
   payOptionTitle: { fontSize: 15, fontWeight: "700", textAlign: "right" },
   payOptionSub: { fontSize: 12, textAlign: "right" },
   payCheck: { position: "absolute", top: 12, left: 12 },
-  confirmBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16, marginTop: 8 },
-  confirmBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  confirmBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 18, borderRadius: 16, marginTop: 8 },
+  confirmBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  validationHint: { fontSize: 13, textAlign: "center", marginTop: 6 },
   successIcon: { width: 100, height: 100, borderRadius: 50, alignItems: "center", justifyContent: "center" },
   successTitle: { fontSize: 24, fontWeight: "800" },
   successSub: { fontSize: 14, textAlign: "center", maxWidth: 280 },

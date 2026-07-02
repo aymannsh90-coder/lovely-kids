@@ -40,6 +40,7 @@ export interface AppSettings {
   ageGroupLabels: Record<string, AgeGroupLabel>;
   categoryLabels: Record<string, string>;
   bankInfo: BankInfo;
+  whatsappNumber: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -72,6 +73,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     accountNumber: "",
     iban: "",
   },
+  whatsappNumber: "97292376808",
 };
 
 interface AppSettingsContextType {

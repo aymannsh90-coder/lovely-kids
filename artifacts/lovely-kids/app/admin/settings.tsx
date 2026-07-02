@@ -243,6 +243,21 @@ export default function SettingsScreen() {
         </Field>
       </Section>
 
+      {/* ── واتساب ── */}
+      <Section title="💬 رقم واتساب المتجر">
+        <Field label="رقم الواتساب (بدون + مع رمز الدولة، مثال: 97250000000)">
+          <TextInput
+            value={settings.whatsappNumber ?? ""}
+            onChangeText={(v) => updateSettings({ whatsappNumber: v.replace(/\D/g, "") })}
+            placeholder="97292376808"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="phone-pad"
+            style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+        </Field>
+      </Section>
+
       {/* ── التحويل البنكي ── */}
       <Section title="🏦 بيانات التحويل البنكي">
         {[
@@ -259,7 +274,7 @@ export default function SettingsScreen() {
               }
               placeholder={f.placeholder}
               placeholderTextColor={colors.mutedForeground}
-              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+              style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
               textAlign="right"
             />
           </Field>

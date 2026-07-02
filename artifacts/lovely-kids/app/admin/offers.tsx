@@ -147,7 +147,7 @@ export default function OffersScreen() {
     );
   }
 
-  if (editing && editing !== "new") {
+  if (editing !== null && typeof editing !== "string") {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.primary }]}>
