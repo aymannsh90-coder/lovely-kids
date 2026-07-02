@@ -151,11 +151,12 @@ const styles = StyleSheet.create({
   imageWrapper: {
     position: "relative",
     height: 160,
+    backgroundColor: "#f8f8f8",
   },
   image: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
+    resizeMode: "contain",
   },
   imageDimmed: {
     opacity: 0.45,

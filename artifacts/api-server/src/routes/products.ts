@@ -12,6 +12,7 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     price: r.price,
     originalPrice: r.originalPrice ?? undefined,
     image: r.image,
+    images: (r.images as string[]) ?? [],
     category: r.category,
     ageGroup: r.ageGroup,
     gender: (r.gender as "boys" | "girls" | null) ?? null,

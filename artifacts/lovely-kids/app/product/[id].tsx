@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
+  Dimensions,
+  FlatList,
   Image,
   Platform,
   Pressable,
@@ -19,6 +21,8 @@ import { useProducts } from "@/context/ProductsContext";
 import { PRODUCTS } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
@@ -27,15 +31,18 @@ export default function ProductDetailScreen() {
   const { toggleItem, isWishlisted } = useWishlist();
   const { products } = useProducts();
 
-  // Try from live context first, fall back to static
   const product = products.find((p) => p.id === id) ?? PRODUCTS.find((p) => p.id === id);
 
-  const [selectedSize, setSelectedSize] = useState<string | undefined>(
-    product?.sizes?.[0]
-  );
+  const [selectedSize, setSelectedSize] = useState<string | undefined>(product?.sizes?.[0]);
   const [added, setAdded] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const flatRef = useRef<FlatList>(null);
 
   if (!product) return null;
+
+  const allImages = product.images && product.images.length > 0
+    ? product.images
+    : [product.image];
 
   const wishlisted = isWishlisted(product.id);
   const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
@@ -56,13 +63,54 @@ export default function ProductDetailScreen() {
   };
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom + 16;
+  const topOffset = Platform.OS === "web" ? 67 : insets.top;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Image */}
-        <View style={styles.imageContainer}>
-          <Image source={{ uri: product.image }} style={[styles.image, isOutOfStock && styles.imageDimmed]} />
+
+        {/* ── Image Carousel ── */}
+        <View style={styles.carouselWrapper}>
+          <FlatList
+            ref={flatRef}
+            data={allImages}
+            keyExtractor={(_, i) => String(i)}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setActiveIdx(idx);
+            }}
+            renderItem={({ item }) => (
+              <View style={[styles.imageSlide, isOutOfStock && styles.imageDimmed]}>
+                <Image
+                  source={{ uri: item }}
+                  style={styles.slideImage}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+          />
+
+          {/* Dots */}
+          {allImages.length > 1 && (
+            <View style={styles.dots}>
+              {allImages.map((_, i) => (
+                <Pressable
+                  key={i}
+                  onPress={() => {
+                    flatRef.current?.scrollToIndex({ index: i, animated: true });
+                    setActiveIdx(i);
+                  }}
+                  style={[
+                    styles.dot,
+                    { backgroundColor: i === activeIdx ? colors.primary : colors.border },
+                  ]}
+                />
+              ))}
+            </View>
+          )}
 
           {/* Out of stock overlay */}
           {isOutOfStock && (
@@ -75,7 +123,7 @@ export default function ProductDetailScreen() {
           {/* Back Button */}
           <Pressable
             onPress={() => router.back()}
-            style={[styles.backBtn, { top: (Platform.OS === "web" ? 67 : insets.top) + 8, backgroundColor: colors.card }]}
+            style={[styles.backBtn, { top: topOffset + 8, backgroundColor: colors.card }]}
           >
             <Ionicons name="arrow-forward" size={22} color={colors.foreground} />
           </Pressable>
@@ -86,7 +134,7 @@ export default function ProductDetailScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               toggleItem({ id: product.id, name: product.nameAr, price: product.price, image: product.image, category: product.category });
             }}
-            style={[styles.wishlistBtn, { top: (Platform.OS === "web" ? 67 : insets.top) + 8, backgroundColor: colors.card }]}
+            style={[styles.wishlistBtn, { top: topOffset + 8, backgroundColor: colors.card }]}
           >
             <Ionicons
               name={wishlisted ? "heart" : "heart-outline"}
@@ -99,6 +147,35 @@ export default function ProductDetailScreen() {
             <View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.discountText}>-{product.discount}%</Text>
             </View>
+          )}
+
+          {/* Thumbnail strip */}
+          {allImages.length > 1 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.thumbStrip}
+              style={[styles.thumbBar, { backgroundColor: colors.background }]}
+            >
+              {allImages.map((img, i) => (
+                <Pressable
+                  key={i}
+                  onPress={() => {
+                    flatRef.current?.scrollToIndex({ index: i, animated: true });
+                    setActiveIdx(i);
+                  }}
+                  style={[
+                    styles.thumb,
+                    {
+                      borderColor: i === activeIdx ? colors.primary : colors.border,
+                      backgroundColor: "#f8f8f8",
+                    },
+                  ]}
+                >
+                  <Image source={{ uri: img }} style={styles.thumbImg} resizeMode="contain" />
+                </Pressable>
+              ))}
+            </ScrollView>
           )}
         </View>
 
@@ -151,7 +228,6 @@ export default function ProductDetailScreen() {
             </>
           )}
 
-          {/* Features */}
           <View style={[styles.featuresBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
             {[
               { icon: "shield-checkmark-outline" as const, text: "جودة مضمونة 100%" },
@@ -190,9 +266,35 @@ export default function ProductDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  imageContainer: { position: "relative", height: 320 },
-  image: { width: "100%", height: "100%", resizeMode: "cover" },
+  carouselWrapper: { position: "relative" },
+  imageSlide: {
+    width: SCREEN_WIDTH,
+    height: 320,
+    backgroundColor: "#f8f8f8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  slideImage: { width: "100%", height: "100%" },
   imageDimmed: { opacity: 0.45 },
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+  },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  thumbBar: { maxHeight: 72 },
+  thumbStrip: { paddingHorizontal: 12, gap: 8, paddingVertical: 6 },
+  thumb: {
+    width: 58,
+    height: 58,
+    borderRadius: 10,
+    borderWidth: 2,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbImg: { width: "100%", height: "100%" },
   outOfStockOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "rgba(0,0,0,0.45)",

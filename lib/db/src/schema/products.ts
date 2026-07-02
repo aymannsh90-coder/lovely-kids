@@ -9,6 +9,7 @@ export const productsTable = pgTable("products", {
   price: integer("price").notNull(),
   originalPrice: integer("original_price"),
   image: text("image").notNull(),
+  images: jsonb("images").$type<string[]>().default([]),
   category: text("category").notNull(),
   ageGroup: text("age_group").notNull(),
   gender: text("gender"),

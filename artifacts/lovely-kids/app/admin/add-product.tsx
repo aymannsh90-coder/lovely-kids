@@ -48,6 +48,7 @@ export default function AddProductScreen() {
   const [price, setPrice] = useState(editProduct?.price?.toString() ?? "");
   const [originalPrice, setOriginalPrice] = useState(editProduct?.originalPrice?.toString() ?? "");
   const [image, setImage] = useState(editProduct?.image ?? "");
+  const [images, setImages] = useState<string[]>(editProduct?.images ?? []);
   const [description, setDescription] = useState(editProduct?.description ?? "");
   const [category, setCategory] = useState(editProduct?.category ?? "clothes");
   const [ageGroup, setAgeGroup] = useState(editProduct?.ageGroup ?? "newborn");
@@ -77,11 +78,11 @@ export default function AddProductScreen() {
 
   const removeSize = (s: string) => setSizes((prev) => prev.filter((x) => x !== s));
 
-  const handlePickAndUpload = async () => {
+  const uploadImage = async (): Promise<string | null> => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       setErrors(["يجب السماح بالوصول إلى الصور لرفع صورة المنتج"]);
-      return;
+      return null;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -90,7 +91,7 @@ export default function AddProductScreen() {
       base64: true,
     });
 
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets[0]) return null;
 
     const asset = result.assets[0];
     const base64 = asset.base64;
@@ -98,7 +99,7 @@ export default function AddProductScreen() {
 
     if (!base64) {
       setErrors(["تعذّر قراءة الصورة، جرب صورة أخرى"]);
-      return;
+      return null;
     }
 
     setUploading(true);
@@ -115,16 +116,46 @@ export default function AddProductScreen() {
         throw new Error((err as { error?: string }).error ?? "فشل الرفع");
       }
 
-      const data = await res.json() as { url: string; objectPath: string };
+      const data = await res.json() as { url: string };
       const fullUrl = `${API_BASE}${data.url}`;
-      setImage(fullUrl);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return fullUrl;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "فشل رفع الصورة";
       setErrors([msg]);
+      return null;
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleAddImage = async () => {
+    const url = await uploadImage();
+    if (!url) return;
+    if (!image) {
+      setImage(url);
+    }
+    setImages((prev) => [...prev, url]);
+  };
+
+  const handleReplaceImage = async (index: number) => {
+    const url = await uploadImage();
+    if (!url) return;
+    setImages((prev) => {
+      const updated = [...prev];
+      updated[index] = url;
+      return updated;
+    });
+    if (index === 0) setImage(url);
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImages((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      if (index === 0 && updated.length > 0) setImage(updated[0]);
+      else if (updated.length === 0) setImage("");
+      return updated;
+    });
   };
 
   const validate = () => {
@@ -148,6 +179,7 @@ export default function AddProductScreen() {
         price: Number(price),
         originalPrice: originalPrice.trim() ? Number(originalPrice) : undefined,
         image: image.trim(),
+        images: images.length > 0 ? images : [image.trim()],
         description: description.trim() || nameAr.trim(),
         category,
         ageGroup,
@@ -268,41 +300,66 @@ export default function AddProductScreen() {
           </View>
         </View>
 
-        {/* Image Upload */}
+        {/* Image Upload — Multi */}
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.foreground }]}>صورة المنتج *</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>صور المنتج *</Text>
+          <Text style={[styles.hint, { color: colors.mutedForeground, marginBottom: 4 }]}>
+            الصورة الأولى هي الصورة الرئيسية — يمكنك إضافة حتى 6 صور
+          </Text>
 
-          {/* Preview if image set */}
-          {image ? (
-            <View style={styles.imagePreviewBox}>
-              <Image source={{ uri: image }} style={styles.imagePreview} resizeMode="cover" />
-              <View style={styles.imageActions}>
+          {/* Image Grid */}
+          {images.length > 0 && (
+            <View style={styles.imageGrid}>
+              {images.map((img, idx) => (
+                <View key={idx} style={[styles.gridItem, { borderColor: idx === 0 ? colors.primary : colors.border }]}>
+                  {idx === 0 && (
+                    <View style={[styles.mainBadge, { backgroundColor: colors.primary }]}>
+                      <Text style={styles.mainBadgeText}>رئيسية</Text>
+                    </View>
+                  )}
+                  <Image source={{ uri: img }} style={styles.gridImage} resizeMode="contain" />
+                  <View style={styles.gridActions}>
+                    <Pressable
+                      onPress={() => handleReplaceImage(idx)}
+                      disabled={uploading}
+                      style={[styles.gridBtn, { backgroundColor: colors.primary + "20" }]}
+                    >
+                      <Ionicons name="camera-outline" size={14} color={colors.primary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleRemoveImage(idx)}
+                      style={[styles.gridBtn, { backgroundColor: "#fee2e2" }]}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+
+              {/* Add more button */}
+              {images.length < 6 && (
                 <Pressable
-                  onPress={handlePickAndUpload}
+                  onPress={handleAddImage}
                   disabled={uploading}
-                  style={[styles.imageActionBtn, { backgroundColor: colors.primary }]}
+                  style={[styles.gridAddBtn, { borderColor: colors.primary, backgroundColor: colors.primary + "08" }]}
                 >
                   {uploading ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
-                    <Ionicons name="camera-outline" size={16} color="#fff" />
+                    <>
+                      <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
+                      <Text style={[styles.gridAddText, { color: colors.primary }]}>إضافة</Text>
+                    </>
                   )}
-                  <Text style={styles.imageActionText}>
-                    {uploading ? "جارٍ الرفع..." : "تغيير الصورة"}
-                  </Text>
                 </Pressable>
-                <Pressable
-                  onPress={() => setImage("")}
-                  style={[styles.imageActionBtn, { backgroundColor: "#fee2e2" }]}
-                >
-                  <Ionicons name="trash-outline" size={16} color={colors.destructive} />
-                  <Text style={[styles.imageActionText, { color: colors.destructive }]}>حذف</Text>
-                </Pressable>
-              </View>
+              )}
             </View>
-          ) : (
+          )}
+
+          {/* First upload CTA when empty */}
+          {images.length === 0 && (
             <Pressable
-              onPress={handlePickAndUpload}
+              onPress={handleAddImage}
               disabled={uploading}
               style={[styles.uploadBox, { borderColor: colors.primary, backgroundColor: colors.primary + "08" }]}
             >
@@ -315,7 +372,7 @@ export default function AddProductScreen() {
                 {uploading ? "جارٍ رفع الصورة..." : "اضغط لاختيار صورة من جهازك"}
               </Text>
               <Text style={[styles.uploadHint, { color: colors.mutedForeground }]}>
-                ترفع تلقائياً — لا حاجة لأي موقع خارجي
+                يمكنك إضافة حتى 6 صور للمنتج
               </Text>
             </Pressable>
           )}
@@ -323,11 +380,15 @@ export default function AddProductScreen() {
           {/* Manual URL fallback */}
           <View style={[styles.urlRow, { borderColor: colors.border }]}>
             <Ionicons name="link-outline" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.urlLabel, { color: colors.mutedForeground }]}>أو أدخل رابطاً يدوياً</Text>
+            <Text style={[styles.urlLabel, { color: colors.mutedForeground }]}>أو أدخل رابط الصورة الرئيسية يدوياً</Text>
           </View>
           <TextInput
             value={image}
-            onChangeText={setImage}
+            onChangeText={(v) => {
+              setImage(v);
+              if (v && images.length === 0) setImages([v]);
+              else if (v && images.length > 0) setImages((prev) => { const u = [...prev]; u[0] = v; return u; });
+            }}
             placeholder="https://..."
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
@@ -501,11 +562,15 @@ const styles = StyleSheet.create({
   uploadBox: { borderWidth: 2, borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 10 },
   uploadText: { fontSize: 15, fontWeight: "700", textAlign: "center" },
   uploadHint: { fontSize: 12, textAlign: "center" },
-  imagePreviewBox: { borderRadius: 16, overflow: "hidden", gap: 0 },
-  imagePreview: { width: "100%", height: 200, borderRadius: 16 },
-  imageActions: { flexDirection: "row-reverse", gap: 8, marginTop: 8 },
-  imageActionBtn: { flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
-  imageActionText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  imageGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 },
+  gridItem: { width: 100, height: 100, borderRadius: 12, borderWidth: 2, overflow: "hidden", position: "relative", backgroundColor: "#f8f8f8" },
+  gridImage: { width: "100%", height: "100%" },
+  mainBadge: { position: "absolute", top: 4, right: 4, zIndex: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  mainBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  gridActions: { position: "absolute", bottom: 4, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 6 },
+  gridBtn: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  gridAddBtn: { width: 100, height: 100, borderRadius: 12, borderWidth: 2, borderStyle: "dashed", alignItems: "center", justifyContent: "center", gap: 4 },
+  gridAddText: { fontSize: 11, fontWeight: "700" },
   urlRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6, paddingVertical: 6, borderTopWidth: 1, marginTop: 4 },
   urlLabel: { fontSize: 12 },
   sizeInputRow: { flexDirection: "row-reverse", alignItems: "center", borderRadius: 12, borderWidth: 1, overflow: "hidden" },
