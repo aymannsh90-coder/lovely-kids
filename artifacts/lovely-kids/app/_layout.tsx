@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppSettingsProvider } from "@/context/AppSettingsContext";
+import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { NewOrdersProvider } from "@/context/NewOrdersContext";
 import { ProductsProvider } from "@/context/ProductsContext";
@@ -36,7 +37,6 @@ function RootLayoutNav() {
       <Stack.Screen name="search" />
       <Stack.Screen name="contact" />
       <Stack.Screen name="about" />
-      <Stack.Screen name="admin/index" />
       <Stack.Screen name="admin/products" />
       <Stack.Screen name="admin/add-product" />
       <Stack.Screen name="admin/settings" />
@@ -68,19 +68,21 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AppSettingsProvider>
-            <ProductsProvider>
-              <CartProvider>
-                <WishlistProvider>
-                  <NewOrdersProvider>
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <KeyboardProvider>
-                        <RootLayoutNav />
-                      </KeyboardProvider>
-                    </GestureHandlerRootView>
-                  </NewOrdersProvider>
-                </WishlistProvider>
-              </CartProvider>
-            </ProductsProvider>
+            <AuthProvider>
+              <ProductsProvider>
+                <CartProvider>
+                  <WishlistProvider>
+                    <NewOrdersProvider>
+                      <GestureHandlerRootView style={{ flex: 1 }}>
+                        <KeyboardProvider>
+                          <RootLayoutNav />
+                        </KeyboardProvider>
+                      </GestureHandlerRootView>
+                    </NewOrdersProvider>
+                  </WishlistProvider>
+                </CartProvider>
+              </ProductsProvider>
+            </AuthProvider>
           </AppSettingsProvider>
         </QueryClientProvider>
       </ErrorBoundary>

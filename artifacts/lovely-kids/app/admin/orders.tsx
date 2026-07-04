@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNewOrders } from "@/context/NewOrdersContext";
 import { useColors } from "@/hooks/useColors";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE } from "@/constants/api";
 
 interface OrderItem {
   id: string;

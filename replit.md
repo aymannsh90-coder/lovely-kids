@@ -1,6 +1,6 @@
-# [Project name]
+# Lovely Kids
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An Arabic-language children's clothing store mobile app (Expo/React Native) for a shop in Nablus, Palestine, backed by an Express + PostgreSQL API.
 
 ## Run & Operate
 
@@ -22,15 +22,22 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/lovely-kids` — Expo app (customer-facing store + admin screens under `app/admin/`)
+- `artifacts/api-server` — Express API (`/api/products`, `/api/orders`, `/api/auth`, `/api/notifications`, `/api/images`)
+- `lib/db/src/schema` — Drizzle schema: `products`, `orders`, `push-tokens`, `users`, `sessions`
+- `artifacts/lovely-kids/constants/api.ts` — single source of truth for `API_BASE`, used by every context/screen instead of inlining `process.env.EXPO_PUBLIC_DOMAIN`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- User accounts use a custom phone-number + password system (not Clerk) since Clerk lacks native phone/SMS and Facebook login. Sessions are opaque tokens in a `sessions` table, stored client-side in AsyncStorage.
+- Admin access is not a separate password screen anymore. Any registered user can be promoted to admin from inside "حسابي" (long-press the header logo to reveal a password prompt calling `POST /api/auth/promote-admin`); once `isAdmin` is true, an "الإدارة" card appears in the profile.
+- `API_BASE` falls back to the published production domain (`lovely-kids--aymannsh90.replit.app`) when `EXPO_PUBLIC_DOMAIN` is unset at build time — this is what was breaking image uploads/push notifications in the standalone APK build.
+- Products refresh via polling (20s) + on app-foreground, not push-based, so new/edited products appear for all users without an app reinstall.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Customers browse/search products, add to cart, checkout (COD or bank transfer with payment proof upload), track order status, and can register/log in with phone + password.
+- Admins (promoted via the hidden profile flow) manage products (multi-image upload), stock, orders, categories, offers, and send push notifications to all users.
 
 ## User preferences
 
@@ -38,7 +45,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The user has been manually building Android APKs via `eas-cli`/`eas.json` outside of Replit's supported flow. Replit's Expo skill explicitly forbids running EAS CLI commands and does not officially support Google Play/Android publishing — only iOS via "Expo Launch". Any future APK build issues should be diagnosed via code fixes (like the `API_BASE` fallback), not by running `eas build` from this environment.
 
 ## Pointers
 

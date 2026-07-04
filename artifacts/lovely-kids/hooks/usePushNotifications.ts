@@ -3,7 +3,7 @@ import * as Notifications from "expo-notifications";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE } from "@/constants/api";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({

@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import { Vibration } from "react-native";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE } from "@/constants/api";
 
 interface NewOrdersContextType {
   newCount: number;

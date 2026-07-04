@@ -22,7 +22,7 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product } from "@/data/products";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE } from "@/constants/api";
 
 export default function AdminProductsScreen() {
   const colors = useColors();

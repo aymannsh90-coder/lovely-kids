@@ -4,6 +4,7 @@ import ordersRouter from "./orders";
 import productsRouter from "./products";
 import notificationsRouter from "./notifications";
 import imagesRouter from "./images";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(ordersRouter);
 router.use(productsRouter);
 router.use(notificationsRouter);
 router.use(imagesRouter);
+router.use(authRouter);
 
 export default router;

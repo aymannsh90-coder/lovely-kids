@@ -5,10 +5,13 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { AppState } from "react-native";
 
 import { Product } from "@/data/products";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE } from "@/constants/api";
+
+const POLL_INTERVAL_MS = 20000;
 
 interface ProductsContextType {
   products: Product[];
@@ -68,6 +71,24 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refreshProducts();
+  }, [refreshProducts]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (AppState.currentState === "active") {
+        refreshProducts();
+      }
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refreshProducts]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        refreshProducts();
+      }
+    });
+    return () => subscription.remove();
   }, [refreshProducts]);
 
   const addProduct = useCallback(async (product: Omit<Product, "id">) => {

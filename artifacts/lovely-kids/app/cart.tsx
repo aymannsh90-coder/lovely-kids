@@ -23,7 +23,7 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE } from "@/constants/api";
 
 type Step = "cart" | "checkout" | "payment" | "success";
 
