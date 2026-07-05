@@ -342,6 +342,56 @@ export default function SettingsScreen() {
         </Field>
       </Section>
 
+      {/* ── صفحة عن المحل ── */}
+      <Section title="ℹ️ صفحة عن المحل">
+        <Field label="من نحن (نص التعريف بالمحل)">
+          <TextInput
+            value={settings.aboutInfo?.intro ?? ""}
+            onChangeText={(v) =>
+              updateSettings({ aboutInfo: { ...settings.aboutInfo, intro: v } })
+            }
+            placeholder="اكتب نبذة عن المحل..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            style={[styles.fieldInput, styles.fieldInputMultiline, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+        </Field>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Text style={[styles.fieldLabel, { color: colors.mutedForeground, paddingHorizontal: 14, paddingTop: 4 }]}>
+          لماذا تختارنا (4 مميزات)
+        </Text>
+        {(settings.aboutInfo?.features ?? []).map((feature, index) => (
+          <View key={index}>
+            <View style={styles.field}>
+              <Field
+                label={`عنوان الميزة ${index + 1}`}
+                value={feature.title}
+                onChangeText={(v) => {
+                  const features = [...(settings.aboutInfo?.features ?? [])];
+                  features[index] = { ...features[index], title: v };
+                  updateSettings({ aboutInfo: { ...settings.aboutInfo, features } });
+                }}
+                placeholder="عنوان الميزة"
+              />
+              <Field
+                label={`وصف الميزة ${index + 1}`}
+                value={feature.desc}
+                onChangeText={(v) => {
+                  const features = [...(settings.aboutInfo?.features ?? [])];
+                  features[index] = { ...features[index], desc: v };
+                  updateSettings({ aboutInfo: { ...settings.aboutInfo, features } });
+                }}
+                placeholder="وصف الميزة"
+              />
+            </View>
+            {index < (settings.aboutInfo?.features?.length ?? 0) - 1 && (
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            )}
+          </View>
+        ))}
+      </Section>
+
       {/* ── التصنيفات ── */}
       <Section title="🏷️ أسماء التصنيفات">
         <Pressable

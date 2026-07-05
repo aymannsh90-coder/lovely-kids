@@ -31,6 +31,16 @@ export interface BankInfo {
   iban: string;
 }
 
+export interface AboutFeature {
+  title: string;
+  desc: string;
+}
+
+export interface AboutInfo {
+  intro: string;
+  features: AboutFeature[];
+}
+
 export interface ContactInfo {
   storeName: string;
   storeTagline: string;
@@ -66,6 +76,7 @@ export interface AppSettings {
   bankInfo: BankInfo;
   whatsappNumber: string;
   contactInfo: ContactInfo;
+  aboutInfo: AboutInfo;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -114,6 +125,20 @@ const DEFAULT_SETTINGS: AppSettings = {
     workingHours: "السبت - الخميس\n9:00 صباحاً - 9:00 مساءً",
     shippingInfo: "توصيل سريع لجميع المناطق\nشحن مجاني فوق 200 ₪",
     returnPolicy: "إمكانية الاستبدال خلال 7 أيام\nبالبضاعة سليمة",
+  },
+  aboutInfo: {
+    intro:
+      "Lovely Kids متجر متخصص في ملابس ومستلزمات الأطفال في مدينة نابلس.\n" +
+      "نقدم منتجات عالية الجودة بأسعار مناسبة لتلبية احتياجات كل مرحلة من\n" +
+      "مراحل نمو طفلك.\n\n" +
+      "📍 نابلس · المركز التجاري · شارع عمر المختار · طلعة بنك القدس\n" +
+      "📞 09-237-6808",
+    features: [
+      { title: "جودة مضمونة", desc: "منتجات مختارة بعناية من أفضل العلامات التجارية" },
+      { title: "توصيل سريع", desc: "نوصل لجميع مناطق فلسطين بأسرع وقت" },
+      { title: "أسعار مناسبة", desc: "أفضل الأسعار مع ضمان الجودة العالية" },
+      { title: "ضمان الاستبدال", desc: "إمكانية الاستبدال خلال 7 أيام من الاستلام" },
+    ],
   },
 };
 

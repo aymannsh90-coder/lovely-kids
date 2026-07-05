@@ -12,11 +12,20 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
+
+const FEATURE_ICONS = [
+  "shield-checkmark-outline",
+  "rocket-outline",
+  "pricetag-outline",
+  "refresh-outline",
+] as const;
 
 export default function AboutScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { settings } = useAppSettings();
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
@@ -36,7 +45,7 @@ export default function AboutScreen() {
 
       <View style={[styles.heroBanner, { backgroundColor: colors.primary }]}>
         <Image
-          source={require("@/assets/images/logo.jpg")}
+          source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
           style={styles.logoImage}
           resizeMode="contain"
         />
@@ -60,11 +69,7 @@ export default function AboutScreen() {
           من نحن
         </Text>
         <Text style={[styles.text, { color: colors.mutedForeground }]}>
-          Lovely Kids متجر متخصص في ملابس ومستلزمات الأطفال في مدينة نابلس.
-          نقدم منتجات عالية الجودة بأسعار مناسبة لتلبية احتياجات كل مرحلة من
-          مراحل نمو طفلك.{"\n\n"}
-          📍 نابلس · المركز التجاري · شارع عمر المختار · طلعة بنك القدس{"\n"}
-          📞 09-237-6808
+          {settings.aboutInfo.intro}
         </Text>
       </View>
 
@@ -73,21 +78,20 @@ export default function AboutScreen() {
           لماذا تختارنا؟
         </Text>
         <View style={styles.features}>
-          {[
-            { icon: "shield-checkmark-outline" as const, title: "جودة مضمونة", desc: "منتجات مختارة بعناية من أفضل العلامات التجارية" },
-            { icon: "rocket-outline" as const, title: "توصيل سريع", desc: "نوصل لجميع مناطق فلسطين بأسرع وقت" },
-            { icon: "pricetag-outline" as const, title: "أسعار مناسبة", desc: "أفضل الأسعار مع ضمان الجودة العالية" },
-            { icon: "refresh-outline" as const, title: "ضمان الاستبدال", desc: "إمكانية الاستبدال خلال 7 أيام من الاستلام" },
-          ].map((f) => (
+          {settings.aboutInfo.features.map((f, index) => (
             <View
-              key={f.title}
+              key={`${f.title}-${index}`}
               style={[
                 styles.featureCard,
                 { backgroundColor: colors.card, borderColor: colors.border },
               ]}
             >
               <View style={[styles.featureIcon, { backgroundColor: colors.muted }]}>
-                <Ionicons name={f.icon} size={24} color={colors.primary} />
+                <Ionicons
+                  name={FEATURE_ICONS[index % FEATURE_ICONS.length]}
+                  size={24}
+                  color={colors.primary}
+                />
               </View>
               <View style={styles.featureText}>
                 <Text style={[styles.featureTitle, { color: colors.foreground }]}>
