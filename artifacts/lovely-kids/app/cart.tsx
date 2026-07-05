@@ -75,6 +75,7 @@ export default function CartScreen() {
             quantity: i.quantity,
             image: i.image,
             size: i.size,
+            color: i.color,
           })),
           totalPrice: currentTotal,
           status: "new",
@@ -91,7 +92,10 @@ export default function CartScreen() {
     }
 
     const itemsList = currentItems
-      .map((i) => `• ${i.name} x${i.quantity} — ${i.price * i.quantity}₪${i.size ? ` (مقاس ${i.size})` : ""}`)
+      .map((i) => {
+        const variant = [i.color ? `لون ${i.color}` : null, i.size ? `مقاس ${i.size}` : null].filter(Boolean).join("، ");
+        return `• ${i.name} x${i.quantity} — ${i.price * i.quantity}₪${variant ? ` (${variant})` : ""}`;
+      })
       .join("\n");
 
     const payLabel = paymentMethod === "bank_transfer" ? "💳 تحويل بنكي" : "💵 الدفع عند الاستلام";
@@ -471,9 +475,11 @@ export default function CartScreen() {
                 </Pressable>
                 <View style={styles.itemRight}>
                   <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
-                  {item.size && (
+                  {(item.size || item.color) && (
                     <Text style={[styles.itemSize, { color: colors.mutedForeground }]}>
-                      المقاس: {item.size}
+                      {[item.color ? `اللون: ${item.color}` : null, item.size ? `المقاس: ${item.size}` : null]
+                        .filter(Boolean)
+                        .join(" — ")}
                     </Text>
                   )}
                   <Text style={[styles.itemPrice, { color: colors.primary }]}>

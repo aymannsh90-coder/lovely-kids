@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -33,10 +33,28 @@ export default function ProductDetailScreen() {
 
   const product = products.find((p) => p.id === id) ?? PRODUCTS.find((p) => p.id === id);
 
-  const [selectedSize, setSelectedSize] = useState<string | undefined>(product?.sizes?.[0]);
+  const hasColorVariants = !!product?.colorVariants && product.colorVariants.length > 0;
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(
+    hasColorVariants ? product!.colorVariants![0].color : undefined
+  );
+  const activeColorVariant = hasColorVariants
+    ? product!.colorVariants!.find((c) => c.color === selectedColor) ?? product!.colorVariants![0]
+    : undefined;
+  const [selectedSize, setSelectedSize] = useState<string | undefined>(
+    activeColorVariant
+      ? activeColorVariant.sizes.find((s) => !s.outOfStock)?.size
+      : product?.sizes?.[0]
+  );
   const [added, setAdded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const flatRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (!activeColorVariant) return;
+    const firstAvailable = activeColorVariant.sizes.find((s) => !s.outOfStock)?.size;
+    setSelectedSize(firstAvailable);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedColor]);
 
   if (!product) return null;
 
@@ -57,6 +75,7 @@ export default function ProductDetailScreen() {
       image: product.image,
       category: product.category,
       size: selectedSize,
+      color: activeColorVariant?.color,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
@@ -202,7 +221,67 @@ export default function ProductDetailScreen() {
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>الوصف</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{product.description}</Text>
 
-          {product.sizes && product.sizes.length > 0 && (
+          {hasColorVariants && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>اللون</Text>
+              <View style={styles.sizesRow}>
+                {product.colorVariants!.map((cv) => (
+                  <Pressable
+                    key={cv.color}
+                    onPress={() => !isOutOfStock && setSelectedColor(cv.color)}
+                    style={[
+                      styles.colorSwatchOuter,
+                      {
+                        borderColor: selectedColor === cv.color ? colors.primary : colors.border,
+                        opacity: isOutOfStock ? 0.5 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.colorSwatchInner, { backgroundColor: cv.hex }]} />
+                    <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 12 }}>{cv.color}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+
+          {hasColorVariants && activeColorVariant && activeColorVariant.sizes.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>المقاس</Text>
+              <View style={styles.sizesRow}>
+                {activeColorVariant.sizes.map((s) => {
+                  const disabled = isOutOfStock || s.outOfStock;
+                  return (
+                    <Pressable
+                      key={s.size}
+                      onPress={() => !disabled && setSelectedSize(s.size)}
+                      disabled={disabled}
+                      style={[
+                        styles.sizeChip,
+                        styles.sizeChipWithMark,
+                        {
+                          backgroundColor: selectedSize === s.size ? colors.primary : colors.card,
+                          borderColor: selectedSize === s.size ? colors.primary : colors.border,
+                          opacity: s.outOfStock ? 0.45 : isOutOfStock ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 13 }}>
+                        {s.size}
+                      </Text>
+                      {s.outOfStock && (
+                        <View style={styles.sizeOutOfStockOverlay}>
+                          <Ionicons name="close" size={26} color="#ef4444" />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {!hasColorVariants && product.sizes && product.sizes.length > 0 && (
             <>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>المقاس</Text>
               <View style={styles.sizesRow}>
@@ -326,6 +405,16 @@ const styles = StyleSheet.create({
   description: { fontSize: 14, textAlign: "right", lineHeight: 22 },
   sizesRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
   sizeChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  sizeChipWithMark: { position: "relative", overflow: "hidden" },
+  sizeOutOfStockOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: "center", justifyContent: "center",
+  },
+  colorSwatchOuter: {
+    flexDirection: "row-reverse", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 2,
+  },
+  colorSwatchInner: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
   featuresBox: { borderRadius: 12, padding: 14, gap: 10, borderWidth: 1, marginTop: 4 },
   featureRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   featureText: { fontSize: 13, textAlign: "right" },

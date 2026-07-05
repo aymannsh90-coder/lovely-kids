@@ -1,3 +1,14 @@
+export interface SizeStock {
+  size: string;
+  outOfStock?: boolean;
+}
+
+export interface ColorVariant {
+  color: string;
+  hex: string;
+  sizes: SizeStock[];
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -10,6 +21,7 @@ export interface Product {
   ageGroup: string;
   gender?: "boys" | "girls" | null;
   sizes?: string[];
+  colorVariants?: ColorVariant[];
   rating: number;
   reviews: number;
   isNew?: boolean;

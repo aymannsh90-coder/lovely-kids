@@ -17,6 +17,7 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     ageGroup: r.ageGroup,
     gender: (r.gender as "boys" | "girls" | null) ?? null,
     sizes: (r.sizes as string[]) ?? [],
+    colorVariants: (r.colorVariants as unknown[]) ?? [],
     rating: r.rating / 10,
     reviews: r.reviews,
     isNew: r.isNew ?? false,

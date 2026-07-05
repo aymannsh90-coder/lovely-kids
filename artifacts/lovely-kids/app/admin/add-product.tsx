@@ -18,8 +18,23 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
-import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product } from "@/data/products";
+import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, ColorVariant } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
+
+const COLOR_SWATCHES = [
+  { name: "أحمر", hex: "#EF4444" },
+  { name: "أزرق", hex: "#3B82F6" },
+  { name: "أخضر", hex: "#22C55E" },
+  { name: "أصفر", hex: "#EAB308" },
+  { name: "وردي", hex: "#EC4899" },
+  { name: "بنفسجي", hex: "#A855F7" },
+  { name: "برتقالي", hex: "#F97316" },
+  { name: "أسود", hex: "#111827" },
+  { name: "أبيض", hex: "#F9FAFB" },
+  { name: "رمادي", hex: "#9CA3AF" },
+  { name: "بني", hex: "#92400E" },
+  { name: "بيج", hex: "#D6C7A1" },
+];
 
 import { API_BASE } from "@/constants/api";
 
@@ -61,6 +76,10 @@ export default function AddProductScreen() {
   );
   const [sizes, setSizes] = useState<string[]>(editProduct?.sizes ?? []);
   const [sizeInput, setSizeInput] = useState("");
+  const [colorVariants, setColorVariants] = useState<ColorVariant[]>(editProduct?.colorVariants ?? []);
+  const [newColorName, setNewColorName] = useState("");
+  const [newColorHex, setNewColorHex] = useState(COLOR_SWATCHES[0].hex);
+  const [colorSizeInputs, setColorSizeInputs] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -77,6 +96,50 @@ export default function AddProductScreen() {
   };
 
   const removeSize = (s: string) => setSizes((prev) => prev.filter((x) => x !== s));
+
+  const addColorVariant = () => {
+    const name = newColorName.trim();
+    if (!name) return;
+    if (colorVariants.some((c) => c.color === name)) { setNewColorName(""); return; }
+    setColorVariants((prev) => [...prev, { color: name, hex: newColorHex, sizes: [] }]);
+    setNewColorName("");
+  };
+
+  const removeColorVariant = (idx: number) => {
+    setColorVariants((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addSizeToColor = (idx: number) => {
+    const raw = (colorSizeInputs[idx] ?? "").trim().toUpperCase();
+    if (!raw) return;
+    setColorVariants((prev) =>
+      prev.map((c, i) => {
+        if (i !== idx) return c;
+        if (c.sizes.some((s) => s.size === raw)) return c;
+        return { ...c, sizes: [...c.sizes, { size: raw, outOfStock: false }] };
+      })
+    );
+    setColorSizeInputs((prev) => ({ ...prev, [idx]: "" }));
+  };
+
+  const removeSizeFromColor = (idx: number, size: string) => {
+    setColorVariants((prev) =>
+      prev.map((c, i) => (i !== idx ? c : { ...c, sizes: c.sizes.filter((s) => s.size !== size) }))
+    );
+  };
+
+  const toggleSizeOutOfStock = (idx: number, size: string) => {
+    setColorVariants((prev) =>
+      prev.map((c, i) =>
+        i !== idx
+          ? c
+          : {
+              ...c,
+              sizes: c.sizes.map((s) => (s.size === size ? { ...s, outOfStock: !s.outOfStock } : s)),
+            }
+      )
+    );
+  };
 
   const uploadImage = async (): Promise<string | null> => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -185,6 +248,7 @@ export default function AddProductScreen() {
         ageGroup,
         gender,
         sizes,
+        colorVariants,
         rating: editProduct?.rating ?? 4.8,
         reviews: editProduct?.reviews ?? 0,
         isNew,
@@ -450,6 +514,108 @@ export default function AddProductScreen() {
           </Text>
         </View>
 
+        {/* Colors & Sizes per color */}
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>الألوان والمقاسات (اختياري)</Text>
+          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+            أضيفي لوناً ثم مقاساته — اضغطي على المقاس لتعليمه "نفد المخزون" (يظهر بعلامة X للزبون)
+          </Text>
+
+          {/* Color swatch picker for new color */}
+          <View style={styles.swatchWrap}>
+            {COLOR_SWATCHES.map((sw) => (
+              <Pressable
+                key={sw.hex}
+                onPress={() => setNewColorHex(sw.hex)}
+                style={[
+                  styles.swatch,
+                  { backgroundColor: sw.hex, borderColor: newColorHex === sw.hex ? colors.primary : colors.border, borderWidth: newColorHex === sw.hex ? 3 : 1 },
+                ]}
+              />
+            ))}
+          </View>
+
+          <View style={[styles.sizeInputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Pressable onPress={addColorVariant} style={[styles.addSizeBtn, { backgroundColor: colors.primary }]}>
+              <Ionicons name="add" size={18} color="#fff" />
+            </Pressable>
+            <TextInput
+              value={newColorName}
+              onChangeText={setNewColorName}
+              onSubmitEditing={addColorVariant}
+              placeholder="اسم اللون، مثال: أحمر"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.sizeTextInput, { color: colors.foreground }]}
+              textAlign="right"
+              returnKeyType="done"
+            />
+          </View>
+
+          {colorVariants.length > 0 && (
+            <View style={{ gap: 12, marginTop: 8 }}>
+              {colorVariants.map((cv, idx) => (
+                <View key={`${cv.color}-${idx}`} style={[styles.colorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.colorCardHeader}>
+                    <Pressable onPress={() => removeColorVariant(idx)} style={[styles.gridBtn, { backgroundColor: "#fee2e2" }]}>
+                      <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                    </Pressable>
+                    <View style={styles.colorCardTitle}>
+                      <Text style={[styles.colorCardName, { color: colors.foreground }]}>{cv.color}</Text>
+                      <View style={[styles.swatch, { backgroundColor: cv.hex, borderColor: colors.border, width: 20, height: 20 }]} />
+                    </View>
+                  </View>
+
+                  <View style={[styles.sizeInputRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Pressable onPress={() => addSizeToColor(idx)} style={[styles.addSizeBtn, { backgroundColor: colors.primary }]}>
+                      <Ionicons name="add" size={16} color="#fff" />
+                    </Pressable>
+                    <TextInput
+                      value={colorSizeInputs[idx] ?? ""}
+                      onChangeText={(v) => setColorSizeInputs((prev) => ({ ...prev, [idx]: v }))}
+                      onSubmitEditing={() => addSizeToColor(idx)}
+                      placeholder="مقاس لهذا اللون، مثال: M"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[styles.sizeTextInput, { color: colors.foreground, fontSize: 13 }]}
+                      textAlign="right"
+                      returnKeyType="done"
+                    />
+                  </View>
+
+                  {cv.sizes.length > 0 && (
+                    <View style={styles.sizesWrap}>
+                      {cv.sizes.map((s) => (
+                        <View key={s.size} style={styles.colorSizeChipWrap}>
+                          <Pressable
+                            onPress={() => toggleSizeOutOfStock(idx, s.size)}
+                            style={[
+                              styles.sizeChip,
+                              {
+                                backgroundColor: s.outOfStock ? "#fee2e2" : colors.primary + "20",
+                                borderColor: s.outOfStock ? "#ef4444" : colors.primary,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.sizeChipText, { color: s.outOfStock ? "#ef4444" : colors.primary }]}>
+                              {s.size}
+                            </Text>
+                            {s.outOfStock && <Ionicons name="close" size={12} color="#ef4444" />}
+                          </Pressable>
+                          <Pressable onPress={() => removeSizeFromColor(idx, s.size)} style={styles.colorSizeRemoveBtn}>
+                            <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                    اضغطي على المقاس لتبديل حالته (متوفر / نفد المخزون) — الدائرة الصغيرة لحذف المقاس
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Gender */}
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.foreground }]}>تصنيف المنتج</Text>
@@ -589,4 +755,12 @@ const styles = StyleSheet.create({
   genderRow: { flexDirection: "row-reverse", borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   genderOption: { flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
   genderOptionText: { fontSize: 14, fontWeight: "700" },
+  swatchWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 },
+  swatch: { width: 32, height: 32, borderRadius: 16, borderWidth: 1 },
+  colorCard: { borderRadius: 14, borderWidth: 1, padding: 12, gap: 10 },
+  colorCardHeader: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },
+  colorCardTitle: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  colorCardName: { fontSize: 14, fontWeight: "700" },
+  colorSizeChipWrap: { flexDirection: "row-reverse", alignItems: "center" },
+  colorSizeRemoveBtn: { marginRight: -6, marginLeft: 2 },
 });

@@ -2,6 +2,17 @@ import { pgTable, serial, text, integer, boolean, timestamp, jsonb } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+export interface SizeStock {
+  size: string;
+  outOfStock?: boolean;
+}
+
+export interface ColorVariant {
+  color: string;
+  hex: string;
+  sizes: SizeStock[];
+}
+
 export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -14,6 +25,7 @@ export const productsTable = pgTable("products", {
   ageGroup: text("age_group").notNull(),
   gender: text("gender"),
   sizes: jsonb("sizes").$type<string[]>().default([]),
+  colorVariants: jsonb("color_variants").$type<ColorVariant[]>().default([]),
   rating: integer("rating").notNull().default(48),
   reviews: integer("reviews").notNull().default(0),
   isNew: boolean("is_new").default(false),
@@ -28,6 +40,20 @@ export const insertProductSchema = createInsertSchema(productsTable).omit({
   createdAt: true,
 }).extend({
   sizes: z.array(z.string()).optional(),
+  colorVariants: z
+    .array(
+      z.object({
+        color: z.string(),
+        hex: z.string(),
+        sizes: z.array(
+          z.object({
+            size: z.string(),
+            outOfStock: z.boolean().optional(),
+          })
+        ),
+      })
+    )
+    .optional(),
   stock: z.number().int().nonnegative().nullable().optional(),
   gender: z.enum(["boys", "girls"]).nullable().optional(),
 });
