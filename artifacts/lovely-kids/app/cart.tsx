@@ -305,7 +305,7 @@ export default function CartScreen() {
               ملخص الطلب ({totalItems} منتج)
             </Text>
             {items.map((item) => (
-              <View key={item.id} style={styles.summaryItem}>
+              <View key={`${item.id}-${item.color ?? ""}-${item.size ?? ""}`} style={styles.summaryItem}>
                 <Text style={[styles.summaryItemPrice, { color: colors.primary }]}>
                   {item.price * item.quantity}₪
                 </Text>
@@ -466,11 +466,11 @@ export default function CartScreen() {
         <>
           <FlatList
             data={items}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => `${item.id}-${item.color ?? ""}-${item.size ?? ""}`}
             contentContainerStyle={styles.list}
             renderItem={({ item }) => (
               <View style={[styles.cartItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Pressable onPress={() => removeItem(item.id)} style={styles.removeBtn}>
+                <Pressable onPress={() => removeItem(item.id, item.size, item.color)} style={styles.removeBtn}>
                   <Ionicons name="close" size={16} color={colors.mutedForeground} />
                 </Pressable>
                 <View style={styles.itemRight}>
@@ -489,14 +489,14 @@ export default function CartScreen() {
                 <Image source={{ uri: item.image }} style={styles.itemImage} />
                 <View style={styles.quantityRow}>
                   <Pressable
-                    onPress={() => updateQuantity(item.id, item.quantity + 1)}
+                    onPress={() => updateQuantity(item.id, item.quantity + 1, item.size, item.color)}
                     style={[styles.qtyBtn, { backgroundColor: colors.primary }]}
                   >
                     <Ionicons name="add" size={16} color="#fff" />
                   </Pressable>
                   <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
                   <Pressable
-                    onPress={() => updateQuantity(item.id, item.quantity - 1)}
+                    onPress={() => updateQuantity(item.id, item.quantity - 1, item.size, item.color)}
                     style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
                   >
                     <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />

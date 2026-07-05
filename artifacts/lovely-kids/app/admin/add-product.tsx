@@ -127,6 +127,16 @@ export default function AddProductScreen() {
     );
   };
 
+  const handlePickColorImage = async (idx: number) => {
+    const url = await uploadImage();
+    if (!url) return;
+    setColorVariants((prev) => prev.map((c, i) => (i !== idx ? c : { ...c, image: url })));
+  };
+
+  const removeColorImage = (idx: number) => {
+    setColorVariants((prev) => prev.map((c, i) => (i !== idx ? c : { ...c, image: undefined })));
+  };
+
   const uploadImage = async (): Promise<string | null> => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -541,6 +551,44 @@ export default function AddProductScreen() {
                     </View>
                   </View>
 
+                  <View style={styles.colorImageRow}>
+                    {cv.image ? (
+                      <View style={[styles.colorImageWrap, { borderColor: colors.border }]}>
+                        <Image source={{ uri: cv.image }} style={styles.colorImageThumb} resizeMode="contain" />
+                        <View style={styles.colorImageActions}>
+                          <Pressable
+                            onPress={() => handlePickColorImage(idx)}
+                            disabled={uploading}
+                            style={[styles.gridBtn, { backgroundColor: colors.primary + "20" }]}
+                          >
+                            <Ionicons name="camera-outline" size={14} color={colors.primary} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => removeColorImage(idx)}
+                            style={[styles.gridBtn, { backgroundColor: "#fee2e2" }]}
+                          >
+                            <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => handlePickColorImage(idx)}
+                        disabled={uploading}
+                        style={[styles.colorImageAddBtn, { borderColor: colors.primary, backgroundColor: colors.primary + "08" }]}
+                      >
+                        {uploading ? (
+                          <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                          <>
+                            <Ionicons name="image-outline" size={16} color={colors.primary} />
+                            <Text style={[styles.colorImageAddText, { color: colors.primary }]}>صورة لهذا اللون (اختياري)</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+
                   <View style={[styles.sizeInputRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
                     <Pressable onPress={() => addSizeToColor(idx)} style={[styles.addSizeBtn, { backgroundColor: colors.primary }]}>
                       <Ionicons name="add" size={16} color="#fff" />
@@ -736,6 +784,12 @@ const styles = StyleSheet.create({
   colorCardHeader: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },
   colorCardTitle: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
   colorCardName: { fontSize: 14, fontWeight: "700" },
+  colorImageRow: { flexDirection: "row-reverse" },
+  colorImageWrap: { flexDirection: "row-reverse", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 8 },
+  colorImageThumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: "#f8f8f8" },
+  colorImageActions: { flexDirection: "row-reverse", gap: 6 },
+  colorImageAddBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 6, borderWidth: 1, borderStyle: "dashed", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, alignSelf: "stretch", justifyContent: "center" },
+  colorImageAddText: { fontSize: 12, fontWeight: "700" },
   colorSizeChipWrap: { flexDirection: "row-reverse", alignItems: "center" },
   colorSizeRemoveBtn: { marginRight: -6, marginLeft: 2 },
 });

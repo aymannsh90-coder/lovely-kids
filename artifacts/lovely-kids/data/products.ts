@@ -6,6 +6,7 @@ export interface SizeStock {
 export interface ColorVariant {
   color: string;
   hex: string;
+  image?: string;
   sizes: SizeStock[];
 }
 

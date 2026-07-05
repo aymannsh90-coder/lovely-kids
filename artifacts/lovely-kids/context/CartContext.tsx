@@ -21,8 +21,8 @@ export interface CartItem {
 interface CartContextType {
   items: CartItem[];
   addItem: (item: Omit<CartItem, "quantity">) => void;
-  removeItem: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
+  removeItem: (id: string, size?: string, color?: string) => void;
+  updateQuantity: (id: string, quantity: number, size?: string, color?: string) => void;
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
@@ -52,45 +52,51 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem("cart", JSON.stringify(newItems));
   }, []);
 
+  const matchesVariant = useCallback(
+    (i: CartItem, item: { id: string; size?: string; color?: string }) =>
+      i.id === item.id && i.size === item.size && i.color === item.color,
+    []
+  );
+
   const addItem = useCallback(
     (item: Omit<CartItem, "quantity">) => {
       setItems((prev) => {
-        const existing = prev.find((i) => i.id === item.id);
+        const existing = prev.find((i) => matchesVariant(i, item));
         const updated = existing
           ? prev.map((i) =>
-              i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+              matchesVariant(i, item) ? { ...i, quantity: i.quantity + 1 } : i
             )
           : [...prev, { ...item, quantity: 1 }];
         AsyncStorage.setItem("cart", JSON.stringify(updated));
         return updated;
       });
     },
-    []
+    [matchesVariant]
   );
 
   const removeItem = useCallback(
-    (id: string) => {
+    (id: string, size?: string, color?: string) => {
       setItems((prev) => {
-        const updated = prev.filter((i) => i.id !== id);
+        const updated = prev.filter((i) => !matchesVariant(i, { id, size, color }));
         AsyncStorage.setItem("cart", JSON.stringify(updated));
         return updated;
       });
     },
-    []
+    [matchesVariant]
   );
 
   const updateQuantity = useCallback(
-    (id: string, quantity: number) => {
+    (id: string, quantity: number, size?: string, color?: string) => {
       setItems((prev) => {
         const updated =
           quantity === 0
-            ? prev.filter((i) => i.id !== id)
-            : prev.map((i) => (i.id === id ? { ...i, quantity } : i));
+            ? prev.filter((i) => !matchesVariant(i, { id, size, color }))
+            : prev.map((i) => (matchesVariant(i, { id, size, color }) ? { ...i, quantity } : i));
         AsyncStorage.setItem("cart", JSON.stringify(updated));
         return updated;
       });
     },
-    []
+    [matchesVariant]
   );
 
   const clearCart = useCallback(() => {

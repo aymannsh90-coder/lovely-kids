@@ -33,25 +33,17 @@ export default function ProductDetailScreen() {
   const product = products.find((p) => p.id === id);
 
   const hasColorVariants = !!product?.colorVariants && product.colorVariants.length > 0;
-  const [selectedColor, setSelectedColor] = useState<string | undefined>(
-    hasColorVariants ? product!.colorVariants![0].color : undefined
-  );
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(undefined);
   const activeColorVariant = hasColorVariants
-    ? product!.colorVariants!.find((c) => c.color === selectedColor) ?? product!.colorVariants![0]
+    ? product!.colorVariants!.find((c) => c.color === selectedColor)
     : undefined;
-  const [selectedSize, setSelectedSize] = useState<string | undefined>(
-    activeColorVariant
-      ? activeColorVariant.sizes.find((s) => !s.outOfStock)?.size
-      : product?.sizes?.[0]
-  );
+  const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
   const [added, setAdded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const flatRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (!activeColorVariant) return;
-    const firstAvailable = activeColorVariant.sizes.find((s) => !s.outOfStock)?.size;
-    setSelectedSize(firstAvailable);
+    setSelectedSize(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedColor]);
 
@@ -86,21 +78,29 @@ export default function ProductDetailScreen() {
     );
   }
 
-  const allImages = product.images && product.images.length > 0
+  const allImages = activeColorVariant?.image
+    ? [activeColorVariant.image]
+    : product.images && product.images.length > 0
     ? product.images
     : [product.image];
 
   const wishlisted = isWishlisted(product.id);
   const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
 
+  const needsColor = hasColorVariants && !activeColorVariant?.color;
+  const needsSize = hasColorVariants
+    ? !!activeColorVariant && activeColorVariant.sizes.length > 0 && !selectedSize
+    : !!product.sizes && product.sizes.length > 0 && !selectedSize;
+  const selectionIncomplete = needsColor || needsSize;
+
   const handleAddToCart = () => {
-    if (isOutOfStock) return;
+    if (isOutOfStock || selectionIncomplete) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addItem({
       id: product.id,
       name: product.nameAr,
       price: product.price,
-      image: product.image,
+      image: activeColorVariant?.image ?? product.image,
       category: product.category,
       size: selectedSize,
       color: activeColorVariant?.color,
@@ -251,7 +251,9 @@ export default function ProductDetailScreen() {
 
           {hasColorVariants && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>اللون</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                اللون {needsColor ? "(مطلوب)" : ""}
+              </Text>
               <View style={styles.sizesRow}>
                 {product.colorVariants!.map((cv) => (
                   <Pressable
@@ -275,7 +277,9 @@ export default function ProductDetailScreen() {
 
           {hasColorVariants && activeColorVariant && activeColorVariant.sizes.length > 0 && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>المقاس</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                المقاس {needsSize ? "(مطلوب)" : ""}
+              </Text>
               <View style={styles.sizesRow}>
                 {activeColorVariant.sizes.map((s) => {
                   const disabled = isOutOfStock || s.outOfStock;
@@ -311,7 +315,9 @@ export default function ProductDetailScreen() {
 
           {!hasColorVariants && product.sizes && product.sizes.length > 0 && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>المقاس</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                المقاس {needsSize ? "(مطلوب)" : ""}
+              </Text>
               <View style={styles.sizesRow}>
                 {product.sizes.map((size) => (
                   <Pressable
@@ -358,13 +364,35 @@ export default function ProductDetailScreen() {
             <Text style={[styles.outOfStockBtnText, { color: colors.mutedForeground }]}>نفد المخزون</Text>
           </View>
         ) : (
-          <Pressable
-            onPress={handleAddToCart}
-            style={[styles.addBtn, { backgroundColor: added ? "#22c55e" : colors.primary }]}
-          >
-            <Ionicons name={added ? "checkmark" : "bag-add-outline"} size={20} color="#fff" />
-            <Text style={styles.addBtnText}>{added ? "تمت الإضافة!" : "أضف إلى السلة"}</Text>
-          </Pressable>
+          <>
+            {selectionIncomplete && (
+              <Text style={[styles.selectionHint, { color: colors.primary }]}>
+                {needsColor ? "يرجى اختيار اللون" : "يرجى اختيار المقاس"}
+              </Text>
+            )}
+            <Pressable
+              onPress={handleAddToCart}
+              disabled={selectionIncomplete}
+              style={[
+                styles.addBtn,
+                { backgroundColor: added ? "#22c55e" : selectionIncomplete ? colors.muted : colors.primary },
+              ]}
+            >
+              <Ionicons
+                name={added ? "checkmark" : "bag-add-outline"}
+                size={20}
+                color={selectionIncomplete ? colors.mutedForeground : "#fff"}
+              />
+              <Text
+                style={[
+                  styles.addBtnText,
+                  { color: selectionIncomplete ? colors.mutedForeground : "#fff" },
+                ]}
+              >
+                {added ? "تمت الإضافة!" : "أضف إلى السلة"}
+              </Text>
+            </Pressable>
+          </>
         )}
       </View>
     </View>
@@ -454,4 +482,5 @@ const styles = StyleSheet.create({
   addBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   outOfStockBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16, borderWidth: 1 },
   outOfStockBtnText: { fontSize: 16, fontWeight: "700" },
+  selectionHint: { fontSize: 12, fontWeight: "600", textAlign: "center", marginBottom: 8 },
 });

@@ -10,6 +10,7 @@ export interface SizeStock {
 export interface ColorVariant {
   color: string;
   hex: string;
+  image?: string;
   sizes: SizeStock[];
 }
 
@@ -45,6 +46,7 @@ export const insertProductSchema = createInsertSchema(productsTable).omit({
       z.object({
         color: z.string(),
         hex: z.string(),
+        image: z.string().optional(),
         sizes: z.array(
           z.object({
             size: z.string(),
