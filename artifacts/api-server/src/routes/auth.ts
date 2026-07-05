@@ -6,8 +6,6 @@ import { getBearerToken, getUserFromToken } from "../lib/auth";
 
 const router = Router();
 
-const ADMIN_PASSWORD = "aymansh90";
-
 function toUser(u: typeof usersTable.$inferSelect) {
   return {
     id: String(u.id),
@@ -94,7 +92,13 @@ router.post("/auth/promote-admin", async (req, res) => {
     return;
   }
   const { password } = req.body ?? {};
-  if (password !== ADMIN_PASSWORD) {
+  const adminPassword = process.env.ADMIN_PROMOTE_PASSWORD;
+  if (!adminPassword) {
+    req.log?.error("ADMIN_PROMOTE_PASSWORD is not configured");
+    res.status(500).json({ error: "إعداد الإدارة غير مكتمل على الخادم" });
+    return;
+  }
+  if (password !== adminPassword) {
     res.status(403).json({ error: "كلمة مرور الإدارة غير صحيحة" });
     return;
   }
