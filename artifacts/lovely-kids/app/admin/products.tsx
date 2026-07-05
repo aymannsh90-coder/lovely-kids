@@ -49,23 +49,29 @@ export default function AdminProductsScreen() {
 
   const handleDelete = (id: string, name: string) => {
     if (Platform.OS === "web") {
-      const confirmed = window.confirm(`هل تريد حذف "${name}"؟`);
+      const confirmed = window.confirm(
+        `هل أنت متأكدة من حذف "${name}"؟\nهذا الإجراء لا يمكن التراجع عنه.`
+      );
       if (confirmed) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         deleteProduct(id);
       }
     } else {
-      Alert.alert("حذف المنتج", `هل تريد حذف "${name}"؟`, [
-        { text: "إلغاء", style: "cancel" },
-        {
-          text: "حذف",
-          style: "destructive",
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            deleteProduct(id);
+      Alert.alert(
+        "حذف المنتج",
+        `هل أنت متأكدة من حذف "${name}"؟\nهذا الإجراء لا يمكن التراجع عنه.`,
+        [
+          { text: "إلغاء", style: "cancel" },
+          {
+            text: "حذف نهائياً",
+            style: "destructive",
+            onPress: () => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              deleteProduct(id);
+            },
           },
-        },
-      ]);
+        ]
+      );
     }
   };
 
