@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "ecaf32fd-8c0c-4634-8207-b5be0d256c51"
+      }
+    },
+    "android": {
+      "package": "com.lovelykids.app"
+    }
+  }
+}
