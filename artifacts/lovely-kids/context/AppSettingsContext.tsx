@@ -4,9 +4,16 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { AppState } from "react-native";
+
 import { DEFAULT_AGE_GROUP_LABELS, DEFAULT_CATEGORY_LABELS, AgeGroupLabel } from "@/data/products";
+import { API_BASE } from "@/constants/api";
+import { useAuth } from "@/context/AuthContext";
+
+const POLL_INTERVAL_MS = 20000;
 
 export interface Offer {
   id: string;
@@ -97,25 +104,82 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
 const STORAGE_KEY = "lovely_kids_app_settings";
 
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const tokenRef = useRef<string | null>(token);
+  tokenRef.current = token;
+
+  const applyRemote = useCallback((data: Partial<AppSettings>) => {
+    const merged = { ...DEFAULT_SETTINGS, ...data };
+    setSettings(merged);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    return merged;
+  }, []);
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/settings`);
+      if (!res.ok) return;
+      const data = await res.json();
+      applyRemote(data);
+    } catch {
+      // keep cached/local settings on network failure
+    }
+  }, [applyRemote]);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((data) => {
-      if (data) {
-        try {
-          const saved = JSON.parse(data) as Partial<AppSettings>;
+    (async () => {
+      try {
+        const cached = await AsyncStorage.getItem(STORAGE_KEY);
+        if (cached) {
+          const saved = JSON.parse(cached) as Partial<AppSettings>;
           setSettings({ ...DEFAULT_SETTINGS, ...saved });
-        } catch {
-          // ignore
         }
+      } catch {
+        // ignore
       }
-    });
-  }, []);
+      fetchSettings();
+    })();
+  }, [fetchSettings]);
 
-  const save = useCallback((updated: AppSettings) => {
-    setSettings(updated);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  }, []);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (AppState.currentState === "active") {
+        fetchSettings();
+      }
+    }, POLL_INTERVAL_MS);
+
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") fetchSettings();
+    });
+
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [fetchSettings]);
+
+  const pushSettings = useCallback(
+    async (partial: Partial<AppSettings>) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/settings`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...(tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}),
+          },
+          body: JSON.stringify(partial),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          applyRemote(data);
+        }
+      } catch {
+        // ignore network errors, optimistic local update already applied
+      }
+    },
+    [applyRemote]
+  );
 
   const updateSettings = useCallback(
     (partial: Partial<AppSettings>) => {
@@ -124,46 +188,58 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
         AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return updated;
       });
+      pushSettings(partial);
     },
-    []
+    [pushSettings]
   );
 
-  const addOffer = useCallback((offer: Omit<Offer, "id">) => {
-    setSettings((prev) => {
-      const updated = {
-        ...prev,
-        offers: [
+  const addOffer = useCallback(
+    (offer: Omit<Offer, "id">) => {
+      setSettings((prev) => {
+        const offers = [
           ...prev.offers,
           { ...offer, id: Date.now().toString() + Math.random().toString(36).substr(2, 5) },
-        ],
-      };
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+        ];
+        const updated = { ...prev, offers };
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        pushSettings({ offers });
+        return updated;
+      });
+    },
+    [pushSettings]
+  );
 
-  const updateOffer = useCallback((offer: Offer) => {
-    setSettings((prev) => {
-      const updated = {
-        ...prev,
-        offers: prev.offers.map((o) => (o.id === offer.id ? offer : o)),
-      };
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  const updateOffer = useCallback(
+    (offer: Offer) => {
+      setSettings((prev) => {
+        const offers = prev.offers.map((o) => (o.id === offer.id ? offer : o));
+        const updated = { ...prev, offers };
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        pushSettings({ offers });
+        return updated;
+      });
+    },
+    [pushSettings]
+  );
 
-  const deleteOffer = useCallback((id: string) => {
-    setSettings((prev) => {
-      const updated = { ...prev, offers: prev.offers.filter((o) => o.id !== id) };
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  const deleteOffer = useCallback(
+    (id: string) => {
+      setSettings((prev) => {
+        const offers = prev.offers.filter((o) => o.id !== id);
+        const updated = { ...prev, offers };
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        pushSettings({ offers });
+        return updated;
+      });
+    },
+    [pushSettings]
+  );
 
   const resetSettings = useCallback(() => {
-    save(DEFAULT_SETTINGS);
-  }, [save]);
+    setSettings(DEFAULT_SETTINGS);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
+    pushSettings(DEFAULT_SETTINGS);
+  }, [pushSettings]);
 
   return (
     <AppSettingsContext.Provider

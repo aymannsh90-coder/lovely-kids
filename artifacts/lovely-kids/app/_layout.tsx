@@ -67,8 +67,8 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <AppSettingsProvider>
-            <AuthProvider>
+          <AuthProvider>
+            <AppSettingsProvider>
               <ProductsProvider>
                 <CartProvider>
                   <WishlistProvider>
@@ -82,8 +82,8 @@ export default function RootLayout() {
                   </WishlistProvider>
                 </CartProvider>
               </ProductsProvider>
-            </AuthProvider>
-          </AppSettingsProvider>
+            </AppSettingsProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

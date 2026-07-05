@@ -5,6 +5,7 @@ import productsRouter from "./products";
 import notificationsRouter from "./notifications";
 import imagesRouter from "./images";
 import authRouter from "./auth";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(productsRouter);
 router.use(notificationsRouter);
 router.use(imagesRouter);
 router.use(authRouter);
+router.use(settingsRouter);
 
 export default router;

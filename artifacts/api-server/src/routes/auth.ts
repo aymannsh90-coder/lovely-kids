@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, usersTable, sessionsTable, registerSchema, loginSchema } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword, generateToken } from "../lib/password";
+import { getBearerToken, getUserFromToken } from "../lib/auth";
 
 const router = Router();
 
@@ -14,24 +15,6 @@ function toUser(u: typeof usersTable.$inferSelect) {
     name: u.name,
     isAdmin: u.isAdmin,
   };
-}
-
-async function getUserFromToken(token: string | undefined) {
-  if (!token) return null;
-  const sessions = await db
-    .select()
-    .from(sessionsTable)
-    .where(eq(sessionsTable.token, token));
-  const session = sessions[0];
-  if (!session) return null;
-  const users = await db.select().from(usersTable).where(eq(usersTable.id, session.userId));
-  return users[0] ?? null;
-}
-
-function getBearerToken(req: import("express").Request) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return undefined;
-  return header.slice("Bearer ".length);
 }
 
 // POST /api/auth/register
