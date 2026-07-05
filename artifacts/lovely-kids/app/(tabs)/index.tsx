@@ -18,6 +18,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS } from "@/data/products";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 type GenderTab = "boys" | "girls" | null;
@@ -38,6 +39,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { products } = useProducts();
   const { settings } = useAppSettings();
+  const { user } = useAuth();
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const ageGroups = AGE_GROUP_IDS.map((id) => ({
     id,
@@ -90,6 +92,14 @@ export default function HomeScreen() {
           <CartBadge />
         </View>
       </View>
+
+      {user && (
+        <View style={styles.greetingRow}>
+          <Text style={[styles.greetingText, { color: colors.foreground }]}>
+            أهلاً وسهلاً : {user.name}
+          </Text>
+        </View>
+      )}
 
       {/* Gender Tabs */}
       <View style={[styles.genderTabsRow, { borderColor: colors.border }]}>
@@ -371,6 +381,8 @@ const styles = StyleSheet.create({
   headerLeft: { alignItems: "flex-end" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   logoImage: { width: 110, height: 52 },
+  greetingRow: { paddingHorizontal: 16, paddingBottom: 10 },
+  greetingText: { fontSize: 15, fontWeight: "700", textAlign: "right" },
   iconBtn: {
     width: 40,
     height: 40,
