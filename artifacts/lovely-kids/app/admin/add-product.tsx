@@ -16,25 +16,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, ColorVariant } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
-
-const COLOR_SWATCHES = [
-  { name: "أحمر", hex: "#EF4444" },
-  { name: "أزرق", hex: "#3B82F6" },
-  { name: "أخضر", hex: "#22C55E" },
-  { name: "أصفر", hex: "#EAB308" },
-  { name: "وردي", hex: "#EC4899" },
-  { name: "بنفسجي", hex: "#A855F7" },
-  { name: "برتقالي", hex: "#F97316" },
-  { name: "أسود", hex: "#111827" },
-  { name: "أبيض", hex: "#F9FAFB" },
-  { name: "رمادي", hex: "#9CA3AF" },
-  { name: "بني", hex: "#92400E" },
-  { name: "بيج", hex: "#D6C7A1" },
-];
 
 import { API_BASE } from "@/constants/api";
 
@@ -78,7 +64,7 @@ export default function AddProductScreen() {
   const [sizeInput, setSizeInput] = useState("");
   const [colorVariants, setColorVariants] = useState<ColorVariant[]>(editProduct?.colorVariants ?? []);
   const [newColorName, setNewColorName] = useState("");
-  const [newColorHex, setNewColorHex] = useState(COLOR_SWATCHES[0].hex);
+  const [newColorHex, setNewColorHex] = useState("#EF4444");
   const [colorSizeInputs, setColorSizeInputs] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -521,19 +507,9 @@ export default function AddProductScreen() {
             أضيفي لوناً ثم مقاساته — اضغطي على المقاس لتعليمه "نفد المخزون" (يظهر بعلامة X للزبون)
           </Text>
 
-          {/* Color swatch picker for new color */}
-          <View style={styles.swatchWrap}>
-            {COLOR_SWATCHES.map((sw) => (
-              <Pressable
-                key={sw.hex}
-                onPress={() => setNewColorHex(sw.hex)}
-                style={[
-                  styles.swatch,
-                  { backgroundColor: sw.hex, borderColor: newColorHex === sw.hex ? colors.primary : colors.border, borderWidth: newColorHex === sw.hex ? 3 : 1 },
-                ]}
-              />
-            ))}
-          </View>
+          {/* Custom color picker for new color */}
+          <ColorPickerButton value={newColorHex} title="لون هذا الخيار" onChange={setNewColorHex} />
+          <View style={{ height: 10 }} />
 
           <View style={[styles.sizeInputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Pressable onPress={addColorVariant} style={[styles.addSizeBtn, { backgroundColor: colors.primary }]}>
@@ -755,7 +731,6 @@ const styles = StyleSheet.create({
   genderRow: { flexDirection: "row-reverse", borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   genderOption: { flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
   genderOptionText: { fontSize: 14, fontWeight: "700" },
-  swatchWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 },
   swatch: { width: 32, height: 32, borderRadius: 16, borderWidth: 1 },
   colorCard: { borderRadius: 14, borderWidth: 1, padding: 12, gap: 10 },
   colorCardHeader: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },

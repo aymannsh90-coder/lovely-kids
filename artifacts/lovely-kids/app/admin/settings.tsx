@@ -14,69 +14,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
-
-const PRIMARY_COLORS = [
-  { label: "وردي", value: "#E91E8C" },
-  { label: "أزرق", value: "#2196F3" },
-  { label: "بنفسجي", value: "#9C27B0" },
-  { label: "برتقالي", value: "#FF5722" },
-  { label: "أخضر", value: "#4CAF50" },
-  { label: "أحمر", value: "#F44336" },
-  { label: "سماوي", value: "#00BCD4" },
-  { label: "ذهبي", value: "#FFC107" },
-];
-
-const BG_COLORS = [
-  { label: "أزرق فاتح", value: "#F0FAFE" },
-  { label: "أبيض", value: "#FFFFFF" },
-  { label: "وردي فاتح", value: "#FFF0F5" },
-  { label: "أخضر فاتح", value: "#F0FFF4" },
-  { label: "أصفر فاتح", value: "#FFFDE7" },
-  { label: "رمادي فاتح", value: "#F5F5F5" },
-  { label: "بنفسجي فاتح", value: "#F3E5F5" },
-  { label: "برتقالي فاتح", value: "#FFF3E0" },
-];
-
-const SECONDARY_COLORS = [
-  { label: "سماوي", value: "#96DFEC" },
-  { label: "وردي فاتح", value: "#FFB5C8" },
-  { label: "أصفر", value: "#FFF176" },
-  { label: "أخضر", value: "#A5D6A7" },
-  { label: "بنفسجي", value: "#CE93D8" },
-  { label: "برتقالي", value: "#FFCC80" },
-];
-
-function ColorSwatch({
-  colors: swatches,
-  selected,
-  onSelect,
-}: {
-  colors: { label: string; value: string }[];
-  selected: string;
-  onSelect: (v: string) => void;
-}) {
-  return (
-    <View style={styles.swatchRow}>
-      {swatches.map((c) => (
-        <Pressable
-          key={c.value}
-          onPress={() => onSelect(c.value)}
-          style={[
-            styles.swatch,
-            { backgroundColor: c.value },
-            selected === c.value && styles.swatchSelected,
-          ]}
-        >
-          {selected === c.value && (
-            <Ionicons name="checkmark" size={16} color="#fff" />
-          )}
-        </Pressable>
-      ))}
-    </View>
-  );
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const colors = useColors();
@@ -163,26 +103,26 @@ export default function SettingsScreen() {
       {/* ── الألوان ── */}
       <Section title="🎨 الألوان الرئيسية">
         <Field label="لون الزر والعناصر الرئيسية">
-          <ColorSwatch
-            colors={PRIMARY_COLORS}
-            selected={settings.primaryColor}
-            onSelect={(v) => updateSettings({ primaryColor: v, bannerColor: v })}
+          <ColorPickerButton
+            value={settings.primaryColor}
+            title="لون الزر والعناصر الرئيسية"
+            onChange={(v) => updateSettings({ primaryColor: v, bannerColor: v })}
           />
         </Field>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field label="لون خلفية التطبيق">
-          <ColorSwatch
-            colors={BG_COLORS}
-            selected={settings.backgroundColor}
-            onSelect={(v) => updateSettings({ backgroundColor: v })}
+          <ColorPickerButton
+            value={settings.backgroundColor}
+            title="لون خلفية التطبيق"
+            onChange={(v) => updateSettings({ backgroundColor: v })}
           />
         </Field>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field label="اللون الثانوي">
-          <ColorSwatch
-            colors={SECONDARY_COLORS}
-            selected={settings.secondaryColor}
-            onSelect={(v) => updateSettings({ secondaryColor: v, accentColor: v })}
+          <ColorPickerButton
+            value={settings.secondaryColor}
+            title="اللون الثانوي"
+            onChange={(v) => updateSettings({ secondaryColor: v, accentColor: v })}
           />
         </Field>
       </Section>
@@ -235,10 +175,10 @@ export default function SettingsScreen() {
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field label="لون البانر">
-          <ColorSwatch
-            colors={PRIMARY_COLORS}
-            selected={settings.bannerColor}
-            onSelect={(v) => updateSettings({ bannerColor: v })}
+          <ColorPickerButton
+            value={settings.bannerColor}
+            title="لون البانر"
+            onChange={(v) => updateSettings({ bannerColor: v })}
           />
         </Field>
       </Section>
@@ -474,26 +414,6 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   divider: { height: 1, marginHorizontal: 14 },
-  swatchRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 },
-  swatch: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  swatchSelected: {
-    borderWidth: 3,
-    borderColor: "#fff",
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 4,
-  },
   navRow: {
     flexDirection: "row-reverse",
     alignItems: "center",

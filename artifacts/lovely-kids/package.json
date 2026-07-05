@@ -58,6 +58,7 @@
   "dependencies": {
     "expo-audio": "^1.1.1",
     "expo-device": "^8.0.10",
-    "expo-notifications": "^0.32.17"
+    "expo-notifications": "^0.32.17",
+    "reanimated-color-picker": "5.1.2"
   }
 }

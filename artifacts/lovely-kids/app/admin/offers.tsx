@@ -16,13 +16,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { Offer, useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
-
-const OFFER_COLORS = [
-  "#E91E8C", "#2196F3", "#9C27B0", "#FF5722",
-  "#4CAF50", "#F44336", "#00BCD4", "#FF9800",
-];
 
 function OfferForm({
   initial,
@@ -67,17 +63,7 @@ function OfferForm({
 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.foreground }]}>لون العرض</Text>
-          <View style={styles.swatchRow}>
-            {OFFER_COLORS.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setColor(c)}
-                style={[styles.swatch, { backgroundColor: c }, color === c && styles.swatchActive]}
-              >
-                {color === c && <Ionicons name="checkmark" size={14} color="#fff" />}
-              </Pressable>
-            ))}
-          </View>
+          <ColorPickerButton value={color} title="لون العرض" onChange={setColor} />
         </View>
 
         <View style={[styles.toggleRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -314,15 +300,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     fontSize: 14,
   },
-  swatchRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 },
-  swatch: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  swatchActive: { borderWidth: 3, borderColor: "#fff" },
   toggleRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
