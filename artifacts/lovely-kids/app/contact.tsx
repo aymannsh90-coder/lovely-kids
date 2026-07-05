@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 
-const PHONE = "0092376808";
+const PHONE = "092376808";
 const WHATSAPP_NUM = "97292376808";
 const FACEBOOK = "https://www.facebook.com/lovely.kids.nablus1";
 const INSTAGRAM = "https://www.instagram.com/lovely.kids.nablus";
