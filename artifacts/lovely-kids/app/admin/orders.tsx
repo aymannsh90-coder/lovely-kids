@@ -28,7 +28,9 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  image?: string;
   size?: string;
+  color?: string;
 }
 
 interface Order {
@@ -319,11 +321,34 @@ export default function AdminOrdersScreen() {
                     <View style={[styles.itemsSection, { backgroundColor: colors.background }]}>
                       <Text style={[styles.sectionLabel, { color: colors.foreground }]}>المنتجات:</Text>
                       {item.items.map((oi, idx) => (
-                        <View key={idx} style={styles.orderItemRow}>
+                        <View key={idx} style={styles.orderItemCard}>
+                          {oi.image ? (
+                            <Pressable onPress={() => setProofModal(oi.image!)}>
+                              <Image source={{ uri: oi.image }} style={styles.orderItemImage} resizeMode="cover" />
+                            </Pressable>
+                          ) : (
+                            <View style={[styles.orderItemImage, styles.orderItemImagePlaceholder, { backgroundColor: colors.secondary }]}>
+                              <Ionicons name="image-outline" size={20} color={colors.mutedForeground} />
+                            </View>
+                          )}
+                          <View style={styles.orderItemInfo}>
+                            <Text style={[styles.orderItemName, { color: colors.foreground }]} numberOfLines={2}>
+                              {oi.name} x{oi.quantity}
+                            </Text>
+                            <View style={styles.orderItemVariantRow}>
+                              {oi.color ? (
+                                <View style={[styles.variantChip, { backgroundColor: colors.secondary }]}>
+                                  <Text style={[styles.variantChipText, { color: colors.foreground }]}>اللون: {oi.color}</Text>
+                                </View>
+                              ) : null}
+                              {oi.size ? (
+                                <View style={[styles.variantChip, { backgroundColor: colors.secondary }]}>
+                                  <Text style={[styles.variantChipText, { color: colors.foreground }]}>المقاس: {oi.size}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </View>
                           <Text style={[styles.orderItemPrice, { color: colors.primary }]}>{oi.price * oi.quantity}₪</Text>
-                          <Text style={[styles.orderItemName, { color: colors.foreground }]}>
-                            {oi.name} x{oi.quantity}{oi.size ? ` (${oi.size})` : ""}
-                          </Text>
                         </View>
                       ))}
                     </View>
@@ -477,6 +502,13 @@ const styles = StyleSheet.create({
   itemsSection: { borderRadius: 12, padding: 12, gap: 6 },
   sectionLabel: { fontSize: 13, fontWeight: "700", textAlign: "right", marginBottom: 2 },
   orderItemRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  orderItemCard: { flexDirection: "row-reverse", alignItems: "center", gap: 10, paddingVertical: 6 },
+  orderItemImage: { width: 52, height: 52, borderRadius: 10 },
+  orderItemImagePlaceholder: { alignItems: "center", justifyContent: "center" },
+  orderItemInfo: { flex: 1, gap: 4, alignItems: "flex-end" },
+  orderItemVariantRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 6 },
+  variantChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  variantChipText: { fontSize: 11, fontWeight: "600" },
   orderItemName: { fontSize: 13, textAlign: "right", flex: 1 },
   orderItemPrice: { fontSize: 13, fontWeight: "700" },
   proofSection: { borderRadius: 12, borderWidth: 1.5, padding: 12, gap: 10 },
