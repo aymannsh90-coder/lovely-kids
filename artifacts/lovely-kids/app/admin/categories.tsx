@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -27,6 +28,7 @@ export default function CategoriesScreen() {
 
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
+  const hiddenCategories = settings.hiddenCategories ?? [];
 
   const [localAgeGroups, setLocalAgeGroups] = useState({ ...ageGroupLabels });
   const [localCategories, setLocalCategories] = useState({ ...categoryLabels });
@@ -34,6 +36,15 @@ export default function CategoriesScreen() {
 
   const AGE_GROUP_IDS = ["newborn", "infant", "toddler", "kids", "boys", "girls"];
   const CATEGORY_IDS = ["all", "clothes", "stroller", "feeding", "bath", "toys", "accessories"];
+
+  const toggleCategoryVisibility = (id: string) => {
+    const isHidden = hiddenCategories.includes(id);
+    const updated = isHidden
+      ? hiddenCategories.filter((c) => c !== id)
+      : [...hiddenCategories, id];
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    updateSettings({ hiddenCategories: updated });
+  };
 
   const handleSave = () => {
     updateSettings({
@@ -154,35 +165,56 @@ export default function CategoriesScreen() {
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           🏷️ فئات المنتجات
         </Text>
+        <Text style={[styles.hint, { color: colors.mutedForeground, paddingHorizontal: 0, paddingTop: 0 }]}>
+          استخدمي المفتاح لإخفاء أو إظهار الفئة لجميع المستخدمين فوراً
+        </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {CATEGORY_IDS.map((id, index) => (
-            <View key={id}>
-              {index > 0 && (
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              )}
-              <View style={styles.catRow}>
-                <View style={[styles.catPreview, { backgroundColor: colors.secondary }]}>
-                  <Text style={[styles.catPreviewText, { color: colors.foreground }]}>
-                    {localCategories[id] || "—"}
-                  </Text>
+          {CATEGORY_IDS.map((id, index) => {
+            const isHidden = id !== "all" && hiddenCategories.includes(id);
+            return (
+              <View key={id}>
+                {index > 0 && (
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                )}
+                <View style={styles.catRow}>
+                  <View style={[styles.catPreview, { backgroundColor: colors.secondary }]}>
+                    <Text style={[styles.catPreviewText, { color: colors.foreground }]}>
+                      {localCategories[id] || "—"}
+                    </Text>
+                  </View>
+                  <TextInput
+                    value={localCategories[id] ?? ""}
+                    onChangeText={(v) =>
+                      setLocalCategories((prev) => ({ ...prev, [id]: v }))
+                    }
+                    style={[
+                      styles.input,
+                      styles.catInput,
+                      { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground },
+                    ]}
+                    textAlign="right"
+                    placeholder="اسم الفئة"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                  {id !== "all" && (
+                    <View style={styles.visibilityToggle}>
+                      <Ionicons
+                        name={isHidden ? "eye-off-outline" : "eye-outline"}
+                        size={18}
+                        color={isHidden ? colors.mutedForeground : colors.primary}
+                      />
+                      <Switch
+                        value={!isHidden}
+                        onValueChange={() => toggleCategoryVisibility(id)}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                  )}
                 </View>
-                <TextInput
-                  value={localCategories[id] ?? ""}
-                  onChangeText={(v) =>
-                    setLocalCategories((prev) => ({ ...prev, [id]: v }))
-                  }
-                  style={[
-                    styles.input,
-                    styles.catInput,
-                    { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground },
-                  ]}
-                  textAlign="right"
-                  placeholder="اسم الفئة"
-                  placeholderTextColor={colors.mutedForeground}
-                />
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </View>
 
@@ -270,6 +302,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   catInput: { flex: 1 },
+  visibilityToggle: { alignItems: "center", gap: 2 },
   catPreview: {
     paddingHorizontal: 14,
     paddingVertical: 8,

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
 import { CATEGORY_IDS, DEFAULT_CATEGORY_LABELS } from "@/data/products";
-import { useProducts } from "@/context/ProductsContext";
+import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -24,15 +24,24 @@ const { width } = Dimensions.get("window");
 export default function ProductsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { products } = useProducts();
+  const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
-  const categories = CATEGORY_IDS.map((id) => ({
+  const hiddenCategories = settings.hiddenCategories ?? [];
+  const categories = CATEGORY_IDS.filter(
+    (id) => id === "all" || !hiddenCategories.includes(id)
+  ).map((id) => ({
     id,
     label: categoryLabels[id] ?? DEFAULT_CATEGORY_LABELS[id],
   }));
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+
+  useEffect(() => {
+    if (selectedCategory !== "all" && !categories.some((c) => c.id === selectedCategory)) {
+      setSelectedCategory("all");
+    }
+  }, [categories, selectedCategory]);
 
   const filtered = products.filter((p) => {
     const matchCat =

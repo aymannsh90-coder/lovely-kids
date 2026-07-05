@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
-import { useProducts } from "@/context/ProductsContext";
+import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -23,7 +23,7 @@ export default function WishlistScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { items } = useWishlist();
-  const { products } = useProducts();
+  const { products } = useVisibleProducts();
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const wishlisted = products.filter((p) => items.some((i) => i.id === p.id));

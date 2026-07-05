@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CartBadge } from "@/components/CartBadge";
 import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS } from "@/data/products";
-import { useProducts } from "@/context/ProductsContext";
+import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -37,7 +37,7 @@ const AGE_COLORS = [
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { products } = useProducts();
+  const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
   const { user } = useAuth();
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;

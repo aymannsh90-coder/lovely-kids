@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
-import { useProducts } from "@/context/ProductsContext";
+import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -28,7 +28,7 @@ export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const { addItem } = useCart();
   const { toggleItem, isWishlisted } = useWishlist();
-  const { products, loading } = useProducts();
+  const { products, loading } = useVisibleProducts();
 
   const product = products.find((p) => p.id === id);
 

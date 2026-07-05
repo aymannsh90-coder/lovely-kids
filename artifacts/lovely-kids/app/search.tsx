@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
-import { useProducts } from "@/context/ProductsContext";
+import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
 
 const { width } = Dimensions.get("window");
@@ -24,7 +24,7 @@ const POPULAR = ["ملابس مولود", "عربة أطفال", "ألعاب", "
 export default function SearchScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { products } = useProducts();
+  const { products } = useVisibleProducts();
   const [query, setQuery] = useState("");
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;

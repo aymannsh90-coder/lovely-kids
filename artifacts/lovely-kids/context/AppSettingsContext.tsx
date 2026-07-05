@@ -61,6 +61,7 @@ export interface AppSettings {
   offers: Offer[];
   ageGroupLabels: Record<string, AgeGroupLabel>;
   categoryLabels: Record<string, string>;
+  hiddenCategories: string[];
   bankInfo: BankInfo;
   whatsappNumber: string;
   contactInfo: ContactInfo;
@@ -90,6 +91,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ],
   ageGroupLabels: DEFAULT_AGE_GROUP_LABELS,
   categoryLabels: DEFAULT_CATEGORY_LABELS,
+  hiddenCategories: [],
   bankInfo: {
     bankName: "",
     accountHolder: "",
