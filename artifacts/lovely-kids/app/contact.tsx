@@ -12,44 +12,40 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
-
-const PHONE = "092376808";
-const WHATSAPP_NUM = "97292376808";
-const FACEBOOK = "https://www.facebook.com/lovely.kids.nablus1";
-const INSTAGRAM = "https://www.instagram.com/lovely.kids.nablus";
-const TIKTOK = "https://www.tiktok.com/@lovely_kids_nablus";
-const MAPS = "https://google.com/maps?cid=10801481858754571229";
 
 export default function ContactScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { settings } = useAppSettings();
+  const contact = settings.contactInfo;
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
   const openWhatsapp = () => {
-    Linking.openURL(`https://wa.me/${WHATSAPP_NUM}?text=مرحباً، أريد الاستفسار عن منتج`);
+    Linking.openURL(`https://wa.me/${settings.whatsappNumber}?text=مرحباً، أريد الاستفسار عن منتج`);
   };
 
   const openPhone = () => {
-    Linking.openURL(`tel:${PHONE}`);
+    Linking.openURL(`tel:${contact.phoneNumber}`);
   };
 
   const openFacebook = () => {
-    Linking.openURL(FACEBOOK);
+    Linking.openURL(contact.facebookUrl);
   };
 
   const openInstagram = () => {
-    Linking.openURL(INSTAGRAM);
+    Linking.openURL(contact.instagramUrl);
   };
 
   const openTiktok = () => {
-    Linking.openURL(TIKTOK);
+    Linking.openURL(contact.tiktokUrl);
   };
 
   const openMaps = () => {
-    Linking.openURL(MAPS);
+    Linking.openURL(contact.mapsUrl);
   };
 
   return (
@@ -69,9 +65,9 @@ export default function ContactScreen() {
       {/* Hero */}
       <View style={[styles.hero, { backgroundColor: colors.primary }]}>
         <Ionicons name="storefront-outline" size={48} color="#fff" />
-        <Text style={styles.heroTitle}>Lovely Kids</Text>
+        <Text style={styles.heroTitle}>{contact.storeName}</Text>
         <Text style={styles.heroSub}>نابلس · فلسطين</Text>
-        <Text style={styles.heroTagline}>كل ما يحتاجه طفلك في مكان واحد</Text>
+        <Text style={styles.heroTagline}>{contact.storeTagline}</Text>
       </View>
 
       {/* Direct Contact */}
@@ -84,7 +80,7 @@ export default function ContactScreen() {
           <Ionicons name="logo-whatsapp" size={28} color="#fff" />
           <View style={styles.contactInfo}>
             <Text style={styles.contactLabel}>واتساب</Text>
-            <Text style={styles.contactValue}>09-237-6808</Text>
+            <Text style={styles.contactValue}>{settings.whatsappNumber}</Text>
           </View>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </Pressable>
@@ -93,7 +89,7 @@ export default function ContactScreen() {
           <Ionicons name="call-outline" size={28} color={colors.foreground} />
           <View style={styles.contactInfo}>
             <Text style={[styles.contactLabel, { color: colors.foreground }]}>اتصال مباشر</Text>
-            <Text style={[styles.contactValue, { color: colors.foreground }]}>09-237-6808</Text>
+            <Text style={[styles.contactValue, { color: colors.foreground }]}>{contact.phoneNumber}</Text>
           </View>
           <Ionicons name="arrow-back" size={20} color={colors.foreground} />
         </Pressable>
@@ -145,7 +141,9 @@ export default function ContactScreen() {
           <View style={styles.infoContent}>
             <Text style={[styles.infoTitle, { color: colors.foreground }]}>الموقع</Text>
             <Text style={[styles.infoValue, { color: colors.mutedForeground }]}>
-              نابلس · المركز التجاري{"\n"}شارع عمر المختار · طلعة بنك القدس
+              {contact.addressLine1}
+              {"\n"}
+              {contact.addressLine2}
             </Text>
             <Text style={[styles.mapsLink, { color: colors.primary }]}>اضغط لفتح الخريطة</Text>
           </View>
@@ -156,17 +154,17 @@ export default function ContactScreen() {
           {
             icon: "time-outline" as const,
             title: "ساعات العمل",
-            value: "السبت - الخميس\n9:00 صباحاً - 9:00 مساءً",
+            value: contact.workingHours,
           },
           {
             icon: "rocket-outline" as const,
             title: "الشحن",
-            value: "توصيل سريع لجميع المناطق\nشحن مجاني فوق 200 ₪",
+            value: contact.shippingInfo,
           },
           {
             icon: "refresh-outline" as const,
             title: "سياسة الإرجاع",
-            value: "إمكانية الاستبدال خلال 7 أيام\nبالبضاعة سليمة",
+            value: contact.returnPolicy,
           },
         ].map((item) => (
           <View

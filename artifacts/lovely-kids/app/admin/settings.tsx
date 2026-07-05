@@ -281,6 +281,115 @@ export default function SettingsScreen() {
         ))}
       </Section>
 
+      {/* ── معلومات صفحة التواصل ── */}
+      <Section title="📇 صفحة تواصل معنا">
+        <Field
+          label="اسم المتجر"
+          value={settings.contactInfo?.storeName}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, storeName: v } })}
+          placeholder="Lovely Kids"
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field
+          label="الشعار الفرعي"
+          value={settings.contactInfo?.storeTagline}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, storeTagline: v } })}
+          placeholder="كل ما يحتاجه طفلك في مكان واحد"
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field label="رقم الاتصال المباشر">
+          <TextInput
+            value={settings.contactInfo?.phoneNumber ?? ""}
+            onChangeText={(v) =>
+              updateSettings({ contactInfo: { ...settings.contactInfo, phoneNumber: v.replace(/[^\d+]/g, "") } })
+            }
+            placeholder="092376808"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="phone-pad"
+            style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+        </Field>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field
+          label="رابط فيسبوك"
+          value={settings.contactInfo?.facebookUrl}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, facebookUrl: v } })}
+          placeholder="https://www.facebook.com/..."
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field
+          label="رابط انستجرام"
+          value={settings.contactInfo?.instagramUrl}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, instagramUrl: v } })}
+          placeholder="https://www.instagram.com/..."
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field
+          label="رابط تيك توك"
+          value={settings.contactInfo?.tiktokUrl}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, tiktokUrl: v } })}
+          placeholder="https://www.tiktok.com/@..."
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field
+          label="سطر العنوان الأول"
+          value={settings.contactInfo?.addressLine1}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, addressLine1: v } })}
+          placeholder="نابلس · المركز التجاري"
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field
+          label="سطر العنوان الثاني"
+          value={settings.contactInfo?.addressLine2}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, addressLine2: v } })}
+          placeholder="شارع عمر المختار · طلعة بنك القدس"
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field
+          label="رابط خرائط جوجل"
+          value={settings.contactInfo?.mapsUrl}
+          onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, mapsUrl: v } })}
+          placeholder="https://google.com/maps?..."
+        />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field label="ساعات العمل (سطرين بـ Enter)">
+          <TextInput
+            value={settings.contactInfo?.workingHours ?? ""}
+            onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, workingHours: v } })}
+            placeholder={"السبت - الخميس\n9:00 صباحاً - 9:00 مساءً"}
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            style={[styles.fieldInput, styles.fieldInputMultiline, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+        </Field>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field label="معلومات الشحن (سطرين بـ Enter)">
+          <TextInput
+            value={settings.contactInfo?.shippingInfo ?? ""}
+            onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, shippingInfo: v } })}
+            placeholder={"توصيل سريع لجميع المناطق\nشحن مجاني فوق 200 ₪"}
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            style={[styles.fieldInput, styles.fieldInputMultiline, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+        </Field>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <Field label="سياسة الإرجاع (سطرين بـ Enter)">
+          <TextInput
+            value={settings.contactInfo?.returnPolicy ?? ""}
+            onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, returnPolicy: v } })}
+            placeholder={"إمكانية الاستبدال خلال 7 أيام\nبالبضاعة سليمة"}
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            style={[styles.fieldInput, styles.fieldInputMultiline, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+        </Field>
+      </Section>
+
       {/* ── التصنيفات ── */}
       <Section title="🏷️ أسماء التصنيفات">
         <Pressable
@@ -359,6 +468,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     fontSize: 14,
+  },
+  fieldInputMultiline: {
+    minHeight: 60,
+    textAlignVertical: "top",
   },
   divider: { height: 1, marginHorizontal: 14 },
   swatchRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 },

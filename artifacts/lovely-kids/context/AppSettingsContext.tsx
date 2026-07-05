@@ -31,6 +31,21 @@ export interface BankInfo {
   iban: string;
 }
 
+export interface ContactInfo {
+  storeName: string;
+  storeTagline: string;
+  phoneNumber: string;
+  facebookUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
+  addressLine1: string;
+  addressLine2: string;
+  mapsUrl: string;
+  workingHours: string;
+  shippingInfo: string;
+  returnPolicy: string;
+}
+
 export interface AppSettings {
   primaryColor: string;
   backgroundColor: string;
@@ -48,6 +63,7 @@ export interface AppSettings {
   categoryLabels: Record<string, string>;
   bankInfo: BankInfo;
   whatsappNumber: string;
+  contactInfo: ContactInfo;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -81,6 +97,20 @@ const DEFAULT_SETTINGS: AppSettings = {
     iban: "",
   },
   whatsappNumber: "97292376808",
+  contactInfo: {
+    storeName: "Lovely Kids",
+    storeTagline: "كل ما يحتاجه طفلك في مكان واحد",
+    phoneNumber: "092376808",
+    facebookUrl: "https://www.facebook.com/lovely.kids.nablus1",
+    instagramUrl: "https://www.instagram.com/lovely.kids.nablus",
+    tiktokUrl: "https://www.tiktok.com/@lovely_kids_nablus",
+    addressLine1: "نابلس · المركز التجاري",
+    addressLine2: "شارع عمر المختار · طلعة بنك القدس",
+    mapsUrl: "https://google.com/maps?cid=10801481858754571229",
+    workingHours: "السبت - الخميس\n9:00 صباحاً - 9:00 مساءً",
+    shippingInfo: "توصيل سريع لجميع المناطق\nشحن مجاني فوق 200 ₪",
+    returnPolicy: "إمكانية الاستبدال خلال 7 أيام\nبالبضاعة سليمة",
+  },
 };
 
 interface AppSettingsContextType {
