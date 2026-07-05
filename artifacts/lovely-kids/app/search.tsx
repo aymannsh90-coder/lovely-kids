@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
-import { PRODUCTS } from "@/data/products";
+import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
 
 const { width } = Dimensions.get("window");
@@ -24,12 +24,13 @@ const POPULAR = ["ملابس مولود", "عربة أطفال", "ألعاب", "
 export default function SearchScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { products } = useProducts();
   const [query, setQuery] = useState("");
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const results = query.trim()
-    ? PRODUCTS.filter(
+    ? products.filter(
         (p) =>
           p.nameAr.includes(query) ||
           p.name.toLowerCase().includes(query.toLowerCase())

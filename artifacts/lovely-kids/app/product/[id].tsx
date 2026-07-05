@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useProducts } from "@/context/ProductsContext";
-import { PRODUCTS } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -29,9 +28,9 @@ export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const { addItem } = useCart();
   const { toggleItem, isWishlisted } = useWishlist();
-  const { products } = useProducts();
+  const { products, loading } = useProducts();
 
-  const product = products.find((p) => p.id === id) ?? PRODUCTS.find((p) => p.id === id);
+  const product = products.find((p) => p.id === id);
 
   const hasColorVariants = !!product?.colorVariants && product.colorVariants.length > 0;
   const [selectedColor, setSelectedColor] = useState<string | undefined>(
@@ -56,7 +55,36 @@ export default function ProductDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedColor]);
 
-  if (!product) return null;
+  if (!product) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.center,
+          { backgroundColor: colors.background, paddingTop: insets.top },
+        ]}
+      >
+        {loading ? (
+          <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>
+            جاري التحميل...
+          </Text>
+        ) : (
+          <>
+            <Ionicons name="alert-circle-outline" size={48} color={colors.mutedForeground} />
+            <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: "700" }}>
+              المنتج غير متوفر
+            </Text>
+            <Pressable
+              onPress={() => router.back()}
+              style={[styles.backToShop, { backgroundColor: colors.primary }]}
+            >
+              <Text style={styles.backToShopText}>الرجوع</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    );
+  }
 
   const allImages = product.images && product.images.length > 0
     ? product.images
@@ -345,6 +373,9 @@ export default function ProductDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  center: { alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },
+  backToShop: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 8 },
+  backToShopText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   carouselWrapper: { position: "relative" },
   imageSlide: {
     width: SCREEN_WIDTH,
