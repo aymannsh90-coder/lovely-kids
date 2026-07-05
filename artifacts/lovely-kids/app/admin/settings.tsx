@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ColorPickerButton } from "@/components/ColorPickerButton";
+import { LogoPickerButton } from "@/components/LogoPickerButton";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -99,6 +100,17 @@ export default function SettingsScreen() {
           <Ionicons name="refresh-outline" size={22} color="#fff" />
         </Pressable>
       </View>
+
+      {/* ── الشعار ── */}
+      <Section title="🖼️ شعار المتجر">
+        <View style={styles.field}>
+          <LogoPickerButton
+            value={settings.logoUrl}
+            fallbackSource={require("@/assets/images/logo.jpg")}
+            onChange={(url) => updateSettings({ logoUrl: url })}
+          />
+        </View>
+      </Section>
 
       {/* ── الألوان ── */}
       <Section title="🎨 الألوان الرئيسية">

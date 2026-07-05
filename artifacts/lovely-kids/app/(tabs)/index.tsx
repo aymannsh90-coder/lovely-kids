@@ -77,7 +77,7 @@ export default function HomeScreen() {
       >
         <View style={styles.headerLeft}>
           <Image
-            source={require("@/assets/images/logo.jpg")}
+            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
             resizeMode="contain"
           />

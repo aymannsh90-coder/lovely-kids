@@ -47,6 +47,7 @@ export interface ContactInfo {
 }
 
 export interface AppSettings {
+  logoUrl: string;
   primaryColor: string;
   backgroundColor: string;
   secondaryColor: string;
@@ -68,6 +69,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
+  logoUrl: "",
   primaryColor: "#E91E8C",
   backgroundColor: "#F0FAFE",
   secondaryColor: "#96DFEC",

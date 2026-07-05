@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
@@ -36,6 +37,7 @@ export default function ProfileScreen() {
   const { count } = useWishlist();
   const { newCount, clearNew } = useNewOrders();
   const { user, loading, register, login, logout, promoteToAdmin } = useAuth();
+  const { settings } = useAppSettings();
 
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
@@ -125,7 +127,7 @@ export default function ProfileScreen() {
           style={styles.avatarContainer}
         >
           <Image
-            source={require("@/assets/images/logo.jpg")}
+            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
             resizeMode="contain"
           />

@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 
 const VISIBLE_DURATION_MS = 3000;
@@ -22,6 +23,7 @@ interface WelcomeSplashProps {
 
 export function WelcomeSplash({ onFinish }: WelcomeSplashProps) {
   const colors = useColors();
+  const { settings } = useAppSettings();
   const player = useAudioPlayer(require("@/assets/sounds/welcome-chime.wav"));
 
   const containerOpacity = useSharedValue(1);
@@ -80,7 +82,7 @@ export function WelcomeSplash({ onFinish }: WelcomeSplashProps) {
       >
         <Animated.View style={[styles.logoWrap, logoStyle]}>
           <Image
-            source={require("@/assets/images/logo.jpg")}
+            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
             style={styles.logo}
           />
         </Animated.View>
