@@ -28,10 +28,17 @@ export function ProductCard({ product, style }: Props) {
   const wishlisted = isWishlisted(product.id);
 
   const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
+  const hasVariants =
+    (product.colorVariants && product.colorVariants.length > 0) ||
+    (product.sizes && product.sizes.length > 0);
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (hasVariants) {
+      router.push({ pathname: "/product/[id]", params: { id: product.id } });
+      return;
+    }
     addItem({
       id: product.id,
       name: product.nameAr,
