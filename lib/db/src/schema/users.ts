@@ -8,6 +8,7 @@ export const usersTable = pgTable("users", {
   name: text("name").notNull(),
   passwordHash: text("password_hash"),
   clerkUserId: text("clerk_user_id").unique(),
+  avatarUrl: text("avatar_url"),
   isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -18,6 +19,7 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({
   passwordHash: true,
   isAdmin: true,
   clerkUserId: true,
+  avatarUrl: true,
 }).extend({
   phone: z.string().min(6),
   name: z.string().min(1),

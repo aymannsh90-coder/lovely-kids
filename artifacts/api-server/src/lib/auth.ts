@@ -32,11 +32,12 @@ async function getOrCreateUserFromClerk(clerkUserId: string) {
   const name =
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ").trim() ||
     clerkUser.primaryEmailAddress?.emailAddress ||
-    "مستخدم جوجل";
+    "مستخدم جديد";
+  const avatarUrl = clerkUser.hasImage ? clerkUser.imageUrl : null;
 
   const rows = await db
     .insert(usersTable)
-    .values({ clerkUserId, name })
+    .values({ clerkUserId, name, avatarUrl })
     .returning();
   return rows[0];
 }

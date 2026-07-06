@@ -12,6 +12,7 @@ function toUser(u: typeof usersTable.$inferSelect) {
     phone: u.phone,
     name: u.name,
     isAdmin: u.isAdmin,
+    avatarUrl: u.avatarUrl,
   };
 }
 

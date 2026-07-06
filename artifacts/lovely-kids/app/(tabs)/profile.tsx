@@ -160,9 +160,13 @@ export default function ProfileScreen() {
         </View>
       ) : user ? (
         <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.accountAvatar, { backgroundColor: colors.primary }]}>
-            <Ionicons name="person" size={24} color="#fff" />
-          </View>
+          {user.avatarUrl ? (
+            <Image source={{ uri: user.avatarUrl }} style={styles.accountAvatarImage} />
+          ) : (
+            <View style={[styles.accountAvatar, { backgroundColor: colors.primary }]}>
+              <Ionicons name="person" size={24} color="#fff" />
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={[styles.accountName, { color: colors.foreground }]}>{user.name}</Text>
             {user.phone ? (
@@ -427,6 +431,11 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
+  },
+  accountAvatarImage: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   accountName: { fontSize: 15, fontWeight: "700", textAlign: "right" },
   accountPhone: { fontSize: 13, marginTop: 2, textAlign: "right" },
