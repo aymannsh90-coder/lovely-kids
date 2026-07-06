@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Image,
@@ -167,6 +168,29 @@ export default function AdminOrdersScreen() {
     } catch {
       // ignore
     }
+  };
+
+  const deleteOrder = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/orders/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setOrders((prev) => prev.filter((o) => o.id !== id));
+        if (expanded === id) setExpanded(null);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const confirmDeleteOrder = (id: number) => {
+    Alert.alert(
+      "حذف الطلب",
+      `هل أنت متأكد من حذف الطلب #${id}؟ لا يمكن التراجع عن هذا الإجراء.`,
+      [
+        { text: "إلغاء", style: "cancel" },
+        { text: "حذف", style: "destructive", onPress: () => deleteOrder(id) },
+      ]
+    );
   };
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
@@ -435,6 +459,15 @@ export default function AdminOrdersScreen() {
                         </Pressable>
                       ))}
                     </View>
+
+                    {/* Delete Order */}
+                    <Pressable
+                      onPress={() => confirmDeleteOrder(item.id)}
+                      style={[styles.deleteBtn, { backgroundColor: "#ef444420" }]}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                      <Text style={styles.deleteBtnText}>حذف الطلب</Text>
+                    </Pressable>
                   </View>
                 )}
               </Pressable>
@@ -528,6 +561,8 @@ const styles = StyleSheet.create({
   statusBtns: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 6 },
   statusBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20 },
   statusBtnText: { fontSize: 12, fontWeight: "700" },
+  deleteBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, marginTop: 4 },
+  deleteBtnText: { color: "#ef4444", fontSize: 13, fontWeight: "700" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center" },
   modalContent: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
   proofFull: { width: 340, height: 500 },

@@ -106,4 +106,22 @@ router.patch("/orders/:id/confirm-payment", async (req, res) => {
   res.json(updated[0]);
 });
 
+// DELETE /api/orders/:id — remove an order
+router.delete("/orders/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "معرّف الطلب غير صالح" });
+    return;
+  }
+
+  const deleted = await db.delete(ordersTable).where(eq(ordersTable.id, id)).returning();
+
+  if (deleted.length === 0) {
+    res.status(404).json({ error: "الطلب غير موجود" });
+    return;
+  }
+
+  res.status(204).send();
+});
+
 export default router;
