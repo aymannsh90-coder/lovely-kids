@@ -29,10 +29,13 @@ async function getOrCreateUserFromClerk(clerkUserId: string) {
   if (existing[0]) return existing[0];
 
   const clerkUser = await clerkClient.users.getUser(clerkUserId);
+  const isAppleUser = clerkUser.externalAccounts.some(
+    (account) => account.provider === "apple"
+  );
   const name =
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ").trim() ||
     clerkUser.primaryEmailAddress?.emailAddress ||
-    "مستخدم جديد";
+    (isAppleUser ? "مستخدم آبل" : "مستخدم جديد");
   const avatarUrl = clerkUser.hasImage ? clerkUser.imageUrl : null;
 
   const rows = await db

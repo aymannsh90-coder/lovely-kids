@@ -115,30 +115,42 @@ export function SocialSignInButtons() {
   return (
     <>
       <View style={styles.buttonsRow}>
-        {PROVIDERS.map((p) => (
-          <Pressable
-            key={p.key}
-            onPress={() => handlePress(p.key, p.strategy)}
-            disabled={submittingProvider !== null}
-            style={[
-              styles.button,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                opacity: submittingProvider !== null && submittingProvider !== p.key ? 0.5 : 1,
-              },
-            ]}
-          >
-            {submittingProvider === p.key ? (
-              <ActivityIndicator color={colors.foreground} />
-            ) : (
-              <>
-                <Ionicons name={p.icon} size={18} color={colors.foreground} />
-                <Text style={[styles.text, { color: colors.foreground }]}>{p.label}</Text>
-              </>
-            )}
-          </Pressable>
-        ))}
+        {PROVIDERS.map((p) => {
+          // Apple's Human Interface Guidelines require the "Sign in with
+          // Apple" button to use one of Apple's own approved styles (solid
+          // black, white, or white-outline) rather than matching arbitrary
+          // app branding like the other social buttons — App Store review
+          // can reject a custom-styled Apple button that looks identical to
+          // a third-party one.
+          const isApple = p.key === "apple";
+          const bg = isApple ? "#000000" : colors.card;
+          const fg = isApple ? "#FFFFFF" : colors.foreground;
+          const border = isApple ? "#000000" : colors.border;
+          return (
+            <Pressable
+              key={p.key}
+              onPress={() => handlePress(p.key, p.strategy)}
+              disabled={submittingProvider !== null}
+              style={[
+                styles.button,
+                {
+                  borderColor: border,
+                  backgroundColor: bg,
+                  opacity: submittingProvider !== null && submittingProvider !== p.key ? 0.5 : 1,
+                },
+              ]}
+            >
+              {submittingProvider === p.key ? (
+                <ActivityIndicator color={fg} />
+              ) : (
+                <>
+                  <Ionicons name={p.icon} size={18} color={fg} />
+                  <Text style={[styles.text, { color: fg }]}>{p.label}</Text>
+                </>
+              )}
+            </Pressable>
+          );
+        })}
       </View>
       {error ? (
         <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
