@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
@@ -164,7 +165,9 @@ export default function ProfileScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.accountName, { color: colors.foreground }]}>{user.name}</Text>
-            <Text style={[styles.accountPhone, { color: colors.mutedForeground }]}>{user.phone}</Text>
+            {user.phone ? (
+              <Text style={[styles.accountPhone, { color: colors.mutedForeground }]}>{user.phone}</Text>
+            ) : null}
           </View>
           <Pressable onPress={() => logout()} style={styles.logoutBtn}>
             <Ionicons name="log-out-outline" size={22} color={colors.destructive} />
@@ -253,6 +256,14 @@ export default function ProfileScreen() {
               </Text>
             )}
           </Pressable>
+
+          <View style={styles.orRow}>
+            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.orText, { color: colors.mutedForeground }]}>أو</Text>
+            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+          </View>
+
+          <GoogleSignInButton />
         </View>
       )}
 
@@ -442,6 +453,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   errorText: { fontSize: 13, fontWeight: "600", textAlign: "right" },
+  orRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 2,
+  },
+  orLine: { flex: 1, height: 1 },
+  orText: { fontSize: 12, fontWeight: "600" },
   authSubmitBtn: {
     borderRadius: 12,
     paddingVertical: 14,

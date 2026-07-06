@@ -1,3 +1,4 @@
 - [Expo standalone build domain fallback](expo-standalone-build-domain.md) — EXPO_PUBLIC_DOMAIN is dev-only; standalone/EAS builds need a hardcoded production URL fallback or every server call silently fails.
 - [Phone-based auth for Expo apps needing SMS/Facebook login](expo-phone-auth-no-clerk.md) — Clerk lacks native phone/SMS and Facebook login; custom phone+password + token sessions is the pragmatic fallback.
 - [reanimated-color-picker worklet callbacks](reanimated-color-picker-worklets.md) — must use onChangeJS/onCompleteJS (not onChange/onComplete) for plain React state setters, or it expects a worklet.
+- [Clerk + legacy custom auth coexistence](clerk-legacy-auth-coexistence.md) — pattern for adding Clerk OAuth alongside an existing custom session-token auth system without breaking it.

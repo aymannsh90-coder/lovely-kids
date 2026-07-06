@@ -4,9 +4,10 @@ import { z } from "zod/v4";
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
-  phone: text("phone").notNull().unique(),
+  phone: text("phone").unique(),
   name: text("name").notNull(),
-  passwordHash: text("password_hash").notNull(),
+  passwordHash: text("password_hash"),
+  clerkUserId: text("clerk_user_id").unique(),
   isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -16,6 +17,7 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({
   createdAt: true,
   passwordHash: true,
   isAdmin: true,
+  clerkUserId: true,
 }).extend({
   phone: z.string().min(6),
   name: z.string().min(1),

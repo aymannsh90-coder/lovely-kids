@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { supabase } from "../lib/supabase";
-import { getBearerToken, getUserFromToken } from "../lib/auth";
+import { getCurrentUser } from "../lib/auth";
 
 const router = Router();
 
@@ -30,7 +30,7 @@ router.get("/settings", async (_req, res) => {
 // =======================
 router.put("/settings", async (req, res) => {
   try {
-    const user = await getUserFromToken(getBearerToken(req));
+    const user = await getCurrentUser(req);
 
     if (!user || !user.isAdmin) {
       return res.status(403).json({ error: "غير مصرح لك بتعديل الإعدادات" });

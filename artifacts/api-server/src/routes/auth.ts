@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, usersTable, sessionsTable, registerSchema, loginSchema } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword, generateToken } from "../lib/password";
-import { getBearerToken, getUserFromToken } from "../lib/auth";
+import { getBearerToken, getUserFromToken, getCurrentUser } from "../lib/auth";
 
 const router = Router();
 
@@ -54,7 +54,7 @@ router.post("/auth/login", async (req, res) => {
 
   const rows = await db.select().from(usersTable).where(eq(usersTable.phone, phone));
   const user = rows[0];
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
     res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
     return;
   }
@@ -67,7 +67,7 @@ router.post("/auth/login", async (req, res) => {
 
 // GET /api/auth/me
 router.get("/auth/me", async (req, res) => {
-  const user = await getUserFromToken(getBearerToken(req));
+  const user = await getCurrentUser(req);
   if (!user) {
     res.status(401).json({ error: "غير مسجل الدخول" });
     return;
@@ -86,7 +86,7 @@ router.post("/auth/logout", async (req, res) => {
 
 // POST /api/auth/promote-admin
 router.post("/auth/promote-admin", async (req, res) => {
-  const user = await getUserFromToken(getBearerToken(req));
+  const user = await getCurrentUser(req);
   if (!user) {
     res.status(401).json({ error: "غير مسجل الدخول" });
     return;

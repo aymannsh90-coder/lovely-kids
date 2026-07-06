@@ -163,10 +163,10 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
 const STORAGE_KEY = "lovely_kids_app_settings";
 
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { token } = useAuth();
+  const { getAuthToken } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const tokenRef = useRef<string | null>(token);
-  tokenRef.current = token;
+  const getAuthTokenRef = useRef(getAuthToken);
+  getAuthTokenRef.current = getAuthToken;
 
   const applyRemote = useCallback((data: Partial<AppSettings>) => {
     const merged = { ...DEFAULT_SETTINGS, ...data };
@@ -221,11 +221,12 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   const pushSettings = useCallback(
     async (partial: Partial<AppSettings>) => {
       try {
+        const authToken = await getAuthTokenRef.current();
         const res = await fetch(`${API_BASE}/api/settings`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            ...(tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {}),
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify(partial),
         });

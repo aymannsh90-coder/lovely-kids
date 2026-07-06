@@ -5,6 +5,8 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import { ClerkLoaded, ClerkProvider } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -26,6 +28,9 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
 function RootLayoutNav() {
   usePushNotifications();
@@ -66,33 +71,41 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <AppSettingsProvider>
-              <ProductsProvider>
-                <CartProvider>
-                  <WishlistProvider>
-                    <NewOrdersProvider>
-                      <GestureHandlerRootView style={{ flex: 1 }}>
-                        <KeyboardProvider>
-                          <RootLayoutNav />
-                          {showWelcome && (
-                            <WelcomeSplash
-                              onFinish={() => setShowWelcome(false)}
-                            />
-                          )}
-                        </KeyboardProvider>
-                      </GestureHandlerRootView>
-                    </NewOrdersProvider>
-                  </WishlistProvider>
-                </CartProvider>
-              </ProductsProvider>
-            </AppSettingsProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <ClerkProvider
+      publishableKey={clerkPublishableKey}
+      tokenCache={tokenCache}
+      proxyUrl={clerkProxyUrl}
+    >
+      <ClerkLoaded>
+        <SafeAreaProvider>
+          <ErrorBoundary>
+            <QueryClientProvider client={queryClient}>
+              <AuthProvider>
+                <AppSettingsProvider>
+                  <ProductsProvider>
+                    <CartProvider>
+                      <WishlistProvider>
+                        <NewOrdersProvider>
+                          <GestureHandlerRootView style={{ flex: 1 }}>
+                            <KeyboardProvider>
+                              <RootLayoutNav />
+                              {showWelcome && (
+                                <WelcomeSplash
+                                  onFinish={() => setShowWelcome(false)}
+                                />
+                              )}
+                            </KeyboardProvider>
+                          </GestureHandlerRootView>
+                        </NewOrdersProvider>
+                      </WishlistProvider>
+                    </CartProvider>
+                  </ProductsProvider>
+                </AppSettingsProvider>
+              </AuthProvider>
+            </QueryClientProvider>
+          </ErrorBoundary>
+        </SafeAreaProvider>
+      </ClerkLoaded>
+    </ClerkProvider>
   );
 }
