@@ -40,42 +40,52 @@ const FIELD_LABELS: Record<string, string> = {
   last_name: "الاسم الأخير",
 };
 
-export function GoogleSignInButton() {
+type Provider = "google" | "apple";
+
+const PROVIDERS: { key: Provider; strategy: "oauth_google" | "oauth_apple"; label: string; icon: "logo-google" | "logo-apple" }[] = [
+  { key: "google", strategy: "oauth_google", label: "المتابعة عبر جوجل", icon: "logo-google" },
+  { key: "apple", strategy: "oauth_apple", label: "المتابعة عبر آبل", icon: "logo-apple" },
+];
+
+export function SocialSignInButtons() {
   useWarmUpBrowser();
   const colors = useColors();
   const { startSSOFlow } = useSSO();
   const { signUp } = useSignUp();
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingProvider, setSubmittingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState("");
   const [needsCompletion, setNeedsCompletion] = useState(false);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [completing, setCompleting] = useState(false);
 
-  const onPress = useCallback(async () => {
-    setSubmitting(true);
-    setError("");
-    try {
-      const { createdSessionId, setActive } = await startSSOFlow({
-        strategy: "oauth_google",
-        redirectUrl: AuthSession.makeRedirectUri(),
-      });
+  const handlePress = useCallback(
+    async (provider: Provider, strategy: "oauth_google" | "oauth_apple") => {
+      setSubmittingProvider(provider);
+      setError("");
+      try {
+        const { createdSessionId, setActive } = await startSSOFlow({
+          strategy,
+          redirectUrl: AuthSession.makeRedirectUri(),
+        });
 
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (signUp?.status === "missing_requirements") {
-        setNeedsCompletion(true);
-      } else if (signUp?.status && signUp.status !== "complete") {
-        setError("تعذر إكمال تسجيل الدخول عبر جوجل");
+        if (createdSessionId && setActive) {
+          await setActive({ session: createdSessionId });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else if (signUp?.status === "missing_requirements") {
+          setNeedsCompletion(true);
+        } else if (signUp?.status && signUp.status !== "complete") {
+          setError("تعذر إكمال تسجيل الدخول");
+        }
+      } catch (err) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setError("تعذر تسجيل الدخول، حاول مرة أخرى");
+        console.error(JSON.stringify(err, null, 2));
+      } finally {
+        setSubmittingProvider(null);
       }
-    } catch (err) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError("تعذر تسجيل الدخول عبر جوجل، حاول مرة أخرى");
-      console.error(JSON.stringify(err, null, 2));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [startSSOFlow, signUp]);
+    },
+    [startSSOFlow, signUp]
+  );
 
   const handleCompleteSignUp = useCallback(async () => {
     if (!signUp) return;
@@ -104,25 +114,32 @@ export function GoogleSignInButton() {
 
   return (
     <>
-      <Pressable
-        onPress={onPress}
-        disabled={submitting}
-        style={[
-          styles.button,
-          { borderColor: colors.border, backgroundColor: colors.card, opacity: submitting ? 0.7 : 1 },
-        ]}
-      >
-        {submitting ? (
-          <ActivityIndicator color={colors.foreground} />
-        ) : (
-          <>
-            <Ionicons name="logo-google" size={18} color={colors.foreground} />
-            <Text style={[styles.text, { color: colors.foreground }]}>
-              المتابعة عبر جوجل
-            </Text>
-          </>
-        )}
-      </Pressable>
+      <View style={styles.buttonsRow}>
+        {PROVIDERS.map((p) => (
+          <Pressable
+            key={p.key}
+            onPress={() => handlePress(p.key, p.strategy)}
+            disabled={submittingProvider !== null}
+            style={[
+              styles.button,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                opacity: submittingProvider !== null && submittingProvider !== p.key ? 0.5 : 1,
+              },
+            ]}
+          >
+            {submittingProvider === p.key ? (
+              <ActivityIndicator color={colors.foreground} />
+            ) : (
+              <>
+                <Ionicons name={p.icon} size={18} color={colors.foreground} />
+                <Text style={[styles.text, { color: colors.foreground }]}>{p.label}</Text>
+              </>
+            )}
+          </Pressable>
+        ))}
+      </View>
       {error ? (
         <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
       ) : null}
@@ -179,16 +196,21 @@ export function GoogleSignInButton() {
 }
 
 const styles = StyleSheet.create({
+  buttonsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
   button: {
+    flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 8,
     borderRadius: 12,
     borderWidth: 1.5,
     paddingVertical: 13,
   },
-  text: { fontSize: 15, fontWeight: "700" },
+  text: { fontSize: 14, fontWeight: "700" },
   errorText: { fontSize: 13, fontWeight: "600", textAlign: "right", marginTop: 6 },
   modalOverlay: {
     flex: 1,

@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { GoogleSignInButton } from "@/components/GoogleSignInButton";
+import { SocialSignInButtons } from "@/components/SocialSignInButtons";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
@@ -175,6 +175,20 @@ export default function ProfileScreen() {
         </View>
       ) : (
         <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.authSectionLabel, { color: colors.mutedForeground }]}>
+            سجّل دخولك أو أنشئ حسابك بخطوة واحدة
+          </Text>
+
+          <SocialSignInButtons />
+
+          <View style={styles.orRow}>
+            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.orText, { color: colors.mutedForeground }]}>
+              أو سجّل برقم الهاتف
+            </Text>
+            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+          </View>
+
           <View style={styles.authTabs}>
             <Pressable
               onPress={() => { setAuthMode("login"); setAuthError(""); }}
@@ -256,14 +270,6 @@ export default function ProfileScreen() {
               </Text>
             )}
           </Pressable>
-
-          <View style={styles.orRow}>
-            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
-            <Text style={[styles.orText, { color: colors.mutedForeground }]}>أو</Text>
-            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
-          </View>
-
-          <GoogleSignInButton />
         </View>
       )}
 
@@ -432,6 +438,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     gap: 10,
+  },
+  authSectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 2,
   },
   authTabs: {
     flexDirection: "row-reverse",
