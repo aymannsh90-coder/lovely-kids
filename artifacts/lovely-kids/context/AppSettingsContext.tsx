@@ -123,8 +123,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     addressLine2: "شارع عمر المختار · طلعة بنك القدس",
     mapsUrl: "https://google.com/maps?cid=10801481858754571229",
     workingHours: "السبت - الخميس\n9:00 صباحاً - 9:00 مساءً",
-    shippingInfo: "توصيل سريع لجميع المناطق\nشحن مجاني فوق 200 ₪",
-    returnPolicy: "إمكانية الاستبدال خلال 7 أيام\nبالبضاعة سليمة",
+    shippingInfo: "توصيل سريع لجميع المناطق\nشحن مجاني فوق 500 ₪",
+    returnPolicy: "إمكانية الاستبدال خلال 7 أيام\nبالبضاعة السليمة",
   },
   aboutInfo: {
     intro:
