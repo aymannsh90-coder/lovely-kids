@@ -346,7 +346,7 @@ export default function ProductDetailScreen() {
           <View style={[styles.featuresBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
             {[
               { icon: "shield-checkmark-outline" as const, text: "جودة مضمونة 100%" },
-              { icon: "refresh-outline" as const, text: "إمكانية الاستبدال خلال 7 أيام" },
+              { icon: "refresh-outline" as const, text: "إمكانية الاستبدال بالبضاعة السليمة" },
               { icon: "rocket-outline" as const, text: "شحن سريع لجميع المناطق" },
             ].map((f) => (
               <View key={f.text} style={styles.featureRow}>
