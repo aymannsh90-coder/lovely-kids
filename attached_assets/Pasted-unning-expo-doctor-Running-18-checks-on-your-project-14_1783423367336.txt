@@ -1,0 +1,77 @@
+unning "expo doctor"
+Running 18 checks on your project...
+14/18 checks passed. 4 checks failed. Possible issues detected:
+Use the --verbose flag to see more details about passed checks.
+✖ Check Expo config (app.json/ app.config.js) schema
+Errors validating fields in /home/expo/workingdir/build/artifacts/lovely-kids/app.json:
+ Field: android - should NOT have additional property 'enableShrinkResources'.
+ Field: android - should NOT have additional property 'enableProguardInRelease'.
+Error validating asset fields in /home/expo/workingdir/build/artifacts/lovely-kids/app.json:
+ Field: Splash.image - the file extension should match the content, but the file extension is .png while the file content at './assets/images/icon.png' is of type jpg.
+ Field: Splash.image - field 'Splash.image' should point to .png image but the file at './assets/images/icon.png' has type jpg.
+ Field: icon - the file extension should match the content, but the file extension is .png while the file content at './assets/images/icon.png' is of type jpg.
+ Field: icon - field 'icon' should point to .png image but the file at './assets/images/icon.png' has type jpg.
+ Field: icon - image should be square, but the file at './assets/images/icon.png' has dimensions 960x959.
+Advice:
+Resolve schema errors in your app config. Learn more: https://docs.expo.dev/workflow/configuration/
+✖ Check for legacy global CLI installed locally
+EAS CLI should not be installed in your project. Instead, install it globally or use "npx", "pnpx", or "bunx" depending on your preferred package manager.
+Advice:
+Remove eas-cli from your project dependencies.
+✖ Check that required peer dependencies are installed
+Missing peer dependency: expo-asset
+Required by: expo-audio
+Advice:
+Install missing required peer dependency with "npx expo install expo-asset"
+Your app may crash outside of Expo Go without this dependency. Native module peer dependencies must be installed directly.
+✖ Check that no duplicate dependencies are installed
+Your project contains duplicate native module dependencies, which should be de-duplicated.
+Native builds may only contain one version of any given native module, and having multiple versions of a single Native module installed may lead to unexpected build errors.
+Found duplicates for expo:
+  ├─ expo@54.0.35 (at: node_modules/expo)
+  │  └─ linked to: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_f6f32ea34dffbbde148a20bc98dfa37e/node_modules/expo
+  └─ expo@54.0.35 (at: ../../node_modules/.pnpm/expo-keep-awake@15.0.8_expo@54.0.35_react@19.1.0/node_modules/expo)
+     └─ linked to a different installation
+Found duplicates for react-native:
+  ├─ react-native@0.81.5 (at: node_modules/react-native)
+  │  └─ linked to: ../../node_modules/.pnpm/react-native@0.81.5_@babel+core@7.29.7_@types+react@19.1.17_react@19.1.0/node_modules/react-native
+  └─ react-native@0.81.5 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_2735acf49930990fc17e4f7a19e9eb98/node_modules/react-native)
+     └─ linked to a different installation
+Found duplicates for @expo/vector-icons:
+  ├─ @expo/vector-icons@15.1.1 (at: node_modules/@expo/vector-icons)
+  │  └─ linked to: ../../node_modules/.pnpm/@expo+vector-icons@15.1.1_expo-font@14.0.12_expo@54.0.35_react-native@0.81.5_@babel+cor_e77cb8d2c5ebcdd004973413c2e800d6/node_modules/@expo/vector-icons
+  └─ @expo/vector-icons@15.1.1 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_2735acf49930990fc17e4f7a19e9eb98/node_modules/@expo/vector-icons)
+     └─ linked to a different installation
+Found duplicates for expo-constants:
+  ├─ expo-constants@18.0.13 (at: node_modules/expo-constants)
+  │  └─ linked to: ../../node_modules/.pnpm/expo-constants@18.0.13_expo@54.0.35_react-native@0.81.5_@babel+core@7.29.7_@types+react@19.1.17_react@19.1.0_/node_modules/expo-constants
+  └─ expo-constants@18.0.13 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_2735acf49930990fc17e4f7a19e9eb98/node_modules/expo-constants)
+     └─ linked to a different installation
+Found duplicates for expo-font:
+  ├─ expo-font@14.0.12 (at: node_modules/expo-font)
+  │  └─ linked to: ../../node_modules/.pnpm/expo-font@14.0.12_expo@54.0.35_react-native@0.81.5_@babel+core@7.29.7_@types+react@19.1.17_react@19.1.0__react@19.1.0/node_modules/expo-font
+  └─ expo-font@14.0.12 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_2735acf49930990fc17e4f7a19e9eb98/node_modules/expo-font)
+     └─ linked to a different installation
+Found duplicates for expo-asset:
+  ├─ expo-asset@12.0.13 (at: ../../node_modules/.pnpm/expo-audio@1.1.1_expo-asset@12.0.13_expo@54.0.35_react-native@0.81.5_@babel+core@7.29.7_05749c62ee6ea4c8e7f30758f0f4e9e4/node_modules/expo-asset)
+  │  └─ linked to a different installation
+  └─ expo-asset@12.0.13 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_2735acf49930990fc17e4f7a19e9eb98/node_modules/expo-asset)
+     └─ linked to a different installation
+Found duplicates for expo-file-system:
+  ├─ expo-file-system@19.0.23 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_f6f32ea34dffbbde148a20bc98dfa37e/node_modules/expo-file-system)
+  │  └─ linked to a different installation
+  └─ expo-file-system@19.0.23 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_2735acf49930990fc17e4f7a19e9eb98/node_modules/expo-file-system)
+     └─ linked to a different installation
+Found duplicates for expo-modules-core:
+  ├─ expo-modules-core@3.0.30 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_f6f32ea34dffbbde148a20bc98dfa37e/node_modules/expo-modules-core)
+  │  └─ linked to a different installation
+  └─ expo-modules-core@3.0.30 (at: ../../node_modules/.pnpm/expo@54.0.35_@babel+core@7.29.7_@expo+metro-runtime@6.1.2_expo-router@6.0.24_graphql@16_2735acf49930990fc17e4f7a19e9eb98/node_modules/expo-modules-core)
+     └─ linked to a different installation
+Advice:
+Your node_modules folder may be corrupted. Multiple copies of the same version exist for: expo, react-native, @expo/vector-icons, expo-constants, expo-font, expo-asset, expo-file-system, expo-modules-core.
+- Try deleting your node_modules folders and reinstall your dependencies after.
+- If this error persists, delete your node_modules as well as your lockfile and reinstall.
+Resolve your dependency issues and deduplicate your dependencies. Learn more: https://expo.fyi/resolving-dependency-issues
+4 checks failed, indicating possible issues with the project.
+Command "expo doctor" failed.
+npx -y expo-doctor exited with non-zero code: 1
