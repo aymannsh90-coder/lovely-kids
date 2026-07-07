@@ -6,6 +6,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -93,6 +94,8 @@ export default function ProductDetailScreen() {
     : !!product.sizes && product.sizes.length > 0 && !selectedSize;
   const selectionIncomplete = needsColor || needsSize;
 
+  const [cartModal, setCartModal] = useState(false);
+
   const handleAddToCart = () => {
     if (isOutOfStock || selectionIncomplete) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -105,8 +108,7 @@ export default function ProductDetailScreen() {
       size: selectedSize,
       color: activeColorVariant?.color,
     });
-    setAdded(true);
-    setTimeout(() => setAdded(false), 2000);
+    setCartModal(true);
   };
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom + 16;
@@ -375,11 +377,11 @@ export default function ProductDetailScreen() {
               disabled={selectionIncomplete}
               style={[
                 styles.addBtn,
-                { backgroundColor: added ? "#22c55e" : selectionIncomplete ? colors.muted : colors.primary },
+                { backgroundColor: selectionIncomplete ? colors.muted : colors.primary },
               ]}
             >
               <Ionicons
-                name={added ? "checkmark" : "bag-add-outline"}
+                name="bag-add-outline"
                 size={20}
                 color={selectionIncomplete ? colors.mutedForeground : "#fff"}
               />
@@ -389,12 +391,45 @@ export default function ProductDetailScreen() {
                   { color: selectionIncomplete ? colors.mutedForeground : "#fff" },
                 ]}
               >
-                {added ? "تمت الإضافة!" : "أضف إلى السلة"}
+                أضف إلى السلة
               </Text>
             </Pressable>
           </>
         )}
       </View>
+
+      {/* ── Added-to-cart modal ── */}
+      <Modal
+        transparent
+        visible={cartModal}
+        animationType="fade"
+        onRequestClose={() => setCartModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setCartModal(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: colors.primary + "18" }]}>
+              <Ionicons name="checkmark-circle" size={44} color={colors.primary} />
+            </View>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>تمت الإضافة إلى السلة!</Text>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>{product.nameAr}</Text>
+
+            <Pressable
+              style={[styles.modalPrimaryBtn, { backgroundColor: colors.primary }]}
+              onPress={() => { setCartModal(false); router.push("/cart"); }}
+            >
+              <Ionicons name="bag-check-outline" size={18} color="#fff" />
+              <Text style={styles.modalPrimaryBtnText}>إتمام الشراء</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.modalSecondaryBtn, { borderColor: colors.border }]}
+              onPress={() => setCartModal(false)}
+            >
+              <Text style={[styles.modalSecondaryBtnText, { color: colors.foreground }]}>متابعة التسوق</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -483,4 +518,25 @@ const styles = StyleSheet.create({
   outOfStockBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16, borderWidth: 1 },
   outOfStockBtnText: { fontSize: 16, fontWeight: "700" },
   selectionHint: { fontSize: 12, fontWeight: "600", textAlign: "center", marginBottom: 8 },
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center", alignItems: "center", padding: 24,
+  },
+  modalCard: {
+    width: "100%", borderRadius: 24, borderWidth: 1,
+    padding: 24, alignItems: "center", gap: 8,
+  },
+  modalIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  modalTitle: { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  modalSub: { fontSize: 13, textAlign: "center", marginBottom: 8 },
+  modalPrimaryBtn: {
+    width: "100%", flexDirection: "row-reverse", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 14, borderRadius: 14, marginTop: 4,
+  },
+  modalPrimaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  modalSecondaryBtn: {
+    width: "100%", alignItems: "center", justifyContent: "center",
+    paddingVertical: 12, borderRadius: 14, borderWidth: 1, marginTop: 4,
+  },
+  modalSecondaryBtnText: { fontSize: 14, fontWeight: "600" },
 });
