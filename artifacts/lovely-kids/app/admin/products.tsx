@@ -182,6 +182,13 @@ export default function AdminProductsScreen() {
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <Pressable
+            onPress={() => router.push("/admin/users")}
+            style={[styles.addBtn, { backgroundColor: "#6366f1" }]}
+          >
+            <Ionicons name="people-outline" size={18} color="#fff" />
+            <Text style={styles.addBtnText}>المستخدمون</Text>
+          </Pressable>
+          <Pressable
             onPress={() => router.push("/admin/orders")}
             style={[styles.addBtn, { backgroundColor: "#25D366" }]}
           >

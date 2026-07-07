@@ -85,6 +85,46 @@ router.post("/auth/logout", async (req, res) => {
   res.status(204).end();
 });
 
+// GET /api/users — list all users (admin only)
+router.get("/users", async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user?.isAdmin) {
+    res.status(403).json({ error: "غير مصرح" });
+    return;
+  }
+  const rows = await db
+    .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, isAdmin: usersTable.isAdmin, createdAt: usersTable.createdAt, clerkUserId: usersTable.clerkUserId, avatarUrl: usersTable.avatarUrl })
+    .from(usersTable)
+    .orderBy(usersTable.createdAt);
+  res.json(rows.map((u) => ({ ...u, id: String(u.id) })));
+});
+
+// DELETE /api/users/:id — delete a user (admin only, cannot delete self)
+router.delete("/users/:id", async (req, res) => {
+  const admin = await getCurrentUser(req);
+  if (!admin?.isAdmin) {
+    res.status(403).json({ error: "غير مصرح" });
+    return;
+  }
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "معرّف المستخدم غير صالح" });
+    return;
+  }
+  if (id === admin.id) {
+    res.status(400).json({ error: "لا يمكنك حذف حسابك الخاص" });
+    return;
+  }
+  // Delete sessions first, then user
+  await db.delete(sessionsTable).where(eq(sessionsTable.userId, id));
+  const deleted = await db.delete(usersTable).where(eq(usersTable.id, id)).returning();
+  if (deleted.length === 0) {
+    res.status(404).json({ error: "المستخدم غير موجود" });
+    return;
+  }
+  res.status(204).end();
+});
+
 // POST /api/auth/promote-admin
 router.post("/auth/promote-admin", async (req, res) => {
   const user = await getCurrentUser(req);
