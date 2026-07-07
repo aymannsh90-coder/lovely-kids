@@ -92,6 +92,7 @@ export default function AdminOrdersScreen() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [proofModal, setProofModal] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const bannerAnim = useRef(new Animated.Value(-80)).current;
   const bannerCount = useRef(0);
 
@@ -171,6 +172,7 @@ export default function AdminOrdersScreen() {
   };
 
   const deleteOrder = async (id: number) => {
+    setDeleteConfirmId(null);
     try {
       const res = await fetch(`${API_BASE}/api/orders/${id}`, { method: "DELETE" });
       if (res.ok) {
@@ -183,14 +185,7 @@ export default function AdminOrdersScreen() {
   };
 
   const confirmDeleteOrder = (id: number) => {
-    Alert.alert(
-      "حذف الطلب",
-      `هل أنت متأكد من حذف الطلب #${id}؟ لا يمكن التراجع عن هذا الإجراء.`,
-      [
-        { text: "إلغاء", style: "cancel" },
-        { text: "حذف", style: "destructive", onPress: () => deleteOrder(id) },
-      ]
-    );
+    setDeleteConfirmId(id);
   };
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
@@ -476,6 +471,38 @@ export default function AdminOrdersScreen() {
         />
       )}
 
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteConfirmId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmId(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setDeleteConfirmId(null)}>
+          <Pressable style={[styles.deleteConfirmCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.deleteConfirmIcon}>
+              <Ionicons name="trash-outline" size={36} color="#ef4444" />
+            </View>
+            <Text style={[styles.deleteConfirmTitle, { color: colors.foreground }]}>حذف الطلب</Text>
+            <Text style={[styles.deleteConfirmSub, { color: colors.mutedForeground }]}>
+              {`هل أنت متأكد من حذف الطلب #${deleteConfirmId}؟ لا يمكن التراجع عن هذا الإجراء.`}
+            </Text>
+            <Pressable
+              style={styles.deleteConfirmBtn}
+              onPress={() => deleteConfirmId !== null && deleteOrder(deleteConfirmId)}
+            >
+              <Text style={styles.deleteConfirmBtnText}>حذف</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.deleteCancelBtn, { borderColor: colors.border }]}
+              onPress={() => setDeleteConfirmId(null)}
+            >
+              <Text style={[styles.deleteCancelBtnText, { color: colors.foreground }]}>إلغاء</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Proof Image Modal */}
       <Modal visible={!!proofModal} transparent animationType="fade" onRequestClose={() => setProofModal(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setProofModal(null)}>
@@ -563,7 +590,15 @@ const styles = StyleSheet.create({
   statusBtnText: { fontSize: 12, fontWeight: "700" },
   deleteBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, marginTop: 4 },
   deleteBtnText: { color: "#ef4444", fontSize: 13, fontWeight: "700" },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center" },
+  deleteConfirmCard: { width: 300, borderRadius: 20, borderWidth: 1, padding: 24, alignItems: "center", gap: 8, margin: 24 },
+  deleteConfirmIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#ef444418", alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  deleteConfirmTitle: { fontSize: 17, fontWeight: "800", textAlign: "center" },
+  deleteConfirmSub: { fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 4 },
+  deleteConfirmBtn: { width: "100%", backgroundColor: "#ef4444", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginTop: 4 },
+  deleteConfirmBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  deleteCancelBtn: { width: "100%", borderWidth: 1, paddingVertical: 11, borderRadius: 12, alignItems: "center", marginTop: 4 },
+  deleteCancelBtnText: { fontSize: 14, fontWeight: "600" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
   modalContent: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
   proofFull: { width: 340, height: 500 },
   modalClose: { position: "absolute", top: 50, right: 16 },
