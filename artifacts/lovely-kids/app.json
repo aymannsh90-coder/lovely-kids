@@ -24,9 +24,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ABE2F6"
       },
-      "permissions": [],
-      "enableShrinkResources": true,
-      "enableProguardInRelease": true
+      "permissions": []
     },
     "web": {
       "favicon": "./assets/images/icon.png"

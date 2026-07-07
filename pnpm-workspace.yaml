@@ -170,3 +170,12 @@ overrides:
   joi: ">=17.13.4"
   postcss: ">=8.5.10"
   diff: ">=8.0.3"
+  # Deduplicate native Expo modules so EAS sees only one copy of each
+  expo: "54.0.35"
+  react-native: "0.81.5"
+  "@expo/vector-icons": "15.1.1"
+  expo-constants: "18.0.13"
+  expo-font: "14.0.12"
+  expo-asset: "12.0.13"
+  expo-file-system: "19.0.23"
+  expo-modules-core: "3.0.30"
