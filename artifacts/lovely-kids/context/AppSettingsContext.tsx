@@ -144,6 +144,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 interface AppSettingsContextType {
   settings: AppSettings;
+  settingsReady: boolean;
   updateSettings: (partial: Partial<AppSettings>) => void;
   addOffer: (offer: Omit<Offer, "id">) => void;
   updateOffer: (offer: Offer) => void;
@@ -153,6 +154,7 @@ interface AppSettingsContextType {
 
 const AppSettingsContext = createContext<AppSettingsContextType>({
   settings: DEFAULT_SETTINGS,
+  settingsReady: false,
   updateSettings: () => {},
   addOffer: () => {},
   updateOffer: () => {},
@@ -165,6 +167,7 @@ const STORAGE_KEY = "lovely_kids_app_settings";
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
   const { getAuthToken } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settingsReady, setSettingsReady] = useState(false);
   const getAuthTokenRef = useRef(getAuthToken);
   getAuthTokenRef.current = getAuthToken;
 
@@ -197,7 +200,11 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
       } catch {
         // ignore
       }
-      fetchSettings();
+      // Await the initial remote fetch before marking settings as ready so that
+      // any consumer of settingsReady can be confident it has the server's latest
+      // values (or falls back gracefully if the network is unavailable).
+      await fetchSettings();
+      setSettingsReady(true);
     })();
   }, [fetchSettings]);
 
@@ -303,7 +310,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   return (
     <AppSettingsContext.Provider
-      value={{ settings, updateSettings, addOffer, updateOffer, deleteOffer, resetSettings }}
+      value={{ settings, settingsReady, updateSettings, addOffer, updateOffer, deleteOffer, resetSettings }}
     >
       {children}
     </AppSettingsContext.Provider>

@@ -11,8 +11,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { useAppSettings } from "@/context/AppSettingsContext";
-import { useColors } from "@/hooks/useColors";
+// These constants match the native splash screen exactly (app.json backgroundColor).
+// Using hardcoded values here — rather than reading from AppSettingsContext — ensures
+// the animated splash is always colour-accurate on first open, with no jump as the
+// remote settings fetch resolves in the background.
+const SPLASH_PRIMARY = "#E91E8C";
+const SPLASH_ACCENT = "#96DFEC";
 
 const VISIBLE_DURATION_MS = 3000;
 const FADE_OUT_MS = 350;
@@ -22,8 +26,6 @@ interface WelcomeSplashProps {
 }
 
 export function WelcomeSplash({ onFinish }: WelcomeSplashProps) {
-  const colors = useColors();
-  const { settings } = useAppSettings();
   const player = useAudioPlayer(require("@/assets/sounds/welcome-chime.wav"));
 
   const containerOpacity = useSharedValue(1);
@@ -75,14 +77,14 @@ export function WelcomeSplash({ onFinish }: WelcomeSplashProps) {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, containerStyle]}>
       <LinearGradient
-        colors={[colors.primary, colors.accent]}
+        colors={[SPLASH_PRIMARY, SPLASH_ACCENT]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
         <Animated.View style={[styles.logoWrap, logoStyle]}>
           <Image
-            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
+            source={require("@/assets/images/logo.jpg")}
             style={styles.logo}
           />
         </Animated.View>
