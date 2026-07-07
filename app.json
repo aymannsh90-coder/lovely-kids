@@ -6,7 +6,10 @@
       }
     },
     "android": {
-      "package": "com.lovelykids.app"
+      "package": "com.lovelykids.app",
+      "packagingOptions": {
+        "pickFirst": ["META-INF/versions/9/OSGI-INF/MANIFEST.MF"]
+      }
     }
   }
 }
