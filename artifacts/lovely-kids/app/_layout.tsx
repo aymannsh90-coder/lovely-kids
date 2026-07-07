@@ -26,6 +26,10 @@ import { WishlistProvider } from "@/context/WishlistContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 SplashScreen.preventAutoHideAsync();
+SplashScreen.setOptions({
+  fade: true,
+  duration: 400,
+});
 
 const queryClient = new QueryClient();
 

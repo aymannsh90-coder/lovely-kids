@@ -42,6 +42,19 @@
           "origin": "https://replit.com/"
         }
       ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#E91E8C",
+          "image": "./assets/images/icon.png",
+          "resizeMode": "contain",
+          "android": {
+            "backgroundColor": "#E91E8C",
+            "image": "./assets/images/splash-android.png",
+            "resizeMode": "contain"
+          }
+        }
+      ],
       "expo-font",
       "expo-web-browser"
     ],
