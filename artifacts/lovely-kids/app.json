@@ -20,6 +20,11 @@
     "android": {
       "package": "com.lovelykids.nablus",
       "backgroundColor": "#ABE2F6",
+      "splash": {
+        "image": "./assets/images/splash-android.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#E91E8C"
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "monochromeImage": "./assets/images/adaptive-icon.png",
