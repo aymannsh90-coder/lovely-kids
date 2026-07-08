@@ -34,6 +34,12 @@ const AGE_COLORS = [
   "#E8B5FF",
 ];
 
+const TRUST_BADGES = [
+  { icon: "shirt-outline" as const, color: "#E91E8C", title: "خامات ناعمة", subtitle: "ومريحة" },
+  { icon: "sparkles-outline" as const, color: "#96DFEC", title: "تصاميم عصرية", subtitle: "وعملية" },
+  { icon: "ribbon-outline" as const, color: "#FFB84D", title: "جودة تدوم", subtitle: "طويلاً" },
+];
+
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -185,6 +191,23 @@ export default function HomeScreen() {
           </View>
         </View>
       </Pressable>
+
+      {/* Trust Badges */}
+      <View style={styles.trustRow}>
+        {TRUST_BADGES.map((t) => (
+          <View key={t.title} style={styles.trustItem}>
+            <View style={[styles.trustIconCircle, { backgroundColor: t.color + "20" }]}>
+              <Ionicons name={t.icon} size={24} color={t.color} />
+            </View>
+            <Text style={[styles.trustTitle, { color: colors.foreground }]}>
+              {t.title}
+            </Text>
+            <Text style={[styles.trustSubtitle, { color: colors.mutedForeground }]}>
+              {t.subtitle}
+            </Text>
+          </View>
+        ))}
+      </View>
 
       {/* Active Offers */}
       {activeOffers.length > 0 && (
@@ -513,6 +536,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   featureText: { fontSize: 12, fontWeight: "600", textAlign: "right" },
+  trustRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-around",
+    paddingHorizontal: 16,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  trustItem: { alignItems: "center", flex: 1, gap: 2 },
+  trustIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  trustTitle: { fontSize: 12, fontWeight: "700", textAlign: "center" },
+  trustSubtitle: { fontSize: 10, textAlign: "center" },
   productsGrid: {
     flexDirection: "row-reverse",
     flexWrap: "wrap",
