@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
-import { CATEGORY_IDS, DEFAULT_CATEGORY_LABELS } from "@/data/products";
+import { CATEGORY_IDS, DEFAULT_CATEGORY_LABELS, SEASON_IDS, DEFAULT_SEASON_LABELS, SEASON_ICONS } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
@@ -34,8 +34,14 @@ export default function ProductsScreen() {
     id,
     label: categoryLabels[id] ?? DEFAULT_CATEGORY_LABELS[id],
   }));
+  const seasonLabels = settings.seasonLabels ?? DEFAULT_SEASON_LABELS;
+  const seasons = SEASON_IDS.map((id) => ({
+    id,
+    label: seasonLabels[id] ?? DEFAULT_SEASON_LABELS[id],
+  }));
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedSeason, setSelectedSeason] = useState<"all" | "summer" | "winter">("all");
 
   useEffect(() => {
     if (selectedCategory !== "all" && !categories.some((c) => c.id === selectedCategory)) {
@@ -46,9 +52,11 @@ export default function ProductsScreen() {
   const filtered = products.filter((p) => {
     const matchCat =
       selectedCategory === "all" || p.category === selectedCategory;
+    const matchSeason =
+      selectedSeason === "all" || p.season === selectedSeason;
     const matchSearch =
       !search || p.nameAr.includes(search) || p.name.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
+    return matchCat && matchSeason && matchSearch;
   });
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -123,6 +131,47 @@ export default function ProductsScreen() {
         ))}
       </ScrollView>
 
+      {/* Seasons */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoriesScroll}
+      >
+        {seasons.map((s) => (
+          <Pressable
+            key={s.id}
+            onPress={() => setSelectedSeason(s.id)}
+            style={[
+              styles.categoryChip,
+              {
+                backgroundColor:
+                  selectedSeason === s.id ? colors.primary : colors.card,
+                borderColor:
+                  selectedSeason === s.id ? colors.primary : colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name={SEASON_ICONS[s.id] as any}
+              size={14}
+              color={selectedSeason === s.id ? "#fff" : colors.foreground}
+              style={{ marginLeft: 4 }}
+            />
+            <Text
+              style={[
+                styles.categoryText,
+                {
+                  color:
+                    selectedSeason === s.id ? "#fff" : colors.foreground,
+                },
+              ]}
+            >
+              {s.label}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
       {/* Count */}
       <Text style={[styles.count, { color: colors.mutedForeground }]}>
         {filtered.length} منتج
@@ -183,6 +232,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,

@@ -25,6 +25,7 @@ export const productsTable = pgTable("products", {
   category: text("category").notNull(),
   ageGroup: text("age_group").notNull(),
   gender: text("gender"),
+  season: text("season"),
   sizes: jsonb("sizes").$type<string[]>().default([]),
   colorVariants: jsonb("color_variants").$type<ColorVariant[]>().default([]),
   rating: integer("rating").notNull().default(48),
@@ -58,6 +59,7 @@ export const insertProductSchema = createInsertSchema(productsTable).omit({
     .optional(),
   stock: z.number().int().nonnegative().nullable().optional(),
   gender: z.enum(["boys", "girls"]).nullable().optional(),
+  season: z.enum(["summer", "winter"]).nullable().optional(),
 });
 
 export type InsertProduct = z.infer<typeof insertProductSchema>;

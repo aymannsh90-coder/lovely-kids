@@ -2,3 +2,4 @@
 - [Phone-based auth for Expo apps needing SMS/Facebook login](expo-phone-auth-no-clerk.md) — Clerk lacks native phone/SMS and Facebook login; custom phone+password + token sessions is the pragmatic fallback.
 - [reanimated-color-picker worklet callbacks](reanimated-color-picker-worklets.md) — must use onChangeJS/onCompleteJS (not onChange/onComplete) for plain React state setters, or it expects a worklet.
 - [Clerk + legacy custom auth coexistence](clerk-legacy-auth-coexistence.md) — pattern for adding Clerk OAuth alongside an existing custom session-token auth system without breaking it.
+- [Local-to-account data migration](local-to-account-data-migration.md) — upload-then-clear-then-fetch pattern for syncing AsyncStorage-only features (e.g. wishlist) to a user account without losing local data.

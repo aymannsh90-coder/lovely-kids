@@ -6,6 +6,7 @@ import notificationsRouter from "./notifications";
 import imagesRouter from "./images";
 import authRouter from "./auth";
 import settingsRouter from "./settings";
+import likesRouter from "./likes";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(notificationsRouter);
 router.use(imagesRouter);
 router.use(authRouter);
 router.use(settingsRouter);
+router.use(likesRouter);
 
 export default router;

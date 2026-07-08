@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import { AppState } from "react-native";
 
-import { DEFAULT_AGE_GROUP_LABELS, DEFAULT_CATEGORY_LABELS, AgeGroupLabel } from "@/data/products";
+import { DEFAULT_AGE_GROUP_LABELS, DEFAULT_CATEGORY_LABELS, DEFAULT_SEASON_LABELS, AgeGroupLabel } from "@/data/products";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -73,6 +73,7 @@ export interface AppSettings {
   ageGroupLabels: Record<string, AgeGroupLabel>;
   categoryLabels: Record<string, string>;
   hiddenCategories: string[];
+  seasonLabels: Record<string, string>;
   bankInfo: BankInfo;
   whatsappNumber: string;
   contactInfo: ContactInfo;
@@ -105,6 +106,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ageGroupLabels: DEFAULT_AGE_GROUP_LABELS,
   categoryLabels: DEFAULT_CATEGORY_LABELS,
   hiddenCategories: [],
+  seasonLabels: DEFAULT_SEASON_LABELS,
   bankInfo: {
     bankName: "",
     accountHolder: "",

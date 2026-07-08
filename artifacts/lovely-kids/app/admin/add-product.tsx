@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
-import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, ColorVariant } from "@/data/products";
+import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, DEFAULT_SEASON_LABELS, Product, ColorVariant } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
@@ -40,6 +40,10 @@ export default function AddProductScreen() {
     id,
     label: ageGroupLabels[id]?.label ?? DEFAULT_AGE_GROUP_LABELS[id].label,
   }));
+  const seasons: { id: "summer" | "winter"; label: string }[] = [
+    { id: "summer", label: DEFAULT_SEASON_LABELS.summer },
+    { id: "winter", label: DEFAULT_SEASON_LABELS.winter },
+  ];
 
   const editProduct = productId ? products.find((p) => p.id === productId) : null;
   const isEdit = !!editProduct;
@@ -54,6 +58,7 @@ export default function AddProductScreen() {
   const [category, setCategory] = useState(editProduct?.category ?? "clothes");
   const [ageGroup, setAgeGroup] = useState(editProduct?.ageGroup ?? "newborn");
   const [gender, setGender] = useState<"boys" | "girls" | null>(editProduct?.gender ?? null);
+  const [season, setSeason] = useState<"summer" | "winter" | null>(editProduct?.season ?? null);
   const [isNew, setIsNew] = useState(editProduct?.isNew ?? false);
   const [stock, setStock] = useState(
     editProduct?.stock !== undefined && editProduct?.stock !== null
@@ -243,6 +248,7 @@ export default function AddProductScreen() {
         category,
         ageGroup,
         gender,
+        season,
         sizes,
         colorVariants,
         rating: editProduct?.rating ?? 4.8,
@@ -701,6 +707,32 @@ export default function AddProductScreen() {
               >
                 <Text style={{ color: ageGroup === ag.id ? "#fff" : colors.foreground, fontSize: 13, fontWeight: "600" }}>
                   {ag.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* Season */}
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>الموسم</Text>
+          <View style={styles.chipsWrap}>
+            <Pressable
+              onPress={() => setSeason(null)}
+              style={[styles.chip, { backgroundColor: season === null ? colors.primary : colors.card, borderColor: season === null ? colors.primary : colors.border }]}
+            >
+              <Text style={{ color: season === null ? "#fff" : colors.foreground, fontSize: 13, fontWeight: "600" }}>
+                بدون تحديد
+              </Text>
+            </Pressable>
+            {seasons.map((s) => (
+              <Pressable
+                key={s.id}
+                onPress={() => setSeason(s.id)}
+                style={[styles.chip, { backgroundColor: season === s.id ? colors.primary : colors.card, borderColor: season === s.id ? colors.primary : colors.border }]}
+              >
+                <Text style={{ color: season === s.id ? "#fff" : colors.foreground, fontSize: 13, fontWeight: "600" }}>
+                  {s.label}
                 </Text>
               </Pressable>
             ))}

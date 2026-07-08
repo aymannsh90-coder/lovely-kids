@@ -4,8 +4,12 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+
+import { API_BASE } from "@/constants/api";
+import { useAuth } from "@/context/AuthContext";
 
 export interface WishlistItem {
   id: string;
@@ -30,22 +34,83 @@ const WishlistContext = createContext<WishlistContextType>({
 });
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
+  const { user, getAuthToken } = useAuth();
   const [items, setItems] = useState<WishlistItem[]>([]);
+  const syncedForUserId = useRef<string | null>(null);
 
   useEffect(() => {
+    if (user) return;
     AsyncStorage.getItem("wishlist").then((data) => {
       if (data) setItems(JSON.parse(data));
     });
-  }, []);
+  }, [user]);
 
-  const toggleItem = useCallback((item: WishlistItem) => {
-    setItems((prev) => {
-      const exists = prev.find((i) => i.id === item.id);
-      const updated = exists ? prev.filter((i) => i.id !== item.id) : [...prev, item];
-      AsyncStorage.setItem("wishlist", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  useEffect(() => {
+    if (!user) {
+      syncedForUserId.current = null;
+      return;
+    }
+    if (syncedForUserId.current === user.id) return;
+    syncedForUserId.current = user.id;
+
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const localData = await AsyncStorage.getItem("wishlist");
+        const localItems: WishlistItem[] = localData ? JSON.parse(localData) : [];
+        if (localItems.length > 0) {
+          await Promise.all(
+            localItems.map((item) =>
+              fetch(`${API_BASE}/api/likes/${item.id}`, { method: "POST", headers }).catch(() => {})
+            )
+          );
+          await AsyncStorage.removeItem("wishlist");
+        }
+
+        const res = await fetch(`${API_BASE}/api/likes`, { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        const productIds: string[] = data.productIds ?? [];
+        setItems(
+          productIds.map((id) => ({ id, name: "", price: 0, image: "", category: "" }))
+        );
+      } catch {
+        // keep previous state on network failure
+      }
+    })();
+  }, [user, getAuthToken]);
+
+  const toggleItem = useCallback(
+    (item: WishlistItem) => {
+      if (user) {
+        setItems((prev) => {
+          const exists = prev.some((i) => i.id === item.id);
+          const updated = exists ? prev.filter((i) => i.id !== item.id) : [...prev, item];
+          (async () => {
+            const token = await getAuthToken();
+            if (!token) return;
+            const headers = { Authorization: `Bearer ${token}` };
+            await fetch(`${API_BASE}/api/likes/${item.id}`, {
+              method: exists ? "DELETE" : "POST",
+              headers,
+            }).catch(() => {});
+          })();
+          return updated;
+        });
+        return;
+      }
+      setItems((prev) => {
+        const exists = prev.find((i) => i.id === item.id);
+        const updated = exists ? prev.filter((i) => i.id !== item.id) : [...prev, item];
+        AsyncStorage.setItem("wishlist", JSON.stringify(updated));
+        return updated;
+      });
+    },
+    [user, getAuthToken]
+  );
 
   const isWishlisted = useCallback(
     (id: string) => items.some((i) => i.id === id),

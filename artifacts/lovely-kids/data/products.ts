@@ -21,6 +21,7 @@ export interface Product {
   category: string;
   ageGroup: string;
   gender?: "boys" | "girls" | null;
+  season?: "summer" | "winter" | null;
   sizes?: string[];
   colorVariants?: ColorVariant[];
   rating: number;
@@ -33,9 +34,11 @@ export interface Product {
 
 export const AGE_GROUP_IDS = ["newborn", "infant", "toddler", "kids", "boys", "girls"] as const;
 export const CATEGORY_IDS = ["all", "clothes", "stroller", "feeding", "bath", "toys", "accessories"] as const;
+export const SEASON_IDS = ["all", "summer", "winter"] as const;
 
 export type AgeGroupId = typeof AGE_GROUP_IDS[number];
 export type CategoryId = typeof CATEGORY_IDS[number];
+export type SeasonId = typeof SEASON_IDS[number];
 
 export interface AgeGroupLabel { label: string; sublabel: string; }
 
@@ -56,6 +59,18 @@ export const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
   bath:        "استحمام",
   toys:        "ألعاب",
   accessories: "إكسسوارات",
+};
+
+export const DEFAULT_SEASON_LABELS: Record<string, string> = {
+  all: "الكل",
+  summer: "صيفي",
+  winter: "شتوي",
+};
+
+export const SEASON_ICONS: Record<string, string> = {
+  all: "apps-outline",
+  summer: "sunny-outline",
+  winter: "snow-outline",
 };
 
 export const AGE_GROUP_ICONS: Record<string, string> = {
