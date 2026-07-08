@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, isSizeOutOfStock } from "@/data/products";
 
@@ -30,6 +31,7 @@ export default function AdminProductsScreen() {
   const insets = useSafeAreaInsets();
   const { products, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
   const { settings } = useAppSettings();
+  const { getAuthToken } = useAuth();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
 
@@ -147,9 +149,13 @@ export default function AdminProductsScreen() {
     setSending(true);
     setSendResult(null);
     try {
+      const token = await getAuthToken();
       const res = await fetch(`${API_BASE}/api/notifications/send`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ title: notifTitle.trim(), body: notifBody.trim() }),
       });
       const data = await res.json() as { sent?: number; total?: number; message?: string };

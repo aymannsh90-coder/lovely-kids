@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, pushTokensTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { getCurrentUser } from "../lib/auth";
 
 const router = Router();
 
@@ -20,8 +21,14 @@ router.post("/push-tokens", async (req, res) => {
   res.status(201).json({ success: true });
 });
 
-// POST /api/notifications/send — send push notification to all registered tokens
+// POST /api/notifications/send — send push notification to all registered tokens (admin only)
 router.post("/notifications/send", async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user || !user.isAdmin) {
+    res.status(403).json({ error: "غير مصرح لك بإرسال الإشعارات" });
+    return;
+  }
+
   const { title, body } = req.body as { title?: string; body?: string };
 
   if (!title || !body) {
