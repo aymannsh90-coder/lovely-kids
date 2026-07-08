@@ -16,6 +16,7 @@ export interface AuthUser {
   name: string;
   isAdmin: boolean;
   avatarUrl: string | null;
+  deliveryAddress: string | null;
 }
 
 interface AuthContextType {
@@ -26,6 +27,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   promoteToAdmin: (password: string) => Promise<void>;
   getAuthToken: () => Promise<string | null>;
+  updateProfile: (data: { name?: string; deliveryAddress?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -36,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   promoteToAdmin: async () => {},
   getAuthToken: async () => null,
+  updateProfile: async () => {},
 });
 
 async function parseErrorMessage(res: Response, fallback: string) {
@@ -198,12 +201,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [legacyToken, getAuthToken]
   );
 
+  const updateProfile = useCallback(
+    async (data: { name?: string; deliveryAddress?: string }) => {
+      const authToken = await getAuthToken();
+      if (!authToken) throw new Error("يجب تسجيل الدخول أولاً");
+      const res = await fetch(`${API_BASE}/api/auth/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        throw new Error(await parseErrorMessage(res, "فشل تحديث البيانات"));
+      }
+      const updated = await res.json();
+      if (legacyToken) {
+        setLegacyUser(updated);
+        await AsyncStorage.setItem("auth_user", JSON.stringify(updated));
+      } else {
+        setClerkSyncedUser(updated);
+      }
+    },
+    [legacyToken, getAuthToken]
+  );
+
   const user = legacyUser ?? clerkSyncedUser;
   const loading = legacyLoading || !clerkLoaded;
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, register, login, logout, promoteToAdmin, getAuthToken }}
+      value={{ user, loading, register, login, logout, promoteToAdmin, getAuthToken, updateProfile }}
     >
       {children}
     </AuthContext.Provider>

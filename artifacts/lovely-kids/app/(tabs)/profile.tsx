@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
@@ -37,7 +38,7 @@ export default function ProfileScreen() {
   const { totalItems } = useCart();
   const { count } = useWishlist();
   const { newCount, clearNew } = useNewOrders();
-  const { user, loading, register, login, logout, promoteToAdmin } = useAuth();
+  const { user, loading, register, login, logout, promoteToAdmin, updateProfile } = useAuth();
   const { settings } = useAppSettings();
 
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -51,6 +52,12 @@ export default function ProfileScreen() {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
   const [promoting, setPromoting] = useState(false);
+
+  const [editProfileVisible, setEditProfileVisible] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
@@ -108,6 +115,32 @@ export default function ProfileScreen() {
     }
   };
 
+  const openEditProfile = () => {
+    setEditName(user?.name ?? "");
+    setEditAddress(user?.deliveryAddress ?? "");
+    setEditError("");
+    setEditProfileVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    setEditError("");
+    if (!editName.trim()) {
+      setEditError("الاسم مطلوب");
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await updateProfile({ name: editName.trim(), deliveryAddress: editAddress.trim() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEditProfileVisible(false);
+    } catch (e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setEditError(e instanceof Error ? e.message : "حدث خطأ");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   return (
     <ScrollView
       style={[styles.scroll, { backgroundColor: colors.background }]}
@@ -159,24 +192,70 @@ export default function ProfileScreen() {
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : user ? (
-        <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {user.avatarUrl ? (
-            <Image source={{ uri: user.avatarUrl }} style={styles.accountAvatarImage} />
-          ) : (
-            <View style={[styles.accountAvatar, { backgroundColor: colors.primary }]}>
-              <Ionicons name="person" size={24} color="#fff" />
+        <>
+          {/* User Info Card */}
+          <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {user.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.accountAvatarImage} />
+            ) : (
+              <View style={[styles.accountAvatar, { backgroundColor: colors.primary }]}>
+                <Ionicons name="person" size={24} color="#fff" />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.accountName, { color: colors.foreground }]}>{user.name}</Text>
+              {user.phone ? (
+                <Text style={[styles.accountPhone, { color: colors.mutedForeground }]}>{user.phone}</Text>
+              ) : null}
             </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.accountName, { color: colors.foreground }]}>{user.name}</Text>
-            {user.phone ? (
-              <Text style={[styles.accountPhone, { color: colors.mutedForeground }]}>{user.phone}</Text>
-            ) : null}
+            <Pressable onPress={() => logout()} style={styles.logoutBtn}>
+              <Ionicons name="log-out-outline" size={22} color={colors.destructive} />
+            </Pressable>
           </View>
-          <Pressable onPress={() => logout()} style={styles.logoutBtn}>
-            <Ionicons name="log-out-outline" size={22} color={colors.destructive} />
-          </Pressable>
-        </View>
+
+          {/* Personal Details Card */}
+          <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.detailsHeader}>
+              <Pressable onPress={openEditProfile} style={[styles.editBtn, { backgroundColor: colors.primary + "18" }]}>
+                <Ionicons name="create-outline" size={16} color={colors.primary} />
+                <Text style={[styles.editBtnText, { color: colors.primary }]}>تعديل</Text>
+              </Pressable>
+              <Text style={[styles.detailsTitle, { color: colors.foreground }]}>بياناتي الشخصية</Text>
+            </View>
+
+            <View style={[styles.detailRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.detailValue, { color: colors.foreground }]}>{user.name}</Text>
+              <View style={styles.detailLabelRow}>
+                <Ionicons name="person-outline" size={15} color={colors.mutedForeground} />
+                <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>الاسم</Text>
+              </View>
+            </View>
+
+            {user.phone ? (
+              <View style={[styles.detailRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.detailValue, { color: colors.foreground }]}>{user.phone}</Text>
+                <View style={styles.detailLabelRow}>
+                  <Ionicons name="call-outline" size={15} color={colors.mutedForeground} />
+                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>رقم الهاتف</Text>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={[styles.detailRow, { borderTopColor: colors.border }]}>
+              {user.deliveryAddress ? (
+                <Text style={[styles.detailValue, { color: colors.foreground }]}>{user.deliveryAddress}</Text>
+              ) : (
+                <Pressable onPress={openEditProfile}>
+                  <Text style={[styles.detailValueEmpty, { color: colors.primary }]}>+ أضف عنوان التوصيل</Text>
+                </Pressable>
+              )}
+              <View style={styles.detailLabelRow}>
+                <Ionicons name="location-outline" size={15} color={colors.mutedForeground} />
+                <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>عنوان التوصيل</Text>
+              </View>
+            </View>
+          </View>
+        </>
       ) : (
         <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.authSectionLabel, { color: colors.mutedForeground }]}>
@@ -344,6 +423,7 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
+      {/* Admin unlock modal */}
       <Modal
         visible={adminModalVisible}
         transparent
@@ -387,6 +467,79 @@ export default function ProfileScreen() {
                 <Text style={styles.authSubmitText}>تأكيد</Text>
               )}
             </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Edit Profile modal */}
+      <Modal
+        visible={editProfileVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditProfileVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setEditProfileVisible(false)}
+        >
+          <Pressable
+            style={[styles.modalCard, { backgroundColor: colors.card }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Ionicons name="person-circle-outline" size={36} color={colors.primary} />
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>تعديل البيانات الشخصية</Text>
+
+            <View style={{ width: "100%", gap: 12 }}>
+              <View style={styles.modalFieldGroup}>
+                <Text style={[styles.modalFieldLabel, { color: colors.mutedForeground }]}>الاسم الكامل</Text>
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="اسمك الكامل"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
+                  textAlign="right"
+                />
+              </View>
+
+              <View style={styles.modalFieldGroup}>
+                <Text style={[styles.modalFieldLabel, { color: colors.mutedForeground }]}>عنوان التوصيل المفضّل</Text>
+                <TextInput
+                  value={editAddress}
+                  onChangeText={setEditAddress}
+                  placeholder="المدينة، الشارع، رقم المنزل..."
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  numberOfLines={3}
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%", minHeight: 80, textAlignVertical: "top", paddingTop: 12 }]}
+                  textAlign="right"
+                />
+              </View>
+            </View>
+
+            {editError ? (
+              <Text style={[styles.errorText, { color: colors.destructive }]}>{editError}</Text>
+            ) : null}
+
+            <View style={{ width: "100%", flexDirection: "row-reverse", gap: 10 }}>
+              <Pressable
+                onPress={handleSaveProfile}
+                disabled={editSaving}
+                style={[styles.authSubmitBtn, { backgroundColor: colors.primary, flex: 1 }]}
+              >
+                {editSaving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.authSubmitText}>حفظ</Text>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => setEditProfileVisible(false)}
+                style={[styles.authSubmitBtn, { backgroundColor: colors.muted, flex: 1 }]}
+              >
+                <Text style={[styles.authSubmitText, { color: colors.foreground }]}>إلغاء</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -440,6 +593,51 @@ const styles = StyleSheet.create({
   accountName: { fontSize: 15, fontWeight: "700", textAlign: "right" },
   accountPhone: { fontSize: 13, marginTop: 2, textAlign: "right" },
   logoutBtn: { padding: 8 },
+  detailsCard: {
+    margin: 16,
+    marginBottom: 0,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  detailsHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  detailsTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  editBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  editBtnText: { fontSize: 13, fontWeight: "600" },
+  detailRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  detailLabelRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    minWidth: 110,
+  },
+  detailLabel: { fontSize: 13 },
+  detailValue: { fontSize: 14, fontWeight: "600", textAlign: "left", flex: 1, marginLeft: 8 },
+  detailValueEmpty: { fontSize: 14, fontWeight: "600" },
   authCard: {
     margin: 16,
     marginBottom: 0,
@@ -578,4 +776,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalTitle: { fontSize: 17, fontWeight: "800" },
+  modalFieldGroup: { width: "100%", gap: 6 },
+  modalFieldLabel: { fontSize: 13, fontWeight: "600", textAlign: "right" },
 });

@@ -9,6 +9,7 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash"),
   clerkUserId: text("clerk_user_id").unique(),
   avatarUrl: text("avatar_url"),
+  deliveryAddress: text("delivery_address"),
   isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

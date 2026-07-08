@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -31,6 +32,7 @@ export default function CartScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { settings } = useAppSettings();
+  const { user, updateProfile } = useAuth();
   const { items, updateQuantity, removeItem, totalPrice, totalItems, clearCart } = useCart();
 
   const [step, setStep] = useState<Step>("cart");
@@ -47,6 +49,14 @@ export default function CartScreen() {
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
+
+  useEffect(() => {
+    if (step === "checkout" && user) {
+      if (!name.trim() && user.name) setName(user.name);
+      if (!phone.trim() && user.phone) setPhone(user.phone);
+      if (!address.trim() && user.deliveryAddress) setAddress(user.deliveryAddress);
+    }
+  }, [step]);
 
   const bank = settings.bankInfo;
   const hasBankInfo = bank.bankName || bank.accountNumber;
@@ -116,6 +126,20 @@ export default function CartScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     clearCart();
     setLoading(false);
+
+    if (user && !user.deliveryAddress && address.trim()) {
+      const savedAddr = address.trim();
+      setTimeout(() => {
+        Alert.alert(
+          "حفظ عنوان التوصيل",
+          "هل تريد حفظ هذا العنوان لاستخدامه في طلباتك القادمة؟",
+          [
+            { text: "لا", style: "cancel" },
+            { text: "حفظ", onPress: () => updateProfile({ deliveryAddress: savedAddr }).catch(() => {}) },
+          ]
+        );
+      }, 1200);
+    }
 
     if (paymentMethod === "bank_transfer") {
       setStep("payment");

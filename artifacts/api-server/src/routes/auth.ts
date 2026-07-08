@@ -125,6 +125,27 @@ router.delete("/users/:id", async (req, res) => {
   res.status(204).end();
 });
 
+// PUT /api/auth/profile — update current user's name / deliveryAddress
+router.put("/auth/profile", async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user) {
+    res.status(401).json({ error: "غير مسجل الدخول" });
+    return;
+  }
+  const { name, deliveryAddress } = req.body as { name?: string; deliveryAddress?: string };
+  const updates: Partial<typeof usersTable.$inferInsert> = {};
+  if (typeof name === "string" && name.trim()) updates.name = name.trim();
+  if (typeof deliveryAddress === "string") updates.deliveryAddress = deliveryAddress.trim() || null;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "لا توجد بيانات للتحديث" });
+    return;
+  }
+
+  const rows = await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id)).returning();
+  res.json(toUser(rows[0]));
+});
+
 // POST /api/auth/promote-admin
 router.post("/auth/promote-admin", async (req, res) => {
   const user = await getCurrentUser(req);
