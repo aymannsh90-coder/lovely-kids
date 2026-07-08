@@ -42,6 +42,7 @@ export default function ProductDetailScreen() {
   const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
   const [added, setAdded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [cartModal, setCartModal] = useState(false);
   const flatRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -94,8 +95,6 @@ export default function ProductDetailScreen() {
     ? !!activeColorVariant && activeColorVariant.sizes.length > 0 && !selectedSize
     : !!product.sizes && product.sizes.length > 0 && !selectedSize;
   const selectionIncomplete = needsColor || needsSize;
-
-  const [cartModal, setCartModal] = useState(false);
 
   const handleAddToCart = () => {
     if (isOutOfStock || selectionIncomplete) return;
