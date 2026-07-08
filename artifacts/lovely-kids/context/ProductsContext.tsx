@@ -21,6 +21,13 @@ interface ProductsContextType {
   deleteProduct: (id: string) => Promise<void>;
   refreshProducts: () => Promise<void>;
   adjustStock: (id: string, action: "set" | "add" | "subtract", amount: number) => Promise<Product>;
+  adjustVariantStock: (
+    id: string,
+    color: string,
+    size: string,
+    action: "set" | "add" | "subtract",
+    amount: number
+  ) => Promise<Product>;
 }
 
 const ProductsContext = createContext<ProductsContextType>({
@@ -31,6 +38,7 @@ const ProductsContext = createContext<ProductsContextType>({
   deleteProduct: async () => {},
   refreshProducts: async () => {},
   adjustStock: async () => ({} as Product),
+  adjustVariantStock: async () => ({} as Product),
 });
 
 function toInsertBody(product: Omit<Product, "id">) {
@@ -134,9 +142,27 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     return updated;
   }, []);
 
+  const adjustVariantStock = useCallback(async (
+    id: string,
+    color: string,
+    size: string,
+    action: "set" | "add" | "subtract",
+    amount: number
+  ): Promise<Product> => {
+    const res = await fetch(`${API_BASE}/api/products/${id}/variant-stock`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color, size, action, amount }),
+    });
+    if (!res.ok) throw new Error("فشل تعديل كمية المقاس");
+    const updated: Product = await res.json();
+    setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    return updated;
+  }, []);
+
   return (
     <ProductsContext.Provider
-      value={{ products, loading, addProduct, updateProduct, deleteProduct, refreshProducts, adjustStock }}
+      value={{ products, loading, addProduct, updateProduct, deleteProduct, refreshProducts, adjustStock, adjustVariantStock }}
     >
       {children}
     </ProductsContext.Provider>

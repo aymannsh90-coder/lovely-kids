@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export interface SizeStock {
   size: string;
   outOfStock?: boolean;
+  stock?: number | null;
 }
 
 export interface ColorVariant {
@@ -52,6 +53,7 @@ export const insertProductSchema = createInsertSchema(productsTable).omit({
           z.object({
             size: z.string(),
             outOfStock: z.boolean().optional(),
+            stock: z.number().int().nonnegative().nullable().optional(),
           })
         ),
       })

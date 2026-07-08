@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
-import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, DEFAULT_SEASON_LABELS, Product, ColorVariant } from "@/data/products";
+import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, DEFAULT_SEASON_LABELS, Product, ColorVariant, isSizeOutOfStock } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
@@ -72,6 +72,7 @@ export default function AddProductScreen() {
   const [newColorName, setNewColorName] = useState("");
   const [newColorHex, setNewColorHex] = useState("#EF4444");
   const [colorSizeInputs, setColorSizeInputs] = useState<Record<number, string>>({});
+  const [colorSizeQtyInputs, setColorSizeQtyInputs] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -104,14 +105,17 @@ export default function AddProductScreen() {
   const addSizeToColor = (idx: number) => {
     const raw = (colorSizeInputs[idx] ?? "").trim().toUpperCase();
     if (!raw) return;
+    const qtyRaw = (colorSizeQtyInputs[idx] ?? "").trim();
+    const qty = qtyRaw ? Math.max(0, Math.round(Number(qtyRaw))) : null;
     setColorVariants((prev) =>
       prev.map((c, i) => {
         if (i !== idx) return c;
         if (c.sizes.some((s) => s.size === raw)) return c;
-        return { ...c, sizes: [...c.sizes, { size: raw, outOfStock: false }] };
+        return { ...c, sizes: [...c.sizes, { size: raw, stock: qty, outOfStock: qty === 0 }] };
       })
     );
     setColorSizeInputs((prev) => ({ ...prev, [idx]: "" }));
+    setColorSizeQtyInputs((prev) => ({ ...prev, [idx]: "" }));
   };
 
   const removeSizeFromColor = (idx: number, size: string) => {
@@ -120,14 +124,18 @@ export default function AddProductScreen() {
     );
   };
 
-  const toggleSizeOutOfStock = (idx: number, size: string) => {
+  const updateSizeStock = (idx: number, size: string, value: string) => {
+    const trimmed = value.trim();
+    const qty = trimmed === "" ? null : Math.max(0, Math.round(Number(trimmed)) || 0);
     setColorVariants((prev) =>
       prev.map((c, i) =>
         i !== idx
           ? c
           : {
               ...c,
-              sizes: c.sizes.map((s) => (s.size === size ? { ...s, outOfStock: !s.outOfStock } : s)),
+              sizes: c.sizes.map((s) =>
+                s.size === size ? { ...s, stock: qty, outOfStock: qty === 0 } : s
+              ),
             }
       )
     );
@@ -601,6 +609,17 @@ export default function AddProductScreen() {
                       <Ionicons name="add" size={16} color="#fff" />
                     </Pressable>
                     <TextInput
+                      value={colorSizeQtyInputs[idx] ?? ""}
+                      onChangeText={(v) => setColorSizeQtyInputs((prev) => ({ ...prev, [idx]: v }))}
+                      onSubmitEditing={() => addSizeToColor(idx)}
+                      placeholder="الكمية"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="numeric"
+                      style={[styles.sizeTextInput, { color: colors.foreground, fontSize: 13, maxWidth: 70 }]}
+                      textAlign="right"
+                      returnKeyType="done"
+                    />
+                    <TextInput
                       value={colorSizeInputs[idx] ?? ""}
                       onChangeText={(v) => setColorSizeInputs((prev) => ({ ...prev, [idx]: v }))}
                       onSubmitEditing={() => addSizeToColor(idx)}
@@ -613,33 +632,40 @@ export default function AddProductScreen() {
                   </View>
 
                   {cv.sizes.length > 0 && (
-                    <View style={styles.sizesWrap}>
-                      {cv.sizes.map((s) => (
-                        <View key={s.size} style={styles.colorSizeChipWrap}>
-                          <Pressable
-                            onPress={() => toggleSizeOutOfStock(idx, s.size)}
+                    <View style={styles.colorSizesList}>
+                      {cv.sizes.map((s) => {
+                        const out = isSizeOutOfStock(s);
+                        return (
+                          <View
+                            key={s.size}
                             style={[
-                              styles.sizeChip,
-                              {
-                                backgroundColor: s.outOfStock ? "#fee2e2" : colors.primary + "20",
-                                borderColor: s.outOfStock ? "#ef4444" : colors.primary,
-                              },
+                              styles.colorSizeRow,
+                              { backgroundColor: out ? "#fee2e2" : colors.primary + "12", borderColor: out ? "#ef4444" : colors.primary + "40" },
                             ]}
                           >
-                            <Text style={[styles.sizeChipText, { color: s.outOfStock ? "#ef4444" : colors.primary }]}>
+                            <Pressable onPress={() => removeSizeFromColor(idx, s.size)}>
+                              <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+                            </Pressable>
+                            <TextInput
+                              value={s.stock === null || s.stock === undefined ? "" : String(s.stock)}
+                              onChangeText={(v) => updateSizeStock(idx, s.size, v)}
+                              placeholder="غير محدود"
+                              placeholderTextColor={colors.mutedForeground}
+                              keyboardType="numeric"
+                              style={[styles.colorSizeStockInput, { color: out ? "#ef4444" : colors.foreground }]}
+                              textAlign="center"
+                            />
+                            <Text style={[styles.hint, { color: colors.mutedForeground, marginBottom: 0 }]}>قطعة</Text>
+                            <Text style={[styles.sizeChipText, { color: out ? "#ef4444" : colors.primary, marginRight: "auto" }]}>
                               {s.size}
                             </Text>
-                            {s.outOfStock && <Ionicons name="close" size={12} color="#ef4444" />}
-                          </Pressable>
-                          <Pressable onPress={() => removeSizeFromColor(idx, s.size)} style={styles.colorSizeRemoveBtn}>
-                            <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
-                          </Pressable>
-                        </View>
-                      ))}
+                          </View>
+                        );
+                      })}
                     </View>
                   )}
                   <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                    اضغطي على المقاس لتبديل حالته (متوفر / نفد المخزون) — الدائرة الصغيرة لحذف المقاس
+                    اكتبي عدد القطع المتوفرة من كل مقاس — اتركيه فارغاً لكمية غير محدودة، أو 0 لنفاد المخزون
                   </Text>
                 </View>
               ))}
@@ -825,4 +851,7 @@ const styles = StyleSheet.create({
   colorImageAddText: { fontSize: 12, fontWeight: "700" },
   colorSizeChipWrap: { flexDirection: "row-reverse", alignItems: "center" },
   colorSizeRemoveBtn: { marginRight: -6, marginLeft: 2 },
+  colorSizesList: { gap: 8 },
+  colorSizeRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  colorSizeStockInput: { width: 48, fontSize: 14, fontWeight: "700", paddingVertical: 4, textAlignVertical: "center" },
 });

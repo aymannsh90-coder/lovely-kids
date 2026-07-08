@@ -1,6 +1,7 @@
 export interface SizeStock {
   size: string;
   outOfStock?: boolean;
+  stock?: number | null;
 }
 
 export interface ColorVariant {
@@ -8,6 +9,14 @@ export interface ColorVariant {
   hex: string;
   image?: string;
   sizes: SizeStock[];
+}
+
+// A size is out of stock when it has a tracked numeric quantity that has
+// reached zero, or (for older products without quantity tracking) when the
+// manual outOfStock flag was set.
+export function isSizeOutOfStock(s: SizeStock): boolean {
+  if (s.stock !== undefined && s.stock !== null) return s.stock <= 0;
+  return !!s.outOfStock;
 }
 
 export interface Product {

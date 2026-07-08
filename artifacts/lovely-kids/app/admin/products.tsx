@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,14 +21,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
-import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product } from "@/data/products";
+import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, isSizeOutOfStock } from "@/data/products";
 
 import { API_BASE } from "@/constants/api";
 
 export default function AdminProductsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { products, deleteProduct, adjustStock } = useProducts();
+  const { products, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
   const { settings } = useAppSettings();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
@@ -46,6 +47,11 @@ export default function AdminProductsScreen() {
   const [stockProduct, setStockProduct] = useState<Product | null>(null);
   const [stockInput, setStockInput] = useState("");
   const [stockSaving, setStockSaving] = useState(false);
+
+  // Per-color/size variant stock adjustment
+  const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
+  const [variantSaving, setVariantSaving] = useState<string | null>(null);
+  const variantKey = (color: string, size: string) => `${color}|${size}`;
 
   const handleDelete = (id: string, name: string) => {
     if (Platform.OS === "web") {
@@ -114,6 +120,22 @@ export default function AdminProductsScreen() {
       // ignore
     } finally {
       setStockSaving(false);
+    }
+  };
+
+  const handleVariantAdjust = async (color: string, size: string, action: "set" | "add" | "subtract", amount: number) => {
+    if (!stockProduct) return;
+    const key = variantKey(color, size);
+    setVariantSaving(key);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const updated = await adjustVariantStock(stockProduct.id, color, size, action, amount);
+      setStockProduct(updated);
+      if (action === "set") setVariantStockInputs((prev) => ({ ...prev, [key]: "" }));
+    } catch {
+      // ignore
+    } finally {
+      setVariantSaving(null);
     }
   };
 
@@ -318,7 +340,68 @@ export default function AdminProductsScreen() {
                 <Ionicons name="cube-outline" size={22} color="#fff" />
               </View>
 
-              <View style={styles.modalBody}>
+              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+                {/* Per-color / per-size stock */}
+                {!!stockProduct?.colorVariants && stockProduct.colorVariants.length > 0 && (
+                  <View style={styles.variantSection}>
+                    <Text style={[styles.sectionLabel, { color: colors.foreground }]}>الكمية حسب اللون والمقاس</Text>
+                    <Text style={[styles.modalHint, { color: colors.mutedForeground }]}>
+                      عدّلي الكمية عند بيع قطعة داخل المحل، أو عند وصول كمية جديدة
+                    </Text>
+                    {stockProduct.colorVariants.map((cv) => (
+                      <View key={cv.color} style={[styles.variantColorBox, { borderColor: colors.border }]}>
+                        <View style={styles.variantColorHeader}>
+                          <View style={[styles.variantColorSwatch, { backgroundColor: cv.hex, borderColor: colors.border }]} />
+                          <Text style={[styles.variantColorName, { color: colors.foreground }]}>{cv.color}</Text>
+                        </View>
+                        {cv.sizes.map((s) => {
+                          const key = variantKey(cv.color, s.size);
+                          const out = isSizeOutOfStock(s);
+                          const saving = variantSaving === key;
+                          return (
+                            <View key={s.size} style={[styles.variantSizeRow, { borderColor: colors.border }]}>
+                              <Text style={[styles.variantSizeLabel, { color: colors.foreground }]}>{s.size}</Text>
+                              <Text style={[styles.variantSizeStock, { color: out ? "#ef4444" : colors.primary }]}>
+                                {s.stock === null || s.stock === undefined ? "غير محدود" : `${s.stock} قطعة`}
+                              </Text>
+                              <View style={styles.variantSizeActions}>
+                                <Pressable
+                                  onPress={() => handleVariantAdjust(cv.color, s.size, "subtract", 1)}
+                                  disabled={saving}
+                                  style={[styles.variantStepBtn, { backgroundColor: colors.muted }]}
+                                >
+                                  <Ionicons name="remove" size={16} color={colors.foreground} />
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => handleVariantAdjust(cv.color, s.size, "add", 1)}
+                                  disabled={saving}
+                                  style={[styles.variantStepBtn, { backgroundColor: colors.muted }]}
+                                >
+                                  <Ionicons name="add" size={16} color={colors.foreground} />
+                                </Pressable>
+                                <TextInput
+                                  value={variantStockInputs[key] ?? ""}
+                                  onChangeText={(v) => setVariantStockInputs((prev) => ({ ...prev, [key]: v }))}
+                                  placeholder="ضبط"
+                                  placeholderTextColor={colors.mutedForeground}
+                                  keyboardType="numeric"
+                                  style={[styles.variantSetInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                                  textAlign="center"
+                                  returnKeyType="done"
+                                  onSubmitEditing={() => {
+                                    const val = Number((variantStockInputs[key] ?? "").trim());
+                                    if (!isNaN(val) && val >= 0) handleVariantAdjust(cv.color, s.size, "set", val);
+                                  }}
+                                />
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </View>
+                )}
+
                 {/* Current Stock Display */}
                 <View style={[styles.currentStockBox, {
                   backgroundColor: currentStock === 0
@@ -428,7 +511,7 @@ export default function AdminProductsScreen() {
                   <Ionicons name="infinite-outline" size={16} color={colors.mutedForeground} />
                   <Text style={[styles.unlimitedText, { color: colors.mutedForeground }]}>إزالة الحد (كمية غير محدودة)</Text>
                 </Pressable>
-              </View>
+              </ScrollView>
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
@@ -547,7 +630,19 @@ const styles = StyleSheet.create({
   modalBox: { borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
   modalHeader: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16 },
   modalTitle: { fontSize: 16, fontWeight: "800", color: "#fff", flex: 1, textAlign: "center" },
+  modalScroll: { maxHeight: 560 },
   modalBody: { padding: 20, gap: 14, paddingBottom: 34 },
+  variantSection: { gap: 10 },
+  variantColorBox: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
+  variantColorHeader: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  variantColorSwatch: { width: 18, height: 18, borderRadius: 9, borderWidth: 1 },
+  variantColorName: { fontSize: 14, fontWeight: "700" },
+  variantSizeRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8, borderTopWidth: 1, paddingTop: 8 },
+  variantSizeLabel: { fontSize: 13, fontWeight: "700", width: 32 },
+  variantSizeStock: { fontSize: 12, fontWeight: "700", flex: 1, textAlign: "right" },
+  variantSizeActions: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  variantStepBtn: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  variantSetInput: { width: 56, height: 30, borderRadius: 8, borderWidth: 1, fontSize: 13 },
   modalHint: { fontSize: 13, textAlign: "right", lineHeight: 20 },
   currentStockBox: { borderRadius: 16, borderWidth: 1.5, padding: 20, alignItems: "center", gap: 4 },
   currentStockLabel: { fontSize: 13, fontWeight: "600" },

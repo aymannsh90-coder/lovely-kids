@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db, ordersTable, productsTable, insertOrderSchema } from "@workspace/db";
+import type { ColorVariant } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 
 const router = Router();
@@ -15,17 +16,46 @@ router.post("/orders", async (req, res) => {
   const order = await db.insert(ordersTable).values(parsed.data).returning();
 
   // Decrement stock for each ordered item (fire-and-forget, don't block response)
-  const items = parsed.data.items as Array<{ id: string; quantity: number }>;
+  const items = parsed.data.items as Array<{ id: string; quantity: number; size?: string; color?: string }>;
   for (const item of items) {
     const productId = Number(item.id);
     if (isNaN(productId)) continue;
+
     const current = await db
-      .select({ stock: productsTable.stock })
+      .select({ stock: productsTable.stock, colorVariants: productsTable.colorVariants })
       .from(productsTable)
       .where(eq(productsTable.id, productId));
-    if (current.length === 0 || current[0].stock === null || current[0].stock === undefined) continue;
-    const newStock = Math.max(0, current[0].stock - item.quantity);
-    await db.update(productsTable).set({ stock: newStock }).where(eq(productsTable.id, productId));
+    if (current.length === 0) continue;
+
+    const updates: { stock?: number; colorVariants?: ColorVariant[] } = {};
+
+    // Decrement the specific color+size quantity, if tracked.
+    if (item.color && item.size) {
+      const colorVariants = (current[0].colorVariants as ColorVariant[] | null) ?? [];
+      let variantChanged = false;
+      const nextVariants = colorVariants.map((cv) => {
+        if (cv.color !== item.color) return cv;
+        return {
+          ...cv,
+          sizes: cv.sizes.map((s) => {
+            if (s.size !== item.size || s.stock === undefined || s.stock === null) return s;
+            variantChanged = true;
+            const newStock = Math.max(0, s.stock - item.quantity);
+            return { ...s, stock: newStock, outOfStock: newStock <= 0 };
+          }),
+        };
+      });
+      if (variantChanged) updates.colorVariants = nextVariants;
+    }
+
+    // Also keep the overall product stock count in sync, if tracked.
+    if (current[0].stock !== null && current[0].stock !== undefined) {
+      updates.stock = Math.max(0, current[0].stock - item.quantity);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db.update(productsTable).set(updates).where(eq(productsTable.id, productId));
+    }
   }
 
   res.status(201).json(order[0]);

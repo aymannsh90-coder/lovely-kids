@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db, productsTable, insertProductSchema } from "@workspace/db";
+import type { ColorVariant } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 
 const router = Router();
@@ -95,6 +96,68 @@ router.patch("/products/:id/stock", async (req, res) => {
   const updated = await db
     .update(productsTable)
     .set({ stock: newStock })
+    .where(eq(productsTable.id, id))
+    .returning();
+
+  res.json(toProduct(updated[0]));
+});
+
+// PATCH /api/products/:id/variant-stock
+// Adjusts the quantity of a single size within a single color variant.
+// Used both for manual in-store adjustments (admin) and could be reused
+// for future variant-aware order decrements.
+// Body: { color: string; size: string; action: "set"|"add"|"subtract"; amount: number }
+router.patch("/products/:id/variant-stock", async (req, res) => {
+  const id = Number(req.params.id);
+  const { color, size, action, amount } = req.body as {
+    color?: string;
+    size?: string;
+    action?: "set" | "add" | "subtract";
+    amount?: number;
+  };
+
+  if (!color || !size || !action || typeof amount !== "number" || amount < 0) {
+    res.status(400).json({ error: "color و size و action و amount مطلوبة" });
+    return;
+  }
+
+  const current = await db
+    .select({ colorVariants: productsTable.colorVariants })
+    .from(productsTable)
+    .where(eq(productsTable.id, id));
+
+  if (current.length === 0) {
+    res.status(404).json({ error: "المنتج غير موجود" });
+    return;
+  }
+
+  const colorVariants = (current[0].colorVariants as ColorVariant[] | null) ?? [];
+  let found = false;
+  const updatedVariants = colorVariants.map((cv) => {
+    if (cv.color !== color) return cv;
+    return {
+      ...cv,
+      sizes: cv.sizes.map((s) => {
+        if (s.size !== size) return s;
+        found = true;
+        const cur = s.stock ?? 0;
+        let newStock: number;
+        if (action === "set") newStock = Math.max(0, Math.round(amount));
+        else if (action === "add") newStock = cur + Math.round(amount);
+        else newStock = Math.max(0, cur - Math.round(amount));
+        return { ...s, stock: newStock, outOfStock: newStock <= 0 };
+      }),
+    };
+  });
+
+  if (!found) {
+    res.status(404).json({ error: "المقاس أو اللون غير موجود" });
+    return;
+  }
+
+  const updated = await db
+    .update(productsTable)
+    .set({ colorVariants: updatedVariants })
     .where(eq(productsTable.id, id))
     .returning();
 

@@ -20,6 +20,7 @@ import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
+import { isSizeOutOfStock } from "@/data/products";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -284,7 +285,8 @@ export default function ProductDetailScreen() {
               </Text>
               <View style={styles.sizesRow}>
                 {activeColorVariant.sizes.map((s) => {
-                  const disabled = isOutOfStock || s.outOfStock;
+                  const sizeOut = isSizeOutOfStock(s);
+                  const disabled = isOutOfStock || sizeOut;
                   return (
                     <Pressable
                       key={s.size}
@@ -296,14 +298,14 @@ export default function ProductDetailScreen() {
                         {
                           backgroundColor: selectedSize === s.size ? colors.primary : colors.card,
                           borderColor: selectedSize === s.size ? colors.primary : colors.border,
-                          opacity: s.outOfStock ? 0.45 : isOutOfStock ? 0.5 : 1,
+                          opacity: sizeOut ? 0.45 : isOutOfStock ? 0.5 : 1,
                         },
                       ]}
                     >
                       <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 13 }}>
                         {s.size}
                       </Text>
-                      {s.outOfStock && (
+                      {sizeOut && (
                         <View style={styles.sizeOutOfStockOverlay}>
                           <Ionicons name="close" size={26} color="#ef4444" />
                         </View>
