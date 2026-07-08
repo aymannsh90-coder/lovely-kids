@@ -321,7 +321,7 @@ export default function SettingsScreen() {
           <TextInput
             value={settings.contactInfo?.shippingInfo ?? ""}
             onChangeText={(v) => updateSettings({ contactInfo: { ...settings.contactInfo, shippingInfo: v } })}
-            placeholder={"توصيل سريع لجميع المناطق\nشحن مجاني فوق 200 ₪"}
+            placeholder={"توصيل سريع لجميع المناطق\nشحن مجاني فوق 500 ₪"}
             placeholderTextColor={colors.mutedForeground}
             multiline
             style={[styles.fieldInput, styles.fieldInputMultiline, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}

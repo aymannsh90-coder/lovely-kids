@@ -515,7 +515,7 @@ export default function CartScreen() {
               <Text style={[styles.totalPrice, { color: colors.primary }]}>{totalPrice} ₪</Text>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>الإجمالي</Text>
             </View>
-            {totalPrice >= 200 && (
+            {totalPrice >= 500 && (
               <View style={[styles.freeShipping, { backgroundColor: "#22c55e20" }]}>
                 <Ionicons name="rocket-outline" size={16} color="#22c55e" />
                 <Text style={{ color: "#22c55e", fontSize: 13, fontWeight: "600" }}>الشحن مجاني</Text>

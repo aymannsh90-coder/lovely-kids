@@ -332,7 +332,7 @@ export default function ProfileScreen() {
         </Text>
         <Text style={[styles.aboutText, { color: colors.mutedForeground }]}>
           متجر متخصص في ملابس ومستلزمات الأطفال بجودة عالية وأسعار مناسبة. نوفر
-          شحن مجاني لجميع الطلبات فوق 200 ₪
+          شحن مجاني لجميع الطلبات فوق 500 ₪
         </Text>
         <Pressable
           onPress={() => router.push("/contact")}
