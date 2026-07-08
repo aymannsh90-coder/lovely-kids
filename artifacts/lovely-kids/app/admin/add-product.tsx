@@ -32,9 +32,10 @@ export default function AddProductScreen() {
   const { settings } = useAppSettings();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
-  const categories = CATEGORY_IDS.filter((id) => id !== "all").map((id) => ({
+  const customCategories = settings.customCategories ?? [];
+  const categories = [...CATEGORY_IDS.filter((id) => id !== "all"), ...customCategories].map((id) => ({
     id,
-    label: categoryLabels[id] ?? DEFAULT_CATEGORY_LABELS[id],
+    label: categoryLabels[id] ?? DEFAULT_CATEGORY_LABELS[id] ?? id,
   }));
   const ageGroups = AGE_GROUP_IDS.map((id) => ({
     id,

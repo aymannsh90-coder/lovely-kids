@@ -73,6 +73,7 @@ export interface AppSettings {
   ageGroupLabels: Record<string, AgeGroupLabel>;
   categoryLabels: Record<string, string>;
   hiddenCategories: string[];
+  customCategories: string[];
   seasonLabels: Record<string, string>;
   bankInfo: BankInfo;
   whatsappNumber: string;
@@ -106,6 +107,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ageGroupLabels: DEFAULT_AGE_GROUP_LABELS,
   categoryLabels: DEFAULT_CATEGORY_LABELS,
   hiddenCategories: [],
+  customCategories: [],
   seasonLabels: DEFAULT_SEASON_LABELS,
   bankInfo: {
     bankName: "",

@@ -29,10 +29,12 @@ export default function CategoriesScreen() {
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const hiddenCategories = settings.hiddenCategories ?? [];
+  const customCategories = settings.customCategories ?? [];
 
   const [localAgeGroups, setLocalAgeGroups] = useState({ ...ageGroupLabels });
   const [localCategories, setLocalCategories] = useState({ ...categoryLabels });
   const [saved, setSaved] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   const AGE_GROUP_IDS = ["newborn", "infant", "toddler", "kids", "boys", "girls"];
   const CATEGORY_IDS = ["all", "clothes", "stroller", "feeding", "bath", "toys", "accessories"];
@@ -44,6 +46,35 @@ export default function CategoriesScreen() {
       : [...hiddenCategories, id];
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateSettings({ hiddenCategories: updated });
+  };
+
+  const handleAddCategory = () => {
+    const label = newCategoryName.trim();
+    if (!label) return;
+    const id = `custom_${Date.now()}`;
+    const updatedCustom = [...customCategories, id];
+    const updatedLabels = { ...localCategories, [id]: label };
+    setLocalCategories(updatedLabels);
+    setNewCategoryName("");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    updateSettings({
+      customCategories: updatedCustom,
+      categoryLabels: updatedLabels,
+    });
+  };
+
+  const handleDeleteCategory = (id: string) => {
+    const updatedCustom = customCategories.filter((c) => c !== id);
+    const updatedLabels = { ...localCategories };
+    delete updatedLabels[id];
+    const updatedHidden = hiddenCategories.filter((c) => c !== id);
+    setLocalCategories(updatedLabels);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    updateSettings({
+      customCategories: updatedCustom,
+      categoryLabels: updatedLabels,
+      hiddenCategories: updatedHidden,
+    });
   };
 
   const handleSave = () => {
@@ -62,6 +93,7 @@ export default function CategoriesScreen() {
     updateSettings({
       ageGroupLabels: DEFAULT_AGE_GROUP_LABELS,
       categoryLabels: DEFAULT_CATEGORY_LABELS,
+      customCategories: [],
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
@@ -215,7 +247,87 @@ export default function CategoriesScreen() {
               </View>
             );
           })}
+          {customCategories.length > 0 && (
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          )}
+          {customCategories.map((id, index) => {
+            const isHidden = hiddenCategories.includes(id);
+            return (
+              <View key={id}>
+                {index > 0 && (
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                )}
+                <View style={styles.catRow}>
+                  <View style={[styles.catPreview, { backgroundColor: colors.secondary }]}>
+                    <Text style={[styles.catPreviewText, { color: colors.foreground }]}>
+                      {localCategories[id] || "—"}
+                    </Text>
+                  </View>
+                  <TextInput
+                    value={localCategories[id] ?? ""}
+                    onChangeText={(v) =>
+                      setLocalCategories((prev) => ({ ...prev, [id]: v }))
+                    }
+                    style={[
+                      styles.input,
+                      styles.catInput,
+                      { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground },
+                    ]}
+                    textAlign="right"
+                    placeholder="اسم الفئة"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                  <View style={styles.visibilityToggle}>
+                    <Ionicons
+                      name={isHidden ? "eye-off-outline" : "eye-outline"}
+                      size={18}
+                      color={isHidden ? colors.mutedForeground : colors.primary}
+                    />
+                    <Switch
+                      value={!isHidden}
+                      onValueChange={() => toggleCategoryVisibility(id)}
+                      trackColor={{ false: colors.border, true: colors.primary }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => handleDeleteCategory(id)}
+                    style={[styles.deleteBtn, { backgroundColor: "#FEE2E2" }]}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
         </View>
+
+        {/* Add New Category */}
+        <View style={[styles.addCatRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TextInput
+            value={newCategoryName}
+            onChangeText={setNewCategoryName}
+            style={[
+              styles.input,
+              styles.catInput,
+              { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground },
+            ]}
+            textAlign="right"
+            placeholder="اسم فئة جديدة، مثال: بناطيل"
+            placeholderTextColor={colors.mutedForeground}
+            onSubmitEditing={handleAddCategory}
+            returnKeyType="done"
+          />
+          <Pressable
+            onPress={handleAddCategory}
+            style={[styles.addCatBtn, { backgroundColor: colors.primary }]}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+          </Pressable>
+        </View>
+        <Text style={[styles.hint, { color: colors.mutedForeground, paddingHorizontal: 0, paddingTop: 6 }]}>
+          الفئات الجديدة تظهر تلقائياً عند إضافة منتج جديد
+        </Text>
       </View>
 
       {/* Save Button */}
@@ -311,6 +423,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   catPreviewText: { fontSize: 13, fontWeight: "700" },
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addCatRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  addCatBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   saveBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",

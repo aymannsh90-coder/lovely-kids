@@ -28,12 +28,13 @@ export default function ProductsScreen() {
   const { settings } = useAppSettings();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const hiddenCategories = settings.hiddenCategories ?? [];
-  const categories = CATEGORY_IDS.filter(
-    (id) => id === "all" || !hiddenCategories.includes(id)
-  ).map((id) => ({
-    id,
-    label: categoryLabels[id] ?? DEFAULT_CATEGORY_LABELS[id],
-  }));
+  const customCategories = settings.customCategories ?? [];
+  const categories = [...CATEGORY_IDS, ...customCategories]
+    .filter((id) => id === "all" || !hiddenCategories.includes(id))
+    .map((id) => ({
+      id,
+      label: categoryLabels[id] ?? DEFAULT_CATEGORY_LABELS[id] ?? id,
+    }));
   const seasonLabels = settings.seasonLabels ?? DEFAULT_SEASON_LABELS;
   const seasons = SEASON_IDS.map((id) => ({
     id,
