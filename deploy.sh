@@ -1,5 +1,9 @@
 #!/bin/bash
 
+echo "🔐 Loading SSH key..."
+eval "$(ssh-agent -s)" >/dev/null
+ssh-add ~/.ssh/github_lovely_kids >/dev/null
+
 echo "📦 Adding files..."
 git add .
 
