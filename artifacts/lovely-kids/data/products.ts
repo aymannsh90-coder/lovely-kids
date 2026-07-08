@@ -45,7 +45,7 @@ export interface AgeGroupLabel { label: string; sublabel: string; }
 export const DEFAULT_AGE_GROUP_LABELS: Record<string, AgeGroupLabel> = {
   newborn: { label: "مولود جديد", sublabel: "0-3 أشهر" },
   infant:  { label: "رضيع",       sublabel: "3-12 شهر" },
-  toddler: { label: "دارج",       sublabel: "1-3 سنوات" },
+  toddler: { label: "أطفال",      sublabel: "1-3 سنوات" },
   kids:    { label: "أطفال",      sublabel: "3-6 سنوات" },
   boys:    { label: "أولاد",      sublabel: "+6 سنوات" },
   girls:   { label: "بنات",       sublabel: "+6 سنوات" },
