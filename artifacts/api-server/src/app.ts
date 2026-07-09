@@ -45,7 +45,8 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl =
+    process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 
   if (!databaseUrl) {
     res.status(500).json({
