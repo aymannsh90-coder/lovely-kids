@@ -190,9 +190,8 @@ export default function AddProductScreen() {
       }
 
       const data = await res.json() as { url: string };
-      const fullUrl = `${API_BASE}${data.url}`;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return fullUrl;
+      return data.url;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "فشل رفع الصورة";
       setErrors([msg]);
