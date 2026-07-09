@@ -1,0 +1,391 @@
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { API_BASE } from "@/constants/api";
+import { useAuth } from "@/context/AuthContext";
+import { useColors } from "@/hooks/useColors";
+
+type OrderItem = {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  size?: string;
+  color?: string;
+};
+
+type Order = {
+  id: number;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  items: OrderItem[];
+  totalPrice: number;
+  status: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  notes: string | null;
+  createdAt: string;
+};
+
+const STATUS_MAP: Record<string, { label: string; color: string; icon: string }> = {
+  new: { label: "قيد المراجعة", color: "#E91E8C", icon: "time-outline" },
+  confirmed: { label: "تم التأكيد", color: "#2196F3", icon: "checkmark-circle-outline" },
+  shipped: { label: "تم الشحن 🚚", color: "#FF9800", icon: "car-outline" },
+  delivered: { label: "تم التسليم ✅", color: "#22c55e", icon: "bag-check-outline" },
+  cancelled: { label: "ملغى", color: "#ef4444", icon: "close-circle-outline" },
+};
+
+function statusInfo(s: string) {
+  return STATUS_MAP[s] ?? { label: s, color: "#888", icon: "ellipse-outline" };
+}
+
+function canCancel(status: string) {
+  return status === "new" || status === "confirmed";
+}
+
+function timeAgo(dateStr: string) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return "الآن";
+  if (diff < 3600) return `${Math.floor(diff / 60)} دقيقة`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} ساعة`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)} يوم`;
+  return new Date(dateStr).toLocaleDateString("ar-SA");
+}
+
+function payMethodLabel(m: string) {
+  return m === "bank_transfer" ? "تحويل بنكي" : "الدفع عند الاستلام";
+}
+
+export default function MyOrdersScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState<number | null>(null);
+
+  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+
+  const fetchOrders = useCallback(async () => {
+    if (!user?.phone) return;
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/orders/my?phone=${encodeURIComponent(user.phone)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.phone]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+    }, [fetchOrders])
+  );
+
+  const handleCancel = (order: Order) => {
+    Alert.alert(
+      "إلغاء الطلب",
+      `هل تريد إلغاء الطلب رقم #${order.id}؟`,
+      [
+        { text: "لا، تراجع", style: "cancel" },
+        {
+          text: "نعم، إلغاء الطلب",
+          style: "destructive",
+          onPress: async () => {
+            setCancelling(order.id);
+            try {
+              const res = await fetch(`${API_BASE}/api/orders/${order.id}/cancel`, {
+                method: "PATCH",
+              });
+              if (res.ok) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setOrders((prev) =>
+                  prev.map((o) => (o.id === order.id ? { ...o, status: "cancelled" } : o))
+                );
+              } else {
+                const err = await res.json().catch(() => ({}));
+                Alert.alert("تنبيه", (err as { error?: string }).error ?? "تعذّر الإلغاء");
+              }
+            } catch {
+              Alert.alert("خطأ", "تعذّر الاتصال، حاول مجدداً");
+            } finally {
+              setCancelling(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderOrder = ({ item }: { item: Order }) => {
+    const st = statusInfo(item.status);
+    const cancellable = canCancel(item.status);
+    const isCancelling = cancelling === item.id;
+
+    return (
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {/* Header row */}
+        <View style={styles.cardHeader}>
+          <View style={[styles.badge, { backgroundColor: st.color + "20", borderColor: st.color + "50" }]}>
+            <Ionicons name={st.icon as "time-outline"} size={13} color={st.color} />
+            <Text style={[styles.badgeText, { color: st.color }]}>{st.label}</Text>
+          </View>
+          <View style={styles.orderMeta}>
+            <Text style={[styles.orderId, { color: colors.foreground }]}>طلب #{item.id}</Text>
+            <Text style={[styles.orderTime, { color: colors.mutedForeground }]}>{timeAgo(item.createdAt)}</Text>
+          </View>
+        </View>
+
+        {/* Items list */}
+        <View style={styles.itemsBox}>
+          {(item.items as OrderItem[]).map((oi, idx) => (
+            <View key={idx} style={styles.itemRow}>
+              {oi.image ? (
+                <Image source={{ uri: oi.image }} style={styles.itemImage} />
+              ) : (
+                <View style={[styles.itemImagePlaceholder, { backgroundColor: colors.muted }]}>
+                  <Ionicons name="shirt-outline" size={18} color={colors.mutedForeground} />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[styles.itemName, { color: colors.foreground }]} numberOfLines={1}>
+                  {oi.name}
+                </Text>
+                <View style={styles.itemMeta}>
+                  {oi.size ? (
+                    <Text style={[styles.itemTag, { color: colors.mutedForeground }]}>مقاس: {oi.size}</Text>
+                  ) : null}
+                  {oi.color ? (
+                    <Text style={[styles.itemTag, { color: colors.mutedForeground }]}>لون: {oi.color}</Text>
+                  ) : null}
+                  <Text style={[styles.itemTag, { color: colors.mutedForeground }]}>× {oi.quantity}</Text>
+                </View>
+              </View>
+              <Text style={[styles.itemPrice, { color: colors.foreground }]}>
+                {oi.price * oi.quantity}₪
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Footer */}
+        <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+          <Text style={[styles.payMethod, { color: colors.mutedForeground }]}>
+            {payMethodLabel(item.paymentMethod)}
+          </Text>
+          <Text style={[styles.total, { color: colors.primary }]}>{item.totalPrice}₪</Text>
+        </View>
+
+        {/* Cancel button */}
+        {cancellable && (
+          <Pressable
+            onPress={() => handleCancel(item)}
+            disabled={isCancelling}
+            style={[styles.cancelBtn, { borderColor: "#ef4444", opacity: isCancelling ? 0.5 : 1 }]}
+          >
+            {isCancelling ? (
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <Ionicons name="close-circle-outline" size={16} color="#ef4444" />
+            )}
+            <Text style={styles.cancelBtnText}>
+              {isCancelling ? "جاري الإلغاء..." : "إلغاء الطلب"}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.primary }]}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-forward" size={24} color="#fff" />
+        </Pressable>
+        <Text style={styles.headerTitle}>طلباتي</Text>
+        <Pressable onPress={fetchOrders} style={styles.refreshBtn}>
+          <Ionicons name="refresh-outline" size={22} color="#fff" />
+        </Pressable>
+      </View>
+
+      {!user ? (
+        <View style={styles.emptyBox}>
+          <Ionicons name="person-outline" size={60} color={colors.mutedForeground} />
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>سجّل دخولك أولاً</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+            تحتاج إلى تسجيل الدخول لعرض طلباتك
+          </Text>
+          <Pressable
+            onPress={() => router.push("/(tabs)/profile")}
+            style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
+          >
+            <Text style={styles.emptyBtnText}>تسجيل الدخول</Text>
+          </Pressable>
+        </View>
+      ) : loading && orders.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.emptySub, { color: colors.mutedForeground, marginTop: 12 }]}>
+            جاري تحميل طلباتك...
+          </Text>
+        </View>
+      ) : orders.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Ionicons name="bag-outline" size={64} color={colors.mutedForeground} />
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>لا توجد طلبات بعد</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+            طلباتك ستظهر هنا بعد إتمام أول طلب
+          </Text>
+          <Pressable
+            onPress={() => router.push("/(tabs)/products")}
+            style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
+          >
+            <Text style={styles.emptyBtnText}>تسوّق الآن</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={(o) => String(o.id)}
+          renderItem={renderOrder}
+          contentContainerStyle={{
+            padding: 14,
+            gap: 12,
+            paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80,
+          }}
+          onRefresh={fetchOrders}
+          refreshing={loading}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  header: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
+  backBtn: { padding: 4 },
+  refreshBtn: { padding: 4 },
+  emptyBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: 32,
+  },
+  emptyTitle: { fontSize: 18, fontWeight: "700", textAlign: "center" },
+  emptySub: { fontSize: 14, textAlign: "center", lineHeight: 22 },
+  emptyBtn: {
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginTop: 8,
+  },
+  emptyBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  cardHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    paddingBottom: 10,
+  },
+  badge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  badgeText: { fontSize: 12, fontWeight: "700" },
+  orderMeta: { alignItems: "flex-end", gap: 2 },
+  orderId: { fontSize: 14, fontWeight: "800" },
+  orderTime: { fontSize: 11 },
+  itemsBox: { paddingHorizontal: 12, gap: 10, paddingBottom: 10 },
+  itemRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+  },
+  itemImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    resizeMode: "cover",
+  },
+  itemImagePlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemName: { fontSize: 13, fontWeight: "600", textAlign: "right" },
+  itemMeta: { flexDirection: "row-reverse", gap: 8, flexWrap: "wrap" },
+  itemTag: { fontSize: 11 },
+  itemPrice: { fontSize: 13, fontWeight: "700", minWidth: 40, textAlign: "left" },
+  cardFooter: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  payMethod: { fontSize: 12 },
+  total: { fontSize: 16, fontWeight: "800" },
+  cancelBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    margin: 10,
+    marginTop: 0,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+  },
+  cancelBtnText: { color: "#ef4444", fontSize: 13, fontWeight: "700" },
+});

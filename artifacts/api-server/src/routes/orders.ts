@@ -70,6 +70,54 @@ router.get("/orders", async (_req, res) => {
   res.json(orders);
 });
 
+// GET /api/orders/my?phone=:phone — get orders for a specific customer phone
+router.get("/orders/my", async (req, res) => {
+  const phone = (req.query.phone as string | undefined)?.trim();
+  if (!phone) {
+    res.status(400).json({ error: "رقم الهاتف مطلوب" });
+    return;
+  }
+  const orders = await db
+    .select()
+    .from(ordersTable)
+    .where(eq(ordersTable.customerPhone, phone))
+    .orderBy(desc(ordersTable.createdAt));
+  res.json(orders);
+});
+
+// PATCH /api/orders/:id/cancel — customer cancels their own order (only if not shipped/delivered)
+router.patch("/orders/:id/cancel", async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "معرّف الطلب غير صالح" });
+    return;
+  }
+
+  const current = await db
+    .select({ status: ordersTable.status })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id));
+
+  if (current.length === 0) {
+    res.status(404).json({ error: "الطلب غير موجود" });
+    return;
+  }
+
+  const { status } = current[0];
+  if (status === "shipped" || status === "delivered" || status === "cancelled") {
+    res.status(400).json({ error: "لا يمكن إلغاء هذا الطلب بعد الآن" });
+    return;
+  }
+
+  const updated = await db
+    .update(ordersTable)
+    .set({ status: "cancelled" })
+    .where(eq(ordersTable.id, id))
+    .returning();
+
+  res.json(updated[0]);
+});
+
 // PATCH /api/orders/:id/status — update order status
 router.patch("/orders/:id/status", async (req, res) => {
   const id = Number(req.params.id);
