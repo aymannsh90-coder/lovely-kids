@@ -232,7 +232,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 8,
     marginBottom: 8,
-    alignItems: "center",
   },
   categoryChip: {
     flexDirection: "row",
