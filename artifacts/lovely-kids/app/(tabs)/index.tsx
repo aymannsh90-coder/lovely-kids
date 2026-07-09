@@ -88,7 +88,7 @@ export default function HomeScreen() {
             resizeMode="contain"
           />
           {user && (
-            <Text style={[styles.greetingText, { color: colors.primary }]}>
+            <Text style={[styles.greetingText, { color: colors.primary }]} numberOfLines={1}>
               أهلاً {user.name} 🌸
             </Text>
           )}
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  headerLeft: { alignItems: "flex-end" },
+  headerLeft: { flexDirection: "row-reverse", alignItems: "center", gap: 8, flex: 1 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   logoImage: { width: 110, height: 52 },
   greetingText: {
