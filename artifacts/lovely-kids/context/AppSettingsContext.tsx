@@ -91,7 +91,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   tabLabelProducts: "المنتجات",
   tabLabelProfile: "حسابي",
   bannerTitle: "كل ما يحتاجه\nطفلك في مكان واحد",
-  bannerSubtitle: "ملابس · عربات · كوتات · مستلزمات",
+  bannerSubtitle: "ملابس ولادي وبناتي · تجهيز بيبي · مستلزمات مواليد",
   bannerColor: "#E91E8C",
   bannerBadge: "خصم 20%",
   offers: [
