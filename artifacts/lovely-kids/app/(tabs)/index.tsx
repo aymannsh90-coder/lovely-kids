@@ -88,9 +88,10 @@ export default function HomeScreen() {
             resizeMode="contain"
           />
           {user && (
-            <Text style={[styles.greetingText, { color: colors.primary }]} numberOfLines={1}>
-              أهلاً {user.name} 🌸
-            </Text>
+            <View style={styles.greetingBlock}>
+              <Text style={[styles.greetingHi, { color: colors.primary }]}>أهلاً وسهلاً 🌸</Text>
+              <Text style={[styles.greetingName, { color: colors.foreground }]}>{user.name}</Text>
+            </View>
           )}
         </View>
         <View style={styles.headerRight}>
@@ -401,13 +402,19 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: "row-reverse", alignItems: "center", gap: 8, flex: 1 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   logoImage: { width: 110, height: 52 },
-  greetingText: {
-    fontSize: 17,
+  greetingBlock: { alignItems: "flex-end" },
+  greetingHi: {
+    fontSize: 15,
     fontWeight: "800",
     fontStyle: "italic",
     textAlign: "right",
-    marginTop: 2,
     letterSpacing: 0.3,
+  },
+  greetingName: {
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "right",
+    marginTop: 1,
   },
   iconBtn: {
     width: 40,
