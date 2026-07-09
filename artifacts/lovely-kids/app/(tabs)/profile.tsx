@@ -27,6 +27,7 @@ import { useColors } from "@/hooks/useColors";
 
 const MENU_ITEMS = [
   { icon: "bag-outline" as const, label: "طلباتي", route: "/my-orders" as const },
+  { icon: "cube-outline" as const, label: "متابعة الطلبات", route: "/my-orders" as const },
   { icon: "heart-outline" as const, label: "المفضلة", route: "/wishlist" as const },
   { icon: "call-outline" as const, label: "تواصل معنا", route: "/contact" as const },
   { icon: "information-circle-outline" as const, label: "عن المحل", route: "/about" as const },
