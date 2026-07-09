@@ -87,6 +87,11 @@ export default function HomeScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
+          {user && (
+            <Text style={[styles.greetingText, { color: colors.primary }]}>
+              أهلاً {user.name} 🌸
+            </Text>
+          )}
         </View>
         <View style={styles.headerRight}>
           <Pressable
@@ -98,14 +103,6 @@ export default function HomeScreen() {
           <CartBadge />
         </View>
       </View>
-
-      {user && (
-        <View style={styles.greetingRow}>
-          <Text style={[styles.greetingText, { color: colors.foreground }]}>
-            أهلاً وسهلاً : {user.name}
-          </Text>
-        </View>
-      )}
 
       {/* Gender Tabs */}
       <View style={[styles.genderTabsRow, { borderColor: colors.border }]}>
@@ -404,8 +401,14 @@ const styles = StyleSheet.create({
   headerLeft: { alignItems: "flex-end" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   logoImage: { width: 110, height: 52 },
-  greetingRow: { paddingHorizontal: 16, paddingBottom: 10 },
-  greetingText: { fontSize: 15, fontWeight: "700", textAlign: "right" },
+  greetingText: {
+    fontSize: 17,
+    fontWeight: "800",
+    fontStyle: "italic",
+    textAlign: "right",
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
   iconBtn: {
     width: 40,
     height: 40,
