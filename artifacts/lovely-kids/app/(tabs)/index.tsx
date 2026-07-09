@@ -308,7 +308,7 @@ export default function HomeScreen() {
         {[
           { icon: "rocket-outline" as const, text: "توصيل سريع" },
           { icon: "shield-checkmark-outline" as const, text: "دفع آمن" },
-          { icon: "refresh-outline" as const, text: "إمكانية الاستبدال" },
+          { icon: "refresh-outline" as const, text: "استبدال خلال 7 أيام" },
           { icon: "headset-outline" as const, text: "دعم 24/7" },
         ].map((f) => (
           <View
