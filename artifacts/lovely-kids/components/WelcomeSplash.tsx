@@ -26,7 +26,7 @@ interface WelcomeSplashProps {
 }
 
 export function WelcomeSplash({ onFinish }: WelcomeSplashProps) {
-  const player = useAudioPlayer(require("@/assets/sounds/welcome-chime.wav"));
+  const player = useAudioPlayer(require("@/assets/sounds/welcome-chime.mp3"));
 
   const containerOpacity = useSharedValue(1);
   const logoScale = useSharedValue(0.6);

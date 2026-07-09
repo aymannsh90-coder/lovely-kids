@@ -20,6 +20,8 @@
     "android": {
       "package": "com.lovelykids.nablus",
       "backgroundColor": "#ABE2F6",
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true,
       "splash": {
         "image": "./assets/images/splash-android.png",
         "resizeMode": "contain",
@@ -59,6 +61,7 @@
         "expo-build-properties",
         {
           "android": {
+            "enableSeparateBuildPerCPUArchitecture": true,
             "packagingOptions": {
               "pickFirst": ["META-INF/versions/9/OSGI-INF/MANIFEST.MF"]
             }
