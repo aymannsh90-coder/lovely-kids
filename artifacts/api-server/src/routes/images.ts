@@ -1,16 +1,15 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import { existsSync, createReadStream, statSync } from "fs";
-import { join } from "path";
+import { supabase, BUCKET, ensureBucket } from "../lib/supabase";
 
 const router = Router();
 
-const UPLOADS_DIR = join(process.cwd(), "uploads");
+let bucketReady = false;
 
-async function ensureUploadsDir() {
-  if (!existsSync(UPLOADS_DIR)) {
-    await mkdir(UPLOADS_DIR, { recursive: true });
+async function getBucket() {
+  if (!bucketReady) {
+    await ensureBucket();
+    bucketReady = true;
   }
 }
 
@@ -26,24 +25,36 @@ router.post("/images/upload", async (req, res) => {
   }
 
   try {
-    await ensureUploadsDir();
+    await getBucket();
 
     const ext = mimeType.includes("png") ? "png" : mimeType.includes("gif") ? "gif" : mimeType.includes("webp") ? "webp" : "jpg";
     const filename = `${randomUUID()}.${ext}`;
-    const filePath = join(UPLOADS_DIR, filename);
-
     const buffer = Buffer.from(base64, "base64");
-    await writeFile(filePath, buffer);
 
-    const url = `/api/uploads/${filename}`;
-    res.json({ url, objectPath: url });
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(filename, buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (error) {
+      req.log?.error({ err: error }, "supabase upload failed");
+      res.status(500).json({ error: "فشل رفع الصورة" });
+      return;
+    }
+
+    const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(filename);
+    const url = publicData.publicUrl;
+
+    res.json({ url, objectPath: filename });
   } catch (err) {
     req.log?.error({ err }, "image upload failed");
     res.status(500).json({ error: "فشل رفع الصورة" });
   }
 });
 
-// GET /api/uploads/:filename — serve uploaded images
+// GET /api/uploads/:filename — legacy redirect to Supabase public URL
 router.get("/uploads/:filename", (req, res) => {
   const { filename } = req.params;
 
@@ -52,28 +63,8 @@ router.get("/uploads/:filename", (req, res) => {
     return;
   }
 
-  const filePath = join(UPLOADS_DIR, filename);
-
-  if (!existsSync(filePath)) {
-    res.status(404).json({ error: "الصورة غير موجودة" });
-    return;
-  }
-
-  const ext = filename.split(".").pop()?.toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    gif: "image/gif",
-    webp: "image/webp",
-  };
-  const contentType = ext ? (mimeTypes[ext] ?? "image/jpeg") : "image/jpeg";
-
-  const stat = statSync(filePath);
-  res.setHeader("Content-Type", contentType);
-  res.setHeader("Content-Length", stat.size);
-  res.setHeader("Cache-Control", "public, max-age=31536000");
-  createReadStream(filePath).pipe(res);
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(filename);
+  res.redirect(301, data.publicUrl);
 });
 
 export default router;
