@@ -1,0 +1,80 @@
+أريد فحص نهائي للمشروع بعد التعديلات، بدون تغيير أي شيء إلا إذا وجدت خطأ واضح وتخبرني قبل التعديل.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+API server: artifacts/api-server
+GitHub branch: main
+Production API domain:
+https://lovely-kids.replit.app
+
+المطلوب فحصه خطوة خطوة:
+
+1. تأكد أن Git نظيف:
+cd /home/runner/workspace
+git status
+git log --oneline -5
+
+2. تأكد أن آخر commit الخاص بإصلاح Vercel موجود:
+Add environment variable inlining to support web builds
+
+3. تأكد أن إعدادات قاعدة البيانات صحيحة:
+- lib/db/src/index.ts يجب أن يستخدم:
+process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL
+
+- artifacts/api-server/src/app.ts /api/health يجب أن يستخدم نفس المنطق.
+
+4. اختبر API production:
+curl -i -H "Cache-Control: no-cache" "https://lovely-kids.replit.app/api/health?t=$(date +%s)"
+curl -i -H "Cache-Control: no-cache" "https://lovely-kids.replit.app/api/products?t=$(date +%s)"
+curl -i -H "Cache-Control: no-cache" "https://lovely-kids.replit.app/api/settings?t=$(date +%s)"
+
+المطلوب:
+- /api/health يرجع host:
+aws-1-eu-west-2.pooler.supabase.com
+port 6543
+- /api/products يرجع HTTP 200
+- /api/settings يرجع HTTP 200
+
+5. تأكد أن Expo/EAS production env صحيح:
+cd /home/runner/workspace/artifacts/lovely-kids
+pnpm dlx eas-cli@20.5.1 env:list
+واختَر production
+المطلوب:
+EXPO_PUBLIC_DOMAIN=lovely-kids.replit.app
+
+6. تأكد أن Web build ينجح محليًا:
+cd /home/runner/workspace/artifacts/lovely-kids
+pnpm run build
+
+المطلوب:
+ينجح بدون خطأ:
+Invalid call at line 2: process.env.EXPO_ROUTER_APP_ROOT
+
+ويتأكد أن dist موجود.
+
+7. تأكد من إعداد Babel:
+artifacts/lovely-kids/babel.config.js
+يجب أن يحتوي plugin:
+transform-inline-environment-variables
+
+8. تأكد من vercel.json في root:
+يجب أن يحتوي:
+buildCommand = EXPO_ROUTER_APP_ROOT=app pnpm exec expo export --platform web
+outputDirectory = dist
+
+9. لا تغيّر:
+- android package
+- eas projectId
+- Supabase Secrets
+- قاعدة البيانات
+- روابط الصور
+- منطق التطبيق
+- إعدادات APK
+
+في النهاية أعطني تقرير مختصر:
+✅ ما هو الصحيح
+⚠️ ما يحتاج انتباه
+❌ أي خطأ وجدته
+
+ولا تعمل push إلا إذا طلبت منك.
