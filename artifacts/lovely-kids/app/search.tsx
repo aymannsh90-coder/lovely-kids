@@ -19,7 +19,7 @@ import { useColors } from "@/hooks/useColors";
 
 const { width } = Dimensions.get("window");
 
-const POPULAR = ["ملابس مولود", "عربة أطفال", "ألعاب", "أحذية", "طقم بنات"];
+const POPULAR = ["ملابس مولود", "عربة أطفال", "طقم ولادي", "بنطلون", "طقم بنات"];
 
 export default function SearchScreen() {
   const colors = useColors();
