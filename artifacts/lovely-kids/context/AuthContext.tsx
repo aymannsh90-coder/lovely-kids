@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth as useClerkAuth } from "@clerk/expo";
+import { Platform } from "react-native";
 import React, {
   createContext,
   useCallback,
@@ -9,6 +9,16 @@ import React, {
 } from "react";
 
 import { API_BASE } from "@/constants/api";
+
+const useClerkAuth: () => {
+  isLoaded: boolean;
+  isSignedIn: boolean | undefined;
+  signOut: () => Promise<void>;
+  getToken: () => Promise<string | null>;
+} =
+  Platform.OS !== "web"
+    ? require("@clerk/expo").useAuth
+    : () => ({ isLoaded: true, isSignedIn: false, signOut: async () => {}, getToken: async () => null });
 
 export interface AuthUser {
   id: string;
