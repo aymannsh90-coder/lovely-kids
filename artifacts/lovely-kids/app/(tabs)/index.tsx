@@ -72,7 +72,7 @@ export default function HomeScreen() {
     <ScrollView
       style={[styles.scroll, { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 }}
+      contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 }}
     >
       {/* Header */}
       <View

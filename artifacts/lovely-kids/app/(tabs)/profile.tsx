@@ -145,7 +145,7 @@ export default function ProfileScreen() {
     <ScrollView
       style={[styles.scroll, { backgroundColor: colors.background }]}
       contentContainerStyle={{
-        paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16,
+        paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80,
       }}
     >
       {/* Header */}

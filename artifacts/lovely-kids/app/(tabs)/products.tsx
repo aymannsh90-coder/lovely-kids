@@ -186,7 +186,7 @@ export default function ProductsScreen() {
         columnWrapperStyle={styles.row}
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 },
+          { paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 },
         ]}
         renderItem={({ item }) => (
           <ProductCard
