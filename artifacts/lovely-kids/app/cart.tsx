@@ -266,11 +266,20 @@ export default function CartScreen() {
           )}
         </View>
 
+        {proofUploaded && (
+          <Pressable
+            onPress={() => { setStep("cart"); router.push("/my-orders"); }}
+            style={[styles.backHomeBtn, { backgroundColor: colors.primary }]}
+          >
+            <Ionicons name="bag-outline" size={18} color="#fff" />
+            <Text style={styles.backHomeBtnText}>عرض طلباتي</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => { setStep("success"); router.push("/"); }}
-          style={[styles.backHomeBtn, { backgroundColor: proofUploaded ? colors.primary : colors.secondary }]}
+          style={[styles.backHomeBtn, { backgroundColor: proofUploaded ? colors.secondary : colors.secondary }]}
         >
-          <Text style={[styles.backHomeBtnText, { color: proofUploaded ? "#fff" : colors.foreground }]}>
+          <Text style={[styles.backHomeBtnText, { color: colors.foreground }]}>
             {proofUploaded ? "العودة للرئيسية" : "سأرفع الوصل لاحقاً"}
           </Text>
         </Pressable>
@@ -296,10 +305,17 @@ export default function CartScreen() {
           </Text>
         </View>
         <Pressable
-          onPress={() => { setStep("cart"); router.push("/"); }}
+          onPress={() => { setStep("cart"); router.push("/my-orders"); }}
           style={[styles.backHomeBtn, { backgroundColor: colors.primary }]}
         >
-          <Text style={styles.backHomeBtnText}>العودة للرئيسية</Text>
+          <Ionicons name="bag-outline" size={18} color="#fff" />
+          <Text style={styles.backHomeBtnText}>عرض طلباتي</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { setStep("cart"); router.push("/"); }}
+          style={[styles.backHomeBtn, { backgroundColor: colors.secondary, marginTop: -4 }]}
+        >
+          <Text style={[styles.backHomeBtnText, { color: colors.foreground }]}>العودة للرئيسية</Text>
         </Pressable>
       </View>
     );
@@ -643,8 +659,8 @@ const styles = StyleSheet.create({
   successSub: { fontSize: 14, textAlign: "center", maxWidth: 280 },
   successInfo: { flexDirection: "row-reverse", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginTop: 8 },
   successInfoText: { fontSize: 13, textAlign: "right", flex: 1 },
-  backHomeBtn: { paddingHorizontal: 32, paddingVertical: 14, borderRadius: 16, marginTop: 8 },
-  backHomeBtnText: { fontSize: 16, fontWeight: "700" },
+  backHomeBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 16, marginTop: 8 },
+  backHomeBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
   bankCard: { width: "100%", borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 12 },
   bankHeader: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
   bankTitle: { fontSize: 16, fontWeight: "800" },
