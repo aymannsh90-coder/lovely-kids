@@ -59,9 +59,8 @@ export function LogoPickerButton({ value, fallbackSource, onChange }: LogoPicker
       }
 
       const data = (await res.json()) as { url: string };
-      const fullUrl = `${API_BASE}${data.url}`;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onChange(fullUrl);
+      onChange(data.url);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "فشل رفع الشعار";
       setError(msg);
