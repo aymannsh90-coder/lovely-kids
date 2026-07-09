@@ -6,7 +6,6 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { ClerkLoaded, ClerkProvider } from "@clerk/expo";
-import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -36,6 +35,11 @@ const queryClient = new QueryClient();
 
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
+
+const clerkTokenCache =
+  Platform.OS !== "web"
+    ? require("@clerk/expo/token-cache").tokenCache
+    : undefined;
 
 function RootLayoutNav() {
   usePushNotifications();
@@ -81,7 +85,7 @@ export default function RootLayout() {
   return (
     <ClerkProvider
       publishableKey={clerkPublishableKey}
-      tokenCache={tokenCache}
+      tokenCache={clerkTokenCache}
       proxyUrl={clerkProxyUrl}
     >
       <ClerkLoaded>
