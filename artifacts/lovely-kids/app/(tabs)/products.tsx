@@ -186,7 +186,7 @@ export default function ProductsScreen() {
         columnWrapperStyle={styles.row}
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 },
+          { paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 110 },
         ]}
         renderItem={({ item }) => (
           <ProductCard
@@ -229,18 +229,21 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 14, padding: 0 },
   categoriesScroll: {
     paddingHorizontal: 16,
+    paddingVertical: 4,
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
+    alignItems: "center",
   },
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 9,
+    minHeight: 38,
     borderRadius: 20,
     borderWidth: 1,
   },
-  categoryText: { fontSize: 13, fontWeight: "600" },
+  categoryText: { fontSize: 13, fontWeight: "600", lineHeight: 18 },
   count: {
     textAlign: "right",
     paddingHorizontal: 16,

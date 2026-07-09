@@ -46,6 +46,7 @@ export default function AdminUsersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
@@ -58,9 +59,23 @@ export default function AdminUsersScreen() {
       if (res.ok) {
         const data = await res.json();
         setUsers(Array.isArray(data) ? data : []);
+        setFetchError(null);
+      } else {
+        let msg = "فشل تحميل المستخدمين";
+        if (res.status === 401 || res.status === 403) {
+          msg = "غير مصرح — تأكد أن حسابك يملك صلاحية أدمن";
+        } else {
+          try {
+            const body = await res.json();
+            if (body?.error) msg = body.error;
+          } catch { /* ignore */ }
+        }
+        setFetchError(msg);
+        setUsers([]);
       }
     } catch {
-      // ignore
+      setFetchError("تعذّر الاتصال بالسيرفر");
+      setUsers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -151,7 +166,7 @@ export default function AdminUsersScreen() {
         </Pressable>
         <Text style={styles.title}>المستخدمون</Text>
         <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{users.length}</Text>
+          <Text style={styles.countBadgeText}>{fetchError ? "—" : users.length}</Text>
         </View>
       </View>
 
@@ -174,8 +189,17 @@ export default function AdminUsersScreen() {
           }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="people-outline" size={48} color={colors.mutedForeground} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>لا يوجد مستخدمون</Text>
+              {fetchError ? (
+                <>
+                  <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
+                  <Text style={[styles.emptyText, { color: "#ef4444", textAlign: "center" }]}>{fetchError}</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="people-outline" size={48} color={colors.mutedForeground} />
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>لا يوجد مستخدمون</Text>
+                </>
+              )}
             </View>
           }
         />

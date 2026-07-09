@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -59,16 +59,50 @@ function Field({ label, value, onChangeText, placeholder, children }: {
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { settings, updateSettings, resetSettings } = useAppSettings();
+  const { settings, settingsReady, updateSettings, resetSettings } = useAppSettings();
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
-  const handleSave = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const [draftPrimary, setDraftPrimary] = useState(settings.primaryColor);
+  const [draftBg, setDraftBg] = useState(settings.backgroundColor);
+  const [draftSecondary, setDraftSecondary] = useState(settings.secondaryColor);
+  const [draftBanner, setDraftBanner] = useState(settings.bannerColor);
+
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (settingsReady && !initializedRef.current) {
+      initializedRef.current = true;
+      setDraftPrimary(settings.primaryColor);
+      setDraftBg(settings.backgroundColor);
+      setDraftSecondary(settings.secondaryColor);
+      setDraftBanner(settings.bannerColor);
+    }
+  }, [settingsReady, settings.primaryColor, settings.backgroundColor, settings.secondaryColor, settings.bannerColor]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const ok = await updateSettings({
+      primaryColor: draftPrimary,
+      backgroundColor: draftBg,
+      secondaryColor: draftSecondary,
+      accentColor: draftSecondary,
+      bannerColor: draftBanner,
+    });
+    setSaving(false);
+    if (ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } else {
+      Alert.alert(
+        "فشل حفظ الألوان",
+        "تعذّر حفظ الألوان في السيرفر.\nتأكد من اتصالك بالإنترنت وأن حسابك يملك صلاحية أدمن.",
+        [{ text: "حسناً" }]
+      );
+    }
   };
 
   const handleReset = () => {
@@ -116,27 +150,48 @@ export default function SettingsScreen() {
       <Section title="🎨 الألوان الرئيسية">
         <Field label="لون الزر والعناصر الرئيسية">
           <ColorPickerButton
-            value={settings.primaryColor}
+            value={draftPrimary}
             title="لون الزر والعناصر الرئيسية"
-            onChange={(v) => updateSettings({ primaryColor: v, bannerColor: v })}
+            onChange={(v) => { setDraftPrimary(v); setDraftBanner(v); }}
           />
         </Field>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field label="لون خلفية التطبيق">
           <ColorPickerButton
-            value={settings.backgroundColor}
+            value={draftBg}
             title="لون خلفية التطبيق"
-            onChange={(v) => updateSettings({ backgroundColor: v })}
+            onChange={(v) => setDraftBg(v)}
           />
         </Field>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field label="اللون الثانوي">
           <ColorPickerButton
-            value={settings.secondaryColor}
+            value={draftSecondary}
             title="اللون الثانوي"
-            onChange={(v) => updateSettings({ secondaryColor: v, accentColor: v })}
+            onChange={(v) => setDraftSecondary(v)}
           />
         </Field>
+
+        {/* Save Colors Button */}
+        <View style={styles.field}>
+          <Pressable
+            onPress={handleSave}
+            disabled={saving}
+            style={[
+              styles.saveColorsBtn,
+              { backgroundColor: saved ? "#22c55e" : saving ? colors.muted : colors.primary },
+            ]}
+          >
+            <Ionicons
+              name={saved ? "checkmark-circle" : saving ? "hourglass-outline" : "color-palette-outline"}
+              size={18}
+              color="#fff"
+            />
+            <Text style={styles.saveColorsBtnText}>
+              {saved ? "تم حفظ الألوان ✓" : saving ? "جاري الحفظ..." : "حفظ الألوان"}
+            </Text>
+          </Pressable>
+        </View>
       </Section>
 
       {/* ── أسماء التبويبات ── */}
@@ -188,9 +243,9 @@ export default function SettingsScreen() {
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field label="لون البانر">
           <ColorPickerButton
-            value={settings.bannerColor}
+            value={draftBanner}
             title="لون البانر"
-            onChange={(v) => updateSettings({ bannerColor: v })}
+            onChange={(v) => setDraftBanner(v)}
           />
         </Field>
       </Section>
@@ -423,27 +478,30 @@ export default function SettingsScreen() {
       {/* Preview */}
       <Section title="👁️ معاينة الألوان">
         <View style={styles.preview}>
-          <View style={[styles.previewBanner, { backgroundColor: settings.bannerColor }]}>
+          <View style={[styles.previewBanner, { backgroundColor: draftBanner }]}>
             <Text style={styles.previewBannerText}>{settings.bannerTitle.replace("\\n", "\n")}</Text>
           </View>
           <View style={styles.previewRow}>
-            <View style={[styles.previewBtn, { backgroundColor: settings.primaryColor }]}>
+            <View style={[styles.previewBtn, { backgroundColor: draftPrimary }]}>
               <Text style={styles.previewBtnText}>زر رئيسي</Text>
             </View>
-            <View style={[styles.previewCard, { backgroundColor: settings.backgroundColor, borderColor: settings.secondaryColor }]}>
-              <Text style={{ color: settings.primaryColor, fontWeight: "700" }}>بطاقة</Text>
+            <View style={[styles.previewCard, { backgroundColor: draftBg, borderColor: draftSecondary }]}>
+              <Text style={{ color: draftPrimary, fontWeight: "700" }}>بطاقة</Text>
             </View>
           </View>
         </View>
       </Section>
 
-      {/* Save Button */}
+      {/* Main Save Button */}
       <Pressable
         onPress={handleSave}
-        style={[styles.saveBtn, { backgroundColor: saved ? "#22c55e" : colors.primary }]}
+        disabled={saving}
+        style={[styles.saveBtn, { backgroundColor: saved ? "#22c55e" : saving ? colors.muted : colors.primary }]}
       >
-        <Ionicons name={saved ? "checkmark-circle" : "save-outline"} size={22} color="#fff" />
-        <Text style={styles.saveBtnText}>{saved ? "تم الحفظ!" : "حفظ الإعدادات"}</Text>
+        <Ionicons name={saved ? "checkmark-circle" : saving ? "hourglass-outline" : "save-outline"} size={22} color="#fff" />
+        <Text style={styles.saveBtnText}>
+          {saved ? "تم الحفظ!" : saving ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Text>
       </Pressable>
     </ScrollView>
   );
@@ -506,6 +564,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
   },
+  saveColorsBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  saveColorsBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   saveBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",

@@ -1,0 +1,91 @@
+عندي مشاكل في APK تطبيق Lovely Kids على الجوال. أريد تشخيص وإصلاح هذه المشاكل فقط، ولا تلمس مشكلة الويب/Vercel الآن.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+API server: artifacts/api-server
+Production API:
+https://lovely-kids.replit.app
+
+المشاكل من صور التطبيق:
+
+1. الألوان لا تتغير:
+عند تغيير ألوان التطبيق من الإعدادات/قاعدة البيانات، التطبيق يرجع للألوان الأصلية ولا يتغير لا عندي ولا عند المستخدمين الآخرين.
+
+المطلوب:
+- افحص artifacts/lovely-kids/context/AppSettingsContext.tsx أو contexts/AppSettingsContext.tsx حسب المسار الصحيح.
+- افحص DEFAULT_SETTINGS.
+- افحص fetch من /api/settings.
+- افحص هل /api/settings يرجّع:
+primaryColor
+backgroundColor
+secondaryColor
+accentColor
+bannerColor
+وأي ألوان أخرى مستخدمة.
+- افحص هل AsyncStorage cache يطغى على إعدادات السيرفر.
+- افحص الشاشات: products, home, admin/settings, tabs، هل تستخدم settings من AppSettingsContext أم ألوان ثابتة من constants/colors.ts.
+- المطلوب أن التطبيق يستخدم ألوان قاعدة البيانات/الإعدادات دائمًا، وأي تغيير لون يظهر لكل المستخدمين بدون تحديث التطبيق بعد إصلاح الكود.
+
+2. صفحة المستخدمين فارغة:
+في شاشة المستخدمين يظهر:
+المستخدمون 0
+لا يوجد مستخدمون
+
+المطلوب:
+- ابحث عن شاشة المستخدمين داخل app/admin أو أي route مشابه.
+- افحص من أين تجلب المستخدمين.
+- افحص هل يوجد endpoint في API للمستخدمين مثل /api/users أو /api/admin/users.
+- إذا غير موجود، اقترح الحل الأقل تغييرًا:
+  أ) إن كان هناك جدول users في قاعدة البيانات، اربط الشاشة به.
+  ب) إن كان التطبيق يعتمد على Clerk، أضف endpoint في api-server يجلب المستخدمين من Clerk باستخدام CLERK_SECRET_KEY ثم تعرضهم في التطبيق.
+- تأكد أن العداد في أعلى الشاشة يعرض العدد الحقيقي وليس 0 دائمًا.
+- لا تغيّر نظام تسجيل الدخول إلا إذا كان ضروريًا.
+
+3. النصوص مقصوصة في صفحة المنتجات:
+في الصورة تظهر أزرار الفلاتر/التصنيفات مقصوصة مثل:
+استحمام
+ملابس
+والنص داخل بعض الكروت أو أسفل المنتجات مقصوص بسبب ارتفاع الكرت أو tab bar.
+
+المطلوب:
+- افحص صفحة المنتجات:
+app/(tabs)/products.tsx أو المسار الصحيح.
+- افحص مكونات product card والفلاتر.
+- ابحث عن:
+numberOfLines
+height ثابت
+maxHeight
+overflow: hidden
+fixed width
+lineHeight غير مناسب
+padding غير كافي
+- عدّل الفلاتر لتدعم العربية وRTL:
+  لا تقص النص.
+  استخدم minWidth/flexWrap/padding مناسب.
+  لا تستخدم numberOfLines=1 إلا إذا كان مع مساحة كافية.
+- عدّل product cards حتى لا تُقص أسماء المنتجات أو الأسعار، خصوصًا عند أسفل الشاشة فوق tab bar.
+- أضف paddingBottom مناسب لقائمة المنتجات حتى آخر صف لا يدخل تحت bottom tabs.
+
+مهم جدًا:
+لا تغيّر android package.
+لا تغيّر eas projectId.
+لا تغيّر Supabase أو DATABASE_URL.
+لا تغيّر Vercel أو web الآن.
+لا تغيّر روابط الصور.
+لا تكسر APK.
+لا تعمل push إلا بعد موافقتي.
+لا تعمل EAS build إلا بعد موافقتي.
+
+بعد التشخيص أعطني قبل التنفيذ:
+- سبب كل مشكلة
+- الملفات التي ستتغير
+- هل تحتاج APK جديد أم لا
+- خطة الإصلاح
+
+بعد موافقتي نفّذ، ثم شغّل:
+cd artifacts/lovely-kids
+pnpm run typecheck
+
+ولو فيه فحص مناسب للتطبيق شغّله أيضًا.
+ثم اعمل commit فقط بدون push.

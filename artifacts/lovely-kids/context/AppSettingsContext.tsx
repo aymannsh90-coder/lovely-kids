@@ -149,7 +149,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 interface AppSettingsContextType {
   settings: AppSettings;
   settingsReady: boolean;
-  updateSettings: (partial: Partial<AppSettings>) => void;
+  updateSettings: (partial: Partial<AppSettings>) => Promise<boolean>;
   addOffer: (offer: Omit<Offer, "id">) => void;
   updateOffer: (offer: Offer) => void;
   deleteOffer: (id: string) => void;
@@ -159,7 +159,7 @@ interface AppSettingsContextType {
 const AppSettingsContext = createContext<AppSettingsContextType>({
   settings: DEFAULT_SETTINGS,
   settingsReady: false,
-  updateSettings: () => {},
+  updateSettings: () => Promise.resolve(false),
   addOffer: () => {},
   updateOffer: () => {},
   deleteOffer: () => {},
@@ -230,7 +230,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   }, [fetchSettings]);
 
   const pushSettings = useCallback(
-    async (partial: Partial<AppSettings>) => {
+    async (partial: Partial<AppSettings>): Promise<boolean> => {
       try {
         const authToken = await getAuthTokenRef.current();
         const res = await fetch(`${API_BASE}/api/settings`, {
@@ -244,22 +244,24 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
         if (res.ok) {
           const data = await res.json();
           applyRemote(data);
+          return true;
         }
+        return false;
       } catch {
-        // ignore network errors, optimistic local update already applied
+        return false;
       }
     },
     [applyRemote]
   );
 
   const updateSettings = useCallback(
-    (partial: Partial<AppSettings>) => {
+    async (partial: Partial<AppSettings>): Promise<boolean> => {
       setSettings((prev) => {
         const updated = { ...prev, ...partial };
         AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return updated;
       });
-      pushSettings(partial);
+      return pushSettings(partial);
     },
     [pushSettings]
   );

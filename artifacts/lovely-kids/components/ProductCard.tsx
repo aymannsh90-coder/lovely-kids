@@ -219,12 +219,13 @@ const styles = StyleSheet.create({
   info: {
     padding: 12,
     gap: 6,
+    flexShrink: 0,
   },
   name: {
     fontSize: 13,
     fontWeight: "600",
     textAlign: "right",
-    lineHeight: 18,
+    lineHeight: 20,
   },
   ratingRow: {
     flexDirection: "row-reverse",
