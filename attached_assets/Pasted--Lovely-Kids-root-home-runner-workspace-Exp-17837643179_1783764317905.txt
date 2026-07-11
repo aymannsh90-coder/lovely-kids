@@ -1,0 +1,137 @@
+أريد تعديل نظام التسجيل والدخول في تطبيق Lovely Kids.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+API server: artifacts/api-server
+Production API:
+https://lovely-kids.replit.app
+
+مهم جدًا:
+لا تحذف Clerk بالكامل.
+لا تستخدم Google login.
+لا تستخدم Apple login.
+لا تستخدم Social Login / SSO.
+لا تستخدم قاعدة Replit القديمة أو Neon.
+قاعدة البيانات الصحيحة هي Supabase PostgreSQL الحالية المتصلة بالـ API.
+
+تأكد أن api-server يستخدم:
+process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL
+
+وتأكد أن:
+https://lovely-kids.replit.app/api/health
+
+يرجع:
+aws-1-eu-west-2.pooler.supabase.com
+port 6543
+
+المطلوب الأساسي:
+
+1. إبقاء Clerk مسؤولًا عن:
+- إنشاء الحساب
+- تسجيل الدخول
+- كلمة المرور
+- استرجاع كلمة المرور
+- الحماية والجلسات
+
+2. Supabase PostgreSQL مسؤول فقط عن حفظ بيانات المستخدم الإضافية:
+- name
+- email
+- phone
+- clerkUserId
+- role
+- createdAt
+
+مهم:
+لا تخزن كلمة المرور في Supabase.
+لا تبني نظام كلمات مرور خاص بنا.
+
+3. حذف أو تعطيل تسجيل الدخول عبر:
+- Google
+- Apple
+- useSSO
+- SocialSignInButtons
+- أي OAuth / social login
+
+4. شاشة التسجيل يجب أن تحتوي فقط على:
+- الاسم
+- رقم الجوال
+- البريد الإلكتروني
+- كلمة المرور
+
+بعد نجاح التسجيل في Clerk:
+- أنشئ أو حدّث سجل المستخدم في جدول users داخل Supabase PostgreSQL.
+- اربط السجل بـ clerkUserId.
+- احفظ name و email و phone و role.
+
+5. شاشة تسجيل الدخول يجب أن تكون:
+حقل واحد:
+"البريد الإلكتروني أو رقم الجوال"
+
+ثم:
+"كلمة المرور"
+
+المنطق المطلوب:
+- إذا أدخل المستخدم بريد إلكتروني، سجّل الدخول عبر Clerk بالإيميل وكلمة المرور.
+- إذا أدخل المستخدم رقم جوال، ابحث في جدول users في Supabase عن هذا الرقم.
+- إذا وُجد الرقم، خذ email المرتبط به.
+- بعدها استخدم email لتسجيل الدخول عبر Clerk.
+- إذا لم يوجد الرقم، اعرض رسالة واضحة:
+"رقم الجوال غير مسجل"
+
+6. أضف أو تأكد من وجود زر:
+"نسيت كلمة المرور؟"
+
+استرجاع كلمة المرور يكون عبر البريد الإلكتروني باستخدام Clerk.
+لا تنشئ نظام استرجاع خاص بنا.
+
+7. صفحة المستخدمين في لوحة الإدارة:
+- يجب أن تقرأ المستخدمين من Supabase PostgreSQL أو endpoint مربوط به.
+- لا تعرض "لا يوجد مستخدمون" إذا كان الطلب فشل.
+- إذا فشل الطلب، اعرض رسالة واضحة مثل:
+"فشل تحميل المستخدمين"
+أو:
+"غير مصرح"
+
+8. افحص هل يوجد جدول users حاليًا في schema.
+إذا موجود، استخدمه.
+إذا غير موجود، اقترح migration بسيط لإنشاء جدول users في Supabase PostgreSQL بالحقول:
+id
+clerkUserId
+name
+email
+phone
+role
+createdAt
+updatedAt
+
+9. افحص الملفات المتعلقة بـ:
+- شاشة تسجيل الدخول
+- شاشة التسجيل
+- AuthContext
+- app/admin/users
+- api-server routes
+- users schema أو db schema
+- أي استخدام لـ Google / Apple / useSSO / SocialSignInButtons
+
+مهم جدًا:
+لا تغيّر android package.
+لا تغيّر eas projectId.
+لا تغيّر Supabase DATABASE_URL.
+لا تغيّر Vercel الآن.
+لا تغيّر روابط الصور.
+لا تعمل push.
+لا تعمل EAS build.
+لا تعدّل قبل أن تعطيني خطة واضحة.
+
+أولًا أعطني تشخيص وخطة فقط:
+- هل Clerk الحالي يدعم Email + Password؟
+- هل يوجد جدول users في Supabase schema؟
+- أين توجد شاشات login/register؟
+- أين توجد أزرار Google/Apple؟
+- كيف سيتم حفظ رقم الجوال؟
+- كيف سيتم الدخول برقم الجوال؟
+- ما الملفات التي ستتغير؟
+- هل هذا يحتاج APK جديد؟
+
+بعد موافقتي فقط نفّذ التعديلات.
