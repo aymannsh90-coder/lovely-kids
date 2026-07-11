@@ -1,0 +1,90 @@
+أريد إصلاح مشكلة Expo Web / Vercel بطريقة دقيقة بدون أي ميزات جديدة.
+
+المشكلة الحالية:
+Vercel build يفشل بسبب:
+
+SyntaxError: node_modules/expo-router/_ctx.web.js:
+Invalid call at line 2: process.env.EXPO_ROUTER_APP_ROOT
+
+First argument of require.context should be a string denoting the directory to require.
+
+هذا غالبًا يعني أن EXPO_ROUTER_APP_ROOT لم يتم تحويله إلى string أثناء Babel/Web build.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+
+ممنوع:
+- لا تضف ميزات جديدة
+- لا تلمس المنتجات أو الروابط أو الطلبات أو الواتساب أو الإشعارات
+- لا تغيّر Supabase أو Clerk أو Android package أو eas projectId
+- لا تعمل EAS build
+- لا تعمل push
+- لا تعدّل node_modules مباشرة
+- لا تعمل حلول عشوائية
+
+المطلوب إصلاحه فقط:
+اجعل Web build ينجح بالأمر:
+
+cd artifacts/lovely-kids
+pnpm run build
+
+خطوات التشخيص المطلوبة:
+
+1. افحص:
+- artifacts/lovely-kids/package.json
+- artifacts/lovely-kids/babel.config.js
+- artifacts/lovely-kids/app.json
+- artifacts/lovely-kids/vercel.json
+- /home/runner/workspace/vercel.json إذا موجود
+- أي ملف فيه EXPO_ROUTER_APP_ROOT أو EXPO_ROUTER
+
+2. ركّز تحديدًا على babel.config.js.
+إذا كان موجود plugin:
+transform-inline-environment-variables
+
+وتوجد exclude مثل:
+EXPO_ROUTER_APP_ROOT
+EXPO_ROUTER_ABS_APP_ROOT
+EXPO_ROUTER_IMPORT_MODE
+EXPO_PROJECT_ROOT
+
+فهذا غالبًا سبب الخطأ، لأن expo-router يحتاج EXPO_ROUTER_APP_ROOT يتحول إلى string داخل require.context.
+
+جرّب الحل الأبسط والأصح:
+- إما إزالة plugin transform-inline-environment-variables بالكامل إذا لم يكن ضروريًا
+- أو تعديله بحيث لا يمنع تحويل EXPO_ROUTER_APP_ROOT
+- لا تستخدم exclude يمنع EXPO_ROUTER_APP_ROOT من التحويل
+
+3. تأكد أن build script صحيح للويب.
+إذا كان يحتاج env صريح، اجعله مثل:
+EXPO_ROUTER_APP_ROOT=app expo export --platform web
+
+لكن لا تعتمد على env وحده إذا Babel لا يحوله إلى string.
+
+4. بعد أي تعديل شغّل:
+cd artifacts/lovely-kids
+pnpm run build
+
+إذا ظهر نفس الخطأ، لا تغيّر أشياء كثيرة عشوائيًا.
+ارجع للبابل وسبب عدم inline لـ EXPO_ROUTER_APP_ROOT.
+
+5. بعد نجاح build شغّل:
+pnpm run typecheck
+
+6. افحص أن dist تم إنشاؤه وفيه index.html.
+
+7. لا تهتم الآن بمشكلة الصفحة البيضاء runtime إلا إذا build نجح.
+إذا build نجح لكن هناك صفحة بيضاء، أعطني سبب منفصل من console/runtime إن أمكن.
+
+8. اعمل commit فقط بدون push.
+
+المطلوب في التقرير:
+- السبب الحقيقي للمشكلة
+- ما التعديل الذي أصلح EXPO_ROUTER_APP_ROOT
+- الملفات التي تغيرت
+- نتيجة pnpm run build
+- نتيجة pnpm run typecheck
+- هل dist/index.html موجود
+- git status
+- git log --oneline -5

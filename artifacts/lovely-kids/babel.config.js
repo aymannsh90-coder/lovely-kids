@@ -7,8 +7,6 @@ module.exports = function (api) {
         "transform-inline-environment-variables",
         {
           exclude: [
-            "EXPO_ROUTER_APP_ROOT",
-            "EXPO_ROUTER_ABS_APP_ROOT",
             "EXPO_ROUTER_IMPORT_MODE",
             "EXPO_PROJECT_ROOT",
           ],
