@@ -1,0 +1,94 @@
+مشكلة Vercel الحالية ليست runtime white page، بل build failure.
+
+آخر لوج من Vercel:
+
+> EXPO_ROUTER_APP_ROOT=$(pwd)/app expo export --platform web
+
+ثم يفشل بـ:
+
+SyntaxError: node_modules/expo-router/_ctx.web.js:
+Invalid call at line 2: process.env.EXPO_ROUTER_APP_ROOT
+
+First argument of require.context should be a string denoting the directory to require.
+
+المعنى:
+build script يمرر EXPO_ROUTER_APP_ROOT بشكل صحيح كمسار مطلق، لكن Babel لا يحوّله إلى string داخل expo-router/_ctx.web.js.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+
+مهم جدًا:
+لا تضف ميزات جديدة.
+لا تعدّل المنتجات أو مشاركة المنتجات أو الطلبات أو الواتساب أو الإشعارات.
+لا تغيّر Supabase DATABASE_URL.
+لا تغيّر Clerk keys.
+لا تغيّر android package.
+لا تغيّر eas projectId.
+لا تعمل EAS build.
+لا تعمل push.
+لا تعدّل node_modules.
+
+المطلوب إصلاح build فقط:
+
+1. افتح:
+artifacts/lovely-kids/babel.config.js
+
+2. افحص plugin:
+transform-inline-environment-variables
+
+يجب ألا يكون EXPO_ROUTER_APP_ROOT داخل exclude.
+
+أزل من exclude كل هذه إن وجدت:
+- EXPO_ROUTER_APP_ROOT
+- EXPO_ROUTER_ABS_APP_ROOT
+- EXPO_ROUTER_IMPORT_MODE
+
+لأن expo-router يحتاجها تتحول إلى string داخل require.context.
+
+3. تأكد أن build script في:
+artifacts/lovely-kids/package.json
+
+يبقى هكذا أو بما يعادله:
+
+"build": "EXPO_ROUTER_APP_ROOT=$(pwd)/app expo export --platform web"
+
+مهم:
+لا ترجع EXPO_ROUTER_APP_ROOT=app فقط.
+لازم يكون absolute path باستخدام $(pwd)/app.
+
+4. نظّف كاش build محليًا ثم أعد البناء:
+
+cd artifacts/lovely-kids
+rm -rf dist .expo
+pnpm run build
+
+5. بعد نجاح build، تحقق أن المشكلة اختفت من الـ bundle:
+
+grep -R "process.env.EXPO_ROUTER_APP_ROOT" dist || true
+grep -R "EXPO_ROUTER_APP_ROOT" dist || true
+
+المطلوب:
+لا يظهر process.env.EXPO_ROUTER_APP_ROOT داخل dist.
+
+6. تحقق أن routes دخلت فعليًا في bundle:
+
+grep -R "BiometricGate" dist || true
+grep -R "productShareBaseUrl" dist || true
+grep -R "cart" dist || true
+
+7. شغّل:
+
+pnpm run typecheck
+
+8. اعمل commit فقط بدون push.
+
+أعطني تقرير:
+- شكل babel.config.js النهائي
+- شكل build script النهائي من package.json
+- نتيجة pnpm run build
+- نتيجة grep لـ process.env.EXPO_ROUTER_APP_ROOT
+- هل routes ظهرت في bundle
+- نتيجة pnpm run typecheck
+- git status
+- git log --oneline -5
