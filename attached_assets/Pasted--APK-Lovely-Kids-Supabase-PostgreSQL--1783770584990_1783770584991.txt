@@ -1,0 +1,182 @@
+أريد فحص شامل قبل بناء APK جديد لتطبيق Lovely Kids.
+
+المطلوب:
+تأكد أن Supabase PostgreSQL هي قاعدة البيانات المسؤولة عن كل شيء في التطبيق، وأن إشعارات التطبيق يمكن إرسالها لكل المستخدمين.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+API server: artifacts/api-server
+DB package: lib/db
+Production API:
+https://lovely-kids.replit.app
+
+مهم جدًا:
+لا تعدّل أي ملف الآن.
+لا تعمل push.
+لا تعمل EAS build.
+لا تغيّر Vercel الآن.
+أعطني تقرير تشخيص فقط وخطة إن وجدت مشاكل.
+
+أولًا: فحص قاعدة البيانات
+تأكد أن التطبيق والـ API يستخدمان Supabase PostgreSQL فقط وليس Replit/Neon.
+
+افحص:
+- DATABASE_URL
+- DIRECT_URL
+- SUPABASE_DATABASE_URL
+- lib/db/src/index.ts
+- artifacts/api-server/src/app.ts
+- /api/health
+
+المطلوب أن /api/health يرجع host الخاص بـ Supabase:
+aws-1-eu-west-2.pooler.supabase.com
+port 6543
+
+وتأكد أنه لا يوجد استخدام فعلي لأي قاعدة:
+- Neon
+- Replit database
+- Helium
+- أي DATABASE_URL قديم
+
+ابحث في المشروع عن:
+neon.tech
+helium
+replit database
+ep-
+DATABASE_URL
+SUPABASE_DATABASE_URL
+
+ثانيًا: المنتجات
+تأكد أن المنتجات تُقرأ وتُحفظ من Supabase عبر API.
+افحص:
+- ProductsContext
+- product routes في api-server
+- schema الخاص بالمنتجات
+- endpoints:
+GET /api/products
+POST /api/products
+PUT /api/products/:id
+DELETE /api/products/:id
+
+تأكد أن:
+- المنتجات لا تأتي من بيانات ثابتة داخل التطبيق إلا كـ fallback فقط.
+- أي تعديل منتجات من الإدارة يُحفظ في Supabase.
+- المنتجات تظهر للمستخدمين بدون تحديث APK.
+
+ثالثًا: الألوان والإعدادات
+تأكد أن الألوان والإعدادات مربوطة بـ Supabase وليس DEFAULT_SETTINGS فقط.
+
+افحص:
+- AppSettingsContext
+- admin/settings.tsx
+- settings routes في api-server
+- جدول settings أو app_settings في schema/database
+
+تأكد أن:
+- primaryColor
+- backgroundColor
+- secondaryColor
+- accentColor
+- bannerColor
+- offers
+- categories
+- ageGroupLabels
+- categoryLabels
+- hiddenCategories
+- contactInfo
+- aboutInfo
+كلها تُقرأ من /api/settings وتُحفظ في Supabase.
+
+وتأكد أن:
+- DEFAULT_SETTINGS لا يطغى على إعدادات السيرفر.
+- AsyncStorage لا يرجع ألوان قديمة فوق إعدادات Supabase.
+- أي تغيير ألوان أو إعدادات يظهر لكل المستخدمين بدون APK جديد.
+
+رابعًا: المستخدمين
+بعد تعديل Clerk الجديد:
+تأكد أن Clerk مسؤول فقط عن:
+- تسجيل الدخول
+- التسجيل
+- كلمة المرور
+- الجلسات
+- نسيت كلمة المرور
+
+وتأكد أن Supabase مسؤول عن بيانات المستخدمين:
+- name
+- email
+- phone
+- clerkUserId
+- isAdmin أو role
+- createdAt
+- updatedAt
+
+افحص:
+- users schema
+- auth routes
+- /api/auth/sync-user
+- /api/auth/lookup-phone
+- admin/users.tsx
+
+تأكد أن:
+- لا يتم تخزين كلمة المرور في Supabase.
+- passwordHash لم يعد مستخدمًا في النظام الجديد.
+- تسجيل المستخدم الجديد ينشئ/يحدث سجل في Supabase.
+- الدخول برقم الجوال يبحث في Supabase عن phone ويأخذ email المرتبط.
+- صفحة المستخدمين في الإدارة تقرأ من Supabase وتعرض أخطاء واضحة إذا فشل الطلب.
+
+خامسًا: الإشعارات لكل المستخدمين
+أريد التأكد أن التطبيق يستطيع إرسال إشعار لكل المستخدمين.
+
+افحص:
+- expo-notifications
+- أي hook أو service خاص بالـ push notifications
+- أين يتم حفظ Expo push token
+- هل يوجد جدول push_tokens أو notification_tokens في Supabase
+- هل يوجد endpoint لحفظ token المستخدم
+- هل يوجد endpoint لإرسال إشعار لكل المستخدمين
+
+المطلوب:
+1. عند فتح التطبيق أو تسجيل الدخول، يحصل التطبيق على Expo Push Token.
+2. يحفظ التوكن في Supabase مرتبطًا بالمستخدم أو الجهاز.
+3. عند تسجيل خروج المستخدم أو تغير الجهاز، يتم تحديث/إدارة التوكن بشكل آمن.
+4. يوجد endpoint في api-server يستطيع إرسال إشعار:
+   - لكل المستخدمين
+   - أو لمستخدم محدد
+   - أو للأدمن فقط إذا احتجنا
+5. إرسال الإشعار يجب أن يستخدم Expo Push API بشكل صحيح.
+6. إذا البنية غير موجودة، أعطني خطة إضافة بسيطة:
+   - جدول notification_tokens
+   - endpoint لحفظ token
+   - endpoint admin لإرسال إشعار للجميع
+   - ربطه بلوحة الإدارة لاحقًا
+
+سادسًا: فحص APK readiness
+تأكد أن التعديلات الأخيرة لا تكسر APK:
+- تسجيل الدخول الجديد
+- Clerk email/password
+- الدخول برقم الجوال
+- البصمة/Face ID/رمز الهاتف
+- الألوان
+- المستخدمين
+- الإشعارات
+
+شغّل فقط الفحوصات الآمنة:
+cd artifacts/lovely-kids
+pnpm run typecheck
+
+cd ../../artifacts/api-server
+pnpm run typecheck
+
+ولا تشغّل EAS build الآن.
+
+المطلوب في التقرير:
+1. هل Supabase هي المسؤولة عن المنتجات؟
+2. هل Supabase هي المسؤولة عن الألوان والإعدادات؟
+3. هل Supabase هي المسؤولة عن بيانات المستخدمين؟
+4. هل يوجد أي بقايا استخدام لـ Neon/Replit DB؟
+5. هل إشعارات كل المستخدمين جاهزة حاليًا؟
+6. إذا الإشعارات غير جاهزة، ما الخطة والملفات التي ستتغير؟
+7. هل يوجد شيء يحتاج إصلاح قبل APK؟
+8. نتيجة typecheck للتطبيق والـ API.
+9. لا تنفّذ أي تعديل قبل موافقتي.
