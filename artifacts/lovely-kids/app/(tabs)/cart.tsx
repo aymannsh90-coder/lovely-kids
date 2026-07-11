@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
 import type { ShippingZone } from "@/context/AppSettingsContext";
+import { getProductShareUrl } from "@/utils/productShare";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
@@ -107,11 +108,17 @@ export default function CartScreen() {
     }
 
     const itemsList = currentItems
-      .map((i) => {
+      .map((i, idx) => {
         const variant = [i.color ? `لون ${i.color}` : null, i.size ? `مقاس ${i.size}` : null].filter(Boolean).join("، ");
-        return `• ${i.name} x${i.quantity} — ${i.price * i.quantity}₪${variant ? ` (${variant})` : ""}`;
+        const productUrl = getProductShareUrl(i.id, settings);
+        return (
+          `${idx + 1}. ${i.name}` +
+          `\nالكمية: ${i.quantity}` +
+          `\nالسعر: ${i.price * i.quantity}₪${variant ? ` (${variant})` : ""}` +
+          `\nالرابط: ${productUrl}`
+        );
       })
-      .join("\n");
+      .join("\n\n");
 
     const payLabel = paymentMethod === "bank_transfer" ? "💳 تحويل بنكي" : "💵 الدفع عند الاستلام";
     const message = encodeURIComponent(

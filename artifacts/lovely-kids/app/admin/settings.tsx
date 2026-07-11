@@ -265,6 +265,16 @@ export default function SettingsScreen() {
         </Field>
       </Section>
 
+      {/* ── روابط المشاركة ── */}
+      <Section title="🔗 روابط مشاركة المنتجات">
+        <Field
+          label="الدومين الأساسي للروابط (بدون / في النهاية)"
+          value={settings.productShareBaseUrl ?? ""}
+          onChangeText={(v) => updateSettings({ productShareBaseUrl: v.trim() })}
+          placeholder="https://lovely-kids.replit.app"
+        />
+      </Section>
+
       {/* ── التحويل البنكي ── */}
       <Section title="🏦 بيانات التحويل البنكي">
         {[

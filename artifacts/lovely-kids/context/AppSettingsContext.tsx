@@ -85,6 +85,7 @@ export interface AppSettings {
   contactInfo: ContactInfo;
   aboutInfo: AboutInfo;
   shippingZones: ShippingZone[];
+  productShareBaseUrl: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -155,6 +156,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     { label: "القدس", cost: 30 },
     { label: "أراضي الـ48", cost: 70 },
   ],
+  productShareBaseUrl: "https://lovely-kids.replit.app",
 };
 
 interface AppSettingsContextType {
