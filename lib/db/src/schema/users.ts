@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
   phone: text("phone").unique(),
+  email: text("email").unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash"),
   clerkUserId: text("clerk_user_id").unique(),
@@ -21,9 +22,6 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({
   isAdmin: true,
   clerkUserId: true,
   avatarUrl: true,
-}).extend({
-  phone: z.string().min(6),
-  name: z.string().min(1),
 });
 
 export const registerSchema = insertUserSchema.extend({
@@ -31,7 +29,7 @@ export const registerSchema = insertUserSchema.extend({
 });
 
 export const loginSchema = z.object({
-  phone: z.string().min(6),
+  identifier: z.string().min(1),
   password: z.string().min(1),
 });
 

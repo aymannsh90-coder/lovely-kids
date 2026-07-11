@@ -136,7 +136,7 @@ export default function AdminUsersScreen() {
             )}
           </View>
           <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-            {item.phone ?? (isGoogle ? "حساب جوجل / آبل" : "—")}
+            {item.phone ?? (isGoogle ? "حساب بريد إلكتروني" : "—")}
           </Text>
           <Text style={[styles.meta, { color: colors.mutedForeground }]}>
             {timeAgo(item.createdAt)}

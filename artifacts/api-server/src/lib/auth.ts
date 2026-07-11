@@ -29,26 +29,23 @@ async function getOrCreateUserFromClerk(clerkUserId: string) {
   if (existing[0]) return existing[0];
 
   const clerkUser = await clerkClient.users.getUser(clerkUserId);
-  const isAppleUser = clerkUser.externalAccounts.some(
-    (account) => account.provider === "apple"
-  );
   const name =
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ").trim() ||
     clerkUser.primaryEmailAddress?.emailAddress ||
-    (isAppleUser ? "مستخدم آبل" : "مستخدم جديد");
+    "مستخدم جديد";
+  const email = clerkUser.primaryEmailAddress?.emailAddress?.toLowerCase() || null;
   const avatarUrl = clerkUser.hasImage ? clerkUser.imageUrl : null;
 
   const rows = await db
     .insert(usersTable)
-    .values({ clerkUserId, name, avatarUrl })
+    .values({ clerkUserId, name, email, avatarUrl })
     .returning();
   return rows[0];
 }
 
 // Resolves the current user for either the legacy phone/password session
-// tokens or a Clerk-authenticated request (Google sign-in). Clerk users are
-// JIT-provisioned into the local `users` table on first sight so the rest of
-// the app (orders, admin flag, etc.) can keep treating everyone uniformly.
+// tokens or a Clerk-authenticated request. Clerk users are JIT-provisioned
+// into the local `users` table on first sight.
 export async function getCurrentUser(req: Request) {
   const legacyUser = await getUserFromToken(getBearerToken(req));
   if (legacyUser) return legacyUser;

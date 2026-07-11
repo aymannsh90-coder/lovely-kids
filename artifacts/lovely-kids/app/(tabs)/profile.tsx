@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
+import { useSignIn } from "@clerk/expo";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -13,11 +13,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  Image,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SocialSignInButtons } from "@/components/SocialSignInButtons";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
@@ -33,27 +33,55 @@ const MENU_ITEMS = [
   { icon: "information-circle-outline" as const, label: "عن المحل", route: "/about" as const },
 ];
 
+type AuthMode = "login" | "register";
+type ForgotStep = null | "email" | "code";
+
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { totalItems } = useCart();
   const { count } = useWishlist();
   const { newCount, clearNew } = useNewOrders();
-  const { user, loading, register, login, logout, promoteToAdmin, updateProfile } = useAuth();
+  const {
+    user,
+    loading,
+    register,
+    login,
+    logout,
+    promoteToAdmin,
+    updateProfile,
+    pendingVerification,
+    verifyEmail,
+  } = useAuth();
   const { settings } = useAppSettings();
+  const { signIn } = useSignIn();
 
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  // ─── Auth form state ─────────────────────────────────────────────
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [verifyCode, setVerifyCode] = useState("");
   const [authError, setAuthError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // ─── Forgot password state ────────────────────────────────────────
+  const [forgotStep, setForgotStep] = useState<ForgotStep>(null);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+
+  // ─── Admin unlock state ───────────────────────────────────────────
   const [adminModalVisible, setAdminModalVisible] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
   const [promoting, setPromoting] = useState(false);
 
+  // ─── Edit profile state ───────────────────────────────────────────
   const [editProfileVisible, setEditProfileVisible] = useState(false);
   const [editName, setEditName] = useState("");
   const [editAddress, setEditAddress] = useState("");
@@ -62,51 +90,122 @@ export default function ProfileScreen() {
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
+  // ─── Auth submit ──────────────────────────────────────────────────
   const handleAuthSubmit = async () => {
     setAuthError("");
-    if (!phone.trim() || !password.trim() || (authMode === "register" && !name.trim())) {
-      setAuthError("يرجى تعبئة جميع الحقول");
+
+    if (pendingVerification) {
+      if (!verifyCode.trim()) { setAuthError("يرجى إدخال رمز التحقق"); return; }
+      setSubmitting(true);
+      try {
+        await verifyEmail(verifyCode.trim());
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setVerifyCode("");
+      } catch (e) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setAuthError(e instanceof Error ? e.message : "رمز التحقق غير صحيح");
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
-    setSubmitting(true);
-    try {
-      if (authMode === "register") {
-        await register(name.trim(), phone.trim(), password);
-      } else {
-        await login(phone.trim(), password);
+
+    if (authMode === "register") {
+      if (!name.trim() || !phone.trim() || !email.trim() || !password) {
+        setAuthError("يرجى تعبئة جميع الحقول");
+        return;
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setName("");
-      setPhone("");
-      setPassword("");
-    } catch (e) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setAuthError(e instanceof Error ? e.message : "حدث خطأ");
-    } finally {
-      setSubmitting(false);
+      setSubmitting(true);
+      try {
+        await register(name.trim(), phone.trim(), email.trim(), password);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setName(""); setPhone(""); setEmail(""); setPassword("");
+      } catch (e) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setAuthError(e instanceof Error ? e.message : "حدث خطأ");
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      if (!identifier.trim() || !password) {
+        setAuthError("يرجى تعبئة جميع الحقول");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await login(identifier.trim(), password);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setIdentifier(""); setPassword("");
+      } catch (e) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setAuthError(e instanceof Error ? e.message : "حدث خطأ");
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
-  const openAdminUnlock = () => {
-    if (!user) {
-      setAuthError("يجب تسجيل الدخول أولاً للوصول لهذه الخاصية");
-      return;
+  // ─── Forgot password ──────────────────────────────────────────────
+  const handleForgotSendCode = async () => {
+    if (!forgotEmail.trim()) { setForgotError("يرجى إدخال البريد الإلكتروني"); return; }
+    if (!signIn) { setForgotError("يرجى الانتظار..."); return; }
+    setForgotSubmitting(true);
+    setForgotError("");
+    try {
+      // Step 1: initialise sign-in with the identifier
+      const { error: createErr } = await signIn.create({ identifier: forgotEmail.trim().toLowerCase() });
+      if (createErr) throw createErr;
+      // Step 2: request the password-reset code via email
+      const { error: sendErr } = await signIn.resetPasswordEmailCode.sendCode();
+      if (sendErr) throw sendErr;
+      setForgotStep("code");
+    } catch {
+      setForgotError("البريد الإلكتروني غير مسجل أو حدث خطأ");
+    } finally {
+      setForgotSubmitting(false);
     }
+  };
+
+  const handleForgotReset = async () => {
+    if (!forgotCode.trim() || !forgotNewPassword) { setForgotError("يرجى تعبئة جميع الحقول"); return; }
+    if (!signIn) { setForgotError("يرجى الانتظار..."); return; }
+    setForgotSubmitting(true);
+    setForgotError("");
+    try {
+      // Step 3: verify the code
+      const { error: verifyErr } = await signIn.resetPasswordEmailCode.verifyCode({ code: forgotCode.trim() });
+      if (verifyErr) throw verifyErr;
+      // Step 4: submit the new password
+      const { error: submitErr } = await signIn.resetPasswordEmailCode.submitPassword({ password: forgotNewPassword });
+      if (submitErr) throw submitErr;
+      // Step 5: finalise → creates the active session
+      const { error: finalErr } = await signIn.finalize();
+      if (finalErr) throw finalErr;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setForgotStep(null);
+      setForgotEmail(""); setForgotCode(""); setForgotNewPassword("");
+      Alert.alert("تم", "تم تغيير كلمة المرور بنجاح، يمكنك الآن تسجيل الدخول");
+    } catch {
+      setForgotError("الرمز غير صحيح أو منتهي الصلاحية");
+    } finally {
+      setForgotSubmitting(false);
+    }
+  };
+
+  // ─── Admin unlock ─────────────────────────────────────────────────
+  const openAdminUnlock = () => {
+    if (!user) { setAuthError("يجب تسجيل الدخول أولاً"); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setAdminError("");
-    setAdminPassword("");
-    setAdminModalVisible(true);
+    setAdminError(""); setAdminPassword(""); setAdminModalVisible(true);
   };
 
   const handlePromote = async () => {
     if (!adminPassword.trim()) return;
-    setPromoting(true);
-    setAdminError("");
+    setPromoting(true); setAdminError("");
     try {
       await promoteToAdmin(adminPassword.trim());
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setAdminModalVisible(false);
-      setAdminPassword("");
+      setAdminModalVisible(false); setAdminPassword("");
       router.push("/admin/products");
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -116,19 +215,16 @@ export default function ProfileScreen() {
     }
   };
 
+  // ─── Edit profile ─────────────────────────────────────────────────
   const openEditProfile = () => {
     setEditName(user?.name ?? "");
     setEditAddress(user?.deliveryAddress ?? "");
-    setEditError("");
-    setEditProfileVisible(true);
+    setEditError(""); setEditProfileVisible(true);
   };
 
   const handleSaveProfile = async () => {
     setEditError("");
-    if (!editName.trim()) {
-      setEditError("الاسم مطلوب");
-      return;
-    }
+    if (!editName.trim()) { setEditError("الاسم مطلوب"); return; }
     setEditSaving(true);
     try {
       await updateProfile({ name: editName.trim(), deliveryAddress: editAddress.trim() });
@@ -142,6 +238,151 @@ export default function ProfileScreen() {
     }
   };
 
+  // ─── Auth form section ────────────────────────────────────────────
+  const renderAuthForm = () => {
+    // Step 2 of registration: email verification
+    if (pendingVerification) {
+      return (
+        <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="mail-open-outline" size={36} color={colors.primary} style={{ alignSelf: "center" }} />
+          <Text style={[styles.authSectionLabel, { color: colors.foreground, fontWeight: "700" }]}>
+            تحقق من بريدك الإلكتروني
+          </Text>
+          <Text style={[styles.authSectionLabel, { color: colors.mutedForeground }]}>
+            تم إرسال رمز تحقق إلى بريدك. أدخله أدناه:
+          </Text>
+
+          <TextInput
+            value={verifyCode}
+            onChangeText={setVerifyCode}
+            placeholder="رمز التحقق"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="number-pad"
+            style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
+            textAlign="center"
+            autoFocus
+          />
+
+          {authError ? (
+            <Text style={[styles.errorText, { color: colors.destructive }]}>{authError}</Text>
+          ) : null}
+
+          <Pressable
+            onPress={handleAuthSubmit}
+            disabled={submitting}
+            style={[styles.authSubmitBtn, { backgroundColor: colors.primary, opacity: submitting ? 0.7 : 1 }]}
+          >
+            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>تأكيد</Text>}
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.authSectionLabel, { color: colors.mutedForeground }]}>
+          سجّل دخولك أو أنشئ حسابك
+        </Text>
+
+        <View style={styles.authTabs}>
+          <Pressable
+            onPress={() => { setAuthMode("login"); setAuthError(""); }}
+            style={[styles.authTab, authMode === "login" && { backgroundColor: colors.primary }]}
+          >
+            <Text style={[styles.authTabText, { color: authMode === "login" ? "#fff" : colors.mutedForeground }]}>
+              تسجيل الدخول
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { setAuthMode("register"); setAuthError(""); }}
+            style={[styles.authTab, authMode === "register" && { backgroundColor: colors.primary }]}
+          >
+            <Text style={[styles.authTabText, { color: authMode === "register" ? "#fff" : colors.mutedForeground }]}>
+              حساب جديد
+            </Text>
+          </Pressable>
+        </View>
+
+        {authMode === "register" ? (
+          <>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="الاسم الكامل"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
+              textAlign="right"
+            />
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="رقم الجوال (مثال: 0591234567)"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="phone-pad"
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
+              textAlign="right"
+            />
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="البريد الإلكتروني"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
+              textAlign="right"
+            />
+          </>
+        ) : (
+          <TextInput
+            value={identifier}
+            onChangeText={setIdentifier}
+            placeholder="البريد الإلكتروني أو رقم الجوال"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
+            textAlign="right"
+          />
+        )}
+
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          placeholder="كلمة المرور"
+          placeholderTextColor={colors.mutedForeground}
+          secureTextEntry
+          style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
+          textAlign="right"
+        />
+
+        {authError ? (
+          <Text style={[styles.errorText, { color: colors.destructive }]}>{authError}</Text>
+        ) : null}
+
+        <Pressable
+          onPress={handleAuthSubmit}
+          disabled={submitting}
+          style={[styles.authSubmitBtn, { backgroundColor: colors.primary, opacity: submitting ? 0.7 : 1 }]}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.authSubmitText}>
+              {authMode === "login" ? "دخول" : "إنشاء حساب"}
+            </Text>
+          )}
+        </Pressable>
+
+        {authMode === "login" && (
+          <Pressable onPress={() => { setForgotStep("email"); setForgotEmail(""); setForgotError(""); }}>
+            <Text style={[styles.forgotLink, { color: colors.primary }]}>نسيت كلمة المرور؟</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
   return (
     <ScrollView
       style={[styles.scroll, { backgroundColor: colors.background }]}
@@ -150,17 +391,8 @@ export default function ProfileScreen() {
       }}
     >
       {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { paddingTop: topPadding + 12, backgroundColor: colors.primary },
-        ]}
-      >
-        <Pressable
-          onLongPress={openAdminUnlock}
-          delayLongPress={600}
-          style={styles.avatarContainer}
-        >
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.primary }]}>
+        <Pressable onLongPress={openAdminUnlock} delayLongPress={600} style={styles.avatarContainer}>
           <Image
             source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
@@ -168,7 +400,6 @@ export default function ProfileScreen() {
           />
           <Text style={styles.storeTag}>نابلس · فلسطين</Text>
         </Pressable>
-
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statNum}>{totalItems}</Text>
@@ -187,7 +418,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Account Section */}
+      {/* Account section */}
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color={colors.primary} />
@@ -207,6 +438,8 @@ export default function ProfileScreen() {
               <Text style={[styles.accountName, { color: colors.foreground }]}>{user.name}</Text>
               {user.phone ? (
                 <Text style={[styles.accountPhone, { color: colors.mutedForeground }]}>{user.phone}</Text>
+              ) : user.email ? (
+                <Text style={[styles.accountPhone, { color: colors.mutedForeground }]}>{user.email}</Text>
               ) : null}
             </View>
             <Pressable onPress={() => logout()} style={styles.logoutBtn}>
@@ -242,6 +475,16 @@ export default function ProfileScreen() {
               </View>
             ) : null}
 
+            {user.email ? (
+              <View style={[styles.detailRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.detailValue, { color: colors.foreground }]}>{user.email}</Text>
+                <View style={styles.detailLabelRow}>
+                  <Ionicons name="mail-outline" size={15} color={colors.mutedForeground} />
+                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>البريد الإلكتروني</Text>
+                </View>
+              </View>
+            ) : null}
+
             <View style={[styles.detailRow, { borderTopColor: colors.border }]}>
               {user.deliveryAddress ? (
                 <Text style={[styles.detailValue, { color: colors.foreground }]}>{user.deliveryAddress}</Text>
@@ -258,103 +501,7 @@ export default function ProfileScreen() {
           </View>
         </>
       ) : (
-        <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.authSectionLabel, { color: colors.mutedForeground }]}>
-            سجّل دخولك أو أنشئ حسابك بخطوة واحدة
-          </Text>
-
-          <SocialSignInButtons />
-
-          <View style={styles.orRow}>
-            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
-            <Text style={[styles.orText, { color: colors.mutedForeground }]}>
-              أو سجّل برقم الهاتف
-            </Text>
-            <View style={[styles.orLine, { backgroundColor: colors.border }]} />
-          </View>
-
-          <View style={styles.authTabs}>
-            <Pressable
-              onPress={() => { setAuthMode("login"); setAuthError(""); }}
-              style={[
-                styles.authTab,
-                authMode === "login" && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.authTabText,
-                  { color: authMode === "login" ? "#fff" : colors.mutedForeground },
-                ]}
-              >
-                تسجيل الدخول
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => { setAuthMode("register"); setAuthError(""); }}
-              style={[
-                styles.authTab,
-                authMode === "register" && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.authTabText,
-                  { color: authMode === "register" ? "#fff" : colors.mutedForeground },
-                ]}
-              >
-                حساب جديد
-              </Text>
-            </Pressable>
-          </View>
-
-          {authMode === "register" && (
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="الاسم الكامل"
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
-              textAlign="right"
-            />
-          )}
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="رقم الهاتف"
-            placeholderTextColor={colors.mutedForeground}
-            keyboardType="phone-pad"
-            style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
-            textAlign="right"
-          />
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="كلمة المرور"
-            placeholderTextColor={colors.mutedForeground}
-            secureTextEntry
-            style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
-            textAlign="right"
-          />
-
-          {authError ? (
-            <Text style={[styles.errorText, { color: colors.destructive }]}>{authError}</Text>
-          ) : null}
-
-          <Pressable
-            onPress={handleAuthSubmit}
-            disabled={submitting}
-            style={[styles.authSubmitBtn, { backgroundColor: colors.primary, opacity: submitting ? 0.7 : 1 }]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.authSubmitText}>
-                {authMode === "login" ? "دخول" : "إنشاء حساب"}
-              </Text>
-            )}
-          </Pressable>
-        </View>
+        renderAuthForm()
       )}
 
       {/* Menu */}
@@ -363,15 +510,10 @@ export default function ProfileScreen() {
           <React.Fragment key={item.label}>
             <Pressable
               onPress={() => router.push(item.route)}
-              style={({ pressed }) => [
-                styles.menuItem,
-                pressed && { backgroundColor: colors.muted },
-              ]}
+              style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: colors.muted }]}
             >
               <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
-              <Text style={[styles.menuLabel, { color: colors.foreground }]}>
-                {item.label}
-              </Text>
+              <Text style={[styles.menuLabel, { color: colors.foreground }]}>{item.label}</Text>
               <View style={[styles.menuIcon, { backgroundColor: colors.muted }]}>
                 <Ionicons name={item.icon} size={20} color={colors.primary} />
               </View>
@@ -383,7 +525,7 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      {/* Admin Card - only visible to promoted admins */}
+      {/* Admin Card */}
       {user?.isAdmin && (
         <Pressable
           onPress={() => { clearNew(); router.push("/admin/products"); }}
@@ -407,9 +549,7 @@ export default function ProfileScreen() {
       {/* About Card */}
       <View style={[styles.aboutCard, { backgroundColor: colors.secondary }]}>
         <Ionicons name="storefront-outline" size={32} color={colors.foreground} />
-        <Text style={[styles.aboutTitle, { color: colors.foreground }]}>
-          Lovely Kids - نابلس
-        </Text>
+        <Text style={[styles.aboutTitle, { color: colors.foreground }]}>Lovely Kids - نابلس</Text>
         <Text style={[styles.aboutText, { color: colors.mutedForeground }]}>
           متجر متخصص في ملابس ومستلزمات الأطفال بجودة عالية وأسعار مناسبة. نوفر
           شحن مجاني لجميع الطلبات فوق 500 ₪
@@ -418,31 +558,16 @@ export default function ProfileScreen() {
           onPress={() => router.push("/contact")}
           style={[styles.contactBtn, { backgroundColor: colors.foreground }]}
         >
-          <Text style={[styles.contactBtnText, { color: colors.background }]}>
-            تواصل معنا
-          </Text>
+          <Text style={[styles.contactBtnText, { color: colors.background }]}>تواصل معنا</Text>
         </Pressable>
       </View>
 
-      {/* Admin unlock modal */}
-      <Modal
-        visible={adminModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAdminModalVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setAdminModalVisible(false)}
-        >
-          <Pressable
-            style={[styles.modalCard, { backgroundColor: colors.card }]}
-            onPress={(e) => e.stopPropagation()}
-          >
+      {/* ── Admin unlock modal ── */}
+      <Modal visible={adminModalVisible} transparent animationType="fade" onRequestClose={() => setAdminModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAdminModalVisible(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
             <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              الوصول للإدارة
-            </Text>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>الوصول للإدارة</Text>
             <TextInput
               value={adminPassword}
               onChangeText={setAdminPassword}
@@ -454,39 +579,22 @@ export default function ProfileScreen() {
               textAlign="right"
               onSubmitEditing={handlePromote}
             />
-            {adminError ? (
-              <Text style={[styles.errorText, { color: colors.destructive }]}>{adminError}</Text>
-            ) : null}
+            {adminError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{adminError}</Text> : null}
             <Pressable
               onPress={handlePromote}
               disabled={promoting}
               style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%" }]}
             >
-              {promoting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.authSubmitText}>تأكيد</Text>
-              )}
+              {promoting ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>تأكيد</Text>}
             </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Edit Profile modal */}
-      <Modal
-        visible={editProfileVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditProfileVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setEditProfileVisible(false)}
-        >
-          <Pressable
-            style={[styles.modalCard, { backgroundColor: colors.card }]}
-            onPress={(e) => e.stopPropagation()}
-          >
+      {/* ── Edit profile modal ── */}
+      <Modal visible={editProfileVisible} transparent animationType="slide" onRequestClose={() => setEditProfileVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setEditProfileVisible(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
             <Ionicons name="person-circle-outline" size={36} color={colors.primary} />
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>تعديل البيانات الشخصية</Text>
 
@@ -502,7 +610,6 @@ export default function ProfileScreen() {
                   textAlign="right"
                 />
               </View>
-
               <View style={styles.modalFieldGroup}>
                 <Text style={[styles.modalFieldLabel, { color: colors.mutedForeground }]}>عنوان التوصيل المفضّل</Text>
                 <TextInput
@@ -512,15 +619,16 @@ export default function ProfileScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   multiline
                   numberOfLines={3}
-                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%", minHeight: 80, textAlignVertical: "top", paddingTop: 12 }]}
+                  style={[
+                    styles.input,
+                    { color: colors.foreground, borderColor: colors.border, width: "100%", minHeight: 80, textAlignVertical: "top", paddingTop: 12 },
+                  ]}
                   textAlign="right"
                 />
               </View>
             </View>
 
-            {editError ? (
-              <Text style={[styles.errorText, { color: colors.destructive }]}>{editError}</Text>
-            ) : null}
+            {editError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{editError}</Text> : null}
 
             <View style={{ width: "100%", flexDirection: "row-reverse", gap: 10 }}>
               <Pressable
@@ -528,11 +636,7 @@ export default function ProfileScreen() {
                 disabled={editSaving}
                 style={[styles.authSubmitBtn, { backgroundColor: colors.primary, flex: 1 }]}
               >
-                {editSaving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.authSubmitText}>حفظ</Text>
-                )}
+                {editSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>حفظ</Text>}
               </Pressable>
               <Pressable
                 onPress={() => setEditProfileVisible(false)}
@@ -544,239 +648,149 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ── Forgot password modal ── */}
+      <Modal
+        visible={forgotStep !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setForgotStep(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setForgotStep(null)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+            <Ionicons name="lock-open-outline" size={36} color={colors.primary} />
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+              {forgotStep === "email" ? "نسيت كلمة المرور؟" : "أدخل رمز التحقق"}
+            </Text>
+
+            {forgotStep === "email" ? (
+              <>
+                <Text style={[styles.authSectionLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
+                  سنرسل لك رمزاً على بريدك الإلكتروني لإعادة تعيين كلمة المرور
+                </Text>
+                <TextInput
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                  placeholder="البريد الإلكتروني"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoFocus
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
+                  textAlign="right"
+                />
+                {forgotError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{forgotError}</Text> : null}
+                <Pressable
+                  onPress={handleForgotSendCode}
+                  disabled={forgotSubmitting}
+                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%", opacity: forgotSubmitting ? 0.7 : 1 }]}
+                >
+                  {forgotSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>إرسال الرمز</Text>}
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.authSectionLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
+                  تحقق من بريدك وأدخل الرمز المُرسل ثم كلمة المرور الجديدة
+                </Text>
+                <TextInput
+                  value={forgotCode}
+                  onChangeText={setForgotCode}
+                  placeholder="رمز التحقق"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="number-pad"
+                  autoFocus
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
+                  textAlign="center"
+                />
+                <TextInput
+                  value={forgotNewPassword}
+                  onChangeText={setForgotNewPassword}
+                  placeholder="كلمة المرور الجديدة"
+                  placeholderTextColor={colors.mutedForeground}
+                  secureTextEntry
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
+                  textAlign="right"
+                />
+                {forgotError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{forgotError}</Text> : null}
+                <Pressable
+                  onPress={handleForgotReset}
+                  disabled={forgotSubmitting}
+                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%", opacity: forgotSubmitting ? 0.7 : 1 }]}
+                >
+                  {forgotSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>تغيير كلمة المرور</Text>}
+                </Pressable>
+              </>
+            )}
+
+            <Pressable onPress={() => setForgotStep(null)}>
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 4 }}>إلغاء</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  header: {
-    paddingBottom: 24,
-    paddingHorizontal: 16,
-  },
+  header: { paddingBottom: 24, paddingHorizontal: 16 },
   avatarContainer: { alignItems: "center", paddingTop: 16, gap: 8 },
   logoImage: { width: 140, height: 70, borderRadius: 12 },
   storeTag: { fontSize: 13, color: "rgba(255,255,255,0.85)" },
-  statsRow: {
-    flexDirection: "row-reverse",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 20,
-    gap: 0,
-  },
+  statsRow: { flexDirection: "row-reverse", justifyContent: "center", alignItems: "center", marginTop: 20 },
   statItem: { alignItems: "center", flex: 1 },
   statNum: { fontSize: 20, fontWeight: "800", color: "#fff" },
   statLabel: { fontSize: 11, color: "rgba(255,255,255,0.85)", marginTop: 2 },
   divider: { width: 1, height: 36 },
   loadingBox: { paddingVertical: 24, alignItems: "center" },
   accountCard: {
-    margin: 16,
-    marginBottom: 0,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 12,
+    margin: 16, marginBottom: 0, borderRadius: 16, borderWidth: 1,
+    padding: 14, flexDirection: "row-reverse", alignItems: "center", gap: 12,
   },
-  accountAvatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  accountAvatarImage: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-  },
+  accountAvatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  accountAvatarImage: { width: 46, height: 46, borderRadius: 23 },
   accountName: { fontSize: 15, fontWeight: "700", textAlign: "right" },
   accountPhone: { fontSize: 13, marginTop: 2, textAlign: "right" },
   logoutBtn: { padding: 8 },
-  detailsCard: {
-    margin: 16,
-    marginBottom: 0,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  detailsHeader: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  detailsTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    textAlign: "right",
-  },
-  editBtn: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
+  detailsCard: { margin: 16, marginBottom: 0, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  detailsHeader: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", padding: 14 },
+  detailsTitle: { fontSize: 15, fontWeight: "700" },
+  editBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   editBtnText: { fontSize: 13, fontWeight: "600" },
-  detailRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  detailLabelRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 5,
-    minWidth: 110,
-  },
-  detailLabel: { fontSize: 13 },
-  detailValue: { fontSize: 14, fontWeight: "600", textAlign: "left", flex: 1, marginLeft: 8 },
+  detailRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1 },
+  detailLabelRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  detailLabel: { fontSize: 12 },
+  detailValue: { fontSize: 14, fontWeight: "600", textAlign: "right", flex: 1, paddingLeft: 8 },
   detailValueEmpty: { fontSize: 14, fontWeight: "600" },
-  authCard: {
-    margin: 16,
-    marginBottom: 0,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    gap: 10,
-  },
-  authSectionLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 2,
-  },
-  authTabs: {
-    flexDirection: "row-reverse",
-    gap: 8,
-    marginBottom: 6,
-  },
-  authTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-  },
+  authCard: { margin: 16, borderRadius: 20, borderWidth: 1, padding: 20, gap: 12 },
+  authSectionLabel: { fontSize: 14, textAlign: "right" },
+  authTabs: { flexDirection: "row-reverse", backgroundColor: "transparent", borderRadius: 12, overflow: "hidden", gap: 8 },
+  authTab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center" },
   authTabText: { fontSize: 14, fontWeight: "700" },
-  input: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-  },
+  input: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
   errorText: { fontSize: 13, fontWeight: "600", textAlign: "right" },
-  orRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 2,
-  },
-  orLine: { flex: 1, height: 1 },
-  orText: { fontSize: 12, fontWeight: "600" },
-  authSubmitBtn: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 4,
-  },
+  authSubmitBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   authSubmitText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  menuCard: {
-    margin: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  menuItem: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  menuIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  forgotLink: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingVertical: 4 },
+  menuCard: { margin: 16, marginTop: 16, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  menuItem: { flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   menuLabel: { flex: 1, fontSize: 15, fontWeight: "600", textAlign: "right" },
+  menuIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   separator: { height: 1, marginHorizontal: 16 },
-  adminCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 12,
-    padding: 16,
-    borderRadius: 16,
-  },
-  adminCardText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#fff",
-    textAlign: "right",
-  },
-  newOrdersBadge: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    backgroundColor: "#ef4444",
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-    borderWidth: 1.5,
-    borderColor: "#fff",
-  },
-  newOrdersBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  aboutCard: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    gap: 8,
-  },
-  aboutTitle: { fontSize: 16, fontWeight: "700" },
+  adminCard: { marginHorizontal: 16, marginTop: 8, borderRadius: 16, flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", padding: 16, gap: 12 },
+  adminCardText: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "right" },
+  newOrdersBadge: { position: "absolute", top: -4, right: -4, backgroundColor: "#ef4444", borderRadius: 8, minWidth: 16, height: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
+  newOrdersBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  aboutCard: { margin: 16, marginTop: 8, borderRadius: 20, padding: 24, alignItems: "center", gap: 10 },
+  aboutTitle: { fontSize: 16, fontWeight: "800" },
   aboutText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
-  contactBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 24,
-    marginTop: 8,
-  },
+  contactBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, marginTop: 4 },
   contactBtnText: { fontSize: 14, fontWeight: "700" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalCard: {
-    width: "100%",
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    gap: 12,
-  },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 24 },
+  modalCard: { width: "100%", borderRadius: 24, padding: 24, alignItems: "center", gap: 12 },
   modalTitle: { fontSize: 17, fontWeight: "800" },
-  modalFieldGroup: { width: "100%", gap: 6 },
-  modalFieldLabel: { fontSize: 13, fontWeight: "600", textAlign: "right" },
+  modalFieldGroup: { gap: 6 },
+  modalFieldLabel: { fontSize: 12, fontWeight: "600", textAlign: "right" },
 });

@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, usersTable, sessionsTable, registerSchema, loginSchema } from "@workspace/db";
+import { getAuth } from "@clerk/express";
+import { db, usersTable, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { hashPassword, verifyPassword, generateToken } from "../lib/password";
 import { getBearerToken, getUserFromToken, getCurrentUser } from "../lib/auth";
 
 const router = Router();
@@ -10,63 +10,93 @@ function toUser(u: typeof usersTable.$inferSelect) {
   return {
     id: String(u.id),
     phone: u.phone,
+    email: u.email,
     name: u.name,
     isAdmin: u.isAdmin,
     avatarUrl: u.avatarUrl,
+    deliveryAddress: u.deliveryAddress,
   };
 }
 
-// POST /api/auth/register
-router.post("/auth/register", async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.issues });
+// POST /api/auth/sync-user — called by the Expo app after Clerk sign-up/sign-in
+// to upsert the user's extra profile data (name, phone, email) into Supabase.
+router.post("/auth/sync-user", async (req, res) => {
+  const auth = getAuth(req);
+  if (!auth?.userId) {
+    res.status(401).json({ error: "غير مصرح" });
     return;
   }
-  const { phone, name, password } = parsed.data;
+  const { name, email, phone } = req.body as { name?: string; email?: string; phone?: string };
 
-  const existing = await db.select().from(usersTable).where(eq(usersTable.phone, phone));
-  if (existing.length > 0) {
-    res.status(409).json({ error: "رقم الهاتف مسجل بالفعل" });
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, auth.userId));
+
+  if (existing[0]) {
+    const updates: Partial<typeof usersTable.$inferInsert> = {};
+    if (name?.trim()) updates.name = name.trim();
+    if (email?.trim()) updates.email = email.trim().toLowerCase();
+    if (phone?.trim()) updates.phone = phone.trim();
+    const rows = await db
+      .update(usersTable)
+      .set(updates)
+      .where(eq(usersTable.clerkUserId, auth.userId))
+      .returning();
+    res.json(toUser(rows[0]));
     return;
   }
 
-  const passwordHash = hashPassword(password);
   const rows = await db
     .insert(usersTable)
-    .values({ phone, name, passwordHash })
+    .values({
+      clerkUserId: auth.userId,
+      name: name?.trim() || "مستخدم جديد",
+      email: email?.trim().toLowerCase() || null,
+      phone: phone?.trim() || null,
+    })
     .returning();
-  const user = rows[0];
-
-  const token = generateToken();
-  await db.insert(sessionsTable).values({ token, userId: user.id });
-
-  res.status(201).json({ token, user: toUser(user) });
+  res.status(201).json(toUser(rows[0]));
 });
 
-// POST /api/auth/login
+// POST /api/auth/lookup-phone — no auth required; returns the email for a phone number
+router.post("/auth/lookup-phone", async (req, res) => {
+  const { phone } = req.body as { phone?: string };
+  if (!phone?.trim()) {
+    res.status(400).json({ error: "رقم الهاتف مطلوب" });
+    return;
+  }
+  const rows = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.phone, phone.trim()));
+  if (!rows[0]?.email) {
+    res.status(404).json({ error: "رقم الجوال غير مسجل" });
+    return;
+  }
+  res.json({ email: rows[0].email });
+});
+
+// POST /api/auth/register — legacy phone+password (kept for backward compatibility)
+router.post("/auth/register", async (req, res) => {
+  res.status(410).json({ error: "يرجى إنشاء الحساب عبر البريد الإلكتروني" });
+});
+
+// POST /api/auth/login — legacy phone+password (kept for backward compatibility)
 router.post("/auth/login", async (req, res) => {
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "بيانات غير صالحة" });
-    return;
-  }
-  const { phone, password } = parsed.data;
-
-  const rows = await db.select().from(usersTable).where(eq(usersTable.phone, phone));
-  const user = rows[0];
-  if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
-    res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
-    return;
-  }
-
-  const token = generateToken();
-  await db.insert(sessionsTable).values({ token, userId: user.id });
-
-  res.json({ token, user: toUser(user) });
+  res.status(410).json({ error: "يرجى تسجيل الدخول عبر البريد الإلكتروني" });
 });
 
-// GET /api/auth/me
+// POST /api/auth/logout — legacy session invalidation
+router.post("/auth/logout", async (req, res) => {
+  const token = getBearerToken(req);
+  if (token) {
+    await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
+  }
+  res.status(204).end();
+});
+
+// GET /api/auth/me — returns the current user profile
 router.get("/auth/me", async (req, res) => {
   const user = await getCurrentUser(req);
   if (!user) {
@@ -74,15 +104,6 @@ router.get("/auth/me", async (req, res) => {
     return;
   }
   res.json(toUser(user));
-});
-
-// POST /api/auth/logout
-router.post("/auth/logout", async (req, res) => {
-  const token = getBearerToken(req);
-  if (token) {
-    await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
-  }
-  res.status(204).end();
 });
 
 // GET /api/users — list all users (admin only)
@@ -93,7 +114,16 @@ router.get("/users", async (req, res) => {
     return;
   }
   const rows = await db
-    .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, isAdmin: usersTable.isAdmin, createdAt: usersTable.createdAt, clerkUserId: usersTable.clerkUserId, avatarUrl: usersTable.avatarUrl })
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      phone: usersTable.phone,
+      email: usersTable.email,
+      isAdmin: usersTable.isAdmin,
+      createdAt: usersTable.createdAt,
+      clerkUserId: usersTable.clerkUserId,
+      avatarUrl: usersTable.avatarUrl,
+    })
     .from(usersTable)
     .orderBy(usersTable.createdAt);
   res.json(rows.map((u) => ({ ...u, id: String(u.id) })));
@@ -115,7 +145,6 @@ router.delete("/users/:id", async (req, res) => {
     res.status(400).json({ error: "لا يمكنك حذف حسابك الخاص" });
     return;
   }
-  // Delete sessions first, then user
   await db.delete(sessionsTable).where(eq(sessionsTable.userId, id));
   const deleted = await db.delete(usersTable).where(eq(usersTable.id, id)).returning();
   if (deleted.length === 0) {
@@ -125,7 +154,7 @@ router.delete("/users/:id", async (req, res) => {
   res.status(204).end();
 });
 
-// PUT /api/auth/profile — update current user's name / deliveryAddress
+// PUT /api/auth/profile — update name / deliveryAddress
 router.put("/auth/profile", async (req, res) => {
   const user = await getCurrentUser(req);
   if (!user) {
@@ -142,7 +171,11 @@ router.put("/auth/profile", async (req, res) => {
     return;
   }
 
-  const rows = await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id)).returning();
+  const rows = await db
+    .update(usersTable)
+    .set(updates)
+    .where(eq(usersTable.id, user.id))
+    .returning();
   res.json(toUser(rows[0]));
 });
 
