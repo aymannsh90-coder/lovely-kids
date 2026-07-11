@@ -1,5 +1,5 @@
 {
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "EXPO_ROUTER_APP_ROOT=app pnpm exec expo export --platform web",
-  "outputDirectory": "dist"
+  "buildCommand": "cd artifacts/lovely-kids && EXPO_ROUTER_APP_ROOT=app pnpm exec expo export --platform web",
+  "outputDirectory": "artifacts/lovely-kids/dist"
 }
