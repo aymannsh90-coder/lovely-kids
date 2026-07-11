@@ -406,7 +406,6 @@ const styles = StyleSheet.create({
   greetingHi: {
     fontSize: 15,
     fontWeight: "800",
-    fontStyle: "italic",
     textAlign: "right",
     letterSpacing: 0.3,
   },
