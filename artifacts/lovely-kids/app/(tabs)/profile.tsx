@@ -605,11 +605,14 @@ export default function ProfileScreen() {
       {/* About Card */}
       <View style={[styles.aboutCard, { backgroundColor: colors.secondary }]}>
         <Ionicons name="storefront-outline" size={32} color={colors.foreground} />
-        <Text style={[styles.aboutTitle, { color: colors.foreground }]}>Lovely Kids - نابلس</Text>
-        <Text style={[styles.aboutText, { color: colors.mutedForeground }]}>
-          متجر متخصص في ملابس ومستلزمات الأطفال بجودة عالية وأسعار مناسبة. نوفر
-          شحن مجاني لجميع الطلبات فوق 500 ₪
+        <Text style={[styles.aboutTitle, { color: colors.foreground }]}>
+          {settings.contactInfo?.storeName ?? "Lovely Kids"}
         </Text>
+        {(settings.aboutInfo?.intro ?? "").length > 0 && (
+          <Text style={[styles.aboutText, { color: colors.mutedForeground }]}>
+            {settings.aboutInfo.intro}
+          </Text>
+        )}
         <Pressable
           onPress={() => router.push("/contact")}
           style={[styles.contactBtn, { backgroundColor: colors.foreground }]}
