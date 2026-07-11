@@ -17,7 +17,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
@@ -50,9 +49,8 @@ export default function CartScreen() {
   const [proofUploaded, setProofUploaded] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
 
-  const tabBarHeight = useBottomTabBarHeight();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPadding = tabBarHeight + 8;
+  const bottomPadding = Platform.OS === "web" ? 84 + 8 : insets.bottom + 49 + 8;
 
   useEffect(() => {
     if (step === "checkout" && user) {
