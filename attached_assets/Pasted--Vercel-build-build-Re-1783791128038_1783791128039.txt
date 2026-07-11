@@ -1,0 +1,113 @@
+نرجع الآن لإصلاح مشكلة الصفحة البيضاء / Vercel build فقط.
+
+الحالة الحالية:
+- build المحلي داخل Replit نجح بعد تعديل build script إلى:
+  expo export --platform web
+- لكن Vercel ما زال يفشل أو لا يضمّن routes بشكل صحيح.
+- آخر خطأ كان:
+SyntaxError: node_modules/expo-router/_ctx.web.js:
+Invalid call at line 2: process.env.EXPO_ROUTER_APP_ROOT
+
+المطلوب:
+حل Vercel build بشكل ثابت deterministic بدون تعديل node_modules وبدون أي ميزات جديدة.
+
+ممنوع:
+- لا تعدّل Supabase
+- لا تعدّل Clerk keys
+- لا تعدّل المنتجات
+- لا تعدّل مشاركة المنتجات
+- لا تعدّل الطلبات أو الواتساب أو الإشعارات
+- لا تغيّر android package
+- لا تغيّر eas projectId
+- لا تعمل EAS build
+- لا تعمل push
+- لا تعدّل node_modules
+
+نفّذ الحل التالي:
+
+1. عدّل:
+artifacts/lovely-kids/package.json
+
+واجعل build script هكذا:
+
+"build": "EXPO_ROUTER_APP_ROOT=../../app EXPO_ROUTER_IMPORT_MODE=sync expo export --platform web"
+
+مهم:
+لا تستخدم:
+EXPO_ROUTER_APP_ROOT=$(pwd)/app
+
+ولا تستخدم:
+EXPO_ROUTER_APP_ROOT=app
+
+نستخدم ../../app لأن ملف expo-router/_ctx.web.js موجود داخل:
+node_modules/expo-router/_ctx.web.js
+
+ومن هناك المسار النسبي إلى مجلد app هو:
+../../app
+
+2. عدّل:
+artifacts/lovely-kids/babel.config.js
+
+ليصبح:
+
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: [["babel-preset-expo", { unstable_transformImportMeta: true }]],
+    plugins: [
+      [
+        "transform-inline-environment-variables",
+        {
+          include: ["EXPO_ROUTER_APP_ROOT", "EXPO_ROUTER_IMPORT_MODE"],
+        },
+      ],
+    ],
+  };
+};
+
+مهم:
+- استخدم include فقط لهذين المتغيرين.
+- لا تستخدم exclude.
+- لا تعمل inline لكل environment variables.
+- لا تلمس EXPO_PUBLIC أو Clerk أو Supabase.
+
+3. تأكد أن الحزمة موجودة في artifacts/lovely-kids:
+babel-plugin-transform-inline-environment-variables
+
+إذا غير موجودة، أضفها داخل artifacts/lovely-kids فقط.
+
+4. نظّف وشغّل build:
+
+cd artifacts/lovely-kids
+rm -rf dist .expo
+pnpm run build
+
+5. تحقق من النتائج:
+
+grep -R "process.env.EXPO_ROUTER_APP_ROOT" dist || true
+grep -R "productShareBaseUrl" dist || true
+grep -R "BiometricGate" dist || true
+grep -R "cart" dist || true
+
+المطلوب:
+- build ينجح
+- عدد modules قريب من 1900 أو 2000 وليس 600
+- لا يظهر process.env.EXPO_ROUTER_APP_ROOT داخل dist
+- تظهر routes أو نصوص من التطبيق داخل dist
+
+6. شغّل:
+
+pnpm run typecheck
+
+7. إذا نجح كل شيء:
+اعمل commit فقط بدون push.
+
+أعطني تقرير:
+- package.json build script النهائي
+- babel.config.js النهائي
+- نتيجة pnpm run build
+- عدد modules
+- نتيجة grep
+- نتيجة pnpm run typecheck
+- git status
+- git log --oneline -5
