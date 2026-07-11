@@ -201,7 +201,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Use the combined password method (identifier + password in one call).
       const { error } = await signIn.password({ identifier: emailToUse, password });
-      if (error) throw new Error(error.longMessage || error.message || "البريد الإلكتروني أو كلمة المرور غير صحيحة");
+      if (error) {
+        // Clerk already has a session (e.g. residual browser session) — sync the
+        // DB user from the existing token instead of failing with the Clerk error.
+        if (clerkSignedIn) {
+          try {
+            const token = await getToken();
+            if (token) {
+              const meRes = await fetch(`${API_BASE}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (meRes.ok) {
+                setDbUser(await meRes.json());
+                return;
+              }
+            }
+          } catch { /* fall through to original error */ }
+        }
+        throw new Error(error.longMessage || error.message || "البريد الإلكتروني أو كلمة المرور غير صحيحة");
+      }
 
       if (signIn.status === "complete") {
         const { error: finalizeError } = await signIn.finalize();
@@ -210,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("فشل تسجيل الدخول، تحقق من البيانات");
       }
     },
-    [signIn]
+    [signIn, clerkSignedIn, getToken]
   );
 
   // ─── logout ───────────────────────────────────────────────────────────────
