@@ -8,6 +8,9 @@ module.exports = function (api) {
         {
           exclude: [
             "EXPO_PROJECT_ROOT",
+            "EXPO_ROUTER_APP_ROOT",
+            "EXPO_ROUTER_ABS_APP_ROOT",
+            "EXPO_ROUTER_IMPORT_MODE",
           ],
         },
       ],

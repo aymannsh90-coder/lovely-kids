@@ -1,0 +1,116 @@
+الـ Vercel build أصبح Ready وناجح على commit:
+0713956 Fix build error by inlining environment variables for Expo Router
+
+لكن الموقع ما زال صفحة بيضاء وقت التشغيل runtime.
+
+Console error:
+Uncaught TypeError: Cannot read properties of null (reading 'useRef')
+
+الـ stack يظهر:
+useRef
+useNavigationContainerRef
+expo-router / entry
+
+ملاحظة مهمة:
+نحن نستخدم Expo Router، لذلك لا تضف NavigationContainer يدويًا.
+Expo Router يدير NavigationContainer داخليًا.
+إضافة NavigationContainer يدويًا قد تكسر التطبيق.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+
+ممنوع:
+- لا تضف ميزات جديدة
+- لا تعدّل المنتجات أو الطلبات أو الواتساب أو الإشعارات
+- لا تغيّر Supabase أو Clerk keys
+- لا تغيّر android package
+- لا تغيّر eas projectId
+- لا تعمل EAS build
+- لا تعمل push
+
+المطلوب:
+إصلاح الصفحة البيضاء runtime فقط.
+
+ركّز على سبب خطأ:
+Cannot read properties of null (reading 'useRef')
+
+الاحتمالات الأقوى:
+1. Duplicate React / أكثر من نسخة React
+2. عدم توافق react / react-dom / react-native-web مع Expo SDK
+3. Hook مستخدم خارج Component
+4. ترتيب Providers خطأ في app/_layout.tsx
+5. ClerkProviderWrapper.web.tsx يلف التطبيق بطريقة خاطئة
+
+نفّذ التشخيص التالي:
+
+من root:
+pnpm why react
+pnpm why react-dom
+pnpm why react-native-web
+pnpm list react react-dom react-native-web --depth 10
+
+ثم من داخل app:
+cd artifacts/lovely-kids
+pnpm why react
+pnpm why react-dom
+pnpm why react-native-web
+
+افحص الملفات:
+- artifacts/lovely-kids/package.json
+- artifacts/lovely-kids/app/_layout.tsx
+- artifacts/lovely-kids/app/(tabs)/_layout.tsx
+- artifacts/lovely-kids/contexts/AuthContext.tsx
+- artifacts/lovely-kids/components/ClerkProviderWrapper.web.tsx
+- artifacts/lovely-kids/components/ClerkProviderWrapper.native.tsx
+- artifacts/lovely-kids/metro.config.js إذا موجود
+- artifacts/lovely-kids/babel.config.js
+
+ابحث عن:
+useRef
+useNavigationContainerRef
+NavigationContainer
+useRouter
+useSegments
+usePathname
+useAuth
+useUser
+useSignIn
+useSignUp
+
+وتأكد:
+- لا يوجد hook مستخدم خارج component أو custom hook
+- لا يوجد NavigationContainer يدوي
+- ClerkProviderWrapper.web.tsx يلف children بـ ClerkProvider فقط
+- لا يوجد SecureStore/tokenCache على web
+- AuthContext لا يستخدم Clerk hooks قبل وجود ClerkProvider
+- Root layout يلف الـ Providers بترتيب صحيح
+
+إذا السبب Duplicate React:
+أصلحه من package/workspace بطريقة آمنة، بدون كسر Android.
+لا تعدّل node_modules يدويًا.
+
+إذا السبب dependencies:
+استخدم نسخ متوافقة مع Expo SDK الحالي.
+لا تعمل upgrade عشوائي كبير.
+
+بعد الإصلاح شغّل:
+cd artifacts/lovely-kids
+pnpm run build
+pnpm run typecheck
+
+ثم تأكد أن dist/index.html موجود.
+
+إذا أمكن، اختبر dist محليًا وافحص أن الصفحة لا تعطي useRef error.
+
+اعمل commit فقط بدون push.
+
+أعطني تقرير:
+- السبب الحقيقي للصفحة البيضاء
+- هل السبب duplicate React أم Provider order أم hook خارج component أم dependency mismatch
+- الملفات التي تغيرت
+- نتيجة pnpm run build
+- نتيجة pnpm run typecheck
+- ملخص نتيجة pnpm why react / react-dom / react-native-web
+- git status
+- git log --oneline -5
