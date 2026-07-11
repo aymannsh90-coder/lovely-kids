@@ -20,7 +20,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
-import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, isSizeOutOfStock } from "@/data/products";
 
@@ -31,19 +30,11 @@ export default function AdminProductsScreen() {
   const insets = useSafeAreaInsets();
   const { products, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
   const { settings } = useAppSettings();
-  const { getAuthToken } = useAuth();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
-
-  // Notification modal
-  const [notifModal, setNotifModal] = useState(false);
-  const [notifTitle, setNotifTitle] = useState("");
-  const [notifBody, setNotifBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState<string | null>(null);
 
   // Stock modal
   const [stockProduct, setStockProduct] = useState<Product | null>(null);
@@ -141,39 +132,6 @@ export default function AdminProductsScreen() {
     }
   };
 
-  const handleSendNotification = async () => {
-    if (!notifTitle.trim() || !notifBody.trim()) {
-      setSendResult("يرجى كتابة العنوان والنص");
-      return;
-    }
-    setSending(true);
-    setSendResult(null);
-    try {
-      const token = await getAuthToken();
-      const res = await fetch(`${API_BASE}/api/notifications/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ title: notifTitle.trim(), body: notifBody.trim() }),
-      });
-      const data = await res.json() as { sent?: number; total?: number; message?: string };
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (data.message) {
-        setSendResult(data.message);
-      } else {
-        setSendResult(`✅ تم الإرسال بنجاح إلى ${data.sent} جهاز من أصل ${data.total}`);
-        setNotifTitle("");
-        setNotifBody("");
-      }
-    } catch {
-      setSendResult("❌ فشل الإرسال، حاول مجدداً");
-    } finally {
-      setSending(false);
-    }
-  };
-
   const getCategoryLabel = (cat: string) =>
     categoryLabels[cat] ?? DEFAULT_CATEGORY_LABELS[cat] ?? cat;
 
@@ -235,7 +193,7 @@ export default function AdminProductsScreen() {
 
       {/* Send Notification Button */}
       <Pressable
-        onPress={() => { setNotifModal(true); setSendResult(null); }}
+        onPress={() => router.push("/admin/notifications")}
         style={[styles.notifBanner, { backgroundColor: "#FF6B35" }]}
       >
         <Ionicons name="notifications-outline" size={20} color="#fff" />
@@ -523,85 +481,6 @@ export default function AdminProductsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Notification Modal */}
-      <Modal visible={notifModal} transparent animationType="slide" onRequestClose={() => setNotifModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { backgroundColor: colors.card }]}>
-            <View style={[styles.modalHeader, { backgroundColor: "#FF6B35" }]}>
-              <Pressable onPress={() => setNotifModal(false)}>
-                <Ionicons name="close" size={22} color="#fff" />
-              </Pressable>
-              <Text style={styles.modalTitle}>إرسال إشعار</Text>
-              <Ionicons name="notifications" size={22} color="#fff" />
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={[styles.modalHint, { color: colors.mutedForeground }]}>
-                سيصل الإشعار لجميع المستخدمين الذين فتحوا التطبيق على أجهزتهم
-              </Text>
-
-              <View style={styles.field}>
-                <Text style={[styles.fieldLabel, { color: colors.foreground }]}>عنوان الإشعار *</Text>
-                <TextInput
-                  value={notifTitle}
-                  onChangeText={setNotifTitle}
-                  placeholder="مثال: بضاعة جديدة وصلت! 🎉"
-                  placeholderTextColor={colors.mutedForeground}
-                  style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                  textAlign="right"
-                />
-              </View>
-
-              <View style={styles.field}>
-                <Text style={[styles.fieldLabel, { color: colors.foreground }]}>نص الإشعار *</Text>
-                <TextInput
-                  value={notifBody}
-                  onChangeText={setNotifBody}
-                  placeholder="مثال: تفقد أحدث المنتجات والعروض المميزة الآن"
-                  placeholderTextColor={colors.mutedForeground}
-                  multiline
-                  numberOfLines={3}
-                  style={[styles.input, styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                  textAlign="right"
-                  textAlignVertical="top"
-                />
-              </View>
-
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontSize: 12 }]}>قوالب سريعة:</Text>
-              <View style={styles.templates}>
-                {[
-                  { t: "بضاعة جديدة! 🎁", b: "تفقد أحدث المنتجات الوصلت للمتجر" },
-                  { t: "عرض خاص! 🔥", b: "خصومات حصرية لفترة محدودة، لا تفوتها" },
-                  { t: "تخفيضات! 💰", b: "أسعار مخفوضة على منتجات مختارة" },
-                ].map((tpl, i) => (
-                  <Pressable
-                    key={i}
-                    onPress={() => { setNotifTitle(tpl.t); setNotifBody(tpl.b); }}
-                    style={[styles.templateChip, { backgroundColor: colors.muted, borderColor: colors.border }]}
-                  >
-                    <Text style={[styles.templateText, { color: colors.foreground }]}>{tpl.t}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              {sendResult && (
-                <View style={[styles.resultBox, { backgroundColor: colors.muted }]}>
-                  <Text style={[styles.resultText, { color: colors.foreground }]}>{sendResult}</Text>
-                </View>
-              )}
-
-              <Pressable
-                onPress={handleSendNotification}
-                disabled={sending}
-                style={[styles.sendBtn, { backgroundColor: sending ? colors.mutedForeground : "#FF6B35" }]}
-              >
-                <Ionicons name="send-outline" size={20} color="#fff" />
-                <Text style={styles.sendBtnText}>{sending ? "جارٍ الإرسال..." : "إرسال الإشعار"}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
