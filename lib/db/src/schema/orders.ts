@@ -9,6 +9,8 @@ export const ordersTable = pgTable("orders", {
   customerAddress: text("customer_address").notNull(),
   items: jsonb("items").notNull(),
   totalPrice: integer("total_price").notNull(),
+  shippingZone: text("shipping_zone"),
+  shippingCost: integer("shipping_cost"),
   status: text("status").notNull().default("new"),
   notes: text("notes"),
   paymentMethod: text("payment_method").notNull().default("cod"),
@@ -35,6 +37,8 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   paymentMethod: z.enum(["cod", "bank_transfer"]).optional(),
   paymentStatus: z.string().optional(),
   paymentProof: z.string().optional(),
+  shippingZone: z.string().optional(),
+  shippingCost: z.number().optional(),
 });
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;

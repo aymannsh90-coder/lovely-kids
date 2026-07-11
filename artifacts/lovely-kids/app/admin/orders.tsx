@@ -41,6 +41,8 @@ interface Order {
   customerAddress: string;
   items: OrderItem[];
   totalPrice: number;
+  shippingZone?: string;
+  shippingCost?: number;
   status: string;
   notes?: string;
   paymentMethod: string;
@@ -324,6 +326,15 @@ export default function AdminOrdersScreen() {
                         <Ionicons name="location-outline" size={16} color={colors.mutedForeground} />
                         <Text style={[styles.infoText, { color: colors.foreground }]}>{item.customerAddress}</Text>
                       </View>
+                      {item.shippingZone ? (
+                        <View style={styles.infoRow}>
+                          <Ionicons name="bicycle-outline" size={16} color={colors.mutedForeground} />
+                          <Text style={[styles.infoText, { color: colors.foreground }]}>
+                            منطقة التوصيل: {item.shippingZone}
+                            {item.shippingCost != null ? ` — ${item.shippingCost}₪` : ""}
+                          </Text>
+                        </View>
+                      ) : null}
                       <View style={styles.infoRow}>
                         <Ionicons name="call-outline" size={16} color={colors.mutedForeground} />
                         <Text style={[styles.infoText, { color: colors.foreground }]}>{item.customerPhone}</Text>

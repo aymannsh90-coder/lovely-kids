@@ -447,6 +447,37 @@ export default function SettingsScreen() {
         ))}
       </Section>
 
+      {/* ── تكلفة التوصيل ── */}
+      <Section title="🚚 تكلفة التوصيل">
+        {(settings.shippingZones ?? []).map((zone, index) => (
+          <View key={index}>
+            {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+            <View style={[styles.field, { flexDirection: "row-reverse", alignItems: "center", gap: 10 }]}>
+              <Text style={[styles.fieldLabel, { flex: 1, color: colors.mutedForeground }]}>{zone.label}</Text>
+              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+                <TextInput
+                  value={String(zone.cost)}
+                  onChangeText={(v) => {
+                    const cost = parseInt(v.replace(/\D/g, ""), 10);
+                    const zones = [...(settings.shippingZones ?? [])];
+                    zones[index] = { ...zones[index], cost: isNaN(cost) ? 0 : cost };
+                    updateSettings({ shippingZones: zones });
+                  }}
+                  keyboardType="number-pad"
+                  style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, width: 80, textAlign: "center" }]}
+                />
+                <Text style={[styles.fieldLabel, { color: colors.foreground }]}>₪</Text>
+              </View>
+            </View>
+          </View>
+        ))}
+        <View style={[styles.field, { paddingTop: 0 }]}>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontSize: 12 }]}>
+            تكلفة التوصيل تُضاف تلقائياً على إجمالي الطلب عند اختيار المنطقة
+          </Text>
+        </View>
+      </Section>
+
       {/* ── التصنيفات ── */}
       <Section title="🏷️ أسماء التصنيفات">
         <Pressable

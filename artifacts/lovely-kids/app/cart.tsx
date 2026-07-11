@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
+import type { ShippingZone } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
@@ -41,6 +42,7 @@ export default function CartScreen() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [selectedZone, setSelectedZone] = useState<ShippingZone | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "bank_transfer">("cod");
   const [orderId, setOrderId] = useState<number | null>(null);
   const [proofUploading, setProofUploading] = useState(false);
@@ -63,10 +65,11 @@ export default function CartScreen() {
   const whatsapp = settings.whatsappNumber || "97292376808";
 
   const handleCheckout = async () => {
-    if (!name.trim() || !phone.trim() || !address.trim()) return;
+    if (!name.trim() || !phone.trim() || !address.trim() || !selectedZone) return;
     setLoading(true);
 
-    const currentTotal = totalPrice;
+    const shippingCost = selectedZone.cost;
+    const currentTotal = totalPrice + shippingCost;
     const currentItems = [...items];
 
     try {
@@ -88,6 +91,8 @@ export default function CartScreen() {
             color: i.color,
           })),
           totalPrice: currentTotal,
+          shippingZone: selectedZone.label,
+          shippingCost,
           status: "new",
           paymentMethod,
           paymentStatus: paymentMethod === "cod" ? "pending" : "awaiting_transfer",
@@ -114,12 +119,14 @@ export default function CartScreen() {
       `👤 الاسم: ${name}\n` +
       `📞 الهاتف: ${phone}\n` +
       `📍 العنوان: ${address}\n` +
+      `🚚 منطقة التوصيل: ${selectedZone.label}\n` +
       (notes ? `📝 ملاحظات: ${notes}\n` : "") +
       `💳 طريقة الدفع: ${payLabel}\n` +
       `\n──────────────\n` +
       `${itemsList}\n` +
       `──────────────\n` +
-      `💰 *الإجمالي: ${currentTotal}₪*`
+      `🚚 التوصيل (${selectedZone.label}): ${shippingCost}₪\n` +
+      `💰 *الإجمالي شامل التوصيل: ${currentTotal}₪*`
     );
 
     setSavedTotal(currentTotal);
@@ -323,7 +330,14 @@ export default function CartScreen() {
 
   // ── Checkout Form ──
   if (step === "checkout") {
-    const canSubmit = name.trim().length > 0 && phone.trim().length > 0 && address.trim().length > 0;
+    const shippingZones = settings.shippingZones ?? [
+      { label: "الضفة الغربية", cost: 20 },
+      { label: "القدس", cost: 30 },
+      { label: "أراضي الـ48", cost: 70 },
+    ];
+    const shippingCost = selectedZone?.cost ?? 0;
+    const finalTotal = totalPrice + shippingCost;
+    const canSubmit = name.trim().length > 0 && phone.trim().length > 0 && address.trim().length > 0 && selectedZone !== null;
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
@@ -354,9 +368,17 @@ export default function CartScreen() {
                 </Text>
               </View>
             ))}
+            <View style={[styles.summaryItem, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }]}>
+              <Text style={[styles.summaryItemPrice, { color: colors.mutedForeground }]}>
+                {selectedZone ? `${shippingCost}₪` : "—"}
+              </Text>
+              <Text style={[styles.summaryItemName, { color: colors.mutedForeground }]}>
+                🚚 التوصيل{selectedZone ? ` (${selectedZone.label})` : ""}
+              </Text>
+            </View>
             <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
-              <Text style={[styles.totalAmount, { color: colors.primary }]}>{totalPrice}₪</Text>
-              <Text style={[styles.totalText, { color: colors.foreground }]}>الإجمالي</Text>
+              <Text style={[styles.totalAmount, { color: colors.primary }]}>{finalTotal}₪</Text>
+              <Text style={[styles.totalText, { color: colors.foreground }]}>الإجمالي شامل التوصيل</Text>
             </View>
           </View>
 
@@ -384,6 +406,44 @@ export default function CartScreen() {
               </View>
             </View>
           ))}
+
+          {/* Shipping Zone */}
+          <Text style={[styles.formSection, { color: colors.foreground }]}>منطقة التوصيل *</Text>
+          <View style={styles.zoneOptions}>
+            {shippingZones.map((zone) => {
+              const isSelected = selectedZone?.label === zone.label;
+              return (
+                <Pressable
+                  key={zone.label}
+                  onPress={() => setSelectedZone(zone)}
+                  style={[
+                    styles.zoneOption,
+                    {
+                      backgroundColor: isSelected ? colors.primary + "15" : colors.card,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.zoneOptionContent}>
+                    <Text style={[styles.zoneOptionCost, { color: isSelected ? colors.primary : colors.foreground }]}>
+                      {zone.cost}₪
+                    </Text>
+                    <Text style={[styles.zoneOptionLabel, { color: isSelected ? colors.primary : colors.foreground }]}>
+                      {zone.label}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name="bicycle-outline"
+                    size={20}
+                    color={isSelected ? colors.primary : colors.mutedForeground}
+                  />
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={18} color={colors.primary} style={styles.zoneCheck} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.fieldLabel, { color: colors.foreground }]}>ملاحظات (اختياري)</Text>
@@ -646,6 +706,12 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   input: { flex: 1, fontSize: 15, padding: 0 },
   notesInput: { borderRadius: 12, borderWidth: 1, padding: 12, fontSize: 14, minHeight: 80 },
+  zoneOptions: { gap: 8 },
+  zoneOption: { flexDirection: "row-reverse", alignItems: "center", borderRadius: 14, borderWidth: 2, paddingVertical: 12, paddingHorizontal: 14, gap: 10, position: "relative" },
+  zoneOptionContent: { flex: 1, alignItems: "flex-end", gap: 2 },
+  zoneOptionLabel: { fontSize: 15, fontWeight: "700", textAlign: "right" },
+  zoneOptionCost: { fontSize: 13, fontWeight: "600", textAlign: "right" },
+  zoneCheck: { position: "absolute", top: 8, left: 8 },
   paymentOptions: { gap: 10 },
   payOption: { borderRadius: 14, borderWidth: 2, padding: 14, gap: 4, alignItems: "flex-end", position: "relative" },
   payOptionTitle: { fontSize: 15, fontWeight: "700", textAlign: "right" },

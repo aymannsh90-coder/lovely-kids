@@ -41,6 +41,11 @@ export interface AboutInfo {
   features: AboutFeature[];
 }
 
+export interface ShippingZone {
+  label: string;
+  cost: number;
+}
+
 export interface ContactInfo {
   storeName: string;
   storeTagline: string;
@@ -79,6 +84,7 @@ export interface AppSettings {
   whatsappNumber: string;
   contactInfo: ContactInfo;
   aboutInfo: AboutInfo;
+  shippingZones: ShippingZone[];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -144,6 +150,11 @@ const DEFAULT_SETTINGS: AppSettings = {
       { title: "ضمان الاستبدال", desc: "إمكانية الاستبدال" },
     ],
   },
+  shippingZones: [
+    { label: "الضفة الغربية", cost: 20 },
+    { label: "القدس", cost: 30 },
+    { label: "أراضي الـ48", cost: 70 },
+  ],
 };
 
 interface AppSettingsContextType {
