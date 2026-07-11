@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
+import { useBiometric } from "@/hooks/useBiometric";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useNewOrders } from "@/context/NewOrdersContext";
@@ -80,6 +81,26 @@ export default function ProfileScreen() {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
   const [promoting, setPromoting] = useState(false);
+
+  // ─── Biometric ────────────────────────────────────────────────────
+  const { supported: bioSupported, enabled: bioEnabled, loading: bioLoading, enable: bioEnable, disable: bioDisable } = useBiometric();
+  const [bioToggling, setBioToggling] = useState(false);
+
+  const handleToggleBiometric = async () => {
+    setBioToggling(true);
+    try {
+      if (bioEnabled) {
+        await bioDisable();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        const ok = await bioEnable();
+        if (ok) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } finally {
+      setBioToggling(false);
+    }
+  };
 
   // ─── Edit profile state ───────────────────────────────────────────
   const [editProfileVisible, setEditProfileVisible] = useState(false);
@@ -499,6 +520,41 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
+
+          {/* Biometric toggle — only shown when device supports it */}
+          {!bioLoading && bioSupported && (
+            <View style={[styles.bioCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.bioRow}>
+                <Pressable
+                  onPress={handleToggleBiometric}
+                  disabled={bioToggling}
+                  style={[
+                    styles.bioToggleBtn,
+                    {
+                      backgroundColor: bioEnabled ? colors.primary : colors.muted,
+                      opacity: bioToggling ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  {bioToggling ? (
+                    <ActivityIndicator size="small" color={bioEnabled ? "#fff" : colors.foreground} />
+                  ) : (
+                    <Text style={[styles.bioToggleBtnText, { color: bioEnabled ? "#fff" : colors.foreground }]}>
+                      {bioEnabled ? "تعطيل" : "تفعيل"}
+                    </Text>
+                  )}
+                </Pressable>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={[styles.bioTitle, { color: colors.foreground }]}>
+                    🔒 الدخول بالبصمة أو رمز الهاتف
+                  </Text>
+                  <Text style={[styles.bioSubtitle, { color: colors.mutedForeground }]}>
+                    {bioEnabled ? "مفعّل — افتح التطبيق بدون كلمة مرور" : "غير مفعّل"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
         </>
       ) : (
         renderAuthForm()
@@ -793,4 +849,10 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: "800" },
   modalFieldGroup: { gap: 6 },
   modalFieldLabel: { fontSize: 12, fontWeight: "600", textAlign: "right" },
+  bioCard: { margin: 16, marginTop: 12, borderRadius: 16, borderWidth: 1, padding: 14 },
+  bioRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
+  bioToggleBtn: { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, minWidth: 66, alignItems: "center" },
+  bioToggleBtnText: { fontSize: 13, fontWeight: "700" },
+  bioTitle: { fontSize: 14, fontWeight: "700", textAlign: "right" },
+  bioSubtitle: { fontSize: 12, textAlign: "right" },
 });
