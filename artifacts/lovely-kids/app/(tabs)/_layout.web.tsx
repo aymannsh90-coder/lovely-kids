@@ -4,11 +4,13 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function TabLayout() {
   const colors = useColors();
   const { settings } = useAppSettings();
+  const { totalItems } = useCart();
 
   return (
     <Tabs
@@ -50,6 +52,17 @@ export default function TabLayout() {
           title: settings.tabLabelProducts,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="bag-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: "السلة",
+          tabBarBadge: totalItems > 0 ? totalItems : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 10, minWidth: 16, height: 16 },
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cart-outline" size={size} color={color} />
           ),
         }}
       />

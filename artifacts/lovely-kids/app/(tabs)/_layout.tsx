@@ -8,6 +8,7 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
@@ -22,6 +23,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "bag", selected: "bag.fill" }} />
         <Label>{settings.tabLabelProducts}</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="cart">
+        <Icon sf={{ default: "cart", selected: "cart.fill" }} />
+        <Label>السلة</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>{settings.tabLabelProfile}</Label>
@@ -33,6 +38,7 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const colors = useColors();
   const { settings } = useAppSettings();
+  const { totalItems } = useCart();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -94,6 +100,20 @@ function ClassicTabLayout() {
               <SymbolView name="bag" tintColor={color} size={size} />
             ) : (
               <Ionicons name="bag-outline" size={size} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: "السلة",
+          tabBarBadge: totalItems > 0 ? totalItems : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 10, minWidth: 16, height: 16 },
+          tabBarIcon: ({ color, size }) =>
+            isIOS ? (
+              <SymbolView name="cart" tintColor={color} size={size} />
+            ) : (
+              <Ionicons name="cart-outline" size={size} color={color} />
             ),
         }}
       />
