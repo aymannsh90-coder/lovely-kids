@@ -19,7 +19,7 @@ import { ClerkProviderWrapper } from "@/components/ClerkProviderWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
 import { AppSettingsProvider } from "@/context/AppSettingsContext";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { NewOrdersProvider } from "@/context/NewOrdersContext";
 import { ProductsProvider } from "@/context/ProductsContext";
@@ -35,7 +35,8 @@ SplashScreen.setOptions({
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  usePushNotifications();
+  const { user } = useAuth();
+  usePushNotifications(user?.phone);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />

@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { db, ordersTable, productsTable, insertOrderSchema } from "@workspace/db";
+import { db, ordersTable, productsTable, pushTokensTable, insertOrderSchema } from "@workspace/db";
 import type { ColorVariant } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
+import { getCurrentUser } from "../lib/auth";
+import { sendPushNotifications } from "./notifications";
 
 const router = Router();
 
@@ -29,7 +31,6 @@ router.post("/orders", async (req, res) => {
 
     const updates: { stock?: number; colorVariants?: ColorVariant[] } = {};
 
-    // Decrement the specific color+size quantity, if tracked.
     if (item.color && item.size) {
       const colorVariants = (current[0].colorVariants as ColorVariant[] | null) ?? [];
       let variantChanged = false;
@@ -48,7 +49,6 @@ router.post("/orders", async (req, res) => {
       if (variantChanged) updates.colorVariants = nextVariants;
     }
 
-    // Also keep the overall product stock count in sync, if tracked.
     if (current[0].stock !== null && current[0].stock !== undefined) {
       updates.stock = Math.max(0, current[0].stock - item.quantity);
     }
@@ -70,11 +70,33 @@ router.get("/orders", async (_req, res) => {
   res.json(orders);
 });
 
-// GET /api/orders/my?phone=:phone — get orders for a specific customer phone
+// GET /api/orders/my — get orders for the authenticated user
+// Uses Bearer token (session) → looks up phone+email from user profile.
+// Falls back to ?phone= query param for unauthenticated access.
 router.get("/orders/my", async (req, res) => {
+  // Prefer auth token so orders work even if user has no phone stored
+  const authUser = await getCurrentUser(req);
+  if (authUser) {
+    const conditions = [];
+    if (authUser.phone) conditions.push(eq(ordersTable.customerPhone, authUser.phone));
+    if (authUser.email) conditions.push(eq(ordersTable.customerPhone, authUser.email));
+
+    // Also look up by phone directly
+    if (authUser.phone) {
+      const orders = await db
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.customerPhone, authUser.phone))
+        .orderBy(desc(ordersTable.createdAt));
+      res.json(orders);
+      return;
+    }
+  }
+
+  // Legacy fallback: ?phone= query param
   const phone = (req.query.phone as string | undefined)?.trim();
   if (!phone) {
-    res.status(400).json({ error: "رقم الهاتف مطلوب" });
+    res.status(400).json({ error: "يجب تسجيل الدخول أو توفير رقم الهاتف" });
     return;
   }
   const orders = await db
@@ -85,7 +107,7 @@ router.get("/orders/my", async (req, res) => {
   res.json(orders);
 });
 
-// PATCH /api/orders/:id/cancel — customer cancels their own order (only if not shipped/delivered)
+// PATCH /api/orders/:id/cancel — customer cancels their order (only when status = "new")
 router.patch("/orders/:id/cancel", async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) {
@@ -104,8 +126,15 @@ router.patch("/orders/:id/cancel", async (req, res) => {
   }
 
   const { status } = current[0];
-  if (status === "shipped" || status === "delivered" || status === "cancelled") {
-    res.status(400).json({ error: "لا يمكن إلغاء هذا الطلب بعد الآن" });
+  // Only allow cancellation when the order is still "new" (قيد المراجعة)
+  if (status !== "new") {
+    const msgMap: Record<string, string> = {
+      confirmed: "لا يمكن إلغاء الطلب بعد تأكيده",
+      shipped:   "لا يمكن إلغاء الطلب بعد شحنه",
+      delivered: "لا يمكن إلغاء الطلب بعد تسليمه",
+      cancelled: "الطلب ملغى مسبقاً",
+    };
+    res.status(400).json({ error: msgMap[status] ?? "لا يمكن إلغاء هذا الطلب" });
     return;
   }
 
@@ -118,7 +147,8 @@ router.patch("/orders/:id/cancel", async (req, res) => {
   res.json(updated[0]);
 });
 
-// PATCH /api/orders/:id/status — update order status
+// PATCH /api/orders/:id/status — update order status (admin)
+// When status becomes "shipped", sends a push notification to the customer.
 router.patch("/orders/:id/status", async (req, res) => {
   const id = Number(req.params.id);
   const { status } = req.body as { status: string };
@@ -128,18 +158,45 @@ router.patch("/orders/:id/status", async (req, res) => {
     return;
   }
 
+  // Fetch current order to detect status transition
+  const current = await db
+    .select({ status: ordersTable.status, customerPhone: ordersTable.customerPhone, id: ordersTable.id })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id));
+
+  if (current.length === 0) {
+    res.status(404).json({ error: "الطلب غير موجود" });
+    return;
+  }
+
   const updated = await db
     .update(ordersTable)
     .set({ status })
     .where(eq(ordersTable.id, id))
     .returning();
 
-  if (updated.length === 0) {
-    res.status(404).json({ error: "الطلب غير موجود" });
-    return;
-  }
-
   res.json(updated[0]);
+
+  // ── Send push notification when order moves to "shipped" ───────────────────
+  if (status === "shipped" && current[0].status !== "shipped") {
+    const customerPhone = current[0].customerPhone;
+    if (customerPhone) {
+      const tokenRows = await db
+        .select({ token: pushTokensTable.token })
+        .from(pushTokensTable)
+        .where(eq(pushTokensTable.phone, customerPhone));
+
+      const tokens = tokenRows.map((r) => r.token);
+      if (tokens.length > 0) {
+        sendPushNotifications(
+          tokens,
+          "طلبك في الطريق! 🚚",
+          `طلبك رقم #${id} تم شحنه وفي طريقه إليك`,
+          { type: "order_shipped", orderId: id }
+        ).catch(() => {});
+      }
+    }
+  }
 });
 
 // PATCH /api/orders/:id/payment-proof — customer uploads transfer receipt

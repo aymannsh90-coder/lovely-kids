@@ -56,7 +56,7 @@ function statusInfo(s: string) {
 }
 
 function canCancel(status: string) {
-  return status === "new" || status === "confirmed";
+  return status === "new";
 }
 
 function timeAgo(dateStr: string) {
@@ -75,7 +75,7 @@ function payMethodLabel(m: string) {
 export default function MyOrdersScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, getAuthToken } = useAuth();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,12 +84,23 @@ export default function MyOrdersScreen() {
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const fetchOrders = useCallback(async () => {
-    if (!user?.phone) return;
+    if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/orders/my?phone=${encodeURIComponent(user.phone)}`
-      );
+      const token = await getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      // Use auth token if available; fall back to phone param
+      const url = token
+        ? `${API_BASE}/api/orders/my`
+        : user.phone
+        ? `${API_BASE}/api/orders/my?phone=${encodeURIComponent(user.phone)}`
+        : null;
+
+      if (!url) return;
+
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
         setOrders(data);
@@ -99,7 +110,7 @@ export default function MyOrdersScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user?.phone]);
+  }, [user, getAuthToken]);
 
   useFocusEffect(
     useCallback(() => {
@@ -119,8 +130,12 @@ export default function MyOrdersScreen() {
           onPress: async () => {
             setCancelling(order.id);
             try {
+              const token = await getAuthToken();
+              const headers: Record<string, string> = { "Content-Type": "application/json" };
+              if (token) headers["Authorization"] = `Bearer ${token}`;
               const res = await fetch(`${API_BASE}/api/orders/${order.id}/cancel`, {
                 method: "PATCH",
+                headers,
               });
               if (res.ok) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

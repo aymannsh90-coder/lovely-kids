@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { db, pushTokensTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "../lib/auth";
 
 const router = Router();
 
-// POST /api/push-tokens — register a device push token
+// POST /api/push-tokens — register a device push token (optionally linked to a phone number)
 router.post("/push-tokens", async (req, res) => {
-  const { token } = req.body as { token?: string };
+  const { token, phone } = req.body as { token?: string; phone?: string };
   if (!token) {
     res.status(400).json({ error: "التوكن مطلوب" });
     return;
@@ -15,8 +15,11 @@ router.post("/push-tokens", async (req, res) => {
 
   await db
     .insert(pushTokensTable)
-    .values({ token })
-    .onConflictDoNothing();
+    .values({ token, phone: phone?.trim() || null })
+    .onConflictDoUpdate({
+      target: pushTokensTable.token,
+      set: { phone: phone?.trim() || null },
+    });
 
   res.status(201).json({ success: true });
 });
@@ -43,12 +46,39 @@ router.post("/notifications/send", async (req, res) => {
     return;
   }
 
-  const messages = tokens.map((t) => ({
-    to: t.token,
-    sound: "default",
+  const { sent, failed } = await sendPushNotifications(
+    tokens.map((t) => t.token),
     title,
     body,
-    data: { type: "admin_notification" },
+    { type: "admin_notification" }
+  );
+
+  res.json({ sent, total: tokens.length, failed });
+});
+
+// GET /api/push-tokens/count — get count of registered tokens
+router.get("/push-tokens/count", async (_req, res) => {
+  const tokens = await db.select().from(pushTokensTable);
+  res.json({ count: tokens.length });
+});
+
+export default router;
+
+// ─── Shared helper: send Expo push notifications to a list of tokens ──────────
+export async function sendPushNotifications(
+  tokenList: string[],
+  title: string,
+  body: string,
+  data: Record<string, unknown> = {}
+): Promise<{ sent: number; failed: number }> {
+  if (tokenList.length === 0) return { sent: 0, failed: 0 };
+
+  const messages = tokenList.map((to) => ({
+    to,
+    sound: "default" as const,
+    title,
+    body,
+    data,
   }));
 
   const CHUNK_SIZE = 100;
@@ -68,7 +98,9 @@ router.post("/notifications/send", async (req, res) => {
         body: JSON.stringify(chunk),
       });
 
-      const result = await response.json() as { data: Array<{ status: string; id?: string; message?: string }> };
+      const result = (await response.json()) as {
+        data: Array<{ status: string; id?: string; message?: string }>;
+      };
       if (result.data) {
         for (let j = 0; j < result.data.length; j++) {
           if (result.data[j].status === "ok") {
@@ -83,20 +115,12 @@ router.post("/notifications/send", async (req, res) => {
     }
   }
 
-  // Remove invalid tokens
+  // Remove invalid tokens from DB
   if (failedTokens.length > 0) {
-    for (const token of failedTokens) {
-      await db.delete(pushTokensTable).where(eq(pushTokensTable.token, token));
-    }
+    await db
+      .delete(pushTokensTable)
+      .where(inArray(pushTokensTable.token, failedTokens));
   }
 
-  res.json({ sent, total: tokens.length, failed: failedTokens.length });
-});
-
-// GET /api/push-tokens/count — get count of registered tokens
-router.get("/push-tokens/count", async (_req, res) => {
-  const tokens = await db.select().from(pushTokensTable);
-  res.json({ count: tokens.length });
-});
-
-export default router;
+  return { sent, failed: failedTokens.length };
+}

@@ -1,1 +1,1 @@
-export function usePushNotifications() {}
+export function usePushNotifications(_phone?: string | null) {}
