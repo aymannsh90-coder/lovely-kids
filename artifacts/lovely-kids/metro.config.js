@@ -31,7 +31,10 @@ config.resolver.extraNodeModules = {
 // a RELATIVE './app' path so Metro resolves the context correctly.
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === "expo-router/_ctx") {
+  // Only apply the web fix on the web platform.
+  // Native platforms (android/ios) must resolve to their own _ctx.android.js / _ctx.ios.js
+  // via Metro's normal platform-extension resolution.
+  if (platform === "web" && moduleName === "expo-router/_ctx") {
     return {
       filePath: path.resolve(projectRoot, "_expo_ctx_web.js"),
       type: "sourceFile",
