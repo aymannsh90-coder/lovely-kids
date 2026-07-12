@@ -34,6 +34,11 @@ SplashScreen.setOptions({
 
 const queryClient = new QueryClient();
 
+// Maximum time (ms) to wait for fonts before giving up and proceeding anyway.
+const FONT_LOAD_TIMEOUT_MS = 5000;
+// Maximum time (ms) the welcome splash can stay on screen no matter what.
+const SPLASH_HARD_TIMEOUT_MS = 3500;
+
 function RootLayoutNav() {
   const { user, getAuthToken } = useAuth();
   usePushNotifications(user?.phone, getAuthToken);
@@ -64,15 +69,39 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  // Safety: if fonts take too long, proceed anyway so the app never gets stuck.
+  const [fontTimedOut, setFontTimedOut] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    console.log("[Startup] App startup begin");
+    const t = setTimeout(() => {
+      console.log("[Startup] Font load timed out — proceeding without fonts");
+      setFontTimedOut(true);
+    }, FONT_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  const fontsReady = fontsLoaded || !!fontError || fontTimedOut;
+
+  useEffect(() => {
+    if (fontsReady) {
+      console.log("[Startup] Fonts ready — hiding native splash");
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsReady]);
 
-  if (!fontsLoaded && !fontError) {
+  // Hard safety: splash must never stay on screen longer than SPLASH_HARD_TIMEOUT_MS
+  // regardless of what happens inside WelcomeSplash or its contexts.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      console.log("[Startup] Splash hard timeout — forcing dismiss");
+      setShowWelcome(false);
+    }, SPLASH_HARD_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!fontsReady) {
     return <View style={{ flex: 1, backgroundColor: "#E91E8C" }} />;
   }
 
@@ -88,13 +117,16 @@ export default function RootLayout() {
                   <CartProvider>
                     <WishlistProvider>
                       <NewOrdersProvider>
-                        <GestureHandlerRootView style={{ flex: 1 }}>
+                        <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#E91E8C" }}>
                           {Platform.OS !== "web" ? (
                             <KeyboardProvider>
                               <RootLayoutNav />
                               {showWelcome && (
                                 <WelcomeSplash
-                                  onFinish={() => setShowWelcome(false)}
+                                  onFinish={() => {
+                                    console.log("[Startup] Splash finished");
+                                    setShowWelcome(false);
+                                  }}
                                 />
                               )}
                             </KeyboardProvider>

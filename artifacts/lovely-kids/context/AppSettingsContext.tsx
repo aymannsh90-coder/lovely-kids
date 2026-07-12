@@ -14,6 +14,9 @@ import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 
 const POLL_INTERVAL_MS = 20000;
+// Timeout for the initial settings fetch — after this the app proceeds with
+// cached / default settings so the startup flow is never blocked indefinitely.
+const INITIAL_FETCH_TIMEOUT_MS = 5000;
 
 export interface Offer {
   id: string;
@@ -197,17 +200,21 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/settings`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), INITIAL_FETCH_TIMEOUT_MS);
+      const res = await fetch(`${API_BASE}/api/settings`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!res.ok) return;
       const data = await res.json();
       applyRemote(data);
     } catch {
-      // keep cached/local settings on network failure
+      // Network failure or timeout — keep cached/default settings.
     }
   }, [applyRemote]);
 
   useEffect(() => {
     (async () => {
+      // 1. Load from cache instantly so the UI has something to show.
       try {
         const cached = await AsyncStorage.getItem(STORAGE_KEY);
         if (cached) {
@@ -215,13 +222,16 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
           setSettings({ ...DEFAULT_SETTINGS, ...saved });
         }
       } catch {
-        // ignore
+        // ignore cache errors
       }
-      // Await the initial remote fetch before marking settings as ready so that
-      // any consumer of settingsReady can be confident it has the server's latest
-      // values (or falls back gracefully if the network is unavailable).
-      await fetchSettings();
-      setSettingsReady(true);
+      // 2. Fetch from server (with timeout). Always mark ready afterwards
+      //    so the startup flow is never blocked indefinitely.
+      try {
+        await fetchSettings();
+      } finally {
+        console.log("[Startup] Settings ready");
+        setSettingsReady(true);
+      }
     })();
   }, [fetchSettings]);
 

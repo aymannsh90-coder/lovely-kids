@@ -1,0 +1,90 @@
+التطبيق بعد تثبيت APK لا يفتح بشكل صحيح. يظهر Overlay وردي كبير بشعار Lovely Kids ويظل عالقًا أو يفشل في الدخول للتطبيق.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: /home/runner/workspace/artifacts/lovely-kids
+
+مهم جدًا:
+لا تعمل push.
+لا تغيّر قاعدة البيانات.
+لا تغيّر Supabase DATABASE_URL.
+لا تغيّر Clerk keys.
+لا تغيّر EAS projectId.
+لا تغيّر android package.
+لا تغيّر product sharing.
+لا تغيّر Vercel.
+لا تغيّر Metro أو Babel إلا إذا كان هناك خطأ واضح.
+المطلوب فقط إصلاح مشكلة تعليق التطبيق على شاشة البداية في Android APK.
+
+افحص هذه الملفات:
+- artifacts/lovely-kids/app/_layout.tsx
+- artifacts/lovely-kids/components/WelcomeSplash.tsx
+- artifacts/lovely-kids/context/AppSettingsContext.tsx
+- artifacts/lovely-kids/context/AuthContext.tsx
+- artifacts/lovely-kids/context/ProductsContext.tsx
+- أي ملف يتحكم في loading أو settingsReady أو splash
+
+المشكلة الظاهرة:
+بعد تشغيل APK يظهر لون وردي/شفاف وشعار Lovely Kids، لكن التطبيق لا يكمل للصفحة الرئيسية.
+
+المطلوب:
+
+1. لا تجعل WelcomeSplash يعلق للأبد.
+- أضف timeout أمان أقصاه 2500 إلى 3000ms.
+- بعد انتهاء الوقت، يجب إخفاء WelcomeSplash حتى لو settings أو auth أو products لم تكتمل.
+- لا تجعل ظهور التطبيق يعتمد بالكامل على API response.
+
+2. في AppSettingsContext:
+- تأكد أن settingsReady يصبح true دائمًا داخل finally.
+- إذا فشل fetch /api/settings، استخدم DEFAULT_SETTINGS أو cache من AsyncStorage.
+- لا تترك settingsReady = false للأبد.
+- AsyncStorage cache لا يمنع fetch السيرفر لاحقًا.
+
+3. في AuthContext:
+- تأكد أن loading/authInitializing لا يظل true للأبد.
+- أي fetch أو sync-user يجب أن يكون داخل try/catch/finally.
+- إذا فشل السيرفر، لا تعلق شاشة البداية؛ اسمح للتطبيق يفتح كزائر.
+
+4. في ProductsContext:
+- إذا فشل /api/products، لا تعلق التطبيق.
+- استخدم [] أو آخر cache إن وجد.
+- لا تمنع الصفحة الرئيسية من الظهور بسبب فشل المنتجات.
+
+5. في app/_layout.tsx:
+- تأكد أن SplashScreen.hideAsync() يتم استدعاؤه في النهاية ولا ينتظر شيء ممكن يعلق.
+- لا تجعل RootLayout يرجع null لفترة غير محدودة.
+- أضف backgroundColor ثابت للـ root حتى لا يظهر التطبيق شفافًا فوق شاشة الهاتف.
+- لا تستخدم transparent background في شاشة البداية.
+
+6. WelcomeSplash:
+- يجب أن يكون لونه solid وليس transparent.
+- عند الانتهاء يعمل fade ثم unmount.
+- لا يبقى فوق الواجهة بعد تحميل التطبيق.
+- إذا كان يعتمد على prop مثل visible/loading، أضف fallback timer داخله.
+
+7. أضف console.log مؤقتة فقط لو مفيدة:
+- App startup begin
+- settings ready
+- auth ready
+- splash hidden
+لكن لا تكثر logs.
+
+8. بعد الإصلاح شغّل:
+
+cd /home/runner/workspace/artifacts/lovely-kids
+pnpm run typecheck
+
+pnpm exec expo export:embed --eager --platform android --dev false --bundle-output /tmp/index.android.bundle --assets-dest /tmp/assets
+
+9. إذا نجحا، اعمل commit فقط بدون push.
+
+أعطني تقرير:
+- ما السبب المتوقع لتعليق الشاشة؟
+- ما الملفات التي تغيرت؟
+- كيف ضمنت أن WelcomeSplash لا يعلق للأبد؟
+- هل settingsReady يصبح true دائمًا؟
+- هل auth loading ينتهي دائمًا؟
+- نتيجة typecheck
+- نتيجة expo export:embed
+- git status
+- git log --oneline -5
