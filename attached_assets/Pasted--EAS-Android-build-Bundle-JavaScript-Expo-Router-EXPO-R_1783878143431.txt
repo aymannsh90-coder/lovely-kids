@@ -1,0 +1,83 @@
+فشل EAS Android build في مرحلة Bundle JavaScript بسبب Expo Router:
+
+EXPO_ROUTER_APP_ROOT
+First argument of require.context should be a string denoting the directory to require
+
+المشروع:
+root: /home/runner/workspace
+Expo app: /home/runner/workspace/artifacts/lovely-kids
+
+مهم جدًا:
+لا تعمل push.
+لا تغيّر قاعدة البيانات.
+لا تغيّر Clerk keys.
+لا تغيّر Supabase.
+لا تغيّر android package.
+لا تغيّر EAS projectId الجديد.
+لا تغيّر product sharing.
+لا تغيّر Auth.
+لا تغيّر Vercel.
+المطلوب فقط إصلاح خطأ Expo Router bundling على Android.
+
+افحص:
+- artifacts/lovely-kids/babel.config.js
+- artifacts/lovely-kids/metro.config.js
+- artifacts/lovely-kids/package.json
+- artifacts/lovely-kids/app.json
+- artifacts/lovely-kids/_expo_ctx_web.js إن وجد
+
+المطلوب:
+
+1. تأكد أن babel.config.js يستخدم babel-preset-expo بشكل صحيح.
+إذا كان expo-router/babel غير موجود، أضفه فقط إذا كان مطلوبًا لحل:
+EXPO_ROUTER_APP_ROOT not defined.
+
+الشكل المقبول مثل:
+
+module.exports = function(api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: ['expo-router/babel'],
+  };
+};
+
+لكن إذا كان عند المشروع plugins أخرى مهمة، لا تحذفها بدون سبب.
+
+2. تأكد أن metro.config.js مبني على:
+const { getDefaultConfig } = require('expo/metro-config');
+
+وليس @expo/metro-config إذا كان هذا يسبب المشكلة.
+
+الشكل الأساسي المقبول:
+
+const { getDefaultConfig } = require('expo/metro-config');
+const config = getDefaultConfig(__dirname);
+module.exports = config;
+
+إذا كان هناك إعدادات monorepo ضرورية، أبقِها فقط إذا لا تكسر Expo Router.
+
+3. إذا كان الملف _expo_ctx_web.js مضافًا كحل ويب قديم ويسبب مشاكل أو غير مستخدم في Android build، لا تجعله يؤثر على Android bundling. لا تركز على الويب الآن.
+
+4. شغّل اختبار bundling محليًا من داخل التطبيق:
+
+cd /home/runner/workspace/artifacts/lovely-kids
+pnpm exec expo export:embed --eager --platform android --dev false --bundle-output /tmp/index.android.bundle --assets-dest /tmp/assets
+
+لا تبدأ EAS build إلا إذا نجح هذا الأمر.
+
+5. شغّل:
+
+pnpm run typecheck
+
+6. إذا عدّلت ملفات، اعمل commit فقط بدون push.
+
+أعطني تقرير:
+- ما سبب الخطأ؟
+- ما الملفات التي تغيرت؟
+- محتوى babel.config.js النهائي
+- محتوى metro.config.js النهائي
+- نتيجة expo export:embed
+- نتيجة typecheck
+- git status
+- git log --oneline -5
