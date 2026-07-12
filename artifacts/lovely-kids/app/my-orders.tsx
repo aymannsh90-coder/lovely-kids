@@ -4,9 +4,9 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -81,6 +81,10 @@ export default function MyOrdersScreen() {
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState<number | null>(null);
 
+  // In-app confirmation modal (replaces Alert.alert which is blocked in iframes)
+  const [confirmOrder, setConfirmOrder] = useState<Order | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const fetchOrders = useCallback(async () => {
@@ -91,10 +95,8 @@ export default function MyOrdersScreen() {
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      // Always include ?phone= when available — server tries auth first,
-      // then falls back to the phone param (covers users with null phone in profile)
       const phone = user.phone;
-      if (!phone && !token) return; // nothing to identify the user with
+      if (!phone && !token) return;
 
       const url = phone
         ? `${API_BASE}/api/orders/my?phone=${encodeURIComponent(phone)}`
@@ -118,43 +120,36 @@ export default function MyOrdersScreen() {
     }, [fetchOrders])
   );
 
-  const handleCancel = (order: Order) => {
-    Alert.alert(
-      "إلغاء الطلب",
-      `هل تريد إلغاء الطلب رقم #${order.id}؟`,
-      [
-        { text: "لا، تراجع", style: "cancel" },
-        {
-          text: "نعم، إلغاء الطلب",
-          style: "destructive",
-          onPress: async () => {
-            setCancelling(order.id);
-            try {
-              const token = await getAuthToken();
-              const headers: Record<string, string> = { "Content-Type": "application/json" };
-              if (token) headers["Authorization"] = `Bearer ${token}`;
-              const res = await fetch(`${API_BASE}/api/orders/${order.id}/cancel`, {
-                method: "PATCH",
-                headers,
-              });
-              if (res.ok) {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setOrders((prev) =>
-                  prev.map((o) => (o.id === order.id ? { ...o, status: "cancelled" } : o))
-                );
-              } else {
-                const err = await res.json().catch(() => ({}));
-                Alert.alert("تنبيه", (err as { error?: string }).error ?? "تعذّر الإلغاء");
-              }
-            } catch {
-              Alert.alert("خطأ", "تعذّر الاتصال، حاول مجدداً");
-            } finally {
-              setCancelling(null);
-            }
-          },
-        },
-      ]
-    );
+  // Called when user confirms cancellation in the modal
+  const doCancel = async (order: Order) => {
+    setConfirmOrder(null);
+    setCancelling(order.id);
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/api/orders/${order.id}/cancel`, {
+        method: "PATCH",
+        headers,
+      });
+
+      if (res.ok) {
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        setOrders((prev) =>
+          prev.map((o) => (o.id === order.id ? { ...o, status: "cancelled" } : o))
+        );
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setErrorMsg((err as { error?: string }).error ?? "تعذّر إلغاء الطلب، حاول مجدداً");
+      }
+    } catch {
+      setErrorMsg("تعذّر الاتصال بالسيرفر، حاول مجدداً");
+    } finally {
+      setCancelling(null);
+    }
   };
 
   const renderOrder = ({ item }: { item: Order }) => {
@@ -216,10 +211,10 @@ export default function MyOrdersScreen() {
           <Text style={[styles.total, { color: colors.primary }]}>{item.totalPrice}₪</Text>
         </View>
 
-        {/* Cancel button */}
+        {/* Cancel button — only shown when status = "new" */}
         {cancellable && (
           <Pressable
-            onPress={() => handleCancel(item)}
+            onPress={() => setConfirmOrder(item)}
             disabled={isCancelling}
             style={[styles.cancelBtn, { borderColor: "#ef4444", opacity: isCancelling ? 0.5 : 1 }]}
           >
@@ -300,6 +295,62 @@ export default function MyOrdersScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* ── Confirmation Modal ─────────────────────────────────────────── */}
+      <Modal
+        visible={confirmOrder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmOrder(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setConfirmOrder(null)}>
+          <Pressable style={[styles.modalBox, { backgroundColor: colors.card }]} onPress={() => {}}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="alert-circle-outline" size={44} color="#ef4444" />
+            </View>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>إلغاء الطلب</Text>
+            <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
+              هل تريد إلغاء الطلب رقم #{confirmOrder?.id}؟{"\n"}لا يمكن التراجع عن هذا الإجراء.
+            </Text>
+            <View style={styles.modalBtns}>
+              <Pressable
+                style={[styles.modalBtnSecondary, { borderColor: colors.border }]}
+                onPress={() => setConfirmOrder(null)}
+              >
+                <Text style={[styles.modalBtnSecondaryText, { color: colors.foreground }]}>لا، تراجع</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalBtnDanger}
+                onPress={() => confirmOrder && doCancel(confirmOrder)}
+              >
+                <Text style={styles.modalBtnDangerText}>نعم، إلغاء الطلب</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Error Modal ────────────────────────────────────────────────── */}
+      <Modal
+        visible={errorMsg !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setErrorMsg(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setErrorMsg(null)}>
+          <Pressable style={[styles.modalBox, { backgroundColor: colors.card }]} onPress={() => {}}>
+            <Ionicons name="warning-outline" size={44} color="#F59E0B" />
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>تنبيه</Text>
+            <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>{errorMsg}</Text>
+            <Pressable
+              style={[styles.modalBtnDanger, { backgroundColor: colors.primary, width: "100%" }]}
+              onPress={() => setErrorMsg(null)}
+            >
+              <Text style={styles.modalBtnDangerText}>حسناً</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -402,4 +453,45 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   cancelBtnText: { color: "#ef4444", fontSize: 13, fontWeight: "700" },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 28,
+  },
+  modalBox: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconWrap: { marginBottom: 4 },
+  modalTitle: { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  modalBody: { fontSize: 14, textAlign: "center", lineHeight: 22 },
+  modalBtns: { flexDirection: "row-reverse", gap: 10, width: "100%", marginTop: 4 },
+  modalBtnSecondary: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalBtnSecondaryText: { fontSize: 14, fontWeight: "700" },
+  modalBtnDanger: {
+    flex: 1,
+    backgroundColor: "#ef4444",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalBtnDangerText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
