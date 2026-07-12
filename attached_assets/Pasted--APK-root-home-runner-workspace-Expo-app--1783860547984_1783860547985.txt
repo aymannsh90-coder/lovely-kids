@@ -1,0 +1,88 @@
+أريد فحص وإصلاح زر مشاركة المنتج قبل بناء APK.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: artifacts/lovely-kids
+
+مهم جدًا:
+لا تعمل EAS build.
+لا تعمل push.
+لا تغيّر Clerk keys.
+لا تغيّر Supabase DATABASE_URL.
+لا تغيّر android package.
+لا تغيّر eas projectId.
+لا تغيّر إعدادات Vercel أو web build مثل babel.config.js أو package.json إلا إذا كان ضروريًا جدًا، وإذا احتجت قل لي قبل التعديل.
+لا تضف ميزات جديدة.
+المطلوب فقط إصلاح زر المشاركة.
+
+المشكلة:
+زر مشاركة المنتج ظاهر لكنه لا يعمل أو لا يستجيب عند الضغط.
+
+افحص الملفات التالية:
+- artifacts/lovely-kids/utils/productShare.ts
+- artifacts/lovely-kids/components/ProductCard.tsx
+- artifacts/lovely-kids/app/product/[id].tsx
+- أي ملف يستخدم Share من react-native
+
+المطلوب:
+
+1. تأكد أن زر المشاركة في صفحة تفاصيل المنتج يعمل:
+app/product/[id].tsx
+
+عند الضغط يجب أن يستدعي Share.share من react-native على Android.
+
+نص المشاركة:
+شاهد هذا المنتج من Lovely Kids:
+{productName}
+السعر: {price} ₪
+الرابط:
+{productLink}
+
+2. تأكد أن زر المشاركة داخل ProductCard إذا موجود يعمل:
+- لا يفتح صفحة المنتج بالغلط.
+- لا يفعّل ضغط الكرت نفسه.
+- استخدم event.stopPropagation إن كان متاحًا.
+- تأكد من zIndex و position حتى لا يكون الزر مغطى بعنصر آخر.
+- تأكد أن الزر Touchable/Pressable وليس View فقط.
+
+3. افحص getProductShareUrl:
+يجب أن يولّد رابطًا صحيحًا.
+الأولوية:
+- إذا settings.productShareBaseUrl موجودة، استخدمها.
+- إذا غير موجودة، استخدم fallback آمن.
+- لا تستخدم localhost.
+- لا تستخدم رابط dev مؤقت.
+- لا تستخدم API domain كرابط صفحة منتج إلا إذا لا يوجد بديل.
+
+لكن لا تغيّر قاعدة البيانات الآن.
+
+4. على Android native:
+استخدم Share من react-native:
+import { Share } from "react-native";
+
+وتأكد أن handleShare فيه try/catch ولا يسبب crash.
+
+5. على web إن كان نفس الكود يعمل للويب:
+إذا Platform.OS === "web":
+- استخدم navigator.share إذا متاح.
+- إذا غير متاح، انسخ الرابط للـ clipboard وأظهر رسالة "تم نسخ رابط المنتج".
+لكن لا تخرب Android.
+
+6. أضف رسائل خطأ بسيطة إذا فشلت المشاركة، بدون طباعة أسرار.
+
+7. بعد الإصلاح شغّل:
+cd artifacts/lovely-kids
+pnpm run typecheck
+
+8. لا تعمل build.
+9. اعمل commit فقط إذا عدّلت كود، بدون push.
+
+أعطني تقرير:
+- سبب عدم عمل زر المشاركة
+- الملفات التي تغيرت
+- هل زر المشاركة يعمل في ProductCard؟
+- هل زر المشاركة يعمل في صفحة تفاصيل المنتج؟
+- هل Android يستخدم Share.share؟
+- نتيجة typecheck
+- git status
+- git log --oneline -5
