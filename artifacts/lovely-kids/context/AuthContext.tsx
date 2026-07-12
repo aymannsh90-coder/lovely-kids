@@ -142,7 +142,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
 
-      if (error) throw new Error(error.longMessage || error.message || "فشل إنشاء الحساب");
+      if (error) {
+        pendingRegRef.current = null;
+        throw new Error(error.longMessage || error.message || "فشل إنشاء الحساب");
+      }
 
       if (signUp.status === "complete") {
         const { error: finalizeError } = await signUp.finalize();

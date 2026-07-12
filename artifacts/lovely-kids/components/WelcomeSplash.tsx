@@ -34,9 +34,13 @@ export function WelcomeSplash({ onFinish }: WelcomeSplashProps) {
   const textOpacity = useSharedValue(0);
   const textTranslateY = useSharedValue(10);
 
+  // Play audio once the player has finished loading the asset.
   useEffect(() => {
-    player.play();
+    if (!player.isLoaded) return;
+    try { player.play(); } catch { /* ignore audio errors */ }
+  }, [player.isLoaded]);
 
+  useEffect(() => {
     logoOpacity.value = withTiming(1, {
       duration: 450,
       easing: Easing.out(Easing.exp),
