@@ -102,6 +102,7 @@ export default function ProductsScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoriesScroll}
+        style={{ marginBottom: 8 }}
       >
         {categories.map((cat) => (
           <Pressable
@@ -137,6 +138,7 @@ export default function ProductsScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoriesScroll}
+        style={{ marginBottom: 4 }}
       >
         {seasons.map((s) => (
           <Pressable
@@ -231,18 +233,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 4,
     gap: 8,
-    marginBottom: 8,
+    flexDirection: "row",
+    flexWrap: "nowrap",
   },
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    minHeight: 38,
+    justifyContent: "center",
+    minWidth: 76,
+    height: 36,
+    paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,
+    flexShrink: 0,
   },
-  categoryText: { fontSize: 13, fontWeight: "600", lineHeight: 18 },
+  categoryText: { fontSize: 13, fontWeight: "600", lineHeight: 18, textAlign: "center" },
   count: {
     textAlign: "right",
     paddingHorizontal: 16,
