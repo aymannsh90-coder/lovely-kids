@@ -44,11 +44,11 @@ type Order = {
 };
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: string }> = {
-  new: { label: "قيد المراجعة", color: "#E91E8C", icon: "time-outline" },
-  confirmed: { label: "تم التأكيد", color: "#2196F3", icon: "checkmark-circle-outline" },
-  shipped: { label: "تم الشحن 🚚", color: "#FF9800", icon: "car-outline" },
-  delivered: { label: "تم التسليم ✅", color: "#22c55e", icon: "bag-check-outline" },
-  cancelled: { label: "ملغى", color: "#ef4444", icon: "close-circle-outline" },
+  new:        { label: "جديد",          color: "#E91E8C", icon: "star-outline" },
+  confirmed:  { label: "مؤكد",          color: "#2196F3", icon: "checkmark-circle-outline" },
+  delivering: { label: "قيد التوصيل",  color: "#FF9800", icon: "bicycle-outline" },
+  done:       { label: "تم التسليم",   color: "#22c55e", icon: "bag-check-outline" },
+  cancelled:  { label: "ملغي",         color: "#ef4444", icon: "close-circle-outline" },
 };
 
 function statusInfo(s: string) {

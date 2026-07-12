@@ -137,13 +137,13 @@ router.patch("/orders/:id/cancel", async (req, res) => {
   }
 
   const { status } = current[0];
-  // Only allow cancellation when the order is still "new" (قيد المراجعة)
+  // Only allow cancellation when the order is still "new" (جديد)
   if (status !== "new") {
     const msgMap: Record<string, string> = {
-      confirmed: "لا يمكن إلغاء الطلب بعد تأكيده",
-      shipped:   "لا يمكن إلغاء الطلب بعد شحنه",
-      delivered: "لا يمكن إلغاء الطلب بعد تسليمه",
-      cancelled: "الطلب ملغى مسبقاً",
+      confirmed:  "لا يمكن إلغاء الطلب بعد تأكيده",
+      delivering: "لا يمكن إلغاء الطلب وهو قيد التوصيل",
+      done:       "لا يمكن إلغاء الطلب بعد تسليمه",
+      cancelled:  "الطلب ملغى مسبقاً",
     };
     res.status(400).json({ error: msgMap[status] ?? "لا يمكن إلغاء هذا الطلب" });
     return;
@@ -188,8 +188,8 @@ router.patch("/orders/:id/status", async (req, res) => {
 
   res.json(updated[0]);
 
-  // ── Send push notification when order moves to "shipped" ───────────────────
-  if (status === "shipped" && current[0].status !== "shipped") {
+  // ── Send push notification when order moves to "delivering" ────────────────
+  if (status === "delivering" && current[0].status !== "delivering") {
     const customerPhone = current[0].customerPhone;
     if (customerPhone) {
       const tokenRows = await db
@@ -201,9 +201,9 @@ router.patch("/orders/:id/status", async (req, res) => {
       if (tokens.length > 0) {
         sendPushNotifications(
           tokens,
-          "طلبك في الطريق! 🚚",
-          `طلبك رقم #${id} تم شحنه وفي طريقه إليك`,
-          { type: "order_shipped", orderId: id }
+          "طلبك في الطريق! 🚴",
+          `طلبك رقم #${id} قيد التوصيل وفي طريقه إليك`,
+          { type: "order_delivering", orderId: id }
         ).catch(() => {});
       }
     }
