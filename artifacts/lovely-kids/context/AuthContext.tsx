@@ -237,16 +237,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try { await clerkSignOut(); } catch { /* ignore */ }
       }
 
-      // Classic API: create sign-in with identifier + password in one step.
+      // Classic API two-step: create with identifier, then attempt password factor.
       try {
-        await clerk.client.signIn.create({ identifier: emailToUse, password });
+        await clerk.client.signIn.create({ identifier: emailToUse });
       } catch (err) {
-        throw new Error(clerkErrMsg(err, "البريد الإلكتروني أو كلمة المرور غير صحيحة"));
+        throw new Error(clerkErrMsg(err, "البريد الإلكتروني غير مسجل"));
       }
 
       const si = clerk.client.signIn;
-      if (si.status === "complete") {
-        await clerk.setActive({ session: si.createdSessionId });
+
+      if (si.status === "needs_first_factor") {
+        try {
+          await si.attemptFirstFactor({ strategy: "password", password });
+        } catch (err) {
+          throw new Error(clerkErrMsg(err, "كلمة المرور غير صحيحة"));
+        }
+      }
+
+      if (clerk.client.signIn.status === "complete") {
+        await clerk.setActive({ session: clerk.client.signIn.createdSessionId });
+      } else if (clerk.client.signIn.status === "needs_second_factor") {
+        throw new Error("التحقق الثنائي غير مدعوم حالياً");
       } else {
         throw new Error("فشل تسجيل الدخول، تحقق من البيانات");
       }
