@@ -59,6 +59,24 @@ router.post("/orders", async (req, res) => {
   }
 
   res.status(201).json(order[0]);
+
+  // ── Notify all admin devices about the new order (fire-and-forget) ──────────
+  const newOrder = order[0];
+  db.select({ token: pushTokensTable.token })
+    .from(pushTokensTable)
+    .where(eq(pushTokensTable.isAdmin, true))
+    .then((rows) => {
+      const tokens = rows.map((r) => r.token);
+      if (tokens.length === 0) return;
+      const itemCount = (parsed.data.items as Array<unknown>).length;
+      sendPushNotifications(
+        tokens,
+        "🛍️ طلب جديد!",
+        `طلب جديد من ${newOrder.customerName} — ${itemCount} منتج — ${newOrder.totalPrice}₪`,
+        { type: "new_order", orderId: newOrder.id }
+      );
+    })
+    .catch(() => {});
 });
 
 // GET /api/orders — get all orders (newest first)

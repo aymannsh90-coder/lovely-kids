@@ -44,25 +44,38 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
   return tokenData.data;
 }
 
-async function saveTokenToServer(token: string, phone?: string | null) {
+async function saveTokenToServer(
+  token: string,
+  phone?: string | null,
+  getAuthToken?: (() => Promise<string | null>) | null
+) {
   try {
+    const authToken = getAuthToken ? await getAuthToken() : null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
     await fetch(`${API_BASE}/api/push-tokens`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ token, phone: phone ?? undefined }),
     });
   } catch {
   }
 }
 
-export function usePushNotifications(phone?: string | null) {
+export function usePushNotifications(
+  phone?: string | null,
+  getAuthToken?: (() => Promise<string | null>) | null
+) {
   useEffect(() => {
     registerForPushNotificationsAsync()
       .then((token) => {
-        if (token) saveTokenToServer(token, phone);
+        if (token) saveTokenToServer(token, phone, getAuthToken);
       })
       .catch((error) => {
         console.warn("Push notification registration failed:", error);
       });
-  }, [phone]);
+  // Re-register whenever the user's identity or auth changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, getAuthToken]);
 }

@@ -5,7 +5,9 @@ import { getCurrentUser } from "../lib/auth";
 
 const router = Router();
 
-// POST /api/push-tokens — register a device push token (optionally linked to a phone number)
+// POST /api/push-tokens — register a device push token
+// Optionally linked to a phone; if the request has a valid admin Bearer token,
+// the record is marked isAdmin=true so targeted admin notifications can be sent.
 router.post("/push-tokens", async (req, res) => {
   const { token, phone } = req.body as { token?: string; phone?: string };
   if (!token) {
@@ -13,12 +15,16 @@ router.post("/push-tokens", async (req, res) => {
     return;
   }
 
+  // Determine if the requester is an admin
+  const user = await getCurrentUser(req);
+  const isAdmin = user?.isAdmin ?? false;
+
   await db
     .insert(pushTokensTable)
-    .values({ token, phone: phone?.trim() || null })
+    .values({ token, phone: phone?.trim() || null, isAdmin })
     .onConflictDoUpdate({
       target: pushTokensTable.token,
-      set: { phone: phone?.trim() || null },
+      set: { phone: phone?.trim() || null, isAdmin },
     });
 
   res.status(201).json({ success: true });

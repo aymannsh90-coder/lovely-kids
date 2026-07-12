@@ -35,8 +35,8 @@ SplashScreen.setOptions({
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const { user } = useAuth();
-  usePushNotifications(user?.phone);
+  const { user, getAuthToken } = useAuth();
+  usePushNotifications(user?.phone, getAuthToken);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
