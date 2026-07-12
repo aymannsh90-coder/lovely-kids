@@ -231,25 +231,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         emailToUse = data.email;
       }
 
+      // If a stale Clerk session exists (DB user missing), sign out first so
+      // signIn.create() doesn't throw "You're already signed in."
+      if (clerkSignedIn) {
+        try { await clerkSignOut(); } catch { /* ignore */ }
+      }
+
       // Classic API: create sign-in with identifier + password in one step.
       try {
         await clerk.client.signIn.create({ identifier: emailToUse, password });
       } catch (err) {
-        // If Clerk already has an active session, sync the DB user from it instead.
-        if (clerkSignedIn) {
-          try {
-            const token = await getToken();
-            if (token) {
-              const meRes = await fetch(`${API_BASE}/api/auth/me`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (meRes.ok) {
-                setDbUser(await meRes.json());
-                return;
-              }
-            }
-          } catch { /* fall through to original error */ }
-        }
         throw new Error(clerkErrMsg(err, "البريد الإلكتروني أو كلمة المرور غير صحيحة"));
       }
 
@@ -260,7 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("فشل تسجيل الدخول، تحقق من البيانات");
       }
     },
-    [clerk, clerkSignedIn, getToken]
+    [clerk, clerkSignedIn, clerkSignOut]
   );
 
   // ─── logout ───────────────────────────────────────────────────────────────
