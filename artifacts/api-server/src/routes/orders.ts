@@ -92,26 +92,19 @@ router.get("/orders", async (_req, res) => {
 // Uses Bearer token (session) → looks up phone+email from user profile.
 // Falls back to ?phone= query param for unauthenticated access.
 router.get("/orders/my", async (req, res) => {
-  // Prefer auth token so orders work even if user has no phone stored
+  // 1. Try auth token: if the user has a phone in their profile, use it.
   const authUser = await getCurrentUser(req);
-  if (authUser) {
-    const conditions = [];
-    if (authUser.phone) conditions.push(eq(ordersTable.customerPhone, authUser.phone));
-    if (authUser.email) conditions.push(eq(ordersTable.customerPhone, authUser.email));
-
-    // Also look up by phone directly
-    if (authUser.phone) {
-      const orders = await db
-        .select()
-        .from(ordersTable)
-        .where(eq(ordersTable.customerPhone, authUser.phone))
-        .orderBy(desc(ordersTable.createdAt));
-      res.json(orders);
-      return;
-    }
+  if (authUser?.phone) {
+    const orders = await db
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.customerPhone, authUser.phone))
+      .orderBy(desc(ordersTable.createdAt));
+    res.json(orders);
+    return;
   }
 
-  // Legacy fallback: ?phone= query param
+  // 2. Fallback: ?phone= query param (sent by client when user.phone is known)
   const phone = (req.query.phone as string | undefined)?.trim();
   if (!phone) {
     res.status(400).json({ error: "يجب تسجيل الدخول أو توفير رقم الهاتف" });

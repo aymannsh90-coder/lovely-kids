@@ -91,14 +91,14 @@ export default function MyOrdersScreen() {
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      // Use auth token if available; fall back to phone param
-      const url = token
-        ? `${API_BASE}/api/orders/my`
-        : user.phone
-        ? `${API_BASE}/api/orders/my?phone=${encodeURIComponent(user.phone)}`
-        : null;
+      // Always include ?phone= when available — server tries auth first,
+      // then falls back to the phone param (covers users with null phone in profile)
+      const phone = user.phone;
+      if (!phone && !token) return; // nothing to identify the user with
 
-      if (!url) return;
+      const url = phone
+        ? `${API_BASE}/api/orders/my?phone=${encodeURIComponent(phone)}`
+        : `${API_BASE}/api/orders/my`;
 
       const res = await fetch(url, { headers });
       if (res.ok) {
