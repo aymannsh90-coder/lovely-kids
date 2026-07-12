@@ -1,0 +1,151 @@
+أريد إنشاء مشروع EAS مؤقت على حساب Expo الثاني لبناء APK تجريبي، لأن المشروع الحالي لا يسمح بالبناء بسبب quota/permissions.
+
+المشروع:
+root: /home/runner/workspace
+Expo app: /home/runner/workspace/artifacts/lovely-kids
+
+مهم جدًا:
+لا تعمل push نهائيًا.
+لا تغيّر GitHub.
+لا تغيّر قاعدة البيانات.
+لا تغيّر Supabase DATABASE_URL.
+لا تغيّر Clerk keys في الكود.
+لا تغيّر Android package:
+com.lovelykids.app
+لا تغيّر API domain:
+lovely-kids.replit.app
+لا تلمس web/Vercel.
+لا تعدّل Auth أو Metro أو Babel.
+الهدف فقط: مشروع EAS مؤقت للحساب الثاني وبناء APK.
+
+الحساب الثاني موجود عبر EXPO_TOKEN في Secrets.
+استخدم دائمًا:
+pnpm dlx eas-cli@20.5.1
+ولا تستخدم eas مباشرة.
+
+نفّذ الخطوات التالية:
+
+1. تأكد من الوضع الحالي:
+
+cd /home/runner/workspace
+git status
+git log --oneline -5
+
+2. أنشئ فرع مؤقت للبناء فقط:
+
+git checkout -b eas-temp-second-account
+
+إذا كان الفرع موجودًا، انتقل له:
+
+git checkout eas-temp-second-account
+
+3. داخل تطبيق Expo:
+
+cd /home/runner/workspace/artifacts/lovely-kids
+
+4. تأكد من الحساب الحالي:
+
+pnpm dlx eas-cli@20.5.1 whoami
+
+يجب أن يظهر حساب Expo الثاني.
+
+5. احذف فقط ربط EAS القديم من app.json:
+- احذف expo.extra.eas.projectId
+- احذف expo.owner إذا كان موجودًا
+- لا تغيّر android.package
+- لا تغيّر name/slug
+- لا تغيّر splash/icons
+- لا تغيّر أي شيء آخر
+
+يمكنك استخدام سكربت Node آمن:
+
+node - <<'NODE'
+const fs = require('fs');
+const path = 'app.json';
+const app = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+if (app.expo?.extra?.eas?.projectId) {
+  delete app.expo.extra.eas.projectId;
+}
+
+if (app.expo?.owner) {
+  delete app.expo.owner;
+}
+
+fs.writeFileSync(path, JSON.stringify(app, null, 2) + '\n');
+console.log('Removed old EAS projectId/owner only');
+NODE
+
+6. اعرض التغيير للتأكد:
+
+git diff -- app.json
+
+يجب أن يكون التغيير فقط حذف projectId/owner.
+
+7. أنشئ/اربط مشروع EAS جديد للحساب الثاني:
+
+pnpm dlx eas-cli@20.5.1 init
+
+إذا طلب إنشاء مشروع جديد، اختر yes.
+إذا احتاج تأكيدات، استخدم الاختيار الذي ينشئ مشروع EAS جديد للحساب الثاني.
+
+8. بعد init، اعرض app.json:
+
+cat app.json
+
+وتأكد أن EAS أضاف projectId جديد.
+
+9. أضف متغيرات production لهذا المشروع الجديد:
+
+pnpm dlx eas-cli@20.5.1 env:create production \
+  --name EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY \
+  --value "pk_test_d2lubmluZy1lZnQtNDUuY2xlcmsuYWNjb3VudHMuZGV2JA" \
+  --visibility plaintext \
+  --non-interactive
+
+pnpm dlx eas-cli@20.5.1 env:create production \
+  --name EXPO_PUBLIC_DOMAIN \
+  --value "lovely-kids.replit.app" \
+  --visibility plaintext \
+  --non-interactive
+
+10. اعرض env للتأكد:
+
+pnpm dlx eas-cli@20.5.1 env:list
+
+اختر production إذا طلب.
+يجب أن تظهر:
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_d2lub...
+EXPO_PUBLIC_DOMAIN=lovely-kids.replit.app
+
+11. شغّل typecheck قبل البناء:
+
+pnpm run typecheck
+
+cd /home/runner/workspace/artifacts/api-server
+pnpm run typecheck
+
+12. ارجع لتطبيق Expo وابنِ APK:
+
+cd /home/runner/workspace/artifacts/lovely-kids
+
+pnpm dlx eas-cli@20.5.1 build --platform android --profile production-apk --clear-cache
+
+13. لا تعمل push.
+لا تعمل merge.
+لا تحذف الفرع.
+
+أعطني تقرير نهائي يحتوي:
+- whoami
+- اسم الفرع الحالي
+- هل تم إنشاء projectId جديد؟
+- ما الملفات التي تغيرت؟
+- نتيجة env:list production
+- نتيجة typecheck للتطبيق
+- نتيجة typecheck للـ API
+- رابط build من EAS أو رسالة الخطأ كاملة
+- git status
+- git log --oneline -5
+
+ملاحظة:
+هذا APK تجريبي بحساب Expo ثاني. إذا كان على الهاتف نسخة قديمة بنفس package لكنها موقعة بمفتاح مختلف، قد لا يقبل التثبيت فوقها. وقتها نحذف التطبيق القديم من الهاتف ثم نثبت الجديد.

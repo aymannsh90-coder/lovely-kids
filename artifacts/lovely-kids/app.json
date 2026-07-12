@@ -32,7 +32,10 @@
         "monochromeImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ABE2F6"
       },
-      "permissions": []
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png",
@@ -65,7 +68,9 @@
           "android": {
             "enableSeparateBuildPerCPUArchitecture": true,
             "packagingOptions": {
-              "pickFirst": ["META-INF/versions/9/OSGI-INF/MANIFEST.MF"]
+              "pickFirst": [
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+              ]
             }
           }
         }
@@ -80,8 +85,12 @@
     },
     "extra": {
       "eas": {
-        "projectId": "81cc3df4-73c9-4fb0-b5c3-32ef214b9d59"
+        "projectId": "29a18980-4b6d-44de-8c39-b2bbdd1385d5"
+      },
+      "router": {
+        "origin": "https://replit.com/"
       }
-    }
+    },
+    "owner": "aymanshaheen"
   }
 }
