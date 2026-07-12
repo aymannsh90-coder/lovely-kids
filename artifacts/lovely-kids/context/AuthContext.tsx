@@ -1,4 +1,4 @@
-import { useAuth as useClerkHook, useSignIn, useSignUp, useUser } from "@clerk/expo";
+import { useAuth as useClerkHook, useClerk, useUser } from "@clerk/expo";
 import React, {
   createContext,
   useCallback,
@@ -59,18 +59,31 @@ function isEmail(s: string) {
   return s.includes("@");
 }
 
+// Extract a user-friendly message from a Clerk API error (classic API throws).
+function clerkErrMsg(err: unknown, fallback: string): string {
+  if (err && typeof err === "object") {
+    if ("errors" in err) {
+      const errs = (err as { errors: Array<{ longMessage?: string; message?: string }> }).errors;
+      if (Array.isArray(errs) && errs.length > 0) {
+        return errs[0].longMessage || errs[0].message || fallback;
+      }
+    }
+    if (err instanceof Error) return err.message || fallback;
+  }
+  return fallback;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn, signOut, getToken } = useClerkHook();
+  const clerk = useClerk();
   const { user: clerkUser } = useUser();
-  const { signIn } = useSignIn();
-  const { signUp } = useSignUp();
 
   const [dbUser, setDbUser] = useState<AuthUser | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false);
 
   // Extra data (name, phone) collected at sign-up time; stored in a ref so
-  // it's visible synchronously when the effect fires after finalize().
+  // it's visible synchronously when the effect fires after setActive().
   const pendingRegRef = useRef<{ name: string; phone: string; email: string } | null>(null);
 
   // Sync DB profile whenever Clerk auth state changes.
@@ -88,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await getToken();
         if (!token || cancelled) return;
 
-        // Sync extra fields from registration into Supabase.
+        // Sync extra fields from registration into our DB.
         const pending = pendingRegRef.current;
         if (pending) {
           pendingRegRef.current = null;
@@ -127,67 +140,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ─── register ─────────────────────────────────────────────────────────────
   const register = useCallback(
     async (name: string, phone: string, email: string, password: string) => {
-      if (!signUp) throw new Error("يرجى الانتظار...");
+      if (!clerk.client) throw new Error("يرجى الانتظار...");
 
-      // Store extra data synchronously so the post-finalize effect can sync it.
+      // Store extra data synchronously so the post-setActive effect can sync it.
       pendingRegRef.current = {
         name: name.trim(),
         phone: phone.trim(),
         email: email.trim().toLowerCase(),
       };
 
-      // Use the combined password method (identifier + password in one call).
-      const { error } = await signUp.password({
-        emailAddress: email.trim().toLowerCase(),
-        password,
-      });
-
-      if (error) {
+      // Classic API: create a sign-up with email + password.
+      try {
+        await clerk.client.signUp.create({
+          emailAddress: email.trim().toLowerCase(),
+          password,
+        });
+      } catch (err) {
         pendingRegRef.current = null;
-        throw new Error(error.longMessage || error.message || "فشل إنشاء الحساب");
+        throw new Error(clerkErrMsg(err, "فشل إنشاء الحساب"));
       }
 
-      if (signUp.status === "complete") {
-        const { error: finalizeError } = await signUp.finalize();
-        if (finalizeError) throw new Error(finalizeError.longMessage || finalizeError.message || "فشل إتمام التسجيل");
+      const su = clerk.client.signUp;
+
+      if (su.status === "complete") {
+        await clerk.setActive({ session: su.createdSessionId });
         setPendingVerification(false);
-      } else {
-        // Email verification required — send the code.
-        const { error: sendError } = await signUp.verifications.sendEmailCode();
-        if (sendError) throw new Error(sendError.longMessage || sendError.message || "فشل إرسال رمز التحقق");
+      } else if ((su.unverifiedFields as string[])?.includes("email_address")) {
+        // Email verification required.
+        try {
+          await su.prepareEmailAddressVerification({ strategy: "email_code" });
+        } catch (err) {
+          throw new Error(clerkErrMsg(err, "فشل إرسال رمز التحقق"));
+        }
         setPendingVerification(true);
+      } else {
+        pendingRegRef.current = null;
+        throw new Error("فشل إنشاء الحساب، يرجى التحقق من البيانات");
       }
     },
-    [signUp]
+    [clerk]
   );
 
   // ─── verifyEmail ──────────────────────────────────────────────────────────
   const verifyEmail = useCallback(
     async (code: string) => {
-      if (!signUp) throw new Error("يرجى الانتظار...");
+      if (!clerk.client) throw new Error("يرجى الانتظار...");
 
-      const { error } = await signUp.verifications.verifyEmailCode({ code });
-      if (error) throw new Error(error.longMessage || error.message || "رمز التحقق غير صحيح أو منتهي الصلاحية");
+      try {
+        await clerk.client.signUp.attemptEmailAddressVerification({ code });
+      } catch (err) {
+        throw new Error(clerkErrMsg(err, "رمز التحقق غير صحيح أو منتهي الصلاحية"));
+      }
 
-      if (signUp.status === "complete") {
-        const { error: finalizeError } = await signUp.finalize();
-        if (finalizeError) throw new Error(finalizeError.longMessage || finalizeError.message || "فشل إتمام التسجيل");
+      const su = clerk.client.signUp;
+      if (su.status === "complete") {
+        await clerk.setActive({ session: su.createdSessionId });
         setPendingVerification(false);
       } else {
         throw new Error("رمز التحقق غير صحيح أو منتهي الصلاحية");
       }
     },
-    [signUp]
+    [clerk]
   );
 
   // ─── login ────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (identifier: string, password: string) => {
-      if (!signIn) throw new Error("يرجى الانتظار...");
+      if (!clerk.client) throw new Error("يرجى الانتظار...");
 
       let emailToUse = identifier.trim();
 
-      // If a phone number was supplied, look up the associated email in Supabase.
+      // If a phone number was supplied, look up the associated email in the DB.
       if (!isEmail(emailToUse)) {
         const res = await fetch(`${API_BASE}/api/auth/lookup-phone`, {
           method: "POST",
@@ -202,11 +225,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         emailToUse = data.email;
       }
 
-      // Use the combined password method (identifier + password in one call).
-      const { error } = await signIn.password({ identifier: emailToUse, password });
-      if (error) {
-        // Clerk already has a session (e.g. residual browser session) — sync the
-        // DB user from the existing token instead of failing with the Clerk error.
+      // Classic API: create sign-in with identifier + password in one step.
+      try {
+        await clerk.client.signIn.create({ identifier: emailToUse, password });
+      } catch (err) {
+        // If Clerk already has an active session, sync the DB user from it instead.
         if (clerkSignedIn) {
           try {
             const token = await getToken();
@@ -221,17 +244,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch { /* fall through to original error */ }
         }
-        throw new Error(error.longMessage || error.message || "البريد الإلكتروني أو كلمة المرور غير صحيحة");
+        throw new Error(clerkErrMsg(err, "البريد الإلكتروني أو كلمة المرور غير صحيحة"));
       }
 
-      if (signIn.status === "complete") {
-        const { error: finalizeError } = await signIn.finalize();
-        if (finalizeError) throw new Error(finalizeError.longMessage || finalizeError.message || "فشل إتمام تسجيل الدخول");
+      const si = clerk.client.signIn;
+      if (si.status === "complete") {
+        await clerk.setActive({ session: si.createdSessionId });
       } else {
         throw new Error("فشل تسجيل الدخول، تحقق من البيانات");
       }
     },
-    [signIn, clerkSignedIn, getToken]
+    [clerk, clerkSignedIn, getToken]
   );
 
   // ─── logout ───────────────────────────────────────────────────────────────

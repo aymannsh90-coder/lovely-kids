@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { useSignIn } from "@clerk/expo";
+import { useClerk, useSignIn } from "@clerk/expo";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -56,6 +56,7 @@ export default function ProfileScreen() {
   } = useAuth();
   const { settings } = useAppSettings();
   const { signIn } = useSignIn();
+  const clerk = useClerk();
 
   // ─── Auth form state ─────────────────────────────────────────────
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -173,11 +174,11 @@ export default function ProfileScreen() {
     setForgotSubmitting(true);
     setForgotError("");
     try {
-      // Step 1: initialise sign-in with the identifier
-      const { error: createErr } = await signIn.create({ identifier: forgotEmail.trim().toLowerCase() });
-      if (createErr) throw createErr;
-      // Step 2: request the password-reset code via email
-      const { error: sendErr } = await signIn.resetPasswordEmailCode.sendCode();
+      // Step 1: initialise sign-in with the identifier (classic API — throws on error)
+      if (!clerk.client) throw new Error("يرجى الانتظار...");
+      await clerk.client.signIn.create({ identifier: forgotEmail.trim().toLowerCase() });
+      // Step 2: request the password-reset code via email (Future API)
+      const { error: sendErr } = await signIn!.resetPasswordEmailCode.sendCode();
       if (sendErr) throw sendErr;
       setForgotStep("code");
     } catch {
