@@ -232,9 +232,9 @@ const styles = StyleSheet.create({
   categoriesScroll: {
     paddingHorizontal: 16,
     paddingVertical: 4,
-    gap: 8,
     flexDirection: "row",
     flexWrap: "nowrap",
+    alignItems: "center",
   },
   categoryChip: {
     flexDirection: "row",
@@ -246,6 +246,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     flexShrink: 0,
+    marginHorizontal: 5,
   },
   categoryText: { fontSize: 13, fontWeight: "600", lineHeight: 18, textAlign: "center" },
   count: {
