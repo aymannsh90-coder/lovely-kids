@@ -74,7 +74,7 @@ function clerkErrMsg(err: unknown, fallback: string): string {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn, signOut, getToken } = useClerkHook();
+  const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn, signOut: clerkSignOut, getToken } = useClerkHook();
   const clerk = useClerk();
   const { user: clerkUser } = useUser();
 
@@ -142,6 +142,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (name: string, phone: string, email: string, password: string) => {
       if (!clerk.client) throw new Error("يرجى الانتظار...");
 
+      // If a stale Clerk session exists (e.g. user was deleted from DB), sign
+      // out first so signUp.create() doesn't throw "You're already signed in."
+      if (clerkSignedIn) {
+        try { await clerkSignOut(); } catch { /* ignore */ }
+      }
+
       // Store extra data synchronously so the post-setActive effect can sync it.
       pendingRegRef.current = {
         name: name.trim(),
@@ -178,7 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("فشل إنشاء الحساب، يرجى التحقق من البيانات");
       }
     },
-    [clerk]
+    [clerk, clerkSignedIn, clerkSignOut]
   );
 
   // ─── verifyEmail ──────────────────────────────────────────────────────────
@@ -260,12 +266,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ─── logout ───────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try {
-      await signOut();
+      await clerkSignOut();
     } catch { /* ignore */ }
     setDbUser(null);
     setPendingVerification(false);
     pendingRegRef.current = null;
-  }, [signOut]);
+  }, [clerkSignOut]);
 
   // ─── promoteToAdmin ───────────────────────────────────────────────────────
   const promoteToAdmin = useCallback(
