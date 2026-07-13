@@ -20,8 +20,6 @@
     "android": {
       "package": "com.lovelykids.nablus",
       "backgroundColor": "#ABE2F6",
-      "enableProguardInReleaseBuilds": true,
-      "enableShrinkResourcesInReleaseBuilds": true,
       "splash": {
         "image": "./assets/images/splash-android.png",
         "resizeMode": "contain",
