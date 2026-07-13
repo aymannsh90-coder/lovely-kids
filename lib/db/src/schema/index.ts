@@ -5,3 +5,4 @@ export * from "./users";
 export * from "./sessions";
 export * from "./app-settings";
 export * from "./product-likes";
+export * from "./password-reset-tokens";

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { API_BASE } from "@/constants/api";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
@@ -137,11 +138,29 @@ export default function ProfileScreen() {
     }
   };
 
-  // ─── Forgot password (placeholder — shows info message only) ─────
-  const handleForgotSubmit = () => {
+  // ─── Forgot password — calls real API ────────────────────────────
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+
+  const handleForgotSubmit = async () => {
     if (!forgotPhone.trim()) { setForgotError("يرجى إدخال رقم الجوال"); return; }
     setForgotError("");
-    setForgotStep("sent");
+    setForgotSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: forgotPhone.trim() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error ?? "حدث خطأ");
+      }
+      setForgotStep("sent");
+    } catch (e) {
+      setForgotError(e instanceof Error ? e.message : "حدث خطأ في الاتصال");
+    } finally {
+      setForgotSubmitting(false);
+    }
   };
 
   const closeForgot = () => {
@@ -640,9 +659,13 @@ export default function ProfileScreen() {
                 {forgotError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{forgotError}</Text> : null}
                 <Pressable
                   onPress={handleForgotSubmit}
-                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%" }]}
+                  disabled={forgotSubmitting}
+                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%", opacity: forgotSubmitting ? 0.7 : 1 }]}
                 >
-                  <Text style={styles.authSubmitText}>إرسال رابط الاستعادة</Text>
+                  {forgotSubmitting
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.authSubmitText}>إرسال رابط الاستعادة</Text>
+                  }
                 </Pressable>
               </>
             ) : (
