@@ -33,6 +33,19 @@
  *   delete react; it remains fully accessible at node_modules/react, but now
  *   via a symlink so that all paths share the same underlying inode.
  *   Skipped if the package is already a symlink or the inodes already match.
+ *
+ * Phase 3 – babel-preset-expo visibility symlinks
+ *   babel-preset-expo lives in ROOT/node_modules and uses hasModule() (i.e.
+ *   require.resolve) to detect optional integrations such as expo-router,
+ *   react-native-worklets, and react-native-reanimated. With pnpm hoisted,
+ *   those packages end up ONLY in artifacts/lovely-kids/node_modules (not in
+ *   ROOT), so hasModule() returns false and the corresponding babel plugins are
+ *   never loaded — critically, expoRouterBabelPlugin is skipped, leaving
+ *   process.env.EXPO_ROUTER_APP_ROOT un-inlined, which makes
+ *   collect-dependencies.js throw "First argument of require.context should be
+ *   a string" when bundling for Android.
+ *   Fix: create symlinks at ROOT/node_modules/<pkg> pointing into
+ *   artifacts/lovely-kids/node_modules/<pkg> so hasModule() succeeds.
  */
 
 'use strict';
@@ -223,4 +236,59 @@ if (!existsSync(PNPM_DIR)) {
 }
 
 console.log(`[dedup-expo] Phase 2 done — aligned ${aligned} package(s).`);
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 3 – babel-preset-expo visibility symlinks
+//
+// babel-preset-expo (installed in ROOT/node_modules) calls hasModule(pkg) which
+// uses require.resolve() from ROOT context. Packages that are ONLY installed in
+// artifacts/lovely-kids/node_modules are invisible to ROOT's require.resolve,
+// so the corresponding babel plugins (e.g. expoRouterBabelPlugin) are never
+// added. This causes process.env.EXPO_ROUTER_APP_ROOT to remain un-inlined and
+// collect-dependencies.js to throw on _ctx.android.js.
+//
+// We create symlinks at ROOT/node_modules/<pkg> → ../artifacts/lovely-kids/node_modules/<pkg>
+// so hasModule() succeeds. pnpm never manages these paths (no root-level dep),
+// so the symlinks persist across installs. The postinstall re-creates them on
+// every `pnpm install` as a safety net.
+// ════════════════════════════════════════════════════════════════════════════
+console.log('[dedup-expo] Phase 3: babel-preset-expo visibility symlinks');
+
+const BABEL_PRESET_NEEDS = [
+  'expo-router',
+  'react-native-reanimated',
+  'react-native-worklets',
+];
+
+let symlinked3 = 0;
+
+for (const pkg of BABEL_PRESET_NEEDS) {
+  const rootTarget   = join(ROOT_NM, pkg);
+  const lkSource     = join(LOCAL_NM, pkg);
+  const relTarget    = join('..', 'artifacts', 'lovely-kids', 'node_modules', pkg);
+
+  if (!existsSync(lkSource)) {
+    console.log(`[dedup-expo]   skip  ${pkg} — not in lovely-kids/node_modules`);
+    continue;
+  }
+
+  if (existsSync(rootTarget)) {
+    if (isSymlink(rootTarget)) {
+      console.log(`[dedup-expo]   skip  ${pkg} — symlink already exists in root`);
+    } else {
+      console.log(`[dedup-expo]   skip  ${pkg} — real directory already in root (pnpm hoisted it)`);
+    }
+    continue;
+  }
+
+  try {
+    symlinkSync(relTarget, rootTarget);
+    symlinked3++;
+    console.log(`[dedup-expo]   symlinked ${pkg} → ${relTarget}`);
+  } catch (err) {
+    console.error(`[dedup-expo]   ERROR symlinking ${pkg}: ${err.message}`);
+  }
+}
+
+console.log(`[dedup-expo] Phase 3 done — symlinked ${symlinked3} package(s).`);
 console.log('[dedup-expo] All phases complete.');

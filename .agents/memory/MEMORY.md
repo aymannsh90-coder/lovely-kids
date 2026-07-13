@@ -1,4 +1,5 @@
 - [Expo standalone build domain fallback](expo-standalone-build-domain.md) — EXPO_PUBLIC_DOMAIN is dev-only; standalone/EAS builds need a hardcoded production URL fallback or every server call silently fails.
+- [babel-preset-expo hasModule in pnpm monorepo](babel-preset-expo-hasmodule-monorepo.md) — expo-router/reanimated/worklets missing from ROOT breaks expoRouterBabelPlugin; Phase 3 in dedup-expo.cjs creates ROOT symlinks as fix.
 - [babel-preset-expo env var handling](babel-preset-expo-env-vars.md) — never add transform-inline-environment-variables as a custom plugin; babel-preset-expo handles EXPO_ROUTER_APP_ROOT via Metro caller internally.
 - [Phone-based auth for Expo apps needing SMS/Facebook login](expo-phone-auth-no-clerk.md) — Clerk lacks native phone/SMS and Facebook login; custom phone+password + token sessions is the pragmatic fallback.
 - [reanimated-color-picker worklet callbacks](reanimated-color-picker-worklets.md) — must use onChangeJS/onCompleteJS (not onChange/onComplete) for plain React state setters, or it expects a worklet.
