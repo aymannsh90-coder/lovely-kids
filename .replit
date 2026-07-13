@@ -22,3 +22,7 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["eas-cli", "nano"]
+
+[[ports]]
+localPort = 19000
+externalPort = 80
