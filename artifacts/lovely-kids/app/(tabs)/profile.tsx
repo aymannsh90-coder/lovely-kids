@@ -1,6 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
+// useClerk / useSignIn are used exclusively in the forgot-password flow below
+// (handleForgotSendCode / handleForgotReset). They are NOT part of the main
+// register / login / logout path, which runs entirely through the custom
+// AuthContext → POST /api/auth/* → bcrypt + sessions-table flow.
+// ClerkProviderWrapper is currently a no-op, so this flow won't work until a
+// real ClerkProvider is wired in — but it does not affect normal auth.
 import { useClerk, useSignIn } from "@clerk/expo";
 import React, { useState } from "react";
 import {
@@ -361,7 +367,8 @@ export default function ProfileScreen() {
             placeholder="البريد الإلكتروني أو رقم الجوال"
             placeholderTextColor={colors.mutedForeground}
             autoCapitalize="none"
-            keyboardType="email-address"
+            autoCorrect={false}
+            keyboardType="default"
             style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
             textAlign="right"
           />

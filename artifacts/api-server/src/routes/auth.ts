@@ -8,6 +8,42 @@ import { getBearerToken, getUserFromToken, getCurrentUser } from "../lib/auth";
 
 const router = Router();
 
+// ─── Shared normalization helpers ─────────────────────────────────────────
+/**
+ * Normalize a phone string:
+ * - Convert Arabic-Indic digits (٠-٩ / U+0660-U+0669) to Western digits
+ * - Strip whitespace, dashes, parentheses, and dots
+ * - Preserve leading '+' and '00' (international prefixes)
+ */
+export function normalizePhone(raw: string): string {
+  return raw
+    .replace(/[\u0660-\u0669]/g, (c) => String(c.codePointAt(0)! - 0x0660))
+    .replace(/[\s\-().]/g, "");
+}
+
+/** True when the string contains '@', meaning it looks like an e-mail. */
+function isEmailLike(s: string): boolean {
+  return s.includes("@");
+}
+
+/**
+ * Classify and normalize a login identifier.
+ * Returns { type, value } where value is already safe for a DB equality check.
+ */
+export function normalizeIdentifier(raw: string): { type: "email" | "phone"; value: string } {
+  const trimmed = raw.trim();
+  if (isEmailLike(trimmed)) {
+    return { type: "email", value: trimmed.toLowerCase() };
+  }
+  return { type: "phone", value: normalizePhone(trimmed) };
+}
+
+/** Mask all but the first and last character — safe for server logs. */
+function maskValue(s: string): string {
+  if (s.length <= 2) return "**";
+  return s[0] + "*".repeat(Math.min(s.length - 2, 8)) + s[s.length - 1];
+}
+
 function toUser(u: typeof usersTable.$inferSelect) {
   return {
     id: String(u.id),
@@ -43,7 +79,8 @@ router.post("/auth/register", async (req, res) => {
   }
 
   const normalEmail = email.trim().toLowerCase();
-  const normalPhone = phone?.trim() || null;
+  // Apply the same phone normalization used by login so they always match
+  const normalPhone = phone?.trim() ? normalizePhone(phone.trim()) : null;
 
   const conditions = [eq(usersTable.email, normalEmail)];
   if (normalPhone) conditions.push(eq(usersTable.phone, normalPhone));
@@ -89,21 +126,37 @@ router.post("/auth/login", async (req, res) => {
     return;
   }
 
-  const id = identifier.trim();
-  const idLower = id.toLowerCase();
+  const { type, value } = normalizeIdentifier(identifier);
 
+  req.log?.debug(
+    { identifierType: type, identifierMasked: maskValue(value) },
+    "login: normalized identifier"
+  );
+
+  // Type-specific lookup: search only the matching column to avoid
+  // a phone string accidentally matching an e-mail column or vice versa.
   const rows = await db
     .select()
     .from(usersTable)
-    .where(or(eq(usersTable.email, idLower), eq(usersTable.phone, id)));
+    .where(
+      type === "email"
+        ? eq(usersTable.email, value)
+        : eq(usersTable.phone, value)
+    );
 
   const user = rows[0];
+
+  req.log?.debug({ userFound: !!user, hasHash: !!user?.passwordHash }, "login: user lookup");
+
   if (!user || !user.passwordHash) {
     res.status(401).json({ error: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
     return;
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
+
+  req.log?.debug({ passwordValid: valid }, "login: bcrypt result");
+
   if (!valid) {
     res.status(401).json({ error: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
     return;
