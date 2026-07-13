@@ -1,13 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-// useClerk / useSignIn are used exclusively in the forgot-password flow below
-// (handleForgotSendCode / handleForgotReset). They are NOT part of the main
-// register / login / logout path, which runs entirely through the custom
-// AuthContext → POST /api/auth/* → bcrypt + sessions-table flow.
-// ClerkProviderWrapper is currently a no-op, so this flow won't work until a
-// real ClerkProvider is wired in — but it does not affect normal auth.
-import { useClerk, useSignIn } from "@clerk/expo";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -39,7 +32,7 @@ const MENU_ITEMS = [
 ];
 
 type AuthMode = "login" | "register";
-type ForgotStep = null | "email" | "code";
+type ForgotStep = null | "phone" | "sent";
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -59,15 +52,11 @@ export default function ProfileScreen() {
     verifyEmail,
   } = useAuth();
   const { settings } = useAppSettings();
-  const { signIn } = useSignIn();
-  const clerk = useClerk();
-
   // ─── Auth form state ─────────────────────────────────────────────
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [verifyCode, setVerifyCode] = useState("");
   const [authError, setAuthError] = useState("");
@@ -75,11 +64,8 @@ export default function ProfileScreen() {
 
   // ─── Forgot password state ────────────────────────────────────────
   const [forgotStep, setForgotStep] = useState<ForgotStep>(null);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotCode, setForgotCode] = useState("");
-  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotPhone, setForgotPhone] = useState("");
   const [forgotError, setForgotError] = useState("");
-  const [forgotSubmitting, setForgotSubmitting] = useState(false);
 
   // ─── Admin unlock state ───────────────────────────────────────────
   const [adminModalVisible, setAdminModalVisible] = useState(false);
@@ -133,15 +119,15 @@ export default function ProfileScreen() {
         setSubmitting(false);
       }
     } else {
-      if (!identifier.trim() || !password) {
+      if (!phone.trim() || !password) {
         setAuthError("يرجى تعبئة جميع الحقول");
         return;
       }
       setSubmitting(true);
       try {
-        await login(identifier.trim(), password);
+        await login(phone.trim(), password);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setIdentifier(""); setPassword("");
+        setPhone(""); setPassword("");
       } catch (e) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setAuthError(e instanceof Error ? e.message : "حدث خطأ");
@@ -151,51 +137,17 @@ export default function ProfileScreen() {
     }
   };
 
-  // ─── Forgot password ──────────────────────────────────────────────
-  const handleForgotSendCode = async () => {
-    if (!forgotEmail.trim()) { setForgotError("يرجى إدخال البريد الإلكتروني"); return; }
-    if (!signIn) { setForgotError("يرجى الانتظار..."); return; }
-    setForgotSubmitting(true);
+  // ─── Forgot password (placeholder — shows info message only) ─────
+  const handleForgotSubmit = () => {
+    if (!forgotPhone.trim()) { setForgotError("يرجى إدخال رقم الجوال"); return; }
     setForgotError("");
-    try {
-      // Step 1: initialise sign-in with the identifier (classic API — throws on error)
-      if (!clerk.client) throw new Error("يرجى الانتظار...");
-      await clerk.client.signIn.create({ identifier: forgotEmail.trim().toLowerCase() });
-      // Step 2: request the password-reset code via email (Future API)
-      const { error: sendErr } = await signIn!.resetPasswordEmailCode.sendCode();
-      if (sendErr) throw sendErr;
-      setForgotStep("code");
-    } catch {
-      setForgotError("البريد الإلكتروني غير مسجل أو حدث خطأ");
-    } finally {
-      setForgotSubmitting(false);
-    }
+    setForgotStep("sent");
   };
 
-  const handleForgotReset = async () => {
-    if (!forgotCode.trim() || !forgotNewPassword) { setForgotError("يرجى تعبئة جميع الحقول"); return; }
-    if (!signIn) { setForgotError("يرجى الانتظار..."); return; }
-    setForgotSubmitting(true);
+  const closeForgot = () => {
+    setForgotStep(null);
+    setForgotPhone("");
     setForgotError("");
-    try {
-      // Step 3: verify the code
-      const { error: verifyErr } = await signIn.resetPasswordEmailCode.verifyCode({ code: forgotCode.trim() });
-      if (verifyErr) throw verifyErr;
-      // Step 4: submit the new password
-      const { error: submitErr } = await signIn.resetPasswordEmailCode.submitPassword({ password: forgotNewPassword });
-      if (submitErr) throw submitErr;
-      // Step 5: finalise → creates the active session
-      const { error: finalErr } = await signIn.finalize();
-      if (finalErr) throw finalErr;
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setForgotStep(null);
-      setForgotEmail(""); setForgotCode(""); setForgotNewPassword("");
-      Alert.alert("تم", "تم تغيير كلمة المرور بنجاح، يمكنك الآن تسجيل الدخول");
-    } catch {
-      setForgotError("الرمز غير صحيح أو منتهي الصلاحية");
-    } finally {
-      setForgotSubmitting(false);
-    }
   };
 
   // ─── Admin unlock ─────────────────────────────────────────────────
@@ -292,7 +244,7 @@ export default function ProfileScreen() {
 
         <View style={styles.authTabs}>
           <Pressable
-            onPress={() => { setAuthMode("login"); setAuthError(""); }}
+            onPress={() => { setAuthMode("login"); setAuthError(""); setPhone(""); setPassword(""); }}
             style={[styles.authTab, authMode === "login" && { backgroundColor: colors.primary }]}
           >
             <Text style={[styles.authTabText, { color: authMode === "login" ? "#fff" : colors.mutedForeground }]}>
@@ -300,7 +252,7 @@ export default function ProfileScreen() {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => { setAuthMode("register"); setAuthError(""); }}
+            onPress={() => { setAuthMode("register"); setAuthError(""); setPhone(""); setPassword(""); }}
             style={[styles.authTab, authMode === "register" && { backgroundColor: colors.primary }]}
           >
             <Text style={[styles.authTabText, { color: authMode === "register" ? "#fff" : colors.mutedForeground }]}>
@@ -341,13 +293,11 @@ export default function ProfileScreen() {
           </>
         ) : (
           <TextInput
-            value={identifier}
-            onChangeText={setIdentifier}
-            placeholder="البريد الإلكتروني أو رقم الجوال"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="رقم الجوال (مثال: 0591234567)"
             placeholderTextColor={colors.mutedForeground}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="default"
+            keyboardType="phone-pad"
             style={[styles.input, { color: colors.foreground, borderColor: colors.border }]}
             textAlign="right"
           />
@@ -382,7 +332,7 @@ export default function ProfileScreen() {
         </Pressable>
 
         {authMode === "login" && (
-          <Pressable onPress={() => { setForgotStep("email"); setForgotEmail(""); setForgotError(""); }}>
+          <Pressable onPress={() => { setForgotStep("phone"); setForgotPhone(""); setForgotError(""); }}>
             <Text style={[styles.forgotLink, { color: colors.primary }]}>نسيت كلمة المرور؟</Text>
           </Pressable>
         )}
@@ -665,76 +615,55 @@ export default function ProfileScreen() {
         visible={forgotStep !== null}
         transparent
         animationType="slide"
-        onRequestClose={() => setForgotStep(null)}
+        onRequestClose={closeForgot}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setForgotStep(null)}>
+        <Pressable style={styles.modalOverlay} onPress={closeForgot}>
           <Pressable style={[styles.modalCard, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
             <Ionicons name="lock-open-outline" size={36} color={colors.primary} />
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              {forgotStep === "email" ? "نسيت كلمة المرور؟" : "أدخل رمز التحقق"}
-            </Text>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>نسيت كلمة المرور؟</Text>
 
-            {forgotStep === "email" ? (
+            {forgotStep === "phone" ? (
               <>
                 <Text style={[styles.authSectionLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
-                  سنرسل لك رمزاً على بريدك الإلكتروني لإعادة تعيين كلمة المرور
+                  أدخل رقم جوالك وسيتم إرسال رابط الاستعادة إلى البريد الإلكتروني المرتبط بحسابك
                 </Text>
                 <TextInput
-                  value={forgotEmail}
-                  onChangeText={setForgotEmail}
-                  placeholder="البريد الإلكتروني"
+                  value={forgotPhone}
+                  onChangeText={setForgotPhone}
+                  placeholder="رقم الجوال (مثال: 0591234567)"
                   placeholderTextColor={colors.mutedForeground}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
+                  keyboardType="phone-pad"
                   autoFocus
                   style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
                   textAlign="right"
                 />
                 {forgotError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{forgotError}</Text> : null}
                 <Pressable
-                  onPress={handleForgotSendCode}
-                  disabled={forgotSubmitting}
-                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%", opacity: forgotSubmitting ? 0.7 : 1 }]}
+                  onPress={handleForgotSubmit}
+                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%" }]}
                 >
-                  {forgotSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>إرسال الرمز</Text>}
+                  <Text style={styles.authSubmitText}>إرسال رابط الاستعادة</Text>
                 </Pressable>
               </>
             ) : (
               <>
-                <Text style={[styles.authSectionLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
-                  تحقق من بريدك وأدخل الرمز المُرسل ثم كلمة المرور الجديدة
+                <Ionicons name="mail-outline" size={48} color={colors.primary} style={{ marginVertical: 4 }} />
+                <Text style={[styles.authSectionLabel, { color: colors.foreground, textAlign: "center", fontWeight: "700", fontSize: 15 }]}>
+                  سيتم إرسال رابط استعادة كلمة المرور إلى البريد الإلكتروني المرتبط برقم جوالك
                 </Text>
-                <TextInput
-                  value={forgotCode}
-                  onChangeText={setForgotCode}
-                  placeholder="رمز التحقق"
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="number-pad"
-                  autoFocus
-                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
-                  textAlign="center"
-                />
-                <TextInput
-                  value={forgotNewPassword}
-                  onChangeText={setForgotNewPassword}
-                  placeholder="كلمة المرور الجديدة"
-                  placeholderTextColor={colors.mutedForeground}
-                  secureTextEntry
-                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
-                  textAlign="right"
-                />
-                {forgotError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{forgotError}</Text> : null}
+                <Text style={[styles.authSectionLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
+                  يرجى مراجعة بريدك الإلكتروني واتباع التعليمات
+                </Text>
                 <Pressable
-                  onPress={handleForgotReset}
-                  disabled={forgotSubmitting}
-                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%", opacity: forgotSubmitting ? 0.7 : 1 }]}
+                  onPress={closeForgot}
+                  style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%" }]}
                 >
-                  {forgotSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>تغيير كلمة المرور</Text>}
+                  <Text style={styles.authSubmitText}>حسناً</Text>
                 </Pressable>
               </>
             )}
 
-            <Pressable onPress={() => setForgotStep(null)}>
+            <Pressable onPress={closeForgot}>
               <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 4 }}>إلغاء</Text>
             </Pressable>
           </Pressable>

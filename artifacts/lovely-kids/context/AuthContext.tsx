@@ -22,7 +22,7 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   register: (name: string, phone: string, email: string, password: string) => Promise<void>;
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (phone: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   promoteToAdmin: (password: string) => Promise<void>;
   getAuthToken: () => Promise<string | null>;
@@ -108,13 +108,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── login ────────────────────────────────────────────────────────────────
   const login = useCallback(
-    async (identifier: string, password: string) => {
+    async (phone: string, password: string) => {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({ phone, password }),
       });
-      if (!res.ok) throw new Error(await parseError(res, "البريد الإلكتروني أو كلمة المرور غير صحيحة"));
+      if (!res.ok) throw new Error(await parseError(res, "رقم الجوال أو كلمة المرور غير صحيحة"));
       const data = (await res.json()) as { token: string; user: AuthUser };
       await saveSession(data.token, data.user);
     },

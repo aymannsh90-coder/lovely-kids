@@ -3,7 +3,7 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { getAuth } from "@clerk/express";
 import { db, usersTable, sessionsTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getBearerToken, getUserFromToken, getCurrentUser } from "../lib/auth";
 
 const router = Router();
@@ -19,23 +19,6 @@ export function normalizePhone(raw: string): string {
   return raw
     .replace(/[\u0660-\u0669]/g, (c) => String(c.codePointAt(0)! - 0x0660))
     .replace(/[\s\-().]/g, "");
-}
-
-/** True when the string contains '@', meaning it looks like an e-mail. */
-function isEmailLike(s: string): boolean {
-  return s.includes("@");
-}
-
-/**
- * Classify and normalize a login identifier.
- * Returns { type, value } where value is already safe for a DB equality check.
- */
-export function normalizeIdentifier(raw: string): { type: "email" | "phone"; value: string } {
-  const trimmed = raw.trim();
-  if (isEmailLike(trimmed)) {
-    return { type: "email", value: trimmed.toLowerCase() };
-  }
-  return { type: "phone", value: normalizePhone(trimmed) };
 }
 
 /** Mask all but the first and last character — safe for server logs. */
@@ -60,7 +43,7 @@ function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
-// POST /api/auth/register — custom email+password registration
+// POST /api/auth/register — custom phone+password registration (email stored for recovery only)
 router.post("/auth/register", async (req, res) => {
   const { name, phone, email, password } = req.body as {
     name?: string;
@@ -69,7 +52,7 @@ router.post("/auth/register", async (req, res) => {
     password?: string;
   };
 
-  if (!name?.trim() || !email?.trim() || !password) {
+  if (!name?.trim() || !phone?.trim() || !email?.trim() || !password) {
     res.status(400).json({ error: "يرجى تعبئة جميع الحقول" });
     return;
   }
@@ -78,20 +61,26 @@ router.post("/auth/register", async (req, res) => {
     return;
   }
 
+  const normalPhone = normalizePhone(phone.trim());
   const normalEmail = email.trim().toLowerCase();
-  // Apply the same phone normalization used by login so they always match
-  const normalPhone = phone?.trim() ? normalizePhone(phone.trim()) : null;
 
-  const conditions = [eq(usersTable.email, normalEmail)];
-  if (normalPhone) conditions.push(eq(usersTable.phone, normalPhone));
-
-  const existing = await db
+  // Check phone uniqueness first
+  const existingByPhone = await db
     .select({ id: usersTable.id })
     .from(usersTable)
-    .where(or(...conditions));
+    .where(eq(usersTable.phone, normalPhone));
+  if (existingByPhone.length > 0) {
+    res.status(409).json({ error: "رقم الجوال مسجل مسبقاً" });
+    return;
+  }
 
-  if (existing.length > 0) {
-    res.status(409).json({ error: "البريد الإلكتروني أو رقم الجوال مسجل مسبقاً" });
+  // Check email uniqueness
+  const existingByEmail = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, normalEmail));
+  if (existingByEmail.length > 0) {
+    res.status(409).json({ error: "البريد الإلكتروني مسجل في حساب آخر" });
     return;
   }
 
@@ -114,42 +103,33 @@ router.post("/auth/register", async (req, res) => {
   res.status(201).json({ token, user: toUser(user) });
 });
 
-// POST /api/auth/login — custom email/phone + password login
+// POST /api/auth/login — phone + password login only
 router.post("/auth/login", async (req, res) => {
-  const { identifier, password } = req.body as {
-    identifier?: string;
+  const { phone, password } = req.body as {
+    phone?: string;
     password?: string;
   };
 
-  if (!identifier?.trim() || !password) {
+  if (!phone?.trim() || !password) {
     res.status(400).json({ error: "يرجى تعبئة جميع الحقول" });
     return;
   }
 
-  const { type, value } = normalizeIdentifier(identifier);
+  const normalPhone = normalizePhone(phone.trim());
 
-  req.log?.debug(
-    { identifierType: type, identifierMasked: maskValue(value) },
-    "login: normalized identifier"
-  );
+  req.log?.debug({ phoneMasked: maskValue(normalPhone) }, "login: normalized phone");
 
-  // Type-specific lookup: search only the matching column to avoid
-  // a phone string accidentally matching an e-mail column or vice versa.
   const rows = await db
     .select()
     .from(usersTable)
-    .where(
-      type === "email"
-        ? eq(usersTable.email, value)
-        : eq(usersTable.phone, value)
-    );
+    .where(eq(usersTable.phone, normalPhone));
 
   const user = rows[0];
 
   req.log?.debug({ userFound: !!user, hasHash: !!user?.passwordHash }, "login: user lookup");
 
   if (!user || !user.passwordHash) {
-    res.status(401).json({ error: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
+    res.status(401).json({ error: "رقم الجوال أو كلمة المرور غير صحيحة" });
     return;
   }
 
@@ -158,7 +138,7 @@ router.post("/auth/login", async (req, res) => {
   req.log?.debug({ passwordValid: valid }, "login: bcrypt result");
 
   if (!valid) {
-    res.status(401).json({ error: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
+    res.status(401).json({ error: "رقم الجوال أو كلمة المرور غير صحيحة" });
     return;
   }
 
@@ -237,7 +217,7 @@ router.post("/auth/lookup-phone", async (req, res) => {
   const rows = await db
     .select({ email: usersTable.email })
     .from(usersTable)
-    .where(eq(usersTable.phone, phone.trim()));
+    .where(eq(usersTable.phone, normalizePhone(phone.trim())));
   if (!rows[0]?.email) {
     res.status(404).json({ error: "رقم الجوال غير مسجل" });
     return;
