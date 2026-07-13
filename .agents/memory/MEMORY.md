@@ -5,3 +5,4 @@
 - [Clerk + legacy custom auth coexistence](clerk-legacy-auth-coexistence.md) — pattern for adding Clerk OAuth alongside an existing custom session-token auth system without breaking it.
 - [Local-to-account data migration](local-to-account-data-migration.md) — upload-then-clear-then-fetch pattern for syncing AsyncStorage-only features (e.g. wishlist) to a user account without losing local data.
 - [Expo web preview: babel plugin ordering bug](expo-web-preview-babel-ordering.md) — babel-plugin-transform-inline-environment-variables must exclude EXPO_ROUTER_* vars or it hijacks them before expoRouterBabelPlugin runs.
+- [pnpm hoisted dedup for expo-doctor](pnpm-hoisted-dedup-expo-doctor.md) — two-phase postinstall script keeps expo-doctor at 18/18 when node-linker=hoisted + --no-frozen-lockfile creates dual physical copies of react.
