@@ -75,8 +75,7 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      "expo-local-authentication"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -127,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionToken(null);
     setDbUser(null);
     await AsyncStorage.removeItem(SESSION_KEY);
+    await AsyncStorage.removeItem("@lovely_kids_biometric_enabled");
     if (token) {
       await fetch(`${API_BASE}/api/auth/logout`, {
         method: "POST",

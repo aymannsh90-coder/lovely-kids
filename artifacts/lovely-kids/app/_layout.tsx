@@ -14,7 +14,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { BiometricGate } from "@/components/BiometricGate";
 import { ClerkProviderWrapper } from "@/components/ClerkProviderWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
@@ -109,7 +108,6 @@ export default function RootLayout() {
 
   return (
     <ClerkProviderWrapper>
-      <BiometricGate>
       <SafeAreaProvider>
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
@@ -145,7 +143,6 @@ export default function RootLayout() {
           </QueryClientProvider>
         </ErrorBoundary>
       </SafeAreaProvider>
-      </BiometricGate>
     </ClerkProviderWrapper>
   );
 }
