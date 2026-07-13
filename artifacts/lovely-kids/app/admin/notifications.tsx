@@ -103,7 +103,9 @@ export default function NotificationsScreen() {
           <Ionicons name="arrow-forward" size={24} color="#fff" />
         </Pressable>
         <Text style={styles.headerTitle}>إرسال إشعار</Text>
-        <Ionicons name="notifications" size={22} color="#fff" />
+        <Pressable onPress={() => router.push("/admin/push-debug")} hitSlop={12}>
+          <Ionicons name="bug-outline" size={22} color="#fff" />
+        </Pressable>
       </View>
 
       {/* Device count banner */}

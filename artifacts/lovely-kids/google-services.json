@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "39034619273",
+    "project_id": "lovely-kids-e0b48",
+    "storage_bucket": "lovely-kids-e0b48.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:39034619273:android:8a373ee3c5a89ab0634d58",
+        "android_client_info": {
+          "package_name": "com.lovelykids.nablus"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNInCdbLaLSYie7euvCkGWVqP1WlvDULk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

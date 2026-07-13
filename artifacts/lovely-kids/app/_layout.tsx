@@ -58,6 +58,8 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/orders" />
       <Stack.Screen name="admin/categories" />
       <Stack.Screen name="admin/users" />
+      <Stack.Screen name="admin/notifications" />
+      <Stack.Screen name="admin/push-debug" />
     </Stack>
   );
 }
