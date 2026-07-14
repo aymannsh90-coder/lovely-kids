@@ -26,7 +26,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   promoteToAdmin: (password: string) => Promise<void>;
   getAuthToken: () => Promise<string | null>;
-  updateProfile: (data: { name?: string; deliveryAddress?: string }) => Promise<void>;
+  updateProfile: (data: { name?: string; deliveryAddress?: string; phone?: string; email?: string; currentPassword?: string }) => Promise<void>;
   pendingVerification: boolean;
   verifyEmail: (code: string) => Promise<void>;
 }
@@ -39,7 +39,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   promoteToAdmin: async () => {},
   getAuthToken: async () => null,
-  updateProfile: async () => {},
+  updateProfile: async (_data) => {},
   pendingVerification: false,
   verifyEmail: async () => {},
 });
@@ -166,10 +166,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── updateProfile ────────────────────────────────────────────────────────
   const updateProfile = useCallback(
-    async (data: { name?: string; deliveryAddress?: string }) => {
+    async (data: { name?: string; deliveryAddress?: string; phone?: string; email?: string; currentPassword?: string }) => {
       if (!sessionToken) throw new Error("يجب تسجيل الدخول أولاً");
       const res = await fetch(`${API_BASE}/api/auth/profile`, {
-        method: "PUT",
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${sessionToken}`,

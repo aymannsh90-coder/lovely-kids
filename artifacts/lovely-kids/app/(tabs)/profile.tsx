@@ -78,6 +78,9 @@ export default function ProfileScreen() {
   const [editProfileVisible, setEditProfileVisible] = useState(false);
   const [editName, setEditName] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editCurrentPassword, setEditCurrentPassword] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -196,17 +199,40 @@ export default function ProfileScreen() {
   const openEditProfile = () => {
     setEditName(user?.name ?? "");
     setEditAddress(user?.deliveryAddress ?? "");
-    setEditError(""); setEditProfileVisible(true);
+    setEditPhone(user?.phone ?? "");
+    setEditEmail(user?.email ?? "");
+    setEditCurrentPassword("");
+    setEditError("");
+    setEditProfileVisible(true);
   };
 
   const handleSaveProfile = async () => {
     setEditError("");
     if (!editName.trim()) { setEditError("الاسم مطلوب"); return; }
+
+    const phoneChanged = editPhone.trim() !== "" && editPhone.trim() !== (user?.phone ?? "");
+    const emailChanged = editEmail.trim() !== "" && editEmail.trim().toLowerCase() !== (user?.email ?? "").toLowerCase();
+    const needsPassword = phoneChanged || emailChanged;
+
+    if (needsPassword && !editCurrentPassword) {
+      setEditError("يجب إدخال كلمة المرور الحالية لتغيير رقم الجوال أو البريد");
+      return;
+    }
+
     setEditSaving(true);
     try {
-      await updateProfile({ name: editName.trim(), deliveryAddress: editAddress.trim() });
+      const data: Parameters<typeof updateProfile>[0] = {
+        name: editName.trim(),
+        deliveryAddress: editAddress.trim(),
+      };
+      if (editPhone.trim()) data.phone = editPhone.trim();
+      if (editEmail.trim()) data.email = editEmail.trim();
+      if (editCurrentPassword) data.currentPassword = editCurrentPassword;
+
+      await updateProfile(data);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setEditProfileVisible(false);
+      setEditCurrentPassword("");
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setEditError(e instanceof Error ? e.message : "حدث خطأ");
@@ -578,7 +604,7 @@ export default function ProfileScreen() {
             <Ionicons name="person-circle-outline" size={36} color={colors.primary} />
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>تعديل البيانات الشخصية</Text>
 
-            <View style={{ width: "100%", gap: 12 }}>
+            <ScrollView style={{ width: "100%" }} contentContainerStyle={{ gap: 12 }} showsVerticalScrollIndicator={false}>
               <View style={styles.modalFieldGroup}>
                 <Text style={[styles.modalFieldLabel, { color: colors.mutedForeground }]}>الاسم الكامل</Text>
                 <TextInput
@@ -590,6 +616,34 @@ export default function ProfileScreen() {
                   textAlign="right"
                 />
               </View>
+
+              <View style={styles.modalFieldGroup}>
+                <Text style={[styles.modalFieldLabel, { color: colors.mutedForeground }]}>رقم الجوال</Text>
+                <TextInput
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  placeholder="رقم الجوال"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="phone-pad"
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
+                  textAlign="right"
+                />
+              </View>
+
+              <View style={styles.modalFieldGroup}>
+                <Text style={[styles.modalFieldLabel, { color: colors.mutedForeground }]}>البريد الإلكتروني</Text>
+                <TextInput
+                  value={editEmail}
+                  onChangeText={setEditEmail}
+                  placeholder="البريد الإلكتروني"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
+                  textAlign="right"
+                />
+              </View>
+
               <View style={styles.modalFieldGroup}>
                 <Text style={[styles.modalFieldLabel, { color: colors.mutedForeground }]}>عنوان التوصيل المفضّل</Text>
                 <TextInput
@@ -606,11 +660,33 @@ export default function ProfileScreen() {
                   textAlign="right"
                 />
               </View>
-            </View>
+
+              {/* Password required only when changing phone or email */}
+              {((editPhone.trim() !== "" && editPhone.trim() !== (user?.phone ?? "")) ||
+                (editEmail.trim() !== "" && editEmail.trim().toLowerCase() !== (user?.email ?? "").toLowerCase())) && (
+                <View style={styles.modalFieldGroup}>
+                  <View style={styles.passwordNoteRow}>
+                    <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
+                    <Text style={[styles.modalFieldLabel, { color: colors.primary }]}>
+                      كلمة المرور الحالية (مطلوبة لتغيير الجوال/البريد)
+                    </Text>
+                  </View>
+                  <TextInput
+                    value={editCurrentPassword}
+                    onChangeText={setEditCurrentPassword}
+                    placeholder="كلمة المرور الحالية"
+                    placeholderTextColor={colors.mutedForeground}
+                    secureTextEntry
+                    style={[styles.input, { color: colors.foreground, borderColor: colors.primary, width: "100%" }]}
+                    textAlign="right"
+                  />
+                </View>
+              )}
+            </ScrollView>
 
             {editError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{editError}</Text> : null}
 
-            <View style={{ width: "100%", flexDirection: "row-reverse", gap: 10 }}>
+            <View style={{ width: "100%", flexDirection: "row-reverse", gap: 10, marginTop: 4 }}>
               <Pressable
                 onPress={handleSaveProfile}
                 disabled={editSaving}
@@ -758,4 +834,5 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: "800" },
   modalFieldGroup: { gap: 6 },
   modalFieldLabel: { fontSize: 12, fontWeight: "600", textAlign: "right" },
+  passwordNoteRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
 });

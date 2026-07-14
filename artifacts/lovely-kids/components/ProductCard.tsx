@@ -21,6 +21,12 @@ interface Props {
   style?: object;
 }
 
+function calcDiscount(price: number, originalPrice?: number | null): number | null {
+  if (!originalPrice || originalPrice <= 0 || originalPrice <= price) return null;
+  const pct = Math.round(((originalPrice - price) / originalPrice) * 100);
+  return pct > 0 ? Math.min(pct, 99) : null;
+}
+
 export function ProductCard({ product, style }: Props) {
   const colors = useColors();
   const { addItem } = useCart();
@@ -28,6 +34,7 @@ export function ProductCard({ product, style }: Props) {
   const wishlisted = isWishlisted(product.id);
 
   const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
+  const discountPct = calcDiscount(product.price, product.originalPrice);
   const hasVariants =
     (product.colorVariants && product.colorVariants.length > 0) ||
     (product.sizes && product.sizes.length > 0);
@@ -80,16 +87,15 @@ export function ProductCard({ product, style }: Props) {
         )}
 
         {/* Badges — only if in stock */}
-        {!isOutOfStock && product.discount && (
+        {!isOutOfStock && discountPct ? (
           <View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.discountText}>-{product.discount}%</Text>
+            <Text style={styles.discountText}>خصم {discountPct}%</Text>
           </View>
-        )}
-        {!isOutOfStock && product.isNew && !product.discount && (
+        ) : !isOutOfStock && product.isNew ? (
           <View style={[styles.discountBadge, { backgroundColor: "#22c55e" }]}>
             <Text style={styles.discountText}>جديد</Text>
           </View>
-        )}
+        ) : null}
 
         <Pressable
           onPress={handleToggleWishlist}

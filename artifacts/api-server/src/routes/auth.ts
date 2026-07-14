@@ -273,7 +273,7 @@ router.delete("/users/:id", async (req, res) => {
   res.status(204).end();
 });
 
-// PUT /api/auth/profile — update name / deliveryAddress
+// PUT /api/auth/profile — update name / deliveryAddress (legacy, kept for compatibility)
 router.put("/auth/profile", async (req, res) => {
   const user = await getCurrentUser(req);
   if (!user) {
@@ -284,6 +284,96 @@ router.put("/auth/profile", async (req, res) => {
   const updates: Partial<typeof usersTable.$inferInsert> = {};
   if (typeof name === "string" && name.trim()) updates.name = name.trim();
   if (typeof deliveryAddress === "string") updates.deliveryAddress = deliveryAddress.trim() || null;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "لا توجد بيانات للتحديث" });
+    return;
+  }
+
+  const rows = await db
+    .update(usersTable)
+    .set(updates)
+    .where(eq(usersTable.id, user.id))
+    .returning();
+  res.json(toUser(rows[0]));
+});
+
+// PATCH /api/auth/profile — update name, deliveryAddress, phone (sensitive: needs currentPassword), email (sensitive: needs currentPassword)
+router.patch("/auth/profile", async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user) {
+    res.status(401).json({ error: "غير مسجل الدخول" });
+    return;
+  }
+
+  const { name, deliveryAddress, phone, email, currentPassword } = req.body as {
+    name?: string;
+    deliveryAddress?: string;
+    phone?: string;
+    email?: string;
+    currentPassword?: string;
+  };
+
+  const updates: Partial<typeof usersTable.$inferInsert> = {};
+
+  // Simple fields — no password required
+  if (typeof name === "string" && name.trim()) updates.name = name.trim();
+  if (typeof deliveryAddress === "string") updates.deliveryAddress = deliveryAddress.trim() || null;
+
+  // Sensitive fields — require password verification
+  const newPhone = typeof phone === "string" && phone.trim() ? normalizePhone(phone.trim()) : null;
+  const newEmail = typeof email === "string" && email.trim() ? email.trim().toLowerCase() : null;
+
+  const changingPhone = !!newPhone && newPhone !== user.phone;
+  const changingEmail = !!newEmail && newEmail !== user.email;
+
+  if (changingPhone || changingEmail) {
+    if (changingEmail) {
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail!);
+      if (!emailOk) {
+        res.status(400).json({ error: "صيغة البريد الإلكتروني غير صحيحة" });
+        return;
+      }
+    }
+
+    if (!currentPassword) {
+      res.status(400).json({ error: "يجب إدخال كلمة المرور الحالية لتغيير رقم الجوال أو البريد" });
+      return;
+    }
+    if (!user.passwordHash) {
+      res.status(400).json({ error: "لا يمكن التحقق من كلمة المرور" });
+      return;
+    }
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "كلمة المرور الحالية غير صحيحة" });
+      return;
+    }
+
+    if (changingPhone) {
+      const existing = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.phone, newPhone!));
+      if (existing.length > 0) {
+        res.status(409).json({ error: "رقم الجوال مسجل في حساب آخر" });
+        return;
+      }
+      updates.phone = newPhone!;
+    }
+
+    if (changingEmail) {
+      const existing = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, newEmail!));
+      if (existing.length > 0) {
+        res.status(409).json({ error: "البريد الإلكتروني مسجل في حساب آخر" });
+        return;
+      }
+      updates.email = newEmail!;
+    }
+  }
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "لا توجد بيانات للتحديث" });

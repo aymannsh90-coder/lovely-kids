@@ -25,6 +25,12 @@ import { isSizeOutOfStock } from "@/data/products";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
+function calcDiscount(price: number, originalPrice?: number | null): number | null {
+  if (!originalPrice || originalPrice <= 0 || originalPrice <= price) return null;
+  const pct = Math.round(((originalPrice - price) / originalPrice) * 100);
+  return pct > 0 ? Math.min(pct, 99) : null;
+}
+
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
@@ -91,6 +97,7 @@ export default function ProductDetailScreen() {
 
   const wishlisted = isWishlisted(product.id);
   const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
+  const discountPct = calcDiscount(product.price, product.originalPrice);
 
   const needsColor = hasColorVariants && !activeColorVariant?.color;
   const needsSize = hasColorVariants
@@ -194,11 +201,11 @@ export default function ProductDetailScreen() {
             />
           </Pressable>
 
-          {!isOutOfStock && product.discount && (
+          {!isOutOfStock && discountPct ? (
             <View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.discountText}>-{product.discount}%</Text>
+              <Text style={styles.discountText}>خصم {discountPct}%</Text>
             </View>
-          )}
+          ) : null}
 
           {/* Thumbnail strip */}
           {allImages.length > 1 && (
