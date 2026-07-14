@@ -4,10 +4,11 @@ import { logger } from "./logger";
 let _client: Resend | null = null;
 
 function getClient(): Resend {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY_missing: environment variable is not set");
+  }
   if (!_client) {
-    const key = process.env.RESEND_API_KEY;
-    if (!key) throw new Error("RESEND_API_KEY is not configured");
-    _client = new Resend(key);
+    _client = new Resend(process.env.RESEND_API_KEY);
   }
   return _client;
 }
@@ -52,9 +53,13 @@ export async function sendPasswordResetEmail(opts: {
   });
 
   if (result.error) {
-    logger.error({ resendError: result.error.message }, "mailer: send failed");
-    throw new Error("فشل إرسال البريد الإلكتروني");
+    // Log the exact Resend error code and message for diagnosis
+    logger.error(
+      { resendErrorName: result.error.name, resendErrorMessage: result.error.message },
+      "mailer: Resend rejected the send request"
+    );
+    throw new Error(result.error.message ?? "فشل إرسال البريد الإلكتروني");
   }
 
-  logger.info({ messageId: result.data?.id }, "mailer: reset email sent");
+  logger.info({ messageId: result.data?.id }, "mailer: reset email sent successfully");
 }

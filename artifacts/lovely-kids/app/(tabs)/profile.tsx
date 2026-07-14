@@ -652,6 +652,7 @@ export default function ProfileScreen() {
                   placeholder="رقم الجوال (مثال: 0591234567)"
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
+                  autoCorrect={false}
                   autoFocus
                   style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
                   textAlign="right"

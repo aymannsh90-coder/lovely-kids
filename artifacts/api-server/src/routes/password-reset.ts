@@ -10,9 +10,10 @@ import { sendPasswordResetEmail } from "../lib/mailer";
 const router = Router();
 
 const RESET_TTL_MINUTES = 30;
+const isDev = process.env.NODE_ENV !== "production";
 
 // POST /api/auth/forgot-password
-// Accepts { phone }. Always responds 200 (security: don't reveal if account exists).
+// Accepts { phone }. Always responds 200 OK (security: don't reveal if account exists).
 router.post("/auth/forgot-password", async (req, res) => {
   const { phone } = req.body as { phone?: string };
 
@@ -23,7 +24,7 @@ router.post("/auth/forgot-password", async (req, res) => {
 
   const normalPhone = normalizePhone(phone.trim());
 
-  // Generic success — sent regardless of whether account exists
+  // Generic 200 — always returned regardless of outcome
   const sendOk = () => res.json({ ok: true });
 
   try {
@@ -34,14 +35,24 @@ router.post("/auth/forgot-password", async (req, res) => {
 
     const user = users[0];
 
-    // If no account or no email — return generic OK (don't reveal)
+    // Dev-only safe diagnostics — never log full phone, email, or token
+    if (isDev) {
+      req.log?.info(
+        {
+          phoneMasked: normalPhone.slice(0, 4) + "****",
+          userFound: !!user,
+          hasEmail: !!(user?.email),
+        },
+        "forgot-password: lookup result"
+      );
+    }
+
     if (!user?.email) {
-      req.log?.info({ phoneMasked: normalPhone.slice(0, 4) + "****" }, "forgot-password: no account or no email");
+      // Not revealing whether the account exists or has email
       sendOk();
       return;
     }
 
-    // Generate a secure random token (32 bytes = 64 hex chars)
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
     const expiresAt = new Date(Date.now() + RESET_TTL_MINUTES * 60 * 1000);
@@ -55,18 +66,51 @@ router.post("/auth/forgot-password", async (req, res) => {
     const domain = process.env.REPLIT_DOMAINS?.split(",")[0] ?? "localhost:80";
     const resetLink = `https://${domain}/api/auth/reset-password?token=${rawToken}`;
 
-    await sendPasswordResetEmail({
-      to: user.email,
-      resetLink,
-      userName: user.name,
-    });
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        resetLink,
+        userName: user.name,
+      });
 
-    req.log?.info({ userId: user.id }, "forgot-password: reset email dispatched");
+      if (isDev) {
+        req.log?.info({ userId: user.id }, "forgot-password: reset email dispatched");
+      }
+    } catch (mailErr) {
+      // Diagnose the specific Resend failure reason
+      const errMsg = mailErr instanceof Error ? mailErr.message : String(mailErr);
+
+      // Categorise common Resend rejection reasons
+      let cause = "unknown";
+      if (!process.env.RESEND_API_KEY) {
+        cause = "RESEND_API_KEY_missing";
+      } else if (/testing emails to your own email/i.test(errMsg)) {
+        cause = "resend_onboarding_domain_restriction: recipient must match Resend account email";
+      } else if (/invalid.*email|email.*invalid/i.test(errMsg)) {
+        cause = "resend_invalid_recipient_email";
+      } else if (/unauthorized|api.*key/i.test(errMsg)) {
+        cause = "resend_auth_failure: check RESEND_API_KEY value";
+      } else if (/rate limit/i.test(errMsg)) {
+        cause = "resend_rate_limited";
+      } else {
+        cause = "resend_error: " + errMsg;
+      }
+
+      req.log?.error({ userId: user.id, cause }, "forgot-password: email send failed");
+
+      // Mark the token as already-used so it can't be exploited
+      await db
+        .update(passwordResetTokensTable)
+        .set({ usedAt: new Date() })
+        .where(eq(passwordResetTokensTable.tokenHash, tokenHash))
+        .catch(() => { /* best-effort */ });
+    }
   } catch (err) {
-    req.log?.error({ err }, "forgot-password: unexpected error");
-    // Still return generic OK to avoid leaking info — but log internally
+    const errMsg = err instanceof Error ? err.message : String(err);
+    req.log?.error({ errMsg }, "forgot-password: unexpected server error");
   }
 
+  // Always return generic OK — never reveal whether an email was sent
   sendOk();
 });
 
@@ -137,7 +181,6 @@ router.post("/auth/reset-password", async (req, res) => {
   const resetRow = rows[0];
   const newHash = await bcrypt.hash(password, 10);
 
-  // Mark token used, update password, invalidate all sessions — atomically via sequential awaits
   await db
     .update(passwordResetTokensTable)
     .set({ usedAt: now })
