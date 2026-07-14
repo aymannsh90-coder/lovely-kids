@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 import { db, usersTable, sessionsTable } from "@workspace/db";
 import { passwordResetTokensTable } from "@workspace/db";
 import { eq, and, isNull, gt } from "drizzle-orm";
-import { normalizePhone } from "./auth";
 import { sendPasswordResetEmail } from "../lib/mailer";
 
 const router = Router();
@@ -13,16 +12,16 @@ const RESET_TTL_MINUTES = 30;
 const isDev = process.env.NODE_ENV !== "production";
 
 // POST /api/auth/forgot-password
-// Accepts { phone }. Always responds 200 OK (security: don't reveal if account exists).
+// Accepts { email }. Always responds 200 OK (security: don't reveal if account exists).
 router.post("/auth/forgot-password", async (req, res) => {
-  const { phone } = req.body as { phone?: string };
+  const { email } = req.body as { email?: string };
 
-  if (!phone?.trim()) {
-    res.status(400).json({ error: "رقم الجوال مطلوب" });
+  if (!email?.trim()) {
+    res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
     return;
   }
 
-  const normalPhone = normalizePhone(phone.trim());
+  const normalEmail = email.trim().toLowerCase();
 
   // Generic 200 — always returned regardless of outcome
   const sendOk = () => res.json({ ok: true });
@@ -31,24 +30,23 @@ router.post("/auth/forgot-password", async (req, res) => {
     const users = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.phone, normalPhone));
+      .where(eq(usersTable.email, normalEmail));
 
     const user = users[0];
 
-    // Dev-only safe diagnostics — never log full phone, email, or token
+    // Dev-only safe diagnostics — never log full email or token
     if (isDev) {
       req.log?.info(
         {
-          phoneMasked: normalPhone.slice(0, 4) + "****",
+          emailMasked: normalEmail[0] + "***@" + normalEmail.split("@")[1],
           userFound: !!user,
-          hasEmail: !!(user?.email),
         },
         "forgot-password: lookup result"
       );
     }
 
     if (!user?.email) {
-      // Not revealing whether the account exists or has email
+      // Not revealing whether the account exists or lacks email
       sendOk();
       return;
     }

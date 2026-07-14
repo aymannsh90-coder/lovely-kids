@@ -65,7 +65,7 @@ export default function ProfileScreen() {
 
   // ─── Forgot password state ────────────────────────────────────────
   const [forgotStep, setForgotStep] = useState<ForgotStep>(null);
-  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
   const [forgotError, setForgotError] = useState("");
 
   // ─── Admin unlock state ───────────────────────────────────────────
@@ -142,14 +142,14 @@ export default function ProfileScreen() {
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
 
   const handleForgotSubmit = async () => {
-    if (!forgotPhone.trim()) { setForgotError("يرجى إدخال رقم الجوال"); return; }
+    if (!forgotEmail.trim()) { setForgotError("يرجى إدخال البريد الإلكتروني"); return; }
     setForgotError("");
     setForgotSubmitting(true);
     try {
       const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: forgotPhone.trim() }),
+        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -165,7 +165,7 @@ export default function ProfileScreen() {
 
   const closeForgot = () => {
     setForgotStep(null);
-    setForgotPhone("");
+    setForgotEmail("");
     setForgotError("");
   };
 
@@ -351,7 +351,7 @@ export default function ProfileScreen() {
         </Pressable>
 
         {authMode === "login" && (
-          <Pressable onPress={() => { setForgotStep("phone"); setForgotPhone(""); setForgotError(""); }}>
+          <Pressable onPress={() => { setForgotStep("phone"); setForgotEmail(""); setForgotError(""); }}>
             <Text style={[styles.forgotLink, { color: colors.primary }]}>نسيت كلمة المرور؟</Text>
           </Pressable>
         )}
@@ -644,14 +644,15 @@ export default function ProfileScreen() {
             {forgotStep === "phone" ? (
               <>
                 <Text style={[styles.authSectionLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
-                  أدخل رقم جوالك وسيتم إرسال رابط الاستعادة إلى البريد الإلكتروني المرتبط بحسابك
+                  أدخل البريد الإلكتروني المسجّل وسيتم إرسال رابط الاستعادة إليه
                 </Text>
                 <TextInput
-                  value={forgotPhone}
-                  onChangeText={setForgotPhone}
-                  placeholder="رقم الجوال (مثال: 0591234567)"
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                  placeholder="البريد الإلكتروني"
                   placeholderTextColor={colors.mutedForeground}
-                  keyboardType="phone-pad"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
                   autoCorrect={false}
                   autoFocus
                   style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
@@ -673,7 +674,7 @@ export default function ProfileScreen() {
               <>
                 <Ionicons name="mail-outline" size={48} color={colors.primary} style={{ marginVertical: 4 }} />
                 <Text style={[styles.authSectionLabel, { color: colors.foreground, textAlign: "center", fontWeight: "700", fontSize: 15 }]}>
-                  سيتم إرسال رابط استعادة كلمة المرور إلى البريد الإلكتروني المرتبط برقم جوالك
+                  إذا كان البريد مرتبطًا بحساب، سيتم إرسال رابط استعادة كلمة المرور إليه
                 </Text>
                 <Text style={[styles.authSectionLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
                   يرجى مراجعة بريدك الإلكتروني واتباع التعليمات
