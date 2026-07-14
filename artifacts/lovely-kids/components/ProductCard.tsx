@@ -6,7 +6,6 @@ import {
   Image,
   Platform,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -14,10 +13,8 @@ import {
 
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
-import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 import { Product } from "@/data/products";
-import { getProductShareUrl } from "@/utils/productShare";
 
 interface Props {
   product: Product;
@@ -28,7 +25,6 @@ export function ProductCard({ product, style }: Props) {
   const colors = useColors();
   const { addItem } = useCart();
   const { toggleItem, isWishlisted } = useWishlist();
-  const { settings } = useAppSettings();
   const wishlisted = isWishlisted(product.id);
 
   const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
@@ -61,19 +57,6 @@ export function ProductCard({ product, style }: Props) {
       image: product.image,
       category: product.category,
     });
-  };
-
-  const handleShare = () => {
-    const productUrl = getProductShareUrl(product.id, settings);
-    Share.share({
-      message:
-        `شاهد هذا المنتج من Lovely Kids:\n` +
-        `${product.nameAr}\n` +
-        `السعر: ${product.price} ₪\n` +
-        `الرابط:\n${productUrl}`,
-      url: productUrl,
-      title: product.nameAr,
-    }).catch(() => {});
   };
 
   return (
@@ -119,31 +102,12 @@ export function ProductCard({ product, style }: Props) {
             color={wishlisted ? colors.primary : colors.mutedForeground}
           />
         </Pressable>
-
-        {/* Share Button */}
-        <Pressable
-          onPress={(e) => {
-            if (e && typeof e.stopPropagation === "function") e.stopPropagation();
-            handleShare();
-          }}
-          style={[styles.shareBtn, { backgroundColor: colors.card }]}
-          hitSlop={8}
-        >
-          <Ionicons name="share-social-outline" size={15} color={colors.mutedForeground} />
-        </Pressable>
       </View>
 
       <View style={styles.info}>
         <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={2}>
           {product.nameAr}
         </Text>
-
-        <View style={styles.ratingRow}>
-          <Ionicons name="star" size={12} color="#F59E0B" />
-          <Text style={[styles.rating, { color: colors.mutedForeground }]}>
-            {product.rating} ({product.reviews})
-          </Text>
-        </View>
 
         <View style={styles.priceRow}>
           <View>
@@ -245,21 +209,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  shareBtn: {
-    position: "absolute",
-    bottom: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
   info: {
     padding: 12,
     gap: 6,
@@ -270,14 +219,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "right",
     lineHeight: 20,
-  },
-  ratingRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 3,
-  },
-  rating: {
-    fontSize: 11,
   },
   priceRow: {
     flexDirection: "row-reverse",

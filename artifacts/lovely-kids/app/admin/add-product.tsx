@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -76,6 +77,7 @@ export default function AddProductScreen() {
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
@@ -152,6 +154,8 @@ export default function AddProductScreen() {
   };
 
   const uploadImage = async (): Promise<string | null> => {
+    if (uploading || isCompressing) return null;
+
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       setErrors(["يجب السماح بالوصول إلى الصور لرفع صورة المنتج"]);
@@ -160,28 +164,79 @@ export default function AddProductScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 0.8,
-      base64: true,
+      quality: 1,
+      base64: Platform.OS === "web",
     });
 
     if (result.canceled || !result.assets[0]) return null;
-
     const asset = result.assets[0];
-    const base64 = asset.base64;
-    const mimeType = asset.mimeType ?? "image/jpeg";
 
-    if (!base64) {
+    setIsCompressing(true);
+    setErrors([]);
+    let finalBase64: string | undefined;
+    const finalMimeType = "image/jpeg";
+
+    try {
+      if (Platform.OS === "web") {
+        // Web: canvas-based compression
+        const dataUri = asset.uri;
+        const compressed = await new Promise<{ base64: string }>((resolve, reject) => {
+          const img = new (globalThis as unknown as { Image: new () => HTMLImageElement }).Image();
+          img.onload = () => {
+            const MAX = 1200;
+            const scale = Math.min(1, MAX / Math.max(img.width || MAX, img.height || MAX));
+            const w = Math.max(1, Math.round((img.width || MAX) * scale));
+            const h = Math.max(1, Math.round((img.height || MAX) * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { reject(new Error("canvas غير متوفر")); return; }
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+            resolve({ base64: dataUrl.split(",")[1] });
+          };
+          img.onerror = () => reject(new Error("تعذّر تحميل الصورة"));
+          img.src = dataUri;
+        });
+        finalBase64 = compressed.base64;
+      } else {
+        // Native: expo-image-manipulator
+        const MAX = 1200;
+        const w = asset.width ?? MAX;
+        const h = asset.height ?? MAX;
+        const actions: Parameters<typeof manipulateAsync>[1] = [];
+        if (Math.max(w, h) > MAX) {
+          const scale = MAX / Math.max(w, h);
+          actions.push({ resize: { width: Math.round(w * scale), height: Math.round(h * scale) } });
+        }
+        const compressed = await manipulateAsync(
+          asset.uri,
+          actions,
+          { compress: 0.75, format: SaveFormat.JPEG, base64: true },
+        );
+        if (!compressed.base64) throw new Error("الضغط لم ينتج base64");
+        finalBase64 = compressed.base64;
+      }
+    } catch (compErr) {
+      setIsCompressing(false);
+      const msg = compErr instanceof Error ? compErr.message : "فشل ضغط الصورة";
+      setErrors([`فشل ضغط الصورة: ${msg}`]);
+      return null;
+    }
+    setIsCompressing(false);
+
+    if (!finalBase64) {
       setErrors(["تعذّر قراءة الصورة، جرب صورة أخرى"]);
       return null;
     }
 
     setUploading(true);
-    setErrors([]);
     try {
       const res = await fetch(`${API_BASE}/api/images/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64, mimeType }),
+        body: JSON.stringify({ base64: finalBase64, mimeType: finalMimeType }),
       });
 
       if (!res.ok) {

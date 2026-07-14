@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Dimensions,
   Image,
   Platform,
@@ -55,6 +56,17 @@ export default function HomeScreen() {
   const activeOffers = settings.offers.filter((o) => o.active);
   const [selectedAge, setSelectedAge] = useState<string | null>(null);
   const [genderTab, setGenderTab] = useState<GenderTab>(null);
+  const ageArrowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(ageArrowAnim, {
+      toValue: 0.52,
+      duration: 700,
+      delay: 500,
+      useNativeDriver: true,
+    }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const genderFiltered = genderTab
     ? products.filter((p) => p.gender === genderTab)
@@ -242,64 +254,72 @@ export default function HomeScreen() {
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
         تسوقي حسب عمر الطفل
       </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.ageScroll}
-      >
-        {ageGroups.map((ag, idx) => (
-          <Pressable
-            key={ag.id}
-            onPress={() => setSelectedAge(selectedAge === ag.id ? null : ag.id)}
-            style={[
-              styles.ageItem,
-              {
-                backgroundColor:
-                  selectedAge === ag.id ? colors.primary : colors.card,
-                borderColor:
-                  selectedAge === ag.id ? colors.primary : colors.border,
-              },
-            ]}
-          >
-            <View
+      <View style={styles.ageScrollWrapper}>
+        <Animated.View style={[styles.ageArrowRight, { opacity: ageArrowAnim, pointerEvents: "none" }]}>
+          <Ionicons name="chevron-forward" size={13} color={colors.primary} />
+        </Animated.View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.ageScroll}
+        >
+          {ageGroups.map((ag, idx) => (
+            <Pressable
+              key={ag.id}
+              onPress={() => setSelectedAge(selectedAge === ag.id ? null : ag.id)}
               style={[
-                styles.ageIcon,
-                { backgroundColor: AGE_COLORS[idx] + "40" },
-              ]}
-            >
-              <Ionicons
-                name={(AGE_GROUP_ICONS[ag.id] ?? "person-outline") as keyof typeof Ionicons.glyphMap}
-                size={22}
-                color={AGE_COLORS[idx]}
-              />
-            </View>
-            <Text
-              style={[
-                styles.ageLabel,
+                styles.ageItem,
                 {
-                  color:
-                    selectedAge === ag.id ? "#fff" : colors.foreground,
+                  backgroundColor:
+                    selectedAge === ag.id ? colors.primary : colors.card,
+                  borderColor:
+                    selectedAge === ag.id ? colors.primary : colors.border,
                 },
               ]}
             >
-              {ag.label}
-            </Text>
-            <Text
-              style={[
-                styles.ageSublabel,
-                {
-                  color:
-                    selectedAge === ag.id
-                      ? "rgba(255,255,255,0.8)"
-                      : colors.mutedForeground,
-                },
-              ]}
-            >
-              {ag.sublabel}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+              <View
+                style={[
+                  styles.ageIcon,
+                  { backgroundColor: AGE_COLORS[idx] + "40" },
+                ]}
+              >
+                <Ionicons
+                  name={(AGE_GROUP_ICONS[ag.id] ?? "person-outline") as keyof typeof Ionicons.glyphMap}
+                  size={22}
+                  color={AGE_COLORS[idx]}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.ageLabel,
+                  {
+                    color:
+                      selectedAge === ag.id ? "#fff" : colors.foreground,
+                  },
+                ]}
+              >
+                {ag.label}
+              </Text>
+              <Text
+                style={[
+                  styles.ageSublabel,
+                  {
+                    color:
+                      selectedAge === ag.id
+                        ? "rgba(255,255,255,0.8)"
+                        : colors.mutedForeground,
+                  },
+                ]}
+              >
+                {ag.sublabel}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Animated.View style={[styles.ageArrowLeft, { opacity: ageArrowAnim, pointerEvents: "none" }]}>
+          <Ionicons name="chevron-back" size={13} color={colors.primary} />
+        </Animated.View>
+      </View>
 
       {/* Features */}
       <View style={styles.features}>
@@ -508,7 +528,27 @@ const styles = StyleSheet.create({
   offerBadgeText: { color: "#fff", fontWeight: "800", fontSize: 13 },
   offerTitle: { color: "#fff", fontWeight: "700", fontSize: 14, textAlign: "right" },
   offerSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, textAlign: "right" },
-  ageScroll: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
+  ageScrollWrapper: {
+    position: "relative",
+    justifyContent: "center",
+  },
+  ageArrowRight: {
+    position: "absolute",
+    right: 4,
+    top: 0,
+    bottom: 16,
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  ageArrowLeft: {
+    position: "absolute",
+    left: 4,
+    top: 0,
+    bottom: 16,
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  ageScroll: { paddingHorizontal: 22, gap: 10, paddingBottom: 4 },
   ageItem: {
     alignItems: "center",
     paddingVertical: 12,

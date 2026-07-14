@@ -10,7 +10,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -23,7 +22,6 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
 import { isSizeOutOfStock } from "@/data/products";
-import { getProductShareUrl } from "@/utils/productShare";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -118,25 +116,6 @@ export default function ProductDetailScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom + 16;
   const topOffset = Platform.OS === "web" ? 67 : insets.top;
 
-  const handleShare = async () => {
-    if (!product) return;
-    const productUrl = getProductShareUrl(product.id, settings);
-    const price = product.price;
-    try {
-      await Share.share({
-        message:
-          `شاهد هذا المنتج من Lovely Kids:\n` +
-          `${product.nameAr}\n` +
-          `السعر: ${price} ₪\n` +
-          `الرابط:\n${productUrl}`,
-        url: productUrl,
-        title: product.nameAr,
-      });
-    } catch {
-      // ignore share cancellation
-    }
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -215,14 +194,6 @@ export default function ProductDetailScreen() {
             />
           </Pressable>
 
-          {/* Share Button */}
-          <Pressable
-            onPress={handleShare}
-            style={[styles.shareBtn, { top: topOffset + 56, backgroundColor: colors.card }]}
-          >
-            <Ionicons name="share-social-outline" size={22} color={colors.foreground} />
-          </Pressable>
-
           {!isOutOfStock && product.discount && (
             <View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.discountText}>-{product.discount}%</Text>
@@ -262,13 +233,6 @@ export default function ProductDetailScreen() {
         {/* Content */}
         <View style={[styles.content, { backgroundColor: colors.background }]}>
           <Text style={[styles.name, { color: colors.foreground }]}>{product.nameAr}</Text>
-
-          <View style={styles.ratingRow}>
-            {[1, 2, 3, 4, 5].map((s) => (
-              <Ionicons key={s} name={s <= Math.floor(product.rating) ? "star" : "star-outline"} size={16} color="#F59E0B" />
-            ))}
-            <Text style={[styles.ratingText, { color: colors.mutedForeground }]}>({product.reviews} تقييم)</Text>
-          </View>
 
           <View style={styles.priceRow}>
             <Text style={[styles.price, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
@@ -392,15 +356,6 @@ export default function ProductDetailScreen() {
 
       {/* Add to Cart Footer */}
       <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border, paddingBottom: bottomPad }]}>
-        {/* Share row — always visible */}
-        <Pressable
-          onPress={handleShare}
-          style={[styles.shareFooterRow, { borderColor: colors.border }]}
-        >
-          <Ionicons name="share-social-outline" size={16} color={colors.primary} />
-          <Text style={[styles.shareFooterRowText, { color: colors.primary }]}>مشاركة المنتج</Text>
-        </Pressable>
-
         {isOutOfStock ? (
           <View style={[styles.outOfStockBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}>
             <Ionicons name="close-circle-outline" size={20} color={colors.mutedForeground} />
@@ -527,32 +482,10 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
   },
-  shareBtn: {
-    position: "absolute", right: 16,
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: "center", justifyContent: "center",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
-  },
-  shareFooterRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  shareFooterRowText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
   discountBadge: { position: "absolute", bottom: 16, left: 16, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   discountText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   content: { padding: 20, gap: 12 },
   name: { fontSize: 22, fontWeight: "800", textAlign: "right", lineHeight: 30 },
-  ratingRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
-  ratingText: { fontSize: 13, marginRight: 4 },
   priceRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
   price: { fontSize: 26, fontWeight: "800" },
   originalPrice: { fontSize: 16, textDecorationLine: "line-through" },
