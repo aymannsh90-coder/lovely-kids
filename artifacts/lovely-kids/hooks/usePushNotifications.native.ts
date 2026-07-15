@@ -128,15 +128,31 @@ export function usePushNotifications(
   getAuthToken?: (() => Promise<string | null>) | null
 ) {
   useEffect(() => {
-    registerForPushNotificationsAsync()
-      .then((token) => {
-        if (token) void saveTokenToServer(token, phone, getAuthToken);
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[Push] registerForPushNotificationsAsync failed:", msg);
-      });
-    // Re-register whenever user identity or auth state changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let stopped = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const run = async () => {
+      attempt++;
+      try {
+        const token = await registerForPushNotificationsAsync();
+        if (!token || stopped) return;
+
+        const result = await saveTokenToServer(token, phone, getAuthToken);
+        if (result.ok || stopped) return;
+      } catch (err) {
+        console.error("[Push] Registration failed:", err);
+      }
+
+      if (attempt < 5 && !stopped) {
+        timer = setTimeout(run, attempt * 5000);
+      }
+    };
+
+    void run();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [phone, getAuthToken]);
 }
