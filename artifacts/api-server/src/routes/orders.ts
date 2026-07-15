@@ -1,102 +1,78 @@
 import { Router } from "express";
-import { db, ordersTable, productsTable, pushTokensTable, insertOrderSchema } from "@workspace/db";
-import type { ColorVariant } from "@workspace/db";
+import { db, ordersTable, pushTokensTable, insertOrderSchema } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 import { getCurrentUser, requireAuth, requireAdmin } from "../lib/auth";
 import { sendPushNotifications } from "./notifications";
+import { createTrustedOrder, OrderValidationError } from "../lib/create-order";
 
 const router = Router();
 
-// POST /api/orders — create a new order + decrement stock
+
+// POST /api/orders — create an order using trusted server data
 router.post("/orders", async (req, res) => {
   const parsed = insertOrderSchema.safeParse(req.body);
+
   if (!parsed.success) {
-    res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.issues });
+    res.status(400).json({
+      error: "بيانات غير صالحة",
+      details: parsed.error.issues,
+    });
     return;
   }
 
-  const authUser = await getCurrentUser(req);
+  try {
+    const authUser = await getCurrentUser(req);
 
-  // لا نسمح للعميل بتحديد حالة الطلب أو اعتباره مدفوعًا.
-  // وعند تسجيل الدخول نربط الطلب برقم الهاتف الموجود في الحساب.
-  const orderData = {
-    ...parsed.data,
-    customerPhone: authUser?.phone ?? parsed.data.customerPhone,
-    status: "new",
-    paymentStatus:
-      parsed.data.paymentMethod === "bank_transfer"
-        ? "awaiting_transfer"
-        : "pending",
-    paymentProof: null,
-  };
+    const newOrder = await createTrustedOrder({
+      customerName: parsed.data.customerName,
+      customerPhone:
+        authUser?.phone ?? parsed.data.customerPhone,
+      customerAddress: parsed.data.customerAddress,
+      notes: parsed.data.notes,
+      shippingZone: parsed.data.shippingZone,
+      paymentMethod: parsed.data.paymentMethod,
+      items: parsed.data.items.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+      })),
+    });
 
-  const order = await db.insert(ordersTable).values(orderData).returning();
+    res.status(201).json(newOrder);
 
-  // Decrement stock for each ordered item
-  const items = orderData.items as Array<{
-    id: string;
-    quantity: number;
-    size?: string;
-    color?: string;
-  }>;
-  for (const item of items) {
-    const productId = Number(item.id);
-    if (isNaN(productId)) continue;
+    const itemCount = Array.isArray(newOrder.items)
+      ? newOrder.items.length
+      : 0;
 
-    const current = await db
-      .select({ stock: productsTable.stock, colorVariants: productsTable.colorVariants })
-      .from(productsTable)
-      .where(eq(productsTable.id, productId));
-    if (current.length === 0) continue;
+    db.select({ token: pushTokensTable.token })
+      .from(pushTokensTable)
+      .where(eq(pushTokensTable.isAdmin, true))
+      .then((rows) => {
+        const tokens = rows.map((row) => row.token);
 
-    const updates: { stock?: number; colorVariants?: ColorVariant[] } = {};
+        if (tokens.length === 0) return;
 
-    if (item.color && item.size) {
-      const colorVariants = (current[0].colorVariants as ColorVariant[] | null) ?? [];
-      let variantChanged = false;
-      const nextVariants = colorVariants.map((cv) => {
-        if (cv.color !== item.color) return cv;
-        return {
-          ...cv,
-          sizes: cv.sizes.map((s) => {
-            if (s.size !== item.size || s.stock === undefined || s.stock === null) return s;
-            variantChanged = true;
-            const newStock = Math.max(0, s.stock - item.quantity);
-            return { ...s, stock: newStock, outOfStock: newStock <= 0 };
-          }),
-        };
-      });
-      if (variantChanged) updates.colorVariants = nextVariants;
+        return sendPushNotifications(
+          tokens,
+          "🛍️ طلب جديد!",
+          `طلب جديد من ${newOrder.customerName} — ${itemCount} منتج — ${newOrder.totalPrice}₪`,
+          {
+            type: "new_order",
+            orderId: newOrder.id,
+          },
+        );
+      })
+      .catch(() => {});
+  } catch (error) {
+    if (error instanceof OrderValidationError) {
+      res.status(400).json({ error: error.message });
+      return;
     }
 
-    if (current[0].stock !== null && current[0].stock !== undefined) {
-      updates.stock = Math.max(0, current[0].stock - item.quantity);
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await db.update(productsTable).set(updates).where(eq(productsTable.id, productId));
-    }
+    console.error("Failed to create order:", error);
+    res.status(500).json({ error: "تعذر إنشاء الطلب، حاول مرة أخرى" });
   }
-
-  res.status(201).json(order[0]);
-
-  // ── Notify all admin devices about the new order (fire-and-forget) ──────────
-  const newOrder = order[0];
-  db.select({ token: pushTokensTable.token })
-    .from(pushTokensTable)
-    .where(eq(pushTokensTable.isAdmin, true))
-    .then((rows) => {
-      const tokens = rows.map((r) => r.token);
-      if (tokens.length === 0) return;
-      const itemCount = (orderData.items as Array<unknown>).length;
-      sendPushNotifications(
-        tokens,
-        "🛍️ طلب جديد!",
-        `طلب جديد من ${newOrder.customerName} — ${itemCount} منتج — ${newOrder.totalPrice}₪`,
-        { type: "new_order", orderId: newOrder.id }
-      );
-    })
-    .catch(() => {});
 });
 
 // GET /api/orders — get all orders (newest first)
