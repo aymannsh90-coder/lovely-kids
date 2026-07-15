@@ -1,0 +1,12 @@
+{
+  "name": "lovely-kids-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "165581b7907f47b6884b71e02abab3c7"
+    }
+  ]
+}
