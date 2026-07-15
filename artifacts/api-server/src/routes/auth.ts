@@ -207,23 +207,6 @@ router.post("/auth/sync-user", async (req, res) => {
   res.status(201).json(toUser(rows[0]));
 });
 
-// POST /api/auth/lookup-phone — returns the email for a phone number
-router.post("/auth/lookup-phone", async (req, res) => {
-  const { phone } = req.body as { phone?: string };
-  if (!phone?.trim()) {
-    res.status(400).json({ error: "رقم الهاتف مطلوب" });
-    return;
-  }
-  const rows = await db
-    .select({ email: usersTable.email })
-    .from(usersTable)
-    .where(eq(usersTable.phone, normalizePhone(phone.trim())));
-  if (!rows[0]?.email) {
-    res.status(404).json({ error: "رقم الجوال غير مسجل" });
-    return;
-  }
-  res.json({ email: rows[0].email });
-});
 
 // GET /api/users — list all users (admin only)
 router.get("/users", async (req, res) => {
