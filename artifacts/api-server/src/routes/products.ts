@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, productsTable, insertProductSchema } from "@workspace/db";
 import type { ColorVariant } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
+import { requireAdmin } from "../lib/auth";
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get("/products", async (_req, res) => {
 });
 
 // POST /api/products
-router.post("/products", async (req, res) => {
+router.post("/products", requireAdmin, async (req, res) => {
   const parsed = insertProductSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.issues });
@@ -47,7 +48,7 @@ router.post("/products", async (req, res) => {
 });
 
 // PUT /api/products/:id
-router.put("/products/:id", async (req, res) => {
+router.put("/products/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const parsed = insertProductSchema.partial().safeParse(req.body);
   if (!parsed.success) {
@@ -67,7 +68,7 @@ router.put("/products/:id", async (req, res) => {
 //   { action: "set",      amount: 10 }  → set stock to exact value
 //   { action: "add",      amount: 5  }  → add to current stock
 //   { action: "subtract", amount: 2  }  → subtract from current stock (min 0)
-router.patch("/products/:id/stock", async (req, res) => {
+router.patch("/products/:id/stock", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { action, amount } = req.body as { action: "set" | "add" | "subtract"; amount: number };
 
@@ -107,7 +108,7 @@ router.patch("/products/:id/stock", async (req, res) => {
 // Used both for manual in-store adjustments (admin) and could be reused
 // for future variant-aware order decrements.
 // Body: { color: string; size: string; action: "set"|"add"|"subtract"; amount: number }
-router.patch("/products/:id/variant-stock", async (req, res) => {
+router.patch("/products/:id/variant-stock", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { color, size, action, amount } = req.body as {
     color?: string;
@@ -165,7 +166,7 @@ router.patch("/products/:id/variant-stock", async (req, res) => {
 });
 
 // DELETE /api/products/:id
-router.delete("/products/:id", async (req, res) => {
+router.delete("/products/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const deleted = await db.delete(productsTable).where(eq(productsTable.id, id)).returning();
   if (deleted.length === 0) {

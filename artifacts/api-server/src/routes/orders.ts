@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, ordersTable, productsTable, pushTokensTable, insertOrderSchema } from "@workspace/db";
 import type { ColorVariant } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
-import { getCurrentUser } from "../lib/auth";
+import { getCurrentUser, requireAuth, requireAdmin } from "../lib/auth";
 import { sendPushNotifications } from "./notifications";
 
 const router = Router();
@@ -15,10 +15,30 @@ router.post("/orders", async (req, res) => {
     return;
   }
 
-  const order = await db.insert(ordersTable).values(parsed.data).returning();
+  const authUser = await getCurrentUser(req);
 
-  // Decrement stock for each ordered item (fire-and-forget, don't block response)
-  const items = parsed.data.items as Array<{ id: string; quantity: number; size?: string; color?: string }>;
+  // لا نسمح للعميل بتحديد حالة الطلب أو اعتباره مدفوعًا.
+  // وعند تسجيل الدخول نربط الطلب برقم الهاتف الموجود في الحساب.
+  const orderData = {
+    ...parsed.data,
+    customerPhone: authUser?.phone ?? parsed.data.customerPhone,
+    status: "new",
+    paymentStatus:
+      parsed.data.paymentMethod === "bank_transfer"
+        ? "awaiting_transfer"
+        : "pending",
+    paymentProof: null,
+  };
+
+  const order = await db.insert(ordersTable).values(orderData).returning();
+
+  // Decrement stock for each ordered item
+  const items = orderData.items as Array<{
+    id: string;
+    quantity: number;
+    size?: string;
+    color?: string;
+  }>;
   for (const item of items) {
     const productId = Number(item.id);
     if (isNaN(productId)) continue;
@@ -68,7 +88,7 @@ router.post("/orders", async (req, res) => {
     .then((rows) => {
       const tokens = rows.map((r) => r.token);
       if (tokens.length === 0) return;
-      const itemCount = (parsed.data.items as Array<unknown>).length;
+      const itemCount = (orderData.items as Array<unknown>).length;
       sendPushNotifications(
         tokens,
         "🛍️ طلب جديد!",
@@ -80,7 +100,7 @@ router.post("/orders", async (req, res) => {
 });
 
 // GET /api/orders — get all orders (newest first)
-router.get("/orders", async (_req, res) => {
+router.get("/orders", requireAdmin, async (_req, res) => {
   const orders = await db
     .select()
     .from(ordersTable)
@@ -89,37 +109,27 @@ router.get("/orders", async (_req, res) => {
 });
 
 // GET /api/orders/my — get orders for the authenticated user
-// Uses Bearer token (session) → looks up phone+email from user profile.
-// Falls back to ?phone= query param for unauthenticated access.
-router.get("/orders/my", async (req, res) => {
-  // 1. Try auth token: if the user has a phone in their profile, use it.
-  const authUser = await getCurrentUser(req);
-  if (authUser?.phone) {
-    const orders = await db
-      .select()
-      .from(ordersTable)
-      .where(eq(ordersTable.customerPhone, authUser.phone))
-      .orderBy(desc(ordersTable.createdAt));
-    res.json(orders);
+router.get("/orders/my", requireAuth, async (_req, res) => {
+  const user = res.locals.user as {
+    phone?: string | null;
+  };
+
+  if (!user.phone) {
+    res.status(400).json({ error: "أضف رقم الهاتف إلى حسابك لعرض طلباتك" });
     return;
   }
 
-  // 2. Fallback: ?phone= query param (sent by client when user.phone is known)
-  const phone = (req.query.phone as string | undefined)?.trim();
-  if (!phone) {
-    res.status(400).json({ error: "يجب تسجيل الدخول أو توفير رقم الهاتف" });
-    return;
-  }
   const orders = await db
     .select()
     .from(ordersTable)
-    .where(eq(ordersTable.customerPhone, phone))
+    .where(eq(ordersTable.customerPhone, user.phone))
     .orderBy(desc(ordersTable.createdAt));
+
   res.json(orders);
 });
 
 // PATCH /api/orders/:id/cancel — customer cancels their order (only when status = "new")
-router.patch("/orders/:id/cancel", async (req, res) => {
+router.patch("/orders/:id/cancel", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "معرّف الطلب غير صالح" });
@@ -127,12 +137,28 @@ router.patch("/orders/:id/cancel", async (req, res) => {
   }
 
   const current = await db
-    .select({ status: ordersTable.status })
+    .select({
+      status: ordersTable.status,
+      customerPhone: ordersTable.customerPhone,
+    })
     .from(ordersTable)
     .where(eq(ordersTable.id, id));
 
   if (current.length === 0) {
     res.status(404).json({ error: "الطلب غير موجود" });
+    return;
+  }
+
+  const user = res.locals.user as {
+    phone?: string | null;
+    isAdmin?: boolean;
+  };
+
+  if (
+    !user.isAdmin &&
+    (!user.phone || current[0].customerPhone !== user.phone)
+  ) {
+    res.status(403).json({ error: "لا يمكنك إلغاء طلب لا يخص حسابك" });
     return;
   }
 
@@ -160,7 +186,7 @@ router.patch("/orders/:id/cancel", async (req, res) => {
 
 // PATCH /api/orders/:id/status — update order status (admin)
 // When status becomes "shipped", sends a push notification to the customer.
-router.patch("/orders/:id/status", async (req, res) => {
+router.patch("/orders/:id/status", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { status } = req.body as { status: string };
 
@@ -211,12 +237,52 @@ router.patch("/orders/:id/status", async (req, res) => {
 });
 
 // PATCH /api/orders/:id/payment-proof — customer uploads transfer receipt
-router.patch("/orders/:id/payment-proof", async (req, res) => {
+router.patch("/orders/:id/payment-proof", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const { paymentProof } = req.body as { paymentProof: string };
 
-  if (!paymentProof) {
-    res.status(400).json({ error: "صورة الوصل مطلوبة" });
+  if (isNaN(id)) {
+    res.status(400).json({ error: "معرّف الطلب غير صالح" });
+    return;
+  }
+
+  if (
+    !paymentProof ||
+    !paymentProof.startsWith("data:image/") ||
+    paymentProof.length > 8_000_000
+  ) {
+    res.status(400).json({ error: "صورة الوصل غير صالحة أو كبيرة جدًا" });
+    return;
+  }
+
+  const current = await db
+    .select({
+      customerPhone: ordersTable.customerPhone,
+      paymentMethod: ordersTable.paymentMethod,
+    })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id));
+
+  if (current.length === 0) {
+    res.status(404).json({ error: "الطلب غير موجود" });
+    return;
+  }
+
+  const user = res.locals.user as {
+    phone?: string | null;
+    isAdmin?: boolean;
+  };
+
+  if (
+    !user.isAdmin &&
+    (!user.phone || current[0].customerPhone !== user.phone)
+  ) {
+    res.status(403).json({ error: "لا يمكنك تعديل طلب لا يخص حسابك" });
+    return;
+  }
+
+  if (current[0].paymentMethod !== "bank_transfer") {
+    res.status(400).json({ error: "هذا الطلب لا يستخدم التحويل البنكي" });
     return;
   }
 
@@ -235,7 +301,7 @@ router.patch("/orders/:id/payment-proof", async (req, res) => {
 });
 
 // PATCH /api/orders/:id/confirm-payment — admin confirms payment
-router.patch("/orders/:id/confirm-payment", async (req, res) => {
+router.patch("/orders/:id/confirm-payment", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
 
   const updated = await db
@@ -253,7 +319,7 @@ router.patch("/orders/:id/confirm-payment", async (req, res) => {
 });
 
 // DELETE /api/orders/:id — remove an order
-router.delete("/orders/:id", async (req, res) => {
+router.delete("/orders/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "معرّف الطلب غير صالح" });

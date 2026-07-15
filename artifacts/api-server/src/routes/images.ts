@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import { supabase, BUCKET, ensureBucket } from "../lib/supabase";
+import { requireAdmin } from "../lib/auth";
 
 const router = Router();
 
@@ -16,7 +17,7 @@ async function getBucket() {
 // POST /api/images/upload
 // Body: { base64: string, mimeType: string }
 // Returns: { url: string, objectPath: string }
-router.post("/images/upload", async (req, res) => {
+router.post("/images/upload", requireAdmin, async (req, res) => {
   const { base64, mimeType } = req.body as { base64?: string; mimeType?: string };
 
   if (!base64 || !mimeType) {

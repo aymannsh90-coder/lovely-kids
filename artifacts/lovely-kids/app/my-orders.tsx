@@ -91,18 +91,15 @@ export default function MyOrdersScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const token = await getAuthToken();
-      const headers: Record<string, string> = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+        const token = await getAuthToken();
+        if (!token) {
+          setOrders([]);
+          return;
+        }
 
-      const phone = user.phone;
-      if (!phone && !token) return;
-
-      const url = phone
-        ? `${API_BASE}/api/orders/my?phone=${encodeURIComponent(phone)}`
-        : `${API_BASE}/api/orders/my`;
-
-      const res = await fetch(url, { headers });
+        const res = await fetch(`${API_BASE}/api/orders/my`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       if (res.ok) {
         const data = await res.json();
         setOrders(data);

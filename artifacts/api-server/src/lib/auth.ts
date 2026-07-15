@@ -1,4 +1,4 @@
-import type { Request } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { db, usersTable, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
@@ -55,4 +55,51 @@ export async function getCurrentUser(req: Request) {
     return await getOrCreateUserFromClerk(auth.userId);
   }
   return null;
+}
+
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const user = await getCurrentUser(req);
+
+    if (!user) {
+      res.status(401).json({ error: "يجب تسجيل الدخول" });
+      return;
+    }
+
+    res.locals.user = user;
+    next();
+  } catch (error) {
+    console.error("requireAuth failed", error);
+    res.status(500).json({ error: "تعذر التحقق من المستخدم" });
+  }
+}
+
+export async function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const user = await getCurrentUser(req);
+
+    if (!user) {
+      res.status(401).json({ error: "يجب تسجيل الدخول" });
+      return;
+    }
+
+    if (!user.isAdmin) {
+      res.status(403).json({ error: "هذه العملية متاحة للإدارة فقط" });
+      return;
+    }
+
+    res.locals.user = user;
+    next();
+  } catch (error) {
+    console.error("requireAdmin failed", error);
+    res.status(500).json({ error: "تعذر التحقق من صلاحيات الإدارة" });
+  }
 }

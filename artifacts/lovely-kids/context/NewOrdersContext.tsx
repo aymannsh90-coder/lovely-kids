@@ -10,6 +10,7 @@ import React, {
 import { Vibration } from "react-native";
 
 import { API_BASE } from "@/constants/api";
+import { useAuth } from "@/context/AuthContext";
 
 interface NewOrdersContextType {
   newCount: number;
@@ -24,14 +25,22 @@ const NewOrdersContext = createContext<NewOrdersContextType>({
 });
 
 export function NewOrdersProvider({ children }: { children: React.ReactNode }) {
+  const { user, getAuthToken } = useAuth();
   const [newCount, setNewCount] = useState(0);
   const [latestOrderId, setLatestOrderId] = useState<number | null>(null);
   const lastSeenIdRef = useRef<number | null>(null);
   const initialLoadRef = useRef(true);
 
   const fetchAndDetect = useCallback(async () => {
+    if (!user?.isAdmin) return;
+
     try {
-      const res = await fetch(`${API_BASE}/api/orders`);
+      const token = await getAuthToken();
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE}/api/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) return;
       const orders: { id: number; status: string }[] = await res.json();
       if (!Array.isArray(orders) || orders.length === 0) return;
@@ -59,7 +68,7 @@ export function NewOrdersProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore network errors silently
     }
-  }, []);
+  }, [user?.isAdmin, getAuthToken]);
 
   useEffect(() => {
     fetchAndDetect();

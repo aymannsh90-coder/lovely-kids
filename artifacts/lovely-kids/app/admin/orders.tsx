@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useNewOrders } from "@/context/NewOrdersContext";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
@@ -88,6 +89,7 @@ export default function AdminOrdersScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { newCount, clearNew } = useNewOrders();
+  const { getAuthToken } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -112,8 +114,16 @@ export default function AdminOrdersScreen() {
   }, [bannerAnim]);
 
   const fetchOrders = useCallback(async () => {
+    const token = await getAuthToken();
+    if (!token) {
+      setOrders([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/api/orders`);
+      const res = await fetch(`${API_BASE}/api/orders`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch {
@@ -122,7 +132,7 @@ export default function AdminOrdersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [getAuthToken]);
 
   useEffect(() => {
     if (newCount > 0) {
@@ -144,12 +154,14 @@ export default function AdminOrdersScreen() {
 
   const updateStatus = async (id: number, status: string) => {
     try {
-      await fetch(`${API_BASE}/api/orders/${id}/status`, {
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/orders/${id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status }),
       });
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     } catch {
       // ignore
     }
@@ -157,9 +169,11 @@ export default function AdminOrdersScreen() {
 
   const confirmPayment = async (id: number) => {
     try {
+      const token = await getAuthToken();
+      if (!token) return;
       const res = await fetch(`${API_BASE}/api/orders/${id}/confirm-payment`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setOrders((prev) =>
@@ -176,7 +190,9 @@ export default function AdminOrdersScreen() {
   const deleteOrder = async (id: number) => {
     setDeleteConfirmId(null);
     try {
-      const res = await fetch(`${API_BASE}/api/orders/${id}`, { method: "DELETE" });
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/orders/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         setOrders((prev) => prev.filter((o) => o.id !== id));
         if (expanded === id) setExpanded(null);

@@ -34,7 +34,7 @@ export default function CartScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { settings } = useAppSettings();
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, getAuthToken } = useAuth();
   const { items, updateQuantity, removeItem, totalPrice, totalItems, clearCart } = useCart();
 
   const [step, setStep] = useState<Step>("cart");
@@ -67,6 +67,15 @@ export default function CartScreen() {
 
   const handleCheckout = async () => {
     if (!name.trim() || !phone.trim() || !address.trim() || !selectedZone) return;
+
+    if (paymentMethod === "bank_transfer" && (!user || !user.phone)) {
+      Alert.alert(
+        "تسجيل الدخول مطلوب",
+        "التحويل البنكي ورفع وصل الدفع يتطلبان حسابًا يحتوي على رقم هاتف."
+      );
+      return;
+    }
+
     setLoading(true);
 
     const shippingCost = selectedZone.cost;
@@ -74,9 +83,13 @@ export default function CartScreen() {
     const currentItems = [...items];
 
     try {
+        const token = await getAuthToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/api/orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           customerName: name.trim(),
           customerPhone: phone.trim(),
@@ -94,18 +107,29 @@ export default function CartScreen() {
           totalPrice: currentTotal,
           shippingZone: selectedZone.label,
           shippingCost,
-          status: "new",
           paymentMethod,
-          paymentStatus: paymentMethod === "cod" ? "pending" : "awaiting_transfer",
         }),
       });
-      if (res.ok) {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(
+            (errorData as { error?: string }).error ??
+              "تعذّر حفظ الطلب في السيرفر"
+          );
+        }
+
         const order = await res.json();
         setOrderId(order.id);
+      } catch (error) {
+        Alert.alert(
+          "تعذّر إنشاء الطلب",
+          error instanceof Error
+            ? error.message
+            : "تحقق من اتصال الإنترنت وحاول مرة أخرى"
+        );
+        setLoading(false);
+        return;
       }
-    } catch {
-      // ignore
-    }
 
     const itemsList = currentItems
       .map((i, idx) => {
@@ -186,9 +210,14 @@ export default function CartScreen() {
 
     setProofUploading(true);
     try {
+        const token = await getAuthToken();
+        if (!token) {
+          throw new Error("يجب تسجيل الدخول لرفع وصل الدفع");
+        }
+
       const res = await fetch(`${API_BASE}/api/orders/${orderId}/payment-proof`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ paymentProof: `data:image/jpeg;base64,${base64}` }),
       });
       if (res.ok) {
