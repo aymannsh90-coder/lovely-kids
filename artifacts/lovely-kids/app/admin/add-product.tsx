@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useAuth } from "@/context/AuthContext";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, DEFAULT_SEASON_LABELS, Product, ColorVariant, isSizeOutOfStock } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
 
@@ -31,6 +32,7 @@ export default function AddProductScreen() {
   const { productId } = useLocalSearchParams<{ productId?: string }>();
   const { products, addProduct, updateProduct } = useProducts();
   const { settings } = useAppSettings();
+  const { getAuthToken } = useAuth();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const customCategories = settings.customCategories ?? [];
@@ -233,9 +235,14 @@ export default function AddProductScreen() {
 
     setUploading(true);
     try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمشرف");
       const res = await fetch(`${API_BASE}/api/images/upload`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ base64: finalBase64, mimeType: finalMimeType }),
       });
 

@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import React, { useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { API_BASE } from "@/constants/api";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 interface LogoPickerButtonProps {
@@ -15,6 +17,7 @@ interface LogoPickerButtonProps {
 
 export function LogoPickerButton({ value, fallbackSource, onChange }: LogoPickerButtonProps) {
   const colors = useColors();
+  const { getAuthToken } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,20 +39,38 @@ export function LogoPickerButton({ value, fallbackSource, onChange }: LogoPicker
     if (result.canceled || !result.assets[0]) return;
 
     const asset = result.assets[0];
-    const base64 = asset.base64;
-    const mimeType = asset.mimeType ?? "image/jpeg";
+    let base64: string | undefined;
+
+    try {
+      const compressed = await manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.8, format: SaveFormat.JPEG, base64: true },
+      );
+      base64 = compressed.base64;
+    } catch {
+      setError("تعذّر ضغط الصورة، جرب صورة أخرى");
+      return;
+    }
+
+    const mimeType = "image/jpeg";
 
     if (!base64) {
-      setError("تعذّر قراءة الصورة، جرب صورة أخرى");
+      setError("تعذّر ضغط الصورة، جرب صورة أخرى");
       return;
     }
 
     setUploading(true);
     setError(null);
     try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمشرف");
       const res = await fetch(`${API_BASE}/api/images/upload`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ base64, mimeType }),
       });
 
