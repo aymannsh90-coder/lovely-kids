@@ -13,7 +13,7 @@ import { DEFAULT_AGE_GROUP_LABELS, DEFAULT_CATEGORY_LABELS, DEFAULT_SEASON_LABEL
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 
-const POLL_INTERVAL_MS = 20000;
+const POLL_INTERVAL_MS = 300000;
 // Timeout for the initial settings fetch — after this the app proceeds with
 // cached / default settings so the startup flow is never blocked indefinitely.
 const INITIAL_FETCH_TIMEOUT_MS = 5000;

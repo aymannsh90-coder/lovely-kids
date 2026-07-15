@@ -72,7 +72,7 @@ export function NewOrdersProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchAndDetect();
-    const interval = setInterval(fetchAndDetect, 20000); // every 20s
+    const interval = setInterval(fetchAndDetect, 60000); // every 20s
     return () => clearInterval(interval);
   }, [fetchAndDetect]);
 

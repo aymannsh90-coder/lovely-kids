@@ -11,7 +11,7 @@ import { Product } from "@/data/products";
 
 import { API_BASE } from "@/constants/api";
 
-const POLL_INTERVAL_MS = 20000;
+const POLL_INTERVAL_MS = 300000;
 
 interface ProductsContextType {
   products: Product[];

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, productLikesTable } from "@workspace/db";
+import { db, productLikesTable, productsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "../lib/auth";
 
@@ -31,6 +31,17 @@ router.post("/likes/:productId", async (req, res) => {
     res.status(400).json({ error: "معرّف المنتج غير صالح" });
     return;
   }
+  const product = await db
+    .select({ id: productsTable.id })
+    .from(productsTable)
+    .where(eq(productsTable.id, productId))
+    .limit(1);
+
+  if (!product[0]) {
+    res.status(404).json({ error: "المنتج غير موجود" });
+    return;
+  }
+
   const existing = await db
     .select()
     .from(productLikesTable)
