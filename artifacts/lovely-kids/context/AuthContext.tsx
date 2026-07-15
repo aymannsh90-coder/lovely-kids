@@ -27,6 +27,7 @@ interface AuthContextType {
   promoteToAdmin: (password: string) => Promise<void>;
   getAuthToken: () => Promise<string | null>;
   updateProfile: (data: { name?: string; deliveryAddress?: string; phone?: string; email?: string; currentPassword?: string }) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   pendingVerification: boolean;
   verifyEmail: (code: string) => Promise<void>;
 }
@@ -40,6 +41,7 @@ const AuthContext = createContext<AuthContextType>({
   promoteToAdmin: async () => {},
   getAuthToken: async () => null,
   updateProfile: async (_data) => {},
+  changePassword: async () => {},
   pendingVerification: false,
   verifyEmail: async () => {},
 });
@@ -182,6 +184,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [sessionToken]
   );
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!sessionToken) throw new Error("يجب تسجيل الدخول أولاً");
+
+      const res = await fetch(`${API_BASE}/api/auth/password`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      if (!res.ok) {
+        throw new Error(
+          await parseError(res, "فشل تغيير كلمة المرور"),
+        );
+      }
+    },
+    [sessionToken],
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -193,6 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         promoteToAdmin,
         getAuthToken,
         updateProfile,
+        changePassword,
         pendingVerification: false,
         verifyEmail,
       }}

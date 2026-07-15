@@ -371,6 +371,70 @@ router.patch("/auth/profile", async (req, res) => {
   res.json(toUser(rows[0]));
 });
 
+// PATCH /api/auth/password — change account password
+router.patch("/auth/password", async (req, res) => {
+  const user = await getCurrentUser(req);
+
+  if (!user) {
+    res.status(401).json({ error: "غير مسجل الدخول" });
+    return;
+  }
+
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword?: string;
+    newPassword?: string;
+  };
+
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({
+      error: "كلمة المرور الحالية والجديدة مطلوبتان",
+    });
+    return;
+  }
+
+  if (newPassword.length < 4 || newPassword.length > 128) {
+    res.status(400).json({
+      error: "كلمة المرور الجديدة يجب أن تكون بين 4 و128 حرفًا",
+    });
+    return;
+  }
+
+  if (!user.passwordHash) {
+    res.status(400).json({
+      error: "لا يمكن تغيير كلمة المرور لهذا الحساب",
+    });
+    return;
+  }
+
+  const valid = await bcrypt.compare(
+    currentPassword,
+    user.passwordHash,
+  );
+
+  if (!valid) {
+    res.status(401).json({
+      error: "كلمة المرور الحالية غير صحيحة",
+    });
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    res.status(400).json({
+      error: "كلمة المرور الجديدة مطابقة للحالية",
+    });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  await db
+    .update(usersTable)
+    .set({ passwordHash })
+    .where(eq(usersTable.id, user.id));
+
+  res.json({ ok: true });
+});
+
 // POST /api/auth/promote-admin
 router.post("/auth/promote-admin", async (req, res) => {
   const user = await getCurrentUser(req);

@@ -49,6 +49,7 @@ export default function ProfileScreen() {
     logout,
     promoteToAdmin,
     updateProfile,
+    changePassword,
     pendingVerification,
     verifyEmail,
   } = useAuth();
@@ -81,6 +82,10 @@ export default function ProfileScreen() {
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editCurrentPassword, setEditCurrentPassword] = useState("");
+  const [editNewPassword, setEditNewPassword] = useState("");
+  const [editConfirmPassword, setEditConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -202,6 +207,9 @@ export default function ProfileScreen() {
     setEditPhone(user?.phone ?? "");
     setEditEmail(user?.email ?? "");
     setEditCurrentPassword("");
+    setEditNewPassword("");
+    setEditConfirmPassword("");
+    setPasswordSuccess("");
     setEditError("");
     setEditProfileVisible(true);
   };
@@ -238,6 +246,48 @@ export default function ProfileScreen() {
       setEditError(e instanceof Error ? e.message : "حدث خطأ");
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setEditError("");
+    setPasswordSuccess("");
+
+    if (!editCurrentPassword) {
+      setEditError("أدخل كلمة المرور الحالية");
+      return;
+    }
+
+    if (editNewPassword.length < 4) {
+      setEditError("كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل");
+      return;
+    }
+
+    if (editNewPassword !== editConfirmPassword) {
+      setEditError("تأكيد كلمة المرور الجديدة غير مطابق");
+      return;
+    }
+
+    setPasswordSaving(true);
+
+    try {
+      await changePassword(editCurrentPassword, editNewPassword);
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+      setEditCurrentPassword("");
+      setEditNewPassword("");
+      setEditConfirmPassword("");
+      setPasswordSuccess("تم تغيير كلمة المرور بنجاح");
+    } catch (e) {
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Error,
+      );
+      setEditError(
+        e instanceof Error ? e.message : "فشل تغيير كلمة المرور",
+      );
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -661,27 +711,16 @@ export default function ProfileScreen() {
                 />
               </View>
 
-              {/* Password required only when changing phone or email */}
-              {((editPhone.trim() !== "" && editPhone.trim() !== (user?.phone ?? "")) ||
-                (editEmail.trim() !== "" && editEmail.trim().toLowerCase() !== (user?.email ?? "").toLowerCase())) && (
                 <View style={styles.modalFieldGroup}>
-                  <View style={styles.passwordNoteRow}>
-                    <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
-                    <Text style={[styles.modalFieldLabel, { color: colors.primary }]}>
-                      كلمة المرور الحالية (مطلوبة لتغيير الجوال/البريد)
-                    </Text>
-                  </View>
-                  <TextInput
-                    value={editCurrentPassword}
-                    onChangeText={setEditCurrentPassword}
-                    placeholder="كلمة المرور الحالية"
-                    placeholderTextColor={colors.mutedForeground}
-                    secureTextEntry
-                    style={[styles.input, { color: colors.foreground, borderColor: colors.primary, width: "100%" }]}
-                    textAlign="right"
-                  />
+                  <Text style={[styles.modalFieldLabel,{color:colors.primary,fontWeight:"700"}]}>تغيير كلمة المرور</Text>
+                  <TextInput value={editCurrentPassword} onChangeText={setEditCurrentPassword} placeholder="كلمة المرور الحالية" placeholderTextColor={colors.mutedForeground} secureTextEntry style={[styles.input,{color:colors.foreground,borderColor:colors.border,width:"100%"}]} textAlign="right" />
+                  <TextInput value={editNewPassword} onChangeText={setEditNewPassword} placeholder="كلمة المرور الجديدة" placeholderTextColor={colors.mutedForeground} secureTextEntry style={[styles.input,{color:colors.foreground,borderColor:colors.border,width:"100%"}]} textAlign="right" />
+                  <TextInput value={editConfirmPassword} onChangeText={setEditConfirmPassword} placeholder="تأكيد كلمة المرور الجديدة" placeholderTextColor={colors.mutedForeground} secureTextEntry style={[styles.input,{color:colors.foreground,borderColor:colors.border,width:"100%"}]} textAlign="right" />
+                  {passwordSuccess ? <Text style={{color:colors.primary,textAlign:"center",fontWeight:"700"}}>{passwordSuccess}</Text> : null}
+                  <Pressable onPress={handleChangePassword} disabled={passwordSaving} style={[styles.authSubmitBtn,{backgroundColor:colors.primary,width:"100%"}]}>
+                    {passwordSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>تغيير كلمة المرور</Text>}
+                  </Pressable>
                 </View>
-              )}
             </ScrollView>
 
             {editError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{editError}</Text> : null}
