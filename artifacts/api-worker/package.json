@@ -4,6 +4,15 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@workspace/db": "workspace:*",
+    "cors": "^2.8.6",
+    "drizzle-orm": "catalog:",
+    "express": "^5.2.1",
     "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.20.0"
   }
 }
