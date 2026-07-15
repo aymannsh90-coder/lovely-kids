@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { db, usersTable, sessionsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
+import { createHash } from "crypto";
 import { getAuth, clerkClient } from "@clerk/express";
 
 export function getBearerToken(req: Request) {
@@ -9,15 +10,39 @@ export function getBearerToken(req: Request) {
   return header.slice("Bearer ".length);
 }
 
+export function hashSessionToken(token: string) {
+  return `sha256:${createHash("sha256").update(token).digest("hex")}`;
+}
+
 export async function getUserFromToken(token: string | undefined) {
   if (!token) return null;
+
+  const hashedToken = hashSessionToken(token);
+  const isLegacyToken = /^[a-f0-9]{64}$/i.test(token);
   const sessions = await db
     .select()
     .from(sessionsTable)
-    .where(eq(sessionsTable.token, token));
+    .where(isLegacyToken ? or(
+      eq(sessionsTable.token, hashedToken),
+      eq(sessionsTable.token, token),
+    ) : eq(sessionsTable.token, hashedToken))
+    .limit(1);
+
   const session = sessions[0];
   if (!session) return null;
-  const users = await db.select().from(usersTable).where(eq(usersTable.id, session.userId));
+
+  if (isLegacyToken && session.token === token) {
+    await db
+      .update(sessionsTable)
+      .set({ token: hashedToken })
+      .where(eq(sessionsTable.token, token));
+  }
+
+  const users = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, session.userId));
+
   return users[0] ?? null;
 }
 

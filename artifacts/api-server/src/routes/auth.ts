@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { getAuth } from "@clerk/express";
 import { db, usersTable, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { getBearerToken, getUserFromToken, getCurrentUser } from "../lib/auth";
+import { getBearerToken, getUserFromToken, getCurrentUser, hashSessionToken } from "../lib/auth";
 
 const router = Router();
 
@@ -98,7 +98,7 @@ router.post("/auth/register", async (req, res) => {
 
   const user = rows[0];
   const token = generateToken();
-  await db.insert(sessionsTable).values({ token, userId: user.id });
+  await db.insert(sessionsTable).values({ token: hashSessionToken(token), userId: user.id });
 
   res.status(201).json({ token, user: toUser(user) });
 });
@@ -143,7 +143,7 @@ router.post("/auth/login", async (req, res) => {
   }
 
   const token = generateToken();
-  await db.insert(sessionsTable).values({ token, userId: user.id });
+  await db.insert(sessionsTable).values({ token: hashSessionToken(token), userId: user.id });
 
   res.json({ token, user: toUser(user) });
 });
@@ -152,6 +152,7 @@ router.post("/auth/login", async (req, res) => {
 router.post("/auth/logout", async (req, res) => {
   const token = getBearerToken(req);
   if (token) {
+    await db.delete(sessionsTable).where(eq(sessionsTable.token, hashSessionToken(token)));
     await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
   }
   res.status(204).end();
