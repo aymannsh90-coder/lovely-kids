@@ -38,17 +38,6 @@ async function requireAdmin(
     return json({ error: "غير مصرح" }, 403);
   }
 
-  if (
-    request.method === "DELETE" &&
-    productMatch
-  ) {
-    return handleDeleteProduct(
-      request,
-      db,
-      env,
-      Number(productMatch[1]),
-    );
-  }
 
   return null;
 }
@@ -454,10 +443,24 @@ async function handleDeleteProduct(
 
   if (authError) return authError;
 
-  const rows = await db
-    .delete(productsTable)
-    .where(eq(productsTable.id, id))
-    .returning();
+  let rows;
+
+  try {
+    rows = await db
+      .delete(productsTable)
+      .where(eq(productsTable.id, id))
+      .returning();
+  } catch (error) {
+    console.error("DELETE_PRODUCT_FAILED", {
+      productId: id,
+      error,
+    });
+
+    return json(
+      { error: "تعذر حذف المنتج" },
+      500,
+    );
+  }
 
   if (!rows[0]) {
     return json({ error: "المنتج غير موجود" }, 404);
