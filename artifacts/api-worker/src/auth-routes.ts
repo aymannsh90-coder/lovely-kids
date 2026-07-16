@@ -131,6 +131,13 @@ export async function handleAuthRequest(
     return handleSyncUser(request, db, env);
   }
 
+  if (
+    request.method === "PATCH" &&
+    path === "/api/auth/profile"
+  ) {
+    return handleProfile(request, db, env);
+  }
+
   return null;
 }
 
@@ -404,4 +411,143 @@ async function handleSyncUser(
     .returning();
 
   return json(toUser(rows[0]), 201);
+}
+
+async function handleProfile(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const user = await getCurrentUser(db, request, env);
+
+  if (!user) {
+    return json({ error: "غير مسجل الدخول" }, 401);
+  }
+
+  const body = await request.json().catch(() => null) as {
+    name?: string;
+    deliveryAddress?: string;
+    phone?: string;
+    email?: string;
+    currentPassword?: string;
+  } | null;
+
+  const updates: Partial<
+    typeof usersTable.$inferInsert
+  > = {};
+
+  if (body?.name?.trim()) {
+    updates.name = body.name.trim();
+  }
+
+  if (typeof body?.deliveryAddress === "string") {
+    updates.deliveryAddress =
+      body.deliveryAddress.trim() || null;
+  }
+
+  const newPhone =
+    body?.phone?.trim()
+      ? normalizePhone(body.phone.trim())
+      : null;
+
+  const newEmail =
+    body?.email?.trim()
+      ? body.email.trim().toLowerCase()
+      : null;
+
+  const changingPhone =
+    !!newPhone && newPhone !== user.phone;
+
+  const changingEmail =
+    !!newEmail && newEmail !== user.email;
+
+  if (changingPhone || changingEmail) {
+    if (
+      changingEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail!)
+    ) {
+      return json(
+        { error: "صيغة البريد الإلكتروني غير صحيحة" },
+        400,
+      );
+    }
+
+    if (!body?.currentPassword) {
+      return json(
+        {
+          error:
+            "يجب إدخال كلمة المرور الحالية لتغيير رقم الجوال أو البريد",
+        },
+        400,
+      );
+    }
+
+    if (!user.passwordHash) {
+      return json(
+        { error: "لا يمكن التحقق من كلمة المرور" },
+        400,
+      );
+    }
+
+    const valid = await bcrypt.compare(
+      body.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!valid) {
+      return json(
+        { error: "كلمة المرور الحالية غير صحيحة" },
+        401,
+      );
+    }
+
+    if (changingPhone) {
+      const existing = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.phone, newPhone!))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return json(
+          { error: "رقم الجوال مسجل في حساب آخر" },
+          409,
+        );
+      }
+
+      updates.phone = newPhone!;
+    }
+
+    if (changingEmail) {
+      const existing = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, newEmail!))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return json(
+          { error: "البريد الإلكتروني مسجل في حساب آخر" },
+          409,
+        );
+      }
+
+      updates.email = newEmail!;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return json(
+      { error: "لا توجد بيانات للتحديث" },
+      400,
+    );
+  }
+
+  const rows = await db
+    .update(usersTable)
+    .set(updates)
+    .where(eq(usersTable.id, user.id))
+    .returning();
+
+  return json(toUser(rows[0]));
 }
