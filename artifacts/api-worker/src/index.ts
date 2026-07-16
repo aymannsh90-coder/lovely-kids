@@ -2,6 +2,7 @@ import { appSettingsTable, productsTable } from "@workspace/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { openDb, type Env } from "./db";
 import { handleAuthRequest } from "./auth-routes";
+import { handleProductRequest } from "./product-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -53,6 +54,9 @@ export default {
     try {
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
+
+      const productResponse = await handleProductRequest(request, db, env);
+      if (productResponse) return productResponse;
       if (path === "/api/health") {
         await client.query("select 1");
         return json({ ok: true, service: "Lovely Kids Worker API", database: "connected" });

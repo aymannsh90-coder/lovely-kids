@@ -1,0 +1,467 @@
+import {
+  insertProductSchema,
+  type ColorVariant,
+  productsTable,
+} from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
+import { getCurrentUser } from "./auth";
+import type { Env, openDb } from "./db";
+
+type Db = Awaited<
+  ReturnType<typeof openDb>
+>["db"];
+
+const json = (data: unknown, status = 200) =>
+  Response.json(data, {
+    status,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+
+async function requireAdmin(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const user = await getCurrentUser(
+    db,
+    request,
+    env,
+  );
+
+  if (!user) {
+    return json({ error: "يجب تسجيل الدخول" }, 401);
+  }
+
+  if (!user.isAdmin) {
+    return json({ error: "غير مصرح" }, 403);
+  }
+
+  if (
+    request.method === "DELETE" &&
+    productMatch
+  ) {
+    return handleDeleteProduct(
+      request,
+      db,
+      env,
+      Number(productMatch[1]),
+    );
+  }
+
+  return null;
+}
+
+function toProduct(
+  row: typeof productsTable.$inferSelect,
+) {
+  return {
+    id: String(row.id),
+    name: row.name,
+    nameAr: row.nameAr,
+    price: row.price,
+    originalPrice:
+      row.originalPrice ?? undefined,
+    image: row.image,
+    images: (row.images as string[]) ?? [],
+    category: row.category,
+    ageGroup: row.ageGroup,
+    gender: row.gender ?? null,
+    season: row.season ?? null,
+    sizes: (row.sizes as string[]) ?? [],
+    colorVariants:
+      (row.colorVariants as unknown[]) ?? [],
+    rating: row.rating / 10,
+    reviews: row.reviews,
+    isNew: row.isNew ?? false,
+    discount: row.discount ?? undefined,
+    description: row.description,
+    stock: row.stock ?? null,
+  };
+}
+
+async function handleCreateProduct(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const authError = await requireAdmin(
+    request,
+    db,
+    env,
+  );
+
+  if (authError) return authError;
+
+  const body = await request.json().catch(() => null);
+  const parsed = insertProductSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return json(
+      {
+        error: "بيانات غير صالحة",
+        details: parsed.error.issues,
+      },
+      400,
+    );
+  }
+
+  const rows = await db
+    .insert(productsTable)
+    .values(parsed.data)
+    .returning();
+
+  const product = rows[0];
+
+  if (!product) {
+    return json(
+      { error: "تعذر إنشاء المنتج" },
+      500,
+    );
+  }
+
+  return json(toProduct(product), 201);
+}
+
+async function handleUpdateProduct(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const authError = await requireAdmin(
+    request,
+    db,
+    env,
+  );
+
+  if (authError) return authError;
+
+  const body = await request.json().catch(() => null);
+  const parsed =
+    insertProductSchema.partial().safeParse(body);
+
+  if (!parsed.success) {
+    return json(
+      {
+        error: "بيانات غير صالحة",
+        details: parsed.error.issues,
+      },
+      400,
+    );
+  }
+
+  const rows = await db
+    .update(productsTable)
+    .set(parsed.data)
+    .where(eq(productsTable.id, id))
+    .returning();
+
+  const product = rows[0];
+
+  if (!product) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  return json(toProduct(product));
+}
+
+async function handleStock(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const authError = await requireAdmin(
+    request,
+    db,
+    env,
+  );
+
+  if (authError) return authError;
+
+  const body = await request.json().catch(() => null) as {
+    action?: "set" | "add" | "subtract";
+    amount?: number;
+  } | null;
+
+  if (
+    !body?.action ||
+    typeof body.amount !== "number" ||
+    body.amount < 0
+  ) {
+    return json(
+      { error: "action و amount مطلوبان" },
+      400,
+    );
+  }
+
+  const current = await db
+    .select({ stock: productsTable.stock })
+    .from(productsTable)
+    .where(eq(productsTable.id, id))
+    .limit(1);
+
+  if (!current[0]) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  const amount = Math.round(body.amount);
+  const oldStock = current[0].stock ?? 0;
+
+  let newStock: number;
+
+  if (body.action === "set") {
+    newStock = Math.max(0, amount);
+  } else if (body.action === "add") {
+    newStock = oldStock + amount;
+  } else {
+    newStock = Math.max(0, oldStock - amount);
+  }
+
+  const rows = await db
+    .update(productsTable)
+    .set({ stock: newStock })
+    .where(eq(productsTable.id, id))
+    .returning();
+
+  const product = rows[0];
+
+  if (!product) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  return json(toProduct(product));
+}
+
+export async function handleProductRequest(
+  request: Request,
+  db: Db,
+  env: Env,
+): Promise<Response | null> {
+  const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "POST" &&
+    path === "/api/products"
+  ) {
+    return handleCreateProduct(request, db, env);
+  }
+
+  const variantMatch = path.match(
+    /^\/api\/products\/(\d+)\/variant-stock$/,
+  );
+
+  if (
+    request.method === "PATCH" &&
+    variantMatch
+  ) {
+    return handleVariantStock(
+      request,
+      db,
+      env,
+      Number(variantMatch[1]),
+    );
+  }
+
+  const stockMatch = path.match(
+    /^\/api\/products\/(\d+)\/stock$/,
+  );
+
+  if (
+    request.method === "PATCH" &&
+    stockMatch
+  ) {
+    return handleStock(
+      request,
+      db,
+      env,
+      Number(stockMatch[1]),
+    );
+  }
+
+  const productMatch = path.match(
+    /^\/api\/products\/(\d+)$/,
+  );
+
+  if (
+    request.method === "PUT" &&
+    productMatch
+  ) {
+    return handleUpdateProduct(
+      request,
+      db,
+      env,
+      Number(productMatch[1]),
+    );
+  }
+
+  if (
+    request.method === "DELETE" &&
+    productMatch
+  ) {
+    return handleDeleteProduct(
+      request,
+      db,
+      env,
+      Number(productMatch[1]),
+    );
+  }
+
+  return null;
+}
+
+async function handleVariantStock(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const authError = await requireAdmin(
+    request,
+    db,
+    env,
+  );
+
+  if (authError) return authError;
+
+  const body = await request.json().catch(() => null) as {
+    color?: string;
+    size?: string;
+    action?: "set" | "add" | "subtract";
+    amount?: number;
+  } | null;
+
+  if (
+    !body?.color ||
+    !body.size ||
+    !body.action ||
+    typeof body.amount !== "number" ||
+    body.amount < 0
+  ) {
+    return json(
+      {
+        error:
+          "color و size و action و amount مطلوبة",
+      },
+      400,
+    );
+  }
+
+  const current = await db
+    .select({
+      colorVariants: productsTable.colorVariants,
+    })
+    .from(productsTable)
+    .where(eq(productsTable.id, id))
+    .limit(1);
+
+  if (!current[0]) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  const variants =
+    (current[0].colorVariants as
+      | ColorVariant[]
+      | null) ?? [];
+
+  const color = body.color;
+  const size = body.size;
+  const action = body.action;
+  const amount = Math.round(body.amount);
+
+  let found = false;
+
+  const updatedVariants = variants.map((variant) => {
+    if (variant.color !== color) return variant;
+
+    return {
+      ...variant,
+      sizes: variant.sizes.map((entry) => {
+        if (entry.size !== size) return entry;
+
+        found = true;
+        const oldStock = entry.stock ?? 0;
+
+        let newStock: number;
+
+        if (action === "set") {
+          newStock = Math.max(0, amount);
+        } else if (action === "add") {
+          newStock = oldStock + amount;
+        } else {
+          newStock = Math.max(0, oldStock - amount);
+        }
+
+        return {
+          ...entry,
+          stock: newStock,
+          outOfStock: newStock <= 0,
+        };
+      }),
+    };
+  });
+
+  if (!found) {
+    return json(
+      { error: "المقاس أو اللون غير موجود" },
+      404,
+    );
+  }
+
+  const rows = await db
+    .update(productsTable)
+    .set({ colorVariants: updatedVariants })
+    .where(eq(productsTable.id, id))
+    .returning();
+
+  const product = rows[0];
+
+  if (!product) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  return json(toProduct(product));
+}
+
+async function handleDeleteProduct(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const authError = await requireAdmin(
+    request,
+    db,
+    env,
+  );
+
+  if (authError) return authError;
+
+  const rows = await db
+    .delete(productsTable)
+    .where(eq(productsTable.id, id))
+    .returning();
+
+  if (!rows[0]) {
+    return json({ error: "المنتج غير موجود" }, 404);
+  }
+
+  return json({ success: true });
+}
