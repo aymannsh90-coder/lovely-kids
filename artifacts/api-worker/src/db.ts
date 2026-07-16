@@ -3,6 +3,7 @@ import { Client } from "pg";
 import * as schema from "@workspace/db/schema";
 
 export interface Env {
+  ADMIN_PROMOTE_PASSWORD?: string;
   HYPERDRIVE: {
     connectionString: string;
   };
