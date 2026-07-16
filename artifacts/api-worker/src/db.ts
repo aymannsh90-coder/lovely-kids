@@ -4,6 +4,8 @@ import * as schema from "@workspace/db/schema";
 
 export interface Env {
   ADMIN_PROMOTE_PASSWORD?: string;
+  CLERK_SECRET_KEY?: string;
+  CLERK_PUBLISHABLE_KEY?: string;
   HYPERDRIVE: {
     connectionString: string;
   };

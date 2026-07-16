@@ -9,6 +9,7 @@ import {
   normalizePhone,
   toUser,
 } from "./auth";
+import { getClerkUserId } from "./clerk";
 import type { Env, openDb } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -93,7 +94,7 @@ export async function handleAuthRequest(
     request.method === "GET" &&
     path === "/api/auth/me"
   ) {
-    const user = await getCurrentUser(db, request);
+    const user = await getCurrentUser(db, request, env);
 
     if (!user) {
       return json({ error: "غير مسجل الدخول" }, 401);
@@ -113,7 +114,7 @@ export async function handleAuthRequest(
     request.method === "PATCH" &&
     path === "/api/auth/password"
   ) {
-    return handlePassword(request, db);
+    return handlePassword(request, db, env);
   }
 
   if (
@@ -121,6 +122,13 @@ export async function handleAuthRequest(
     path === "/api/auth/promote-admin"
   ) {
     return handlePromoteAdmin(request, db, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/auth/sync-user"
+  ) {
+    return handleSyncUser(request, db, env);
   }
 
   return null;
@@ -226,8 +234,8 @@ async function handleLogout(request: Request, db: Db) {
   });
 }
 
-async function handlePassword(request: Request, db: Db) {
-  const user = await getCurrentUser(db, request);
+async function handlePassword(request: Request, db: Db, env: Env) {
+  const user = await getCurrentUser(db, request, env);
 
   if (!user) {
     return json({ error: "غير مسجل الدخول" }, 401);
@@ -299,7 +307,7 @@ async function handlePromoteAdmin(
   db: Db,
   env: Env,
 ) {
-  const user = await getCurrentUser(db, request);
+  const user = await getCurrentUser(db, request, env);
 
   if (!user) {
     return json({ error: "غير مسجل الدخول" }, 401);
@@ -330,4 +338,70 @@ async function handlePromoteAdmin(
     .returning();
 
   return json(toUser(rows[0]));
+}
+
+async function handleSyncUser(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const clerkUserId = await getClerkUserId(request, env);
+
+  if (!clerkUserId) {
+    return json({ error: "غير مصرح" }, 401);
+  }
+
+  const body = await request.json().catch(() => null) as {
+    name?: string;
+    email?: string;
+    phone?: string;
+  } | null;
+
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, clerkUserId))
+    .limit(1);
+
+  if (existing[0]) {
+    const updates: Partial<
+      typeof usersTable.$inferInsert
+    > = {};
+
+    if (body?.name?.trim()) {
+      updates.name = body.name.trim();
+    }
+
+    if (body?.email?.trim()) {
+      updates.email = body.email.trim().toLowerCase();
+    }
+
+    if (body?.phone?.trim()) {
+      updates.phone = normalizePhone(body.phone.trim());
+    }
+
+    const rows = await db
+      .update(usersTable)
+      .set(updates)
+      .where(eq(usersTable.clerkUserId, clerkUserId))
+      .returning();
+
+    return json(toUser(rows[0]));
+  }
+
+  const rows = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId,
+      name: body?.name?.trim() || "مستخدم جديد",
+      email:
+        body?.email?.trim().toLowerCase() || null,
+      phone:
+        body?.phone?.trim()
+          ? normalizePhone(body.phone.trim())
+          : null,
+    })
+    .returning();
+
+  return json(toUser(rows[0]), 201);
 }

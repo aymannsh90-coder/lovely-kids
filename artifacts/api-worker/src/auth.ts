@@ -1,7 +1,8 @@
 import { sessionsTable, usersTable } from "@workspace/db/schema";
 import { eq, or } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
-import { openDb } from "./db";
+import { getClerkUser, getClerkUserId } from "./clerk";
+import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -81,6 +82,69 @@ export async function getUserFromToken(
   return users[0] ?? null;
 }
 
-export function getCurrentUser(db: Db, request: Request) {
-  return getUserFromToken(db, getBearerToken(request));
+export async function getCurrentUser(
+  db: Db,
+  request: Request,
+  env: Env,
+) {
+  const localUser = await getUserFromToken(
+    db,
+    getBearerToken(request),
+  );
+
+  if (localUser) return localUser;
+
+  const clerkUserId = await getClerkUserId(request, env);
+  if (!clerkUserId) return null;
+
+  return getOrCreateUserFromClerk(db, clerkUserId, env);
+}
+
+async function getOrCreateUserFromClerk(
+  db: Db,
+  clerkUserId: string,
+  env: Env,
+) {
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, clerkUserId))
+    .limit(1);
+
+  if (existing[0]) return existing[0];
+
+  const clerkUser = await getClerkUser(
+    clerkUserId,
+    env,
+  );
+
+  if (!clerkUser) return null;
+
+  const name =
+    [clerkUser.firstName, clerkUser.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    clerkUser.primaryEmailAddress?.emailAddress ||
+    "مستخدم جديد";
+
+  const email =
+    clerkUser.primaryEmailAddress?.emailAddress
+      ?.toLowerCase() ?? null;
+
+  const avatarUrl = clerkUser.hasImage
+    ? clerkUser.imageUrl
+    : null;
+
+  const rows = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId,
+      name,
+      email,
+      avatarUrl,
+    })
+    .returning();
+
+  return rows[0] ?? null;
 }
