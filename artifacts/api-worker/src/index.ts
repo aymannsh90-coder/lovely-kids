@@ -4,6 +4,7 @@ import { openDb, type Env } from "./db";
 import { handleAuthRequest } from "./auth-routes";
 import { handleProductRequest } from "./product-routes";
 import { handleSettingsRequest } from "./settings-routes";
+import { handleOrderRequest } from "./order-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -61,6 +62,9 @@ export default {
 
       const settingsResponse = await handleSettingsRequest(request, db, env);
       if (settingsResponse) return settingsResponse;
+
+      const orderResponse = await handleOrderRequest(request, db, env);
+      if (orderResponse) return orderResponse;
       if (path === "/api/health") {
         await client.query("select 1");
         return json({ ok: true, service: "Lovely Kids Worker API", database: "connected" });
