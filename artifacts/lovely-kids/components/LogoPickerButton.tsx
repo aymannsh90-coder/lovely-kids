@@ -44,7 +44,7 @@ export function LogoPickerButton({ value, fallbackSource, onChange }: LogoPicker
     try {
       const compressed = await manipulateAsync(
         asset.uri,
-        [{ resize: { width: 800 } }],
+        [{ resize: { width: 600 } }],
         { compress: 0.8, format: SaveFormat.JPEG, base64: true },
       );
       base64 = compressed.base64;
