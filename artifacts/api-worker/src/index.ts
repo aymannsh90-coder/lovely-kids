@@ -105,7 +105,10 @@ export default {
         return usersResponse;
       }
 
-      if (path === "/api/health") {
+      if (
+        path === "/api/health" ||
+        path === "/api/healthz"
+      ) {
         await client.query("select 1");
         return json({ ok: true, service: "Lovely Kids Worker API", database: "connected" });
       }
