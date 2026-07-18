@@ -287,6 +287,41 @@ async function handleImageUpload(
   }
 }
 
+
+async function handleLegacyUpload(
+  env: Env,
+  encodedFilename: string,
+) {
+  let filename: string;
+
+  try {
+    filename = decodeURIComponent(encodedFilename);
+  } catch {
+    return json({ error: "اسم ملف غير صالح" }, 400);
+  }
+
+  if (
+    !filename ||
+    filename.includes("..") ||
+    filename.includes("/")
+  ) {
+    return json({ error: "اسم ملف غير صالح" }, 400);
+  }
+
+  const supabaseUrl =
+    env.SUPABASE_URL?.replace(/\/+$/, "");
+
+  if (!supabaseUrl) {
+    return json({ error: "الخدمة غير متاحة" }, 500);
+  }
+
+  const url =
+    `${supabaseUrl}/storage/v1/object/public/` +
+    `${BUCKET}/${encodeURIComponent(filename)}`;
+
+  return Response.redirect(url, 301);
+}
+
 export async function handleImageRequest(
   request: Request,
   db: Db,
@@ -299,6 +334,20 @@ export async function handleImageRequest(
     path === "/api/images/upload"
   ) {
     return handleImageUpload(request, db, env);
+  }
+
+  const legacyMatch = path.match(
+    /^\/api\/uploads\/([^/]+)$/,
+  );
+
+  if (
+    request.method === "GET" &&
+    legacyMatch
+  ) {
+    return handleLegacyUpload(
+      env,
+      legacyMatch[1],
+    );
   }
 
   return null;
