@@ -61,7 +61,6 @@ const Module = require('module');
 //   flagged for this workspace. Do NOT add react, react-dom, Clerk, or any
 //   other non-native package here.
 const ALLOWLIST = [
-  'expo',
   'expo-asset',
   'expo-constants',
   'expo-font',
@@ -271,6 +270,16 @@ for (const pkg of BABEL_PRESET_NEEDS) {
   if (!existsSync(lkSource)) {
     console.log(`[dedup-expo]   skip  ${pkg} — not in lovely-kids/node_modules`);
     continue;
+  }
+
+  if (
+    pkg === 'expo' &&
+    existsSync(rootTarget) &&
+    !isSymlink(rootTarget) &&
+    pkgVersion(rootTarget) === pkgVersion(lkSource)
+  ) {
+    rmSync(rootTarget, { recursive: true, force: true });
+    console.log('[dedup-expo]   removed root expo directory before symlinking');
   }
 
   if (existsSync(rootTarget)) {
