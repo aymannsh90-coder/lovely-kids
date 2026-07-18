@@ -7,6 +7,7 @@ import { handleSettingsRequest } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
 import { handleImageRequest } from "./image-routes";
 import { handleNotificationRequest } from "./notification-routes";
+import { handlePasswordResetRequest } from "./password-reset-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -58,6 +59,13 @@ export default {
     try {
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
+
+      const passwordResetResponse =
+        await handlePasswordResetRequest(request, db, env);
+
+      if (passwordResetResponse) {
+        return passwordResetResponse;
+      }
 
       const productResponse = await handleProductRequest(request, db, env);
       if (productResponse) return productResponse;

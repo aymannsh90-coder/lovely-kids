@@ -6,8 +6,9 @@ export interface Env {
   ADMIN_PROMOTE_PASSWORD?: string;
   CLERK_SECRET_KEY?: string;
   CLERK_PUBLISHABLE_KEY?: string;
-    SUPABASE_URL?: string;
-    SUPABASE_SERVICE_ROLE_KEY?: string;
+  RESEND_API_KEY?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
   HYPERDRIVE: {
     connectionString: string;
   };
