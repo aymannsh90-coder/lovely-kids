@@ -9,6 +9,7 @@ import { handleImageRequest } from "./image-routes";
 import { handleNotificationRequest } from "./notification-routes";
 import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
+import { handleUsersRequest } from "./users-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -95,6 +96,13 @@ export default {
 
       if (likesResponse) {
         return likesResponse;
+      }
+
+      const usersResponse =
+        await handleUsersRequest(request, db, env);
+
+      if (usersResponse) {
+        return usersResponse;
       }
 
       if (path === "/api/health") {
