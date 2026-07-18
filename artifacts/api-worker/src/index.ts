@@ -5,6 +5,7 @@ import { handleAuthRequest } from "./auth-routes";
 import { handleProductRequest } from "./product-routes";
 import { handleSettingsRequest } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
+import { handleImageRequest } from "./image-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -65,6 +66,8 @@ export default {
 
       const orderResponse = await handleOrderRequest(request, db, env);
       if (orderResponse) return orderResponse;
+        const imageResponse = await handleImageRequest(request, db, env);
+        if (imageResponse) return imageResponse;
       if (path === "/api/health") {
         await client.query("select 1");
         return json({ ok: true, service: "Lovely Kids Worker API", database: "connected" });
