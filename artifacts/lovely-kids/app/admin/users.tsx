@@ -53,8 +53,13 @@ export default function AdminUsersScreen() {
   const fetchUsers = useCallback(async () => {
     try {
       const token = await getAuthToken();
+      if (!token) {
+        setFetchError("يجب تسجيل الدخول كمشرف");
+        setUsers([]);
+        return;
+      }
       const res = await fetch(`${API_BASE}/api/users`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
@@ -90,9 +95,13 @@ export default function AdminUsersScreen() {
     setDeleteConfirmId(null);
     try {
       const token = await getAuthToken();
+      if (!token) {
+        setFetchError("يجب تسجيل الدخول كمشرف");
+        return;
+      }
       const res = await fetch(`${API_BASE}/api/users/${id}`, {
         method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setUsers((prev) => prev.filter((u) => u.id !== id));
