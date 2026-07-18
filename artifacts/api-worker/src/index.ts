@@ -8,6 +8,7 @@ import { handleOrderRequest } from "./order-routes";
 import { handleImageRequest } from "./image-routes";
 import { handleNotificationRequest } from "./notification-routes";
 import { handlePasswordResetRequest } from "./password-reset-routes";
+import { handleLikesRequest } from "./likes-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -88,6 +89,13 @@ export default {
         if (notificationResponse) {
           return notificationResponse;
         }
+
+      const likesResponse =
+        await handleLikesRequest(request, db, env);
+
+      if (likesResponse) {
+        return likesResponse;
+      }
 
       if (path === "/api/health") {
         await client.query("select 1");
