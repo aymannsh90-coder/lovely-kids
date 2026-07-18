@@ -255,6 +255,7 @@ console.log(`[dedup-expo] Phase 2 done — aligned ${aligned} package(s).`);
 console.log('[dedup-expo] Phase 3: babel-preset-expo visibility symlinks');
 
 const BABEL_PRESET_NEEDS = [
+  'expo',
   'expo-router',
   'react-native-reanimated',
   'react-native-worklets',
