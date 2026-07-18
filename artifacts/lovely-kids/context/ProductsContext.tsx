@@ -10,6 +10,7 @@ import { AppState } from "react-native";
 import { Product } from "@/data/products";
 
 import { API_BASE } from "@/constants/api";
+import { useAuth } from "@/context/AuthContext";
 
 const POLL_INTERVAL_MS = 300000;
 
@@ -66,6 +67,12 @@ function toInsertBody(product: Omit<Product, "id">) {
 export function ProductsProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const { getAuthToken } = useAuth();
+  const getAdminHeaders = useCallback(async () => {
+    const token = await getAuthToken();
+    if (!token) throw new Error("يجب تسجيل الدخول كمشرف");
+    return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+  }, [getAuthToken]);
 
   const refreshProducts = useCallback(async () => {
     try {
@@ -103,44 +110,48 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   }, [refreshProducts]);
 
   const addProduct = useCallback(async (product: Omit<Product, "id">) => {
+    const headers = await getAdminHeaders();
     const res = await fetch(`${API_BASE}/api/products`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(toInsertBody(product)),
     });
     if (!res.ok) throw new Error("فشل إضافة المنتج");
     const created: Product = await res.json();
     setProducts((prev) => [created, ...prev]);
-  }, []);
+  }, [getAdminHeaders]);
 
   const updateProduct = useCallback(async (product: Product) => {
+    const headers = await getAdminHeaders();
     const res = await fetch(`${API_BASE}/api/products/${product.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(toInsertBody(product)),
     });
     if (!res.ok) throw new Error("فشل تعديل المنتج");
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === product.id ? updated : p)));
-  }, []);
+  }, [getAdminHeaders]);
 
   const deleteProduct = useCallback(async (id: string) => {
-    const res = await fetch(`${API_BASE}/api/products/${id}`, { method: "DELETE" });
+    const headers = await getAdminHeaders();
+    const res = await fetch(`${API_BASE}/api/products/${id}`, { method: "DELETE", headers });
     if (!res.ok) throw new Error("فشل حذف المنتج");
     setProducts((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+  }, [getAdminHeaders]);
 
   const adjustStock = useCallback(async (id: string, action: "set" | "add" | "subtract", amount: number): Promise<Product> => {
+    const headers = await getAdminHeaders();
     const res = await fetch(`${API_BASE}/api/products/${id}/stock`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ action, amount }),
     });
     if (!res.ok) throw new Error("فشل تعديل الكمية");
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
     return updated;
-  }, []);
+  }, [getAdminHeaders]);
 
   const adjustVariantStock = useCallback(async (
     id: string,
@@ -149,16 +160,17 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     action: "set" | "add" | "subtract",
     amount: number
   ): Promise<Product> => {
+    const headers = await getAdminHeaders();
     const res = await fetch(`${API_BASE}/api/products/${id}/variant-stock`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ color, size, action, amount }),
     });
     if (!res.ok) throw new Error("فشل تعديل كمية المقاس");
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
     return updated;
-  }, []);
+  }, [getAdminHeaders]);
 
   return (
     <ProductsContext.Provider

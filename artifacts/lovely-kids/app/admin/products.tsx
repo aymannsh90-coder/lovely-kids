@@ -23,12 +23,11 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, isSizeOutOfStock } from "@/data/products";
 
-import { API_BASE } from "@/constants/api";
 
 export default function AdminProductsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { products, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
+  const { products, updateProduct, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
   const { settings } = useAppSettings();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
@@ -442,31 +441,8 @@ export default function AdminProductsScreen() {
                     if (!stockProduct) return;
                     setStockSaving(true);
                     try {
-                      const res = await fetch(`${API_BASE}/api/products/${stockProduct.id}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          name: stockProduct.name,
-                          nameAr: stockProduct.nameAr,
-                          price: stockProduct.price,
-                          originalPrice: stockProduct.originalPrice ?? null,
-                          image: stockProduct.image,
-                          category: stockProduct.category,
-                          ageGroup: stockProduct.ageGroup,
-                          sizes: stockProduct.sizes ?? [],
-                          rating: Math.round((stockProduct.rating ?? 4.8) * 10),
-                          reviews: stockProduct.reviews ?? 0,
-                          isNew: stockProduct.isNew ?? false,
-                          discount: stockProduct.discount ?? null,
-                          description: stockProduct.description ?? "",
-                          stock: null,
-                        }),
-                      });
-                      if (res.ok) {
-                        const updated = await res.json();
-                        setStockProduct(updated);
-                        // update in context via adjustStock workaround
-                      }
+                        await updateProduct({ ...stockProduct, stock: null });
+                        setStockProduct({ ...stockProduct, stock: null });
                     } catch { }
                     setStockSaving(false);
                   }}
