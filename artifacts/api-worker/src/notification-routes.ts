@@ -1,5 +1,5 @@
 import { pushTokensTable } from "@workspace/db/schema";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 
@@ -125,6 +125,132 @@ function chunk<T>(
   }
 
   return result;
+}
+
+
+export async function sendNewOrderNotification(
+  db: Db,
+  order: {
+    id: number;
+    customerName: string;
+    totalPrice: number;
+  },
+) {
+  const devices = await db
+    .select({ token: pushTokensTable.token })
+    .from(pushTokensTable)
+    .where(eq(pushTokensTable.isAdmin, true));
+
+  if (devices.length === 0) {
+    return {
+      sent: 0,
+      total: 0,
+      removedInvalidTokens: 0,
+    };
+  }
+
+  const tokens = devices.map(
+    (device) => device.token,
+  );
+
+
+  let sent = 0;
+  const invalidTokens: string[] = [];
+
+  for (const tokenBatch of chunk(tokens, 100)) {
+    const messages = tokenBatch.map((to) => ({
+      to,
+      sound: "default",
+      channelId: "default",
+      title: "طلب جديد",
+      body:
+        `طلب #${order.id} من ${order.customerName}` +
+        ` بقيمة ${order.totalPrice} ₪`,
+      data: {
+        type: "new_order",
+        orderId: String(order.id),
+      },
+    }));
+
+    const expoResponse = await fetch(
+      "https://exp.host/--/api/v2/push/send",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(messages),
+      },
+    );
+
+    if (!expoResponse.ok) {
+      console.error(
+        "New order push failed:",
+        expoResponse.status,
+      );
+      continue;
+    }
+
+
+    const expoData = await expoResponse
+      .json()
+      .catch(() => null) as {
+        data?: Array<{
+          status?: string;
+          details?: { error?: string };
+        }>;
+      } | null;
+
+    const tickets = Array.isArray(expoData?.data)
+      ? expoData.data
+      : [];
+
+    for (
+      let index = 0;
+      index < tickets.length;
+      index += 1
+    ) {
+      const ticket = tickets[index];
+      const token = tokenBatch[index];
+
+      if (ticket?.status === "ok") {
+        sent += 1;
+        continue;
+      }
+
+      if (
+        ticket?.details?.error ===
+          "DeviceNotRegistered" &&
+        token
+      ) {
+        invalidTokens.push(token);
+      }
+    }
+  }
+
+
+  const uniqueInvalidTokens = [
+    ...new Set(invalidTokens),
+  ];
+
+  if (uniqueInvalidTokens.length > 0) {
+    await db
+      .delete(pushTokensTable)
+      .where(
+        inArray(
+          pushTokensTable.token,
+          uniqueInvalidTokens,
+        ),
+      );
+  }
+
+  return {
+    sent,
+    total: tokens.length,
+    removedInvalidTokens:
+      uniqueInvalidTokens.length,
+  };
 }
 
 async function handleSendNotification(

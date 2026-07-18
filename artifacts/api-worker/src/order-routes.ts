@@ -9,6 +9,9 @@ import {
   createTrustedOrder,
   OrderValidationError,
 } from "./order-service";
+import {
+  sendNewOrderNotification,
+} from "./notification-routes";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -67,6 +70,25 @@ async function handleCreateOrder(
         })),
       },
     );
+
+    try {
+      const notificationResult =
+        await sendNewOrderNotification(db, {
+          id: newOrder.id,
+          customerName: newOrder.customerName,
+          totalPrice: newOrder.totalPrice,
+        });
+
+      console.log(
+        "NEW_ORDER_NOTIFICATION",
+        notificationResult,
+      );
+    } catch (notificationError) {
+      console.error(
+        "NEW_ORDER_NOTIFICATION_FAILED",
+        notificationError,
+      );
+    }
 
     return json(newOrder, 201);
   } catch (error) {
