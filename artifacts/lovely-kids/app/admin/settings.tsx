@@ -70,6 +70,9 @@ export default function SettingsScreen() {
   const [draftBg, setDraftBg] = useState(settings.backgroundColor);
   const [draftSecondary, setDraftSecondary] = useState(settings.secondaryColor);
   const [draftBanner, setDraftBanner] = useState(settings.bannerColor);
+  const [draftBannerTitle, setDraftBannerTitle] = useState(settings.bannerTitle);
+  const [draftBannerSubtitle, setDraftBannerSubtitle] = useState(settings.bannerSubtitle);
+  const [draftBannerBadge, setDraftBannerBadge] = useState(settings.bannerBadge);
 
   const initializedRef = useRef(false);
   useEffect(() => {
@@ -79,6 +82,9 @@ export default function SettingsScreen() {
       setDraftBg(settings.backgroundColor);
       setDraftSecondary(settings.secondaryColor);
       setDraftBanner(settings.bannerColor);
+      setDraftBannerTitle(settings.bannerTitle);
+      setDraftBannerSubtitle(settings.bannerSubtitle);
+      setDraftBannerBadge(settings.bannerBadge);
     }
   }, [settingsReady, settings.primaryColor, settings.backgroundColor, settings.secondaryColor, settings.bannerColor]);
 
@@ -90,6 +96,9 @@ export default function SettingsScreen() {
       secondaryColor: draftSecondary,
       accentColor: draftSecondary,
       bannerColor: draftBanner,
+      bannerTitle: draftBannerTitle,
+      bannerSubtitle: draftBannerSubtitle,
+      bannerBadge: draftBannerBadge,
     });
     setSaving(false);
     if (ok) {
@@ -222,22 +231,22 @@ export default function SettingsScreen() {
       <Section title="🖼️ البانر الرئيسي">
         <Field
           label="عنوان البانر (السطر الأول والثاني بـ \\n)"
-          value={settings.bannerTitle}
-          onChangeText={(v) => updateSettings({ bannerTitle: v })}
+          value={draftBannerTitle}
+          onChangeText={setDraftBannerTitle}
           placeholder="كل ما يحتاجه\nطفلك..."
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field
           label="وصف البانر"
-          value={settings.bannerSubtitle}
-          onChangeText={(v) => updateSettings({ bannerSubtitle: v })}
+          value={draftBannerSubtitle}
+          onChangeText={setDraftBannerSubtitle}
           placeholder="ملابس · عربات · مستلزمات"
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <Field
           label="نص الشارة (مثلاً: خصم 30%)"
-          value={settings.bannerBadge}
-          onChangeText={(v) => updateSettings({ bannerBadge: v })}
+          value={draftBannerBadge}
+          onChangeText={setDraftBannerBadge}
           placeholder="خصم 20%"
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
