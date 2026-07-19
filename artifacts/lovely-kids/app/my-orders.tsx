@@ -87,9 +87,9 @@ export default function MyOrdersScreen() {
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (silent = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
         const token = await getAuthToken();
         if (!token) {
@@ -107,13 +107,19 @@ export default function MyOrdersScreen() {
     } catch {
       // silent
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [user, getAuthToken]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchOrders();
+      void fetchOrders();
+
+      const intervalId = setInterval(() => {
+        void fetchOrders(true);
+      }, 15000);
+
+      return () => clearInterval(intervalId);
     }, [fetchOrders])
   );
 
@@ -237,7 +243,7 @@ export default function MyOrdersScreen() {
           <Ionicons name="arrow-forward" size={24} color="#fff" />
         </Pressable>
         <Text style={styles.headerTitle}>طلباتي</Text>
-        <Pressable onPress={fetchOrders} style={styles.refreshBtn}>
+        <Pressable onPress={() => void fetchOrders()} style={styles.refreshBtn}>
           <Ionicons name="refresh-outline" size={22} color="#fff" />
         </Pressable>
       </View>

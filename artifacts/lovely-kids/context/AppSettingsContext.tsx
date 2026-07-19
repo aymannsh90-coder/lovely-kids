@@ -190,6 +190,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   const [settingsReady, setSettingsReady] = useState(false);
   const getAuthTokenRef = useRef(getAuthToken);
   getAuthTokenRef.current = getAuthToken;
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
 
   const applyRemote = useCallback((data: Partial<AppSettings>) => {
     const merged = { ...DEFAULT_SETTINGS, ...data };
@@ -252,7 +253,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     };
   }, [fetchSettings]);
 
-  const pushSettings = useCallback(
+  const sendSettings = useCallback(
     async (partial: Partial<AppSettings>): Promise<boolean> => {
       try {
         const authToken = await getAuthTokenRef.current();
@@ -264,18 +265,19 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
           },
           body: JSON.stringify(partial),
         });
-        if (res.ok) {
-          const data = await res.json();
-          applyRemote(data);
-          return true;
-        }
-        return false;
+        return res.ok;
       } catch {
         return false;
       }
     },
     [applyRemote]
   );
+  const pushSettings = useCallback((partial: Partial<AppSettings>) => {
+    const queued = saveQueueRef.current.then(() => sendSettings(partial), () => sendSettings(partial));
+    saveQueueRef.current = queued;
+    return queued;
+  }, [sendSettings]);
+
 
   const updateSettings = useCallback(
     async (partial: Partial<AppSettings>): Promise<boolean> => {
