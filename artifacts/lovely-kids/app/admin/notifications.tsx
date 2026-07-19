@@ -43,7 +43,11 @@ export default function NotificationsScreen() {
   const fetchCount = useCallback(async () => {
     setCountLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/push-tokens/count`);
+      const token = await getAuthToken();
+      if (!token) throw new Error("No admin token");
+      const res = await fetch(`${API_BASE}/api/push-tokens/count`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json() as { count?: number };
       setTokenCount(data.count ?? 0);
     } catch {
@@ -51,7 +55,7 @@ export default function NotificationsScreen() {
     } finally {
       setCountLoading(false);
     }
-  }, []);
+  }, [getAuthToken]);
 
   useEffect(() => {
     void fetchCount();

@@ -105,8 +105,13 @@ async function handleRegisterToken(
 }
 
 async function handleTokenCount(
+  request: Request,
   db: Db,
+  env: Env,
 ) {
+  const denied = await requireAdmin(request, db, env);
+  if (denied) return denied;
+
   const rows = await db
     .select({ id: pushTokensTable.id })
     .from(pushTokensTable);
@@ -429,7 +434,7 @@ export async function handleNotificationRequest(
     request.method === "GET" &&
     path === "/api/push-tokens/count"
   ) {
-    return handleTokenCount(db);
+    return handleTokenCount(request, db, env);
   }
 
   if (
