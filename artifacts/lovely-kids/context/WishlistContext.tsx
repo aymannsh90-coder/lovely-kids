@@ -40,9 +40,23 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user) return;
-    AsyncStorage.getItem("wishlist").then((data) => {
-      if (data) setItems(JSON.parse(data));
-    });
+
+    let active = true;
+
+    (async () => {
+      try {
+        const data = await AsyncStorage.getItem("wishlist");
+        const parsed = data ? JSON.parse(data) : [];
+        if (active) setItems(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        await AsyncStorage.removeItem("wishlist").catch(() => {});
+        if (active) setItems([]);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   useEffect(() => {
