@@ -2,13 +2,14 @@ import {
   insertOrderSchema,
   ordersTable,
 } from "@workspace/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import {
   createTrustedOrder,
   OrderValidationError,
 } from "./order-service";
+import { cancelOrderAndRestoreStock } from "./order-stock";
 import {
   sendNewOrderNotification,
 } from "./notification-routes";
@@ -24,6 +25,24 @@ const json = (data: unknown, status = 200) =>
       "Access-Control-Allow-Origin": "*",
     },
   });
+
+const ORDER_STATUSES = new Set(["new", "confirmed", "delivering", "done", "cancelled"]);
+const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
+  new: ["new", "confirmed", "cancelled"],
+  confirmed: ["confirmed", "delivering", "cancelled"],
+  delivering: ["delivering", "done", "cancelled"],
+  done: ["done"],
+  cancelled: ["cancelled"],
+};
+
+
+const orderOwnerWhere = (userId: number, phone?: string | null) =>
+  phone
+    ? or(
+        eq(ordersTable.userId, userId),
+        and(isNull(ordersTable.userId), eq(ordersTable.customerPhone, phone)),
+      )
+    : eq(ordersTable.userId, userId);
 
 async function handleCreateOrder(
   request: Request,
@@ -53,6 +72,7 @@ async function handleCreateOrder(
     const newOrder = await createTrustedOrder(
       db,
       {
+        userId: authUser?.id ?? null,
         customerName: parsed.data.customerName,
         customerPhone:
           authUser?.phone ??
@@ -150,25 +170,10 @@ async function handleGetMyOrders(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.phone) {
-    return json(
-      {
-        error:
-          "أضف رقم الهاتف إلى حسابك لعرض طلباتك",
-      },
-      400,
-    );
-  }
-
   const orders = await db
     .select()
     .from(ordersTable)
-    .where(
-      eq(
-        ordersTable.customerPhone,
-        user.phone,
-      ),
-    )
+    .where(orderOwnerWhere(user.id, user.phone))
     .orderBy(desc(ordersTable.createdAt));
 
   return json(orders);
@@ -304,6 +309,7 @@ async function handleCancelOrder(
   const current = await db
     .select({
       status: ordersTable.status,
+      userId: ordersTable.userId,
       customerPhone: ordersTable.customerPhone,
     })
     .from(ordersTable)
@@ -316,7 +322,9 @@ async function handleCancelOrder(
 
   if (
     !user.isAdmin &&
+    current[0].userId !== user.id &&
     (
+      current[0].userId !== null ||
       !user.phone ||
       current[0].customerPhone !== user.phone
     )
@@ -347,17 +355,21 @@ async function handleCancelOrder(
     );
   }
 
-  const updated = await db
-    .update(ordersTable)
-    .set({ status: "cancelled" })
-    .where(eq(ordersTable.id, id))
-    .returning();
+  const result = await cancelOrderAndRestoreStock(
+    db,
+    id,
+    ["new"],
+  );
 
-  if (!updated[0]) {
+  if (result.kind === "not_found") {
     return json({ error: "الطلب غير موجود" }, 404);
   }
 
-  return json(updated[0]);
+  if (result.kind === "invalid_status") {
+    return json({ error: "لا يمكن إلغاء هذا الطلب" }, 409);
+  }
+
+  return json(result.order);
 }
 
 async function handleUpdateOrderStatus(
@@ -388,8 +400,12 @@ async function handleUpdateOrderStatus(
     return json({ error: "الحالة مطلوبة" }, 400);
   }
 
+  if (!ORDER_STATUSES.has(body.status)) {
+    return json({ error: "حالة الطلب غير صالحة" }, 400);
+  }
+
   const current = await db
-    .select({ id: ordersTable.id })
+    .select({ id: ordersTable.id, status: ordersTable.status })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
     .limit(1);
@@ -397,6 +413,27 @@ async function handleUpdateOrderStatus(
   if (!current[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
   }
+
+  const allowed = ORDER_TRANSITIONS[current[0].status] ?? [];
+
+  if (!allowed.includes(body.status)) {
+    return json({ error: "لا يمكن نقل الطلب إلى هذه الحالة" }, 409);
+  }
+
+  if (body.status === "cancelled") {
+    const result = await cancelOrderAndRestoreStock(db, id, ["new", "confirmed", "delivering"]);
+
+    if (result.kind === "not_found") {
+      return json({ error: "الطلب غير موجود" }, 404);
+    }
+
+    if (result.kind === "invalid_status") {
+      return json({ error: "لا يمكن إلغاء الطلب بهذه الحالة" }, 409);
+    }
+
+    return json(result.order);
+  }
+
 
   const updated = await db
     .update(ordersTable)
@@ -446,8 +483,11 @@ async function handlePaymentProof(
 
   const current = await db
     .select({
+      userId: ordersTable.userId,
       customerPhone: ordersTable.customerPhone,
       paymentMethod: ordersTable.paymentMethod,
+      status: ordersTable.status,
+      paymentStatus: ordersTable.paymentStatus,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -459,7 +499,9 @@ async function handlePaymentProof(
 
   if (
     !user.isAdmin &&
+    current[0].userId !== user.id &&
     (
+      current[0].userId !== null ||
       !user.phone ||
       current[0].customerPhone !== user.phone
     )
@@ -476,6 +518,16 @@ async function handlePaymentProof(
       400,
     );
   }
+  if (current[0].paymentStatus === "confirmed") {
+    return json({ error: "تم تأكيد الدفع ولا يمكن تعديل الوصل" }, 409);
+  }
+  if (current[0].status === "cancelled" || current[0].status === "done") {
+    return json({ error: "لا يمكن تعديل وصل هذا الطلب" }, 409);
+  }
+
+
+
+
 
   const updated = await db
     .update(ordersTable)
@@ -513,6 +565,33 @@ async function handleConfirmPayment(
     return json({ error: "غير مصرح" }, 403);
   }
 
+  const current = await db
+    .select({
+      status: ordersTable.status,
+      paymentMethod: ordersTable.paymentMethod,
+      paymentStatus: ordersTable.paymentStatus,
+    })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  if (!current[0]) {
+    return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (current[0].paymentMethod !== "bank_transfer") {
+    return json({ error: "هذا الطلب لا يستخدم التحويل البنكي" }, 400);
+  }
+
+  if (current[0].status === "cancelled" || current[0].status === "done") {
+    return json({ error: "لا يمكن تأكيد دفع هذا الطلب" }, 409);
+  }
+
+
+  if (current[0].status !== "new" && current[0].status !== "confirmed") {
+    return json({ error: "حالة الطلب لا تسمح بتأكيد الدفع" }, 409);
+  }
+
   const updated = await db
     .update(ordersTable)
     .set({
@@ -547,6 +626,20 @@ async function handleDeleteOrder(
 
   if (!user.isAdmin) {
     return json({ error: "غير مصرح" }, 403);
+  }
+
+  const current = await db
+    .select({ status: ordersTable.status })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  if (!current[0]) {
+    return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (current[0].status !== "cancelled" && current[0].status !== "done") {
+    return json({ error: "يجب إلغاء الطلب أو إكماله قبل حذفه" }, 409);
   }
 
   const deleted = await db

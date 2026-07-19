@@ -1,9 +1,11 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { usersTable } from "./users";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "set null" }),
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerAddress: text("customer_address").notNull(),
@@ -21,6 +23,7 @@ export const ordersTable = pgTable("orders", {
 
 export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   id: true,
+  userId: true,
   createdAt: true,
 }).extend({
   items: z.array(

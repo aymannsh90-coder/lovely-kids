@@ -154,7 +154,7 @@ async function uploadToSupabase(
       "Content-Type": mimeType,
       "x-upsert": "false",
     },
-    body: buffer,
+    body: Uint8Array.from(buffer).buffer,
   });
 
   if (!response.ok) {

@@ -26,6 +26,7 @@ export interface TrustedOrderItem {
 }
 
 export interface TrustedOrderInput {
+  userId?: number | null;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -346,6 +347,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
     const orderRows = await tx
       .insert(ordersTable)
       .values({
+        userId: input.userId ?? null,
         customerName,
         customerPhone,
         customerAddress,

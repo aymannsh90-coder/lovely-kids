@@ -53,6 +53,7 @@ function toInsertBody(product: Omit<Product, "id">) {
     category: product.category,
     ageGroup: product.ageGroup,
     gender: product.gender ?? null,
+    season: product.season ?? null,
     sizes: product.sizes ?? [],
     colorVariants: product.colorVariants ?? [],
     rating: Math.round((product.rating ?? 4.8) * 10),
