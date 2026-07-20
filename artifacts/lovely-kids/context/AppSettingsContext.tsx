@@ -159,7 +159,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     { label: "القدس", cost: 30 },
     { label: "أراضي الـ48", cost: 70 },
   ],
-  productShareBaseUrl: "https://lovely-kids.replit.app",
+  productShareBaseUrl: "https://lovelykids.net",
 };
 
 interface AppSettingsContextType {

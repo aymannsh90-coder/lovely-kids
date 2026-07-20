@@ -1,3 +1,3 @@
-const PRODUCTION_FALLBACK_DOMAIN = "lovely-kids-api.aymannsh90.workers.dev";
+const PRODUCTION_FALLBACK_DOMAIN = "api.lovelykids.net";
 
 export const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN || PRODUCTION_FALLBACK_DOMAIN}`;

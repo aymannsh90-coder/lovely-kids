@@ -280,7 +280,7 @@ export default function SettingsScreen() {
           label="الدومين الأساسي للروابط (بدون / في النهاية)"
           value={settings.productShareBaseUrl ?? ""}
           onChangeText={(v) => updateSettings({ productShareBaseUrl: v.trim() })}
-          placeholder="https://lovely-kids.replit.app"
+          placeholder="https://lovelykids.net"
         />
       </Section>
 
