@@ -159,6 +159,7 @@ export default function AdminOrdersScreen() {
     if (!previousStatus || previousStatus === status) return;
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     setPendingOrderIds((prev) => new Set(prev).add(id));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     try {
       const token = await getAuthToken();
       if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
@@ -480,7 +481,7 @@ export default function AdminOrdersScreen() {
                       {STATUS_OPTIONS.map((s) => (
                         <Pressable
                           key={s.key}
-                          onPress={() => updateStatus(item.id, s.key)}
+                          onPress={(event) => { event.stopPropagation(); updateStatus(item.id, s.key); }}
                           style={[
                             styles.statusBtn,
                             { backgroundColor: item.status === s.key ? s.color : s.color + "20" },
