@@ -97,6 +97,7 @@ export default function AdminOrdersScreen() {
   const [showBanner, setShowBanner] = useState(false);
   const [proofModal, setProofModal] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
   const bannerAnim = useRef(new Animated.Value(-80)).current;
   const bannerCount = useRef(0);
 
@@ -153,18 +154,24 @@ export default function AdminOrdersScreen() {
   }, [fetchOrders]);
 
   const updateStatus = async (id: number, status: string) => {
+    if (pendingOrderIds.has(id)) return;
+    const previousStatus = orders.find((o) => o.id === id)?.status;
+    if (!previousStatus || previousStatus === status) return;
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+    setPendingOrderIds((prev) => new Set(prev).add(id));
     try {
       const token = await getAuthToken();
-      if (!token) return;
+      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
       const res = await fetch(`${API_BASE}/api/orders/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status }),
       });
-      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+      if (!res.ok) throw new Error("تعذر تحديث حالة الطلب");
     } catch {
-      // ignore
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: previousStatus } : o)));
     }
+    finally { setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
   };
 
   const confirmPayment = async (id: number) => {
@@ -188,18 +195,23 @@ export default function AdminOrdersScreen() {
   };
 
   const deleteOrder = async (id: number) => {
+    if (pendingOrderIds.has(id)) return;
     setDeleteConfirmId(null);
+    const deletedOrder = orders.find((o) => o.id === id);
+    if (!deletedOrder) return;
+    const deletedIndex = orders.findIndex((o) => o.id === id);
+    setOrders((prev) => prev.filter((o) => o.id !== id));
+    setPendingOrderIds((prev) => new Set(prev).add(id));
     try {
       const token = await getAuthToken();
-      if (!token) return;
+      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
       const res = await fetch(`${API_BASE}/api/orders/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        setOrders((prev) => prev.filter((o) => o.id !== id));
-        if (expanded === id) setExpanded(null);
-      }
+      if (!res.ok) throw new Error("تعذر حذف الطلب");
+      if (expanded === id) setExpanded(null);
     } catch {
-      // ignore
+      setOrders((prev) => [...prev.slice(0, deletedIndex), deletedOrder, ...prev.slice(deletedIndex)]);
     }
+    finally { setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
   };
 
   const confirmDeleteOrder = (id: number) => {
@@ -483,6 +495,7 @@ export default function AdminOrdersScreen() {
                     </View>
 
                     {/* Delete Order */}
+                    {(item.status === "cancelled" || item.status === "done") && (
                     <Pressable
                       onPress={() => confirmDeleteOrder(item.id)}
                       style={[styles.deleteBtn, { backgroundColor: "#ef444420" }]}
@@ -490,6 +503,7 @@ export default function AdminOrdersScreen() {
                       <Ionicons name="trash-outline" size={16} color="#ef4444" />
                       <Text style={styles.deleteBtnText}>حذف الطلب</Text>
                     </Pressable>
+                    )}
                   </View>
                 )}
               </Pressable>

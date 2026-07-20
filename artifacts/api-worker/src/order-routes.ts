@@ -29,8 +29,8 @@ const json = (data: unknown, status = 200) =>
 const ORDER_STATUSES = new Set(["new", "confirmed", "delivering", "done", "cancelled"]);
 const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
   new: ["new", "confirmed", "cancelled"],
-  confirmed: ["confirmed", "delivering", "cancelled"],
-  delivering: ["delivering", "done", "cancelled"],
+  confirmed: ["new", "confirmed", "delivering", "cancelled"],
+  delivering: ["new", "confirmed", "delivering", "done", "cancelled"],
   done: ["done"],
   cancelled: ["cancelled"],
 };
