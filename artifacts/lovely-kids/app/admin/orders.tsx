@@ -60,6 +60,14 @@ const STATUS_OPTIONS = [
   { key: "cancelled", label: "ملغي", color: "#ef4444", icon: "close-circle-outline" as const },
 ];
 
+const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
+  new: ["confirmed", "cancelled"],
+  confirmed: ["new", "delivering", "cancelled"],
+  delivering: ["new", "confirmed", "done", "cancelled"],
+  done: [],
+  cancelled: [],
+};
+
 function statusInfo(s: string) {
   return STATUS_OPTIONS.find((o) => o.key === s) ?? STATUS_OPTIONS[0];
 }
@@ -100,8 +108,16 @@ export default function AdminOrdersScreen() {
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
   const pendingOrderIdsRef = useRef<Set<number>>(new Set());
   const ordersFetchVersionRef = useRef(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bannerAnim = useRef(new Animated.Value(-80)).current;
   const bannerCount = useRef(0);
+
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setErrorMsg(null), 4000);
+  };
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
@@ -160,8 +176,11 @@ export default function AdminOrdersScreen() {
 
   const updateStatus = async (id: number, status: string) => {
     if (pendingOrderIdsRef.current.has(id)) return;
-    const previousStatus = orders.find((o) => o.id === id)?.status;
+    const order = orders.find((o) => o.id === id);
+    const previousStatus = order?.status;
     if (!previousStatus || previousStatus === status) return;
+    const allowed = ORDER_TRANSITIONS[previousStatus] ?? [];
+    if (!allowed.includes(status)) return;
     pendingOrderIdsRef.current.add(id);
     ordersFetchVersionRef.current += 1;
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
@@ -175,14 +194,22 @@ export default function AdminOrdersScreen() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error(await res.text());
-        const updatedOrder = (await res.json()) as Order;
-        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updatedOrder } : o)));
+      if (!res.ok) {
+        let msg = "تعذر تحديث الحالة";
+        try { const body = await res.json() as { error?: string }; if (body.error) msg = body.error; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      const updatedOrder = (await res.json()) as Order;
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updatedOrder } : o)));
     } catch (error) {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: previousStatus } : o)));
-      Alert.alert("تعذر تحديث الحالة", error instanceof Error ? error.message : "حدث خطأ غير متوقع");
+      const msg = error instanceof Error ? error.message : "حدث خطأ غير متوقع";
+      showError(msg);
+      if (Platform.OS !== "web") Alert.alert("تعذر تحديث الحالة", msg);
+    } finally {
+      pendingOrderIdsRef.current.delete(id);
+      setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     }
-    finally { pendingOrderIdsRef.current.delete(id); setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
   };
 
   const confirmPayment = async (id: number) => {
@@ -246,6 +273,15 @@ export default function AdminOrdersScreen() {
             <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
           </Pressable>
         </Animated.View>
+      )}
+
+      {/* Error Banner */}
+      {errorMsg !== null && (
+        <Pressable style={styles.errorBanner} onPress={() => setErrorMsg(null)}>
+          <Ionicons name="alert-circle-outline" size={18} color="#fff" />
+          <Text style={styles.errorBannerText}>{errorMsg}</Text>
+          <Ionicons name="close" size={16} color="rgba(255,255,255,0.8)" />
+        </Pressable>
       )}
 
       {/* Header */}
@@ -491,6 +527,7 @@ export default function AdminOrdersScreen() {
                       {STATUS_OPTIONS.map((s) => (
                         <Pressable
                           key={s.key}
+                            disabled={pendingOrderIds.has(item.id) || item.status === s.key || !(ORDER_TRANSITIONS[item.status] ?? []).includes(s.key)}
                           onPress={(event) => { event.stopPropagation(); updateStatus(item.id, s.key); }}
                           style={[
                             styles.statusBtn,
@@ -585,6 +622,8 @@ const styles = StyleSheet.create({
   newBadgeText: { fontSize: 11, fontWeight: "800", color: "#000" },
   notifBanner: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 100, flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", backgroundColor: "#E91E8C", paddingHorizontal: 16, paddingVertical: 14 },
   notifText: { color: "#fff", fontWeight: "700", fontSize: 14, flex: 1, textAlign: "center" },
+  errorBanner: { flexDirection: "row-reverse", alignItems: "center", gap: 8, backgroundColor: "#c0392b", paddingHorizontal: 16, paddingVertical: 12, zIndex: 99 },
+  errorBannerText: { color: "#fff", fontWeight: "700", fontSize: 13, flex: 1, textAlign: "right" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
   loadingText: { fontSize: 14 },
   emptyText: { fontSize: 18, fontWeight: "700" },
