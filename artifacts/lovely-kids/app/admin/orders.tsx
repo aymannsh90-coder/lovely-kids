@@ -98,6 +98,8 @@ export default function AdminOrdersScreen() {
   const [proofModal, setProofModal] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
+  const pendingOrderIdsRef = useRef<Set<number>>(new Set());
+  const ordersFetchVersionRef = useRef(0);
   const bannerAnim = useRef(new Animated.Value(-80)).current;
   const bannerCount = useRef(0);
 
@@ -115,6 +117,8 @@ export default function AdminOrdersScreen() {
   }, [bannerAnim]);
 
   const fetchOrders = useCallback(async () => {
+    if (pendingOrderIdsRef.current.size > 0) { setRefreshing(false); return; }
+    const fetchVersion = ordersFetchVersionRef.current;
     const token = await getAuthToken();
     if (!token) {
       setOrders([]);
@@ -126,6 +130,7 @@ export default function AdminOrdersScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/orders`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
+      if (fetchVersion !== ordersFetchVersionRef.current) return;
       setOrders(Array.isArray(data) ? data : []);
     } catch {
       setOrders([]);
@@ -154,9 +159,11 @@ export default function AdminOrdersScreen() {
   }, [fetchOrders]);
 
   const updateStatus = async (id: number, status: string) => {
-    if (pendingOrderIds.has(id)) return;
+    if (pendingOrderIdsRef.current.has(id)) return;
     const previousStatus = orders.find((o) => o.id === id)?.status;
     if (!previousStatus || previousStatus === status) return;
+    pendingOrderIdsRef.current.add(id);
+    ordersFetchVersionRef.current += 1;
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     setPendingOrderIds((prev) => new Set(prev).add(id));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -169,11 +176,13 @@ export default function AdminOrdersScreen() {
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error(await res.text());
+        const updatedOrder = (await res.json()) as Order;
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updatedOrder } : o)));
     } catch (error) {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: previousStatus } : o)));
       Alert.alert("تعذر تحديث الحالة", error instanceof Error ? error.message : "حدث خطأ غير متوقع");
     }
-    finally { setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
+    finally { pendingOrderIdsRef.current.delete(id); setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
   };
 
   const confirmPayment = async (id: number) => {
@@ -197,7 +206,7 @@ export default function AdminOrdersScreen() {
   };
 
   const deleteOrder = async (id: number) => {
-    if (pendingOrderIds.has(id)) return;
+    if (pendingOrderIdsRef.current.has(id)) return;
     setDeleteConfirmId(null);
     const deletedOrder = orders.find((o) => o.id === id);
     if (!deletedOrder) return;
@@ -213,7 +222,7 @@ export default function AdminOrdersScreen() {
     } catch {
       setOrders((prev) => [...prev.slice(0, deletedIndex), deletedOrder, ...prev.slice(deletedIndex)]);
     }
-    finally { setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
+    finally { pendingOrderIdsRef.current.delete(id); setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
   };
 
   const confirmDeleteOrder = (id: number) => {
