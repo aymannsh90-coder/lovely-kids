@@ -168,9 +168,10 @@ export default function AdminOrdersScreen() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error("تعذر تحديث حالة الطلب");
-    } catch {
+      if (!res.ok) throw new Error(await res.text());
+    } catch (error) {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: previousStatus } : o)));
+      Alert.alert("تعذر تحديث الحالة", error instanceof Error ? error.message : "حدث خطأ غير متوقع");
     }
     finally { setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); }
   };
