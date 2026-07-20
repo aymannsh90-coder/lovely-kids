@@ -113,7 +113,7 @@ async function sendPasswordResetEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Lovely Kids <onboarding@resend.dev>",
+        from: "Lovely Kids <no-reply@lovelykids.net>",
         to: [options.to],
         subject:
           "إعادة تعيين كلمة المرور - Lovely Kids",
