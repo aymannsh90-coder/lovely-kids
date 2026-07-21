@@ -97,12 +97,15 @@ export default function RootLayout() {
   // Hard safety: splash must never stay on screen longer than SPLASH_HARD_TIMEOUT_MS
   // regardless of what happens inside WelcomeSplash or its contexts.
   useEffect(() => {
+    if (!fontsReady) return;
+
     const t = setTimeout(() => {
       console.log("[Startup] Splash hard timeout — forcing dismiss");
       setShowWelcome(false);
     }, SPLASH_HARD_TIMEOUT_MS);
+
     return () => clearTimeout(t);
-  }, []);
+  }, [fontsReady]);
 
   if (!fontsReady) {
     return <View style={{ flex: 1, backgroundColor: "#E91E8C" }} />;
