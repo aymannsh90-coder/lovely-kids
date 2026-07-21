@@ -68,6 +68,7 @@ export default function CartScreen() {
   const handleCheckout = async () => {
     if (!user) {
       if (Platform.OS === "web") {
+        window.alert("لإتمام الطلب يرجى التسجيل أو تسجيل الدخول");
         router.push("/(tabs)/profile");
       } else {
         Alert.alert(
