@@ -10,12 +10,14 @@
     "cors": "^2.8.6",
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/pg": "^8.20.0"
+    "@types/pg": "^8.20.0",
+    "@types/web-push": "^3.6.4"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"

@@ -1,5 +1,6 @@
-import { pushTokensTable } from "@workspace/db/schema";
+import { pushTokensTable, webPushSubscriptionsTable } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import webpush from "web-push";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 
@@ -31,6 +32,17 @@ async function requireAdmin(
   }
 
   return null;
+}
+
+function configureWebPush(env: Env) {
+  const publicKey = env.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = env.VAPID_PRIVATE_KEY?.trim();
+  const subject = env.VAPID_SUBJECT?.trim();
+
+  if (!publicKey || !privateKey || !subject) return false;
+
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  return true;
 }
 
 function isValidExpoPushToken(token: string) {
@@ -104,6 +116,91 @@ async function handleRegisterToken(
   return json({ success: true }, 201);
 }
 
+async function handleRegisterWebPush(request: Request, db: Db, env: Env) {
+  const body = await request.json().catch(() => null) as {
+    endpoint?: unknown;
+    p256dh?: unknown;
+    auth?: unknown;
+  } | null;
+
+  if (
+    !body ||
+    typeof body.endpoint !== "string" ||
+    typeof body.p256dh !== "string" ||
+    typeof body.auth !== "string"
+  ) {
+    return json({ error: "بيانات الاشتراك غير صالحة" }, 400);
+  }
+
+  const user = await getCurrentUser(db, request, env);
+
+  await db.insert(webPushSubscriptionsTable).values({
+    endpoint: body.endpoint,
+    p256dh: body.p256dh,
+    auth: body.auth,
+    phone: user?.phone ?? null,
+    isAdmin: user?.isAdmin ?? false,
+  }).onConflictDoUpdate({
+    target: webPushSubscriptionsTable.endpoint,
+    set: {
+      p256dh: body.p256dh,
+      auth: body.auth,
+      phone: user?.phone ?? null,
+      isAdmin: user?.isAdmin ?? false,
+    },
+  });
+
+  return json({ success: true }, 201);
+}
+
+async function sendWebPush(
+  env: Env,
+  subscription: { endpoint: string; p256dh: string; auth: string },
+  title: string,
+  body: string,
+) {
+  if (!configureWebPush(env)) {
+    return { ok: false, expired: false };
+  }
+
+  try {
+    await webpush.sendNotification(
+      {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: subscription.p256dh,
+          auth: subscription.auth,
+        },
+      },
+      JSON.stringify({ title, body }),
+    );
+
+    return { ok: true, expired: false };
+  } catch (error) {
+    const statusCode =
+      typeof error === "object" &&
+      error !== null &&
+      "statusCode" in error
+        ? Number(error.statusCode)
+        : 0;
+
+    return {
+      ok: false,
+      expired: statusCode === 404 || statusCode === 410,
+    };
+  }
+}
+
+function handleWebPushPublicKey(env: Env) {
+  const publicKey = env.VAPID_PUBLIC_KEY?.trim();
+
+  if (!publicKey) {
+    return json({ error: "Web Push غير مهيأ" }, 503);
+  }
+
+  return json({ publicKey });
+}
+
 async function handleTokenCount(
   request: Request,
   db: Db,
@@ -116,7 +213,15 @@ async function handleTokenCount(
     .select({ id: pushTokensTable.id })
     .from(pushTokensTable);
 
-  return json({ count: rows.length });
+  const webRows = await db
+    .select({ id: webPushSubscriptionsTable.id })
+    .from(webPushSubscriptionsTable);
+
+  return json({
+    count: rows.length + webRows.length,
+    expoCount: rows.length,
+    webCount: webRows.length,
+  });
 }
 
 function chunk<T>(
@@ -309,7 +414,15 @@ async function handleSendNotification(
     .select({ token: pushTokensTable.token })
     .from(pushTokensTable);
 
-  if (devices.length === 0) {
+  const webDevices = await db
+    .select({
+      endpoint: webPushSubscriptionsTable.endpoint,
+      p256dh: webPushSubscriptionsTable.p256dh,
+      auth: webPushSubscriptionsTable.auth,
+    })
+    .from(webPushSubscriptionsTable);
+
+  if (devices.length === 0 && webDevices.length === 0) {
     return json({
       sent: 0,
       total: 0,
@@ -322,7 +435,9 @@ async function handleSendNotification(
   );
 
   let sent = 0;
+  let webSent = 0;
   const invalidTokens: string[] = [];
+  const expiredWebEndpoints: string[] = [];
 
   for (const tokenBatch of chunk(tokens, 100)) {
     const messages = tokenBatch.map((to) => ({
@@ -392,6 +507,21 @@ async function handleSendNotification(
     }
     }
 
+  for (const device of webDevices) {
+    const result = await sendWebPush(
+      env,
+      device,
+      title,
+      messageBody,
+    );
+
+    if (result.ok) {
+      webSent += 1;
+    } else if (result.expired) {
+      expiredWebEndpoints.push(device.endpoint);
+    }
+  }
+
   const uniqueInvalidTokens = [
     ...new Set(invalidTokens),
   ];
@@ -407,12 +537,32 @@ async function handleSendNotification(
       );
   }
 
+  const uniqueExpiredWebEndpoints = [
+    ...new Set(expiredWebEndpoints),
+  ];
+
+  if (uniqueExpiredWebEndpoints.length > 0) {
+    await db
+      .delete(webPushSubscriptionsTable)
+      .where(
+        inArray(
+          webPushSubscriptionsTable.endpoint,
+          uniqueExpiredWebEndpoints,
+        ),
+      );
+  }
+
+  const totalSent = sent + webSent;
+  const totalDevices = tokens.length + webDevices.length;
+
   return json({
-    sent,
-    total: tokens.length,
-    failed: tokens.length - sent,
-    removedInvalidTokens:
-      uniqueInvalidTokens.length,
+    sent: totalSent,
+    total: totalDevices,
+    failed: totalDevices - totalSent,
+    expoSent: sent,
+    webSent,
+    removedInvalidTokens: uniqueInvalidTokens.length,
+    removedExpiredWebSubscriptions: uniqueExpiredWebEndpoints.length,
   });
 }
 
@@ -428,6 +578,20 @@ export async function handleNotificationRequest(
     path === "/api/push-tokens"
   ) {
     return handleRegisterToken(request, db, env);
+  }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/web-push-public-key"
+  ) {
+    return handleWebPushPublicKey(env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/web-push-subscriptions"
+  ) {
+    return handleRegisterWebPush(request, db, env);
   }
 
   if (

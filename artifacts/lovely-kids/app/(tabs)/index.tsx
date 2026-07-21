@@ -18,6 +18,7 @@ import { CartBadge } from "@/components/CartBadge";
 import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
+import { enableWebPushNotifications } from "@/hooks/usePushNotifications";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -51,7 +52,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
-  const { user } = useAuth();
+  const { user, getAuthToken } = useAuth();
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const ageGroups = AGE_GROUP_IDS.map((id) => ({
     id,
@@ -63,6 +64,7 @@ export default function HomeScreen() {
   const [genderTab, setGenderTab] = useState<GenderTab>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
+  const [webPushEnabled, setWebPushEnabled] = useState(false);
 
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
 
@@ -88,6 +90,28 @@ export default function HomeScreen() {
     window.addEventListener("beforeinstallprompt", onPrompt);
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    setWebPushEnabled(
+      typeof Notification !== "undefined" &&
+      Notification.permission === "granted",
+    );
+  }, []);
+
+  const handleEnableWebPush = async () => {
+    const result = await enableWebPushNotifications(
+      user?.phone,
+      getAuthToken,
+    );
+
+    if (result.ok) {
+      setWebPushEnabled(true);
+      window.alert("تم تفعيل الإشعارات بنجاح ✅");
+    } else {
+      window.alert(result.error ?? "تعذر تفعيل الإشعارات");
+    }
+  };
 
   const handleInstall = async () => {
     if (installPrompt) {
@@ -243,6 +267,16 @@ export default function HomeScreen() {
         >
           <Ionicons name="download-outline" size={20} color="#fff" />
           <Text style={styles.installBtnText}>تثبيت تطبيق Lovely Kids</Text>
+        </Pressable>
+      ) : null}
+
+      {Platform.OS === "web" && !webPushEnabled ? (
+        <Pressable
+          onPress={() => void handleEnableWebPush()}
+          style={[styles.installBtn, { backgroundColor: colors.primary }]}
+        >
+          <Ionicons name="notifications-outline" size={20} color="#fff" />
+          <Text style={styles.installBtnText}>تفعيل الإشعارات</Text>
         </Pressable>
       ) : null}
 
