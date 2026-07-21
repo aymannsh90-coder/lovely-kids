@@ -8,6 +8,7 @@ type InstallPromptEvent = Event & {
 export default function InstallPage() {
   const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
+  const [showIosHelp, setShowIosHelp] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -38,7 +39,7 @@ export default function InstallPage() {
     }
 
     if (isIos) {
-      window.alert("من Safari اضغط زر المشاركة ثم اختر: إضافة إلى الشاشة الرئيسية");
+      setShowIosHelp(true);
       return;
     }
 
@@ -63,6 +64,20 @@ export default function InstallPage() {
           تثبيت التطبيق
         </Text>
       </Pressable>
+
+      {showIosHelp ? (
+        <View style={{ marginTop: 24, padding: 18, borderRadius: 14, backgroundColor: "#fff", width: "100%", maxWidth: 420 }}>
+          <Text style={{ fontSize: 17, fontWeight: "800", marginBottom: 10, textAlign: "center" }}>
+            طريقة التثبيت على iPhone
+          </Text>
+          <Text style={{ fontSize: 15, lineHeight: 26, textAlign: "right" }}>
+            1. افتح الصفحة من Safari{"\n"}
+            2. اضغط زر المشاركة{"\n"}
+            3. اختر إضافة إلى الشاشة الرئيسية{"\n"}
+            4. اضغط إضافة
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
