@@ -22,6 +22,11 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
 type GenderTab = "boys" | "girls" | null;
 
 const { width } = Dimensions.get("window");
@@ -56,6 +61,9 @@ export default function HomeScreen() {
   const activeOffers = settings.offers.filter((o) => o.active);
   const [selectedAge, setSelectedAge] = useState<string | null>(null);
   const [genderTab, setGenderTab] = useState<GenderTab>(null);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [isIos, setIsIos] = useState(false);
+
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -67,6 +75,32 @@ export default function HomeScreen() {
     }).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as InstallPromptEvent);
+    };
+
+    setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, []);
+
+  const handleInstall = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      await installPrompt.userChoice;
+      setInstallPrompt(null);
+      return;
+    }
+
+    if (isIos) {
+      window.alert("من Safari اضغط زر المشاركة ثم اختر: إضافة إلى الشاشة الرئيسية");
+    }
+  };
 
   const genderFiltered = genderTab
     ? products.filter((p) => p.gender === genderTab)
@@ -201,6 +235,16 @@ export default function HomeScreen() {
           </View>
         </View>
       </Pressable>
+
+      {Platform.OS === "web" && (installPrompt || isIos) ? (
+        <Pressable
+          onPress={() => void handleInstall()}
+          style={[styles.installBtn, { backgroundColor: colors.primary }]}
+        >
+          <Ionicons name="download-outline" size={20} color="#fff" />
+          <Text style={styles.installBtnText}>تثبيت تطبيق Lovely Kids</Text>
+        </Pressable>
+      ) : null}
 
       {/* Trust Badges */}
       <View style={styles.trustRow}>
@@ -585,6 +629,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   featureText: { fontSize: 12, fontWeight: "600", textAlign: "right" },
+  installBtn: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    minHeight: 46,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  installBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
   trustRow: {
     flexDirection: "row-reverse",
     justifyContent: "space-around",

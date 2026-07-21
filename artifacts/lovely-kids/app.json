@@ -45,7 +45,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://lovelykids.net/"
         }
       ],
       [
@@ -89,7 +89,7 @@
         "projectId": "29a18980-4b6d-44de-8c39-b2bbdd1385d5"
       },
       "router": {
-        "origin": "https://replit.com/"
+        "origin": "https://lovelykids.net/"
       }
     },
     "owner": "aymanshaheen"
