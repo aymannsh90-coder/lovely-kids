@@ -12,9 +12,17 @@ export default function InstallPage() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
 
+    const w = window as Window & { __lovelyInstallPrompt?: InstallPromptEvent | null };
+
+    if (w.__lovelyInstallPrompt) {
+      setPromptEvent(w.__lovelyInstallPrompt);
+    }
+
     const onPrompt = (e: Event) => {
       e.preventDefault();
-      setPromptEvent(e as InstallPromptEvent);
+      const prompt = e as InstallPromptEvent;
+      w.__lovelyInstallPrompt = prompt;
+      setPromptEvent(prompt);
     };
 
     setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));

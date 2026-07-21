@@ -29,6 +29,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Lovely Kids" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <script>
+      window.__lovelyInstallPrompt = null;
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        window.__lovelyInstallPrompt = e;
+      });
+    </script>
   </head>
 
   <body>
