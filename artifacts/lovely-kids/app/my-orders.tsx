@@ -99,6 +99,7 @@ export default function MyOrdersScreen() {
 
         const res = await fetch(`${API_BASE}/api/orders/my`, {
           headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
         });
       if (res.ok) {
         const data = await res.json();
@@ -117,7 +118,7 @@ export default function MyOrdersScreen() {
 
       const intervalId = setInterval(() => {
         void fetchOrders(true);
-      }, 15000);
+      }, 10000);
 
       return () => clearInterval(intervalId);
     }, [fetchOrders])
