@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -114,6 +114,8 @@ export default function MyOrdersScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (Platform.OS === "web") return;
+
       void fetchOrders();
 
       const intervalId = setInterval(() => {
@@ -123,6 +125,18 @@ export default function MyOrdersScreen() {
       return () => clearInterval(intervalId);
     }, [fetchOrders])
   );
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    void fetchOrders();
+
+    const intervalId = setInterval(() => {
+      void fetchOrders(true);
+    }, 10000);
+
+    return () => clearInterval(intervalId);
+  }, [fetchOrders]);
 
   // Called when user confirms cancellation in the modal
   const doCancel = async (order: Order) => {
