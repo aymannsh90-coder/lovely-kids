@@ -133,7 +133,17 @@ export default function RootLayout() {
                               )}
                             </KeyboardProvider>
                           ) : (
-                            <RootLayoutNav />
+                            <>
+                              <RootLayoutNav />
+                              {showWelcome && (
+                                <WelcomeSplash
+                                  onFinish={() => {
+                                    console.log("[Startup] Web splash finished");
+                                    setShowWelcome(false);
+                                  }}
+                                />
+                              )}
+                            </>
                           )}
                         </GestureHandlerRootView>
                       </NewOrdersProvider>

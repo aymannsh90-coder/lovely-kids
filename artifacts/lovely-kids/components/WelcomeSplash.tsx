@@ -98,7 +98,7 @@ export function WelcomeSplash({ onFinish }: WelcomeSplashProps) {
           />
         </Animated.View>
         <Animated.View style={textStyle}>
-          <Text style={styles.welcomeText}>أهلاً وسهلاً بعودتك</Text>
+          <Text style={styles.welcomeText}>{"أهلاً وسهلاً بكم في متجر\nLOVELY KIDS"}</Text>
         </Animated.View>
       </LinearGradient>
     </Animated.View>
