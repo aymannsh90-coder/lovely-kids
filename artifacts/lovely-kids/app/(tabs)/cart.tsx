@@ -66,6 +66,22 @@ export default function CartScreen() {
   const whatsapp = settings.whatsappNumber || "97292376808";
 
   const handleCheckout = async () => {
+    if (!user) {
+      if (Platform.OS === "web") {
+        router.push("/(tabs)/profile");
+      } else {
+        Alert.alert(
+          "تسجيل الدخول مطلوب",
+          "يجب تسجيل الدخول أو إنشاء حساب لإتمام الطلب.",
+          [
+            { text: "إلغاء", style: "cancel" },
+            { text: "تسجيل الدخول", onPress: () => router.push("/(tabs)/profile") },
+          ],
+        );
+      }
+      return;
+    }
+
     if (!name.trim() || !phone.trim() || !address.trim() || !selectedZone) return;
 
     if (paymentMethod === "bank_transfer" && (!user || !user.phone)) {

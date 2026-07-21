@@ -69,6 +69,10 @@ async function handleCreateOrder(
       env,
     );
 
+    if (!authUser) {
+      return json({ error: "يجب تسجيل الدخول لإتمام الطلب" }, 401);
+    }
+
     const newOrder = await createTrustedOrder(
       db,
       {
