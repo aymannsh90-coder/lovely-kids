@@ -6,15 +6,18 @@ import {
   Image,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
+import { useAppSettings } from "@/context/AppSettingsContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 import { Product } from "@/data/products";
+import { getProductShareUrl } from "@/utils/productShare";
 
 interface Props {
   product: Product;
@@ -29,6 +32,7 @@ function calcDiscount(price: number, originalPrice?: number | null): number | nu
 
 export function ProductCard({ product, style }: Props) {
   const colors = useColors();
+  const { settings } = useAppSettings();
   const { addItem } = useCart();
   const { toggleItem, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(product.id);
@@ -53,6 +57,24 @@ export function ProductCard({ product, style }: Props) {
       image: product.image,
       category: product.category,
     });
+  };
+
+  const handleShare = async () => {
+    const productUrl = getProductShareUrl(product.id, settings);
+    const message = `شاهد هذا المنتج من Lovely Kids:\n${product.nameAr}\nالسعر: ${product.price} ₪\n${productUrl}`;
+
+    try {
+      if (Platform.OS === "web") {
+        if (navigator.share) {
+          await navigator.share({ title: product.nameAr, text: message, url: productUrl });
+        } else {
+          await navigator.clipboard.writeText(productUrl);
+          window.alert("تم نسخ رابط المنتج");
+        }
+      } else {
+        await Share.share({ title: product.nameAr, message, url: productUrl });
+      }
+    } catch {}
   };
 
   const handleToggleWishlist = () => {
@@ -107,6 +129,14 @@ export function ProductCard({ product, style }: Props) {
             size={18}
             color={wishlisted ? colors.primary : colors.mutedForeground}
           />
+        </Pressable>
+
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); void handleShare(); }}
+          style={[styles.shareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          hitSlop={8}
+        >
+          <Ionicons name="share-social-outline" size={17} color={colors.primary} />
         </Pressable>
       </View>
 
@@ -213,6 +243,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 2,
+  },
+  shareBtn: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
     elevation: 2,
   },
   info: {
