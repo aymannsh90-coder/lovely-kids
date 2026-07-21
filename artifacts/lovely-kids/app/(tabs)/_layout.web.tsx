@@ -28,7 +28,10 @@ export default function TabLayout() {
         },
         tabBarBackground: () => (
           <View
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: colors.background },
+            ]}
           />
         ),
         tabBarLabelStyle: {
@@ -38,11 +41,27 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="profile"
         options={{
-          title: settings.tabLabelHome,
+          title: settings.tabLabelProfile,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="person-outline" size={size} color={color} />
+          ),
+        }}
+      />{" "}
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: "السلة",
+          tabBarBadge: totalItems > 0 ? totalItems : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.primary,
+            fontSize: 10,
+            minWidth: 16,
+            height: 16,
+          },
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cart-outline" size={size} color={color} />
           ),
         }}
       />
@@ -56,22 +75,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="cart"
+        name="index"
         options={{
-          title: "السلة",
-          tabBarBadge: totalItems > 0 ? totalItems : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 10, minWidth: 16, height: 16 },
+          title: settings.tabLabelHome,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cart-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: settings.tabLabelProfile,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
