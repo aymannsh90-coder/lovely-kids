@@ -110,6 +110,7 @@ const styles = StyleSheet.create({
     // Solid background prevents any transparency bleed-through while the
     // app renders behind the splash on first launch.
     backgroundColor: SPLASH_PRIMARY,
+    zIndex: 9999,
   },
   gradient: {
     flex: 1,
