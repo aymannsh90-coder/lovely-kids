@@ -89,11 +89,16 @@ export default function ProductDetailScreen() {
     );
   }
 
-  const allImages = activeColorVariant?.image
-    ? [activeColorVariant.image]
-    : product.images && product.images.length > 0
-    ? product.images
-    : [product.image];
+  const allImages = [
+    ...new Set([
+      ...(product.images && product.images.length > 0
+        ? product.images
+        : [product.image]),
+      ...(product.colorVariants ?? [])
+        .map((variant) => variant.image)
+        .filter((img): img is string => !!img),
+    ]),
+  ];
 
   const wishlisted = isWishlisted(product.id);
   const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
@@ -262,7 +267,22 @@ export default function ProductDetailScreen() {
                 {product.colorVariants!.map((cv) => (
                   <Pressable
                     key={cv.color}
-                    onPress={() => !isOutOfStock && setSelectedColor(cv.color)}
+                    onPress={() => {
+                      if (isOutOfStock) return;
+
+                      setSelectedColor(cv.color);
+
+                      if (cv.image) {
+                        const imageIndex = allImages.indexOf(cv.image);
+                        if (imageIndex >= 0) {
+                          flatRef.current?.scrollToIndex({
+                            index: imageIndex,
+                            animated: true,
+                          });
+                          setActiveIdx(imageIndex);
+                        }
+                      }
+                    }}
                     style={[
                       styles.colorSwatchOuter,
                       {

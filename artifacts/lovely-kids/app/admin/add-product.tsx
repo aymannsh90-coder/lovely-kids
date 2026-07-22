@@ -103,7 +103,25 @@ export default function AddProductScreen() {
   };
 
   const removeColorVariant = (idx: number) => {
+    const removedUrl = colorVariants[idx]?.image;
+
+    const usedByAnotherColor = removedUrl
+      ? colorVariants.some((c, i) => i !== idx && c.image === removedUrl)
+      : false;
+
     setColorVariants((prev) => prev.filter((_, i) => i !== idx));
+
+    if (removedUrl && !usedByAnotherColor) {
+      setImages((prev) => {
+        const updated = prev.filter((url) => url !== removedUrl);
+
+        if (image === removedUrl) {
+          setImage(updated[0] ?? "");
+        }
+
+        return updated;
+      });
+    }
   };
 
   const addSizeToColor = (idx: number) => {
@@ -146,13 +164,65 @@ export default function AddProductScreen() {
   };
 
   const handlePickColorImage = async (idx: number) => {
+    const previousUrl = colorVariants[idx]?.image;
+    const previousImageIndex = previousUrl ? images.indexOf(previousUrl) : -1;
+    const needsNewGallerySlot = previousImageIndex < 0;
+
+    if (needsNewGallerySlot && images.length >= 6) {
+      setErrors(["يمكنك إضافة حتى 6 صور للمنتج"]);
+      return;
+    }
+
     const url = await uploadImage();
     if (!url) return;
-    setColorVariants((prev) => prev.map((c, i) => (i !== idx ? c : { ...c, image: url })));
+
+    setColorVariants((prev) =>
+      prev.map((c, i) => (i !== idx ? c : { ...c, image: url }))
+    );
+
+    setImages((prev) => {
+      if (previousUrl) {
+        const previousIndex = prev.indexOf(previousUrl);
+        if (previousIndex >= 0) {
+          const updated = [...prev];
+          updated[previousIndex] = url;
+          return [...new Set(updated)];
+        }
+      }
+
+      if (prev.includes(url)) return prev;
+      if (prev.length >= 6) return prev;
+      return [...prev, url];
+    });
+
+    if (!image || image === previousUrl) {
+      setImage(url);
+    }
   };
 
   const removeColorImage = (idx: number) => {
-    setColorVariants((prev) => prev.map((c, i) => (i !== idx ? c : { ...c, image: undefined })));
+    const removedUrl = colorVariants[idx]?.image;
+    if (!removedUrl) return;
+
+    const usedByAnotherColor = colorVariants.some(
+      (c, i) => i !== idx && c.image === removedUrl
+    );
+
+    setColorVariants((prev) =>
+      prev.map((c, i) => (i !== idx ? c : { ...c, image: undefined }))
+    );
+
+    if (!usedByAnotherColor) {
+      setImages((prev) => {
+        const updated = prev.filter((url) => url !== removedUrl);
+
+        if (image === removedUrl) {
+          setImage(updated[0] ?? "");
+        }
+
+        return updated;
+      });
+    }
   };
 
   const uploadImage = async (): Promise<string | null> => {
@@ -273,21 +343,46 @@ export default function AddProductScreen() {
   };
 
   const handleReplaceImage = async (index: number) => {
+    const previousUrl = images[index];
+    if (!previousUrl) return;
+
     const url = await uploadImage();
     if (!url) return;
+
     setImages((prev) => {
       const updated = [...prev];
       updated[index] = url;
       return updated;
     });
-    if (index === 0) setImage(url);
+
+    setColorVariants((prev) =>
+      prev.map((c) =>
+        c.image === previousUrl ? { ...c, image: url } : c
+      )
+    );
+
+    if (index === 0 || image === previousUrl) {
+      setImage(url);
+    }
   };
 
   const handleRemoveImage = (index: number) => {
+    const removedUrl = images[index];
+    if (!removedUrl) return;
+
+    setColorVariants((prev) =>
+      prev.map((c) =>
+        c.image === removedUrl ? { ...c, image: undefined } : c
+      )
+    );
+
     setImages((prev) => {
       const updated = prev.filter((_, i) => i !== index);
-      if (index === 0 && updated.length > 0) setImage(updated[0]);
-      else if (updated.length === 0) setImage("");
+
+      if (image === removedUrl) {
+        setImage(updated[0] ?? "");
+      }
+
       return updated;
     });
   };
