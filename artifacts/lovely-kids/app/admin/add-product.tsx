@@ -213,15 +213,12 @@ export default function AddProductScreen() {
     );
 
     if (!usedByAnotherColor) {
-      setImages((prev) => {
-        const updated = prev.filter((url) => url !== removedUrl);
+      const updatedImages = images.filter((url) => url !== removedUrl);
+      setImages(updatedImages);
 
-        if (image === removedUrl) {
-          setImage(updated[0] ?? "");
-        }
-
-        return updated;
-      });
+      if (image === removedUrl) {
+        setImage(updatedImages[0] ?? "");
+      }
     }
   };
 
