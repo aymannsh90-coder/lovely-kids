@@ -64,6 +64,7 @@ export default function HomeScreen() {
   const [genderTab, setGenderTab] = useState<GenderTab>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
   const [webPushEnabled, setWebPushEnabled] = useState(false);
 
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
@@ -81,14 +82,22 @@ export default function HomeScreen() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
 
+    const savedPrompt = (window as any).__lovelyInstallPrompt as InstallPromptEvent | null;
+    const standalone = window.matchMedia("(display-mode: standalone)").matches;
+    setIsInstalled(standalone);
+    if (!standalone && savedPrompt) setInstallPrompt(savedPrompt);
+
     const onPrompt = (e: Event) => {
       e.preventDefault();
+      (window as any).__lovelyInstallPrompt = e;
       setInstallPrompt(e as InstallPromptEvent);
     };
 
+    const onInstalled = () => setIsInstalled(true);
     setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
     window.addEventListener("beforeinstallprompt", onPrompt);
-    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => { window.removeEventListener("beforeinstallprompt", onPrompt); window.removeEventListener("appinstalled", onInstalled); };
   }, []);
 
   useEffect(() => {
@@ -116,7 +125,8 @@ export default function HomeScreen() {
   const handleInstall = async () => {
     if (installPrompt) {
       await installPrompt.prompt();
-      await installPrompt.userChoice;
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "accepted") setIsInstalled(true);
       setInstallPrompt(null);
       return;
     }
@@ -260,7 +270,7 @@ export default function HomeScreen() {
         </View>
       </Pressable>
 
-      {Platform.OS === "web" && (installPrompt || isIos) ? (
+      {Platform.OS === "web" && !isInstalled && (installPrompt || isIos) ? (
         <Pressable
           onPress={() => void handleInstall()}
           style={[styles.installBtn, { backgroundColor: colors.primary }]}
@@ -491,26 +501,26 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  headerLeft: { flexDirection: "row-reverse", alignItems: "center", gap: 8, flex: 1 },
+  headerLeft: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 8, flex: 1 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   logoImage: { width: 110, height: 52 },
-  greetingBlock: { alignItems: "flex-end" },
+  greetingBlock: { alignItems: Platform.OS === "web" ? "flex-end" : "flex-start" },
   greetingHi: {
     fontSize: 15,
     fontWeight: "800",
-    textAlign: "right",
+    textAlign: Platform.OS === "web" ? "right" : "left",
     letterSpacing: 0.3,
   },
   greetingName: {
     fontSize: 14,
     fontWeight: "600",
-    textAlign: "right",
+    textAlign: Platform.OS === "web" ? "right" : "left",
     marginTop: 1,
   },
   iconBtn: {
@@ -522,7 +532,7 @@ const styles = StyleSheet.create({
   searchBar: {
     marginHorizontal: 16,
     marginBottom: 16,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 16,
@@ -530,7 +540,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
-  searchPlaceholder: { fontSize: 14, flex: 1, textAlign: "right" },
+  searchPlaceholder: { fontSize: 14, flex: 1, textAlign: Platform.OS === "web" ? "right" : "left" },
   heroBanner: {
     marginHorizontal: 16,
     borderRadius: 20,
@@ -539,22 +549,22 @@ const styles = StyleSheet.create({
     padding: 20,
     minHeight: 180,
   },
-  heroContent: { alignItems: "flex-end", gap: 8 },
+  heroContent: { alignItems: Platform.OS === "web" ? "flex-end" : "flex-start", gap: 8 },
   heroBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
-    alignSelf: "flex-end",
+    alignSelf: Platform.OS === "web" ? "flex-end" : "flex-start",
   },
   heroBadgeText: { fontSize: 12, fontWeight: "700", color: "#333" },
   heroTitle: {
     fontSize: 24,
     fontWeight: "800",
     color: "#fff",
-    textAlign: "right",
+    textAlign: Platform.OS === "web" ? "right" : "left",
     lineHeight: 32,
   },
-  heroSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.85)", textAlign: "right" },
+  heroSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.85)", textAlign: Platform.OS === "web" ? "right" : "left" },
   heroBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -562,7 +572,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 30,
-    alignSelf: "flex-end",
+    alignSelf: Platform.OS === "web" ? "flex-end" : "flex-start",
     marginTop: 4,
   },
   heroBtnText: { fontSize: 14, fontWeight: "700" },
@@ -576,12 +586,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    textAlign: "right",
+    textAlign: Platform.OS === "web" ? "right" : "left",
     paddingHorizontal: 16,
     marginBottom: 12,
   },
   sectionHeader: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -601,11 +611,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 3,
-    alignSelf: "flex-end",
+    alignSelf: Platform.OS === "web" ? "flex-end" : "flex-start",
   },
   offerBadgeText: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  offerTitle: { color: "#fff", fontWeight: "700", fontSize: 14, textAlign: "right" },
-  offerSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, textAlign: "right" },
+  offerTitle: { color: "#fff", fontWeight: "700", fontSize: 14, textAlign: Platform.OS === "web" ? "right" : "left" },
+  offerSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, textAlign: Platform.OS === "web" ? "right" : "left" },
   ageScrollWrapper: {
     position: "relative",
     justifyContent: "center",
@@ -647,7 +657,7 @@ const styles = StyleSheet.create({
   ageLabel: { fontSize: 13, fontWeight: "700" },
   ageSublabel: { fontSize: 10 },
   features: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     flexWrap: "wrap",
     paddingHorizontal: 12,
     gap: 8,
@@ -655,14 +665,14 @@ const styles = StyleSheet.create({
   },
   featureItem: {
     width: (width - 40) / 2,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 8,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
   },
-  featureText: { fontSize: 12, fontWeight: "600", textAlign: "right" },
+  featureText: { fontSize: 12, fontWeight: "600", textAlign: Platform.OS === "web" ? "right" : "left" },
   installBtn: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -680,7 +690,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   trustRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "space-around",
     paddingHorizontal: 16,
     marginTop: 18,
@@ -698,7 +708,7 @@ const styles = StyleSheet.create({
   trustTitle: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   trustSubtitle: { fontSize: 10, textAlign: "center" },
   productsGrid: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     flexWrap: "wrap",
     paddingHorizontal: 16,
     gap: 12,
@@ -713,17 +723,17 @@ const styles = StyleSheet.create({
   contactBanner: {
     marginHorizontal: 16,
     marginBottom: 8,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 12,
     padding: 16,
     borderRadius: 16,
   },
-  contactText: { flex: 1, alignItems: "flex-end" },
+  contactText: { flex: 1, alignItems: Platform.OS === "web" ? "flex-end" : "flex-start" },
   contactTitle: { fontSize: 16, fontWeight: "700" },
   contactSub: { fontSize: 12, marginTop: 2 },
   genderTabsRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 16,
@@ -732,7 +742,7 @@ const styles = StyleSheet.create({
   },
   genderTab: {
     flex: 1,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
