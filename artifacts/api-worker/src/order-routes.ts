@@ -11,6 +11,7 @@ import {
 } from "./order-service";
 import { cancelOrderAndRestoreStock } from "./order-stock";
 import {
+  sendOrderStatusNotification,
   sendNewOrderNotification,
 } from "./notification-routes";
 
@@ -409,7 +410,7 @@ async function handleUpdateOrderStatus(
   }
 
   const current = await db
-    .select({ id: ordersTable.id, status: ordersTable.status })
+    .select({ id: ordersTable.id, status: ordersTable.status, customerPhone: ordersTable.customerPhone })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
     .limit(1);
@@ -435,6 +436,14 @@ async function handleUpdateOrderStatus(
       return json({ error: "لا يمكن إلغاء الطلب بهذه الحالة" }, 409);
     }
 
+    if (current[0].customerPhone) {
+      try {
+        await sendOrderStatusNotification(db, env, id, current[0].customerPhone, "cancelled");
+      } catch (error) {
+        console.error("Order status notification failed:", error);
+      }
+    }
+
     return json(result.order);
   }
 
@@ -447,6 +456,20 @@ async function handleUpdateOrderStatus(
 
   if (!updated[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (body.status !== current[0].status && current[0].customerPhone) {
+    try {
+      await sendOrderStatusNotification(
+        db,
+        env,
+        id,
+        current[0].customerPhone,
+        body.status,
+      );
+    } catch (error) {
+      console.error("Order status notification failed:", error);
+    }
   }
 
   return json(updated[0]);

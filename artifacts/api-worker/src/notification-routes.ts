@@ -238,6 +238,106 @@ function chunk<T>(
 }
 
 
+export async function sendOrderStatusNotification(
+  db: Db,
+  env: Env,
+  orderId: number,
+  phone: string,
+  status: string,
+) {
+  const messages: Record<string, { title: string; body: string }> = {
+    new: {
+      title: "تم تحديث طلبك",
+      body: `حالة الطلب #${orderId} أصبحت: جديد`,
+    },
+    confirmed: {
+      title: "تم تأكيد طلبك ✅",
+      body: `تم تأكيد الطلب #${orderId} وجارٍ تجهيزه`,
+    },
+    delivering: {
+      title: "طلبك في طريقه إليك 🚚",
+      body: `الطلب #${orderId} خرج للتوصيل`,
+    },
+    done: {
+      title: "تم تسليم طلبك 🎉",
+      body: `تم تسليم الطلب #${orderId}. شكرًا لتسوقك من Lovely Kids`,
+    },
+    cancelled: {
+      title: "تم إلغاء طلبك",
+      body: `تم إلغاء الطلب #${orderId}`,
+    },
+  };
+
+  const message = messages[status];
+  if (!message) return;
+
+  const devices = await db
+    .select({ token: pushTokensTable.token })
+    .from(pushTokensTable)
+    .where(eq(pushTokensTable.phone, phone));
+
+  const webDevices = await db
+    .select({
+      endpoint: webPushSubscriptionsTable.endpoint,
+      p256dh: webPushSubscriptionsTable.p256dh,
+      auth: webPushSubscriptionsTable.auth,
+    })
+    .from(webPushSubscriptionsTable)
+    .where(eq(webPushSubscriptionsTable.phone, phone));
+
+  const tokens = devices.map((device) => device.token);
+  const invalidTokens: string[] = [];
+  const expiredWebEndpoints: string[] = [];
+
+  for (const tokenBatch of chunk(tokens, 100)) {
+    const messages = tokenBatch.map((to) => ({
+      to,
+      sound: "default",
+      channelId: "default",
+      title: message.title,
+      body: message.body,
+      data: { type: "order_status", orderId: String(orderId), status },
+    }));
+
+    const response = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(messages),
+    });
+
+    if (!response.ok) continue;
+
+    const data = await response.json().catch(() => null) as {
+      data?: Array<{ status?: string; details?: { error?: string } }>;
+    } | null;
+
+    const tickets = Array.isArray(data?.data) ? data.data : [];
+
+    tickets.forEach((ticket, index) => {
+      if (ticket?.details?.error === "DeviceNotRegistered" && tokenBatch[index]) {
+        invalidTokens.push(tokenBatch[index]);
+      }
+    });
+
+  }
+
+  for (const device of webDevices) {
+    const result = await sendWebPush(env, device, message.title, message.body);
+    if (result.expired) expiredWebEndpoints.push(device.endpoint);
+
+  }
+
+  if (invalidTokens.length > 0) {
+    await db.delete(pushTokensTable)
+      .where(inArray(pushTokensTable.token, [...new Set(invalidTokens)]));
+  }
+
+  if (expiredWebEndpoints.length > 0) {
+    await db.delete(webPushSubscriptionsTable)
+      .where(inArray(webPushSubscriptionsTable.endpoint, [...new Set(expiredWebEndpoints)]));
+  }
+}
+
 export async function sendNewOrderNotification(
   db: Db,
   order: {
