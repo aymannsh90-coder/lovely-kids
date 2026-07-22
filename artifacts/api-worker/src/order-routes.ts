@@ -597,6 +597,7 @@ async function handleConfirmPayment(
       status: ordersTable.status,
       paymentMethod: ordersTable.paymentMethod,
       paymentStatus: ordersTable.paymentStatus,
+      customerPhone: ordersTable.customerPhone,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -630,6 +631,20 @@ async function handleConfirmPayment(
 
   if (!updated[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (current[0].status !== "confirmed" && current[0].customerPhone) {
+    try {
+      await sendOrderStatusNotification(
+        db,
+        env,
+        id,
+        current[0].customerPhone,
+        "confirmed",
+      );
+    } catch (error) {
+      console.error("Order status notification failed:", error);
+    }
   }
 
   return json(updated[0]);
