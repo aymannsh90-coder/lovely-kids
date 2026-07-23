@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -216,14 +217,25 @@ export default function CartScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 0.5,
-      base64: true,
+      quality: 1,
     });
 
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets[0]?.uri || !orderId) return;
 
-    const base64 = result.assets[0].base64;
-    if (!base64 || !orderId) return;
+    const asset = result.assets[0];
+    const resizeAction =
+      (asset.width ?? 0) >= (asset.height ?? 0)
+        ? [{ resize: { width: (asset.width ?? 0) > 1200 ? 1200 : asset.width } }]
+        : [{ resize: { height: (asset.height ?? 0) > 1200 ? 1200 : asset.height } }];
+
+    const processed = await manipulateAsync(
+      asset.uri,
+      resizeAction,
+      { compress: 0.7, format: SaveFormat.JPEG, base64: true }
+    );
+
+    const base64 = processed.base64;
+    if (!base64) return;
 
     setProofUploading(true);
     try {

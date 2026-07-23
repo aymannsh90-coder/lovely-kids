@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -181,18 +182,30 @@ export default function MyOrdersScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 0.5,
-      base64: true,
+      quality: 1,
     });
 
-    if (result.canceled || !result.assets[0]?.base64) return;
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    const asset = result.assets[0];
+    const resizeAction =
+      (asset.width ?? 0) >= (asset.height ?? 0)
+        ? [{ resize: { width: (asset.width ?? 0) > 1200 ? 1200 : asset.width } }]
+        : [{ resize: { height: (asset.height ?? 0) > 1200 ? 1200 : asset.height } }];
+
+    const processed = await manipulateAsync(
+      asset.uri,
+      resizeAction,
+      { compress: 0.7, format: SaveFormat.JPEG, base64: true }
+    );
+
+    if (!processed.base64) return;
 
     setProofUploading(order.id);
 
     try {
       const token = await getAuthToken();
       if (!token) throw new Error("يجب تسجيل الدخول لرفع وصل الدفع");
-
 
       const res = await fetch(`${API_BASE}/api/orders/${order.id}/payment-proof`, {
         method: "PATCH",
@@ -201,7 +214,7 @@ export default function MyOrdersScreen() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          paymentProof: `data:image/jpeg;base64,${result.assets[0].base64}`,
+          paymentProof: `data:image/jpeg;base64,${processed.base64}`,
         }),
       });
 
