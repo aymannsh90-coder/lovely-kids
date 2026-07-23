@@ -1,11 +1,13 @@
 import {
   insertProductSchema,
+  ordersTable,
   type ColorVariant,
   productsTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
+import { deleteProductImageObjects, getProductImageObjectPath } from "./image-routes";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -464,6 +466,71 @@ async function handleDeleteProduct(
 
   if (!rows[0]) {
     return json({ error: "المنتج غير موجود" }, 404);
+  }
+
+  try {
+    const deletedProduct = rows[0];
+
+    const deletedImageUrls = new Set<string>();
+
+    if (deletedProduct.image) {
+      deletedImageUrls.add(deletedProduct.image);
+    }
+
+    for (const url of (deletedProduct.images as string[]) ?? []) {
+      if (url) deletedImageUrls.add(url);
+    }
+
+    for (const variant of (deletedProduct.colorVariants as ColorVariant[]) ??
+      []) {
+      if (variant.image) deletedImageUrls.add(variant.image);
+    }
+
+    const remainingProducts = await db
+      .select({
+        image: productsTable.image,
+        images: productsTable.images,
+        colorVariants: productsTable.colorVariants,
+      })
+      .from(productsTable);
+
+    const usedImageUrls = new Set<string>();
+
+    for (const product of remainingProducts) {
+      if (product.image) usedImageUrls.add(product.image);
+
+      for (const url of (product.images as string[]) ?? []) {
+        if (url) usedImageUrls.add(url);
+      }
+
+      for (const variant of (product.colorVariants as ColorVariant[]) ?? []) {
+        if (variant.image) usedImageUrls.add(variant.image);
+      }
+    }
+
+    const existingOrders = await db
+      .select({ items: ordersTable.items })
+      .from(ordersTable);
+
+    for (const order of existingOrders) {
+      const items = (order.items as Array<{ image?: string }>) ?? [];
+
+      for (const item of items) {
+        if (item.image) usedImageUrls.add(item.image);
+      }
+    }
+
+    const objectPaths = [...deletedImageUrls]
+      .filter((url) => !usedImageUrls.has(url))
+      .map((url) => getProductImageObjectPath(url, env))
+      .filter((path): path is string => !!path);
+
+    await deleteProductImageObjects(env, objectPaths);
+  } catch (error) {
+    console.error("DELETE_PRODUCT_STORAGE_CLEANUP_FAILED", {
+      productId: id,
+      error,
+    });
   }
 
   return json({ success: true });

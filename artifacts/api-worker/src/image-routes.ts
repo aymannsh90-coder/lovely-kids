@@ -28,6 +28,36 @@ const json = (data: unknown, status = 200) =>
     },
   });
 
+export function getProductImageObjectPath(
+  url: string | undefined,
+  env: Env,
+): string | null {
+  if (!url) return null;
+
+  const supabaseUrl = env.SUPABASE_URL?.replace(/\/+$/, "");
+  if (!supabaseUrl) return null;
+
+  const prefix =
+    `${supabaseUrl}/storage/v1/object/public/${BUCKET}/`;
+
+  if (!url.startsWith(prefix)) return null;
+
+  const encoded = url.slice(prefix.length).split("?")[0];
+
+  try {
+    const filename = decodeURIComponent(encoded);
+
+    if (!filename || filename.includes("/") || filename.includes("..")) {
+      return null;
+    }
+
+    return filename;
+  } catch {
+    return null;
+  }
+}
+
+
 async function requireAdmin(
   request: Request,
   db: Db,
@@ -176,6 +206,47 @@ async function uploadToSupabase(
     `${BUCKET}/${encodeURIComponent(filename)}`
   );
 }
+
+export async function deleteProductImageObjects(
+  env: Env,
+  objectPaths: string[],
+): Promise<void> {
+  const paths = [...new Set(objectPaths)].filter(Boolean);
+  if (paths.length === 0) return;
+
+  const supabaseUrl = env.SUPABASE_URL?.replace(/\/+$/, "");
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error("Supabase Storage secrets are missing");
+  }
+
+  const response = await fetch(
+    `${supabaseUrl}/storage/v1/object/${BUCKET}`,
+    {
+      method: "DELETE",
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prefixes: paths }),
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+
+    console.error(
+      "Supabase Storage delete failed",
+      response.status,
+      details,
+    );
+
+    throw new Error("Supabase Storage delete failed");
+  }
+}
+
 
 async function handleImageUpload(
   request: Request,
