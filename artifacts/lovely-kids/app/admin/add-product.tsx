@@ -98,7 +98,15 @@ export default function AddProductScreen() {
     const name = newColorName.trim();
     if (!name) return;
     if (colorVariants.some((c) => c.color === name)) { setNewColorName(""); return; }
-    setColorVariants((prev) => [...prev, { color: name, hex: newColorHex, sizes: [] }]);
+    setColorVariants((prev) => {
+      const templateSizes = prev[0]?.sizes.map((s) => ({
+        size: s.size,
+        stock: 0,
+        outOfStock: true,
+      })) ?? [];
+
+      return [...prev, { color: name, hex: newColorHex, sizes: templateSizes }];
+    });
     setNewColorName("");
   };
 
@@ -613,9 +621,25 @@ export default function AddProductScreen() {
           <TextInput
             value={image}
             onChangeText={(v) => {
+              const previousUrl = images[0] ?? image;
               setImage(v);
-              if (v && images.length === 0) setImages([v]);
-              else if (v && images.length > 0) setImages((prev) => { const u = [...prev]; u[0] = v; return u; });
+
+              if (!v) return;
+
+              setImages((prev) => {
+                if (prev.length === 0) return [v];
+                const updated = [...prev];
+                updated[0] = v;
+                return [...new Set(updated)];
+              });
+
+              if (previousUrl && previousUrl !== v) {
+                setColorVariants((prev) =>
+                  prev.map((c) =>
+                    c.image === previousUrl ? { ...c, image: v } : c
+                  )
+                );
+              }
             }}
             placeholder="https://..."
             placeholderTextColor={colors.mutedForeground}
