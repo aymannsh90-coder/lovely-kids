@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -80,6 +81,7 @@ export default function MyOrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState<number | null>(null);
+  const [proofUploading, setProofUploading] = useState<number | null>(null);
 
   // In-app confirmation modal (replaces Alert.alert which is blocked in iframes)
   const [confirmOrder, setConfirmOrder] = useState<Order | null>(null);
@@ -170,10 +172,67 @@ export default function MyOrdersScreen() {
     }
   };
 
+  const handleUploadProof = async (order: Order) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setErrorMsg("يجب السماح بالوصول إلى الصور لرفع وصل التحويل");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets[0]?.base64) return;
+
+    setProofUploading(order.id);
+
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول لرفع وصل الدفع");
+
+
+      const res = await fetch(`${API_BASE}/api/orders/${order.id}/payment-proof`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          paymentProof: `data:image/jpeg;base64,${result.assets[0].base64}`,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("فشل رفع الوصل");
+      }
+
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === order.id
+            ? { ...o, paymentStatus: "proof_submitted" }
+            : o
+        )
+      );
+
+    } catch (e) {
+      setErrorMsg(
+        e instanceof Error ? e.message : "فشل رفع الوصل، حاول مجدداً"
+      );
+    } finally {
+      setProofUploading(null);
+    }
+  };
+
+
   const renderOrder = ({ item }: { item: Order }) => {
     const st = statusInfo(item.status);
     const cancellable = canCancel(item.status);
     const isCancelling = cancelling === item.id;
+    const isProofUploading = proofUploading === item.id;
+    const canUploadProof = item.paymentMethod === "bank_transfer" && item.paymentStatus !== "confirmed" && item.status !== "cancelled" && item.status !== "done";
 
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -188,6 +247,29 @@ export default function MyOrdersScreen() {
             <Text style={[styles.orderTime, { color: colors.mutedForeground }]}>{timeAgo(item.createdAt)}</Text>
           </View>
         </View>
+
+        {canUploadProof && (
+          <Pressable
+            onPress={() => handleUploadProof(item)}
+            disabled={isProofUploading}
+            style={[
+              styles.cancelBtn,
+              { borderColor: colors.primary, opacity: isProofUploading ? 0.5 : 1 },
+            ]}
+          >
+            {isProofUploading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons name="cloud-upload-outline" size={16} color={colors.primary} />
+            )}
+            <Text style={[styles.cancelBtnText, { color: colors.primary }]}>
+              {item.paymentStatus === "proof_submitted"
+                ? "تغيير وصل التحويل"
+                : "رفع وصل التحويل"}
+            </Text>
+          </Pressable>
+        )}
+
 
         {/* Items list */}
         <View style={styles.itemsBox}>
