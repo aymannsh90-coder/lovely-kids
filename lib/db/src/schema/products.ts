@@ -32,6 +32,7 @@ export const productsTable = pgTable("products", {
   rating: integer("rating").notNull().default(48),
   reviews: integer("reviews").notNull().default(0),
   isNew: boolean("is_new").default(false),
+  newUntil: timestamp("new_until"),
   discount: integer("discount"),
   description: text("description").notNull().default(""),
   stock: integer("stock"),
@@ -60,6 +61,7 @@ export const insertProductSchema = createInsertSchema(productsTable).omit({
     )
     .optional(),
   stock: z.number().int().nonnegative().nullable().optional(),
+  newUntil: z.coerce.date().nullable().optional(),
   gender: z.enum(["boys", "girls"]).nullable().optional(),
   season: z.enum(["summer", "winter"]).nullable().optional(),
 });

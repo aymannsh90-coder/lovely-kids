@@ -59,6 +59,7 @@ function toInsertBody(product: Omit<Product, "id">) {
     rating: Math.round((product.rating ?? 4.8) * 10),
     reviews: product.reviews ?? 0,
     isNew: product.isNew ?? false,
+    newUntil: product.newUntil ?? null,
     discount: product.discount ?? null,
     description: product.description ?? "",
     stock: product.stock !== undefined ? product.stock : null,

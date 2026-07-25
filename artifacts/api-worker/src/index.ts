@@ -36,7 +36,11 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     colorVariants: (r.colorVariants as unknown[]) ?? [],
     rating: r.rating / 10,
     reviews: r.reviews,
-    isNew: r.isNew ?? false,
+    isNew:
+      !!r.isNew &&
+      !!r.newUntil &&
+      r.newUntil.getTime() > Date.now(),
+    newUntil: r.newUntil?.toISOString() ?? null,
     discount: r.discount ?? undefined,
     description: r.description,
     stock: r.stock ?? null,

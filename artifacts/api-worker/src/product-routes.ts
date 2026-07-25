@@ -65,7 +65,11 @@ function toProduct(
       (row.colorVariants as unknown[]) ?? [],
     rating: row.rating / 10,
     reviews: row.reviews,
-    isNew: row.isNew ?? false,
+    isNew:
+      !!row.isNew &&
+      !!row.newUntil &&
+      row.newUntil.getTime() > Date.now(),
+    newUntil: row.newUntil?.toISOString() ?? null,
     discount: row.discount ?? undefined,
     description: row.description,
     stock: row.stock ?? null,

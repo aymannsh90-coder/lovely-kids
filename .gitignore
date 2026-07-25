@@ -48,3 +48,6 @@ Thumbs.db
 .cache/
 .local/
 *firebase-adminsdk*.json
+
+# Local database backups
+backups/
