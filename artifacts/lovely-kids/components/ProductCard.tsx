@@ -113,8 +113,10 @@ export function ProductCard({ product, style }: Props) {
           <View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
             <Text style={styles.discountText}>خصم {discountPct}%</Text>
           </View>
-        ) : !isOutOfStock && product.isNew ? (
-          <View style={[styles.discountBadge, { backgroundColor: "#22c55e" }]}>
+        ) : null}
+
+        {!isOutOfStock && product.isNew ? (
+          <View style={[styles.discountBadge, { backgroundColor: "#22c55e", top: discountPct ? 34 : 8 }]}>
             <Text style={styles.discountText}>جديد</Text>
           </View>
         ) : null}
