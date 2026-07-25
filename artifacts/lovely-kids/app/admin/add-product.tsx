@@ -63,9 +63,10 @@ export default function AddProductScreen() {
   const [ageGroup, setAgeGroup] = useState(editProduct?.ageGroup ?? "newborn");
   const [gender, setGender] = useState<"boys" | "girls" | null>(editProduct?.gender ?? null);
   const [season, setSeason] = useState<"summer" | "winter" | null>(editProduct?.season ?? null);
+  const initialNewDays = editProduct?.newUntil ? Math.max(1, Math.ceil((new Date(editProduct.newUntil).getTime() - Date.now()) / 86400000)) : 7;
   const [isNew, setIsNew] = useState(editProduct?.isNew ?? false);
-  const [newDays, setNewDays] = useState("7");
-  const [newDaysMode, setNewDaysMode] = useState<"7" | "14" | "custom">("7");
+  const [newDays, setNewDays] = useState(String(initialNewDays));
+  const [newDaysMode, setNewDaysMode] = useState<"7" | "14" | "custom">(initialNewDays === 7 ? "7" : initialNewDays === 14 ? "14" : "custom");
   const [newDurationChanged, setNewDurationChanged] = useState(false);
   const [stock, setStock] = useState(
     editProduct?.stock !== undefined && editProduct?.stock !== null
@@ -960,9 +961,9 @@ export default function AddProductScreen() {
           <Text style={[styles.toggleLabel, { color: colors.foreground }]}>منتج جديد (يظهر في "وصل حديثًا")</Text>
         </Pressable>
 
-        {isNew && <Pressable onPress={() => { setNewDaysMode("7"); setNewDays("7"); setNewDurationChanged(true); }} style={styles.chip}><Text>7 أيام</Text></Pressable>}
-        {isNew && <Pressable onPress={() => { setNewDaysMode("14"); setNewDays("14"); setNewDurationChanged(true); }} style={styles.chip}><Text>14 يوم</Text></Pressable>}
-        {isNew && <Pressable onPress={() => { setNewDaysMode("custom"); setNewDays(""); setNewDurationChanged(true); }} style={styles.chip}><Text>مخصص</Text></Pressable>}
+        {isNew && <Pressable onPress={() => { setNewDaysMode("7"); setNewDays("7"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="7"?colors.primary:colors.card,borderColor:newDaysMode==="7"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="7"?"#fff":colors.foreground}}>7 أيام</Text></Pressable>}
+        {isNew && <Pressable onPress={() => { setNewDaysMode("14"); setNewDays("14"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="14"?colors.primary:colors.card,borderColor:newDaysMode==="14"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="14"?"#fff":colors.foreground}}>14 يوم</Text></Pressable>}
+        {isNew && <Pressable onPress={() => { setNewDaysMode("custom"); setNewDays(""); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="custom"?colors.primary:colors.card,borderColor:newDaysMode==="custom"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="custom"?"#fff":colors.foreground}}>مخصص</Text></Pressable>}
         {isNew && newDaysMode === "custom" && <TextInput value={newDays} onChangeText={setNewDays} placeholder="عدد الأيام" keyboardType="number-pad" style={[styles.input, { borderColor: colors.border, color: colors.foreground }]} />}
         {/* Save Button */}
         <Pressable
