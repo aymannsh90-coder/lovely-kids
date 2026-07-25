@@ -129,7 +129,7 @@ export function ProductCard({ product, style }: Props) {
           <Ionicons
             name={wishlisted ? "heart" : "heart-outline"}
             size={18}
-            color={wishlisted ? colors.primary : colors.mutedForeground}
+            color={wishlisted ? "#ef4444" : "#64748b"}
           />
         </Pressable>
 
