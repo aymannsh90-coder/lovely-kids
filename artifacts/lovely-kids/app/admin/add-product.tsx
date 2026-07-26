@@ -63,6 +63,7 @@ export default function AddProductScreen() {
   const [ageGroup, setAgeGroup] = useState(editProduct?.ageGroup ?? "newborn");
   const [gender, setGender] = useState<"boys" | "girls" | null>(editProduct?.gender ?? null);
   const [season, setSeason] = useState<"summer" | "winter" | null>(editProduct?.season ?? null);
+  const [isPinned, setIsPinned] = useState(editProduct?.isPinned ?? false);
   const initialNewDays = editProduct?.isNew && editProduct?.newUntil ? Math.max(1, Math.ceil((new Date(editProduct.newUntil).getTime() - Date.now()) / 86400000)) : 7;
   const [isNew, setIsNew] = useState(editProduct?.isNew ?? false);
   const [newDays, setNewDays] = useState(String(initialNewDays));
@@ -425,6 +426,7 @@ export default function AddProductScreen() {
         ageGroup,
         gender,
         season,
+        isPinned,
         sizes,
         colorVariants,
         rating: editProduct?.rating ?? 4.8,
@@ -949,6 +951,17 @@ export default function AddProductScreen() {
             ))}
           </View>
         </View>
+
+        {/* Pin Product Toggle */}
+        <Pressable
+          onPress={() => setIsPinned((v) => !v)}
+          style={[styles.toggleRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <View style={[styles.toggle, { backgroundColor: isPinned ? colors.primary : colors.muted }]}>
+            {isPinned && <Ionicons name="checkmark" size={14} color="#fff" />}
+          </View>
+          <Text style={[styles.toggleLabel, { color: colors.foreground }]}>📌 تثبيت في الأعلى</Text>
+        </Pressable>
 
         {/* Is New Toggle */}
         <Pressable

@@ -58,6 +58,7 @@ function toInsertBody(product: Omit<Product, "id">) {
     colorVariants: product.colorVariants ?? [],
     rating: Math.round((product.rating ?? 4.8) * 10),
     reviews: product.reviews ?? 0,
+    isPinned: product.isPinned ?? false,
     isNew: product.isNew ?? false,
     newUntil: product.newUntil ?? null,
     discount: product.discount ?? null,

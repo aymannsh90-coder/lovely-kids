@@ -259,6 +259,45 @@ export default function SettingsScreen() {
         </Field>
       </Section>
 
+      {/* ── الموسم النشط ── */}
+      <Section title="🌤️ الموسم النشط">
+        <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+          <Pressable
+            onPress={() => updateSettings({ activeSeason: "summer" })}
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              alignItems: "center",
+              backgroundColor: settings.activeSeason === "summer" ? colors.primary : colors.card,
+              borderColor: settings.activeSeason === "summer" ? colors.primary : colors.border,
+            }}
+          >
+            <Text style={{ color: settings.activeSeason === "summer" ? "#fff" : colors.foreground, fontWeight: "700" }}>
+              ☀️ صيفي
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => updateSettings({ activeSeason: "winter" })}
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              alignItems: "center",
+              backgroundColor: settings.activeSeason === "winter" ? colors.primary : colors.card,
+              borderColor: settings.activeSeason === "winter" ? colors.primary : colors.border,
+            }}
+          >
+            <Text style={{ color: settings.activeSeason === "winter" ? "#fff" : colors.foreground, fontWeight: "700" }}>
+              ❄️ شتوي
+            </Text>
+          </Pressable>
+        </View>
+      </Section>
+
       {/* ── واتساب ── */}
       <Section title="💬 رقم واتساب المتجر">
         <Field label="رقم الواتساب (بدون + مع رمز الدولة، مثال: 97250000000)">

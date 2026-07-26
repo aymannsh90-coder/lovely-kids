@@ -83,6 +83,7 @@ export interface AppSettings {
   hiddenCategories: string[];
   customCategories: string[];
   seasonLabels: Record<string, string>;
+  activeSeason: "summer" | "winter" | null;
   bankInfo: BankInfo;
   whatsappNumber: string;
   contactInfo: ContactInfo;
@@ -119,6 +120,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   hiddenCategories: [],
   customCategories: [],
   seasonLabels: DEFAULT_SEASON_LABELS,
+  activeSeason: null,
   bankInfo: {
     bankName: "",
     accountHolder: "",

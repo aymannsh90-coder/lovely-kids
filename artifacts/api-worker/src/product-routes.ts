@@ -65,6 +65,7 @@ function toProduct(
       (row.colorVariants as unknown[]) ?? [],
     rating: row.rating / 10,
     reviews: row.reviews,
+    isPinned: !!row.isPinned,
     isNew:
       !!row.isNew &&
       !!row.newUntil &&

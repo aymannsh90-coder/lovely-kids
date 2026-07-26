@@ -36,6 +36,7 @@ export interface Product {
   rating: number;
   reviews: number;
   isNew?: boolean;
+  isPinned?: boolean;
   newUntil?: string | null;
   discount?: number;
   description: string;
