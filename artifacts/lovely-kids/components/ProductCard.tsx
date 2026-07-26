@@ -16,7 +16,7 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
-import { Product } from "@/data/products";
+import { Product, isSizeOutOfStock } from "@/data/products";
 import { getProductShareUrl } from "@/utils/productShare";
 
 interface Props {
@@ -37,7 +37,11 @@ export function ProductCard({ product, style }: Props) {
   const { toggleItem, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(product.id);
 
-  const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
+  const variantSizes = product.colorVariants?.flatMap((cv) => cv.sizes ?? []) ?? [];
+  const isOutOfStock =
+    variantSizes.length > 0
+      ? variantSizes.every(isSizeOutOfStock)
+      : product.stock !== undefined && product.stock !== null && product.stock <= 0;
   const discountPct = calcDiscount(product.price, product.originalPrice);
   const hasVariants =
     (product.colorVariants && product.colorVariants.length > 0) ||
