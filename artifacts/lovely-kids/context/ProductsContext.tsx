@@ -48,6 +48,11 @@ function toInsertBody(product: Omit<Product, "id">) {
     nameAr: product.nameAr,
     productCode: product.productCode?.trim() || null,
     barcode: product.barcode?.trim() || null,
+    additionalBarcodes: (product.additionalBarcodes ?? []).map((item) => ({
+      barcode: item.barcode.trim(),
+      color: item.color?.trim() || null,
+      size: item.size?.trim() || null,
+    })),
     price: product.price,
     originalPrice: product.originalPrice ?? null,
     image: product.image,
@@ -72,7 +77,7 @@ function toInsertBody(product: Omit<Product, "id">) {
 export function ProductsProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const { getAuthToken } = useAuth();
+  const { getAuthToken, user } = useAuth();
   const getAdminHeaders = useCallback(async () => {
     const token = await getAuthToken();
     if (!token) throw new Error("يجب تسجيل الدخول كمشرف");
@@ -83,14 +88,67 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch(`${API_BASE}/api/products`);
       if (!res.ok) throw new Error("فشل تحميل المنتجات");
-      const data: Product[] = await res.json();
+
+      let data: Product[] = await res.json();
+
+      if (user?.isAdmin) {
+        try {
+          const headers = await getAdminHeaders();
+          const barcodeRes = await fetch(
+            `${API_BASE}/api/products/barcodes`,
+            { headers },
+          );
+
+          if (!barcodeRes.ok) {
+            throw new Error("فشل تحميل الباركودات الإضافية");
+          }
+
+          const barcodeRows: Array<{
+            productId: string;
+            barcode: string;
+            color: string | null;
+            size: string | null;
+          }> = await barcodeRes.json();
+
+          const barcodesByProduct = new Map<
+            string,
+            Array<{
+              barcode: string;
+              color: string | null;
+              size: string | null;
+            }>
+          >();
+
+          for (const row of barcodeRows) {
+            const items = barcodesByProduct.get(row.productId) ?? [];
+            items.push({
+              barcode: row.barcode,
+              color: row.color,
+              size: row.size,
+            });
+            barcodesByProduct.set(row.productId, items);
+          }
+
+          data = data.map((product) => ({
+            ...product,
+            additionalBarcodes:
+              barcodesByProduct.get(product.id) ?? [],
+          }));
+        } catch (error) {
+          console.warn(
+            "ProductsContext: failed to load additional barcodes",
+            error,
+          );
+        }
+      }
+
       setProducts(data);
     } catch (e) {
       console.warn("ProductsContext: failed to load products", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAdminHeaders, user?.isAdmin]);
 
   useEffect(() => {
     refreshProducts();

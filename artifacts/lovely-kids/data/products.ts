@@ -19,12 +19,19 @@ export function isSizeOutOfStock(s: SizeStock): boolean {
   return !!s.outOfStock;
 }
 
+export interface ProductBarcode {
+  barcode: string;
+  color?: string | null;
+  size?: string | null;
+}
+
 export interface Product {
   id: string;
   name: string;
   nameAr: string;
   productCode?: string | null;
   barcode?: string | null;
+  additionalBarcodes?: ProductBarcode[];
   price: number;
   originalPrice?: number;
   image: string;

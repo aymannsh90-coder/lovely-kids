@@ -263,7 +263,10 @@ export default function AdminProductsScreen() {
       product.nameAr.toLowerCase().includes(query) ||
       product.name.toLowerCase().includes(query) ||
       (product.productCode ?? "").toLowerCase().includes(query) ||
-      (product.barcode ?? "").toLowerCase().includes(query)
+      (product.barcode ?? "").toLowerCase().includes(query) ||
+      (product.additionalBarcodes ?? []).some((item) =>
+        item.barcode.toLowerCase().includes(query)
+      )
     );
   });
 

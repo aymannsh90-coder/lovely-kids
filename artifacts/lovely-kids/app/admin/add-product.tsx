@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 import {
   ActivityIndicator,
@@ -25,7 +25,7 @@ import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
-import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, DEFAULT_SEASON_LABELS, Product, ColorVariant, isSizeOutOfStock } from "@/data/products";
+import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, DEFAULT_SEASON_LABELS, Product, ProductBarcode, ColorVariant, isSizeOutOfStock } from "@/data/products";
 import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
@@ -62,7 +62,11 @@ export default function AddProductScreen() {
   const [name, setName] = useState(editProduct?.name ?? "");
   const [productCode, setProductCode] = useState(editProduct?.productCode ?? "");
   const [barcode, setBarcode] = useState(editProduct?.barcode ?? "");
+  const [additionalBarcodes, setAdditionalBarcodes] = useState<ProductBarcode[]>(
+    editProduct?.additionalBarcodes ?? [],
+  );
   const [scannerOpen, setScannerOpen] = useState(false);
+  const barcodeScanTargetRef = useRef<"primary" | number>("primary");
   const [barcodeScanned, setBarcodeScanned] = useState(false);
   const [price, setPrice] = useState(editProduct?.price?.toString() ?? "");
   const [originalPrice, setOriginalPrice] = useState(editProduct?.originalPrice?.toString() ?? "");
@@ -98,6 +102,30 @@ export default function AddProductScreen() {
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
+
+  const addAdditionalBarcode = () => {
+    setAdditionalBarcodes((prev) => [
+      ...prev,
+      { barcode: "", color: null, size: null },
+    ]);
+  };
+
+  const updateAdditionalBarcode = (
+    index: number,
+    updates: Partial<ProductBarcode>,
+  ) => {
+    setAdditionalBarcodes((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, ...updates } : item
+      )
+    );
+  };
+
+  const removeAdditionalBarcode = (index: number) => {
+    setAdditionalBarcodes((prev) =>
+      prev.filter((_, i) => i !== index)
+    );
+  };
 
   const addSize = () => {
     const s = sizeInput.trim().toUpperCase();
@@ -407,13 +435,33 @@ export default function AddProductScreen() {
     });
   };
 
+  const applyScannedBarcode = (value: string) => {
+    const nextBarcode = value.trim();
+    if (!nextBarcode) return;
+
+    const target = barcodeScanTargetRef.current;
+
+    if (target === "primary") {
+      setBarcode(nextBarcode);
+      return;
+    }
+
+    setAdditionalBarcodes((prev) =>
+      prev.map((item, index) =>
+        index === target
+          ? { ...item, barcode: nextBarcode }
+          : item
+      )
+    );
+  };
+
   useEffect(() => {
     if (Platform.OS === "web" || !CameraView.isModernBarcodeScannerAvailable) return;
 
     const subscription = CameraView.onModernBarcodeScanned(({ data }) => {
       if (!data?.trim()) return;
 
-      setBarcode(data.trim());
+      applyScannedBarcode(data);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
     });
@@ -421,7 +469,10 @@ export default function AddProductScreen() {
     return () => subscription.remove();
   }, [barcodeBeep]);
 
-  const handleOpenBarcodeScanner = async () => {
+  const handleOpenBarcodeScanner = async (
+    target: "primary" | number = "primary",
+  ) => {
+    barcodeScanTargetRef.current = target;
     if (Platform.OS === "web") {
       setBarcodeScanned(false);
       setScannerOpen(true);
@@ -460,7 +511,7 @@ export default function AddProductScreen() {
     if (barcodeScanned) return;
 
     setBarcodeScanned(true);
-    setBarcode(data.trim());
+    applyScannedBarcode(data);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
     setScannerOpen(false);
@@ -480,7 +531,7 @@ export default function AddProductScreen() {
 
           disposed = true;
           setBarcodeScanned(true);
-          setBarcode(value);
+          applyScannedBarcode(value);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
           setScannerOpen(false);
@@ -527,6 +578,7 @@ export default function AddProductScreen() {
         name: name.trim() || nameAr.trim(),
         productCode: productCode.trim() || null,
         barcode: barcode.trim() || null,
+        additionalBarcodes,
         price: Number(price),
         originalPrice: originalPrice.trim() ? Number(originalPrice) : undefined,
         image: image.trim(),
@@ -637,7 +689,7 @@ export default function AddProductScreen() {
             textAlign="right"
           />
           <Pressable
-            onPress={handleOpenBarcodeScanner}
+            onPress={() => void handleOpenBarcodeScanner("primary")}
             style={{
               flexDirection: "row-reverse",
               alignItems: "center",
