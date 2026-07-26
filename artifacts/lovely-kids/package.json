@@ -55,6 +55,8 @@
   },
   "dependencies": {
     "@clerk/expo": "^3.6.5",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "expo": "54.0.36",
     "expo-asset": "12.0.13",
     "expo-audio": "^1.1.1",
