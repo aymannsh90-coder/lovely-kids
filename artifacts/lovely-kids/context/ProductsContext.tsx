@@ -46,6 +46,8 @@ function toInsertBody(product: Omit<Product, "id">) {
   return {
     name: product.name,
     nameAr: product.nameAr,
+    productCode: product.productCode?.trim() || null,
+    barcode: product.barcode?.trim() || null,
     price: product.price,
     originalPrice: product.originalPrice ?? null,
     image: product.image,

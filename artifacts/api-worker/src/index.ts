@@ -24,6 +24,8 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     id: String(r.id),
     name: r.name,
     nameAr: r.nameAr,
+    productCode: r.productCode ?? null,
+    barcode: r.barcode ?? null,
     price: r.price,
     originalPrice: r.originalPrice ?? undefined,
     image: r.image,

@@ -23,6 +23,8 @@ export interface Product {
   id: string;
   name: string;
   nameAr: string;
+  productCode?: string | null;
+  barcode?: string | null;
   price: number;
   originalPrice?: number;
   image: string;

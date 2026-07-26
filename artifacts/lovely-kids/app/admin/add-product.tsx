@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -29,6 +31,7 @@ import { API_BASE } from "@/constants/api";
 export default function AddProductScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const { productId } = useLocalSearchParams<{ productId?: string }>();
   const { products, addProduct, updateProduct } = useProducts();
   const { settings } = useAppSettings();
@@ -54,6 +57,10 @@ export default function AddProductScreen() {
 
   const [nameAr, setNameAr] = useState(editProduct?.nameAr ?? "");
   const [name, setName] = useState(editProduct?.name ?? "");
+  const [productCode, setProductCode] = useState(editProduct?.productCode ?? "");
+  const [barcode, setBarcode] = useState(editProduct?.barcode ?? "");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeScanned, setBarcodeScanned] = useState(false);
   const [price, setPrice] = useState(editProduct?.price?.toString() ?? "");
   const [originalPrice, setOriginalPrice] = useState(editProduct?.originalPrice?.toString() ?? "");
   const [image, setImage] = useState(editProduct?.image ?? "");
@@ -397,6 +404,29 @@ export default function AddProductScreen() {
     });
   };
 
+  const handleOpenBarcodeScanner = async () => {
+    const permission = cameraPermission?.granted
+      ? cameraPermission
+      : await requestCameraPermission();
+
+    if (!permission.granted) {
+      setErrors(["يجب السماح باستخدام الكاميرا لمسح الباركود"]);
+      return;
+    }
+
+    setBarcodeScanned(false);
+    setScannerOpen(true);
+  };
+
+  const handleBarcodeScanned = (data: string) => {
+    if (barcodeScanned) return;
+
+    setBarcodeScanned(true);
+    setBarcode(data);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setScannerOpen(false);
+  };
+
   const validate = () => {
     const errs: string[] = [];
     if (!nameAr.trim()) errs.push("اسم المنتج بالعربي مطلوب");
@@ -417,6 +447,8 @@ export default function AddProductScreen() {
       const productData: Omit<Product, "id"> = {
         nameAr: nameAr.trim(),
         name: name.trim() || nameAr.trim(),
+        productCode: productCode.trim() || null,
+        barcode: barcode.trim() || null,
         price: Number(price),
         originalPrice: originalPrice.trim() ? Number(originalPrice) : undefined,
         image: image.trim(),
@@ -498,6 +530,49 @@ export default function AddProductScreen() {
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
           />
+        </View>
+
+        {/* Product Code */}
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>كود المنتج (اختياري)</Text>
+          <TextInput
+            value={productCode}
+            onChangeText={setProductCode}
+            placeholder="مثال: LK-1001"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="characters"
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+        </View>
+
+        {/* Barcode */}
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>الباركود (اختياري)</Text>
+          <TextInput
+            value={barcode}
+            onChangeText={setBarcode}
+            placeholder="امسح أو اكتب رقم الباركود"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            textAlign="right"
+          />
+          <Pressable
+            onPress={handleOpenBarcodeScanner}
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              paddingVertical: 11,
+              borderRadius: 12,
+              backgroundColor: colors.primary,
+            }}
+          >
+            <Ionicons name="camera-outline" size={20} color="#fff" />
+            <Text style={{ color: "#fff", fontWeight: "700" }}>مسح الباركود بالكاميرا</Text>
+          </Pressable>
         </View>
 
         {/* Price Row */}
@@ -990,6 +1065,34 @@ export default function AddProductScreen() {
           </Text>
         </Pressable>
       </View>
+      <Modal
+        visible={scannerOpen}
+        animationType="slide"
+        onRequestClose={() => setScannerOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <CameraView
+            style={{ flex: 1 }}
+            facing="back"
+            onBarcodeScanned={({ data }) => handleBarcodeScanned(data)}
+          />
+          <Pressable
+            onPress={() => setScannerOpen(false)}
+            style={{
+              position: "absolute",
+              top: 50,
+              right: 20,
+              backgroundColor: "rgba(0,0,0,0.65)",
+              paddingHorizontal: 18,
+              paddingVertical: 12,
+              borderRadius: 24,
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "800" }}>إغلاق ✕</Text>
+          </Pressable>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }

@@ -19,6 +19,8 @@ export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   nameAr: text("name_ar").notNull(),
+  productCode: text("product_code"),
+  barcode: text("barcode"),
   price: integer("price").notNull(),
   originalPrice: integer("original_price"),
   image: text("image").notNull(),

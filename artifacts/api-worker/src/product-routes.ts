@@ -51,6 +51,8 @@ function toProduct(
     id: String(row.id),
     name: row.name,
     nameAr: row.nameAr,
+    productCode: row.productCode ?? null,
+    barcode: row.barcode ?? null,
     price: row.price,
     originalPrice:
       row.originalPrice ?? undefined,
