@@ -108,7 +108,7 @@ export function ProductCard({ product, style }: Props) {
         {/* Out of Stock Overlay */}
         {isOutOfStock && (
           <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockText}>نفد المخزون</Text>
+            <Text style={styles.outOfStockText}>خلصت الكمية 😔</Text>
           </View>
         )}
 
