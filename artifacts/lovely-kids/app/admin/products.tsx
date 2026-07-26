@@ -602,45 +602,61 @@ export default function AdminProductsScreen() {
       {/* Barcode Search Scanner */}
       <Modal
         visible={scannerOpen}
-        animationType="slide"
+        transparent
+        animationType="fade"
         onRequestClose={() => setScannerOpen(false)}
       >
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
-          <CameraView
-            style={{ flex: 1 }}
-            facing="back"
-            onBarcodeScanned={
-              barcodeScanned
-                ? undefined
-                : ({ data }) => handleBarcodeScanned(data)
-            }
-          />
-
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.72)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
           <View
             style={{
-              position: "absolute",
-              left: 20,
-              right: 20,
-              bottom: 60,
-              alignItems: "center",
-              gap: 12,
+              width: Platform.OS === "web" ? 360 : "92%",
+              maxWidth: 420,
+              borderRadius: 18,
+              overflow: "hidden",
+              backgroundColor: "#111",
             }}
           >
-            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>
-              وجّه الكاميرا نحو الباركود
-            </Text>
+            <CameraView
+              style={{ width: "100%", height: 250 }}
+              facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: [
+                "ean13", "ean8", "upc_a", "upc_e",
+                "code128", "code39", "code93",
+                "itf14", "codabar", "qr",
+              ],
+            }}
+              onBarcodeScanned={
+                barcodeScanned
+                  ? undefined
+                  : ({ data }) => handleBarcodeScanned(data)
+              }
+            />
 
-            <Pressable
-              onPress={() => setScannerOpen(false)}
-              style={{
-                backgroundColor: "rgba(0,0,0,0.7)",
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                borderRadius: 24,
-              }}
-            >
-              <Text style={{ color: "#fff", fontWeight: "800" }}>إغلاق ✕</Text>
-            </Pressable>
+            <View style={{ padding: 14, alignItems: "center", gap: 10 }}>
+              <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
+                وجّه الكاميرا نحو الباركود أو QR
+              </Text>
+              <Pressable
+                onPress={() => setScannerOpen(false)}
+                style={{
+                  backgroundColor: "#333",
+                  paddingHorizontal: 24,
+                  paddingVertical: 10,
+                  borderRadius: 22,
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800" }}>إغلاق ✕</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
