@@ -6,6 +6,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
+import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 import {
   ActivityIndicator,
   Image,
@@ -421,7 +422,13 @@ export default function AddProductScreen() {
   }, [barcodeBeep]);
 
   const handleOpenBarcodeScanner = async () => {
-    if (Platform.OS !== "web" && CameraView.isModernBarcodeScannerAvailable) {
+    if (Platform.OS === "web") {
+      setBarcodeScanned(false);
+      setScannerOpen(true);
+      return;
+    }
+
+    if (CameraView.isModernBarcodeScannerAvailable) {
       try {
         await CameraView.launchScanner({
           barcodeTypes: [
@@ -458,6 +465,45 @@ export default function AddProductScreen() {
     void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
     setScannerOpen(false);
   };
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !scannerOpen) return;
+
+    let disposed = false;
+    let controls: { stop: () => void } | undefined;
+
+    const timer = setTimeout(() => {
+      void startWebBarcodeScanner(
+        "add-product-barcode-video",
+        (value) => {
+          if (disposed) return;
+
+          disposed = true;
+          setBarcodeScanned(true);
+          setBarcode(value);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
+          setScannerOpen(false);
+        }
+      )
+        .then((scannerControls) => {
+          if (disposed) scannerControls.stop();
+          else controls = scannerControls;
+        })
+        .catch(() => {
+          if (!disposed) {
+            setScannerOpen(false);
+            setErrors(["تعذر تشغيل كاميرا مسح الباركود"]);
+          }
+        });
+    }, 100);
+
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      controls?.stop();
+    };
+  }, [scannerOpen, barcodeBeep]);
 
   const validate = () => {
     const errs: string[] = [];
@@ -1120,22 +1166,40 @@ export default function AddProductScreen() {
               backgroundColor: "#111",
             }}
           >
-            <CameraView
-              style={{ width: "100%", height: 250 }}
-              facing="back"
-            barcodeScannerSettings={{
-              barcodeTypes: [
-                "ean13", "ean8", "upc_a", "upc_e",
-                "code128", "code39", "code93",
-                "itf14", "codabar", "qr",
-              ],
-            }}
-              onBarcodeScanned={
-                barcodeScanned
-                  ? undefined
-                  : ({ data }) => handleBarcodeScanned(data)
-              }
-            />
+            {Platform.OS === "web" ? (
+              React.createElement(
+                "video",
+                {
+                  id: "add-product-barcode-video",
+                  autoPlay: true,
+                  muted: true,
+                  playsInline: true,
+                  style: {
+                    width: "100%",
+                    height: 250,
+                    objectFit: "cover",
+                    backgroundColor: "#000",
+                  },
+                } as any
+              )
+            ) : (
+              <CameraView
+                style={{ width: "100%", height: 250 }}
+                facing="back"
+                barcodeScannerSettings={{
+                  barcodeTypes: [
+                    "ean13", "ean8", "upc_a", "upc_e",
+                    "code128", "code39", "code93",
+                    "itf14", "codabar", "qr",
+                  ],
+                }}
+                onBarcodeScanned={
+                  barcodeScanned
+                    ? undefined
+                    : ({ data }) => handleBarcodeScanned(data)
+                }
+              />
+            )}
 
             <View style={{ padding: 14, alignItems: "center", gap: 10 }}>
               <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>
