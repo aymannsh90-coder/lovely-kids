@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -27,6 +28,7 @@ import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP
 export default function AdminProductsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const { products, updateProduct, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
   const { settings } = useAppSettings();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
@@ -44,7 +46,33 @@ export default function AdminProductsScreen() {
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
   const [stockFilter, setStockFilter] = useState<"all" | "out">("all");
+  const [search, setSearch] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeScanned, setBarcodeScanned] = useState(false);
   const variantKey = (color: string, size: string) => `${color}|${size}`;
+
+  const handleOpenBarcodeScanner = async () => {
+    const permission = cameraPermission?.granted
+      ? cameraPermission
+      : await requestCameraPermission();
+
+    if (!permission.granted) {
+      Alert.alert("الكاميرا", "يجب السماح باستخدام الكاميرا لمسح الباركود.");
+      return;
+    }
+
+    setBarcodeScanned(false);
+    setScannerOpen(true);
+  };
+
+  const handleBarcodeScanned = (data: string) => {
+    if (barcodeScanned) return;
+
+    setBarcodeScanned(true);
+    setSearch(data.trim());
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setScannerOpen(false);
+  };
 
   const handleDelete = (id: string, name: string) => {
     if (Platform.OS === "web") {
@@ -144,8 +172,19 @@ export default function AdminProductsScreen() {
     return product.stock === 0;
   };
 
-  const filteredProducts =
-    stockFilter === "out" ? products.filter(isProductOutOfStock) : products;
+  const filteredProducts = products.filter((product) => {
+    if (stockFilter === "out" && !isProductOutOfStock(product)) return false;
+
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+
+    return (
+      product.nameAr.toLowerCase().includes(query) ||
+      product.name.toLowerCase().includes(query) ||
+      (product.productCode ?? "").toLowerCase().includes(query) ||
+      (product.barcode ?? "").toLowerCase().includes(query)
+    );
+  });
 
   const getStockLabel = (stock: number | null | undefined) => {
     if (stock === null || stock === undefined) return null;
@@ -209,6 +248,39 @@ export default function AdminProductsScreen() {
         <Text style={styles.notifBannerText}>إرسال إشعار لجميع المستخدمين</Text>
         <Ionicons name="chevron-back-outline" size={18} color="#fff" />
       </Pressable>
+
+      <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+        <View
+          style={{
+            flexDirection: "row-reverse",
+            alignItems: "center",
+            gap: 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Ionicons name="search-outline" size={20} color={colors.mutedForeground} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="ابحث بالاسم أو الكود أو الباركود"
+            placeholderTextColor={colors.mutedForeground}
+            style={{ flex: 1, paddingVertical: 12, color: colors.foreground, textAlign: "right" }}
+            autoCapitalize="none"
+          />
+          {search ? (
+            <Pressable onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+          <Pressable onPress={handleOpenBarcodeScanner}>
+            <Ionicons name="camera-outline" size={22} color={colors.primary} />
+          </Pressable>
+        </View>
+      </View>
 
       <View style={{ flexDirection: "row-reverse", gap: 8, paddingHorizontal: 16, paddingVertical: 10 }}>
         <Pressable onPress={() => setStockFilter("all")}>
@@ -491,6 +563,52 @@ export default function AdminProductsScreen() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Barcode Search Scanner */}
+      <Modal
+        visible={scannerOpen}
+        animationType="slide"
+        onRequestClose={() => setScannerOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <CameraView
+            style={{ flex: 1 }}
+            facing="back"
+            onBarcodeScanned={
+              barcodeScanned
+                ? undefined
+                : ({ data }) => handleBarcodeScanned(data)
+            }
+          />
+
+          <View
+            style={{
+              position: "absolute",
+              left: 20,
+              right: 20,
+              bottom: 60,
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>
+              وجّه الكاميرا نحو الباركود
+            </Text>
+
+            <Pressable
+              onPress={() => setScannerOpen(false)}
+              style={{
+                backgroundColor: "rgba(0,0,0,0.7)",
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                borderRadius: 24,
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "800" }}>إغلاق ✕</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
     </View>
