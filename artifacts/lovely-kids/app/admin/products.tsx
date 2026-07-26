@@ -602,7 +602,6 @@ export default function AdminProductsScreen() {
       {/* Barcode Search Scanner */}
       <Modal
         visible={scannerOpen}
-        transparent
         animationType="fade"
         onRequestClose={() => setScannerOpen(false)}
       >

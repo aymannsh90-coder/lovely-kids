@@ -1099,7 +1099,6 @@ export default function AddProductScreen() {
       </View>
       <Modal
         visible={scannerOpen}
-        transparent
         animationType="fade"
         onRequestClose={() => setScannerOpen(false)}
       >
