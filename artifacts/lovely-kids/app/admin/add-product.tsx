@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useAudioPlayer } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -30,6 +31,7 @@ import { API_BASE } from "@/constants/api";
 
 export default function AddProductScreen() {
   const colors = useColors();
+  const barcodeBeep = useAudioPlayer(require("../../assets/sounds/barcode-beep.wav"));
   const insets = useSafeAreaInsets();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const { productId } = useLocalSearchParams<{ productId?: string }>();
@@ -404,7 +406,36 @@ export default function AddProductScreen() {
     });
   };
 
+  useEffect(() => {
+    if (Platform.OS === "web" || !CameraView.isModernBarcodeScannerAvailable) return;
+
+    const subscription = CameraView.onModernBarcodeScanned(({ data }) => {
+      if (!data?.trim()) return;
+
+      setBarcode(data.trim());
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
+    });
+
+    return () => subscription.remove();
+  }, [barcodeBeep]);
+
   const handleOpenBarcodeScanner = async () => {
+    if (Platform.OS !== "web" && CameraView.isModernBarcodeScannerAvailable) {
+      try {
+        await CameraView.launchScanner({
+          barcodeTypes: [
+            "ean13", "ean8", "upc_a", "upc_e",
+            "code128", "code39", "code93",
+            "itf14", "codabar", "qr",
+          ],
+        });
+      } catch {
+        setErrors(["تعذر فتح ماسح الباركود"]);
+      }
+      return;
+    }
+
     const permission = cameraPermission?.granted
       ? cameraPermission
       : await requestCameraPermission();
@@ -422,8 +453,9 @@ export default function AddProductScreen() {
     if (barcodeScanned) return;
 
     setBarcodeScanned(true);
-    setBarcode(data);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setBarcode(data.trim());
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
     setScannerOpen(false);
   };
 

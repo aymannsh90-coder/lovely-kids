@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useAudioPlayer } from "expo-audio";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -28,6 +29,7 @@ import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP
 export default function AdminProductsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const barcodeBeep = useAudioPlayer(require("../../assets/sounds/barcode-beep.wav"));
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const { products, updateProduct, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
   const { settings } = useAppSettings();
@@ -51,7 +53,37 @@ export default function AdminProductsScreen() {
   const [barcodeScanned, setBarcodeScanned] = useState(false);
   const variantKey = (color: string, size: string) => `${color}|${size}`;
 
+  useEffect(() => {
+    if (Platform.OS === "web" || !CameraView.isModernBarcodeScannerAvailable) return;
+
+    const subscription = CameraView.onModernBarcodeScanned(({ data }) => {
+      if (!data?.trim()) return;
+
+      setSearch(data.trim());
+      setStockFilter("all");
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
+    });
+
+    return () => subscription.remove();
+  }, [barcodeBeep]);
+
   const handleOpenBarcodeScanner = async () => {
+    if (Platform.OS !== "web" && CameraView.isModernBarcodeScannerAvailable) {
+      try {
+        await CameraView.launchScanner({
+          barcodeTypes: [
+            "ean13", "ean8", "upc_a", "upc_e",
+            "code128", "code39", "code93",
+            "itf14", "codabar", "qr",
+          ],
+        });
+      } catch {
+        Alert.alert("الماسح", "تعذر فتح ماسح الباركود.");
+      }
+      return;
+    }
+
     const permission = cameraPermission?.granted
       ? cameraPermission
       : await requestCameraPermission();
@@ -70,7 +102,9 @@ export default function AdminProductsScreen() {
 
     setBarcodeScanned(true);
     setSearch(data.trim());
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setStockFilter("all");
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void barcodeBeep.seekTo(0).then(() => barcodeBeep.play()).catch(() => {});
     setScannerOpen(false);
   };
 
