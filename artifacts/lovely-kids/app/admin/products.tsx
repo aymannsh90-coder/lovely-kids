@@ -43,6 +43,7 @@ export default function AdminProductsScreen() {
   // Per-color/size variant stock adjustment
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
+  const [stockFilter, setStockFilter] = useState<"all" | "out">("all");
   const variantKey = (color: string, size: string) => `${color}|${size}`;
 
   const handleDelete = (id: string, name: string) => {
@@ -137,6 +138,15 @@ export default function AdminProductsScreen() {
   const getAgeLabel = (age: string) =>
     ageGroupLabels[age]?.label ?? DEFAULT_AGE_GROUP_LABELS[age]?.label ?? age;
 
+  const isProductOutOfStock = (product: Product) => {
+    const sizes = product.colorVariants?.flatMap((cv) => cv.sizes ?? []) ?? [];
+    if (sizes.length > 0) return sizes.every(isSizeOutOfStock);
+    return product.stock === 0;
+  };
+
+  const filteredProducts =
+    stockFilter === "out" ? products.filter(isProductOutOfStock) : products;
+
   const getStockLabel = (stock: number | null | undefined) => {
     if (stock === null || stock === undefined) return null;
     if (stock === 0) return { text: "نفد", color: "#ef4444" };
@@ -200,9 +210,22 @@ export default function AdminProductsScreen() {
         <Ionicons name="chevron-back-outline" size={18} color="#fff" />
       </Pressable>
 
+      <View style={{ flexDirection: "row-reverse", gap: 8, paddingHorizontal: 16, paddingVertical: 10 }}>
+        <Pressable onPress={() => setStockFilter("all")}>
+          <Text style={{ fontWeight: "700", color: stockFilter === "all" ? colors.primary : colors.foreground }}>
+            الكل
+          </Text>
+        </Pressable>
+        <Pressable onPress={() => setStockFilter("out")}>
+          <Text style={{ fontWeight: "700", color: stockFilter === "out" ? "#ef4444" : colors.foreground }}>
+            منتهي من المخزون
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Products List */}
       <FlatList
-        data={products}
+        data={filteredProducts}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.list, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
@@ -213,9 +236,16 @@ export default function AdminProductsScreen() {
           </View>
         }
         renderItem={({ item }) => {
+          const productOutOfStock = isProductOutOfStock(item);
           const stockInfo = getStockLabel(item.stock);
           return (
-            <View style={[styles.productRow, { backgroundColor: colors.card, borderColor: item.stock === 0 ? "#ef444440" : colors.border }]}>
+            <View style={[
+              styles.productRow,
+              {
+                backgroundColor: productOutOfStock ? "#ef444410" : colors.card,
+                borderColor: productOutOfStock ? "#ef444460" : colors.border,
+              },
+            ]}>
               <Image source={{ uri: item.image }} style={styles.productImage} />
 
               <View style={styles.productInfo}>
@@ -233,6 +263,12 @@ export default function AdminProductsScreen() {
                     <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{getAgeLabel(item.ageGroup)}</Text>
                   </View>
                 </View>
+
+                {productOutOfStock ? (
+                  <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "800" }}>
+                    🔴 منتهي من المخزون
+                  </Text>
+                ) : null}
 
                 {/* Stock Badge — tappable */}
                 <Pressable
