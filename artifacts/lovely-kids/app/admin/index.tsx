@@ -193,7 +193,7 @@ export default function AdminDashboardScreen() {
 
         <View style={styles.quickGrid}>
           <Pressable
-            onPress={() => router.push("/admin/settings")}
+            onPress={() => router.push("/admin/season")}
             style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <Ionicons name="partly-sunny-outline" size={28} color={colors.primary} />
@@ -208,7 +208,7 @@ export default function AdminDashboardScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/admin/settings")}
+            onPress={() => router.push("/admin/shipping")}
             style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <Ionicons name="car-outline" size={28} color={colors.primary} />
@@ -219,7 +219,7 @@ export default function AdminDashboardScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/admin/settings")}
+            onPress={() => router.push("/admin/colors")}
             style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <Ionicons name="color-palette-outline" size={28} color={colors.primary} />
