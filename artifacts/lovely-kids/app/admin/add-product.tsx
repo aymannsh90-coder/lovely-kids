@@ -127,6 +127,16 @@ export default function AddProductScreen() {
     );
   };
 
+  const getAdditionalBarcodeSizeOptions = (item: ProductBarcode) => {
+    if (!item.color) return sizes;
+
+    return (
+      colorVariants
+        .find((variant) => variant.color === item.color)
+        ?.sizes.map((entry) => entry.size) ?? []
+    );
+  };
+
   const addSize = () => {
     const s = sizeInput.trim().toUpperCase();
     if (!s) return;
@@ -563,6 +573,24 @@ export default function AddProductScreen() {
     if (!image.trim()) errs.push("صورة المنتج مطلوبة");
     if (stock.trim() && isNaN(Number(stock))) errs.push("الكمية يجب أن تكون رقماً صحيحاً");
     if (isNew && (!newDays.trim() || !Number.isInteger(Number(newDays)) || Number(newDays) <= 0)) errs.push("مدة وصل حديثًا يجب أن تكون عدد أيام صحيحًا أكبر من صفر");
+
+    const extraBarcodeValues = additionalBarcodes.map((item) =>
+      item.barcode.trim()
+    );
+
+    if (extraBarcodeValues.some((value) => !value)) {
+      errs.push("أدخل الباركود الإضافي أو احذف الحقل الفارغ");
+    }
+
+    const allBarcodeValues = [
+      barcode.trim(),
+      ...extraBarcodeValues,
+    ].filter(Boolean);
+
+    if (new Set(allBarcodeValues).size !== allBarcodeValues.length) {
+      errs.push("يوجد باركود مكرر داخل نفس المنتج");
+    }
+
     setErrors(errs);
     return errs.length === 0;
   };
@@ -604,8 +632,12 @@ export default function AddProductScreen() {
         await addProduct(productData);
       }
       router.back();
-    } catch {
-      setErrors(["فشل الحفظ، يرجى المحاولة مجدداً"]);
+    } catch (error) {
+      setErrors([
+        error instanceof Error
+          ? error.message
+          : "فشل الحفظ، يرجى المحاولة مجدداً",
+      ]);
     } finally {
       setSaving(false);
     }
@@ -703,6 +735,259 @@ export default function AddProductScreen() {
             <Ionicons name="camera-outline" size={20} color="#fff" />
             <Text style={{ color: "#fff", fontWeight: "700" }}>مسح الباركود بالكاميرا</Text>
           </Pressable>
+        </View>
+
+        {/* Additional Barcodes */}
+        <View style={styles.field}>
+          <Pressable
+            onPress={addAdditionalBarcode}
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              paddingVertical: 11,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.primary,
+              backgroundColor: colors.primary + "10",
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+              إضافة باركود إضافي
+            </Text>
+          </Pressable>
+
+          {additionalBarcodes.map((item, index) => (
+            <View
+              key={index}
+              style={{
+                gap: 8,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                backgroundColor: colors.card,
+              }}
+            >
+              <Text style={[styles.label, { color: colors.foreground }]}>
+                باركود إضافي {index + 1}
+              </Text>
+
+              <TextInput
+                value={item.barcode}
+                onChangeText={(value) =>
+                  updateAdditionalBarcode(index, { barcode: value })
+                }
+                placeholder="امسح أو اكتب رقم الباركود"
+                placeholderTextColor={colors.mutedForeground}
+                autoCapitalize="none"
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    color: colors.foreground,
+                  },
+                ]}
+                textAlign="right"
+              />
+
+              {colorVariants.length > 0 && (
+                <View style={{ gap: 6 }}>
+                  <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                    اللون (اختياري)
+                  </Text>
+
+                  <View style={styles.sizesWrap}>
+                    <Pressable
+                      onPress={() =>
+                        updateAdditionalBarcode(index, {
+                          color: null,
+                          size: null,
+                        })
+                      }
+                      style={[
+                        styles.sizeChip,
+                        {
+                          borderColor: !item.color
+                            ? colors.primary
+                            : colors.border,
+                          backgroundColor: !item.color
+                            ? colors.primary + "20"
+                            : colors.background,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: !item.color
+                            ? colors.primary
+                            : colors.foreground,
+                        }}
+                      >
+                        بدون تحديد
+                      </Text>
+                    </Pressable>
+
+                    {colorVariants.map((variant) => (
+                      <Pressable
+                        key={variant.color}
+                        onPress={() =>
+                          updateAdditionalBarcode(index, {
+                            color: variant.color,
+                            size: null,
+                          })
+                        }
+                        style={[
+                          styles.sizeChip,
+                          {
+                            borderColor:
+                              item.color === variant.color
+                                ? colors.primary
+                                : colors.border,
+                            backgroundColor:
+                              item.color === variant.color
+                                ? colors.primary + "20"
+                                : colors.background,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.swatch,
+                            {
+                              width: 14,
+                              height: 14,
+                              backgroundColor: variant.hex,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        />
+                        <Text
+                          style={{
+                            color:
+                              item.color === variant.color
+                                ? colors.primary
+                                : colors.foreground,
+                          }}
+                        >
+                          {variant.color}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {getAdditionalBarcodeSizeOptions(item).length > 0 && (
+                <View style={{ gap: 6 }}>
+                  <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                    المقاس (اختياري)
+                  </Text>
+
+                  <View style={styles.sizesWrap}>
+                    <Pressable
+                      onPress={() =>
+                        updateAdditionalBarcode(index, { size: null })
+                      }
+                      style={[
+                        styles.sizeChip,
+                        {
+                          borderColor: !item.size
+                            ? colors.primary
+                            : colors.border,
+                          backgroundColor: !item.size
+                            ? colors.primary + "20"
+                            : colors.background,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: !item.size
+                            ? colors.primary
+                            : colors.foreground,
+                        }}
+                      >
+                        بدون تحديد
+                      </Text>
+                    </Pressable>
+
+                    {getAdditionalBarcodeSizeOptions(item).map((sizeOption) => (
+                      <Pressable
+                        key={sizeOption}
+                        onPress={() =>
+                          updateAdditionalBarcode(index, {
+                            size: sizeOption,
+                          })
+                        }
+                        style={[
+                          styles.sizeChip,
+                          {
+                            borderColor:
+                              item.size === sizeOption
+                                ? colors.primary
+                                : colors.border,
+                            backgroundColor:
+                              item.size === sizeOption
+                                ? colors.primary + "20"
+                                : colors.background,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              item.size === sizeOption
+                                ? colors.primary
+                                : colors.foreground,
+                          }}
+                        >
+                          {sizeOption}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                <Pressable
+                  onPress={() => void handleOpenBarcodeScanner(index)}
+                  style={{
+                    flex: 1,
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: colors.primary,
+                  }}
+                >
+                  <Ionicons name="camera-outline" size={18} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>
+                    مسح بالكاميرا
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => removeAdditionalBarcode(index)}
+                  style={{
+                    width: 46,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 10,
+                    backgroundColor: "#fee2e2",
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={19} color="#ef4444" />
+                </Pressable>
+              </View>
+            </View>
+          ))}
         </View>
 
         {/* Price Row */}

@@ -179,7 +179,14 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       headers,
       body: JSON.stringify(toInsertBody(product)),
     });
-    if (!res.ok) throw new Error("فشل إضافة المنتج");
+    if (!res.ok) {
+      let message = "فشل إضافة المنتج";
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (data.error) message = data.error;
+      } catch {}
+      throw new Error(message);
+    }
     const created: Product = await res.json();
     setProducts((prev) => [created, ...prev]);
   }, [getAdminHeaders]);
@@ -191,7 +198,14 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       headers,
       body: JSON.stringify(toInsertBody(product)),
     });
-    if (!res.ok) throw new Error("فشل تعديل المنتج");
+    if (!res.ok) {
+      let message = "فشل تعديل المنتج";
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (data.error) message = data.error;
+      } catch {}
+      throw new Error(message);
+    }
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === product.id ? updated : p)));
   }, [getAdminHeaders]);

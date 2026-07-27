@@ -235,7 +235,10 @@ async function handleCreateProduct(
   const product = await db.transaction(async (tx) => {
     const rows = await tx
       .insert(productsTable)
-      .values(productData)
+      .values({
+        ...productData,
+        barcode: productData.barcode?.trim() || null,
+      })
       .returning();
 
     const created = rows[0];
@@ -357,7 +360,12 @@ async function handleUpdateProduct(
     if (Object.keys(productData).length > 0) {
       const rows = await tx
         .update(productsTable)
-        .set(productData)
+        .set({
+          ...productData,
+          ...(productData.barcode !== undefined
+            ? { barcode: productData.barcode?.trim() || null }
+            : {}),
+        })
         .where(eq(productsTable.id, id))
         .returning();
 
