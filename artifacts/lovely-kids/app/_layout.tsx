@@ -50,6 +50,7 @@ function RootLayoutNav() {
       <Stack.Screen name="search" />
       <Stack.Screen name="contact" />
       <Stack.Screen name="about" />
+      <Stack.Screen name="admin/index" />
       <Stack.Screen name="admin/products" />
       <Stack.Screen name="admin/add-product" />
       <Stack.Screen name="admin/settings" />

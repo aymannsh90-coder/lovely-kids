@@ -191,7 +191,7 @@ export default function ProfileScreen() {
       await promoteToAdmin(adminPassword.trim());
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setAdminModalVisible(false); setAdminPassword("");
-      router.push("/admin/products");
+      router.push("/admin");
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setAdminError(e instanceof Error ? e.message : "حدث خطأ");
@@ -581,7 +581,7 @@ export default function ProfileScreen() {
       {/* Admin Card */}
       {user?.isAdmin && (
         <Pressable
-          onPress={() => { clearNew(); router.push("/admin/products"); }}
+          onPress={() => { clearNew(); router.push("/admin"); }}
           style={[styles.adminCard, { backgroundColor: colors.primary }]}
         >
           <View style={{ position: "relative" }}>
