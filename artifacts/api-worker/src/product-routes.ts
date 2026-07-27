@@ -162,6 +162,9 @@ function toProduct(
     reviews: row.reviews,
     isPinned: !!row.isPinned,
     showInOffers: !!row.showInOffers,
+    facebookUrl: row.facebookUrl ?? null,
+    instagramUrl: row.instagramUrl ?? null,
+    tiktokUrl: row.tiktokUrl ?? null,
     isNew:
       !!row.isNew &&
       !!row.newUntil &&

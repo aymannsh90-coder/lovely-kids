@@ -40,6 +40,9 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     reviews: r.reviews,
     isPinned: !!r.isPinned,
     showInOffers: !!r.showInOffers,
+    facebookUrl: r.facebookUrl ?? null,
+    instagramUrl: r.instagramUrl ?? null,
+    tiktokUrl: r.tiktokUrl ?? null,
     isNew:
       !!r.isNew &&
       !!r.newUntil &&

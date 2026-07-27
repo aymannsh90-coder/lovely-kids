@@ -80,6 +80,10 @@ export default function AddProductScreen() {
   const [season, setSeason] = useState<"summer" | "winter" | null>(editProduct?.season ?? null);
   const [isPinned, setIsPinned] = useState(editProduct?.isPinned ?? false);
   const [showInOffers, setShowInOffers] = useState(editProduct?.showInOffers ?? false);
+  const [socialUrlInput, setSocialUrlInput] = useState("");
+  const [facebookUrl, setFacebookUrl] = useState(editProduct?.facebookUrl ?? "");
+  const [instagramUrl, setInstagramUrl] = useState(editProduct?.instagramUrl ?? "");
+  const [tiktokUrl, setTiktokUrl] = useState(editProduct?.tiktokUrl ?? "");
   const initialNewDays = editProduct?.isNew && editProduct?.newUntil ? Math.max(1, Math.ceil((new Date(editProduct.newUntil).getTime() - Date.now()) / 86400000)) : 7;
   const [isNew, setIsNew] = useState(editProduct?.isNew ?? false);
   const [newDays, setNewDays] = useState(String(initialNewDays));
@@ -568,6 +572,47 @@ export default function AddProductScreen() {
     };
   }, [scannerOpen, barcodeBeep]);
 
+  const addSocialLink = () => {
+    const raw = socialUrlInput.trim();
+    if (!raw) return;
+
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    let hostname = "";
+    try {
+      hostname = new URL(normalized).hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+      setErrors(["الرابط غير صحيح"]);
+      return;
+    }
+
+    if (
+      hostname === "facebook.com" ||
+      hostname.endsWith(".facebook.com") ||
+      hostname === "fb.com" ||
+      hostname.endsWith(".fb.com")
+    ) {
+      setFacebookUrl(normalized);
+    } else if (
+      hostname === "instagram.com" ||
+      hostname.endsWith(".instagram.com") ||
+      hostname === "instagr.am"
+    ) {
+      setInstagramUrl(normalized);
+    } else if (
+      hostname === "tiktok.com" ||
+      hostname.endsWith(".tiktok.com")
+    ) {
+      setTiktokUrl(normalized);
+    } else {
+      setErrors(["الرابط غير مدعوم. استخدم Facebook أو Instagram أو TikTok"]);
+      return;
+    }
+
+    setSocialUrlInput("");
+    setErrors([]);
+  };
+
   const validate = () => {
     const errs: string[] = [];
     if (!nameAr.trim()) errs.push("اسم المنتج بالعربي مطلوب");
@@ -620,6 +665,9 @@ export default function AddProductScreen() {
         season,
         isPinned,
         showInOffers,
+        facebookUrl: facebookUrl.trim() || null,
+        instagramUrl: instagramUrl.trim() || null,
+        tiktokUrl: tiktokUrl.trim() || null,
         sizes,
         colorVariants,
         rating: editProduct?.rating ?? 4.8,
@@ -1049,6 +1097,125 @@ export default function AddProductScreen() {
             trackColor={{ false: colors.muted, true: colors.primary }}
             thumbColor="#fff"
           />
+        </View>
+
+        {/* Product Social Links */}
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.foreground }]}>
+            روابط المنتج على السوشال (اختياري)
+          </Text>
+          <Text style={[styles.hint, { color: colors.mutedForeground, marginBottom: 6 }]}>
+            الصق رابط Facebook أو Instagram أو TikTok وسيتم التعرف عليه تلقائيًا
+          </Text>
+
+          <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+            <TextInput
+              value={socialUrlInput}
+              onChangeText={setSocialUrlInput}
+              placeholder="الصق الرابط هنا..."
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={[
+                styles.input,
+                {
+                  flex: 1,
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                },
+              ]}
+              textAlign="left"
+            />
+            <Pressable
+              onPress={addSocialLink}
+              style={{
+                minWidth: 72,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                backgroundColor: colors.primary,
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700" }}>إضافة</Text>
+            </Pressable>
+          </View>
+
+          {(facebookUrl || instagramUrl || tiktokUrl) ? (
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 10,
+              }}
+            >
+              {facebookUrl ? (
+                <Pressable
+                  onPress={() => setFacebookUrl("")}
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-facebook" size={18} color="#1877F2" />
+                  <Text style={{ color: colors.foreground, fontSize: 12 }}>Facebook</Text>
+                  <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ) : null}
+
+              {instagramUrl ? (
+                <Pressable
+                  onPress={() => setInstagramUrl("")}
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-instagram" size={18} color="#E1306C" />
+                  <Text style={{ color: colors.foreground, fontSize: 12 }}>Instagram</Text>
+                  <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ) : null}
+
+              {tiktokUrl ? (
+                <Pressable
+                  onPress={() => setTiktokUrl("")}
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-tiktok" size={18} color={colors.foreground} />
+                  <Text style={{ color: colors.foreground, fontSize: 12 }}>TikTok</Text>
+                  <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {/* Stock */}

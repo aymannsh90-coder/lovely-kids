@@ -6,6 +6,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -262,6 +263,75 @@ export default function ProductDetailScreen() {
 
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>الوصف</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{product.description}</Text>
+
+          {(product.facebookUrl || product.instagramUrl || product.tiktokUrl) ? (
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 10,
+                marginTop: 12,
+                marginBottom: 4,
+              }}
+            >
+              {product.facebookUrl ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(product.facebookUrl!)}
+                  accessibilityLabel="فتح رابط Facebook"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-facebook" size={21} color="#1877F2" />
+                </Pressable>
+              ) : null}
+
+              {product.instagramUrl ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(product.instagramUrl!)}
+                  accessibilityLabel="فتح رابط Instagram"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-instagram" size={21} color="#E1306C" />
+                </Pressable>
+              ) : null}
+
+              {product.tiktokUrl ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(product.tiktokUrl!)}
+                  accessibilityLabel="فتح رابط TikTok"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-tiktok" size={21} color={colors.foreground} />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
 
           {hasColorVariants && (
             <>

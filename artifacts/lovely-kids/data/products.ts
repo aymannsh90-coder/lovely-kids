@@ -47,6 +47,9 @@ export interface Product {
   isNew?: boolean;
   isPinned?: boolean;
   showInOffers?: boolean;
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  tiktokUrl?: string | null;
   newUntil?: string | null;
   discount?: number;
   description: string;
