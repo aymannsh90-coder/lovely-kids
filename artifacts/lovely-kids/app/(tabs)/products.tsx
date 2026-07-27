@@ -77,7 +77,7 @@ export default function ProductsScreen() {
         <View style={styles.headerRow}>
           {fromMenu === "1" && (
             <Pressable
-              onPress={() => router.replace({ pathname: "/(tabs)", params: { openCategories: "1" } })}
+              onPress={() => router.replace({ pathname: "/(tabs)", params: { openCategories: String(Date.now()) } })}
               style={styles.backButton}
               accessibilityLabel="رجوع"
             >

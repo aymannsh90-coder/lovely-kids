@@ -37,7 +37,7 @@ export function CategoryMenu() {
   };
 
   useEffect(() => {
-    if (openCategories === "1") {
+    if (openCategories) {
       openMenu();
     }
   }, [openCategories]);
