@@ -39,6 +39,7 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     rating: r.rating / 10,
     reviews: r.reviews,
     isPinned: !!r.isPinned,
+    showInOffers: !!r.showInOffers,
     isNew:
       !!r.isNew &&
       !!r.newUntil &&

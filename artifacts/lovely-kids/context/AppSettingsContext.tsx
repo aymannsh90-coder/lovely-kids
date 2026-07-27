@@ -78,6 +78,7 @@ export interface AppSettings {
   bannerColor: string;
   bannerBadge: string;
   offers: Offer[];
+  productOffersSectionEnabled: boolean;
   ageGroupLabels: Record<string, AgeGroupLabel>;
   categoryLabels: Record<string, string>;
   hiddenCategories: string[];
@@ -105,6 +106,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   bannerSubtitle: "ملابس ولادي وبناتي · تجهيز بيبي · مستلزمات مواليد",
   bannerColor: "#E91E8C",
   bannerBadge: "خصم 20%",
+  productOffersSectionEnabled: false,
   offers: [
     {
       id: "offer1",

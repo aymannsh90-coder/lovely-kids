@@ -35,6 +35,7 @@ export const productsTable = pgTable("products", {
   reviews: integer("reviews").notNull().default(0),
   isNew: boolean("is_new").default(false),
   isPinned: boolean("is_pinned").default(false),
+  showInOffers: boolean("show_in_offers").notNull().default(false),
   newUntil: timestamp("new_until"),
   discount: integer("discount"),
   description: text("description").notNull().default(""),

@@ -550,6 +550,20 @@ export default function SettingsScreen() {
         </Pressable>
       </Section>
 
+      {/* ── منتجات العروض الجديدة ── */}
+      <Section title="🔥 منتجات العروض">
+        <Pressable
+          onPress={() => router.push("/admin/product-offers")}
+          style={[styles.navRow, { backgroundColor: colors.secondary }]}
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+          <Text style={[styles.navText, { color: colors.foreground }]}>
+            إدارة منتجات قسم العروض
+          </Text>
+          <Ionicons name="flame-outline" size={22} color={colors.primary} />
+        </Pressable>
+      </Section>
+
       {/* ── العروض ── */}
       <Section title="🛒 العروض الخاصة">
         <Pressable

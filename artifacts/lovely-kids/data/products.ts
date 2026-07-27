@@ -46,6 +46,7 @@ export interface Product {
   reviews: number;
   isNew?: boolean;
   isPinned?: boolean;
+  showInOffers?: boolean;
   newUntil?: string | null;
   discount?: number;
   description: string;

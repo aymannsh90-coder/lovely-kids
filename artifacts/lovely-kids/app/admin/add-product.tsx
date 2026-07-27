@@ -14,6 +14,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Switch,
   StyleSheet,
   Text,
   TextInput,
@@ -78,6 +79,7 @@ export default function AddProductScreen() {
   const [gender, setGender] = useState<"boys" | "girls" | null>(editProduct?.gender ?? null);
   const [season, setSeason] = useState<"summer" | "winter" | null>(editProduct?.season ?? null);
   const [isPinned, setIsPinned] = useState(editProduct?.isPinned ?? false);
+  const [showInOffers, setShowInOffers] = useState(editProduct?.showInOffers ?? false);
   const initialNewDays = editProduct?.isNew && editProduct?.newUntil ? Math.max(1, Math.ceil((new Date(editProduct.newUntil).getTime() - Date.now()) / 86400000)) : 7;
   const [isNew, setIsNew] = useState(editProduct?.isNew ?? false);
   const [newDays, setNewDays] = useState(String(initialNewDays));
@@ -617,6 +619,7 @@ export default function AddProductScreen() {
         gender,
         season,
         isPinned,
+        showInOffers,
         sizes,
         colorVariants,
         rating: editProduct?.rating ?? 4.8,
@@ -1016,6 +1019,36 @@ export default function AddProductScreen() {
               textAlign="right"
             />
           </View>
+        </View>
+
+        {/* Product Offers */}
+        <View
+          style={{
+            flexDirection: "row-reverse",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: 14,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            marginBottom: 4,
+          }}
+        >
+          <View style={{ flex: 1, alignItems: "flex-end", marginLeft: 12 }}>
+            <Text style={[styles.label, { color: colors.foreground }]}>
+              🔥 إضافة إلى العروض
+            </Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              يظهر المنتج تلقائيًا ضمن قسم العروض
+            </Text>
+          </View>
+          <Switch
+            value={showInOffers}
+            onValueChange={setShowInOffers}
+            trackColor={{ false: colors.muted, true: colors.primary }}
+            thumbColor="#fff"
+          />
         </View>
 
         {/* Stock */}

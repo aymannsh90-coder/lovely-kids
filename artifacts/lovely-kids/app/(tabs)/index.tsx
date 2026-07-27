@@ -61,6 +61,9 @@ export default function HomeScreen() {
     sublabel: ageGroupLabels[id]?.sublabel ?? DEFAULT_AGE_GROUP_LABELS[id].sublabel,
   }));
   const activeOffers = settings.offers.filter((o) => o.active);
+  const productOffersCount = products.filter((p) => p.showInOffers === true).length;
+  const showProductOffersButton =
+    settings.productOffersSectionEnabled === true && productOffersCount > 0;
   const [selectedAge, setSelectedAge] = useState<string | null>(null);
   const [genderTab, setGenderTab] = useState<GenderTab>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
@@ -272,6 +275,24 @@ export default function HomeScreen() {
           </View>
         </View>
       </Pressable>
+
+      {showProductOffersButton ? (
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/products",
+              params: { offers: "1" },
+            })
+          }
+          style={[styles.installBtn, { backgroundColor: "#FFD54F" }]}
+        >
+          <Ionicons name="flame" size={20} color="#3D2B00" />
+          <Text style={[styles.installBtnText, { color: "#3D2B00" }]}>
+            العروض الخاصة
+          </Text>
+          <Ionicons name="arrow-back" size={18} color="#3D2B00" />
+        </Pressable>
+      ) : null}
 
       {Platform.OS === "web" && !isInstalled && (installPrompt || isIos) ? (
         <Pressable

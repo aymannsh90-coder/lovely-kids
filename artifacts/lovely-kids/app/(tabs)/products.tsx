@@ -24,7 +24,7 @@ import { useColors } from "@/hooks/useColors";
 const { width } = Dimensions.get("window");
 
 export default function ProductsScreen() {
-  const { category, fromMenu } = useLocalSearchParams<{ category?: string; fromMenu?: string }>();
+  const { category, fromMenu, offers } = useLocalSearchParams<{ category?: string; fromMenu?: string; offers?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { products } = useVisibleProducts();
@@ -53,14 +53,17 @@ export default function ProductsScreen() {
     }
   }, [categories, selectedCategory]);
 
+  const isOffersView = offers === "1";
+
   const filtered = products.filter((p) => {
+    const matchOffers = !isOffersView || p.showInOffers === true;
     const matchCat =
       selectedCategory === "all" || p.category === selectedCategory;
     const matchSeason =
       selectedSeason === "all" || p.season === selectedSeason;
     const matchSearch =
       !search || p.nameAr.includes(search) || p.name.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSeason && matchSearch;
+    return matchOffers && matchCat && matchSeason && matchSearch;
   });
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -88,7 +91,7 @@ export default function ProductsScreen() {
               />
             </Pressable>
           )}
-          <Text style={[styles.title, { color: colors.foreground }]}>المنتجات</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>{isOffersView ? "🔥 العروض" : "المنتجات"}</Text>
         </View>
       </View>
 

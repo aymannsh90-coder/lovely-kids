@@ -161,6 +161,7 @@ function toProduct(
     rating: row.rating / 10,
     reviews: row.reviews,
     isPinned: !!row.isPinned,
+    showInOffers: !!row.showInOffers,
     isNew:
       !!row.isNew &&
       !!row.newUntil &&
