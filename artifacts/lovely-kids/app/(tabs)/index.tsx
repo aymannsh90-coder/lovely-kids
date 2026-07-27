@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CartBadge } from "@/components/CartBadge";
+import { CategoryMenu } from "@/components/CategoryMenu";
 import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
@@ -162,6 +163,7 @@ export default function HomeScreen() {
         ]}
       >
         <View style={styles.headerLeft}>
+          {Platform.OS === "web" && <CategoryMenu />}
           <Image
             source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
@@ -182,6 +184,7 @@ export default function HomeScreen() {
             <Ionicons name="heart-outline" size={24} color={colors.foreground} />
           </Pressable>
           <CartBadge />
+          {Platform.OS !== "web" && <CategoryMenu />}
         </View>
       </View>
 

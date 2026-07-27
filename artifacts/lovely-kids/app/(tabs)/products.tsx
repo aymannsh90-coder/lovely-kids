@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Dimensions,
@@ -14,35 +15,37 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
-import { CATEGORY_IDS, DEFAULT_CATEGORY_LABELS, SEASON_IDS, DEFAULT_SEASON_LABELS, SEASON_ICONS } from "@/data/products";
+import { SEASON_IDS, DEFAULT_SEASON_LABELS, SEASON_ICONS } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
+import { useProductCategories } from "@/hooks/useProductCategories";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 
 const { width } = Dimensions.get("window");
 
 export default function ProductsScreen() {
+  const { category } = useLocalSearchParams<{ category?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
-  const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
-  const hiddenCategories = settings.hiddenCategories ?? [];
-  const customCategories = settings.customCategories ?? [];
-  const categories = [...CATEGORY_IDS, ...customCategories]
-    .filter((id) => id === "all" || !hiddenCategories.includes(id))
-    .map((id) => ({
-      id,
-      label: categoryLabels[id] ?? DEFAULT_CATEGORY_LABELS[id] ?? id,
-    }));
+  const categories = useProductCategories();
   const seasonLabels = settings.seasonLabels ?? DEFAULT_SEASON_LABELS;
   const seasons = SEASON_IDS.map((id) => ({
     id,
     label: seasonLabels[id] ?? DEFAULT_SEASON_LABELS[id],
   }));
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState(
+    typeof category === "string" ? category : "all",
+  );
   const [selectedSeason, setSelectedSeason] = useState<"all" | "summer" | "winter">("all");
+
+  useEffect(() => {
+    if (typeof category === "string" && categories.some((c) => c.id === category)) {
+      setSelectedCategory(category);
+    }
+  }, [category, categories]);
 
   useEffect(() => {
     if (selectedCategory !== "all" && !categories.some((c) => c.id === selectedCategory)) {
