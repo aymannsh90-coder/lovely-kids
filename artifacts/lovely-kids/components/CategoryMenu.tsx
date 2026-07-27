@@ -23,7 +23,7 @@ export function CategoryMenu() {
   const [visible, setVisible] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
 
-  const menuWidth = Math.min(width * 0.82, 340);
+  const menuWidth = Math.min(width * 0.72, 300);
 
   const openMenu = () => {
     setVisible(true);
