@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Dimensions,
@@ -24,7 +24,7 @@ import { useColors } from "@/hooks/useColors";
 const { width } = Dimensions.get("window");
 
 export default function ProductsScreen() {
-  const { category } = useLocalSearchParams<{ category?: string }>();
+  const { category, fromMenu } = useLocalSearchParams<{ category?: string; fromMenu?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { products } = useVisibleProducts();
@@ -74,7 +74,22 @@ export default function ProductsScreen() {
           { paddingTop: topPadding + 12, backgroundColor: colors.background },
         ]}
       >
-        <Text style={[styles.title, { color: colors.foreground }]}>المنتجات</Text>
+        <View style={styles.headerRow}>
+          {fromMenu === "1" && (
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+              accessibilityLabel="رجوع"
+            >
+              <Ionicons
+                name="arrow-forward-outline"
+                size={24}
+                color={colors.foreground}
+              />
+            </Pressable>
+          )}
+          <Text style={[styles.title, { color: colors.foreground }]}>المنتجات</Text>
+        </View>
       </View>
 
       {/* Search */}
@@ -218,6 +233,18 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingBottom: 12,
+  },
+  headerRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 19,
   },
   title: { fontSize: 24, fontWeight: "800", textAlign: "right" },
   searchRow: {

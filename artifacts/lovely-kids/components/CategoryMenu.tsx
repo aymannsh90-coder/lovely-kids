@@ -50,7 +50,7 @@ export function CategoryMenu() {
     closeMenu(() => {
       router.push({
         pathname: "/(tabs)/products",
-        params: { category: categoryId },
+        params: { category: categoryId, fromMenu: "1" },
       });
     });
   };

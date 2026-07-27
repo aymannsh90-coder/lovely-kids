@@ -1,3 +1,4 @@
-const PRODUCTION_FALLBACK_DOMAIN = "api.lovelykids.net";
+const PRODUCTION_API_BASE = "https://api.lovelykids.net";
 
-export const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN || PRODUCTION_FALLBACK_DOMAIN}`;
+export const API_BASE =
+  process.env.EXPO_PUBLIC_API_BASE || PRODUCTION_API_BASE;
