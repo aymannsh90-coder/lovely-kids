@@ -261,96 +261,6 @@ export default function ProductDetailScreen() {
             )}
           </View>
 
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>الوصف</Text>
-          <Text style={[styles.description, { color: colors.mutedForeground }]}>{product.description}</Text>
-
-          {(product.facebookUrl || product.instagramUrl || product.tiktokUrl) ? (
-            <View style={{ marginTop: 12, marginBottom: 4 }}>
-              <Text
-                style={{
-                  color: colors.mutedForeground,
-                  fontSize: 13,
-                  fontWeight: "600",
-                  textAlign: "right",
-                  marginBottom: 8,
-                }}
-              >
-                {product.facebookUrl && !product.instagramUrl && !product.tiktokUrl
-                  ? "لمشاهدة المنتج على صفحة الفيس بوك"
-                  : product.instagramUrl && !product.facebookUrl && !product.tiktokUrl
-                    ? "لمشاهدة المنتج على صفحة الإنستغرام"
-                    : product.tiktokUrl && !product.facebookUrl && !product.instagramUrl
-                      ? "لمشاهدة المنتج على صفحة التيك توك"
-                      : "لمشاهدة المنتج على صفحاتنا"}
-              </Text>
-
-              <View
-                style={{
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-              {product.facebookUrl ? (
-                <Pressable
-                  onPress={() => void Linking.openURL(product.facebookUrl!)}
-                  accessibilityLabel="فتح رابط Facebook"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: colors.card,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  <Ionicons name="logo-facebook" size={21} color="#1877F2" />
-                </Pressable>
-              ) : null}
-
-              {product.instagramUrl ? (
-                <Pressable
-                  onPress={() => void Linking.openURL(product.instagramUrl!)}
-                  accessibilityLabel="فتح رابط Instagram"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: colors.card,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  <Ionicons name="logo-instagram" size={21} color="#E1306C" />
-                </Pressable>
-              ) : null}
-
-              {product.tiktokUrl ? (
-                <Pressable
-                  onPress={() => void Linking.openURL(product.tiktokUrl!)}
-                  accessibilityLabel="فتح رابط TikTok"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: colors.card,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  <Ionicons name="logo-tiktok" size={21} color={colors.foreground} />
-                </Pressable>
-              ) : null}
-              </View>
-            </View>
-          ) : null}
-
           {hasColorVariants && (
             <>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
@@ -459,6 +369,113 @@ export default function ProductDetailScreen() {
             </>
           )}
 
+          <View
+            style={[
+              styles.detailCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              تفاصيل المنتج
+            </Text>
+            <Text style={[styles.description, { color: colors.mutedForeground }]}>
+              {product.description}
+            </Text>
+          </View>
+
+          {(product.facebookUrl || product.instagramUrl || product.tiktokUrl) ? (
+            <View
+              style={[
+                styles.socialCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={{
+                  color: colors.mutedForeground,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  textAlign: "right",
+                  marginBottom: 8,
+                }}
+              >
+                {product.facebookUrl && !product.instagramUrl && !product.tiktokUrl
+                  ? "لمشاهدة المنتج على صفحة الفيس بوك"
+                  : product.instagramUrl && !product.facebookUrl && !product.tiktokUrl
+                    ? "لمشاهدة المنتج على صفحة الإنستغرام"
+                    : product.tiktokUrl && !product.facebookUrl && !product.instagramUrl
+                      ? "لمشاهدة المنتج على صفحة التيك توك"
+                      : "لمشاهدة المنتج على صفحاتنا"}
+              </Text>
+
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+              {product.facebookUrl ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(product.facebookUrl!)}
+                  accessibilityLabel="فتح رابط Facebook"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-facebook" size={21} color="#1877F2" />
+                </Pressable>
+              ) : null}
+
+              {product.instagramUrl ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(product.instagramUrl!)}
+                  accessibilityLabel="فتح رابط Instagram"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-instagram" size={21} color="#E1306C" />
+                </Pressable>
+              ) : null}
+
+              {product.tiktokUrl ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(product.tiktokUrl!)}
+                  accessibilityLabel="فتح رابط TikTok"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.card,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="logo-tiktok" size={21} color={colors.foreground} />
+                </Pressable>
+              ) : null}
+              </View>
+            </View>
+          ) : null}
+
+
           <View style={[styles.featuresBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
             {[
               { icon: "shield-checkmark-outline" as const, text: "جودة مضمونة 100%" },
@@ -558,7 +575,7 @@ const styles = StyleSheet.create({
   carouselWrapper: { position: "relative" },
   imageSlide: {
     width: SCREEN_WIDTH,
-    height: 320,
+    height: Platform.OS === "web" ? 420 : 340,
     backgroundColor: "#f8f8f8",
     alignItems: "center",
     justifyContent: "center",
@@ -604,13 +621,27 @@ const styles = StyleSheet.create({
   },
   discountBadge: { position: "absolute", bottom: 16, left: 16, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   discountText: { color: "#fff", fontWeight: "700", fontSize: 13 },
-  content: { padding: 20, gap: 12 },
-  name: { fontSize: 22, fontWeight: "800", textAlign: "right", lineHeight: 30 },
+  content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20, gap: 10, width: "100%", maxWidth: 760, alignSelf: "center" },
+  name: { fontSize: 21, fontWeight: "900", textAlign: "right", lineHeight: 29 },
   priceRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
-  price: { fontSize: 26, fontWeight: "800" },
+  price: { fontSize: 25, fontWeight: "900" },
   originalPrice: { fontSize: 16, textDecorationLine: "line-through" },
   sectionTitle: { fontSize: 16, fontWeight: "700", textAlign: "right" },
   description: { fontSize: 14, textAlign: "right", lineHeight: 22 },
+  detailCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    gap: 7,
+    marginTop: 4,
+  },
+  socialCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 2,
+    marginBottom: 2,
+  },
   sizesRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
   sizeChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   sizeChipWithMark: { position: "relative", overflow: "hidden" },
@@ -626,10 +657,10 @@ const styles = StyleSheet.create({
   featuresBox: { borderRadius: 12, padding: 14, gap: 10, borderWidth: 1, marginTop: 4 },
   featureRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   featureText: { fontSize: 13, textAlign: "right" },
-  footer: { padding: 16, borderTopWidth: 1 },
-  addBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16 },
+  footer: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
+  addBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: 16 },
   addBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  outOfStockBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16, borderWidth: 1 },
+  outOfStockBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: 16, borderWidth: 1 },
   outOfStockBtnText: { fontSize: 16, fontWeight: "700" },
   selectionHint: { fontSize: 12, fontWeight: "600", textAlign: "center", marginBottom: 8 },
   modalOverlay: {
