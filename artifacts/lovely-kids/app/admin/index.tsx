@@ -1,18 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ColorPickerButton } from "@/components/ColorPickerButton";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
@@ -65,31 +63,6 @@ export default function AdminDashboardScreen() {
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 20;
 
-  const [draftPrimary, setDraftPrimary] = useState(settings.primaryColor);
-  const [draftBackground, setDraftBackground] = useState(settings.backgroundColor);
-  const [draftSecondary, setDraftSecondary] = useState(settings.secondaryColor);
-  const [shippingDrafts, setShippingDrafts] = useState<string[]>(
-    (settings.shippingZones ?? []).map((zone) => String(zone.cost)),
-  );
-  const [saving, setSaving] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDraftPrimary(settings.primaryColor);
-    setDraftBackground(settings.backgroundColor);
-    setDraftSecondary(settings.secondaryColor);
-  }, [
-    settings.primaryColor,
-    settings.backgroundColor,
-    settings.secondaryColor,
-  ]);
-
-  useEffect(() => {
-    setShippingDrafts(
-      (settings.shippingZones ?? []).map((zone) => String(zone.cost)),
-    );
-  }, [settings.shippingZones]);
-
   const activeCategories = useMemo(() => {
     const hidden = settings.hiddenCategories ?? [];
     return Object.entries(settings.categoryLabels ?? {})
@@ -102,47 +75,7 @@ export default function AdminDashboardScreen() {
     [products],
   );
 
-  const markSaved = (key: string) => {
-    setSaved(key);
-    setTimeout(() => {
-      setSaved((current) => (current === key ? null : current));
-    }, 1800);
-  };
 
-  const saveColors = async () => {
-    setSaving("colors");
-    const ok = await updateSettings({
-      primaryColor: draftPrimary,
-      backgroundColor: draftBackground,
-      secondaryColor: draftSecondary,
-      accentColor: draftSecondary,
-    });
-    setSaving(null);
-    if (ok) markSaved("colors");
-  };
-
-  const saveShipping = async () => {
-    const zones = (settings.shippingZones ?? []).map((zone, index) => {
-      const parsed = Number.parseInt(shippingDrafts[index] ?? "", 10);
-      return {
-        ...zone,
-        cost: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
-      };
-    });
-
-    setSaving("shipping");
-    const ok = await updateSettings({ shippingZones: zones });
-    setSaving(null);
-    if (ok) markSaved("shipping");
-  };
-
-  const setSeason = async (season: "summer" | "winter") => {
-    if (settings.activeSeason === season) return;
-    setSaving("season");
-    const ok = await updateSettings({ activeSeason: season });
-    setSaving(null);
-    if (ok) markSaved("season");
-  };
 
   return (
     <ScrollView
@@ -258,314 +191,57 @@ export default function AdminDashboardScreen() {
           إعدادات سريعة
         </Text>
 
-        {/* Active season */}
-        <View
-          style={[
-            styles.quickCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <View style={styles.quickHeader}>
-            <Ionicons name="partly-sunny-outline" size={22} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.quickTitle, { color: colors.foreground }]}>
-                الموسم النشط
-              </Text>
-              <Text style={[styles.quickHint, { color: colors.mutedForeground }]}>
-                المنتجات المعروضة حسب الموسم
-              </Text>
-            </View>
-          </View>
+        <View style={styles.quickGrid}>
+          <Pressable
+            onPress={() => router.push("/admin/settings")}
+            style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Ionicons name="partly-sunny-outline" size={28} color={colors.primary} />
+            <Text style={[styles.quickButtonTitle, { color: colors.foreground }]}>الموسم النشط</Text>
+            <Text style={[styles.quickButtonValue, { color: colors.mutedForeground }]}>
+              {settings.activeSeason === "summer"
+                ? "☀️ صيفي"
+                : settings.activeSeason === "winter"
+                  ? "❄️ شتوي"
+                  : "غير محدد"}
+            </Text>
+          </Pressable>
 
-          <View style={styles.seasonRow}>
-            <Pressable
-              onPress={() => void setSeason("summer")}
-              style={[
-                styles.seasonBtn,
-                {
-                  backgroundColor:
-                    settings.activeSeason === "summer"
-                      ? colors.primary
-                      : colors.background,
-                  borderColor:
-                    settings.activeSeason === "summer"
-                      ? colors.primary
-                      : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color:
-                    settings.activeSeason === "summer"
-                      ? "#fff"
-                      : colors.foreground,
-                  fontWeight: "800",
-                }}
-              >
-                ☀️ صيفي
-              </Text>
-            </Pressable>
+          <Pressable
+            onPress={() => router.push("/admin/settings")}
+            style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Ionicons name="car-outline" size={28} color={colors.primary} />
+            <Text style={[styles.quickButtonTitle, { color: colors.foreground }]}>أسعار التوصيل</Text>
+            <Text style={[styles.quickButtonValue, { color: colors.mutedForeground }]}>
+              {(settings.shippingZones ?? []).map((zone) => `${zone.cost} ₪`).join(" · ")}
+            </Text>
+          </Pressable>
 
-            <Pressable
-              onPress={() => void setSeason("winter")}
-              style={[
-                styles.seasonBtn,
-                {
-                  backgroundColor:
-                    settings.activeSeason === "winter"
-                      ? colors.primary
-                      : colors.background,
-                  borderColor:
-                    settings.activeSeason === "winter"
-                      ? colors.primary
-                      : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color:
-                    settings.activeSeason === "winter"
-                      ? "#fff"
-                      : colors.foreground,
-                  fontWeight: "800",
-                }}
-              >
-                ❄️ شتوي
-              </Text>
-            </Pressable>
-          </View>
-
-          {saved === "season" ? (
-            <Text style={styles.savedText}>✓ تم تحديث الموسم</Text>
-          ) : null}
-        </View>
-
-        {/* Shipping */}
-        <View
-          style={[
-            styles.quickCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <View style={styles.quickHeader}>
-            <Ionicons name="car-outline" size={22} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.quickTitle, { color: colors.foreground }]}>
-                أسعار التوصيل
-              </Text>
-              <Text style={[styles.quickHint, { color: colors.mutedForeground }]}>
-                نفس الأسعار المستخدمة عند إنشاء الطلب
-              </Text>
-            </View>
-          </View>
-
-          {(settings.shippingZones ?? []).map((zone, index) => (
-            <View key={`${zone.label}-${index}`} style={styles.shippingRow}>
-              <Text style={[styles.shippingLabel, { color: colors.foreground }]}>
-                {zone.label}
-              </Text>
-
-              <View
-                style={[
-                  styles.shippingInputWrap,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <TextInput
-                  value={shippingDrafts[index] ?? ""}
-                  onChangeText={(value) => {
-                    const clean = value.replace(/\D/g, "");
-                    setShippingDrafts((current) => {
-                      const next = [...current];
-                      next[index] = clean;
-                      return next;
-                    });
-                  }}
-                  keyboardType="number-pad"
-                  style={[styles.shippingInput, { color: colors.foreground }]}
-                  textAlign="center"
+          <Pressable
+            onPress={() => router.push("/admin/settings")}
+            style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Ionicons name="color-palette-outline" size={28} color={colors.primary} />
+            <Text style={[styles.quickButtonTitle, { color: colors.foreground }]}>ألوان التطبيق</Text>
+            <View style={styles.colorDots}>
+              {[settings.primaryColor, settings.backgroundColor, settings.secondaryColor].map((color, index) => (
+                <View
+                  key={`${color}-${index}`}
+                  style={[styles.colorDot, { backgroundColor: color, borderColor: colors.border }]}
                 />
-                <Text style={{ color: colors.foreground, fontWeight: "700" }}>
-                  ₪
-                </Text>
-              </View>
+              ))}
             </View>
-          ))}
-
-          <Pressable
-            onPress={() => void saveShipping()}
-            disabled={saving === "shipping"}
-            style={[
-              styles.saveQuickBtn,
-              {
-                backgroundColor:
-                  saved === "shipping" ? "#22c55e" : colors.primary,
-              },
-            ]}
-          >
-            <Ionicons
-              name={saved === "shipping" ? "checkmark-circle" : "save-outline"}
-              size={18}
-              color="#fff"
-            />
-            <Text style={styles.saveQuickText}>
-              {saving === "shipping"
-                ? "جاري الحفظ..."
-                : saved === "shipping"
-                  ? "تم الحفظ"
-                  : "حفظ أسعار التوصيل"}
-            </Text>
           </Pressable>
-        </View>
-
-        {/* Colors */}
-        <View
-          style={[
-            styles.quickCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <View style={styles.quickHeader}>
-            <Ionicons name="color-palette-outline" size={22} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.quickTitle, { color: colors.foreground }]}>
-                ألوان التطبيق
-              </Text>
-              <Text style={[styles.quickHint, { color: colors.mutedForeground }]}>
-                الألوان الرئيسية المستخدمة في المتجر
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.colorField}>
-            <Text style={[styles.colorLabel, { color: colors.foreground }]}>
-              اللون الرئيسي
-            </Text>
-            <ColorPickerButton
-              value={draftPrimary}
-              title="اللون الرئيسي"
-              onChange={setDraftPrimary}
-            />
-          </View>
-
-          <View style={styles.colorField}>
-            <Text style={[styles.colorLabel, { color: colors.foreground }]}>
-              الخلفية
-            </Text>
-            <ColorPickerButton
-              value={draftBackground}
-              title="لون الخلفية"
-              onChange={setDraftBackground}
-            />
-          </View>
-
-          <View style={styles.colorField}>
-            <Text style={[styles.colorLabel, { color: colors.foreground }]}>
-              اللون الثانوي
-            </Text>
-            <ColorPickerButton
-              value={draftSecondary}
-              title="اللون الثانوي"
-              onChange={setDraftSecondary}
-            />
-          </View>
-
-          <Pressable
-            onPress={() => void saveColors()}
-            disabled={saving === "colors"}
-            style={[
-              styles.saveQuickBtn,
-              {
-                backgroundColor:
-                  saved === "colors" ? "#22c55e" : colors.primary,
-              },
-            ]}
-          >
-            <Ionicons
-              name={saved === "colors" ? "checkmark-circle" : "save-outline"}
-              size={18}
-              color="#fff"
-            />
-            <Text style={styles.saveQuickText}>
-              {saving === "colors"
-                ? "جاري الحفظ..."
-                : saved === "colors"
-                  ? "تم الحفظ"
-                  : "حفظ الألوان"}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Categories */}
-        <View
-          style={[
-            styles.quickCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <View style={styles.quickHeader}>
-            <Ionicons name="grid-outline" size={22} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.quickTitle, { color: colors.foreground }]}>
-                أسماء التصنيفات
-              </Text>
-              <Text style={[styles.quickHint, { color: colors.mutedForeground }]}>
-                {activeCategories.length} تصنيف ظاهر حاليًا
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.categoryChips}>
-            {activeCategories.map((category) => (
-              <View
-                key={category.id}
-                style={[
-                  styles.categoryChip,
-                  { backgroundColor: colors.secondary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    { color: colors.foreground },
-                  ]}
-                >
-                  {category.label}
-                </Text>
-              </View>
-            ))}
-          </View>
 
           <Pressable
             onPress={() => router.push("/admin/categories")}
-            style={[
-              styles.manageBtn,
-              {
-                borderColor: colors.primary,
-                backgroundColor: colors.background,
-              },
-            ]}
+            style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
-            <Ionicons name="create-outline" size={18} color={colors.primary} />
-            <Text style={[styles.manageBtnText, { color: colors.primary }]}>
-              إدارة التصنيفات
+            <Ionicons name="grid-outline" size={28} color={colors.primary} />
+            <Text style={[styles.quickButtonTitle, { color: colors.foreground }]}>أسماء التصنيفات</Text>
+            <Text style={[styles.quickButtonValue, { color: colors.mutedForeground }]}>
+              {activeCategories.length} تصنيف نشط
             </Text>
           </Pressable>
         </View>
@@ -790,4 +466,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
+  quickGrid: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  quickButton: {
+    flexGrow: 1,
+    flexBasis: "46%",
+    minWidth: 150,
+    minHeight: 125,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  quickButtonTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  quickButtonValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  colorDots: {
+    flexDirection: "row",
+    gap: 7,
+    justifyContent: "center",
+  },
+  colorDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+  },
+
 });
