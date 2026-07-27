@@ -265,15 +265,32 @@ export default function ProductDetailScreen() {
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{product.description}</Text>
 
           {(product.facebookUrl || product.instagramUrl || product.tiktokUrl) ? (
-            <View
-              style={{
-                flexDirection: "row-reverse",
-                alignItems: "center",
-                gap: 10,
-                marginTop: 12,
-                marginBottom: 4,
-              }}
-            >
+            <View style={{ marginTop: 12, marginBottom: 4 }}>
+              <Text
+                style={{
+                  color: colors.mutedForeground,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  textAlign: "right",
+                  marginBottom: 8,
+                }}
+              >
+                {product.facebookUrl && !product.instagramUrl && !product.tiktokUrl
+                  ? "لمشاهدة المنتج على صفحة الفيس بوك"
+                  : product.instagramUrl && !product.facebookUrl && !product.tiktokUrl
+                    ? "لمشاهدة المنتج على صفحة الإنستغرام"
+                    : product.tiktokUrl && !product.facebookUrl && !product.instagramUrl
+                      ? "لمشاهدة المنتج على صفحة التيك توك"
+                      : "لمشاهدة المنتج على صفحاتنا"}
+              </Text>
+
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
               {product.facebookUrl ? (
                 <Pressable
                   onPress={() => void Linking.openURL(product.facebookUrl!)}
@@ -330,6 +347,7 @@ export default function ProductDetailScreen() {
                   <Ionicons name="logo-tiktok" size={21} color={colors.foreground} />
                 </Pressable>
               ) : null}
+              </View>
             </View>
           ) : null}
 
