@@ -295,7 +295,7 @@ export default function ProductDetailScreen() {
                     ]}
                   >
                     <View style={[styles.colorSwatchInner, { backgroundColor: cv.hex }]} />
-                    <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 12 }}>{cv.color}</Text>
+                    <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 11 }}>{cv.color}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -326,7 +326,7 @@ export default function ProductDetailScreen() {
                         },
                       ]}
                     >
-                      <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 13 }}>
+                      <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 12 }}>
                         {s.size}
                       </Text>
                       {sizeOut && (
@@ -360,7 +360,7 @@ export default function ProductDetailScreen() {
                       },
                     ]}
                   >
-                    <Text style={{ color: selectedSize === size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 13 }}>
+                    <Text style={{ color: selectedSize === size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 12 }}>
                       {size}
                     </Text>
                   </Pressable>
@@ -621,13 +621,13 @@ const styles = StyleSheet.create({
   },
   discountBadge: { position: "absolute", bottom: 16, left: 16, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   discountText: { color: "#fff", fontWeight: "700", fontSize: 13 },
-  content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20, gap: 10, width: "100%", maxWidth: 760, alignSelf: "center" },
-  name: { fontSize: 21, fontWeight: "900", textAlign: "right", lineHeight: 29 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, gap: 8, width: "100%", maxWidth: 760, alignSelf: "center" },
+  name: { fontSize: 18, fontWeight: "800", textAlign: "right", lineHeight: 25 },
   priceRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
-  price: { fontSize: 25, fontWeight: "900" },
-  originalPrice: { fontSize: 16, textDecorationLine: "line-through" },
-  sectionTitle: { fontSize: 16, fontWeight: "700", textAlign: "right" },
-  description: { fontSize: 14, textAlign: "right", lineHeight: 22 },
+  price: { fontSize: 22, fontWeight: "800" },
+  originalPrice: { fontSize: 14, textDecorationLine: "line-through" },
+  sectionTitle: { fontSize: 14, fontWeight: "700", textAlign: "right" },
+  description: { fontSize: 13, textAlign: "right", lineHeight: 20 },
   detailCard: {
     borderWidth: 1,
     borderRadius: 16,
@@ -643,7 +643,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sizesRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
-  sizeChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  sizeChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
   sizeChipWithMark: { position: "relative", overflow: "hidden" },
   sizeOutOfStockOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
@@ -651,7 +651,7 @@ const styles = StyleSheet.create({
   },
   colorSwatchOuter: {
     flexDirection: "row-reverse", alignItems: "center", gap: 6,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 2,
+    paddingHorizontal: 9, paddingVertical: 5, borderRadius: 18, borderWidth: 2,
   },
   colorSwatchInner: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
   featuresBox: { borderRadius: 12, padding: 14, gap: 10, borderWidth: 1, marginTop: 4 },
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   featureText: { fontSize: 13, textAlign: "right" },
   footer: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
   addBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: 16 },
-  addBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  addBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   outOfStockBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: 16, borderWidth: 1 },
   outOfStockBtnText: { fontSize: 16, fontWeight: "700" },
   selectionHint: { fontSize: 12, fontWeight: "600", textAlign: "center", marginBottom: 8 },
