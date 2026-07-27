@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -19,6 +19,7 @@ export function CategoryMenu() {
   const colors = useColors();
   const categories = useProductCategories();
   const { width } = useWindowDimensions();
+  const { openCategories } = useLocalSearchParams<{ openCategories?: string }>();
   const [visible, setVisible] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -34,6 +35,12 @@ export function CategoryMenu() {
       }).start();
     });
   };
+
+  useEffect(() => {
+    if (openCategories === "1") {
+      openMenu();
+    }
+  }, [openCategories]);
 
   const closeMenu = (afterClose?: () => void) => {
     Animated.timing(progress, {
