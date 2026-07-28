@@ -6,6 +6,7 @@ import { handleProductRequest } from "./product-routes";
 import { handleSettingsRequest } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
 import { handleImageRequest } from "./image-routes";
+import { handleHeroMediaRequest } from "./hero-media-routes";
 import { handleNotificationRequest } from "./notification-routes";
 import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
@@ -91,6 +92,10 @@ export default {
 
         const imageResponse = await handleImageRequest(request, db, env);
         if (imageResponse) return imageResponse;
+
+        const heroMediaResponse =
+          await handleHeroMediaRequest(request, db, env);
+        if (heroMediaResponse) return heroMediaResponse;
 
         const notificationResponse =
           await handleNotificationRequest(
