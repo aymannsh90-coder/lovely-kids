@@ -2,7 +2,7 @@ import {
   insertOrderSchema,
   ordersTable,
 } from "@workspace/db/schema";
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { sql, and, desc, eq, isNull, or } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import {
@@ -184,6 +184,38 @@ async function handleGetMyOrders(
   return json(orders);
 }
 
+async function handleMarkOrderPrinted(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const user = await getCurrentUser(db, request, env);
+
+  if (!user) {
+    return json({ error: "يجب تسجيل الدخول" }, 401);
+  }
+
+  if (!user.isAdmin) {
+    return json({ error: "غير مصرح" }, 403);
+  }
+
+  const updated = await db
+    .update(ordersTable)
+    .set({
+      printedAt: new Date(),
+      printCount: sql`${ordersTable.printCount} + 1`,
+    })
+    .where(eq(ordersTable.id, id))
+    .returning();
+
+  if (!updated[0]) {
+    return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  return json(updated[0]);
+}
+
 export async function handleOrderRequest(
   request: Request,
   db: Db,
@@ -210,6 +242,22 @@ export async function handleOrderRequest(
     path === "/api/orders"
   ) {
     return handleGetOrders(request, db, env);
+  }
+
+  const printMatch = path.match(
+    /^\/api\/orders\/(\d+)\/print$/,
+  );
+
+  if (
+    request.method === "PATCH" &&
+    printMatch
+  ) {
+    return handleMarkOrderPrinted(
+      request,
+      db,
+      env,
+      Number(printMatch[1]),
+    );
   }
 
   const paymentProofMatch = path.match(

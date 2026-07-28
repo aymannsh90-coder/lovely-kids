@@ -18,12 +18,16 @@ export const ordersTable = pgTable("orders", {
   paymentMethod: text("payment_method").notNull().default("cod"),
   paymentStatus: text("payment_status").notNull().default("pending"),
   paymentProof: text("payment_proof"),
+  printedAt: timestamp("printed_at"),
+  printCount: integer("print_count").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   id: true,
   userId: true,
+  printedAt: true,
+  printCount: true,
   createdAt: true,
 }).extend({
   items: z.array(
