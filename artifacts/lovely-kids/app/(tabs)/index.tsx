@@ -329,7 +329,7 @@ export default function HomeScreen() {
         >
           <Ionicons name="flame" size={20} color="#3D2B00" />
           <Text style={[styles.installBtnText, { color: "#3D2B00" }]}>
-            العروض الخاصة
+            قسم العروض 🔥
           </Text>
           <Ionicons name="arrow-back" size={18} color="#3D2B00" />
         </Pressable>
