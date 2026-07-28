@@ -5,6 +5,7 @@ export interface PrintableOrderItem {
   name: string;
   price: number;
   quantity: number;
+  image?: string;
   size?: string;
   color?: string;
 }
@@ -31,6 +32,14 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function safeImageUrl(value?: string): string {
+  const url = String(value ?? "").trim();
+
+  return /^https?:\/\//i.test(url)
+    ? escapeHtml(url)
+    : "";
 }
 
 function orderUrl(id: number): string {
@@ -63,8 +72,17 @@ export async function createOrderPrintHtml(
         .filter(Boolean)
         .join(" — ");
 
+      const imageUrl = safeImageUrl(item.image);
+
       return `
         <tr>
+          <td class="image-cell">
+            ${
+              imageUrl
+                ? `<img class="product-image" src="${imageUrl}" alt="" />`
+                : `<div class="no-image">—</div>`
+            }
+          </td>
           <td>
             <strong>${escapeHtml(item.name)}</strong>
             ${details ? `<div class="muted">${details}</div>` : ""}
@@ -112,6 +130,30 @@ export async function createOrderPrintHtml(
   }
   .box-title { font-weight: 800; margin-bottom: 8px; }
   .row { margin: 5px 0; line-height: 1.6; }
+  .image-cell {
+    width: 68px;
+    text-align: center;
+  }
+  .product-image {
+    width: 58px;
+    height: 58px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    display: block;
+    margin: auto;
+  }
+  .no-image {
+    width: 58px;
+    height: 58px;
+    border-radius: 8px;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: auto;
+    color: #aaa;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -178,6 +220,7 @@ export async function createOrderPrintHtml(
     <table>
       <thead>
         <tr>
+          <th>الصورة</th>
           <th>المنتج</th>
           <th>الكمية</th>
           <th>السعر</th>

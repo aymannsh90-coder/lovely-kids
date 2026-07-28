@@ -17,6 +17,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -117,6 +118,15 @@ export default function AdminOrdersScreen() {
   const [printingId, setPrintingId] = useState<number | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [qrScanned, setQrScanned] = useState(false);
+  const [orderSearch, setOrderSearch] = useState("");
+  const [printConfirmVisible, setPrintConfirmVisible] = useState(false);
+
+  const printConfirmResolverRef =
+    useRef<((confirmed: boolean) => void) | null>(null);
+
+  const orderSearchTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const pendingOrderIdsRef = useRef<Set<number>>(new Set());
   const ordersFetchVersionRef = useRef(0);
   const listRef = useRef<FlatList<Order>>(null);
@@ -323,6 +333,73 @@ export default function AdminOrdersScreen() {
     }
   }, []);
 
+  const parseOrderSearch = (value: string): number | null => {
+    const raw = value.trim();
+
+    if (!raw) return null;
+
+    const qrId = parseOrderQr(raw);
+
+    if (qrId !== null) {
+      return qrId;
+    }
+
+    const manual = raw.match(/^#?(\d+)$/);
+
+    if (!manual) {
+      return null;
+    }
+
+    const id = Number(manual[1]);
+
+    return Number.isInteger(id) && id > 0
+      ? id
+      : null;
+  };
+
+  const openOrderFromSearch = (value: string) => {
+    if (orderSearchTimerRef.current) {
+      clearTimeout(orderSearchTimerRef.current);
+      orderSearchTimerRef.current = null;
+    }
+
+    const id = parseOrderSearch(value);
+
+    if (id === null) {
+      showError("أدخل رقم طلب صحيح أو امسح QR الطلب");
+      return;
+    }
+
+    if (openOrderById(id)) {
+      setOrderSearch("");
+    }
+  };
+
+  const handleOrderSearchChange = (value: string) => {
+    setOrderSearch(value);
+
+    if (orderSearchTimerRef.current) {
+      clearTimeout(orderSearchTimerRef.current);
+      orderSearchTimerRef.current = null;
+    }
+
+    const raw = value.trim();
+
+    /*
+     * فرد الباركود 2D يكتب رابط QR داخل الخانة.
+     * ننتظر لحظة قصيرة حتى ينتهي من كتابة الرابط كاملاً،
+     * ثم نفتح الطلب تلقائياً حتى لو الجهاز لا يرسل Enter.
+     */
+    if (
+      raw.includes("/admin/orders") &&
+      /[?&]orderId=\d+/i.test(raw)
+    ) {
+      orderSearchTimerRef.current = setTimeout(() => {
+        openOrderFromSearch(raw);
+      }, 180);
+    }
+  };
+
   const handleScannedOrderQr = useCallback((value: string) => {
     const id = parseOrderQr(value);
 
@@ -370,33 +447,19 @@ export default function AdminOrdersScreen() {
     setScannerOpen(true);
   };
 
-  const confirmPrintSuccess = (): Promise<boolean> => {
-    if (Platform.OS === "web") {
-      return Promise.resolve(
-        window.confirm("هل تمت طباعة الطلب بنجاح؟"),
-      );
-    }
-
-    return new Promise((resolve) => {
-      Alert.alert(
-        "تأكيد الطباعة",
-        "هل تمت طباعة الطلب بنجاح؟",
-        [
-          {
-            text: "لا",
-            style: "cancel",
-            onPress: () => resolve(false),
-          },
-          {
-            text: "نعم، تمت",
-            onPress: () => resolve(true),
-          },
-        ],
-        {
-          cancelable: false,
-        },
-      );
+  const confirmPrintSuccess = (): Promise<boolean> =>
+    new Promise((resolve) => {
+      printConfirmResolverRef.current = resolve;
+      setPrintConfirmVisible(true);
     });
+
+  const resolvePrintConfirmation = (confirmed: boolean) => {
+    setPrintConfirmVisible(false);
+
+    const resolver = printConfirmResolverRef.current;
+    printConfirmResolverRef.current = null;
+
+    resolver?.(confirmed);
   };
 
   const handlePrintOrder = async (order: Order) => {
@@ -435,10 +498,41 @@ export default function AdminOrdersScreen() {
         printWindow.document.write(html);
         printWindow.document.close();
 
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        const images = Array.from(printWindow.document.images);
+
+        await Promise.all(
+          images.map((image) => {
+            if (image.complete) {
+              return Promise.resolve();
+            }
+
+            return new Promise<void>((resolve) => {
+              let finished = false;
+
+              const done = () => {
+                if (finished) return;
+                finished = true;
+                resolve();
+              };
+
+              image.addEventListener("load", done, { once: true });
+              image.addEventListener("error", done, { once: true });
+
+              setTimeout(done, 2500);
+            });
+          }),
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
 
         printWindow.focus();
         printWindow.print();
+
+        if (!printWindow.closed) {
+          printWindow.close();
+        }
+
+        window.focus();
       } else {
         await Print.printAsync({ html });
       }
@@ -616,24 +710,74 @@ export default function AdminOrdersScreen() {
             </View>
           )}
         </View>
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => void handleOpenQrScanner()}
-            hitSlop={8}
-          >
-            <Ionicons name="scan-outline" size={23} color="#fff" />
-          </Pressable>
+        <Pressable
+          onPress={() => {
+            setRefreshing(true);
+            fetchOrders();
+          }}
+          hitSlop={8}
+        >
+          <Ionicons name="refresh-outline" size={22} color="#fff" />
+        </Pressable>
+      </View>
 
-          <Pressable
-            onPress={() => {
-              setRefreshing(true);
-              fetchOrders();
-            }}
-            hitSlop={8}
-          >
-            <Ionicons name="refresh-outline" size={22} color="#fff" />
-          </Pressable>
-        </View>
+      <View
+        style={[
+          styles.orderSearchBar,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => void handleOpenQrScanner()}
+          style={[
+            styles.orderSearchCamera,
+            { borderColor: colors.border },
+          ]}
+          hitSlop={6}
+        >
+          <Ionicons
+            name="camera-outline"
+            size={21}
+            color={colors.primary}
+          />
+        </Pressable>
+
+        <TextInput
+          value={orderSearch}
+          onChangeText={handleOrderSearchChange}
+          onSubmitEditing={() => openOrderFromSearch(orderSearch)}
+          placeholder="ابحث برقم الطلب أو امسح QR"
+          placeholderTextColor={colors.mutedForeground}
+          style={[
+            styles.orderSearchInput,
+            {
+              color: colors.foreground,
+              borderColor: colors.border,
+            },
+          ]}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          textAlign="right"
+        />
+
+        <Pressable
+          onPress={() => openOrderFromSearch(orderSearch)}
+          style={[
+            styles.orderSearchButton,
+            { borderColor: colors.border },
+          ]}
+          hitSlop={6}
+        >
+          <Ionicons
+            name="search-outline"
+            size={21}
+            color={colors.primary}
+          />
+        </Pressable>
       </View>
 
       {loading ? (
@@ -994,6 +1138,83 @@ export default function AdminOrdersScreen() {
         />
       )}
 
+      {/* Print Confirmation Modal */}
+      <Modal
+        visible={printConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => resolvePrintConfirmation(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.printConfirmCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.printConfirmIcon}>
+              <Ionicons
+                name="print-outline"
+                size={34}
+                color={colors.primary}
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.printConfirmTitle,
+                { color: colors.foreground },
+              ]}
+            >
+              تأكيد الطباعة
+            </Text>
+
+            <Text
+              style={[
+                styles.printConfirmSub,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              هل تمت طباعة الطلب بنجاح؟
+            </Text>
+
+            <Pressable
+              style={styles.printConfirmYes}
+              onPress={() => resolvePrintConfirmation(true)}
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={19}
+                color="#fff"
+              />
+              <Text style={styles.printConfirmYesText}>
+                نعم، تمت الطباعة
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.printConfirmNo,
+                { borderColor: colors.border },
+              ]}
+              onPress={() => resolvePrintConfirmation(false)}
+            >
+              <Text
+                style={[
+                  styles.printConfirmNoText,
+                  { color: colors.foreground },
+                ]}
+              >
+                لا، لم تتم
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* QR Scanner Modal */}
       <Modal
         visible={scannerOpen}
@@ -1158,6 +1379,40 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 14 },
   emptyText: { fontSize: 18, fontWeight: "700" },
   emptySub: { fontSize: 13, textAlign: "center" },
+  orderSearchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginHorizontal: 12,
+    marginTop: 10,
+    padding: 6,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  orderSearchCamera: {
+    width: 40,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderSearchInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 14,
+  },
+  orderSearchButton: {
+    width: 40,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   list: { padding: 12, gap: 10 },
   orderCard: { borderRadius: 16, overflow: "hidden" },
   cardTop: { flexDirection: "row-reverse", alignItems: "flex-start", padding: 14, gap: 10 },
@@ -1230,6 +1485,59 @@ const styles = StyleSheet.create({
   modalContent: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
   proofFull: { width: 340, height: 500 },
   modalClose: { position: "absolute", top: 50, right: 16 },
+  printConfirmCard: {
+    width: 320,
+    maxWidth: "90%",
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 22,
+    alignItems: "center",
+    gap: 10,
+  },
+  printConfirmIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: "#E91E8C18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  printConfirmTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  printConfirmSub: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  printConfirmYes: {
+    width: "100%",
+    backgroundColor: "#22c55e",
+    paddingVertical: 12,
+    borderRadius: 11,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  printConfirmYesText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  printConfirmNo: {
+    width: "100%",
+    borderWidth: 1,
+    paddingVertical: 11,
+    borderRadius: 11,
+    alignItems: "center",
+  },
+  printConfirmNoText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
   scannerCard: { width: "92%", maxWidth: 480, borderRadius: 18, borderWidth: 1, padding: 16, gap: 10 },
   scannerTitle: { fontSize: 18, fontWeight: "800", textAlign: "center" },
   scannerHint: { fontSize: 13, textAlign: "center", lineHeight: 19 },
