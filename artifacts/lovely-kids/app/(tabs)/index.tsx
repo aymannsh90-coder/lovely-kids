@@ -327,9 +327,8 @@ export default function HomeScreen() {
           }
           style={[styles.installBtn, { backgroundColor: "#FFD54F" }]}
         >
-          <Ionicons name="flame" size={20} color="#3D2B00" />
           <Text style={[styles.installBtnText, { color: "#3D2B00" }]}>
-            قسم العروض 🔥
+            🔥قسم العروض🔥
           </Text>
           <Ionicons name="arrow-back" size={18} color="#3D2B00" />
         </Pressable>
