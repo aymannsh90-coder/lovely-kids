@@ -64,6 +64,15 @@ export interface ContactInfo {
   returnPolicy: string;
 }
 
+export interface HeroSlide {
+  id: string;
+  type: "image" | "video";
+  url: string;
+  objectPath: string;
+  active: boolean;
+  order: number;
+}
+
 export interface AppSettings {
   logoUrl: string;
   primaryColor: string;
@@ -77,6 +86,7 @@ export interface AppSettings {
   bannerSubtitle: string;
   bannerColor: string;
   bannerBadge: string;
+  heroSlides: HeroSlide[];
   offers: Offer[];
   productOffersSectionEnabled: boolean;
   ageGroupLabels: Record<string, AgeGroupLabel>;
@@ -106,6 +116,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   bannerSubtitle: "ملابس ولادي وبناتي · تجهيز بيبي · مستلزمات مواليد",
   bannerColor: "#E91E8C",
   bannerBadge: "خصم 20%",
+  heroSlides: [],
   productOffersSectionEnabled: false,
   offers: [
     {

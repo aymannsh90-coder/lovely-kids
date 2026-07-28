@@ -235,6 +235,19 @@ export default function AdminDashboardScreen() {
           </Pressable>
 
           <Pressable
+            onPress={() => router.push("/admin/hero" as never)}
+            style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Ionicons name="images-outline" size={28} color={colors.primary} />
+            <Text style={[styles.quickButtonTitle, { color: colors.foreground }]}>
+              Hero Slider
+            </Text>
+            <Text style={[styles.quickButtonValue, { color: colors.mutedForeground }]}>
+              {(settings.heroSlides ?? []).filter((slide) => slide.active).length} من 3 شرائح
+            </Text>
+          </Pressable>
+
+          <Pressable
             onPress={() => router.push("/admin/categories")}
             style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
