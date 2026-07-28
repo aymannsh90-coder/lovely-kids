@@ -121,8 +121,15 @@ async function handleSetAdminRole(
 
   if (target.isAdmin === body.isAdmin) {
     return json({
-      ...target,
       id: String(target.id),
+      name: target.name,
+      phone: target.phone,
+      email: target.email,
+      isAdmin: target.isAdmin,
+      isOwner: target.isOwner,
+      createdAt: target.createdAt,
+      clerkUserId: target.clerkUserId,
+      avatarUrl: target.avatarUrl,
     });
   }
 
@@ -132,7 +139,17 @@ async function handleSetAdminRole(
         .update(usersTable)
         .set({ isAdmin: body.isAdmin })
         .where(eq(usersTable.id, userId))
-        .returning();
+        .returning({
+          id: usersTable.id,
+          name: usersTable.name,
+          phone: usersTable.phone,
+          email: usersTable.email,
+          isAdmin: usersTable.isAdmin,
+          isOwner: usersTable.isOwner,
+          createdAt: usersTable.createdAt,
+          clerkUserId: usersTable.clerkUserId,
+          avatarUrl: usersTable.avatarUrl,
+        });
 
       await tx
         .insert(securityAuditLogsTable)
