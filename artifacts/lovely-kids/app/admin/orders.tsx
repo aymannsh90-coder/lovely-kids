@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Print from "expo-print";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,6 +26,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
+import { createOrderPrintHtml } from "@/utils/orderPrint";
+import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 
 interface OrderItem {
   id: string;
@@ -49,6 +53,8 @@ interface Order {
   paymentMethod: string;
   paymentStatus: string;
   paymentProof?: string;
+  printedAt?: string | null;
+  printCount?: number;
   createdAt: string;
 }
 
@@ -98,6 +104,8 @@ export default function AdminOrdersScreen() {
   const insets = useSafeAreaInsets();
   const { newCount, clearNew } = useNewOrders();
   const { getAuthToken } = useAuth();
+  const params = useLocalSearchParams<{ orderId?: string | string[] }>();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,8 +114,13 @@ export default function AdminOrdersScreen() {
   const [proofModal, setProofModal] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
+  const [printingId, setPrintingId] = useState<number | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [qrScanned, setQrScanned] = useState(false);
   const pendingOrderIdsRef = useRef<Set<number>>(new Set());
   const ordersFetchVersionRef = useRef(0);
+  const listRef = useRef<FlatList<Order>>(null);
+  const openedOrderParamRef = useRef<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bannerAnim = useRef(new Animated.Value(-80)).current;
@@ -262,6 +275,312 @@ export default function AdminOrdersScreen() {
     Linking.openURL(`https://wa.me/970${phone.replace(/^0/, "")}?text=${msg}`);
   };
 
+  const openOrderById = useCallback((id: number) => {
+    const index = orders.findIndex((order) => order.id === id);
+
+    if (index < 0) {
+      showError(`الطلب #${id} غير موجود`);
+      return false;
+    }
+
+    setExpanded(id);
+
+    setTimeout(() => {
+      try {
+        listRef.current?.scrollToIndex({
+          index,
+          animated: true,
+          viewPosition: 0.15,
+        });
+      } catch {
+        // FlatList may still be measuring.
+      }
+    }, 120);
+
+    return true;
+  }, [orders]);
+
+  const parseOrderQr = useCallback((value: string): number | null => {
+    const raw = value.trim();
+    if (!raw) return null;
+
+    try {
+      const url = new URL(raw, "https://lovelykids.net");
+
+      if (url.pathname.replace(/\/+$/, "") !== "/admin/orders") {
+        return null;
+      }
+
+      const id = Number(url.searchParams.get("orderId"));
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return null;
+      }
+
+      return id;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleScannedOrderQr = useCallback((value: string) => {
+    const id = parseOrderQr(value);
+
+    if (id === null) {
+      showError("هذا QR ليس تابعاً لطلب Lovely Kids");
+      setScannerOpen(false);
+      return;
+    }
+
+    setScannerOpen(false);
+    openOrderById(id);
+  }, [openOrderById, parseOrderQr]);
+
+  const handleOpenQrScanner = async () => {
+    if (Platform.OS === "web") {
+      setQrScanned(false);
+      setScannerOpen(true);
+      return;
+    }
+
+    if (CameraView.isModernBarcodeScannerAvailable) {
+      try {
+        await CameraView.launchScanner({
+          barcodeTypes: ["qr"],
+        });
+      } catch {
+        showError("تعذر تشغيل ماسح QR");
+      }
+      return;
+    }
+
+    const permission = cameraPermission?.granted
+      ? cameraPermission
+      : await requestCameraPermission();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "صلاحية الكاميرا",
+        "يجب السماح باستخدام الكاميرا لمسح QR الطلب",
+      );
+      return;
+    }
+
+    setQrScanned(false);
+    setScannerOpen(true);
+  };
+
+  const confirmPrintSuccess = (): Promise<boolean> => {
+    if (Platform.OS === "web") {
+      return Promise.resolve(
+        window.confirm("هل تمت طباعة الطلب بنجاح؟"),
+      );
+    }
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        "تأكيد الطباعة",
+        "هل تمت طباعة الطلب بنجاح؟",
+        [
+          {
+            text: "لا",
+            style: "cancel",
+            onPress: () => resolve(false),
+          },
+          {
+            text: "نعم، تمت",
+            onPress: () => resolve(true),
+          },
+        ],
+        {
+          cancelable: false,
+        },
+      );
+    });
+  };
+
+  const handlePrintOrder = async (order: Order) => {
+    if (printingId !== null) return;
+
+    let printWindow: Window | null = null;
+
+    if (Platform.OS === "web") {
+      printWindow = window.open(
+        "",
+        "_blank",
+        "width=900,height=750",
+      );
+
+      if (!printWindow) {
+        showError("اسمح بالنوافذ المنبثقة حتى نفتح صفحة الطباعة");
+        return;
+      }
+
+      printWindow.document.write(
+        '<div dir="rtl" style="font-family:Arial;padding:30px;text-align:center">جاري تجهيز الطلب للطباعة...</div>',
+      );
+    }
+
+    setPrintingId(order.id);
+
+    try {
+      const html = await createOrderPrintHtml(order);
+
+      if (Platform.OS === "web") {
+        if (!printWindow) {
+          throw new Error("تعذر فتح نافذة الطباعة");
+        }
+
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        printWindow.focus();
+        printWindow.print();
+      } else {
+        await Print.printAsync({ html });
+      }
+
+      const confirmed = await confirmPrintSuccess();
+
+      if (!confirmed) {
+        return;
+      }
+
+      const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("انتهت جلسة تسجيل الدخول");
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/orders/${order.id}/print`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        let message = "تمت الطباعة لكن تعذر تسجيلها";
+
+        try {
+          const body = await res.json() as { error?: string };
+          if (body.error) message = body.error;
+        } catch {
+          // ignore invalid error body
+        }
+
+        throw new Error(message);
+      }
+
+      const updated = await res.json() as Order;
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item.id === order.id
+            ? { ...item, ...updated }
+            : item,
+        ),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "تعذر طباعة الطلب";
+
+      showError(message);
+
+      if (Platform.OS !== "web") {
+        Alert.alert("خطأ", message);
+      }
+    } finally {
+      setPrintingId(null);
+    }
+  };
+
+  useEffect(() => {
+    const rawParam = Array.isArray(params.orderId)
+      ? params.orderId[0]
+      : params.orderId;
+
+    if (!rawParam || openedOrderParamRef.current === rawParam) {
+      return;
+    }
+
+    const id = Number(rawParam);
+
+    if (!Number.isInteger(id) || id <= 0 || orders.length === 0) {
+      return;
+    }
+
+    if (openOrderById(id)) {
+      openedOrderParamRef.current = rawParam;
+    }
+  }, [params.orderId, orders.length, openOrderById]);
+
+  useEffect(() => {
+    if (
+      Platform.OS === "web" ||
+      !CameraView.isModernBarcodeScannerAvailable
+    ) {
+      return;
+    }
+
+    const subscription =
+      CameraView.onModernBarcodeScanned(({ data }) => {
+        if (!data?.trim()) return;
+        handleScannedOrderQr(data);
+      });
+
+    return () => subscription.remove();
+  }, [handleScannedOrderQr]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !scannerOpen) {
+      return;
+    }
+
+    let disposed = false;
+    let controls: { stop: () => void } | undefined;
+
+    const timer = setTimeout(() => {
+      void startWebBarcodeScanner(
+        "orders-qr-video",
+        (value) => {
+          if (disposed) return;
+
+          disposed = true;
+          setQrScanned(true);
+          handleScannedOrderQr(value);
+        },
+      )
+        .then((result) => {
+          if (disposed) {
+            result.stop();
+          } else {
+            controls = result;
+          }
+        })
+        .catch(() => {
+          if (!disposed) {
+            setScannerOpen(false);
+            showError("تعذر تشغيل الكاميرا");
+          }
+        });
+    }, 100);
+
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      controls?.stop();
+    };
+  }, [scannerOpen, handleScannedOrderQr]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Notification Banner */}
@@ -297,9 +616,24 @@ export default function AdminOrdersScreen() {
             </View>
           )}
         </View>
-        <Pressable onPress={() => { setRefreshing(true); fetchOrders(); }}>
-          <Ionicons name="refresh-outline" size={22} color="#fff" />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => void handleOpenQrScanner()}
+            hitSlop={8}
+          >
+            <Ionicons name="scan-outline" size={23} color="#fff" />
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setRefreshing(true);
+              fetchOrders();
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="refresh-outline" size={22} color="#fff" />
+          </Pressable>
+        </View>
       </View>
 
       {loading ? (
@@ -309,7 +643,17 @@ export default function AdminOrdersScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={orders}
+          onScrollToIndexFailed={({ index }) => {
+            setTimeout(() => {
+              listRef.current?.scrollToIndex({
+                index,
+                animated: true,
+                viewPosition: 0.15,
+              });
+            }, 300);
+          }}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={[styles.list, { paddingBottom: bottomPadding }]}
           refreshControl={
@@ -362,6 +706,14 @@ export default function AdminOrdersScreen() {
                       {item.paymentStatus === "proof_submitted" && (
                         <View style={[styles.newDot, { backgroundColor: "#FF9800" }]}>
                           <Text style={styles.newDotText}>وصل مُرفق</Text>
+                        </View>
+                      )}
+
+                      {(item.printCount ?? 0) > 0 && (
+                        <View style={[styles.newDot, { backgroundColor: "#22c55e" }]}>
+                          <Text style={styles.newDotText}>
+                            مطبوعة ×{item.printCount}
+                          </Text>
                         </View>
                       )}
                     </View>
@@ -503,6 +855,88 @@ export default function AdminOrdersScreen() {
                       </View>
                     )}
 
+                    {/* Print */}
+                    <View
+                      style={[
+                        styles.printSection,
+                        {
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.printStatusRow}>
+                        <Ionicons
+                          name={(item.printCount ?? 0) > 0 ? "checkmark-circle" : "print-outline"}
+                          size={18}
+                          color={(item.printCount ?? 0) > 0 ? "#22c55e" : colors.mutedForeground}
+                        />
+
+                        <View style={styles.printStatusTextWrap}>
+                          <Text
+                            style={[
+                              styles.printStatusTitle,
+                              { color: colors.foreground },
+                            ]}
+                          >
+                            {(item.printCount ?? 0) > 0
+                              ? `تمت الطباعة ${item.printCount} مرة`
+                              : "لم تتم طباعة الطلب"}
+                          </Text>
+
+                          {item.printedAt ? (
+                            <Text
+                              style={[
+                                styles.printStatusSub,
+                                { color: colors.mutedForeground },
+                              ]}
+                            >
+                              آخر طباعة: {new Date(item.printedAt).toLocaleString("ar-EG")}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+
+                      <Pressable
+                        disabled={printingId !== null}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          void handlePrintOrder(item);
+                        }}
+                        style={[
+                          styles.printBtn,
+                          {
+                            backgroundColor:
+                              printingId === item.id
+                                ? colors.mutedForeground
+                                : colors.primary,
+                            opacity:
+                              printingId !== null && printingId !== item.id
+                                ? 0.55
+                                : 1,
+                          },
+                        ]}
+                      >
+                        {printingId === item.id ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Ionicons
+                            name="print-outline"
+                            size={19}
+                            color="#fff"
+                          />
+                        )}
+
+                        <Text style={styles.printBtnText}>
+                          {printingId === item.id
+                            ? "جاري تجهيز الطباعة..."
+                            : (item.printCount ?? 0) > 0
+                            ? "إعادة طباعة"
+                            : "طباعة الطلب"}
+                        </Text>
+                      </Pressable>
+                    </View>
+
                     {/* Contact Buttons */}
                     <View style={styles.contactBtns}>
                       <Pressable
@@ -559,6 +993,101 @@ export default function AdminOrdersScreen() {
           }}
         />
       )}
+
+      {/* QR Scanner Modal */}
+      <Modal
+        visible={scannerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setScannerOpen(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setScannerOpen(false)}
+        >
+          <Pressable
+            style={[
+              styles.scannerCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <Text
+              style={[
+                styles.scannerTitle,
+                { color: colors.foreground },
+              ]}
+            >
+              مسح QR الطلب
+            </Text>
+
+            <Text
+              style={[
+                styles.scannerHint,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              وجّه الكاميرا نحو QR الموجود على الطلب المطبوع
+            </Text>
+
+            <View style={styles.scannerCamera}>
+              {Platform.OS === "web" ? (
+                React.createElement(
+                  "video",
+                  {
+                    id: "orders-qr-video",
+                    autoPlay: true,
+                    muted: true,
+                    playsInline: true,
+                    style: {
+                      width: "100%",
+                      height: 270,
+                      objectFit: "cover",
+                      backgroundColor: "#000",
+                    },
+                  } as any,
+                )
+              ) : (
+                <CameraView
+                  style={{ width: "100%", height: 270 }}
+                  facing="back"
+                  barcodeScannerSettings={{
+                    barcodeTypes: ["qr"],
+                  }}
+                  onBarcodeScanned={
+                    qrScanned
+                      ? undefined
+                      : ({ data }) => {
+                          setQrScanned(true);
+                          handleScannedOrderQr(data);
+                        }
+                  }
+                />
+              )}
+            </View>
+
+            <Pressable
+              style={[
+                styles.scannerCloseBtn,
+                { borderColor: colors.border },
+              ]}
+              onPress={() => setScannerOpen(false)}
+            >
+              <Text
+                style={[
+                  styles.scannerCloseText,
+                  { color: colors.foreground },
+                ]}
+              >
+                إغلاق
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -617,6 +1146,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 16 },
   headerCenter: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 14 },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
   newBadge: { backgroundColor: "#FFD700", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   newBadgeText: { fontSize: 11, fontWeight: "800", color: "#000" },
@@ -673,6 +1203,13 @@ const styles = StyleSheet.create({
   confirmedText: { fontSize: 14, fontWeight: "700" },
   noProofBox: { flexDirection: "row-reverse", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, borderStyle: "dashed" },
   noProofText: { fontSize: 13, flex: 1, textAlign: "right" },
+  printSection: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },
+  printStatusRow: { flexDirection: "row-reverse", alignItems: "center", gap: 9 },
+  printStatusTextWrap: { flex: 1, alignItems: "flex-end" },
+  printStatusTitle: { fontSize: 13, fontWeight: "700", textAlign: "right" },
+  printStatusSub: { fontSize: 11, marginTop: 2, textAlign: "right" },
+  printBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 11, borderRadius: 10 },
+  printBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
   contactBtns: { flexDirection: "row-reverse", gap: 8 },
   contactBtn: { flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
   contactBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
@@ -693,4 +1230,10 @@ const styles = StyleSheet.create({
   modalContent: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
   proofFull: { width: 340, height: 500 },
   modalClose: { position: "absolute", top: 50, right: 16 },
+  scannerCard: { width: "92%", maxWidth: 480, borderRadius: 18, borderWidth: 1, padding: 16, gap: 10 },
+  scannerTitle: { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  scannerHint: { fontSize: 13, textAlign: "center", lineHeight: 19 },
+  scannerCamera: { width: "100%", height: 270, overflow: "hidden", borderRadius: 12, backgroundColor: "#000" },
+  scannerCloseBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  scannerCloseText: { fontSize: 14, fontWeight: "700" },
 });
