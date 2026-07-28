@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CartBadge } from "@/components/CartBadge";
 import { CategoryMenu } from "@/components/CategoryMenu";
+import { HeroSlider } from "@/components/HeroSlider";
 import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
@@ -244,37 +245,77 @@ export default function HomeScreen() {
         </Text>
       </Pressable>
 
-      {/* Hero Banner */}
-      <Pressable
-        onPress={() => router.push("/products")}
-        style={[styles.heroBanner, { backgroundColor: settings.bannerColor }]}
-      >
-        <View style={styles.heroContent}>
-          {settings.bannerBadge ? (
-            <View style={[styles.heroBadge, { backgroundColor: "#FFD700" }]}>
-              <Text style={styles.heroBadgeText}>{settings.bannerBadge}</Text>
-            </View>
-          ) : null}
-          <Text style={styles.heroTitle}>
-            {settings.bannerTitle.replace("\\n", "\n")}
-          </Text>
-          <Text style={styles.heroSubtitle}>{settings.bannerSubtitle}</Text>
-          <View style={[styles.heroBtn, { backgroundColor: "#fff" }]}>
-            <Text style={[styles.heroBtnText, { color: settings.bannerColor }]}>
-              تسوقي الآن
+      {/* Hero Slider — fall back to the original banner when no active media exists */}
+      {(settings.heroSlides ?? []).some(
+        (slide) => slide.active && slide.url,
+      ) ? (
+        <HeroSlider slides={settings.heroSlides ?? []} />
+      ) : (
+        <Pressable
+          onPress={() => router.push("/products")}
+          style={[
+            styles.heroBanner,
+            { backgroundColor: settings.bannerColor },
+          ]}
+        >
+          <View style={styles.heroContent}>
+            {settings.bannerBadge ? (
+              <View
+                style={[
+                  styles.heroBadge,
+                  { backgroundColor: "#FFD700" },
+                ]}
+              >
+                <Text style={styles.heroBadgeText}>
+                  {settings.bannerBadge}
+                </Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.heroTitle}>
+              {settings.bannerTitle.replace("\\n", "\n")}
             </Text>
-            <Ionicons name="arrow-back" size={16} color={settings.bannerColor} />
+
+            <Text style={styles.heroSubtitle}>
+              {settings.bannerSubtitle}
+            </Text>
+
+            <View
+              style={[
+                styles.heroBtn,
+                { backgroundColor: "#fff" },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.heroBtnText,
+                  { color: settings.bannerColor },
+                ]}
+              >
+                تسوقي الآن
+              </Text>
+
+              <Ionicons
+                name="arrow-back"
+                size={16}
+                color={settings.bannerColor}
+              />
+            </View>
+
+            <View style={styles.heroStats}>
+              <Ionicons name="star" size={14} color="#FFD700" />
+              <Ionicons name="star" size={14} color="#FFD700" />
+              <Ionicons name="star" size={14} color="#FFD700" />
+              <Ionicons name="star" size={14} color="#FFD700" />
+              <Ionicons name="star" size={14} color="#FFD700" />
+
+              <Text style={styles.heroStatText}>
+                +٤٨٠٠ عميل
+              </Text>
+            </View>
           </View>
-          <View style={styles.heroStats}>
-            <Ionicons name="star" size={14} color="#FFD700" />
-            <Ionicons name="star" size={14} color="#FFD700" />
-            <Ionicons name="star" size={14} color="#FFD700" />
-            <Ionicons name="star" size={14} color="#FFD700" />
-            <Ionicons name="star" size={14} color="#FFD700" />
-            <Text style={styles.heroStatText}>+٤٨٠٠ عميل</Text>
-          </View>
-        </View>
-      </Pressable>
+        </Pressable>
+      )}
 
       {showProductOffersButton ? (
         <Pressable
