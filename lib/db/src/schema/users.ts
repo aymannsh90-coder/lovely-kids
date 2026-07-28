@@ -12,6 +12,7 @@ export const usersTable = pgTable("users", {
   avatarUrl: text("avatar_url"),
   deliveryAddress: text("delivery_address"),
   isAdmin: boolean("is_admin").notNull().default(false),
+  isOwner: boolean("is_owner").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -20,6 +21,7 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({
   createdAt: true,
   passwordHash: true,
   isAdmin: true,
+  isOwner: true,
   clerkUserId: true,
   avatarUrl: true,
 });

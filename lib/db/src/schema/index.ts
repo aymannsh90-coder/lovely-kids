@@ -10,3 +10,4 @@ export * from "./password-reset-tokens";
 export * from "./web-push-subscriptions";
 
 export * from "./product-barcodes";
+export * from "./security-audit-logs";

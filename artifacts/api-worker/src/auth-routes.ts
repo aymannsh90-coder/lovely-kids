@@ -314,37 +314,14 @@ async function handlePromoteAdmin(
   db: Db,
   env: Env,
 ) {
-  const user = await getCurrentUser(db, request, env);
+  void request;
+  void db;
+  void env;
 
-  if (!user) {
-    return json({ error: "غير مسجل الدخول" }, 401);
-  }
-
-  const body = await request.json().catch(() => null) as {
-    password?: string;
-  } | null;
-
-  if (!env.ADMIN_PROMOTE_PASSWORD) {
-    return json(
-      { error: "إعداد الإدارة غير مكتمل على الخادم" },
-      500,
-    );
-  }
-
-  if (body?.password !== env.ADMIN_PROMOTE_PASSWORD) {
-    return json(
-      { error: "كلمة مرور الإدارة غير صحيحة" },
-      403,
-    );
-  }
-
-  const rows = await db
-    .update(usersTable)
-    .set({ isAdmin: true })
-    .where(eq(usersTable.id, user.id))
-    .returning();
-
-  return json(toUser(rows[0]));
+  return json(
+    { error: "تم تعطيل الترقية الذاتية للإدارة" },
+    403,
+  );
 }
 
 async function handleSyncUser(

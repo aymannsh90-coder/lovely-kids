@@ -3,7 +3,6 @@ import { Client } from "pg";
 import * as schema from "@workspace/db/schema";
 
 export interface Env {
-  ADMIN_PROMOTE_PASSWORD?: string;
   CLERK_SECRET_KEY?: string;
   CLERK_PUBLISHABLE_KEY?: string;
   RESEND_API_KEY?: string;

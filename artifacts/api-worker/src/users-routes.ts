@@ -1,10 +1,11 @@
 import {
   passwordResetTokensTable,
   productLikesTable,
+  securityAuditLogsTable,
   sessionsTable,
   usersTable,
 } from "@workspace/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 
@@ -33,10 +34,7 @@ async function handleListUsers(
   );
 
   if (!admin?.isAdmin) {
-    return json(
-      { error: "غير مصرح" },
-      403,
-    );
+    return json({ error: "غير مصرح" }, 403);
   }
 
   const rows = await db
@@ -46,6 +44,7 @@ async function handleListUsers(
       phone: usersTable.phone,
       email: usersTable.email,
       isAdmin: usersTable.isAdmin,
+      isOwner: usersTable.isOwner,
       createdAt: usersTable.createdAt,
       clerkUserId: usersTable.clerkUserId,
       avatarUrl: usersTable.avatarUrl,
@@ -59,6 +58,133 @@ async function handleListUsers(
       id: String(user.id),
     })),
   );
+}
+
+async function handleSetAdminRole(
+  request: Request,
+  db: Db,
+  env: Env,
+  userId: number,
+) {
+  const owner = await getCurrentUser(
+    db,
+    request,
+    env,
+  );
+
+  if (!owner?.isOwner) {
+    return json(
+      { error: "هذه العملية متاحة للمالك فقط" },
+      403,
+    );
+  }
+
+  const body = await request.json().catch(() => null) as {
+    isAdmin?: boolean;
+  } | null;
+
+  if (typeof body?.isAdmin !== "boolean") {
+    return json(
+      { error: "قيمة صلاحية الأدمن غير صالحة" },
+      400,
+    );
+  }
+
+  const targets = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  const target = targets[0];
+
+  if (!target) {
+    return json(
+      { error: "المستخدم غير موجود" },
+      404,
+    );
+  }
+
+  if (target.isOwner) {
+    return json(
+      { error: "لا يمكن تعديل صلاحيات المالك" },
+      403,
+    );
+  }
+
+  if (target.id === owner.id) {
+    return json(
+      { error: "لا يمكن تعديل صلاحية حساب المالك" },
+      400,
+    );
+  }
+
+  if (target.isAdmin === body.isAdmin) {
+    return json({
+      ...target,
+      id: String(target.id),
+    });
+  }
+
+  const updated = await db.transaction(
+    async (tx) => {
+      const rows = await tx
+        .update(usersTable)
+        .set({ isAdmin: body.isAdmin })
+        .where(eq(usersTable.id, userId))
+        .returning();
+
+      await tx
+        .insert(securityAuditLogsTable)
+        .values({
+          actorUserId: owner.id,
+          targetUserId: target.id,
+          action: body.isAdmin
+            ? "admin_granted"
+            : "admin_revoked",
+          details: {
+            targetName: target.name,
+            targetEmail: target.email,
+            previousIsAdmin: target.isAdmin,
+            newIsAdmin: body.isAdmin,
+          },
+        });
+
+      return rows[0];
+    },
+  );
+
+  return json({
+    ...updated,
+    id: String(updated.id),
+  });
+}
+
+async function handleAuditLog(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const owner = await getCurrentUser(
+    db,
+    request,
+    env,
+  );
+
+  if (!owner?.isOwner) {
+    return json(
+      { error: "هذه العملية متاحة للمالك فقط" },
+      403,
+    );
+  }
+
+  const rows = await db
+    .select()
+    .from(securityAuditLogsTable)
+    .orderBy(desc(securityAuditLogsTable.createdAt))
+    .limit(200);
+
+  return json(rows);
 }
 
 async function handleDeleteUser(
@@ -87,8 +213,50 @@ async function handleDeleteUser(
     );
   }
 
+  const targets = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  const target = targets[0];
+
+  if (!target) {
+    return json(
+      { error: "المستخدم غير موجود" },
+      404,
+    );
+  }
+
+  if (target.isOwner) {
+    return json(
+      { error: "لا يمكن حذف حساب المالك" },
+      403,
+    );
+  }
+
+  if (target.isAdmin && !admin.isOwner) {
+    return json(
+      { error: "الأدمن العادي لا يستطيع حذف أدمن آخر" },
+      403,
+    );
+  }
+
   const deleted = await db.transaction(
     async (tx) => {
+      await tx
+        .insert(securityAuditLogsTable)
+        .values({
+          actorUserId: admin.id,
+          targetUserId: target.id,
+          action: "user_deleted",
+          details: {
+            targetName: target.name,
+            targetEmail: target.email,
+            wasAdmin: target.isAdmin,
+          },
+        });
+
       await tx
         .delete(sessionsTable)
         .where(eq(sessionsTable.userId, userId));
@@ -138,6 +306,29 @@ export async function handleUsersRequest(
     path === "/api/users"
   ) {
     return handleListUsers(request, db, env);
+  }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/users/security-audit"
+  ) {
+    return handleAuditLog(request, db, env);
+  }
+
+  const adminRoleMatch = path.match(
+    /^\/api\/users\/(\d+)\/admin$/,
+  );
+
+  if (
+    request.method === "PATCH" &&
+    adminRoleMatch
+  ) {
+    return handleSetAdminRole(
+      request,
+      db,
+      env,
+      Number(adminRoleMatch[1]),
+    );
   }
 
   const match = path.match(

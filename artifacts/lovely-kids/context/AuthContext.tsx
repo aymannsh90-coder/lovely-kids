@@ -14,6 +14,7 @@ export interface AuthUser {
   email: string | null;
   name: string;
   isAdmin: boolean;
+  isOwner: boolean;
   avatarUrl: string | null;
   deliveryAddress: string | null;
 }
@@ -24,7 +25,6 @@ interface AuthContextType {
   register: (name: string, phone: string, email: string, password: string) => Promise<void>;
   login: (phone: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  promoteToAdmin: (password: string) => Promise<void>;
   getAuthToken: () => Promise<string | null>;
   updateProfile: (data: { name?: string; deliveryAddress?: string; phone?: string; email?: string; currentPassword?: string }) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -38,7 +38,6 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => {},
   login: async () => {},
   logout: async () => {},
-  promoteToAdmin: async () => {},
   getAuthToken: async () => null,
   updateProfile: async (_data) => {},
   changePassword: async () => {},
@@ -148,24 +147,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Registration completes immediately; no email verification step needed.
   }, []);
 
-  // ─── promoteToAdmin ───────────────────────────────────────────────────────
-  const promoteToAdmin = useCallback(
-    async (password: string) => {
-      if (!sessionToken) throw new Error("يجب تسجيل الدخول أولاً");
-      const res = await fetch(`${API_BASE}/api/auth/promote-admin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionToken}`,
-        },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) throw new Error(await parseError(res, "كلمة مرور الإدارة غير صحيحة"));
-      setDbUser(await res.json());
-    },
-    [sessionToken]
-  );
-
   // ─── updateProfile ────────────────────────────────────────────────────────
   const updateProfile = useCallback(
     async (data: { name?: string; deliveryAddress?: string; phone?: string; email?: string; currentPassword?: string }) => {
@@ -214,7 +195,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         login,
         logout,
-        promoteToAdmin,
         getAuthToken,
         updateProfile,
         changePassword,

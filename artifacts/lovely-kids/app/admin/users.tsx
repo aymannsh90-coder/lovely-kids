@@ -24,6 +24,7 @@ interface UserRow {
   name: string;
   phone: string | null;
   isAdmin: boolean;
+  isOwner: boolean;
   createdAt: string;
   clerkUserId: string | null;
   avatarUrl: string | null;
@@ -46,6 +47,12 @@ export default function AdminUsersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [roleConfirm, setRoleConfirm] = useState<{
+    id: string;
+    name: string;
+    nextIsAdmin: boolean;
+  } | null>(null);
+  const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -111,6 +118,67 @@ export default function AdminUsersScreen() {
     }
   };
 
+  const setAdminRole = async () => {
+    if (!roleConfirm || roleBusyId) return;
+
+    const target = roleConfirm;
+    setRoleConfirm(null);
+    setRoleBusyId(target.id);
+
+    try {
+      const token = await getAuthToken();
+
+      if (!token) {
+        setFetchError("يجب تسجيل الدخول");
+        return;
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/users/${target.id}/admin`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            isAdmin: target.nextIsAdmin,
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        let message = "تعذر تحديث الصلاحية";
+
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch {
+          // ignore
+        }
+
+        setFetchError(message);
+        return;
+      }
+
+      const updated = await res.json();
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === target.id
+            ? { ...user, ...updated }
+            : user,
+        ),
+      );
+
+      setFetchError(null);
+    } catch {
+      setFetchError("تعذّر الاتصال بالسيرفر");
+    } finally {
+      setRoleBusyId(null);
+    }
+  };
+
   const deleteTarget = users.find((u) => u.id === deleteConfirmId);
 
   const renderItem = ({ item }: { item: UserRow }) => {
@@ -133,11 +201,15 @@ export default function AdminUsersScreen() {
             <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
               {item.name}
             </Text>
-            {item.isAdmin && (
+            {item.isOwner ? (
+              <View style={[styles.badge, { backgroundColor: "#D4A017" }]}>
+                <Text style={styles.badgeText}>المالك</Text>
+              </View>
+            ) : item.isAdmin ? (
               <View style={[styles.badge, { backgroundColor: colors.primary }]}>
                 <Text style={styles.badgeText}>أدمن</Text>
               </View>
-            )}
+            ) : null}
             {isSelf && (
               <View style={[styles.badge, { backgroundColor: "#22c55e" }]}>
                 <Text style={styles.badgeText}>أنت</Text>
@@ -152,16 +224,57 @@ export default function AdminUsersScreen() {
           </Text>
         </View>
 
-        {/* Delete */}
-        {!isSelf && (
-          <Pressable
-            onPress={() => setDeleteConfirmId(item.id)}
-            style={styles.deleteBtn}
-            hitSlop={8}
-          >
-            <Ionicons name="trash-outline" size={20} color="#ef4444" />
-          </Pressable>
-        )}
+        {/* Security actions */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {me?.isOwner && !isSelf && !item.isOwner && (
+            <Pressable
+              disabled={roleBusyId !== null}
+              onPress={() =>
+                setRoleConfirm({
+                  id: item.id,
+                  name: item.name,
+                  nextIsAdmin: !item.isAdmin,
+                })
+              }
+              style={styles.deleteBtn}
+              hitSlop={8}
+            >
+              {roleBusyId === item.id ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons
+                  name={
+                    item.isAdmin
+                      ? "shield-outline"
+                      : "shield-checkmark-outline"
+                  }
+                  size={20}
+                  color={
+                    item.isAdmin
+                      ? "#FF9800"
+                      : colors.primary
+                  }
+                />
+              )}
+            </Pressable>
+          )}
+
+          {!isSelf &&
+            !item.isOwner &&
+            (!item.isAdmin || me?.isOwner) && (
+              <Pressable
+                onPress={() => setDeleteConfirmId(item.id)}
+                style={styles.deleteBtn}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={20}
+                  color="#ef4444"
+                />
+              </Pressable>
+            )}
+        </View>
       </View>
     );
   };
@@ -213,6 +326,92 @@ export default function AdminUsersScreen() {
           }
         />
       )}
+
+      {/* Admin Role Confirmation */}
+      <Modal
+        visible={roleConfirm !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRoleConfirm(null)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setRoleConfirm(null)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.modalIcon}>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={36}
+                color={colors.primary}
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.modalTitle,
+                { color: colors.foreground },
+              ]}
+            >
+              {roleConfirm?.nextIsAdmin
+                ? "ترقية إلى أدمن"
+                : "إلغاء صلاحية الأدمن"}
+            </Text>
+
+            <Text
+              style={[
+                styles.modalSub,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              {roleConfirm?.nextIsAdmin
+                ? `هل تريد منح "${roleConfirm?.name}" صلاحية الأدمن؟`
+                : `هل تريد إزالة صلاحية الأدمن من "${roleConfirm?.name}"؟`}
+            </Text>
+
+            <Pressable
+              style={[
+                styles.confirmBtn,
+                {
+                  backgroundColor: roleConfirm?.nextIsAdmin
+                    ? colors.primary
+                    : "#FF9800",
+                },
+              ]}
+              onPress={() => void setAdminRole()}
+            >
+              <Text style={styles.confirmBtnText}>
+                تأكيد
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.cancelBtn,
+                { borderColor: colors.border },
+              ]}
+              onPress={() => setRoleConfirm(null)}
+            >
+              <Text
+                style={[
+                  styles.cancelBtnText,
+                  { color: colors.foreground },
+                ]}
+              >
+                إلغاء
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

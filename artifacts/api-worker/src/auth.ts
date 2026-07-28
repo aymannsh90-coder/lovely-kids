@@ -36,6 +36,7 @@ export function toUser(user: typeof usersTable.$inferSelect) {
     email: user.email,
     name: user.name,
     isAdmin: user.isAdmin,
+    isOwner: user.isOwner,
     avatarUrl: user.avatarUrl,
     deliveryAddress: user.deliveryAddress,
   };

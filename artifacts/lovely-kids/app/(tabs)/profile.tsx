@@ -47,7 +47,6 @@ export default function ProfileScreen() {
     register,
     login,
     logout,
-    promoteToAdmin,
     updateProfile,
     changePassword,
     pendingVerification,
@@ -68,12 +67,6 @@ export default function ProfileScreen() {
   const [forgotStep, setForgotStep] = useState<ForgotStep>(null);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotError, setForgotError] = useState("");
-
-  // ─── Admin unlock state ───────────────────────────────────────────
-  const [adminModalVisible, setAdminModalVisible] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminError, setAdminError] = useState("");
-  const [promoting, setPromoting] = useState(false);
 
   // ─── Edit profile state ───────────────────────────────────────────
   const [editProfileVisible, setEditProfileVisible] = useState(false);
@@ -175,29 +168,6 @@ export default function ProfileScreen() {
     setForgotStep(null);
     setForgotEmail("");
     setForgotError("");
-  };
-
-  // ─── Admin unlock ─────────────────────────────────────────────────
-  const openAdminUnlock = () => {
-    if (!user) { setAuthError("يجب تسجيل الدخول أولاً"); return; }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setAdminError(""); setAdminPassword(""); setAdminModalVisible(true);
-  };
-
-  const handlePromote = async () => {
-    if (!adminPassword.trim()) return;
-    setPromoting(true); setAdminError("");
-    try {
-      await promoteToAdmin(adminPassword.trim());
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setAdminModalVisible(false); setAdminPassword("");
-      router.push("/admin");
-    } catch (e) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setAdminError(e instanceof Error ? e.message : "حدث خطأ");
-    } finally {
-      setPromoting(false);
-    }
   };
 
   // ─── Edit profile ─────────────────────────────────────────────────
@@ -444,14 +414,14 @@ export default function ProfileScreen() {
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.primary }]}>
-        <Pressable onLongPress={openAdminUnlock} delayLongPress={600} style={styles.avatarContainer}>
+        <View style={styles.avatarContainer}>
           <Image
             source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
             resizeMode="contain"
           />
           <Text style={styles.storeTag}>نابلس · فلسطين</Text>
-        </Pressable>
+        </View>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statNum}>{totalItems}</Text>
@@ -617,35 +587,6 @@ export default function ProfileScreen() {
           <Text style={[styles.contactBtnText, { color: colors.background }]}>تواصل معنا</Text>
         </Pressable>
       </View>
-
-      {/* ── Admin unlock modal ── */}
-      <Modal visible={adminModalVisible} transparent animationType="fade" onRequestClose={() => setAdminModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setAdminModalVisible(false)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
-            <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>الوصول للإدارة</Text>
-            <TextInput
-              value={adminPassword}
-              onChangeText={setAdminPassword}
-              placeholder="كلمة مرور الإدارة"
-              placeholderTextColor={colors.mutedForeground}
-              secureTextEntry
-              autoFocus
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, width: "100%" }]}
-              textAlign="right"
-              onSubmitEditing={handlePromote}
-            />
-            {adminError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{adminError}</Text> : null}
-            <Pressable
-              onPress={handlePromote}
-              disabled={promoting}
-              style={[styles.authSubmitBtn, { backgroundColor: colors.primary, width: "100%" }]}
-            >
-              {promoting ? <ActivityIndicator color="#fff" /> : <Text style={styles.authSubmitText}>تأكيد</Text>}
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       {/* ── Edit profile modal ── */}
       <Modal visible={editProfileVisible} transparent animationType="slide" onRequestClose={() => setEditProfileVisible(false)}>
