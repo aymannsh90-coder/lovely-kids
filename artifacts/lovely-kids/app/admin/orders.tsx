@@ -540,14 +540,23 @@ export default function AdminOrdersScreen() {
 
         await new Promise((resolve) => setTimeout(resolve, 150));
 
+        const isMobileWeb =
+          /Android|iPhone|iPad|iPod/i.test(
+            window.navigator.userAgent,
+          );
+
         printWindow.focus();
         printWindow.print();
 
-        if (!printWindow.closed) {
-          printWindow.close();
-        }
+        // على متصفح الهاتف يجب إبقاء صفحة الطباعة مفتوحة،
+        // لأن إغلاقها مباشرة يقطع Android Print Service.
+        if (!isMobileWeb) {
+          if (!printWindow.closed) {
+            printWindow.close();
+          }
 
-        window.focus();
+          window.focus();
+        }
       } else {
         await Print.printAsync({ html });
       }
