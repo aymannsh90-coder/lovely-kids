@@ -344,6 +344,18 @@ export default function AdminOrdersScreen() {
       return qrId;
     }
 
+    // بعض أجهزة QR 2D تكتب الرابط بحروف مشوهة إذا كانت
+    // لوحة المفاتيح عربية، لكن نهاية الرابط تبقى مثل =75.
+    const scannedSuffix = raw.match(/=\s*#?(\d+)\s*$/);
+
+    if (scannedSuffix) {
+      const id = Number(scannedSuffix[1]);
+
+      return Number.isInteger(id) && id > 0
+        ? id
+        : null;
+    }
+
     const manual = raw.match(/^#?(\d+)$/);
 
     if (!manual) {
@@ -391,8 +403,11 @@ export default function AdminOrdersScreen() {
      * ثم نفتح الطلب تلقائياً حتى لو الجهاز لا يرسل Enter.
      */
     if (
-      raw.includes("/admin/orders") &&
-      /[?&]orderId=\d+/i.test(raw)
+      (
+        raw.includes("/admin/orders") &&
+        /[?&]orderId=\d+/i.test(raw)
+      ) ||
+      /=\s*\d+\s*$/.test(raw)
     ) {
       orderSearchTimerRef.current = setTimeout(() => {
         openOrderFromSearch(raw);
