@@ -292,8 +292,8 @@ export async function sendOrderStatusNotification(
   for (const tokenBatch of chunk(tokens, 100)) {
     const messages = tokenBatch.map((to) => ({
       to,
-      sound: "default",
-      channelId: "default",
+      sound: "lovely_kids_bell.wav",
+      channelId: "lovely-kids-alerts-v1",
       title: message.title,
       body: message.body,
       data: { type: "order_status", orderId: String(orderId), status },
@@ -370,8 +370,8 @@ export async function sendNewOrderNotification(
   for (const tokenBatch of chunk(tokens, 100)) {
     const messages = tokenBatch.map((to) => ({
       to,
-      sound: "default",
-      channelId: "default",
+      sound: "lovely_kids_bell.wav",
+      channelId: "lovely-kids-alerts-v1",
       title: "طلب جديد",
       body:
         `طلب #${order.id} من ${order.customerName}` +
@@ -542,8 +542,8 @@ async function handleSendNotification(
   for (const tokenBatch of chunk(tokens, 100)) {
     const messages = tokenBatch.map((to) => ({
       to,
-      sound: "default",
-      channelId: "default",
+      sound: "lovely_kids_bell.wav",
+      channelId: "lovely-kids-alerts-v1",
       title,
       body: messageBody,
       data: {

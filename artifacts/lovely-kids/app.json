@@ -77,7 +77,16 @@
       "expo-font",
       "expo-web-browser",
       "expo-localization",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "lovely-kids-alerts-v1",
+          "sounds": [
+            "./assets/sounds/lovely_kids_bell.wav"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

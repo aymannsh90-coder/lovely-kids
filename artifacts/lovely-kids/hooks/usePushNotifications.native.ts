@@ -6,6 +6,9 @@ import { Platform } from "react-native";
 
 import { API_BASE } from "@/constants/api";
 
+const ANDROID_NOTIFICATION_CHANNEL_ID = "lovely-kids-alerts-v1";
+const NOTIFICATION_SOUND = "lovely_kids_bell.wav";
+
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -40,12 +43,19 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
   // Android 8+ (API 26+) requires an explicit notification channel.
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "Default",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-    });
-    console.log("[Push] Android notification channel 'default' ensured");
+    await Notifications.setNotificationChannelAsync(
+      ANDROID_NOTIFICATION_CHANNEL_ID,
+      {
+        name: "Lovely Kids",
+        importance: Notifications.AndroidImportance.MAX,
+        sound: NOTIFICATION_SOUND,
+        vibrationPattern: [0, 250, 120, 250],
+        enableVibrate: true,
+      },
+    );
+    console.log(
+      `[Push] Android notification channel '${ANDROID_NOTIFICATION_CHANNEL_ID}' ensured`,
+    );
   }
 
   const existing = await Notifications.getPermissionsAsync();

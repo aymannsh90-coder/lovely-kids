@@ -91,11 +91,15 @@ export default function PushDebugScreen() {
   const handleLocalNotif = async () => {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "اختبار محلي 🔔",
+        title: "اختبار Lovely Kids 🔔",
         body: "وصل الإشعار بنجاح على هذا الجهاز",
-        sound: "default",
+        sound: "lovely_kids_bell.wav",
       },
-      trigger: null,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 1,
+        channelId: "lovely-kids-alerts-v1",
+      },
     });
     setLocalNotifSent(true);
   };
