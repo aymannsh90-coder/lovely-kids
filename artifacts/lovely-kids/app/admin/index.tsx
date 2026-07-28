@@ -41,7 +41,7 @@ const ADMIN_CARDS = [
     route: "/admin/notifications" as const,
   },
   {
-    label: "العروض",
+    label: "قسم العروض 🔥",
     subtitle: "إدارة منتجات العروض",
     icon: "pricetag-outline" as const,
     route: "/admin/product-offers" as const,
