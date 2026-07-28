@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useAudioPlayer } from "expo-audio";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -19,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
+import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 
 export default function ProductOffersScreen() {
   const colors = useColors();
@@ -26,29 +30,207 @@ export default function ProductOffersScreen() {
   const { products, updateProduct } = useProducts();
   const { settings, updateSettings } = useAppSettings();
 
+  const barcodeBeep = useAudioPlayer(
+    require("../../assets/sounds/barcode-beep.wav"),
+  );
+  const [cameraPermission, requestCameraPermission] =
+    useCameraPermissions();
+
   const [query, setQuery] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeScanned, setBarcodeScanned] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toggleSaving, setToggleSaving] = useState(false);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
-  const offerProducts = useMemo(() => {
+  const displayedProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
 
-    return products
-      .filter((product) => product.showInOffers === true)
-      .filter((product) => {
-        if (!q) return true;
+    if (!q) {
+      return products.filter(
+        (product) => product.showInOffers === true,
+      );
+    }
 
-        return (
-          product.nameAr.toLowerCase().includes(q) ||
-          product.name.toLowerCase().includes(q) ||
-          (product.productCode ?? "").toLowerCase().includes(q) ||
-          (product.barcode ?? "").toLowerCase().includes(q)
+    return products.filter((product) => {
+      const matchesAdditionalBarcode =
+        (product.additionalBarcodes ?? []).some((item) =>
+          (item.barcode ?? "").toLowerCase().includes(q),
         );
-      });
+
+      return (
+        product.nameAr.toLowerCase().includes(q) ||
+        product.name.toLowerCase().includes(q) ||
+        (product.productCode ?? "").toLowerCase().includes(q) ||
+        (product.barcode ?? "").toLowerCase().includes(q) ||
+        matchesAdditionalBarcode
+      );
+    });
   }, [products, query]);
+
+  const applyScannedBarcode = useCallback(
+    (rawValue: string) => {
+      const value = rawValue.trim();
+      if (!value) return false;
+
+      const product = products.find(
+        (item) =>
+          (item.barcode ?? "").trim() === value ||
+          (item.additionalBarcodes ?? []).some(
+            (barcodeItem) =>
+              (barcodeItem.barcode ?? "").trim() === value,
+          ),
+      );
+
+      if (!product) {
+        Alert.alert(
+          "المنتج غير موجود",
+          `لم يتم العثور على منتج بالباركود: ${value}`,
+        );
+        return false;
+      }
+
+      setQuery(value);
+      return true;
+    },
+    [products],
+  );
+
+  const playScanFeedback = useCallback(() => {
+    void Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success,
+    );
+    void barcodeBeep
+      .seekTo(0)
+      .then(() => barcodeBeep.play())
+      .catch(() => {});
+  }, [barcodeBeep]);
+
+  useEffect(() => {
+    if (
+      Platform.OS === "web" ||
+      !CameraView.isModernBarcodeScannerAvailable
+    ) {
+      return;
+    }
+
+    const subscription =
+      CameraView.onModernBarcodeScanned(({ data }) => {
+        if (!data?.trim()) return;
+
+        if (applyScannedBarcode(data)) {
+          playScanFeedback();
+        }
+      });
+
+    return () => subscription.remove();
+  }, [applyScannedBarcode, playScanFeedback]);
+
+  const handleOpenBarcodeScanner = async () => {
+    if (Platform.OS === "web") {
+      setBarcodeScanned(false);
+      setScannerOpen(true);
+      return;
+    }
+
+    if (CameraView.isModernBarcodeScannerAvailable) {
+      try {
+        await CameraView.launchScanner({
+          barcodeTypes: [
+            "ean13",
+            "ean8",
+            "upc_a",
+            "upc_e",
+            "code128",
+            "code39",
+            "code93",
+            "itf14",
+            "codabar",
+            "qr",
+          ],
+        });
+      } catch {
+        Alert.alert(
+          "تعذر فتح الكاميرا",
+          "تعذر فتح ماسح الباركود",
+        );
+      }
+      return;
+    }
+
+    const permission = cameraPermission?.granted
+      ? cameraPermission
+      : await requestCameraPermission();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "صلاحية الكاميرا",
+        "يجب السماح باستخدام الكاميرا لمسح الباركود",
+      );
+      return;
+    }
+
+    setBarcodeScanned(false);
+    setScannerOpen(true);
+  };
+
+  const handleBarcodeScanned = (data: string) => {
+    if (barcodeScanned) return;
+
+    setBarcodeScanned(true);
+
+    if (applyScannedBarcode(data)) {
+      playScanFeedback();
+    }
+
+    setScannerOpen(false);
+  };
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !scannerOpen) return;
+
+    let disposed = false;
+    let controls: { stop: () => void } | undefined;
+
+    const timer = setTimeout(() => {
+      void startWebBarcodeScanner(
+        "product-offers-barcode-video",
+        (value) => {
+          if (disposed) return;
+
+          disposed = true;
+          setBarcodeScanned(true);
+
+          if (applyScannedBarcode(value)) {
+            playScanFeedback();
+          }
+
+          setScannerOpen(false);
+        },
+      )
+        .then((scannerControls) => {
+          if (disposed) scannerControls.stop();
+          else controls = scannerControls;
+        })
+        .catch(() => {
+          if (!disposed) {
+            setScannerOpen(false);
+            Alert.alert(
+              "تعذر تشغيل الكاميرا",
+              "تعذر تشغيل كاميرا مسح الباركود",
+            );
+          }
+        });
+    }, 100);
+
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      controls?.stop();
+    };
+  }, [scannerOpen, applyScannedBarcode, playScanFeedback]);
 
   const toggleSection = async (value: boolean) => {
     setToggleSaving(true);
@@ -65,6 +247,33 @@ export default function ProductOffersScreen() {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const addToOffers = async (id: string) => {
+    const product = products.find((item) => item.id === id);
+    if (!product) return;
+
+    setBusyId(id);
+
+    try {
+      await updateProduct({
+        ...product,
+        showInOffers: true,
+      });
+
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+    } catch (error) {
+      Alert.alert(
+        "تعذر الإضافة",
+        error instanceof Error
+          ? error.message
+          : "حدث خطأ أثناء إضافة المنتج إلى العروض",
+      );
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const removeFromOffers = async (id: string) => {
@@ -116,7 +325,7 @@ export default function ProductOffersScreen() {
       </View>
 
       <FlatList
-        data={offerProducts}
+        data={displayedProducts}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.list,
@@ -186,6 +395,21 @@ export default function ProductOffersScreen() {
                 style={[styles.searchInput, { color: colors.foreground }]}
                 textAlign="right"
               />
+
+              <Pressable
+                onPress={() => void handleOpenBarcodeScanner()}
+                hitSlop={8}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: colors.primary,
+                }}
+              >
+                <Ionicons name="scan-outline" size={21} color="#fff" />
+              </Pressable>
             </View>
 
             <View style={styles.sectionHeader}>
@@ -195,7 +419,9 @@ export default function ProductOffersScreen() {
                   { color: colors.foreground },
                 ]}
               >
-                المنتجات الموجودة في العروض
+                {query.trim()
+                  ? "نتيجة البحث"
+                  : "المنتجات الموجودة في العروض"}
               </Text>
             </View>
           </>
@@ -213,7 +439,9 @@ export default function ProductOffersScreen() {
                 { color: colors.foreground },
               ]}
             >
-              لا توجد منتجات ضمن العروض
+              {query.trim()
+                ? "لم يتم العثور على منتج"
+                : "لا توجد منتجات ضمن العروض"}
             </Text>
             <Text
               style={[
@@ -221,7 +449,9 @@ export default function ProductOffersScreen() {
                 { color: colors.mutedForeground },
               ]}
             >
-              افتح المنتج وفعّل خيار "إضافة إلى العروض"
+              {query.trim()
+                ? "جرّب اسمًا أو كودًا أو باركودًا آخر"
+                : "امسح باركود المنتج أو ابحث عنه لإضافته"}
             </Text>
           </View>
         }
@@ -298,27 +528,154 @@ export default function ProductOffersScreen() {
                   </Text>
                 </Pressable>
 
-                <Pressable
-                  onPress={() => void removeFromOffers(item.id)}
-                  disabled={busyId === item.id}
-                  style={styles.removeButton}
-                >
-                  <Ionicons
-                    name="close-circle-outline"
-                    size={17}
-                    color="#ef4444"
-                  />
-                  <Text style={styles.removeText}>
-                    {busyId === item.id
-                      ? "جارٍ الإزالة..."
-                      : "إزالة من العروض"}
-                  </Text>
-                </Pressable>
+                {item.showInOffers ? (
+                  <Pressable
+                    onPress={() => void removeFromOffers(item.id)}
+                    disabled={busyId === item.id}
+                    style={styles.removeButton}
+                  >
+                    <Ionicons
+                      name="close-circle-outline"
+                      size={17}
+                      color="#ef4444"
+                    />
+                    <Text style={styles.removeText}>
+                      {busyId === item.id
+                        ? "جارٍ الإزالة..."
+                        : "إزالة من العروض"}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => void addToOffers(item.id)}
+                    disabled={busyId === item.id}
+                    style={[
+                      styles.editButton,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={17}
+                      color="#fff"
+                    />
+                    <Text
+                      style={[
+                        styles.editText,
+                        { color: "#fff" },
+                      ]}
+                    >
+                      {busyId === item.id
+                        ? "جارٍ الإضافة..."
+                        : "إضافة للعروض"}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           </View>
         )}
       />
+
+      <Modal
+        visible={scannerOpen}
+        animationType="fade"
+        onRequestClose={() => setScannerOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.72)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              width: Platform.OS === "web" ? 360 : "92%",
+              maxWidth: 420,
+              borderRadius: 18,
+              overflow: "hidden",
+              backgroundColor: "#111",
+            }}
+          >
+            {Platform.OS === "web" ? (
+              React.createElement(
+                "video",
+                {
+                  id: "product-offers-barcode-video",
+                  autoPlay: true,
+                  muted: true,
+                  playsInline: true,
+                  style: {
+                    width: "100%",
+                    height: 250,
+                    objectFit: "cover",
+                    backgroundColor: "#000",
+                  },
+                } as any,
+              )
+            ) : (
+              <CameraView
+                style={{ width: "100%", height: 250 }}
+                facing="back"
+                barcodeScannerSettings={{
+                  barcodeTypes: [
+                    "ean13",
+                    "ean8",
+                    "upc_a",
+                    "upc_e",
+                    "code128",
+                    "code39",
+                    "code93",
+                    "itf14",
+                    "codabar",
+                    "qr",
+                  ],
+                }}
+                onBarcodeScanned={
+                  barcodeScanned
+                    ? undefined
+                    : ({ data }) => handleBarcodeScanned(data)
+                }
+              />
+            )}
+
+            <View
+              style={{
+                padding: 14,
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 15,
+                  fontWeight: "800",
+                }}
+              >
+                وجّه الكاميرا نحو باركود المنتج
+              </Text>
+
+              <Pressable
+                onPress={() => setScannerOpen(false)}
+                style={{
+                  backgroundColor: "#333",
+                  paddingHorizontal: 24,
+                  paddingVertical: 10,
+                  borderRadius: 22,
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800" }}>
+                  إغلاق ✕
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
