@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import {
   passwordResetTokensTable,
   productLikesTable,
@@ -81,12 +82,43 @@ async function handleSetAdminRole(
 
   const body = await request.json().catch(() => null) as {
     isAdmin?: boolean;
+    ownerPassword?: string;
   } | null;
 
   if (typeof body?.isAdmin !== "boolean") {
     return json(
       { error: "قيمة صلاحية الأدمن غير صالحة" },
       400,
+    );
+  }
+
+  if (
+    typeof body.ownerPassword !== "string" ||
+    body.ownerPassword.length < 1 ||
+    body.ownerPassword.length > 128
+  ) {
+    return json(
+      { error: "كلمة مرور المالك مطلوبة" },
+      400,
+    );
+  }
+
+  if (!owner.passwordHash) {
+    return json(
+      { error: "لا يمكن التحقق من كلمة مرور المالك" },
+      400,
+    );
+  }
+
+  const passwordValid = await bcrypt.compare(
+    body.ownerPassword,
+    owner.passwordHash,
+  );
+
+  if (!passwordValid) {
+    return json(
+      { error: "كلمة مرور المالك غير صحيحة" },
+      401,
     );
   }
 

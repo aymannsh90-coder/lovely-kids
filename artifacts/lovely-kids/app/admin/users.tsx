@@ -11,6 +11,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +54,8 @@ export default function AdminUsersScreen() {
     nextIsAdmin: boolean;
   } | null>(null);
   const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
+  const [rolePassword, setRolePassword] = useState("");
+  const [roleError, setRoleError] = useState("");
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -118,18 +121,30 @@ export default function AdminUsersScreen() {
     }
   };
 
+  const closeRoleConfirm = () => {
+    if (roleBusyId) return;
+    setRoleConfirm(null);
+    setRolePassword("");
+    setRoleError("");
+  };
+
   const setAdminRole = async () => {
     if (!roleConfirm || roleBusyId) return;
 
+    if (!rolePassword) {
+      setRoleError("أدخل كلمة مرور المالك");
+      return;
+    }
+
     const target = roleConfirm;
-    setRoleConfirm(null);
     setRoleBusyId(target.id);
+    setRoleError("");
 
     try {
       const token = await getAuthToken();
 
       if (!token) {
-        setFetchError("يجب تسجيل الدخول");
+        setRoleError("يجب تسجيل الدخول");
         return;
       }
 
@@ -143,6 +158,7 @@ export default function AdminUsersScreen() {
           },
           body: JSON.stringify({
             isAdmin: target.nextIsAdmin,
+            ownerPassword: rolePassword,
           }),
         },
       );
@@ -157,7 +173,7 @@ export default function AdminUsersScreen() {
           // ignore
         }
 
-        setFetchError(message);
+        setRoleError(message);
         return;
       }
 
@@ -171,9 +187,12 @@ export default function AdminUsersScreen() {
         ),
       );
 
+      setRoleConfirm(null);
+      setRolePassword("");
+      setRoleError("");
       setFetchError(null);
     } catch {
-      setFetchError("تعذّر الاتصال بالسيرفر");
+      setRoleError("تعذّر الاتصال بالسيرفر");
     } finally {
       setRoleBusyId(null);
     }
@@ -332,11 +351,11 @@ export default function AdminUsersScreen() {
         visible={roleConfirm !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setRoleConfirm(null)}
+        onRequestClose={closeRoleConfirm}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() => setRoleConfirm(null)}
+          onPress={closeRoleConfirm}
         >
           <Pressable
             style={[
@@ -346,6 +365,7 @@ export default function AdminUsersScreen() {
                 borderColor: colors.border,
               },
             ]}
+            onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.modalIcon}>
               <Ionicons
@@ -373,32 +393,78 @@ export default function AdminUsersScreen() {
               ]}
             >
               {roleConfirm?.nextIsAdmin
-                ? `هل تريد منح "${roleConfirm?.name}" صلاحية الأدمن؟`
-                : `هل تريد إزالة صلاحية الأدمن من "${roleConfirm?.name}"؟`}
+                ? `لتأكيد منح "${roleConfirm?.name}" صلاحية الأدمن، أدخل كلمة مرور المالك.`
+                : `لتأكيد إزالة صلاحية الأدمن من "${roleConfirm?.name}"، أدخل كلمة مرور المالك.`}
             </Text>
 
+            <TextInput
+              value={rolePassword}
+              onChangeText={(value) => {
+                setRolePassword(value);
+                if (roleError) setRoleError("");
+              }}
+              placeholder="كلمة مرور المالك"
+              placeholderTextColor={colors.mutedForeground}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!roleBusyId}
+              onSubmitEditing={() => void setAdminRole()}
+              style={[
+                styles.passwordInput,
+                {
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              textAlign="right"
+            />
+
+            {roleError ? (
+              <Text
+                style={{
+                  color: "#ef4444",
+                  fontSize: 13,
+                  textAlign: "right",
+                  width: "100%",
+                }}
+              >
+                {roleError}
+              </Text>
+            ) : null}
+
             <Pressable
+              disabled={!!roleBusyId}
               style={[
                 styles.confirmBtn,
                 {
                   backgroundColor: roleConfirm?.nextIsAdmin
                     ? colors.primary
                     : "#FF9800",
+                  opacity: roleBusyId ? 0.65 : 1,
                 },
               ]}
               onPress={() => void setAdminRole()}
             >
-              <Text style={styles.confirmBtnText}>
-                تأكيد
-              </Text>
+              {roleBusyId ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.confirmBtnText}>
+                  {roleConfirm?.nextIsAdmin
+                    ? "تأكيد الترقية"
+                    : "تأكيد إزالة الصلاحية"}
+                </Text>
+              )}
             </Pressable>
 
             <Pressable
+              disabled={!!roleBusyId}
               style={[
                 styles.cancelBtn,
                 { borderColor: colors.border },
               ]}
-              onPress={() => setRoleConfirm(null)}
+              onPress={closeRoleConfirm}
             >
               <Text
                 style={[
@@ -485,6 +551,14 @@ const styles = StyleSheet.create({
   modalIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#ef444418", alignItems: "center", justifyContent: "center", marginBottom: 4 },
   modalTitle: { fontSize: 17, fontWeight: "800" },
   modalSub: { fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 4 },
+  passwordInput: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 15,
+  },
   confirmBtn: { width: "100%", backgroundColor: "#ef4444", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginTop: 4 },
   confirmBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   cancelBtn: { width: "100%", borderWidth: 1, paddingVertical: 11, borderRadius: 12, alignItems: "center", marginTop: 4 },
