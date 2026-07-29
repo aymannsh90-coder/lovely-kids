@@ -188,7 +188,7 @@ export default function ContactScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 16, marginBottom: 20, gap: 12 },
   sectionTitle: { fontSize: 17, fontWeight: "700", textAlign: "right" },
   contactCard: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     padding: 16,
     borderRadius: 16,
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   contactInfo: { flex: 1, alignItems: "flex-end" },
   contactLabel: { fontSize: 14, fontWeight: "700", color: "#fff" },
   contactValue: { fontSize: 16, fontWeight: "800", color: "#fff", marginTop: 2 },
-  socialRow: { flexDirection: "row-reverse", gap: 10 },
+  socialRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 10 },
   socialBtn: {
     flex: 1,
     alignItems: "center",
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   socialLabel: { color: "#fff", fontSize: 12, fontWeight: "700" },
   infoCard: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "flex-start",
     padding: 14,
     borderRadius: 14,

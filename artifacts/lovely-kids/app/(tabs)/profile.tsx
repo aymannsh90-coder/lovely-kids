@@ -666,7 +666,7 @@ export default function ProfileScreen() {
 
             {editError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{editError}</Text> : null}
 
-            <View style={{ width: "100%", flexDirection: "row-reverse", gap: 10, marginTop: 4 }}>
+            <View style={{ width: "100%", flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 10, marginTop: 4 }}>
               <Pressable
                 onPress={handleSaveProfile}
                 disabled={editSaving}
@@ -760,7 +760,7 @@ const styles = StyleSheet.create({
   avatarContainer: { alignItems: "center", paddingTop: 16, gap: 8 },
   logoImage: { width: 140, height: 70, borderRadius: 12 },
   storeTag: { fontSize: 13, color: "rgba(255,255,255,0.85)" },
-  statsRow: { flexDirection: "row-reverse", justifyContent: "center", alignItems: "center", marginTop: 20 },
+  statsRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", justifyContent: "center", alignItems: "center", marginTop: 20 },
   statItem: { alignItems: "center", flex: 1 },
   statNum: { fontSize: 20, fontWeight: "800", color: "#fff" },
   statLabel: { fontSize: 11, color: "rgba(255,255,255,0.85)", marginTop: 2 },
@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
   loadingBox: { paddingVertical: 24, alignItems: "center" },
   accountCard: {
     margin: 16, marginBottom: 0, borderRadius: 16, borderWidth: 1,
-    padding: 14, flexDirection: "row-reverse", alignItems: "center", gap: 12,
+    padding: 14, flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 12,
   },
   accountAvatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   accountAvatarImage: { width: 46, height: 46, borderRadius: 23 },
@@ -776,18 +776,18 @@ const styles = StyleSheet.create({
   accountPhone: { fontSize: 13, marginTop: 2, textAlign: "right" },
   logoutBtn: { padding: 8 },
   detailsCard: { margin: 16, marginBottom: 0, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
-  detailsHeader: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", padding: 14 },
+  detailsHeader: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", justifyContent: "space-between", alignItems: "center", padding: 14 },
   detailsTitle: { fontSize: 15, fontWeight: "700" },
-  editBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  editBtn: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   editBtnText: { fontSize: 13, fontWeight: "600" },
-  detailRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1 },
-  detailLabelRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  detailRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1 },
+  detailLabelRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 4 },
   detailLabel: { fontSize: 12 },
   detailValue: { fontSize: 14, fontWeight: "600", textAlign: "right", flex: 1, paddingLeft: 8 },
   detailValueEmpty: { fontSize: 14, fontWeight: "600" },
   authCard: { margin: 16, borderRadius: 20, borderWidth: 1, padding: 20, gap: 12 },
   authSectionLabel: { fontSize: 14, textAlign: "right" },
-  authTabs: { flexDirection: "row-reverse", backgroundColor: "transparent", borderRadius: 12, overflow: "hidden", gap: 8 },
+  authTabs: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", backgroundColor: "transparent", borderRadius: 12, overflow: "hidden", gap: 8 },
   authTab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center" },
   authTabText: { fontSize: 14, fontWeight: "700" },
   input: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
@@ -796,11 +796,11 @@ const styles = StyleSheet.create({
   authSubmitText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   forgotLink: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingVertical: 4 },
   menuCard: { margin: 16, marginTop: 16, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
-  menuItem: { flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
+  menuItem: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   menuLabel: { flex: 1, fontSize: 15, fontWeight: "600", textAlign: "right" },
   menuIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   separator: { height: 1, marginHorizontal: 16 },
-  adminCard: { marginHorizontal: 16, marginTop: 8, borderRadius: 16, flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", padding: 16, gap: 12 },
+  adminCard: { marginHorizontal: 16, marginTop: 8, borderRadius: 16, flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", justifyContent: "space-between", padding: 16, gap: 12 },
   adminCardText: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "right" },
   newOrdersBadge: { position: "absolute", top: -4, right: -4, backgroundColor: "#ef4444", borderRadius: 8, minWidth: 16, height: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
   newOrdersBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
@@ -814,5 +814,5 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: "800" },
   modalFieldGroup: { gap: 6 },
   modalFieldLabel: { fontSize: 12, fontWeight: "600", textAlign: "right" },
-  passwordNoteRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  passwordNoteRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 4 },
 });

@@ -167,7 +167,7 @@ export default function HomeScreen() {
         ]}
       >
         <View style={styles.headerLeft}>
-          {Platform.OS === "web" && <CategoryMenu />}
+          <CategoryMenu />
           <Image
             source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
@@ -188,7 +188,6 @@ export default function HomeScreen() {
             <Ionicons name="heart-outline" size={24} color={colors.foreground} />
           </Pressable>
           <CartBadge />
-          {Platform.OS !== "web" && <CategoryMenu />}
         </View>
       </View>
 
@@ -574,17 +573,17 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 8, flex: 1 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   logoImage: { width: 110, height: 52 },
-  greetingBlock: { alignItems: Platform.OS === "web" ? "flex-end" : "flex-start" },
+  greetingBlock: { alignItems: "flex-end" },
   greetingHi: {
     fontSize: 15,
     fontWeight: "800",
-    textAlign: Platform.OS === "web" ? "right" : "left",
+    textAlign: "right",
     letterSpacing: 0.3,
   },
   greetingName: {
     fontSize: 14,
     fontWeight: "600",
-    textAlign: Platform.OS === "web" ? "right" : "left",
+    textAlign: "right",
     marginTop: 1,
   },
   iconBtn: {
@@ -604,7 +603,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
-  searchPlaceholder: { fontSize: 14, flex: 1, textAlign: Platform.OS === "web" ? "right" : "left" },
+  searchPlaceholder: { fontSize: 14, flex: 1, textAlign: "right" },
   heroBanner: {
     marginHorizontal: 16,
     borderRadius: 20,
@@ -613,22 +612,22 @@ const styles = StyleSheet.create({
     padding: 20,
     minHeight: 180,
   },
-  heroContent: { alignItems: Platform.OS === "web" ? "flex-end" : "flex-start", gap: 8 },
+  heroContent: { alignItems: "flex-end", gap: 8 },
   heroBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
-    alignSelf: Platform.OS === "web" ? "flex-end" : "flex-start",
+    alignSelf: "flex-end",
   },
   heroBadgeText: { fontSize: 12, fontWeight: "700", color: "#333" },
   heroTitle: {
     fontSize: 24,
     fontWeight: "800",
     color: "#fff",
-    textAlign: Platform.OS === "web" ? "right" : "left",
+    textAlign: "right",
     lineHeight: 32,
   },
-  heroSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.85)", textAlign: Platform.OS === "web" ? "right" : "left" },
+  heroSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.85)", textAlign: "right" },
   heroBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -636,7 +635,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 30,
-    alignSelf: Platform.OS === "web" ? "flex-end" : "flex-start",
+    alignSelf: "flex-end",
     marginTop: 4,
   },
   heroBtnText: { fontSize: 14, fontWeight: "700" },
@@ -650,7 +649,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    textAlign: Platform.OS === "web" ? "right" : "left",
+    textAlign: "right",
     paddingHorizontal: 16,
     marginBottom: 12,
   },
@@ -675,11 +674,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 3,
-    alignSelf: Platform.OS === "web" ? "flex-end" : "flex-start",
+    alignSelf: "flex-end",
   },
   offerBadgeText: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  offerTitle: { color: "#fff", fontWeight: "700", fontSize: 14, textAlign: Platform.OS === "web" ? "right" : "left" },
-  offerSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, textAlign: Platform.OS === "web" ? "right" : "left" },
+  offerTitle: { color: "#fff", fontWeight: "700", fontSize: 14, textAlign: "right" },
+  offerSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, textAlign: "right" },
   ageScrollWrapper: {
     position: "relative",
     justifyContent: "center",
@@ -736,7 +735,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  featureText: { fontSize: 12, fontWeight: "600", textAlign: Platform.OS === "web" ? "right" : "left" },
+  featureText: { fontSize: 12, fontWeight: "600", textAlign: "right" },
   installBtn: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -793,7 +792,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
   },
-  contactText: { flex: 1, alignItems: Platform.OS === "web" ? "flex-end" : "flex-start" },
+  contactText: { flex: 1, alignItems: "flex-end" },
   contactTitle: { fontSize: 16, fontWeight: "700" },
   contactSub: { fontSize: 12, marginTop: 2 },
   genderTabsRow: {

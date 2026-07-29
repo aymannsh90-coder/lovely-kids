@@ -120,7 +120,7 @@ export default function AboutScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   text: { fontSize: 14, textAlign: "right", lineHeight: 22 },
   features: { gap: 10 },
   featureCard: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "flex-start",
     padding: 14,
     borderRadius: 14,
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
   featureTitle: { fontSize: 15, fontWeight: "700" },
   featureDesc: { fontSize: 13, textAlign: "right", lineHeight: 18 },
   ctaBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,

@@ -190,14 +190,16 @@ const styles = StyleSheet.create({
   },
   modalRoot: {
     flex: 1,
-    flexDirection: "row",
-    justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
   },
   drawer: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
     height: "100%",
     borderLeftWidth: 1,
     elevation: 18,
