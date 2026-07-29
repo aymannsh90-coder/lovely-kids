@@ -16,8 +16,9 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
-import { Product, isSizeOutOfStock } from "@/data/products";
+import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
 import { getProductShareUrl } from "@/utils/productShare";
+import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
 
 interface Props {
   product: Product;
@@ -33,7 +34,7 @@ function calcDiscount(price: number, originalPrice?: number | null): number | nu
 export function ProductCard({ product, style }: Props) {
   const colors = useColors();
   const { settings } = useAppSettings();
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   const { toggleItem, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(product.id);
 
@@ -49,18 +50,42 @@ export function ProductCard({ product, style }: Props) {
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     if (hasVariants) {
       router.push({ pathname: "/product/[id]", params: { id: product.id } });
       return;
     }
-    addItem({
-      id: product.id,
-      name: product.nameAr,
-      price: product.price,
-      image: product.image,
-      category: product.category,
-    });
+
+    const existing = items.find(
+      (item) => item.id === product.id && !item.size && !item.color,
+    );
+    const availableStock = getAvailableStock(product);
+
+    const performAdd = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      addItem({
+        id: product.id,
+        name: product.nameAr,
+        price: product.price,
+        image: product.image,
+        category: product.category,
+      });
+    };
+
+    if (
+      availableStock !== null &&
+      (existing?.quantity ?? 0) >= availableStock
+    ) {
+      showStockLimit(availableStock);
+      return;
+    }
+
+    if (existing) {
+      confirmDuplicateCartItem(performAdd);
+      return;
+    }
+
+    performAdd();
   };
 
   const handleShare = async () => {

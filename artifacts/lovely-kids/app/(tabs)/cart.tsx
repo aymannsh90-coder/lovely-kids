@@ -26,6 +26,9 @@ import { getProductShareUrl } from "@/utils/productShare";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
+import { useVisibleProducts } from "@/hooks/useVisibleProducts";
+import { getAvailableStock } from "@/data/products";
+import { confirmRemoveFromCart, showStockLimit } from "@/utils/cartPrompts";
 
 import { API_BASE } from "@/constants/api";
 
@@ -37,6 +40,7 @@ export default function CartScreen() {
   const { settings } = useAppSettings();
   const { user, updateProfile, getAuthToken } = useAuth();
   const { items, updateQuantity, removeItem, totalPrice, totalItems, clearCart } = useCart();
+  const { products } = useVisibleProducts();
 
   const [step, setStep] = useState<Step>("cart");
   const [loading, setLoading] = useState(false);
@@ -635,9 +639,6 @@ export default function CartScreen() {
             contentContainerStyle={styles.list}
             renderItem={({ item }) => (
               <View style={[styles.cartItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Pressable onPress={() => removeItem(item.id, item.size, item.color)} style={styles.removeBtn}>
-                  <Ionicons name="close" size={16} color={colors.mutedForeground} />
-                </Pressable>
                 <View style={styles.itemRight}>
                   <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
                   {(item.size || item.color) && (
@@ -650,11 +651,44 @@ export default function CartScreen() {
                   <Text style={[styles.itemPrice, { color: colors.primary }]}>
                     {item.price * item.quantity} ₪
                   </Text>
+                  <Pressable
+                    onPress={() =>
+                      confirmRemoveFromCart(() =>
+                        removeItem(item.id, item.size, item.color),
+                      )
+                    }
+                    style={styles.deleteBtn}
+                  >
+                    <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                    <Text style={styles.deleteText}>حذف</Text>
+                  </Pressable>
                 </View>
                 <Image source={{ uri: item.image }} style={styles.itemImage} />
                 <View style={styles.quantityRow}>
                   <Pressable
-                    onPress={() => updateQuantity(item.id, item.quantity + 1, item.size, item.color)}
+                    onPress={() => {
+                      const product = products.find(
+                        (entry) => entry.id === item.id,
+                      );
+                      const availableStock = product
+                        ? getAvailableStock(product, item.size, item.color)
+                        : null;
+
+                      if (
+                        availableStock !== null &&
+                        item.quantity >= availableStock
+                      ) {
+                        showStockLimit(availableStock);
+                        return;
+                      }
+
+                      updateQuantity(
+                        item.id,
+                        item.quantity + 1,
+                        item.size,
+                        item.color,
+                      );
+                    }}
                     style={[styles.qtyBtn, { backgroundColor: colors.primary }]}
                   >
                     <Ionicons name="add" size={16} color="#fff" />
@@ -738,7 +772,16 @@ const styles = StyleSheet.create({
     gap: 12,
     position: "relative",
   },
-  removeBtn: { position: "absolute", top: 8, left: 8, zIndex: 1 },
+  deleteBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    marginTop: 2,
+  },
+  deleteText: { color: "#dc2626", fontSize: 12, fontWeight: "600" },
   itemImage: { width: 70, height: 70, borderRadius: 12, resizeMode: "cover" },
   itemRight: { flex: 1, gap: 4, alignItems: "flex-end" },
   itemName: { fontSize: 14, fontWeight: "700", textAlign: "right" },

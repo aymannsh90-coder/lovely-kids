@@ -56,6 +56,36 @@ export interface Product {
   stock?: number | null;
 }
 
+export function getAvailableStock(
+  product: Product,
+  size?: string,
+  color?: string,
+): number | null {
+  const limits: number[] = [];
+
+  if (color && product.colorVariants?.length) {
+    const variant = product.colorVariants.find((entry) => entry.color === color);
+
+    if (variant && size && variant.sizes.length > 0) {
+      const sizeEntry = variant.sizes.find((entry) => entry.size === size);
+
+      if (sizeEntry) {
+        if (sizeEntry.stock !== undefined && sizeEntry.stock !== null) {
+          limits.push(Math.max(0, sizeEntry.stock));
+        } else if (sizeEntry.outOfStock) {
+          limits.push(0);
+        }
+      }
+    }
+  }
+
+  if (product.stock !== undefined && product.stock !== null) {
+    limits.push(Math.max(0, product.stock));
+  }
+
+  return limits.length > 0 ? Math.min(...limits) : null;
+}
+
 export const AGE_GROUP_IDS = ["newborn", "infant", "toddler", "kids", "boys", "girls"] as const;
 export const CATEGORY_IDS = ["all", "clothes", "stroller", "feeding", "bath", "toys", "accessories"] as const;
 export const SEASON_IDS = ["all", "summer", "winter"] as const;

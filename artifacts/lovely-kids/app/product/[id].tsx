@@ -22,7 +22,8 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
-import { isSizeOutOfStock } from "@/data/products";
+import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
+import { getAvailableStock, isSizeOutOfStock } from "@/data/products";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -36,7 +37,7 @@ export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   const { toggleItem, isWishlisted } = useWishlist();
   const { settings } = useAppSettings();
   const { products, loading } = useVisibleProducts();
@@ -113,17 +114,51 @@ export default function ProductDetailScreen() {
 
   const handleAddToCart = () => {
     if (isOutOfStock || selectionIncomplete) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addItem({
-      id: product.id,
-      name: product.nameAr,
-      price: product.price,
-      image: activeColorVariant?.image ?? product.image,
-      category: product.category,
-      size: selectedSize,
-      color: activeColorVariant?.color,
-    });
-    setCartModal(true);
+
+    const selectedColor = activeColorVariant?.color;
+    const availableStock = getAvailableStock(
+      product,
+      selectedSize,
+      selectedColor,
+    );
+
+    const existing = items.find(
+      (item) =>
+        item.id === product.id &&
+        item.size === selectedSize &&
+        item.color === selectedColor,
+    );
+
+    const performAdd = () => {
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+      addItem({
+        id: product.id,
+        name: product.nameAr,
+        price: product.price,
+        image: activeColorVariant?.image ?? product.image,
+        category: product.category,
+        size: selectedSize,
+        color: selectedColor,
+      });
+      setCartModal(true);
+    };
+
+    if (
+      availableStock !== null &&
+      (existing?.quantity ?? 0) >= availableStock
+    ) {
+      showStockLimit(availableStock);
+      return;
+    }
+
+    if (existing) {
+      confirmDuplicateCartItem(performAdd);
+      return;
+    }
+
+    performAdd();
   };
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom + 16;
