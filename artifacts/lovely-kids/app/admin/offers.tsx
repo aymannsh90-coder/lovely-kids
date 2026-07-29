@@ -233,7 +233,7 @@ export default function OffersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff" },
   list: { padding: 16, gap: 12 },
   offerCard: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden",
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: "#fff", fontWeight: "800", fontSize: 16, textAlign: "center" },
   offerInfo: { flex: 1, padding: 12, gap: 4, alignItems: "flex-end" },
-  offerHeader: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  offerHeader: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   activeLabel: { fontSize: 11, fontWeight: "600" },
   offerTitle: { fontSize: 14, fontWeight: "700", textAlign: "right" },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   addBtnTop: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   toggleRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 12,
     padding: 14,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   toggleLabel: { fontSize: 14, fontWeight: "600" },
-  btnRow: { flexDirection: "row-reverse", gap: 10, marginTop: 8 },
+  btnRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 10, marginTop: 8 },
   cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
   cancelBtnText: { fontSize: 15, fontWeight: "600" },
   saveBtn: { flex: 2, paddingVertical: 14, borderRadius: 12, alignItems: "center" },

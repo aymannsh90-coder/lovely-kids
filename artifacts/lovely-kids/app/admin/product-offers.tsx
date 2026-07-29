@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -709,7 +709,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   visibilityCard: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   searchBox: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     borderWidth: 1,
     borderRadius: 12,
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   productCard: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     borderWidth: 1,
     borderRadius: 14,
     padding: 10,
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   priceRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 8,
   },
@@ -792,11 +792,11 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
   },
   actions: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     gap: 8,
   },
   editButton: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 5,
     paddingHorizontal: 10,
@@ -808,7 +808,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   removeButton: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 5,
     paddingHorizontal: 10,

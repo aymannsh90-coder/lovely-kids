@@ -71,7 +71,7 @@ export default function AdminSeasonScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   body: { padding: 16, gap: 12, width: "100%", maxWidth: 650, alignSelf: "center" },
   hint: { fontSize: 13, textAlign: "right", marginBottom: 4 },
   option: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 12,
     borderWidth: 1,

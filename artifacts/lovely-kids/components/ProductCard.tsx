@@ -251,7 +251,8 @@ const styles = StyleSheet.create({
   discountBadge: {
     position: "absolute",
     top: 8,
-    left: 8,
+    left: Platform.OS === "web" ? 8 : undefined,
+    end: Platform.OS === "web" ? undefined : 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -264,7 +265,8 @@ const styles = StyleSheet.create({
   wishlistBtn: {
     position: "absolute",
     top: 8,
-    right: 8,
+    right: Platform.OS === "web" ? 8 : undefined,
+    start: Platform.OS === "web" ? undefined : 8,
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -279,7 +281,8 @@ const styles = StyleSheet.create({
   shareBtn: {
     position: "absolute",
     bottom: 8,
-    left: 8,
+    left: Platform.OS === "web" ? 8 : undefined,
+    end: Platform.OS === "web" ? undefined : 8,
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -300,7 +303,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   priceRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 2,

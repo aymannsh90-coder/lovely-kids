@@ -755,7 +755,7 @@ export default function AdminHeroScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -781,7 +781,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "flex-start",
     gap: 10,
   },
@@ -808,7 +808,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   slideTopRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 10,
   },
@@ -846,7 +846,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   actions: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 8,
   },
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderRadius: 10,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
@@ -880,7 +880,7 @@ const styles = StyleSheet.create({
   addBtn: {
     minHeight: 52,
     borderRadius: 16,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 9,

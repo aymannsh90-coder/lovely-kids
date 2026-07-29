@@ -556,12 +556,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   moneyRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 8,
   },
   moneyRowSmall: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 5,
   },
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveButton: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 9,

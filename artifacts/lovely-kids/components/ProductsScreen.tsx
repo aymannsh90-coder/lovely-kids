@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: 16 },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "space-between",
     marginBottom: 12,
   },

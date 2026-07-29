@@ -774,7 +774,7 @@ export default function AddProductScreen() {
           <Pressable
             onPress={() => void handleOpenBarcodeScanner("primary")}
             style={{
-              flexDirection: "row-reverse",
+              flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
@@ -793,7 +793,7 @@ export default function AddProductScreen() {
           <Pressable
             onPress={addAdditionalBarcode}
             style={{
-              flexDirection: "row-reverse",
+              flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
@@ -1004,12 +1004,12 @@ export default function AddProductScreen() {
                 </View>
               )}
 
-              <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+              <View style={{ flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 8 }}>
                 <Pressable
                   onPress={() => void handleOpenBarcodeScanner(index)}
                   style={{
                     flex: 1,
-                    flexDirection: "row-reverse",
+                    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 6,
@@ -1072,7 +1072,7 @@ export default function AddProductScreen() {
         {/* Product Offers */}
         <View
           style={{
-            flexDirection: "row-reverse",
+            flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
             alignItems: "center",
             justifyContent: "space-between",
             padding: 14,
@@ -1108,7 +1108,7 @@ export default function AddProductScreen() {
             الصق رابط Facebook أو Instagram أو TikTok وسيتم التعرف عليه تلقائيًا
           </Text>
 
-          <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+          <View style={{ flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 8 }}>
             <TextInput
               value={socialUrlInput}
               onChangeText={setSocialUrlInput}
@@ -1146,7 +1146,7 @@ export default function AddProductScreen() {
           {(facebookUrl || instagramUrl || tiktokUrl) ? (
             <View
               style={{
-                flexDirection: "row-reverse",
+                flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
                 flexWrap: "wrap",
                 gap: 8,
                 marginTop: 10,
@@ -1156,7 +1156,7 @@ export default function AddProductScreen() {
                 <Pressable
                   onPress={() => setFacebookUrl("")}
                   style={{
-                    flexDirection: "row-reverse",
+                    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
                     alignItems: "center",
                     gap: 5,
                     paddingHorizontal: 10,
@@ -1177,7 +1177,7 @@ export default function AddProductScreen() {
                 <Pressable
                   onPress={() => setInstagramUrl("")}
                   style={{
-                    flexDirection: "row-reverse",
+                    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
                     alignItems: "center",
                     gap: 5,
                     paddingHorizontal: 10,
@@ -1198,7 +1198,7 @@ export default function AddProductScreen() {
                 <Pressable
                   onPress={() => setTiktokUrl("")}
                   style={{
-                    flexDirection: "row-reverse",
+                    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
                     alignItems: "center",
                     gap: 5,
                     paddingHorizontal: 10,
@@ -1764,7 +1764,7 @@ export default function AddProductScreen() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  header: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 16 },
+  header: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 16 },
   title: { fontSize: 18, fontWeight: "800", color: "#fff" },
   form: { padding: 16, gap: 16 },
   errorBox: { padding: 12, borderRadius: 12, borderWidth: 1, gap: 4 },
@@ -1774,13 +1774,13 @@ const styles = StyleSheet.create({
   input: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, fontSize: 14 },
   textArea: { height: 80, textAlignVertical: "top" },
   hint: { fontSize: 11, textAlign: "right" },
-  row: { flexDirection: "row-reverse", gap: 10 },
-  stockRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
+  row: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 10 },
+  stockRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   stockInput: { flex: 1, fontSize: 14, padding: 0 },
   uploadBox: { borderWidth: 2, borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 10 },
   uploadText: { fontSize: 15, fontWeight: "700", textAlign: "center" },
   uploadHint: { fontSize: 12, textAlign: "center" },
-  imageGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 },
+  imageGrid: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", flexWrap: "wrap", gap: 10 },
   gridItem: { width: 100, height: 100, borderRadius: 12, borderWidth: 2, overflow: "hidden", position: "relative", backgroundColor: "#f8f8f8" },
   gridImage: { width: "100%", height: "100%" },
   mainBadge: { position: "absolute", top: 4, right: 4, zIndex: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
@@ -1789,38 +1789,38 @@ const styles = StyleSheet.create({
   gridBtn: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   gridAddBtn: { width: 100, height: 100, borderRadius: 12, borderWidth: 2, borderStyle: "dashed", alignItems: "center", justifyContent: "center", gap: 4 },
   gridAddText: { fontSize: 11, fontWeight: "700" },
-  urlRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6, paddingVertical: 6, borderTopWidth: 1, marginTop: 4 },
+  urlRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 6, paddingVertical: 6, borderTopWidth: 1, marginTop: 4 },
   urlLabel: { fontSize: 12 },
-  sizeInputRow: { flexDirection: "row-reverse", alignItems: "center", borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  sizeInputRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", borderRadius: 12, borderWidth: 1, overflow: "hidden" },
   addSizeBtn: { paddingHorizontal: 14, paddingVertical: 12, alignItems: "center", justifyContent: "center" },
   sizeTextInput: { flex: 1, fontSize: 14, paddingHorizontal: 12, paddingVertical: 12 },
-  sizesWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
-  sizeChip: { flexDirection: "row-reverse", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  sizesWrap: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 },
+  sizeChip: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
   sizeChipText: { fontSize: 13, fontWeight: "700" },
-  chipsWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
+  chipsWrap: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  toggleRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
+  toggleRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
   toggle: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   toggleLabel: { fontSize: 14, fontWeight: "600" },
-  saveBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16, marginTop: 8 },
+  saveBtn: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16, marginTop: 8 },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  genderRow: { flexDirection: "row-reverse", borderRadius: 14, borderWidth: 1, overflow: "hidden" },
-  genderOption: { flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
+  genderRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  genderOption: { flex: 1, flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
   genderOptionText: { fontSize: 14, fontWeight: "700" },
   swatch: { width: 32, height: 32, borderRadius: 16, borderWidth: 1 },
   colorCard: { borderRadius: 14, borderWidth: 1, padding: 12, gap: 10 },
-  colorCardHeader: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },
-  colorCardTitle: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  colorCardHeader: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", justifyContent: "space-between" },
+  colorCardTitle: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 8 },
   colorCardName: { fontSize: 14, fontWeight: "700" },
-  colorImageRow: { flexDirection: "row-reverse" },
-  colorImageWrap: { flexDirection: "row-reverse", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 8 },
+  colorImageRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row" },
+  colorImageWrap: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 8 },
   colorImageThumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: "#f8f8f8" },
-  colorImageActions: { flexDirection: "row-reverse", gap: 6 },
-  colorImageAddBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 6, borderWidth: 1, borderStyle: "dashed", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, alignSelf: "stretch", justifyContent: "center" },
+  colorImageActions: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 6 },
+  colorImageAddBtn: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 6, borderWidth: 1, borderStyle: "dashed", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, alignSelf: "stretch", justifyContent: "center" },
   colorImageAddText: { fontSize: 12, fontWeight: "700" },
-  colorSizeChipWrap: { flexDirection: "row-reverse", alignItems: "center" },
+  colorSizeChipWrap: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center" },
   colorSizeRemoveBtn: { marginRight: -6, marginLeft: 2 },
   colorSizesList: { gap: 8 },
-  colorSizeRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  colorSizeRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
   colorSizeStockInput: { width: 48, fontSize: 14, fontWeight: "700", paddingVertical: 4, textAlignVertical: "center" },
 });

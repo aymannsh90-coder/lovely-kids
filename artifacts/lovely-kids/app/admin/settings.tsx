@@ -262,7 +262,7 @@ export default function SettingsScreen() {
 
       {/* ── الموسم النشط ── */}
       <Section title="🌤️ الموسم النشط">
-        <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+        <View style={{ flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 10 }}>
           <Pressable
             onPress={() => updateSettings({ activeSeason: "summer" })}
             style={{
@@ -511,9 +511,9 @@ export default function SettingsScreen() {
         {(settings.shippingZones ?? []).map((zone, index) => (
           <View key={index}>
             {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-            <View style={[styles.field, { flexDirection: "row-reverse", alignItems: "center", gap: 10 }]}>
+            <View style={[styles.field, { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 10 }]}>
               <Text style={[styles.fieldLabel, { flex: 1, color: colors.mutedForeground }]}>{zone.label}</Text>
-              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+              <View style={{ flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 6 }}>
                 <TextInput
                   value={String(zone.cost)}
                   onChangeText={(v) => {
@@ -614,7 +614,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
   },
   divider: { height: 1, marginHorizontal: 14 },
   navRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 12,
     padding: 14,
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   previewBannerText: { color: "#fff", fontWeight: "700", fontSize: 15, textAlign: "right" },
-  previewRow: { flexDirection: "row-reverse", gap: 10, alignItems: "center" },
+  previewRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 10, alignItems: "center" },
   previewBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveColorsBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
   },
   saveColorsBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   saveBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,

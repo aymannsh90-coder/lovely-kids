@@ -936,7 +936,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
   },
-  contactText: { flex: 1, alignItems: "flex-end" },
+  contactText: { flex: 1, alignItems: Platform.OS === "web" ? "flex-end" : "flex-start" },
   contactTitle: { fontSize: 16, fontWeight: "700" },
   contactSub: { fontSize: 12, marginTop: 2 },
   genderTabsRow: {

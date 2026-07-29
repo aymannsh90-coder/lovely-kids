@@ -354,7 +354,7 @@ export default function CategoriesScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   },
   divider: { height: 1, marginHorizontal: 14 },
   fieldRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "flex-start",
     gap: 12,
     padding: 14,
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   previewLabel: { fontSize: 13, fontWeight: "800", textAlign: "center" },
   previewSublabel: { fontSize: 10, textAlign: "center" },
   catRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 14,
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   addCatRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 10,
     padding: 12,
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   saveBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,

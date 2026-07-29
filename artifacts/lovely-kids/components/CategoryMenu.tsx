@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Platform,
   Animated,
   Modal,
   Pressable,
@@ -198,8 +199,9 @@ const styles = StyleSheet.create({
   drawer: {
     position: "absolute",
     top: 0,
-    right: 0,
-    bottom: 0,
+      right: Platform.OS === "web" ? 0 : undefined,
+      start: Platform.OS === "web" ? undefined : 0,
+      bottom: 0,
     height: "100%",
     borderLeftWidth: 1,
     elevation: 18,
