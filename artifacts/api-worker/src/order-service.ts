@@ -16,6 +16,7 @@ export class OrderValidationError extends Error {}
 interface ShippingZone {
   label: string;
   cost: number;
+  promoCost?: number;
 }
 
 export interface TrustedOrderItem {
@@ -81,9 +82,9 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
 }
 
 const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
-  { label: "الضفة الغربية", cost: 20 },
-  { label: "القدس", cost: 30 },
-  { label: "أراضي الـ48", cost: 70 },
+  { label: "الضفة الغربية", cost: 20, promoCost: 20 },
+  { label: "القدس", cost: 30, promoCost: 30 },
+  { label: "أراضي الـ48", cost: 70, promoCost: 70 },
 ];
 
 function resolveShippingZone(
@@ -120,6 +121,106 @@ function resolveShippingZone(
   return selected;
 }
 
+function getStoreDate(): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+
+    const values = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
+
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function resolveShippingCost(
+  settingsData: unknown,
+  shipping: ShippingZone,
+  productsTotal: number,
+): number {
+  const settings =
+    settingsData as
+      | {
+          shippingPromotionEnabled?: unknown;
+          shippingPromotionThreshold?: unknown;
+          shippingPromotionStartDate?: unknown;
+          shippingPromotionEndDate?: unknown;
+        }
+      | null
+      | undefined;
+
+  if (settings?.shippingPromotionEnabled !== true) {
+    return shipping.cost;
+  }
+
+  const threshold = settings.shippingPromotionThreshold;
+
+  if (
+    typeof threshold !== "number" ||
+    !Number.isInteger(threshold) ||
+    threshold < 0 ||
+    productsTotal < threshold
+  ) {
+    return shipping.cost;
+  }
+
+  const today = getStoreDate();
+
+  const startDate =
+    typeof settings.shippingPromotionStartDate === "string"
+      ? settings.shippingPromotionStartDate.trim()
+      : "";
+
+  const endDate =
+    typeof settings.shippingPromotionEndDate === "string"
+      ? settings.shippingPromotionEndDate.trim()
+      : "";
+
+  if (startDate) {
+    if (!isValidDateOnly(startDate) || today < startDate) {
+      return shipping.cost;
+    }
+  }
+
+  if (endDate) {
+    if (!isValidDateOnly(endDate) || today > endDate) {
+      return shipping.cost;
+    }
+  }
+
+  const promoCost = shipping.promoCost;
+
+  if (
+    typeof promoCost !== "number" ||
+    !Number.isInteger(promoCost) ||
+    promoCost < 0
+  ) {
+    return shipping.cost;
+  }
+
+  return promoCost;
+}
+
 interface TrustedStoredItem {
   id: string;
   name: string;
@@ -149,8 +250,10 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       .from(appSettingsTable)
       .where(eq(appSettingsTable.id, 1));
 
+    const settingsData = settingsRows[0]?.data;
+
     const shipping = resolveShippingZone(
-      settingsRows[0]?.data,
+      settingsData,
       input.shippingZone,
     );
 
@@ -342,7 +445,13 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       productsTotal += product.price * item.quantity;
     }
 
-    const totalPrice = productsTotal + shipping.cost;
+    const shippingCost = resolveShippingCost(
+      settingsData,
+      shipping,
+      productsTotal,
+    );
+
+    const totalPrice = productsTotal + shippingCost;
 
     const orderRows = await tx
       .insert(ordersTable)
@@ -355,7 +464,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         items: trustedItems,
         totalPrice,
         shippingZone: shipping.label,
-        shippingCost: shipping.cost,
+        shippingCost,
         status: "new",
         paymentMethod,
         paymentStatus:

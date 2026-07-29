@@ -47,6 +47,7 @@ export interface AboutInfo {
 export interface ShippingZone {
   label: string;
   cost: number;
+  promoCost?: number;
 }
 
 export interface ContactInfo {
@@ -100,6 +101,10 @@ export interface AppSettings {
   contactInfo: ContactInfo;
   aboutInfo: AboutInfo;
   shippingZones: ShippingZone[];
+  shippingPromotionEnabled: boolean;
+  shippingPromotionThreshold: number;
+  shippingPromotionStartDate: string;
+  shippingPromotionEndDate: string;
   productShareBaseUrl: string;
 }
 
@@ -170,10 +175,14 @@ const DEFAULT_SETTINGS: AppSettings = {
     ],
   },
   shippingZones: [
-    { label: "الضفة الغربية", cost: 20 },
-    { label: "القدس", cost: 30 },
-    { label: "أراضي الـ48", cost: 70 },
+    { label: "الضفة الغربية", cost: 20, promoCost: 20 },
+    { label: "القدس", cost: 30, promoCost: 30 },
+    { label: "أراضي الـ48", cost: 70, promoCost: 70 },
   ],
+  shippingPromotionEnabled: false,
+  shippingPromotionThreshold: 500,
+  shippingPromotionStartDate: "",
+  shippingPromotionEndDate: "",
   productShareBaseUrl: "https://lovelykids.net",
 };
 

@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -532,6 +533,221 @@ export default function SettingsScreen() {
         <View style={[styles.field, { paddingTop: 0 }]}>
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontSize: 12 }]}>
             تكلفة التوصيل تُضاف تلقائياً على إجمالي الطلب عند اختيار المنطقة
+          </Text>
+        </View>
+      </Section>
+
+      {/* ── عرض الشحن ── */}
+      <Section title="🚚 عرض الشحن">
+        <View
+          style={[
+            styles.field,
+            {
+              flexDirection: "row-reverse",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            },
+          ]}
+        >
+          <View style={{ flex: 1, alignItems: "flex-end" }}>
+            <Text
+              style={[
+                styles.fieldLabel,
+                { color: colors.foreground, fontWeight: "800" },
+              ]}
+            >
+              تفعيل عرض الشحن
+            </Text>
+            <Text
+              style={[
+                styles.fieldLabel,
+                { color: colors.mutedForeground, fontSize: 12 },
+              ]}
+            >
+              عند إيقافه تبقى أسعار التوصيل العادية كما هي
+            </Text>
+          </View>
+
+          <Switch
+            value={settings.shippingPromotionEnabled === true}
+            onValueChange={(value) => {
+              void updateSettings({ shippingPromotionEnabled: value });
+            }}
+          />
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Field label="الحد الأدنى لقيمة المشتريات">
+          <View
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <TextInput
+              value={String(settings.shippingPromotionThreshold ?? 500)}
+              onChangeText={(value) => {
+                const amount = parseInt(value.replace(/\D/g, ""), 10);
+                updateSettings({
+                  shippingPromotionThreshold: isNaN(amount) ? 0 : amount,
+                });
+              }}
+              keyboardType="number-pad"
+              style={[
+                styles.fieldInput,
+                {
+                  flex: 1,
+                  backgroundColor: colors.input,
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                  textAlign: "center",
+                },
+              ]}
+            />
+            <Text style={{ color: colors.foreground, fontWeight: "700" }}>
+              ₪
+            </Text>
+          </View>
+        </Field>
+
+        <Text
+          style={[
+            styles.fieldLabel,
+            {
+              color: colors.mutedForeground,
+              paddingHorizontal: 16,
+              paddingBottom: 10,
+              textAlign: "right",
+            },
+          ]}
+        >
+          ضع 0 لتطبيق العرض على جميع الطلبات بدون حد أدنى
+        </Text>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Field
+          label="من تاريخ"
+          value={settings.shippingPromotionStartDate ?? ""}
+          onChangeText={(value) =>
+            updateSettings({ shippingPromotionStartDate: value.trim() })
+          }
+          placeholder="2026-08-01"
+        />
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Field
+          label="إلى تاريخ"
+          value={settings.shippingPromotionEndDate ?? ""}
+          onChangeText={(value) =>
+            updateSettings({ shippingPromotionEndDate: value.trim() })
+          }
+          placeholder="2026-08-31"
+        />
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Text
+          style={[
+            styles.fieldLabel,
+            {
+              color: colors.foreground,
+              fontWeight: "800",
+              paddingHorizontal: 16,
+              paddingTop: 14,
+              textAlign: "right",
+            },
+          ]}
+        >
+          أسعار التوصيل خلال العرض
+        </Text>
+
+        {(settings.shippingZones ?? []).map((zone, index) => (
+          <View key={zone.label}>
+            <View
+              style={[
+                styles.field,
+                {
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 10,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { flex: 1, color: colors.mutedForeground },
+                ]}
+              >
+                {zone.label}
+              </Text>
+
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <TextInput
+                  value={String(zone.promoCost ?? zone.cost)}
+                  onChangeText={(value) => {
+                    const promoCost = parseInt(
+                      value.replace(/\D/g, ""),
+                      10,
+                    );
+
+                    const zones = [...(settings.shippingZones ?? [])];
+
+                    zones[index] = {
+                      ...zones[index],
+                      promoCost: isNaN(promoCost) ? 0 : promoCost,
+                    };
+
+                    updateSettings({ shippingZones: zones });
+                  }}
+                  keyboardType="number-pad"
+                  style={[
+                    styles.fieldInput,
+                    {
+                      backgroundColor: colors.input,
+                      borderColor: colors.border,
+                      color: colors.foreground,
+                      width: 90,
+                      textAlign: "center",
+                    },
+                  ]}
+                />
+
+                <Text style={{ color: colors.foreground, fontWeight: "700" }}>
+                  ₪
+                </Text>
+              </View>
+            </View>
+          </View>
+        ))}
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.field}>
+          <Text
+            style={[
+              styles.fieldLabel,
+              {
+                color: colors.mutedForeground,
+                fontSize: 12,
+                textAlign: "right",
+              },
+            ]}
+          >
+            مثال: حد أدنى 500 ₪، الضفة 0 ₪، القدس 10 ₪،
+            أراضي الـ48 50 ₪. عند وصول الطلب إلى 500 ₪ يطبق السعر
+            المخفض تلقائياً.
           </Text>
         </View>
       </Section>

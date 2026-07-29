@@ -34,6 +34,90 @@ import { API_BASE } from "@/constants/api";
 
 type Step = "cart" | "checkout" | "payment" | "success";
 
+function getStoreDate(): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+
+    const values = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
+
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function isShippingPromotionActive(
+  productsTotal: number,
+  enabled: boolean,
+  threshold: number,
+  startDate: string,
+  endDate: string,
+): boolean {
+  if (!enabled) return false;
+
+  const safeThreshold =
+    Number.isInteger(threshold) && threshold >= 0 ? threshold : 0;
+
+  if (productsTotal < safeThreshold) return false;
+
+  const today = getStoreDate();
+
+  if (startDate) {
+    if (!isValidDateOnly(startDate) || today < startDate) return false;
+  }
+
+  if (endDate) {
+    if (!isValidDateOnly(endDate) || today > endDate) return false;
+  }
+
+  return true;
+}
+
+function getShippingCost(
+  zone: ShippingZone,
+  productsTotal: number,
+  enabled: boolean,
+  threshold: number,
+  startDate: string,
+  endDate: string,
+): number {
+  const active = isShippingPromotionActive(
+    productsTotal,
+    enabled,
+    threshold,
+    startDate,
+    endDate,
+  );
+
+  if (!active) return zone.cost;
+
+  return typeof zone.promoCost === "number" &&
+    Number.isInteger(zone.promoCost) &&
+    zone.promoCost >= 0
+    ? zone.promoCost
+    : zone.cost;
+}
+
 export default function CartScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -100,8 +184,16 @@ export default function CartScreen() {
 
     setLoading(true);
 
-    const shippingCost = selectedZone.cost;
-    const currentTotal = totalPrice + shippingCost;
+    let shippingCost = getShippingCost(
+      selectedZone,
+      totalPrice,
+      settings.shippingPromotionEnabled === true,
+      settings.shippingPromotionThreshold ?? 500,
+      settings.shippingPromotionStartDate ?? "",
+      settings.shippingPromotionEndDate ?? "",
+    );
+
+    let currentTotal = totalPrice + shippingCost;
     const currentItems = [...items];
 
     try {
@@ -140,8 +232,29 @@ export default function CartScreen() {
           );
         }
 
-        const order = await res.json();
+        const order = (await res.json()) as {
+          id: number;
+          shippingCost?: number;
+          totalPrice?: number;
+        };
+
         setOrderId(order.id);
+
+        if (
+          typeof order.shippingCost === "number" &&
+          Number.isInteger(order.shippingCost) &&
+          order.shippingCost >= 0
+        ) {
+          shippingCost = order.shippingCost;
+        }
+
+        if (
+          typeof order.totalPrice === "number" &&
+          Number.isInteger(order.totalPrice) &&
+          order.totalPrice >= 0
+        ) {
+          currentTotal = order.totalPrice;
+        }
       } catch (error) {
         Alert.alert(
           "تعذّر إنشاء الطلب",
@@ -404,7 +517,25 @@ export default function CartScreen() {
       { label: "القدس", cost: 30 },
       { label: "أراضي الـ48", cost: 70 },
     ];
-    const shippingCost = selectedZone?.cost ?? 0;
+    const promotionActive = isShippingPromotionActive(
+      totalPrice,
+      settings.shippingPromotionEnabled === true,
+      settings.shippingPromotionThreshold ?? 500,
+      settings.shippingPromotionStartDate ?? "",
+      settings.shippingPromotionEndDate ?? "",
+    );
+
+    const shippingCost = selectedZone
+      ? getShippingCost(
+          selectedZone,
+          totalPrice,
+          settings.shippingPromotionEnabled === true,
+          settings.shippingPromotionThreshold ?? 500,
+          settings.shippingPromotionStartDate ?? "",
+          settings.shippingPromotionEndDate ?? "",
+        )
+      : 0;
+
     const finalTotal = totalPrice + shippingCost;
     const canSubmit = name.trim().length > 0 && phone.trim().length > 0 && address.trim().length > 0 && selectedZone !== null;
     return (
@@ -481,6 +612,16 @@ export default function CartScreen() {
           <View style={styles.zoneOptions}>
             {shippingZones.map((zone) => {
               const isSelected = selectedZone?.label === zone.label;
+
+              const displayedCost = getShippingCost(
+                zone,
+                totalPrice,
+                settings.shippingPromotionEnabled === true,
+                settings.shippingPromotionThreshold ?? 500,
+                settings.shippingPromotionStartDate ?? "",
+                settings.shippingPromotionEndDate ?? "",
+              );
+
               return (
                 <Pressable
                   key={zone.label}
@@ -495,7 +636,9 @@ export default function CartScreen() {
                 >
                   <View style={styles.zoneOptionContent}>
                     <Text style={[styles.zoneOptionCost, { color: isSelected ? colors.primary : colors.foreground }]}>
-                      {zone.cost}₪
+                      {promotionActive && displayedCost !== zone.cost
+                        ? `${displayedCost}₪ بدل ${zone.cost}₪`
+                        : `${displayedCost}₪`}
                     </Text>
                     <Text style={[styles.zoneOptionLabel, { color: isSelected ? colors.primary : colors.foreground }]}>
                       {zone.label}
@@ -714,10 +857,33 @@ export default function CartScreen() {
               <Text style={[styles.totalPrice, { color: colors.primary }]}>{totalPrice} ₪</Text>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>الإجمالي</Text>
             </View>
-            {totalPrice >= 500 && (
-              <View style={[styles.freeShipping, { backgroundColor: "#22c55e20" }]}>
-                <Ionicons name="rocket-outline" size={16} color="#22c55e" />
-                <Text style={{ color: "#22c55e", fontSize: 13, fontWeight: "600" }}>الشحن مجاني</Text>
+            {isShippingPromotionActive(
+              totalPrice,
+              settings.shippingPromotionEnabled === true,
+              settings.shippingPromotionThreshold ?? 500,
+              settings.shippingPromotionStartDate ?? "",
+              settings.shippingPromotionEndDate ?? "",
+            ) && (
+              <View
+                style={[
+                  styles.freeShipping,
+                  { backgroundColor: "#22c55e20" },
+                ]}
+              >
+                <Ionicons
+                  name="rocket-outline"
+                  size={16}
+                  color="#22c55e"
+                />
+                <Text
+                  style={{
+                    color: "#22c55e",
+                    fontSize: 13,
+                    fontWeight: "600",
+                  }}
+                >
+                  🚚 عرض الشحن مطبق على هذا الطلب
+                </Text>
               </View>
             )}
             <Pressable
