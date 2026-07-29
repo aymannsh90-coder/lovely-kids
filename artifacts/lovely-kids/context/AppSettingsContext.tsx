@@ -90,6 +90,9 @@ export interface AppSettings {
   heroSlides: HeroSlide[];
   offers: Offer[];
   productOffersSectionEnabled: boolean;
+  homeSpecialOffersSectionEnabled: boolean;
+  homeAgeGroupsSectionEnabled: boolean;
+  homeFeaturesSectionEnabled: boolean;
   ageGroupLabels: Record<string, AgeGroupLabel>;
   categoryLabels: Record<string, string>;
   hiddenCategories: string[];
@@ -123,6 +126,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   bannerBadge: "خصم 20%",
   heroSlides: [],
   productOffersSectionEnabled: false,
+  homeSpecialOffersSectionEnabled: true,
+  homeAgeGroupsSectionEnabled: true,
+  homeFeaturesSectionEnabled: true,
   offers: [
     {
       id: "offer1",

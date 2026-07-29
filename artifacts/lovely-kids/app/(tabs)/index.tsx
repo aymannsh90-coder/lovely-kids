@@ -163,8 +163,11 @@ export default function HomeScreen() {
 
   const newArrivals = genderFiltered.filter((p) => p.isNew);
 
-  const filteredProducts = selectedAge
-    ? genderFiltered.filter((p) => p.ageGroup === selectedAge)
+  const selectedAgeForProducts =
+    settings.homeAgeGroupsSectionEnabled !== false ? selectedAge : null;
+
+  const filteredProducts = selectedAgeForProducts
+    ? genderFiltered.filter((p) => p.ageGroup === selectedAgeForProducts)
     : genderFiltered.slice(0, 6);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -387,7 +390,8 @@ export default function HomeScreen() {
       </View>
 
       {/* Active Offers */}
-      {activeOffers.length > 0 && (
+      {settings.homeSpecialOffersSectionEnabled !== false &&
+        activeOffers.length > 0 && (
         <>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
             🏷️ عروض خاصة
@@ -417,6 +421,8 @@ export default function HomeScreen() {
         </>
       )}
 
+      {settings.homeAgeGroupsSectionEnabled !== false ? (
+        <>
       {/* Age Groups */}
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
         تسوقي حسب عمر الطفل
@@ -488,6 +494,11 @@ export default function HomeScreen() {
         </Animated.View>
       </View>
 
+        </>
+      ) : null}
+
+      {settings.homeFeaturesSectionEnabled !== false ? (
+        <>
       {/* Features */}
       <View style={styles.features}>
         {[
@@ -510,6 +521,9 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>
+
+        </>
+      ) : null}
 
       {/* New Arrivals */}
       {newArrivals.length > 0 ? (
@@ -597,8 +611,8 @@ export default function HomeScreen() {
       {/* Products Grid */}
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {selectedAge
-            ? ageGroups.find((a) => a.id === selectedAge)?.label
+          {selectedAgeForProducts
+            ? ageGroups.find((a) => a.id === selectedAgeForProducts)?.label
             : "كل المنتجات"}
         </Text>
         <Pressable onPress={() => router.push("/products")}>

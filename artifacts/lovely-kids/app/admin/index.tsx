@@ -53,6 +53,12 @@ const ADMIN_CARDS = [
     route: "/admin/shipping-promotion" as const,
   },
   {
+    label: "أقسام الصفحة الرئيسية",
+    subtitle: "إظهار وإخفاء أقسام الرئيسية",
+    icon: "eye-outline" as const,
+    route: "/admin/home-sections" as const,
+  },
+  {
     label: "إعدادات التطبيق",
     subtitle: "جميع الإعدادات",
     icon: "settings-outline" as const,
