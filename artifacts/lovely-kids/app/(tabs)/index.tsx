@@ -23,6 +23,7 @@ import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { enableWebPushNotifications } from "@/hooks/usePushNotifications";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 
 type InstallPromptEvent = Event & {
@@ -55,6 +56,7 @@ export default function HomeScreen() {
   const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
   const { user, getAuthToken } = useAuth();
+  const { count: wishlistCount } = useWishlist();
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const ageGroups = AGE_GROUP_IDS.map((id) => ({
     id,
@@ -205,6 +207,13 @@ export default function HomeScreen() {
             style={styles.iconBtn}
           >
             <Ionicons name="heart-outline" size={24} color={colors.foreground} />
+            {wishlistCount > 0 && (
+              <View style={[styles.wishlistBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.wishlistBadgeText}>
+                  {wishlistCount > 99 ? "99+" : wishlistCount}
+                </Text>
+              </View>
+            )}
           </Pressable>
           <CartBadge />
         </View>
@@ -686,6 +695,22 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: "center",
     justifyContent: "center",
+  },
+  wishlistBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  wishlistBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
   },
   searchBar: {
     marginHorizontal: 16,
