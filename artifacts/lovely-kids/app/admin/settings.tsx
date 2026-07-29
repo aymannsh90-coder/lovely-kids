@@ -75,6 +75,33 @@ export default function SettingsScreen() {
   const [draftBannerSubtitle, setDraftBannerSubtitle] = useState(settings.bannerSubtitle);
   const [draftBannerBadge, setDraftBannerBadge] = useState(settings.bannerBadge);
 
+  const [draftShippingPromotionEnabled, setDraftShippingPromotionEnabled] =
+    useState(settings.shippingPromotionEnabled === true);
+  const [
+    draftShippingPromotionThreshold,
+    setDraftShippingPromotionThreshold,
+  ] = useState(String(settings.shippingPromotionThreshold ?? 500));
+  const [
+    draftShippingPromotionStartDate,
+    setDraftShippingPromotionStartDate,
+  ] = useState(settings.shippingPromotionStartDate ?? "");
+  const [
+    draftShippingPromotionEndDate,
+    setDraftShippingPromotionEndDate,
+  ] = useState(settings.shippingPromotionEndDate ?? "");
+  const [draftShippingPromoCosts, setDraftShippingPromoCosts] = useState<
+    Record<string, string>
+  >(() =>
+    Object.fromEntries(
+      (settings.shippingZones ?? []).map((zone) => [
+        zone.label,
+        String(zone.promoCost ?? zone.cost),
+      ]),
+    ),
+  );
+  const [shippingPromoSaving, setShippingPromoSaving] = useState(false);
+  const [shippingPromoSaved, setShippingPromoSaved] = useState(false);
+
   const initializedRef = useRef(false);
   useEffect(() => {
     if (settingsReady && !initializedRef.current) {
@@ -86,6 +113,27 @@ export default function SettingsScreen() {
       setDraftBannerTitle(settings.bannerTitle);
       setDraftBannerSubtitle(settings.bannerSubtitle);
       setDraftBannerBadge(settings.bannerBadge);
+
+      setDraftShippingPromotionEnabled(
+        settings.shippingPromotionEnabled === true,
+      );
+      setDraftShippingPromotionThreshold(
+        String(settings.shippingPromotionThreshold ?? 500),
+      );
+      setDraftShippingPromotionStartDate(
+        settings.shippingPromotionStartDate ?? "",
+      );
+      setDraftShippingPromotionEndDate(
+        settings.shippingPromotionEndDate ?? "",
+      );
+      setDraftShippingPromoCosts(
+        Object.fromEntries(
+          (settings.shippingZones ?? []).map((zone) => [
+            zone.label,
+            String(zone.promoCost ?? zone.cost),
+          ]),
+        ),
+      );
     }
   }, [settingsReady, settings.primaryColor, settings.backgroundColor, settings.secondaryColor, settings.bannerColor]);
 
@@ -111,6 +159,128 @@ export default function SettingsScreen() {
         "فشل حفظ الألوان",
         "تعذّر حفظ الألوان في السيرفر.\nتأكد من اتصالك بالإنترنت وأن حسابك يملك صلاحية أدمن.",
         [{ text: "حسناً" }]
+      );
+    }
+  };
+
+  const handleSaveShippingPromotion = async () => {
+    const thresholdText = draftShippingPromotionThreshold.trim();
+
+    if (!/^\d+$/.test(thresholdText)) {
+      Alert.alert(
+        "قيمة غير صالحة",
+        "أدخل الحد الأدنى لقيمة المشتريات كرقم صحيح، ويمكنك وضع 0 لتطبيق العرض على جميع الطلبات.",
+      );
+      return;
+    }
+
+    const threshold = Number(thresholdText);
+
+    if (!Number.isSafeInteger(threshold) || threshold < 0) {
+      Alert.alert(
+        "قيمة غير صالحة",
+        "الحد الأدنى لقيمة المشتريات يجب أن يكون 0 أو أكثر.",
+      );
+      return;
+    }
+
+    const startDate = draftShippingPromotionStartDate.trim();
+    const endDate = draftShippingPromotionEndDate.trim();
+
+    const isValidDate = (value: string) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+      const [year, month, day] = value.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+
+      return (
+        date.getUTCFullYear() === year &&
+        date.getUTCMonth() === month - 1 &&
+        date.getUTCDate() === day
+      );
+    };
+
+    if (startDate && !isValidDate(startDate)) {
+      Alert.alert(
+        "تاريخ البداية غير صالح",
+        "اكتب تاريخ البداية بالشكل YYYY-MM-DD مثل 2026-08-01.",
+      );
+      return;
+    }
+
+    if (endDate && !isValidDate(endDate)) {
+      Alert.alert(
+        "تاريخ النهاية غير صالح",
+        "اكتب تاريخ النهاية بالشكل YYYY-MM-DD مثل 2026-08-31.",
+      );
+      return;
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      Alert.alert(
+        "الفترة غير صالحة",
+        "تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساويًا له.",
+      );
+      return;
+    }
+
+    for (const zone of settings.shippingZones ?? []) {
+      const value = (
+        draftShippingPromoCosts[zone.label] ??
+        String(zone.promoCost ?? zone.cost)
+      ).trim();
+
+      if (!/^\d+$/.test(value)) {
+        Alert.alert(
+          "سعر عرض غير صالح",
+          `أدخل سعر عرض صحيح لمنطقة ${zone.label}. يمكن وضع 0 للشحن المجاني.`,
+        );
+        return;
+      }
+
+      const promoCost = Number(value);
+
+      if (!Number.isSafeInteger(promoCost) || promoCost < 0) {
+        Alert.alert(
+          "سعر عرض غير صالح",
+          `سعر عرض ${zone.label} يجب أن يكون 0 أو أكثر.`,
+        );
+        return;
+      }
+    }
+
+    const shippingZones = (settings.shippingZones ?? []).map((zone) => ({
+      ...zone,
+      promoCost: Number(
+        (
+          draftShippingPromoCosts[zone.label] ??
+          String(zone.promoCost ?? zone.cost)
+        ).trim(),
+      ),
+    }));
+
+    setShippingPromoSaving(true);
+
+    const ok = await updateSettings({
+      shippingPromotionEnabled: draftShippingPromotionEnabled,
+      shippingPromotionThreshold: threshold,
+      shippingPromotionStartDate: startDate,
+      shippingPromotionEndDate: endDate,
+      shippingZones,
+    });
+
+    setShippingPromoSaving(false);
+
+    if (ok) {
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+      setShippingPromoSaved(true);
+      setTimeout(() => setShippingPromoSaved(false), 2000);
+    } else {
+      Alert.alert(
+        "فشل حفظ عرض الشحن",
+        "تعذّر حفظ إعدادات عرض الشحن في السيرفر. تحقق من الإنترنت وصلاحية حساب الأدمن.",
       );
     }
   };
@@ -570,10 +740,8 @@ export default function SettingsScreen() {
           </View>
 
           <Switch
-            value={settings.shippingPromotionEnabled === true}
-            onValueChange={(value) => {
-              void updateSettings({ shippingPromotionEnabled: value });
-            }}
+            value={draftShippingPromotionEnabled}
+            onValueChange={setDraftShippingPromotionEnabled}
           />
         </View>
 
@@ -588,13 +756,12 @@ export default function SettingsScreen() {
             }}
           >
             <TextInput
-              value={String(settings.shippingPromotionThreshold ?? 500)}
-              onChangeText={(value) => {
-                const amount = parseInt(value.replace(/\D/g, ""), 10);
-                updateSettings({
-                  shippingPromotionThreshold: isNaN(amount) ? 0 : amount,
-                });
-              }}
+              value={draftShippingPromotionThreshold}
+              onChangeText={(value) =>
+                setDraftShippingPromotionThreshold(
+                  value.replace(/\D/g, ""),
+                )
+              }
               keyboardType="number-pad"
               style={[
                 styles.fieldInput,
@@ -631,10 +798,8 @@ export default function SettingsScreen() {
 
         <Field
           label="من تاريخ"
-          value={settings.shippingPromotionStartDate ?? ""}
-          onChangeText={(value) =>
-            updateSettings({ shippingPromotionStartDate: value.trim() })
-          }
+          value={draftShippingPromotionStartDate}
+          onChangeText={setDraftShippingPromotionStartDate}
           placeholder="2026-08-01"
         />
 
@@ -642,10 +807,8 @@ export default function SettingsScreen() {
 
         <Field
           label="إلى تاريخ"
-          value={settings.shippingPromotionEndDate ?? ""}
-          onChangeText={(value) =>
-            updateSettings({ shippingPromotionEndDate: value.trim() })
-          }
+          value={draftShippingPromotionEndDate}
+          onChangeText={setDraftShippingPromotionEndDate}
           placeholder="2026-08-31"
         />
 
@@ -666,7 +829,7 @@ export default function SettingsScreen() {
           أسعار التوصيل خلال العرض
         </Text>
 
-        {(settings.shippingZones ?? []).map((zone, index) => (
+        {(settings.shippingZones ?? []).map((zone) => (
           <View key={zone.label}>
             <View
               style={[
@@ -695,22 +858,16 @@ export default function SettingsScreen() {
                 }}
               >
                 <TextInput
-                  value={String(zone.promoCost ?? zone.cost)}
-                  onChangeText={(value) => {
-                    const promoCost = parseInt(
-                      value.replace(/\D/g, ""),
-                      10,
-                    );
-
-                    const zones = [...(settings.shippingZones ?? [])];
-
-                    zones[index] = {
-                      ...zones[index],
-                      promoCost: isNaN(promoCost) ? 0 : promoCost,
-                    };
-
-                    updateSettings({ shippingZones: zones });
-                  }}
+                  value={
+                    draftShippingPromoCosts[zone.label] ??
+                    String(zone.promoCost ?? zone.cost)
+                  }
+                  onChangeText={(value) =>
+                    setDraftShippingPromoCosts((prev) => ({
+                      ...prev,
+                      [zone.label]: value.replace(/\D/g, ""),
+                    }))
+                  }
                   keyboardType="number-pad"
                   style={[
                     styles.fieldInput,
@@ -748,6 +905,56 @@ export default function SettingsScreen() {
             مثال: حد أدنى 500 ₪، الضفة 0 ₪، القدس 10 ₪،
             أراضي الـ48 50 ₪. عند وصول الطلب إلى 500 ₪ يطبق السعر
             المخفض تلقائياً.
+          </Text>
+        </View>
+
+        <View style={styles.field}>
+          <Pressable
+            onPress={() => void handleSaveShippingPromotion()}
+            disabled={shippingPromoSaving}
+            style={[
+              styles.saveColorsBtn,
+              {
+                backgroundColor: shippingPromoSaved
+                  ? "#22c55e"
+                  : shippingPromoSaving
+                    ? colors.muted
+                    : colors.primary,
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                shippingPromoSaved
+                  ? "checkmark-circle"
+                  : shippingPromoSaving
+                    ? "hourglass-outline"
+                    : "save-outline"
+              }
+              size={19}
+              color="#fff"
+            />
+            <Text style={styles.saveColorsBtnText}>
+              {shippingPromoSaved
+                ? "تم حفظ عرض الشحن ✓"
+                : shippingPromoSaving
+                  ? "جاري الحفظ..."
+                  : "حفظ إعدادات عرض الشحن"}
+            </Text>
+          </Pressable>
+
+          <Text
+            style={[
+              styles.fieldLabel,
+              {
+                color: colors.mutedForeground,
+                fontSize: 11,
+                textAlign: "center",
+                marginTop: 8,
+              },
+            ]}
+          >
+            لن تُحفظ التعديلات إلا عند الضغط على زر الحفظ
           </Text>
         </View>
       </Section>
