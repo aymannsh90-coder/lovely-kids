@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useGlobalSearchParams, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Dimensions,
@@ -24,7 +24,8 @@ import { useColors } from "@/hooks/useColors";
 const { width } = Dimensions.get("window");
 
 export default function ProductsScreen() {
-  const { category, fromMenu, offers } = useLocalSearchParams<{ category?: string; fromMenu?: string; offers?: string }>();
+  const { category, fromMenu } = useLocalSearchParams<{ category?: string; fromMenu?: string }>();
+  const { offers } = useGlobalSearchParams<{ offers?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { products } = useVisibleProducts();
