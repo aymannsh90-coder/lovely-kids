@@ -347,10 +347,7 @@ export default function HomeScreen() {
       {showProductOffersButton ? (
         <Pressable
           onPress={() =>
-            router.push({
-              pathname: "/products",
-              params: { offers: "1" },
-            })
+            router.push("/offers")
           }
           style={[styles.installBtn, { backgroundColor: "#FFD54F" }]}
         >
