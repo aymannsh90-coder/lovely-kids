@@ -217,7 +217,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#fff", flex: 1, textAlign: "center" },
   countBanner: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   textArea: { height: 90, paddingTop: 12 },
   charCount: { fontSize: 11, textAlign: "left" },
   sectionLabel: { fontSize: 13, fontWeight: "600", textAlign: "right", marginBottom: 8 },
-  templates: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginBottom: 20 },
+  templates: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   chipText: { fontSize: 13, fontWeight: "600" },
   resultBox: {
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   resultText: { fontSize: 14, fontWeight: "600", textAlign: "right", lineHeight: 22 },
   sendBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,

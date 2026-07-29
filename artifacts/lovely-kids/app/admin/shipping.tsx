@@ -100,7 +100,7 @@ export default function AdminShippingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
   body: { padding: 16, gap: 12, width: "100%", maxWidth: 650, alignSelf: "center" },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     borderWidth: 1,
     borderRadius: 16,
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderRadius: 10,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     paddingHorizontal: 10,
   },
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 14,
     paddingVertical: 14,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,

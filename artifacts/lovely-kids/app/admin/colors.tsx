@@ -90,7 +90,7 @@ export default function AdminColorsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     borderRadius: 14,
     paddingVertical: 14,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,

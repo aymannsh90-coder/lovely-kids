@@ -517,7 +517,7 @@ export default function AdminUsersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 16, fontWeight: "600" },
   list: { padding: 14, gap: 10 },
   card: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 12,
     padding: 14,
@@ -540,7 +540,7 @@ const styles = StyleSheet.create({
   avatar: { width: 46, height: 46, borderRadius: 23 },
   avatarFallback: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
   info: { flex: 1, gap: 3, alignItems: "flex-end" },
-  nameRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  nameRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   name: { fontSize: 14, fontWeight: "700" },
   badge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
   badgeText: { color: "#fff", fontSize: 10, fontWeight: "700" },

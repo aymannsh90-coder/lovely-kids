@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     height: 1,
   },
   saveButton: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 9,
