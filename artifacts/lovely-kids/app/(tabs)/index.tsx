@@ -73,6 +73,22 @@ export default function HomeScreen() {
   const [webPushEnabled, setWebPushEnabled] = useState(false);
 
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
+  const newArrivalsScrollRef = useRef<ScrollView>(null);
+  const newArrivalsScrollX = useRef(0);
+
+  const scrollNewArrivals = (direction: "left" | "right") => {
+    const step = Math.max(180, Math.min(width * 0.75, 360));
+    const nextX = Math.max(
+      0,
+      newArrivalsScrollX.current + (direction === "left" ? step : -step),
+    );
+
+    newArrivalsScrollX.current = nextX;
+    newArrivalsScrollRef.current?.scrollTo({
+      x: nextX,
+      animated: true,
+    });
+  };
 
   useEffect(() => {
     Animated.timing(ageArrowAnim, {
@@ -316,36 +332,6 @@ export default function HomeScreen() {
         </Pressable>
       )}
 
-      {/* New Arrivals */}
-      {newArrivals.length > 0 ? (
-        <>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              وصل حديثاً
-            </Text>
-            <Pressable onPress={() => router.push("/products")}>
-              <Text style={[styles.seeAll, { color: colors.primary }]}>
-                عرض الكل
-              </Text>
-            </Pressable>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalScroll}
-          >
-            {newArrivals.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                style={{ width: 170 }}
-              />
-            ))}
-          </ScrollView>
-        </>
-      ) : null}
-
       {showProductOffersButton ? (
         <Pressable
           onPress={() =>
@@ -525,12 +511,95 @@ export default function HomeScreen() {
         ))}
       </View>
 
+      {/* New Arrivals */}
+      {newArrivals.length > 0 ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              وصل حديثاً
+            </Text>
+
+            <Pressable onPress={() => router.push("/products")}>
+              <Text style={[styles.seeAll, { color: colors.primary }]}>
+                عرض الكل
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.newArrivalsScrollWrapper}>
+            {newArrivals.length > 2 ? (
+              <>
+                <Pressable
+                  onPress={() => scrollNewArrivals("right")}
+                  style={({ pressed }) => [
+                    styles.newArrivalsArrow,
+                    styles.newArrivalsArrowRight,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 0.95,
+                    },
+                  ]}
+                  accessibilityLabel="تحريك وصل حديثاً إلى اليمين"
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => scrollNewArrivals("left")}
+                  style={({ pressed }) => [
+                    styles.newArrivalsArrow,
+                    styles.newArrivalsArrowLeft,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 0.95,
+                    },
+                  ]}
+                  accessibilityLabel="تحريك وصل حديثاً إلى اليسار"
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              </>
+            ) : null}
+
+            <ScrollView
+              ref={newArrivalsScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.newArrivalsHorizontalScroll}
+              onScroll={(event) => {
+                newArrivalsScrollX.current =
+                  event.nativeEvent.contentOffset.x;
+              }}
+              scrollEventThrottle={16}
+            >
+              {newArrivals.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  style={{ width: 170 }}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        </>
+      ) : null}
+
       {/* Products Grid */}
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           {selectedAge
             ? ageGroups.find((a) => a.id === selectedAge)?.label
-            : "منتجاتنا المميزة"}
+            : "كل المنتجات"}
         </Text>
         <Pressable onPress={() => router.push("/products")}>
           <Text style={[styles.seeAll, { color: colors.primary }]}>عرض الكل</Text>
@@ -783,6 +852,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
     marginBottom: 20,
+  },
+  newArrivalsScrollWrapper: {
+    position: "relative",
+    marginBottom: 20,
+  },
+  newArrivalsArrow: {
+    position: "absolute",
+    top: "40%",
+    zIndex: 5,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 3,
+  },
+  newArrivalsArrowRight: {
+    right: 6,
+  },
+  newArrivalsArrowLeft: {
+    left: 6,
+  },
+  newArrivalsHorizontalScroll: {
+    paddingHorizontal: 48,
+    gap: 12,
+    paddingBottom: 4,
   },
   horizontalScroll: {
     paddingHorizontal: 16,
