@@ -124,7 +124,10 @@ export default function ProductsScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoriesScroll}
-        style={{ marginBottom: 8, height: 44, minHeight: 44, maxHeight: 44, flexShrink: 0 }}
+        style={[
+          { marginBottom: 8, height: 44, minHeight: 44, maxHeight: 44, flexShrink: 0 },
+          Platform.OS === "web" ? { direction: "rtl" } : null,
+        ]}
       >
         {categories.map((cat) => (
           <Pressable
@@ -160,7 +163,10 @@ export default function ProductsScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoriesScroll}
-        style={{ marginBottom: 4, height: 44, minHeight: 44, maxHeight: 44, flexShrink: 0 }}
+        style={[
+          { marginBottom: 4, height: 44, minHeight: 44, maxHeight: 44, flexShrink: 0 },
+          Platform.OS === "web" ? { direction: "rtl" } : null,
+        ]}
       >
         {seasons.map((s) => (
           <Pressable
