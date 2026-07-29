@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DateField } from "@/components/DateField";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -315,42 +316,18 @@ export default function ShippingPromotionScreen() {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>
-            من تاريخ
-          </Text>
-          <TextInput
+          <DateField
+            label="من تاريخ"
             value={startDate}
-            onChangeText={setStartDate}
-            placeholder="2026-08-01"
-            placeholderTextColor={colors.mutedForeground}
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.input,
-                borderColor: colors.border,
-                color: colors.foreground,
-              },
-            ]}
-            textAlign="right"
+            onChange={setStartDate}
+            colors={colors}
           />
 
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>
-            إلى تاريخ
-          </Text>
-          <TextInput
+          <DateField
+            label="إلى تاريخ"
             value={endDate}
-            onChangeText={setEndDate}
-            placeholder="2026-08-31"
-            placeholderTextColor={colors.mutedForeground}
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.input,
-                borderColor: colors.border,
-                color: colors.foreground,
-              },
-            ]}
-            textAlign="right"
+            onChange={setEndDate}
+            colors={colors}
           />
         </View>
 

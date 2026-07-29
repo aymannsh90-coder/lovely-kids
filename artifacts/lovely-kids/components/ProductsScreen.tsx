@@ -25,8 +25,10 @@ const { width } = Dimensions.get("window");
 
 export default function ProductsScreen({
   offersOnly = false,
+  newOnly = false,
 }: {
   offersOnly?: boolean;
+  newOnly?: boolean;
 }) {
   const { category, fromMenu } = useLocalSearchParams<{
     category?: string;
@@ -61,16 +63,19 @@ export default function ProductsScreen({
   }, [categories, selectedCategory]);
 
   const isOffersView = offersOnly;
+  const isNewArrivalsView = newOnly;
+  const isSpecialView = isOffersView || isNewArrivalsView;
 
   const filtered = products.filter((p) => {
     const matchOffers = !isOffersView || p.showInOffers === true;
+    const matchNew = !isNewArrivalsView || p.isNew === true;
     const matchCat =
       selectedCategory === "all" || p.category === selectedCategory;
     const matchSeason =
       selectedSeason === "all" || p.season === selectedSeason;
     const matchSearch =
       !search || p.nameAr.includes(search) || p.name.toLowerCase().includes(search.toLowerCase());
-    return matchOffers && matchCat && matchSeason && matchSearch;
+    return matchOffers && matchNew && matchCat && matchSeason && matchSearch;
   });
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -85,29 +90,39 @@ export default function ProductsScreen({
         ]}
       >
         <View style={styles.headerRow}>
-          {(fromMenu === "1" || isOffersView) && (
-            <Pressable
-              onPress={() => {
-                if (isOffersView) {
-                  router.back();
-                  return;
-                }
+          <Pressable
+            onPress={() => {
+              if (isSpecialView) {
+                router.back();
+                return;
+              }
+
+              if (fromMenu === "1") {
                 router.replace({
                   pathname: "/(tabs)",
                   params: { openCategories: String(Date.now()) },
                 });
-              }}
-              style={styles.backButton}
-              accessibilityLabel="رجوع"
-            >
+                return;
+              }
+
+              router.replace("/(tabs)");
+            }}
+            style={styles.backButton}
+            accessibilityLabel="رجوع"
+          >
               <Ionicons
                 name="arrow-forward-outline"
                 size={24}
                 color={colors.foreground}
               />
-            </Pressable>
-          )}
-          <Text style={[styles.title, { color: colors.foreground }]}>{isOffersView ? "🔥 العروض" : "المنتجات"}</Text>
+          </Pressable>
+          <Text style={[styles.title, { color: colors.foreground }]}>
+            {isOffersView
+              ? "🔥 العروض"
+              : isNewArrivalsView
+                ? "وصل حديثاً"
+                : "المنتجات"}
+          </Text>
         </View>
       </View>
 

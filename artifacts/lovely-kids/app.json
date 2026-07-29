@@ -86,7 +86,8 @@
             "./assets/sounds/lovely_kids_bell.wav"
           ]
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

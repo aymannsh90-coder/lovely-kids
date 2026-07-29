@@ -544,7 +544,7 @@ export default function HomeScreen() {
               وصل حديثاً
             </Text>
 
-            <Pressable onPress={() => router.push("/products")}>
+            <Pressable onPress={() => router.push("/new-arrivals")}>
               <Text style={[styles.seeAll, { color: colors.primary }]}>
                 عرض الكل
               </Text>
