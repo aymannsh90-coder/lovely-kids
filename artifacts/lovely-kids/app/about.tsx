@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  featureText: { flex: 1, alignItems: "flex-end", gap: 4 },
+  featureText: { flex: 1, alignItems: Platform.OS === "web" ? "flex-end" : "flex-start", gap: 4 },
   featureTitle: { fontSize: 15, fontWeight: "700" },
   featureDesc: { fontSize: 13, textAlign: "right", lineHeight: 18 },
   ctaBtn: {

@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   priceRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 2,
