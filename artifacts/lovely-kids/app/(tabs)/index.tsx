@@ -316,6 +316,36 @@ export default function HomeScreen() {
         </Pressable>
       )}
 
+      {/* New Arrivals */}
+      {newArrivals.length > 0 ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              وصل حديثاً
+            </Text>
+            <Pressable onPress={() => router.push("/products")}>
+              <Text style={[styles.seeAll, { color: colors.primary }]}>
+                عرض الكل
+              </Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalScroll}
+          >
+            {newArrivals.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                style={{ width: 170 }}
+              />
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
+
       {showProductOffersButton ? (
         <Pressable
           onPress={() =>
@@ -517,29 +547,6 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      {/* New Arrivals */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          وصل حديثاً
-        </Text>
-        <Pressable onPress={() => router.push("/products")}>
-          <Text style={[styles.seeAll, { color: colors.primary }]}>عرض الكل</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.horizontalScroll}
-      >
-        {newArrivals.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            style={{ width: 170 }}
-          />
-        ))}
-      </ScrollView>
 
       {/* Contact Banner */}
       <Pressable
