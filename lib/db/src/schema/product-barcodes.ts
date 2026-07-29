@@ -24,7 +24,7 @@ export const productBarcodesTable = pgTable(
   (table) => [
     uniqueIndex("product_barcodes_barcode_idx").on(table.barcode),
   ],
-);
+).enableRLS();
 
 export type DbProductBarcode = typeof productBarcodesTable.$inferSelect;
 

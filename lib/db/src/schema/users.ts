@@ -14,7 +14,7 @@ export const usersTable = pgTable("users", {
   isAdmin: boolean("is_admin").notNull().default(false),
   isOwner: boolean("is_owner").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}).enableRLS();
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({
   id: true,

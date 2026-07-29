@@ -44,7 +44,7 @@ export const productsTable = pgTable("products", {
   description: text("description").notNull().default(""),
   stock: integer("stock"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}).enableRLS();
 
 export const insertProductSchema = createInsertSchema(productsTable).omit({
   id: true,

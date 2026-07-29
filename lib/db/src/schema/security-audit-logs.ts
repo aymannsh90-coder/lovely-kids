@@ -21,4 +21,4 @@ export const securityAuditLogsTable = pgTable(
     details: jsonb("details").notNull().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-);
+).enableRLS();

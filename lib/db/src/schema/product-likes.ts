@@ -11,6 +11,6 @@ export const productLikesTable = pgTable(
   (table) => [
     uniqueIndex("product_likes_user_product_idx").on(table.userId, table.productId),
   ]
-);
+).enableRLS();
 
 export type DbProductLike = typeof productLikesTable.$inferSelect;

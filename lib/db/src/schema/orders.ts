@@ -21,7 +21,7 @@ export const ordersTable = pgTable("orders", {
   printedAt: timestamp("printed_at"),
   printCount: integer("print_count").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}).enableRLS();
 
 export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   id: true,

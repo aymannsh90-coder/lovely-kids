@@ -8,7 +8,7 @@ export const webPushSubscriptionsTable = pgTable("web_push_subscriptions", {
   phone: text("phone"),
   isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}).enableRLS();
 
 export type WebPushSubscription =
   typeof webPushSubscriptionsTable.$inferSelect;

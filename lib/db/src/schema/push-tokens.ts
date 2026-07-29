@@ -6,6 +6,6 @@ export const pushTokensTable = pgTable("push_tokens", {
   phone: text("phone"),
   isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}).enableRLS();
 
 export type PushToken = typeof pushTokensTable.$inferSelect;

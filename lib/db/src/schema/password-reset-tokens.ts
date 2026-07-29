@@ -7,6 +7,6 @@ export const passwordResetTokensTable = pgTable("password_reset_tokens", {
   expiresAt: timestamp("expires_at").notNull(),
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}).enableRLS();
 
 export type DbPasswordResetToken = typeof passwordResetTokensTable.$inferSelect;
