@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     paddingVertical: 14,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-around",
   },
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   },
 
   cardsGrid: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     flexWrap: "wrap",
     gap: 10,
   },
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
-    alignItems: "flex-end",
+    alignItems: Platform.OS === "web" ? "flex-end" : "flex-start",
     gap: 7,
     minHeight: 132,
   },
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   quickHeader: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 10,
   },
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   },
 
   seasonRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     gap: 10,
   },
   seasonBtn: {
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   },
 
   shippingRow: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 10,
   },
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderWidth: 1,
     borderRadius: 10,
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
   },
 
   saveQuickBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
 
   categoryChips: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     flexWrap: "wrap",
     gap: 7,
   },
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   },
 
   manageBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   quickGrid: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     flexWrap: "wrap",
     gap: 10,
   },

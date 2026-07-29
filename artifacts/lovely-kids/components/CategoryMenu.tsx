@@ -199,7 +199,8 @@ const styles = StyleSheet.create({
   drawer: {
     position: "absolute",
     top: 0,
-    right: 0,
+    right: Platform.OS === "web" ? 0 : undefined,
+    start: Platform.OS === "web" ? undefined : 0,
     bottom: 0,
     height: "100%",
     borderLeftWidth: 1,
