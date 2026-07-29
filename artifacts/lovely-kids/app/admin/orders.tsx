@@ -513,6 +513,71 @@ export default function AdminOrdersScreen() {
         printWindow.document.write(html);
         printWindow.document.close();
 
+        // Keep mobile print windows open so the OS print service is not
+        // interrupted, but always provide an obvious way back to orders.
+        const printReturnStyle = printWindow.document.createElement("style");
+        printReturnStyle.textContent = `
+          @media print {
+            #lovely-kids-print-return {
+              display: none !important;
+            }
+          }
+        `;
+        printWindow.document.head?.appendChild(printReturnStyle);
+
+        const printReturnBar = printWindow.document.createElement("div");
+        printReturnBar.id = "lovely-kids-print-return";
+        printReturnBar.style.cssText = `
+          position: fixed;
+          left: 12px;
+          right: 12px;
+          bottom: calc(12px + env(safe-area-inset-bottom));
+          z-index: 99999;
+          display: flex;
+          justify-content: center;
+          direction: rtl;
+          pointer-events: none;
+        `;
+
+        const printReturnButton = printWindow.document.createElement("button");
+        printReturnButton.type = "button";
+        printReturnButton.textContent = "← إغلاق والعودة للطلبات";
+        printReturnButton.style.cssText = `
+          pointer-events: auto;
+          border: 0;
+          border-radius: 14px;
+          padding: 13px 22px;
+          background: #E91E8C;
+          color: #ffffff;
+          font-family: Arial, sans-serif;
+          font-size: 16px;
+          font-weight: 700;
+          box-shadow: 0 4px 18px rgba(0,0,0,0.22);
+          cursor: pointer;
+        `;
+
+        printReturnButton.addEventListener("click", () => {
+          try {
+            window.focus();
+          } catch {}
+
+          if (!printWindow.closed) {
+            printWindow.close();
+          }
+
+          // iOS/Safari fallback: never leave the user trapped
+          // if the browser refuses to close the script-opened window.
+          setTimeout(() => {
+            if (!printWindow.closed) {
+              printWindow.location.href =
+                `${window.location.origin}/admin/orders`;
+            }
+          }, 250);
+        });
+
+        printReturnBar.appendChild(printReturnButton);
+        printWindow.document.body?.appendChild(printReturnBar);
+
         const images = Array.from(printWindow.document.images);
 
         await Promise.all(
