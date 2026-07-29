@@ -373,6 +373,8 @@ export default function HomeScreen() {
       ) : null}
 
       {/* Trust Badges */}
+      {settings.homeTopBenefitsSectionEnabled !== false ? (
+        <>
       <View style={styles.trustRow}>
         {TRUST_BADGES.map((t) => (
           <View key={t.title} style={styles.trustItem}>
@@ -388,6 +390,9 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>
+
+        </>
+      ) : null}
 
       {/* Active Offers */}
       {settings.homeSpecialOffersSectionEnabled !== false &&

@@ -93,6 +93,7 @@ export interface AppSettings {
   homeSpecialOffersSectionEnabled: boolean;
   homeAgeGroupsSectionEnabled: boolean;
   homeFeaturesSectionEnabled: boolean;
+  homeTopBenefitsSectionEnabled: boolean;
   ageGroupLabels: Record<string, AgeGroupLabel>;
   categoryLabels: Record<string, string>;
   hiddenCategories: string[];
@@ -129,6 +130,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   homeSpecialOffersSectionEnabled: true,
   homeAgeGroupsSectionEnabled: true,
   homeFeaturesSectionEnabled: true,
+  homeTopBenefitsSectionEnabled: true,
   offers: [
     {
       id: "offer1",

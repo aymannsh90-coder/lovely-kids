@@ -34,6 +34,9 @@ export default function HomeSectionsScreen() {
   const [features, setFeatures] = useState(
     settings.homeFeaturesSectionEnabled !== false,
   );
+  const [topBenefits, setTopBenefits] = useState(
+    settings.homeTopBenefitsSectionEnabled !== false,
+  );
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -46,6 +49,7 @@ export default function HomeSectionsScreen() {
     setSpecialOffers(settings.homeSpecialOffersSectionEnabled !== false);
     setAgeGroups(settings.homeAgeGroupsSectionEnabled !== false);
     setFeatures(settings.homeFeaturesSectionEnabled !== false);
+    setTopBenefits(settings.homeTopBenefitsSectionEnabled !== false);
   }, [settingsReady, settings]);
 
   const handleSave = async () => {
@@ -55,6 +59,7 @@ export default function HomeSectionsScreen() {
       homeSpecialOffersSectionEnabled: specialOffers,
       homeAgeGroupsSectionEnabled: ageGroups,
       homeFeaturesSectionEnabled: features,
+      homeTopBenefitsSectionEnabled: topBenefits,
     });
 
     setSaving(false);
@@ -96,6 +101,13 @@ export default function HomeSectionsScreen() {
       value: features,
       setValue: setFeatures,
       icon: "shield-checkmark-outline" as const,
+    },
+    {
+      title: "المزايا العلوية",
+      subtitle: "خامات ناعمة ومريحة · تصاميم عصرية وعملية · جودة تدوم",
+      value: topBenefits,
+      setValue: setTopBenefits,
+      icon: "ribbon-outline" as const,
     },
   ];
 
