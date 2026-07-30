@@ -1,10 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import SalePanel from "./SalePanel";
-import TodaySalesPanel from "./TodaySalesPanel";
+import AppRouter from "./app/router";
+import { PosRuntimeProvider } from "./app/pos-context";
 
 import {
-  API_BASE_URL,
   POS_REGISTER_KEY,
   ApiError,
   closeCashSession,
@@ -16,46 +15,9 @@ import {
   type CashSession,
   type PosUser,
 } from "./lib/api";
+import { formatMoney } from "./lib/format";
 
 const tokenStorageKey = "lovely_kids_pos_session";
-
-const modules = [
-  {
-    key: "open-day",
-    title: "فتح اليوم",
-    description: "إدخال رصيد بداية الصندوق وبدء جلسة العمل.",
-    icon: "💰",
-    requiresOpenSession: false,
-  },
-  {
-    key: "sale",
-    title: "فاتورة مبيعات",
-    description: "مسح الباركود، إضافة الأصناف وإتمام البيع.",
-    icon: "🧾",
-    requiresOpenSession: true,
-  },
-  {
-    key: "expenses",
-    title: "مصروفات اليوم",
-    description: "تسجيل السحوبات والمصروفات المرتبطة باليوم.",
-    icon: "💸",
-    requiresOpenSession: true,
-  },
-  {
-    key: "invoices",
-    title: "مبيعات اليوم",
-    description: "تقرير الأصناف المباعة والبحث في فواتير اليوم.",
-    icon: "📋",
-    requiresOpenSession: true,
-  },
-  {
-    key: "close-day",
-    title: "تقرير نهاية اليوم",
-    description: "ملخص المبيعات والمصروفات ورصيد الصندوق.",
-    icon: "📊",
-    requiresOpenSession: true,
-  },
-];
 
 function errorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -63,30 +25,6 @@ function errorMessage(error: unknown) {
   }
 
   return "حدث خطأ غير متوقع";
-}
-
-function formatMoney(amount: number, currencyCode = "ILS") {
-  return new Intl.NumberFormat("ar-PS", {
-    style: "currency",
-    currency: currencyCode,
-    minimumFractionDigits: 2,
-  }).format(amount);
-}
-
-function formatBusinessDate(value: string) {
-  const date = new Date(`${value}T12:00:00`);
-
-  return new Intl.DateTimeFormat("ar-PS", {
-    dateStyle: "full",
-  }).format(date);
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ar-PS", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Hebron",
-  }).format(new Date(value));
 }
 
 export default function App() {
@@ -427,303 +365,32 @@ export default function App() {
   }
 
   return (
-    <main className="page">
-      <section className="shell">
-        <header className="header">
-          <div>
-            <span className="brand">Lovely Kids</span>
-
-            <h1>نظام نقطة البيع</h1>
-
-            <p>
-              إدارة المبيعات اليومية من مخزون موحّد مع المتجر الإلكتروني
-              والتطبيق.
-            </p>
-          </div>
-
-          <div className="header-actions">
-            <div className="user-chip">
-              <span>المستخدم</span>
-              <strong>{user?.name}</strong>
-            </div>
-
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => void handleLogout()}
-            >
-              تسجيل الخروج
-            </button>
-          </div>
-        </header>
-
-        <section
-          className={
-            session
-              ? "session-banner session-open"
-              : "session-banner session-closed"
-          }
-        >
-          <div className="session-indicator" />
-
-          <div>
-            <span className="session-label">حالة الصندوق</span>
-
-            <strong>
-              {session ? "يوم العمل مفتوح" : "لم يتم فتح يوم العمل"}
-            </strong>
-          </div>
-
-          {session && (
-            <div className="session-banner-value">
-              <span>رصيد البداية</span>
-              <strong>
-                {formatMoney(session.openingBalance, session.currencyCode)}
-              </strong>
-            </div>
-          )}
-        </section>
-
-        {!session ? (
-          <section className="work-panel">
-            <div className="panel-heading">
-              <div className="panel-icon">💰</div>
-
-              <div>
-                <h2>فتح اليوم</h2>
-                <p>أدخل المبلغ الموجود فعليًا داخل الصندوق قبل بدء المبيعات.</p>
-              </div>
-            </div>
-
-            <form className="open-day-form" onSubmit={handleOpenDay}>
-              <label>
-                <span>رصيد بداية الصندوق</span>
-
-                <div className="money-input">
-                  <input
-                    dir="ltr"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={openingBalance}
-                    onChange={(event) => setOpeningBalance(event.target.value)}
-                    disabled={openBusy}
-                  />
-
-                  <span>₪</span>
-                </div>
-              </label>
-
-              <label>
-                <span>
-                  ملاحظة الافتتاح
-                  <small> اختياري</small>
-                </span>
-
-                <textarea
-                  maxLength={500}
-                  rows={3}
-                  value={openingNote}
-                  onChange={(event) => setOpeningNote(event.target.value)}
-                  placeholder="مثال: رصيد مُرحّل من اليوم السابق"
-                  disabled={openBusy}
-                />
-              </label>
-
-              {openError && (
-                <div className="alert error-alert">{openError}</div>
-              )}
-
-              {openMessage && (
-                <div className="alert success-alert">{openMessage}</div>
-              )}
-
-              <button
-                className="primary-button open-button"
-                type="submit"
-                disabled={openBusy}
-              >
-                {openBusy ? "جاري فتح اليوم…" : "فتح يوم العمل"}
-              </button>
-            </form>
-          </section>
-        ) : (
-          <>
-            <SalePanel
-              token={token as string}
-              session={session}
-              cashierName={user?.name ?? "موظف"}
-              onSessionChange={setSession}
-              onUnauthorized={clearAuthentication}
-            />
-
-            <TodaySalesPanel
-              token={token as string}
-              session={session}
-              refreshKey={session.updatedAt}
-              onUnauthorized={clearAuthentication}
-            />
-
-            <section className="work-panel">
-              <div className="panel-heading">
-                <div className="panel-icon">✅</div>
-
-                <div>
-                  <h2>بيانات جلسة اليوم</h2>
-                  <p>جلسة الصندوق نشطة ويمكن البدء بعمليات البيع.</p>
-                </div>
-              </div>
-
-              <div className="session-details">
-                <div>
-                  <span>تاريخ العمل</span>
-                  <strong>{formatBusinessDate(session.businessDate)}</strong>
-                </div>
-
-                <div>
-                  <span>وقت الافتتاح</span>
-                  <strong>{formatDateTime(session.openedAt)}</strong>
-                </div>
-
-                <div>
-                  <span>رصيد البداية</span>
-                  <strong>
-                    {formatMoney(session.openingBalance, session.currencyCode)}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>رقم الجلسة</span>
-                  <strong dir="ltr">#{session.id}</strong>
-                </div>
-              </div>
-
-              {session.openingNote && (
-                <div className="session-note">
-                  <span>ملاحظة الافتتاح</span>
-                  <p>{session.openingNote}</p>
-                </div>
-              )}
-
-              {openMessage && (
-                <div className="alert success-alert">{openMessage}</div>
-              )}
-
-              <div className="close-day-block">
-                <div className="close-day-heading">
-                  <div>
-                    <h3>إغلاق يوم العمل</h3>
-                    <p>
-                      أدخل المبلغ الفعلي الموجود داخل الصندوق عند نهاية اليوم.
-                    </p>
-                  </div>
-
-                  <span className="danger-badge">إجراء نهائي</span>
-                </div>
-
-                <form className="close-day-form" onSubmit={handleCloseDay}>
-                  <label>
-                    <span>الرصيد الفعلي عند الإغلاق</span>
-
-                    <div className="money-input">
-                      <input
-                        dir="ltr"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={closingBalance}
-                        onChange={(event) =>
-                          setClosingBalance(event.target.value)
-                        }
-                        disabled={closeBusy}
-                      />
-
-                      <span>₪</span>
-                    </div>
-                  </label>
-
-                  <label>
-                    <span>
-                      ملاحظة الإغلاق
-                      <small> اختياري</small>
-                    </span>
-
-                    <textarea
-                      maxLength={500}
-                      rows={3}
-                      value={closingNote}
-                      onChange={(event) => setClosingNote(event.target.value)}
-                      placeholder="مثال: تم عدّ الصندوق ومطابقة الرصيد"
-                      disabled={closeBusy}
-                    />
-                  </label>
-
-                  {closeError && (
-                    <div className="alert error-alert">{closeError}</div>
-                  )}
-
-                  <button
-                    className="danger-button"
-                    type="submit"
-                    disabled={closeBusy}
-                  >
-                    {closeBusy ? "جاري إغلاق اليوم…" : "إغلاق يوم العمل"}
-                  </button>
-                </form>
-              </div>
-            </section>
-          </>
-        )}
-
-        <section className="modules" aria-label="أقسام النظام">
-          {modules.map((module) => {
-            const locked = module.requiresOpenSession && !session;
-
-            let badge = "الخطوة التالية";
-
-            if (module.key === "open-day") {
-              badge = session ? "مفتوح" : "جاهز";
-            } else if (
-              (module.key === "sale" || module.key === "invoices") &&
-              session
-            ) {
-              badge = "جاهز";
-            } else if (locked) {
-              badge = "يتطلب فتح اليوم";
-            }
-
-            return (
-              <article
-                className={locked ? "module-card module-locked" : "module-card"}
-                key={module.key}
-              >
-                <span className="module-icon" aria-hidden="true">
-                  {module.icon}
-                </span>
-
-                <h2>{module.title}</h2>
-                <p>{module.description}</p>
-
-                <span className="coming-soon">{badge}</span>
-              </article>
-            );
-          })}
-        </section>
-
-        <footer className="footer">
-          <div>
-            <strong>المخزون:</strong>
-            <span>مركزي وموحّد مع المتجر والتطبيق</span>
-          </div>
-
-          <div className="footer-technical">
-            <code>{API_BASE_URL}</code>
-            <code>الصندوق: {POS_REGISTER_KEY}</code>
-          </div>
-        </footer>
-      </section>
-    </main>
+    <PosRuntimeProvider
+      value={{
+        token: token as string,
+        user,
+        session,
+        setSession,
+        clearAuthentication,
+        handleLogout,
+        openingBalance,
+        setOpeningBalance,
+        openingNote,
+        setOpeningNote,
+        openBusy,
+        openError,
+        openMessage,
+        handleOpenDay,
+        closingBalance,
+        setClosingBalance,
+        closingNote,
+        setClosingNote,
+        closeBusy,
+        closeError,
+        handleCloseDay,
+      }}
+    >
+      <AppRouter />
+    </PosRuntimeProvider>
   );
 }

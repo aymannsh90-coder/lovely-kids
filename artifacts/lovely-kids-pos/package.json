@@ -12,7 +12,8 @@
   "dependencies": {
     "jsbarcode": "^3.12.3",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
     "@types/jsbarcode": "^3.11.4",
