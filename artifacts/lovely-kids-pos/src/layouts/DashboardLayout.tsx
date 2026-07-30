@@ -25,9 +25,17 @@ export default function DashboardLayout() {
             <span className="brand">Lovely Kids</span>
 
             <h1>
-              {isDashboard
-                ? "نظام نقطة البيع"
-                : (currentItem?.title ?? "نظام نقطة البيع")}
+              {isDashboard ? (
+                <span className="main-pos-title">
+                  <span>نظام نقطة البيع</span>
+
+                  <span className="brand-pos-inline" dir="ltr">
+                    POS
+                  </span>
+                </span>
+              ) : (
+                (currentItem?.title ?? "نظام نقطة البيع")
+              )}
             </h1>
 
             <p>
