@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import SalePanel from "./SalePanel";
+import TodaySalesPanel from "./TodaySalesPanel";
 
 import {
   API_BASE_URL,
@@ -42,8 +43,8 @@ const modules = [
   },
   {
     key: "invoices",
-    title: "فواتير اليوم",
-    description: "مراجعة الفواتير التي أُنشئت خلال جلسة اليوم.",
+    title: "مبيعات اليوم",
+    description: "تقرير الأصناف المباعة والبحث في فواتير اليوم.",
     icon: "📋",
     requiresOpenSession: true,
   },
@@ -557,6 +558,13 @@ export default function App() {
               onUnauthorized={clearAuthentication}
             />
 
+            <TodaySalesPanel
+              token={token as string}
+              session={session}
+              refreshKey={session.updatedAt}
+              onUnauthorized={clearAuthentication}
+            />
+
             <section className="work-panel">
               <div className="panel-heading">
                 <div className="panel-icon">✅</div>
@@ -677,7 +685,10 @@ export default function App() {
 
             if (module.key === "open-day") {
               badge = session ? "مفتوح" : "جاهز";
-            } else if (module.key === "sale" && session) {
+            } else if (
+              (module.key === "sale" || module.key === "invoices") &&
+              session
+            ) {
               badge = "جاهز";
             } else if (locked) {
               badge = "يتطلب فتح اليوم";

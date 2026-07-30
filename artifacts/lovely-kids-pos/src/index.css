@@ -990,14 +990,262 @@ textarea:disabled {
   }
 }
 
-@media print {
-  @page {
-    size: 56mm auto;
-    margin: 2mm;
+/* Today sales and A4 report */
+
+.today-sales-panel {
+  margin-top: 22px;
+  padding: 28px;
+  border: 1px solid #dce9ef;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(29, 71, 93, 0.06);
+}
+
+.today-sales-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.today-sales-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.today-sales-actions button {
+  min-width: 130px;
+  padding: 0 18px;
+}
+
+.today-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.today-summary > div {
+  display: grid;
+  gap: 7px;
+  min-height: 82px;
+  padding: 14px;
+  border: 1px solid #e0e9ed;
+  border-radius: 14px;
+  background: #f8fbfc;
+}
+
+.today-summary span {
+  color: #71808e;
+  font-size: 12px;
+}
+
+.today-summary strong {
+  align-self: end;
+  font-size: 17px;
+}
+
+.today-sales-table-wrap {
+  margin-top: 20px;
+  overflow-x: auto;
+  border: 1px solid #dce6ea;
+  border-radius: 15px;
+}
+
+.today-sales-table {
+  width: 100%;
+  min-width: 950px;
+  border-collapse: collapse;
+}
+
+.today-sales-table th,
+.today-sales-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5ecef;
+  text-align: right;
+  vertical-align: top;
+}
+
+.today-sales-table th {
+  color: #435362;
+  background: #f1f7f9;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.today-sales-table td {
+  font-size: 13px;
+}
+
+.today-sales-table td strong,
+.today-sales-table td small {
+  display: block;
+}
+
+.today-sales-table td small {
+  margin-top: 4px;
+  color: #7b8994;
+}
+
+.invoice-search-block {
+  margin-top: 26px;
+  padding-top: 24px;
+  border-top: 1px solid #e5ecef;
+}
+
+.invoice-search-block h3 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.invoice-search-block p {
+  margin: 7px 0 0;
+  color: #687788;
+  line-height: 1.7;
+}
+
+.invoice-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.invoice-search-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #cfdee5;
+  border-radius: 12px;
+  outline: none;
+  color: #172033;
+  background: #fff;
+}
+
+.invoice-search-form input:focus {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 4px rgba(233, 30, 140, 0.1);
+}
+
+.invoice-details {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #cfe1e8;
+  border-radius: 17px;
+  background: #fbfdfe;
+}
+
+.invoice-details-header {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.invoice-details-header > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #eef5f8;
+}
+
+.invoice-details-header span {
+  color: #71808e;
+  font-size: 12px;
+}
+
+.invoice-internal-items {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.invoice-internal-item {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 0.8fr 1.1fr;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #e1e9ed;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.invoice-internal-item > div {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.invoice-internal-item span {
+  color: #5e6e7a;
+  font-size: 13px;
+}
+
+.invoice-note {
+  margin-top: 15px;
+  padding: 14px;
+  border-right: 4px solid #e91e8c;
+  border-radius: 11px;
+  background: #fff5fa;
+}
+
+.invoice-note p {
+  margin: 6px 0 0;
+}
+
+.daily-sales-print-area {
+  display: none;
+}
+
+@media (max-width: 950px) {
+  .today-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  html,
-  body {
+  .invoice-details-header {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .invoice-internal-item {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .today-sales-panel {
+    padding: 20px;
+  }
+
+  .today-sales-heading,
+  .today-sales-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .invoice-search-form,
+  .today-summary,
+  .invoice-details-header,
+  .invoice-internal-item {
+    grid-template-columns: 1fr;
+  }
+}
+
+@page receipt {
+  size: 56mm auto;
+  margin: 2mm;
+}
+
+@page daily-sales {
+  size: A4 landscape;
+  margin: 9mm;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  body[data-print-mode="receipt"] {
     width: 56mm;
     min-width: 56mm;
     margin: 0;
@@ -1005,16 +1253,13 @@ textarea:disabled {
     background: #fff;
   }
 
-  body * {
-    visibility: hidden !important;
-  }
-
-  .receipt-print-area,
-  .receipt-print-area * {
+  body[data-print-mode="receipt"] .receipt-print-area,
+  body[data-print-mode="receipt"] .receipt-print-area * {
     visibility: visible !important;
   }
 
-  .receipt-print-area {
+  body[data-print-mode="receipt"] .receipt-print-area {
+    page: receipt;
     position: absolute;
     top: 0;
     left: 0;
@@ -1105,5 +1350,130 @@ textarea:disabled {
     padding-top: 3mm;
     border-top: 1px dashed #000;
     text-align: center;
+  }
+
+  body[data-print-mode="daily-sales"] {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  body[data-print-mode="daily-sales"] .daily-sales-print-area,
+  body[data-print-mode="daily-sales"] .daily-sales-print-area * {
+    visibility: visible !important;
+  }
+
+  body[data-print-mode="daily-sales"] .daily-sales-print-area {
+    page: daily-sales;
+    position: absolute;
+    inset: 0;
+    display: block !important;
+    width: 100%;
+    color: #000;
+    background: #fff;
+    font-family: Arial, Tahoma, sans-serif;
+    font-size: 10px;
+  }
+
+  .daily-report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #000;
+  }
+
+  .daily-report-header h1 {
+    margin: 0;
+    font-size: 22px;
+  }
+
+  .daily-report-header p {
+    margin: 3px 0 0;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .daily-report-header > div:last-child {
+    display: grid;
+    gap: 3px;
+    text-align: left;
+  }
+
+  .daily-report-summary {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+    padding: 7px;
+    border: 1px solid #000;
+  }
+
+  .daily-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .daily-report-table th,
+  .daily-report-table td {
+    padding: 4px;
+    border: 1px solid #000;
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+
+  .daily-report-table th {
+    font-size: 9px;
+  }
+
+  .daily-report-table th:nth-child(1) {
+    width: 5%;
+  }
+
+  .daily-report-table th:nth-child(2) {
+    width: 18%;
+  }
+
+  .daily-report-table th:nth-child(3) {
+    width: 10%;
+  }
+
+  .daily-report-table th:nth-child(4) {
+    width: 22%;
+  }
+
+  .daily-report-table th:nth-child(5) {
+    width: 7%;
+  }
+
+  .daily-report-table th:nth-child(6) {
+    width: 10%;
+  }
+
+  .daily-report-table th:nth-child(7) {
+    width: 13%;
+  }
+
+  .daily-report-table th:nth-child(8) {
+    width: 15%;
+  }
+
+  .daily-report-barcode svg {
+    display: block;
+    width: 100%;
+    max-width: 55mm;
+    height: 9mm;
+    margin: 0 auto;
+  }
+
+  .daily-report-footer {
+    margin-top: 7px;
+    text-align: left;
+    font-size: 8px;
   }
 }

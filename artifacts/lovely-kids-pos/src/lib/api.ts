@@ -315,3 +315,30 @@ export function createPosSale(
     token,
   );
 }
+
+export interface PosTodaySalesResult {
+  session: {
+    id: string;
+    registerKey: string;
+    businessDate: string;
+  } | null;
+  sales: PosSaleResult[];
+}
+
+export function getTodayPosSales(token: string, registerKey = "main") {
+  const register = encodeURIComponent(registerKey);
+
+  return apiRequest<PosTodaySalesResult>(
+    `/api/pos/sales/today?register=${register}`,
+    {},
+    token,
+  );
+}
+
+export function getPosSaleByPublicId(token: string, publicId: string) {
+  return apiRequest<PosSaleResult>(
+    `/api/pos/sales/by-public-id?publicId=${encodeURIComponent(publicId)}`,
+    {},
+    token,
+  );
+}

@@ -392,7 +392,7 @@ export default function SalePanel({
 
   return (
     <>
-      <section className="sale-panel">
+      <section className="sale-panel" id="pos-sale">
         <div className="panel-heading">
           <div className="panel-icon">🧾</div>
 
@@ -687,7 +687,17 @@ export default function SalePanel({
             <button
               className="secondary-button"
               type="button"
-              onClick={() => window.print()}
+              onClick={() => {
+                document.body.dataset.printMode = "receipt";
+
+                const cleanup = () => {
+                  delete document.body.dataset.printMode;
+                };
+
+                window.addEventListener("afterprint", cleanup, { once: true });
+
+                window.print();
+              }}
             >
               طباعة إيصال 56mm
             </button>
