@@ -6,7 +6,7 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -925,6 +925,144 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
   }
 }
 
+async function handleTodaySales(request: Request, db: Db, env: Env) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+
+  const registerKey = normalizeRegisterKey(
+    url.searchParams.get("register") ?? "main",
+  );
+
+  if (!registerKey) {
+    return json(
+      {
+        error: "معرّف الصندوق غير صالح",
+      },
+      400,
+    );
+  }
+
+  const sessionRows = await db
+    .select()
+    .from(cashSessionsTable)
+    .where(
+      and(
+        eq(cashSessionsTable.registerKey, registerKey),
+        eq(cashSessionsTable.status, "open"),
+      ),
+    )
+    .orderBy(desc(cashSessionsTable.openedAt))
+    .limit(1);
+
+  const session = sessionRows[0];
+
+  if (!session) {
+    return json({
+      session: null,
+      sales: [],
+    });
+  }
+
+  const sales = await db
+    .select()
+    .from(posSalesTable)
+    .where(eq(posSalesTable.cashSessionId, session.id))
+    .orderBy(asc(posSalesTable.createdAt), asc(posSalesTable.id));
+
+  if (sales.length === 0) {
+    return json({
+      session: {
+        id: String(session.id),
+        registerKey: session.registerKey,
+        businessDate: session.businessDate,
+      },
+      sales: [],
+    });
+  }
+
+  const saleIds = sales.map((sale) => sale.id);
+
+  const items = await db
+    .select()
+    .from(posSaleItemsTable)
+    .where(inArray(posSaleItemsTable.saleId, saleIds))
+    .orderBy(asc(posSaleItemsTable.saleId), asc(posSaleItemsTable.lineNumber));
+
+  const itemsBySale = new Map<number, typeof items>();
+
+  for (const item of items) {
+    const current = itemsBySale.get(item.saleId) ?? [];
+
+    current.push(item);
+    itemsBySale.set(item.saleId, current);
+  }
+
+  return json({
+    session: {
+      id: String(session.id),
+      registerKey: session.registerKey,
+      businessDate: session.businessDate,
+    },
+
+    sales: sales.map((sale) =>
+      toSaleResponse(sale, itemsBySale.get(sale.id) ?? [], false),
+    ),
+  });
+}
+
+async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+
+  const publicId = (url.searchParams.get("publicId") ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (!publicId || publicId.length > 80 || !/^[A-Z0-9_-]+$/.test(publicId)) {
+    return json(
+      {
+        error: "رقم الفاتورة غير صالح",
+      },
+      400,
+    );
+  }
+
+  const saleRows = await db
+    .select()
+    .from(posSalesTable)
+    .where(eq(posSalesTable.publicId, publicId))
+    .limit(1);
+
+  const sale = saleRows[0];
+
+  if (!sale) {
+    return json(
+      {
+        error: "الفاتورة غير موجودة",
+      },
+      404,
+    );
+  }
+
+  const items = await db
+    .select()
+    .from(posSaleItemsTable)
+    .where(eq(posSaleItemsTable.saleId, sale.id))
+    .orderBy(asc(posSaleItemsTable.lineNumber));
+
+  return json(toSaleResponse(sale, items, false));
+}
+
 export async function handlePosSaleRequest(
   request: Request,
   db: Db,
@@ -934,6 +1072,14 @@ export async function handlePosSaleRequest(
 
   if (request.method === "GET" && path === "/api/pos/products/by-barcode") {
     return handleBarcodeLookup(request, db, env);
+  }
+
+  if (request.method === "GET" && path === "/api/pos/sales/today") {
+    return handleTodaySales(request, db, env);
+  }
+
+  if (request.method === "GET" && path === "/api/pos/sales/by-public-id") {
+    return handleSaleByPublicId(request, db, env);
   }
 
   if (request.method === "POST" && path === "/api/pos/sales") {
