@@ -278,6 +278,23 @@ export interface PosSaleResult {
   items: PosSaleItemResult[];
 }
 
+export interface PosProductSearchResult {
+  query: string;
+  results: PosProductLookup[];
+}
+
+export function searchPosProducts(token: string, query: string, limit = 15) {
+  const search = encodeURIComponent(query.trim());
+
+  const resultLimit = Math.min(25, Math.max(1, Math.trunc(limit)));
+
+  return apiRequest<PosProductSearchResult>(
+    `/api/pos/products/search?q=${search}&limit=${resultLimit}`,
+    {},
+    token,
+  );
+}
+
 export function lookupPosProductByBarcode(token: string, barcode: string) {
   return apiRequest<PosProductLookup>(
     `/api/pos/products/by-barcode?barcode=${encodeURIComponent(barcode)}`,

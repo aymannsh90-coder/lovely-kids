@@ -6,7 +6,7 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -331,6 +331,242 @@ async function getExistingSale(db: Db, idempotencyKey: string) {
   };
 }
 
+function toPosProductLookup(
+  product: typeof productsTable.$inferSelect,
+  barcode: string,
+  color: string | null,
+  size: string | null,
+) {
+  const colorVariants = (product.colorVariants as ColorVariant[] | null) ?? [];
+
+  let exactStock = product.stock ?? null;
+
+  let outOfStock =
+    product.stock !== null && product.stock !== undefined && product.stock <= 0;
+
+  if (color && size) {
+    const variant = colorVariants.find((entry) => entry.color === color);
+
+    const sizeEntry = variant?.sizes?.find((entry) => entry.size === size);
+
+    if (sizeEntry) {
+      exactStock = sizeEntry.stock ?? null;
+
+      outOfStock =
+        !!sizeEntry.outOfStock ||
+        (sizeEntry.stock !== null &&
+          sizeEntry.stock !== undefined &&
+          sizeEntry.stock <= 0);
+    }
+  }
+
+  return {
+    productId: String(product.id),
+    barcode,
+    productCode: product.productCode ?? null,
+    nameAr: product.nameAr,
+    image: product.image,
+    websiteUnitPrice: product.price,
+    websiteUnitPriceMinor: product.price * 100,
+    mappedColor: color,
+    mappedSize: size,
+    sizes: (product.sizes as string[]) ?? [],
+    colorVariants,
+    stock: exactStock,
+    outOfStock,
+  };
+}
+
+function normalizeProductSearch(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const query = value.trim();
+
+  if (query.length < 1 || query.length > 100) {
+    return null;
+  }
+
+  return query;
+}
+
+async function handleProductSearch(request: Request, db: Db, env: Env) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+
+  const query = normalizeProductSearch(url.searchParams.get("q"));
+
+  if (!query) {
+    return json(
+      {
+        error: "أدخل اسم الصنف أو الكود أو الباركود",
+      },
+      400,
+    );
+  }
+
+  const requestedLimit = Number(url.searchParams.get("limit") ?? "15");
+
+  const limit =
+    Number.isSafeInteger(requestedLimit) &&
+    requestedLimit >= 1 &&
+    requestedLimit <= 25
+      ? requestedLimit
+      : 15;
+
+  const pattern = `%${query}%`;
+  const candidateLimit = limit * 3;
+
+  const primaryMatches = await db
+    .select()
+    .from(productsTable)
+    .where(
+      or(
+        ilike(productsTable.nameAr, pattern),
+        ilike(productsTable.name, pattern),
+        ilike(productsTable.productCode, pattern),
+        ilike(productsTable.barcode, pattern),
+      ),
+    )
+    .limit(candidateLimit);
+
+  const barcodeMatches = await db
+    .select({
+      productId: productBarcodesTable.productId,
+      barcode: productBarcodesTable.barcode,
+      color: productBarcodesTable.color,
+      size: productBarcodesTable.size,
+    })
+    .from(productBarcodesTable)
+    .where(ilike(productBarcodesTable.barcode, pattern))
+    .limit(candidateLimit);
+
+  const barcodeProductIds = [
+    ...new Set(barcodeMatches.map((row) => row.productId)),
+  ];
+
+  const barcodeProducts =
+    barcodeProductIds.length > 0
+      ? await db
+          .select()
+          .from(productsTable)
+          .where(inArray(productsTable.id, barcodeProductIds))
+      : [];
+
+  const productsById = new Map<number, typeof productsTable.$inferSelect>();
+
+  for (const product of [...primaryMatches, ...barcodeProducts]) {
+    productsById.set(product.id, product);
+  }
+
+  const candidateIds = [...productsById.keys()];
+
+  const candidateBarcodes =
+    candidateIds.length > 0
+      ? await db
+          .select({
+            productId: productBarcodesTable.productId,
+            barcode: productBarcodesTable.barcode,
+            color: productBarcodesTable.color,
+            size: productBarcodesTable.size,
+          })
+          .from(productBarcodesTable)
+          .where(inArray(productBarcodesTable.productId, candidateIds))
+      : [];
+
+  const barcodesByProduct = new Map<number, typeof candidateBarcodes>();
+
+  for (const row of candidateBarcodes) {
+    const current = barcodesByProduct.get(row.productId) ?? [];
+
+    current.push(row);
+
+    barcodesByProduct.set(row.productId, current);
+  }
+
+  const normalizedQuery = query.toLocaleLowerCase("ar");
+
+  const ranked = [...productsById.values()]
+    .map((product) => {
+      const extraBarcodes = barcodesByProduct.get(product.id) ?? [];
+
+      const primaryBarcode = product.barcode?.trim() || null;
+
+      const fallbackBarcode = extraBarcodes[0] ?? null;
+
+      const selectedBarcode =
+        primaryBarcode ?? fallbackBarcode?.barcode ?? null;
+
+      if (!selectedBarcode) {
+        return null;
+      }
+
+      const productCode =
+        product.productCode?.trim().toLocaleLowerCase("ar") ?? "";
+
+      const primaryBarcodeValue = primaryBarcode?.toLocaleLowerCase("ar") ?? "";
+
+      const name = product.nameAr.trim().toLocaleLowerCase("ar");
+
+      const exactExtraBarcode = extraBarcodes.find(
+        (row) => row.barcode.toLocaleLowerCase("ar") === normalizedQuery,
+      );
+
+      let rank = 4;
+
+      if (
+        productCode === normalizedQuery ||
+        primaryBarcodeValue === normalizedQuery ||
+        exactExtraBarcode
+      ) {
+        rank = 0;
+      } else if (
+        name.startsWith(normalizedQuery) ||
+        productCode.startsWith(normalizedQuery)
+      ) {
+        rank = 1;
+      } else if (
+        name.includes(normalizedQuery) ||
+        productCode.includes(normalizedQuery)
+      ) {
+        rank = 2;
+      } else {
+        rank = 3;
+      }
+
+      const selectedMapping = primaryBarcode ? null : fallbackBarcode;
+
+      return {
+        rank,
+        name,
+        result: toPosProductLookup(
+          product,
+          selectedBarcode,
+          selectedMapping?.color ?? null,
+          selectedMapping?.size ?? null,
+        ),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort(
+      (left, right) =>
+        left.rank - right.rank || left.name.localeCompare(right.name, "ar"),
+    )
+    .slice(0, limit)
+    .map((item) => item.result);
+
+  return json({
+    query,
+    results: ranked,
+  });
+}
+
 async function handleBarcodeLookup(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
 
@@ -372,54 +608,14 @@ async function handleBarcodeLookup(request: Request, db: Db, env: Env) {
     return json({ error: "لم يتم العثور على المنتج" }, 404);
   }
 
-  const color = mapping?.color ?? null;
-
-  const size = mapping?.size ?? null;
-
-  const colorVariants = (product.colorVariants as ColorVariant[] | null) ?? [];
-
-  let exactStock = product.stock ?? null;
-
-  let outOfStock =
-    product.stock !== null && product.stock !== undefined && product.stock <= 0;
-
-  if (color && size) {
-    const variant = colorVariants.find((entry) => entry.color === color);
-
-    const sizeEntry = variant?.sizes?.find((entry) => entry.size === size);
-
-    if (sizeEntry) {
-      exactStock = sizeEntry.stock ?? null;
-
-      outOfStock =
-        !!sizeEntry.outOfStock ||
-        (sizeEntry.stock !== null &&
-          sizeEntry.stock !== undefined &&
-          sizeEntry.stock <= 0);
-    }
-  }
-
-  return json({
-    productId: String(product.id),
-    barcode,
-    productCode: product.productCode ?? null,
-
-    nameAr: product.nameAr,
-    image: product.image,
-
-    websiteUnitPrice: product.price,
-    websiteUnitPriceMinor: product.price * 100,
-
-    mappedColor: color,
-    mappedSize: size,
-
-    sizes: (product.sizes as string[]) ?? [],
-
-    colorVariants,
-
-    stock: exactStock,
-    outOfStock,
-  });
+  return json(
+    toPosProductLookup(
+      product,
+      barcode,
+      mapping?.color ?? null,
+      mapping?.size ?? null,
+    ),
+  );
 }
 
 async function handleCreateSale(request: Request, db: Db, env: Env) {
@@ -1069,6 +1265,10 @@ export async function handlePosSaleRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (request.method === "GET" && path === "/api/pos/products/search") {
+    return handleProductSearch(request, db, env);
+  }
 
   if (request.method === "GET" && path === "/api/pos/products/by-barcode") {
     return handleBarcodeLookup(request, db, env);
