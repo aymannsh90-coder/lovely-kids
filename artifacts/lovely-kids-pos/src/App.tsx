@@ -7,6 +7,7 @@ import {
 import {
   API_BASE_URL,
   ApiError,
+  closeCashSession,
   getCurrentCashSession,
   getCurrentPosUser,
   loginPos,
@@ -125,6 +126,18 @@ export default function App() {
   const [openError, setOpenError] = useState("");
   const [openMessage, setOpenMessage] = useState("");
 
+  const [closingBalance, setClosingBalance] =
+    useState("");
+
+  const [closingNote, setClosingNote] =
+    useState("");
+
+  const [closeBusy, setCloseBusy] =
+    useState(false);
+
+  const [closeError, setCloseError] =
+    useState("");
+
   function clearAuthentication() {
     sessionStorage.removeItem(tokenStorageKey);
     setToken(null);
@@ -178,6 +191,23 @@ export default function App() {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (!session) {
+      setClosingBalance("");
+      setClosingNote("");
+      setCloseError("");
+      return;
+    }
+
+    const expected =
+      session.expectedBalance ??
+      session.openingBalance;
+
+    setClosingBalance(
+      expected.toFixed(2),
+    );
+  }, [session]);
 
   async function handleLogin(
     event: FormEvent<HTMLFormElement>,
@@ -305,6 +335,95 @@ export default function App() {
       setOpenError(errorMessage(error));
     } finally {
       setOpenBusy(false);
+    }
+  }
+
+  async function handleCloseDay(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!token || !session) {
+      return;
+    }
+
+    const numericBalance = Number(
+      closingBalance,
+    );
+
+    if (
+      closingBalance.trim() === "" ||
+      !Number.isFinite(numericBalance) ||
+      numericBalance < 0
+    ) {
+      setCloseError(
+        "أدخل المبلغ الفعلي الموجود في الصندوق",
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "هل أنت متأكد من إغلاق يوم العمل؟ بعد الإغلاق لن يمكن إضافة مبيعات إلى هذه الجلسة.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCloseBusy(true);
+    setCloseError("");
+    setOpenMessage("");
+
+    try {
+      const result = await closeCashSession(
+        token,
+        {
+          sessionId: session.id,
+          registerKey: session.registerKey,
+          closingBalance:
+            closingBalance.trim(),
+          closingNote:
+            closingNote.trim(),
+        },
+      );
+
+      let varianceMessage =
+        "رصيد الصندوق مطابق للرصيد المتوقع.";
+
+      if (result.variance > 0) {
+        varianceMessage =
+          `توجد زيادة بقيمة ${formatMoney(
+            result.variance,
+            result.session.currencyCode,
+          )}.`;
+      } else if (result.variance < 0) {
+        varianceMessage =
+          `يوجد نقص بقيمة ${formatMoney(
+            Math.abs(result.variance),
+            result.session.currencyCode,
+          )}.`;
+      }
+
+      setSession(null);
+      setOpeningBalance("0.00");
+      setClosingNote("");
+      setCloseError("");
+
+      setOpenMessage(
+        `تم إغلاق يوم العمل بنجاح. ${varianceMessage}`,
+      );
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setCloseError(errorMessage(error));
+    } finally {
+      setCloseBusy(false);
     }
   }
 
@@ -608,6 +727,88 @@ export default function App() {
                 {openMessage}
               </div>
             )}
+
+            <div className="close-day-block">
+              <div className="close-day-heading">
+                <div>
+                  <h3>إغلاق يوم العمل</h3>
+                  <p>
+                    أدخل المبلغ الفعلي الموجود داخل
+                    الصندوق عند نهاية اليوم.
+                  </p>
+                </div>
+
+                <span className="danger-badge">
+                  إجراء نهائي
+                </span>
+              </div>
+
+              <form
+                className="close-day-form"
+                onSubmit={handleCloseDay}
+              >
+                <label>
+                  <span>
+                    الرصيد الفعلي عند الإغلاق
+                  </span>
+
+                  <div className="money-input">
+                    <input
+                      dir="ltr"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={closingBalance}
+                      onChange={(event) =>
+                        setClosingBalance(
+                          event.target.value,
+                        )
+                      }
+                      disabled={closeBusy}
+                    />
+
+                    <span>₪</span>
+                  </div>
+                </label>
+
+                <label>
+                  <span>
+                    ملاحظة الإغلاق
+                    <small> اختياري</small>
+                  </span>
+
+                  <textarea
+                    maxLength={500}
+                    rows={3}
+                    value={closingNote}
+                    onChange={(event) =>
+                      setClosingNote(
+                        event.target.value,
+                      )
+                    }
+                    placeholder="مثال: تم عدّ الصندوق ومطابقة الرصيد"
+                    disabled={closeBusy}
+                  />
+                </label>
+
+                {closeError && (
+                  <div className="alert error-alert">
+                    {closeError}
+                  </div>
+                )}
+
+                <button
+                  className="danger-button"
+                  type="submit"
+                  disabled={closeBusy}
+                >
+                  {closeBusy
+                    ? "جاري إغلاق اليوم…"
+                    : "إغلاق يوم العمل"}
+                </button>
+              </form>
+            </div>
           </section>
         )}
 

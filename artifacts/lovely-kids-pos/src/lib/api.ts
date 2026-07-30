@@ -169,6 +169,38 @@ export function openCashSession(
   );
 }
 
+export function closeCashSession(
+  token: string,
+  input: {
+    sessionId: string;
+    registerKey?: string;
+    closingBalance: string;
+    closingNote?: string;
+  },
+) {
+  return apiRequest<{
+    session: CashSession;
+    alreadyClosed: boolean;
+    varianceMinor: number;
+    variance: number;
+  }>(
+    "/api/pos/cash-sessions/close",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        sessionId: input.sessionId,
+        registerKey:
+          input.registerKey ?? "main",
+        closingBalance:
+          input.closingBalance,
+        closingNote:
+          input.closingNote || undefined,
+      }),
+    },
+    token,
+  );
+}
+
 export function logoutPos(token: string) {
   return apiRequest<void>(
     "/api/auth/logout",
