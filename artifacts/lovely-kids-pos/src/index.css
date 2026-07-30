@@ -1988,3 +1988,117 @@ textarea:disabled {
     font-size: 31px;
   }
 }
+
+/* Centered POS page header */
+
+.centered-app-topbar {
+  position: relative;
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 230px;
+}
+
+.app-title-centered {
+  width: 100%;
+  max-width: 620px;
+  text-align: center;
+}
+
+.app-title-centered p {
+  margin-inline: auto;
+}
+
+.topbar-home-slot {
+  position: absolute;
+  top: 50%;
+  right: 30px;
+  min-width: 135px;
+  transform: translateY(-50%);
+}
+
+.topbar-home-slot .route-home-button {
+  width: 100%;
+}
+
+.topbar-user-card {
+  position: absolute;
+  top: 50%;
+  left: 30px;
+  display: grid;
+  width: 190px;
+  gap: 5px;
+  padding: 12px 14px 9px;
+  border: 1px solid #d7e4ea;
+  border-radius: 14px;
+  background: #f7fafb;
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+.topbar-user-card > span {
+  color: #778590;
+  font-size: 11px;
+}
+
+.topbar-user-card > strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-logout-button {
+  width: 100%;
+  margin-top: 5px;
+  padding: 8px 5px 2px;
+  border: 0;
+  border-top: 1px solid #dce6ea;
+  color: #b21d5e;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.header-logout-button:hover {
+  color: #e91e8c;
+}
+
+@media (max-width: 850px) {
+  .centered-app-topbar {
+    min-height: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 22px;
+  }
+
+  .app-title-centered {
+    order: 1;
+    max-width: none;
+    text-align: right;
+  }
+
+  .app-title-centered p {
+    margin-inline: 0;
+  }
+
+  .topbar-home-slot,
+  .topbar-user-card {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    transform: none;
+  }
+
+  .topbar-home-slot {
+    order: 2;
+  }
+
+  .topbar-user-card {
+    order: 3;
+  }
+}

@@ -17,8 +17,16 @@ export default function DashboardLayout() {
   return (
     <main className="page routed-page">
       <section className="shell">
-        <header className="app-topbar">
-          <div className="app-title">
+        <header className="app-topbar centered-app-topbar">
+          <div className="topbar-home-slot">
+            {!isDashboard && (
+              <Link className="secondary-button route-home-button" to="/">
+                الرئيسية
+              </Link>
+            )}
+          </div>
+
+          <div className="app-title app-title-centered">
             <span className="brand">Lovely Kids</span>
 
             <h1>
@@ -34,20 +42,13 @@ export default function DashboardLayout() {
             </p>
           </div>
 
-          <div className="topbar-actions">
-            {!isDashboard && (
-              <Link className="secondary-button route-home-button" to="/">
-                ← الرئيسية
-              </Link>
-            )}
+          <div className="topbar-user-card">
+            <span>المستخدم</span>
 
-            <div className="user-chip">
-              <span>المستخدم</span>
-              <strong>{user?.name ?? "موظف"}</strong>
-            </div>
+            <strong>{user?.name ?? "موظف"}</strong>
 
             <button
-              className="secondary-button"
+              className="header-logout-button"
               type="button"
               onClick={() => void handleLogout()}
             >
