@@ -6,6 +6,7 @@ import {
 
 import {
   API_BASE_URL,
+  POS_REGISTER_KEY,
   ApiError,
   closeCashSession,
   getCurrentCashSession,
@@ -161,7 +162,10 @@ export default function App() {
         const [currentUser, currentSession] =
           await Promise.all([
             getCurrentPosUser(token as string),
-            getCurrentCashSession(token as string),
+            getCurrentCashSession(
+              token as string,
+              POS_REGISTER_KEY,
+            ),
           ]);
 
         if (
@@ -244,7 +248,10 @@ export default function App() {
       }
 
       const current =
-        await getCurrentCashSession(result.token);
+        await getCurrentCashSession(
+          result.token,
+          POS_REGISTER_KEY,
+        );
 
       sessionStorage.setItem(
         tokenStorageKey,
@@ -308,7 +315,7 @@ export default function App() {
       const result = await openCashSession(
         token,
         {
-          registerKey: "main",
+          registerKey: POS_REGISTER_KEY,
           openingBalance:
             openingBalance.trim(),
           openingNote: openingNote.trim(),
@@ -866,7 +873,12 @@ export default function App() {
             </span>
           </div>
 
-          <code>{API_BASE_URL}</code>
+          <div className="footer-technical">
+            <code>{API_BASE_URL}</code>
+            <code>
+              الصندوق: {POS_REGISTER_KEY}
+            </code>
+          </div>
         </footer>
       </section>
     </main>

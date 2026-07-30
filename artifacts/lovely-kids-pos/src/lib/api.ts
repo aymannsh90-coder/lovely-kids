@@ -4,6 +4,20 @@ export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || fallbackApiBaseUrl
 ).replace(/\/+$/, "");
 
+const configuredRegisterKey = (
+  import.meta.env.VITE_POS_REGISTER_KEY ||
+  "main"
+)
+  .trim()
+  .toLowerCase();
+
+export const POS_REGISTER_KEY =
+  /^[a-z0-9_-]{1,50}$/.test(
+    configuredRegisterKey,
+  )
+    ? configuredRegisterKey
+    : "main";
+
 export interface PosUser {
   id: string | number;
   name: string;

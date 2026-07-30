@@ -716,3 +716,11 @@ textarea:disabled {
     align-items: flex-start;
   }
 }
+
+.footer-technical {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
