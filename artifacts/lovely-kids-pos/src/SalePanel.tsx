@@ -1112,23 +1112,33 @@ export default function SalePanel({
 
           <div className="receipt-divider" />
 
-          <div className="receipt-items">
-            {lastSale.items.map((item) => (
-              <div className="receipt-item" key={item.id}>
-                <strong>{item.productNameAr}</strong>
+          <table className="receipt-items-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الصنف</th>
+                <th>الكود</th>
+                <th>الكمية</th>
+                <th>السعر</th>
+              </tr>
+            </thead>
 
-                <span>الكود: {item.productCode ?? "—"}</span>
+            <tbody>
+              {lastSale.items.map((item, index) => (
+                <tr key={item.id}>
+                  <td>{index + 1}</td>
 
-                <div>
-                  <span>
-                    {item.quantity} × {item.soldUnitPrice.toFixed(2)}
-                  </span>
+                  <td>{item.productNameAr.trim().split(/\s+/)[0] || "صنف"}</td>
 
-                  <strong>{item.lineTotal.toFixed(2)} ₪</strong>
-                </div>
-              </div>
-            ))}
-          </div>
+                  <td dir="ltr">{item.productCode ?? "—"}</td>
+
+                  <td>{item.quantity}</td>
+
+                  <td dir="ltr">{item.lineTotal.toFixed(2)} ₪</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           <div className="receipt-divider" />
 

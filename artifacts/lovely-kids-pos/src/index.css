@@ -2803,3 +2803,62 @@ textarea:disabled {
     justify-items: initial;
   }
 }
+
+/* Compact receipt table */
+
+@media print {
+  .receipt-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 8px;
+  }
+
+  .receipt-items-table th,
+  .receipt-items-table td {
+    padding: 1.4mm 0.4mm;
+    border-bottom: 1px dashed #000;
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+
+  .receipt-items-table th {
+    padding-top: 0;
+    font-size: 7.5px;
+    font-weight: 800;
+  }
+
+  .receipt-items-table th:nth-child(1) {
+    width: 7%;
+  }
+
+  .receipt-items-table th:nth-child(2) {
+    width: 21%;
+  }
+
+  .receipt-items-table th:nth-child(3) {
+    width: 31%;
+  }
+
+  .receipt-items-table th:nth-child(4) {
+    width: 15%;
+  }
+
+  .receipt-items-table th:nth-child(5) {
+    width: 26%;
+  }
+
+  .receipt-items-table td:nth-child(2) {
+    font-weight: 800;
+  }
+
+  .receipt-items-table td:nth-child(3),
+  .receipt-items-table td:nth-child(5) {
+    font-size: 7.3px;
+  }
+
+  .receipt-items-table tr {
+    break-inside: avoid;
+  }
+}
