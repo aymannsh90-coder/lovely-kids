@@ -1,8 +1,9 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 
 import { API_BASE_URL, POS_REGISTER_KEY } from "../lib/api";
 import { findNavigationItem } from "../app/navigation";
 import { usePosRuntime } from "../app/pos-context";
+import ClockWidget from "../components/ClockWidget";
 import { formatMoney } from "../lib/format";
 
 export default function DashboardLayout() {
@@ -18,13 +19,7 @@ export default function DashboardLayout() {
     <main className="page routed-page">
       <section className="shell">
         <header className="app-topbar centered-app-topbar">
-          <div className="topbar-home-slot">
-            {!isDashboard && (
-              <Link className="secondary-button route-home-button" to="/">
-                الرئيسية
-              </Link>
-            )}
-          </div>
+          <ClockWidget showHomeButton={!isDashboard} />
 
           <div className="app-title app-title-centered">
             <span className="brand">Lovely Kids</span>

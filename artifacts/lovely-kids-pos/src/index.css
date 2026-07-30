@@ -2102,3 +2102,154 @@ textarea:disabled {
     order: 3;
   }
 }
+
+/* Header analog clock */
+
+.topbar-clock-card {
+  position: absolute;
+  top: 50%;
+  right: 30px;
+  display: grid;
+  width: 155px;
+  justify-items: center;
+  gap: 6px;
+  transform: translateY(-50%);
+}
+
+.analog-clock {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border: 3px solid #243644;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    #ffffff 0%,
+    #f5fafc 72%,
+    #e7f1f5 100%
+  );
+  box-shadow: 0 7px 18px rgba(25, 61, 78, 0.14);
+}
+
+.clock-tick {
+  position: absolute;
+  inset: 4px;
+  transform: rotate(var(--tick-rotation));
+}
+
+.clock-tick i {
+  display: block;
+  width: 2px;
+  height: 6px;
+  margin: 0 auto;
+  border-radius: 2px;
+  background: #506673;
+}
+
+.clock-tick:nth-child(3n + 1) i {
+  width: 3px;
+  height: 8px;
+  background: #172a36;
+}
+
+.clock-hand {
+  position: absolute;
+  z-index: 2;
+  bottom: 50%;
+  left: 50%;
+  border-radius: 999px;
+  transform: translateX(-50%) rotate(var(--rotation));
+  transform-origin: center bottom;
+}
+
+.clock-hour-hand {
+  width: 4px;
+  height: 21px;
+  background: #172a36;
+}
+
+.clock-minute-hand {
+  width: 3px;
+  height: 28px;
+  background: #314c5c;
+}
+
+.clock-second-hand {
+  width: 1.5px;
+  height: 30px;
+  background: #e91e8c;
+}
+
+.clock-center-dot {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #e91e8c;
+  box-shadow: 0 0 0 1px rgba(30, 53, 66, 0.2);
+  transform: translate(-50%, -50%);
+}
+
+.clock-date {
+  display: grid;
+  gap: 1px;
+  text-align: center;
+}
+
+.clock-date strong {
+  color: #182c39;
+  font-size: 13px;
+}
+
+.clock-date span {
+  color: #647681;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.clock-home-button {
+  display: flex;
+  width: 100%;
+  min-height: 33px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  border: 1px solid #cedee5;
+  border-radius: 10px;
+  color: #243744;
+  background: #f7fafb;
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.clock-home-button:hover {
+  border-color: #e91e8c;
+  color: #b51665;
+  background: #fff4fa;
+}
+
+@media (max-width: 850px) {
+  .topbar-clock-card {
+    position: static;
+    order: 2;
+    width: 100%;
+    padding: 15px;
+    border: 1px solid #dce7eb;
+    border-radius: 15px;
+    background: #f8fbfc;
+    transform: none;
+  }
+
+  .clock-home-button {
+    max-width: 240px;
+  }
+}
