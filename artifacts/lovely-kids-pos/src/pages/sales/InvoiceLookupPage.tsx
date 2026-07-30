@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
+import SaleReceipt from "../../components/SaleReceipt";
 import {
   ApiError,
   getPosSaleByPublicId,
@@ -18,6 +19,18 @@ function stockText(before: number | null, after: number | null) {
   }
 
   return `${before ?? "—"} ← ${after ?? "—"}`;
+}
+
+function printReceipt() {
+  document.body.dataset.printMode = "receipt";
+
+  const cleanup = () => {
+    delete document.body.dataset.printMode;
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+
+  window.print();
 }
 
 export default function InvoiceLookupPage() {
@@ -108,122 +121,148 @@ export default function InvoiceLookupPage() {
       )}
 
       {result && (
-        <article className="standalone-invoice-result">
-          <div className="standalone-invoice-summary">
+        <>
+          <div className="invoice-print-actions">
             <div>
-              <span>رقم الفاتورة</span>
+              <strong>الفاتورة جاهزة للطباعة</strong>
 
-              <strong dir="ltr">{result.sale.publicId}</strong>
+              <span>إيصال حراري مختصر بعرض 56mm.</span>
             </div>
 
-            <div>
-              <span>التاريخ والوقت</span>
-
-              <strong>{formatDateTime(result.sale.createdAt)}</strong>
-            </div>
-
-            <div>
-              <span>اسم الزبون</span>
-
-              <strong>{result.sale.customerName || "زبون نقدي"}</strong>
-            </div>
-
-            <div>
-              <span>حالة الفاتورة</span>
-
-              <strong>
-                {result.sale.status === "completed"
-                  ? "مكتملة"
-                  : result.sale.status}
-              </strong>
-            </div>
-
-            <div>
-              <span>الإجمالي</span>
-
-              <strong>{formatMinor(result.sale.total)}</strong>
-            </div>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={printReceipt}
+            >
+              إعادة طباعة الإيصال
+            </button>
           </div>
 
-          <div className="standalone-invoice-items">
-            {result.items.map((item) => (
-              <div className="standalone-invoice-item" key={item.id}>
-                <div>
-                  <strong>{item.productNameAr}</strong>
+          <article className="standalone-invoice-result">
+            <div className="standalone-invoice-summary">
+              <div>
+                <span>رقم الفاتورة</span>
 
-                  <span>الكود: {item.productCode ?? "—"}</span>
-
-                  <span dir="ltr">الباركود: {item.barcode ?? "—"}</span>
-                </div>
-
-                <div>
-                  <span>اللون: {item.color ?? "—"}</span>
-
-                  <span>المقاس: {item.size ?? "—"}</span>
-
-                  <span>الكمية: {item.quantity}</span>
-                </div>
-
-                <div>
-                  <span>سعر البيع: {formatMinor(item.soldUnitPrice)}</span>
-
-                  <span>مجموع الصنف: {formatMinor(item.lineTotal)}</span>
-                </div>
-
-                <div>
-                  <span>
-                    المخزون العام:{" "}
-                    {stockText(item.generalStockBefore, item.generalStockAfter)}
-                  </span>
-
-                  <span>
-                    مخزون المتغير:{" "}
-                    {stockText(item.variantStockBefore, item.variantStockAfter)}
-                  </span>
-                </div>
+                <strong dir="ltr">{result.sale.publicId}</strong>
               </div>
-            ))}
-          </div>
 
-          <div className="standalone-invoice-totals">
-            <div>
-              <span>مجموع الأصناف</span>
+              <div>
+                <span>التاريخ والوقت</span>
 
-              <strong>{formatMinor(result.sale.subtotal)}</strong>
+                <strong>{formatDateTime(result.sale.createdAt)}</strong>
+              </div>
+
+              <div>
+                <span>اسم الزبون</span>
+
+                <strong>{result.sale.customerName || "زبون نقدي"}</strong>
+              </div>
+
+              <div>
+                <span>حالة الفاتورة</span>
+
+                <strong>
+                  {result.sale.status === "completed"
+                    ? "مكتملة"
+                    : result.sale.status}
+                </strong>
+              </div>
+
+              <div>
+                <span>الإجمالي</span>
+
+                <strong>{formatMinor(result.sale.total)}</strong>
+              </div>
             </div>
 
-            <div>
-              <span>الخصم</span>
+            <div className="standalone-invoice-items">
+              {result.items.map((item) => (
+                <div className="standalone-invoice-item" key={item.id}>
+                  <div>
+                    <strong>{item.productNameAr}</strong>
 
-              <strong>{formatMinor(result.sale.discount)}</strong>
+                    <span>الكود: {item.productCode ?? "—"}</span>
+
+                    <span dir="ltr">الباركود: {item.barcode ?? "—"}</span>
+                  </div>
+
+                  <div>
+                    <span>اللون: {item.color ?? "—"}</span>
+
+                    <span>المقاس: {item.size ?? "—"}</span>
+
+                    <span>الكمية: {item.quantity}</span>
+                  </div>
+
+                  <div>
+                    <span>سعر البيع: {formatMinor(item.soldUnitPrice)}</span>
+
+                    <span>مجموع الصنف: {formatMinor(item.lineTotal)}</span>
+                  </div>
+
+                  <div>
+                    <span>
+                      المخزون العام:{" "}
+                      {stockText(
+                        item.generalStockBefore,
+                        item.generalStockAfter,
+                      )}
+                    </span>
+
+                    <span>
+                      مخزون المتغير:{" "}
+                      {stockText(
+                        item.variantStockBefore,
+                        item.variantStockAfter,
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div>
-              <span>الإجمالي النهائي</span>
+            <div className="standalone-invoice-totals">
+              <div>
+                <span>مجموع الأصناف</span>
 
-              <strong>{formatMinor(result.sale.total)}</strong>
+                <strong>{formatMinor(result.sale.subtotal)}</strong>
+              </div>
+
+              <div>
+                <span>الخصم</span>
+
+                <strong>{formatMinor(result.sale.discount)}</strong>
+              </div>
+
+              <div>
+                <span>الإجمالي النهائي</span>
+
+                <strong>{formatMinor(result.sale.total)}</strong>
+              </div>
+
+              <div>
+                <span>المدفوع</span>
+
+                <strong>{formatMinor(result.sale.paid)}</strong>
+              </div>
+
+              <div>
+                <span>الباقي</span>
+
+                <strong>{formatMinor(result.sale.change)}</strong>
+              </div>
             </div>
 
-            <div>
-              <span>المدفوع</span>
+            {result.sale.notes && (
+              <div className="standalone-invoice-note">
+                <strong>ملاحظات</strong>
+                <p>{result.sale.notes}</p>
+              </div>
+            )}
+          </article>
 
-              <strong>{formatMinor(result.sale.paid)}</strong>
-            </div>
-
-            <div>
-              <span>الباقي</span>
-
-              <strong>{formatMinor(result.sale.change)}</strong>
-            </div>
-          </div>
-
-          {result.sale.notes && (
-            <div className="standalone-invoice-note">
-              <strong>ملاحظات</strong>
-              <p>{result.sale.notes}</p>
-            </div>
-          )}
-        </article>
+          <SaleReceipt result={result} isReprint />
+        </>
       )}
     </section>
   );

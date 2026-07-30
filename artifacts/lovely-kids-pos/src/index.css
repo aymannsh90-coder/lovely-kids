@@ -2862,3 +2862,159 @@ textarea:disabled {
     break-inside: avoid;
   }
 }
+
+/* Invoice reprint actions */
+
+.invoice-print-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #bde2cb;
+  border-radius: 14px;
+  background: #effbf4;
+}
+
+.invoice-print-actions > div {
+  display: grid;
+  gap: 4px;
+}
+
+.invoice-print-actions span {
+  color: #657984;
+  font-size: 12px;
+}
+
+@media (max-width: 650px) {
+  .invoice-print-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media print {
+  .receipt-copy-label {
+    justify-self: center;
+    margin-top: 1.5mm;
+    padding: 0.7mm 2mm;
+    border: 1px solid #000;
+    font-size: 8px;
+  }
+}
+
+/* Receipt single-page print fix */
+
+@media print {
+  body[data-print-mode="receipt"] .app-topbar,
+  body[data-print-mode="receipt"] .sale-panel {
+    display: none !important;
+  }
+
+  body[data-print-mode="receipt"]
+    .invoice-lookup-page
+    > :not(.receipt-print-area) {
+    display: none !important;
+  }
+
+  body[data-print-mode="receipt"] .page,
+  body[data-print-mode="receipt"] .routed-page,
+  body[data-print-mode="receipt"] .shell,
+  body[data-print-mode="receipt"] .invoice-lookup-page {
+    width: 56mm !important;
+    min-width: 56mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-print-area {
+    position: static !important;
+    inset: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    break-after: avoid-page !important;
+    page-break-after: avoid !important;
+  }
+}
+
+/* Receipt complete layout isolation */
+
+@media print {
+  html,
+  body[data-print-mode="receipt"],
+  body[data-print-mode="receipt"] #root {
+    width: 56mm !important;
+    min-width: 56mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body[data-print-mode="receipt"] .shell {
+    display: block !important;
+    width: 56mm !important;
+    min-width: 56mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body[data-print-mode="receipt"] .shell > * {
+    display: none !important;
+  }
+
+  body[data-print-mode="receipt"] .shell > .route-content {
+    display: block !important;
+  }
+
+  body[data-print-mode="receipt"] .route-content {
+    width: 56mm !important;
+    min-width: 56mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body[data-print-mode="receipt"] .route-content > * {
+    display: none !important;
+  }
+
+  body[data-print-mode="receipt"] .route-content > .invoice-lookup-page {
+    display: block !important;
+  }
+
+  body[data-print-mode="receipt"] .invoice-lookup-page {
+    width: 56mm !important;
+    min-width: 56mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body[data-print-mode="receipt"] .invoice-lookup-page > * {
+    display: none !important;
+  }
+
+  body[data-print-mode="receipt"] .invoice-lookup-page > .receipt-print-area {
+    display: block !important;
+    position: static !important;
+    width: 52mm !important;
+    min-width: 52mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+}
