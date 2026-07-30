@@ -12,6 +12,7 @@ import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
+import { handlePosSaleRequest } from "./pos-sale-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -45,10 +46,7 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     facebookUrl: r.facebookUrl ?? null,
     instagramUrl: r.instagramUrl ?? null,
     tiktokUrl: r.tiktokUrl ?? null,
-    isNew:
-      !!r.isNew &&
-      !!r.newUntil &&
-      r.newUntil.getTime() > Date.now(),
+    isNew: !!r.isNew && !!r.newUntil && r.newUntil.getTime() > Date.now(),
     newUntil: r.newUntil?.toISOString() ?? null,
     discount: r.discount ?? undefined,
     description: r.description,
@@ -75,19 +73,27 @@ export default {
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
 
-      const cashSessionResponse =
-        await handleCashSessionRequest(
-          request,
-          db,
-          env,
-        );
+      const cashSessionResponse = await handleCashSessionRequest(
+        request,
+        db,
+        env,
+      );
 
       if (cashSessionResponse) {
         return cashSessionResponse;
       }
 
-      const passwordResetResponse =
-        await handlePasswordResetRequest(request, db, env);
+      const posSaleResponse = await handlePosSaleRequest(request, db, env);
+
+      if (posSaleResponse) {
+        return posSaleResponse;
+      }
+
+      const passwordResetResponse = await handlePasswordResetRequest(
+        request,
+        db,
+        env,
+      );
 
       if (passwordResetResponse) {
         return passwordResetResponse;
@@ -99,55 +105,58 @@ export default {
       const settingsResponse = await handleSettingsRequest(request, db, env);
       if (settingsResponse) return settingsResponse;
 
-        const orderResponse = await handleOrderRequest(request, db, env);
-        if (orderResponse) return orderResponse;
+      const orderResponse = await handleOrderRequest(request, db, env);
+      if (orderResponse) return orderResponse;
 
-        const imageResponse = await handleImageRequest(request, db, env);
-        if (imageResponse) return imageResponse;
+      const imageResponse = await handleImageRequest(request, db, env);
+      if (imageResponse) return imageResponse;
 
-        const heroMediaResponse =
-          await handleHeroMediaRequest(request, db, env);
-        if (heroMediaResponse) return heroMediaResponse;
+      const heroMediaResponse = await handleHeroMediaRequest(request, db, env);
+      if (heroMediaResponse) return heroMediaResponse;
 
-        const notificationResponse =
-          await handleNotificationRequest(
-            request,
-            db,
-            env,
-          );
-        if (notificationResponse) {
-          return notificationResponse;
-        }
+      const notificationResponse = await handleNotificationRequest(
+        request,
+        db,
+        env,
+      );
+      if (notificationResponse) {
+        return notificationResponse;
+      }
 
-      const likesResponse =
-        await handleLikesRequest(request, db, env);
+      const likesResponse = await handleLikesRequest(request, db, env);
 
       if (likesResponse) {
         return likesResponse;
       }
 
-      const usersResponse =
-        await handleUsersRequest(request, db, env);
+      const usersResponse = await handleUsersRequest(request, db, env);
 
       if (usersResponse) {
         return usersResponse;
       }
 
-      if (
-        path === "/api/health" ||
-        path === "/api/healthz"
-      ) {
+      if (path === "/api/health" || path === "/api/healthz") {
         await client.query("select 1");
-        return json({ ok: true, service: "Lovely Kids Worker API", database: "connected" });
+        return json({
+          ok: true,
+          service: "Lovely Kids Worker API",
+          database: "connected",
+        });
       }
 
       if (request.method === "GET" && path === "/api/products") {
-        const rows = await db.select().from(productsTable).orderBy(desc(productsTable.createdAt));
+        const rows = await db
+          .select()
+          .from(productsTable)
+          .orderBy(desc(productsTable.createdAt));
         return json(rows.map(toProduct));
       }
 
       if (request.method === "GET" && path === "/api/settings") {
-        const rows = await db.select().from(appSettingsTable).where(eq(appSettingsTable.id, 1));
+        const rows = await db
+          .select()
+          .from(appSettingsTable)
+          .where(eq(appSettingsTable.id, 1));
         return json((rows[0]?.data as Record<string, unknown>) ?? {});
       }
 
