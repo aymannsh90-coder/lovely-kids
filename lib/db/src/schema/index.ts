@@ -13,3 +13,5 @@ export * from "./product-barcodes";
 export * from "./security-audit-logs";
 
 export * from "./cash-sessions";
+
+export * from "./pos-sales";
