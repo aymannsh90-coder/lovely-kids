@@ -13,6 +13,7 @@ import {
   createPosSale,
   getCurrentCashSession,
   lookupPosProductByBarcode,
+  searchPosProducts,
   type CashSession,
   type PosProductLookup,
   type PosSaleResult,
@@ -186,6 +187,15 @@ export default function SalePanel({
   }
 
   const [barcode, setBarcode] = useState("");
+
+  const [searchResults, setSearchResults] = useState<PosProductLookup[]>([]);
+
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const [searchBusy, setSearchBusy] = useState(false);
+
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+
   const [cart, setCart] = useState<CartLine[]>([]);
 
   const [discountAmount, setDiscountAmount] = useState("0.00");
@@ -233,120 +243,210 @@ export default function SalePanel({
     setPaidAmount((totalMinor / 100).toFixed(2));
   }, [totalMinor]);
 
-  async function handleBarcode(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function clearProductSearch() {
+    setSearchResults([]);
+    setSearchOpen(false);
+    setSearchBusy(false);
+    setActiveSearchIndex(0);
+  }
 
-    const value = barcode.trim();
+  function addProductToCart(product: PosProductLookup) {
+    const colors = getColors(product);
 
-    if (!value) {
-      setError("أدخل الباركود");
-      focusBarcodeField();
-      return;
-    }
+    const color =
+      product.mappedColor ?? (colors.length === 1 ? colors[0] : null);
 
-    setLookupBusy(true);
-    setError("");
-    setMessage("");
+    const sizes = getSizes(product, color);
+
+    const size = product.mappedSize ?? (sizes.length === 1 ? sizes[0] : null);
+
+    const needsColor = colors.length > 0 && !color;
+
+    const needsSize = !needsColor && sizes.length > 0 && !size;
+
+    const selectionComplete = !needsColor && !needsSize;
+
+    const existingIndex = selectionComplete
+      ? cart.findIndex(
+          (line) =>
+            line.barcode === product.barcode &&
+            line.color === color &&
+            line.size === size,
+        )
+      : -1;
 
     let focusTarget: {
       lineId: string;
       field: LineField;
     } | null = null;
 
+    if (existingIndex >= 0) {
+      const existingLine = cart[existingIndex];
+
+      setCart(
+        cart.map((line, index) =>
+          index === existingIndex
+            ? {
+                ...line,
+                quantity: line.quantity + 1,
+              }
+            : line,
+        ),
+      );
+
+      setMessage(`تمت زيادة كمية ${product.nameAr}`);
+
+      focusTarget = {
+        lineId: existingLine.id,
+        field: "quantity",
+      };
+    } else {
+      const lineId = createKey();
+
+      setCart([
+        ...cart,
+        {
+          id: lineId,
+          barcode: product.barcode,
+          product,
+          color,
+          size,
+          quantity: 1,
+          soldUnitPrice: product.websiteUnitPrice.toFixed(2),
+        },
+      ]);
+
+      setMessage(`تمت إضافة ${product.nameAr}`);
+
+      if (needsColor) {
+        focusTarget = {
+          lineId,
+          field: "color",
+        };
+      } else if (needsSize) {
+        focusTarget = {
+          lineId,
+          field: "size",
+        };
+      }
+    }
+
+    setBarcode("");
+    setError("");
+    clearProductSearch();
+
+    if (focusTarget) {
+      focusLineField(focusTarget.lineId, focusTarget.field);
+    } else {
+      focusBarcodeField();
+    }
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" && searchResults.length > 0) {
+      event.preventDefault();
+
+      setActiveSearchIndex((current) => (current + 1) % searchResults.length);
+
+      return;
+    }
+
+    if (event.key === "ArrowUp" && searchResults.length > 0) {
+      event.preventDefault();
+
+      setActiveSearchIndex(
+        (current) =>
+          (current - 1 + searchResults.length) % searchResults.length,
+      );
+
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      clearProductSearch();
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      searchOpen &&
+      searchResults[activeSearchIndex]
+    ) {
+      event.preventDefault();
+
+      addProductToCart(searchResults[activeSearchIndex]);
+    }
+  }
+
+  async function handleBarcode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const value = barcode.trim();
+
+    if (!value) {
+      setError("أدخل الباركود أو الكود أو اسم الصنف");
+
+      focusBarcodeField();
+      return;
+    }
+
+    if (searchOpen && searchResults[activeSearchIndex]) {
+      addProductToCart(searchResults[activeSearchIndex]);
+
+      return;
+    }
+
+    setLookupBusy(true);
+    setError("");
+    setMessage("");
+    clearProductSearch();
+
     try {
       const product = await lookupPosProductByBarcode(token, value);
 
-      const colors = getColors(product);
-
-      const color =
-        product.mappedColor ?? (colors.length === 1 ? colors[0] : null);
-
-      const sizes = getSizes(product, color);
-
-      const size = product.mappedSize ?? (sizes.length === 1 ? sizes[0] : null);
-
-      const needsColor = colors.length > 0 && !color;
-
-      const needsSize = !needsColor && sizes.length > 0 && !size;
-
-      const selectionComplete = !needsColor && !needsSize;
-
-      const existingIndex = selectionComplete
-        ? cart.findIndex(
-            (line) =>
-              line.barcode === product.barcode &&
-              line.color === color &&
-              line.size === size,
-          )
-        : -1;
-
-      if (existingIndex >= 0) {
-        const existingLine = cart[existingIndex];
-
-        setCart(
-          cart.map((line, index) =>
-            index === existingIndex
-              ? {
-                  ...line,
-                  quantity: line.quantity + 1,
-                }
-              : line,
-          ),
-        );
-
-        setMessage(`تمت زيادة كمية ${product.nameAr}`);
-
-        focusTarget = {
-          lineId: existingLine.id,
-          field: "quantity",
-        };
-      } else {
-        const lineId = createKey();
-
-        setCart([
-          ...cart,
-          {
-            id: lineId,
-            barcode: product.barcode,
-            product,
-            color,
-            size,
-            quantity: 1,
-            soldUnitPrice: product.websiteUnitPrice.toFixed(2),
-          },
-        ]);
-
-        setMessage(`تمت إضافة ${product.nameAr}`);
-
-        if (needsColor) {
-          focusTarget = {
-            lineId,
-            field: "color",
-          };
-        } else if (needsSize) {
-          focusTarget = {
-            lineId,
-            field: "size",
-          };
-        }
-      }
-
-      setBarcode("");
+      addProductToCart(product);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         onUnauthorized();
         return;
       }
 
-      setError(errorMessage(caught));
+      if (caught instanceof ApiError && caught.status === 404) {
+        setSearchBusy(true);
+
+        try {
+          const result = await searchPosProducts(token, value);
+
+          setSearchResults(result.results);
+
+          setActiveSearchIndex(0);
+
+          setSearchOpen(result.results.length > 0);
+
+          if (result.results.length === 0) {
+            setError("لم يتم العثور على أصناف مطابقة");
+          } else {
+            setMessage(
+              `تم العثور على ${result.results.length} صنف، اختر الصنف المطلوب`,
+            );
+          }
+        } catch (searchError) {
+          if (searchError instanceof ApiError && searchError.status === 401) {
+            onUnauthorized();
+            return;
+          }
+
+          setError(errorMessage(searchError));
+        } finally {
+          setSearchBusy(false);
+        }
+      } else {
+        setError(errorMessage(caught));
+      }
     } finally {
       setLookupBusy(false);
-
-      if (focusTarget) {
-        focusLineField(focusTarget.lineId, focusTarget.field);
-      } else {
-        focusBarcodeField();
-      }
+      focusBarcodeField();
     }
   }
 
@@ -567,15 +667,22 @@ export default function SalePanel({
 
         <form className="barcode-form" onSubmit={handleBarcode}>
           <label>
-            <span>مسح أو إدخال الباركود</span>
+            <span>مسح الباركود أو البحث بالكود أو اسم الصنف</span>
 
             <input
               ref={barcodeInput}
               dir="ltr"
               autoComplete="off"
               value={barcode}
-              onChange={(event) => setBarcode(event.target.value)}
-              placeholder="امسح الباركود هنا"
+              onChange={(event) => {
+                setBarcode(event.target.value);
+
+                if (searchOpen) {
+                  clearProductSearch();
+                }
+              }}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="امسح الباركود أو اكتب الكود أو اسم الصنف"
               disabled={lookupBusy}
             />
           </label>
@@ -585,9 +692,67 @@ export default function SalePanel({
             type="submit"
             disabled={lookupBusy}
           >
-            {lookupBusy ? "جاري البحث…" : "إضافة الصنف"}
+            {lookupBusy ? "جاري البحث…" : "بحث / إضافة"}
           </button>
         </form>
+
+        {(searchBusy || searchOpen) && (
+          <section className="pos-product-search-panel">
+            <header>
+              <div>
+                <strong>نتائج البحث</strong>
+
+                <span>استخدم الأسهم ثم Enter للاختيار</span>
+              </div>
+
+              <button type="button" onClick={clearProductSearch}>
+                إغلاق
+              </button>
+            </header>
+
+            {searchBusy ? (
+              <div className="pos-search-loading">جاري البحث عن الأصناف…</div>
+            ) : (
+              <div className="pos-product-search-results">
+                {searchResults.map((product, index) => (
+                  <button
+                    className={index === activeSearchIndex ? "is-active" : ""}
+                    type="button"
+                    key={`${product.productId}-${product.barcode}`}
+                    onMouseEnter={() => setActiveSearchIndex(index)}
+                    onClick={() => addProductToCart(product)}
+                  >
+                    <img src={product.image} alt="" />
+
+                    <div className="pos-search-product-info">
+                      <strong>{product.nameAr}</strong>
+
+                      <div>
+                        <span>الكود: {product.productCode ?? "—"}</span>
+
+                        <span dir="ltr">{product.barcode}</span>
+                      </div>
+                    </div>
+
+                    <div className="pos-search-product-side">
+                      <strong>
+                        {formatMinor(product.websiteUnitPriceMinor)}
+                      </strong>
+
+                      <span
+                        className={product.outOfStock ? "out-of-stock" : ""}
+                      >
+                        {product.outOfStock
+                          ? "غير متوفر"
+                          : `المخزون: ${product.stock ?? "غير محدد"}`}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {error && <div className="alert error-alert sale-alert">{error}</div>}
 

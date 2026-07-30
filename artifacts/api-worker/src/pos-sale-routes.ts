@@ -500,13 +500,6 @@ async function handleProductSearch(request: Request, db: Db, env: Env) {
 
       const fallbackBarcode = extraBarcodes[0] ?? null;
 
-      const selectedBarcode =
-        primaryBarcode ?? fallbackBarcode?.barcode ?? null;
-
-      if (!selectedBarcode) {
-        return null;
-      }
-
       const productCode =
         product.productCode?.trim().toLocaleLowerCase("ar") ?? "";
 
@@ -517,6 +510,19 @@ async function handleProductSearch(request: Request, db: Db, env: Env) {
       const exactExtraBarcode = extraBarcodes.find(
         (row) => row.barcode.toLocaleLowerCase("ar") === normalizedQuery,
       );
+
+      const selectedMapping =
+        exactExtraBarcode ?? (primaryBarcode ? null : fallbackBarcode);
+
+      const selectedBarcode =
+        exactExtraBarcode?.barcode ??
+        primaryBarcode ??
+        fallbackBarcode?.barcode ??
+        null;
+
+      if (!selectedBarcode) {
+        return null;
+      }
 
       let rank = 4;
 
@@ -539,8 +545,6 @@ async function handleProductSearch(request: Request, db: Db, env: Env) {
       } else {
         rank = 3;
       }
-
-      const selectedMapping = primaryBarcode ? null : fallbackBarcode;
 
       return {
         rank,
