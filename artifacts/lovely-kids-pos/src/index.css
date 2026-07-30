@@ -2280,3 +2280,216 @@ textarea:disabled {
     flex-wrap: wrap;
   }
 }
+
+/* Reusable invoice document table */
+
+.document-items-table-wrap {
+  margin-top: 20px;
+  overflow-x: auto;
+  border: 1px solid #d8e5ea;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.document-items-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.document-items-table th {
+  padding: 12px 9px;
+  border-bottom: 1px solid #cfdce2;
+  color: #344956;
+  background: #edf6f8;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.document-items-table td {
+  padding: 9px 7px;
+  border-bottom: 1px solid #e4ecef;
+  border-inline-start: 1px solid #eef3f5;
+  vertical-align: middle;
+}
+
+.document-items-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.document-items-table tbody tr {
+  background: #fff;
+}
+
+.document-items-table tbody tr:hover {
+  background: #fbfdfe;
+}
+
+.document-items-table .document-row-incomplete {
+  background: #fffaf1;
+}
+
+.document-row-number {
+  width: 46px;
+  color: #687b87;
+  font-weight: 900;
+  text-align: center;
+}
+
+.document-barcode-cell {
+  width: 142px;
+  color: #324b5a;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: center;
+  word-break: break-all;
+}
+
+.document-code-cell {
+  width: 90px;
+  text-align: center;
+  font-weight: 800;
+}
+
+.document-product-cell {
+  display: flex;
+  min-width: 250px;
+  align-items: center;
+  gap: 10px;
+}
+
+.document-product-cell img {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 9px;
+  object-fit: cover;
+  background: #eef3f5;
+}
+
+.document-product-cell > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.document-product-cell strong {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+}
+
+.document-product-cell small {
+  color: #74838e;
+  font-size: 11px;
+}
+
+.document-control-cell {
+  width: 132px;
+}
+
+.document-quantity-cell {
+  width: 82px;
+}
+
+.document-price-cell {
+  width: 118px;
+}
+
+.document-control-cell select,
+.document-control-cell input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 1px solid #cbdbe2;
+  border-radius: 9px;
+  outline: none;
+  color: #172733;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+}
+
+.document-control-cell select:focus,
+.document-control-cell input:focus {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 3px rgba(233, 30, 140, 0.1);
+}
+
+.document-control-cell select:disabled {
+  color: #334b58;
+  background: #f1f5f7;
+  opacity: 1;
+}
+
+.document-money-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  border: 1px solid #cbdbe2;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.document-money-input:focus-within {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 3px rgba(233, 30, 140, 0.1);
+}
+
+.document-money-input input {
+  min-height: 36px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+.document-money-input span {
+  color: #536974;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.document-total-cell {
+  width: 112px;
+  color: #172c38;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.document-remove-cell {
+  width: 58px;
+  text-align: center;
+}
+
+.document-remove-cell button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  color: #b12356;
+  background: #ffeaf2;
+  font-size: 21px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.document-remove-cell button:hover {
+  color: #fff;
+  background: #c82b60;
+}
+
+.document-empty-value {
+  display: block;
+  color: #8b989f;
+  text-align: center;
+}

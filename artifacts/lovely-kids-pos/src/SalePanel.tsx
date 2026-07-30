@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import JsBarcode from "jsbarcode";
 
 import {
@@ -20,6 +27,8 @@ interface CartLine {
   quantity: number;
   soldUnitPrice: string;
 }
+
+type LineField = "color" | "size" | "quantity" | "price";
 
 interface SalePanelProps {
   token: string;
@@ -127,6 +136,55 @@ export default function SalePanel({
 
   const idempotencyKey = useRef<string | null>(null);
 
+  function focusBarcodeField() {
+    window.setTimeout(() => {
+      barcodeInput.current?.focus();
+      barcodeInput.current?.select();
+    }, 0);
+  }
+
+  function getLineField(lineId: string, field: LineField) {
+    return document.querySelector<HTMLInputElement | HTMLSelectElement>(
+      `[data-line-id="${lineId}"][data-line-field="${field}"]`,
+    );
+  }
+
+  function focusLineField(lineId: string, field: LineField) {
+    window.setTimeout(() => {
+      const element = getLineField(lineId, field);
+
+      if (!element || element.disabled) {
+        focusBarcodeField();
+        return;
+      }
+
+      element.focus();
+
+      if (element instanceof HTMLInputElement) {
+        element.select();
+      }
+    }, 0);
+  }
+
+  function moveAfterEnter(
+    event: KeyboardEvent<HTMLElement>,
+    lineId: string,
+    nextField: LineField | "barcode",
+  ) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (nextField === "barcode") {
+      focusBarcodeField();
+      return;
+    }
+
+    focusLineField(lineId, nextField);
+  }
+
   const [barcode, setBarcode] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
 
@@ -182,13 +240,18 @@ export default function SalePanel({
 
     if (!value) {
       setError("أدخل الباركود");
-      barcodeInput.current?.focus();
+      focusBarcodeField();
       return;
     }
 
     setLookupBusy(true);
     setError("");
     setMessage("");
+
+    let focusTarget: {
+      lineId: string;
+      field: LineField;
+    } | null = null;
 
     try {
       const product = await lookupPosProductByBarcode(token, value);
@@ -202,29 +265,48 @@ export default function SalePanel({
 
       const size = product.mappedSize ?? (sizes.length === 1 ? sizes[0] : null);
 
-      setCart((current) => {
-        const existing = current.findIndex(
-          (line) =>
-            line.barcode === product.barcode &&
-            line.color === color &&
-            line.size === size,
-        );
+      const needsColor = colors.length > 0 && !color;
 
-        if (existing >= 0) {
-          return current.map((line, index) =>
-            index === existing
+      const needsSize = !needsColor && sizes.length > 0 && !size;
+
+      const selectionComplete = !needsColor && !needsSize;
+
+      const existingIndex = selectionComplete
+        ? cart.findIndex(
+            (line) =>
+              line.barcode === product.barcode &&
+              line.color === color &&
+              line.size === size,
+          )
+        : -1;
+
+      if (existingIndex >= 0) {
+        const existingLine = cart[existingIndex];
+
+        setCart(
+          cart.map((line, index) =>
+            index === existingIndex
               ? {
                   ...line,
                   quantity: line.quantity + 1,
                 }
               : line,
-          );
-        }
+          ),
+        );
 
-        return [
-          ...current,
+        setMessage(`تمت زيادة كمية ${product.nameAr}`);
+
+        focusTarget = {
+          lineId: existingLine.id,
+          field: "quantity",
+        };
+      } else {
+        const lineId = createKey();
+
+        setCart([
+          ...cart,
           {
-            id: createKey(),
+            id: lineId,
             barcode: product.barcode,
             product,
             color,
@@ -232,11 +314,24 @@ export default function SalePanel({
             quantity: 1,
             soldUnitPrice: product.websiteUnitPrice.toFixed(2),
           },
-        ];
-      });
+        ]);
+
+        setMessage(`تمت إضافة ${product.nameAr}`);
+
+        if (needsColor) {
+          focusTarget = {
+            lineId,
+            field: "color",
+          };
+        } else if (needsSize) {
+          focusTarget = {
+            lineId,
+            field: "size",
+          };
+        }
+      }
 
       setBarcode("");
-      setMessage(`تمت إضافة ${product.nameAr}`);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         onUnauthorized();
@@ -247,24 +342,92 @@ export default function SalePanel({
     } finally {
       setLookupBusy(false);
 
-      window.setTimeout(() => barcodeInput.current?.focus(), 0);
+      if (focusTarget) {
+        focusLineField(focusTarget.lineId, focusTarget.field);
+      } else {
+        focusBarcodeField();
+      }
     }
   }
 
   function updateLine(id: string, patch: Partial<CartLine>) {
     setCart((current) =>
-      current.map((line) => (line.id === id ? { ...line, ...patch } : line)),
+      current.map((line) =>
+        line.id === id
+          ? {
+              ...line,
+              ...patch,
+            }
+          : line,
+      ),
     );
+  }
+
+  function updateVariantSelection(id: string, patch: Partial<CartLine>) {
+    const currentLine = cart.find((line) => line.id === id);
+
+    if (!currentLine) {
+      return id;
+    }
+
+    const updatedLine: CartLine = {
+      ...currentLine,
+      ...patch,
+    };
+
+    const duplicate = selectionIsComplete(updatedLine)
+      ? cart.find(
+          (line) =>
+            line.id !== id &&
+            line.barcode === updatedLine.barcode &&
+            line.color === updatedLine.color &&
+            line.size === updatedLine.size,
+        )
+      : undefined;
+
+    if (duplicate) {
+      setCart(
+        cart
+          .filter((line) => line.id !== id)
+          .map((line) =>
+            line.id === duplicate.id
+              ? {
+                  ...line,
+                  quantity: line.quantity + updatedLine.quantity,
+                }
+              : line,
+          ),
+      );
+
+      setMessage("تم دمج البند مع نفس اللون والمقاس");
+
+      return duplicate.id;
+    }
+
+    setCart(cart.map((line) => (line.id === id ? updatedLine : line)));
+
+    return id;
   }
 
   function changeColor(line: CartLine, colorValue: string) {
     const color = colorValue || null;
+
     const sizes = getSizes(line.product, color);
 
-    updateLine(line.id, {
+    const targetId = updateVariantSelection(line.id, {
       color,
       size: sizes.length === 1 ? sizes[0] : null,
     });
+
+    focusLineField(targetId, sizes.length > 1 ? "size" : "quantity");
+  }
+
+  function changeSize(line: CartLine, sizeValue: string) {
+    const targetId = updateVariantSelection(line.id, {
+      size: sizeValue || null,
+    });
+
+    focusLineField(targetId, "quantity");
   }
 
   async function completeSale() {
@@ -435,35 +598,70 @@ export default function SalePanel({
         {cart.length === 0 ? (
           <div className="empty-cart">لم تتم إضافة أصناف إلى الفاتورة بعد.</div>
         ) : (
-          <div className="sale-cart">
-            {cart.map((line) => {
-              const colors = getColors(line.product);
+          <div className="document-items-table-wrap">
+            <table className="document-items-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>الباركود</th>
+                  <th>الكود</th>
+                  <th>اسم الصنف</th>
+                  <th>اللون</th>
+                  <th>المقاس</th>
+                  <th>الكمية</th>
+                  <th>سعر البيع</th>
+                  <th>المجموع</th>
+                  <th>حذف</th>
+                </tr>
+              </thead>
 
-              const sizes = getSizes(line.product, line.color);
+              <tbody>
+                {cart.map((line, index) => {
+                  const colors = getColors(line.product);
 
-              const availability = getLineAvailability(line);
+                  const sizes = getSizes(line.product, line.color);
 
-              return (
-                <article className="sale-line" key={line.id}>
-                  <img src={line.product.image} alt="" />
+                  const availability = getLineAvailability(line);
 
-                  <div className="sale-line-main">
-                    <strong>{line.product.nameAr}</strong>
+                  const lineTotal =
+                    (moneyToMinor(line.soldUnitPrice) ?? 0) * line.quantity;
 
-                    <div className="sale-line-meta">
-                      <span dir="ltr">{line.barcode}</span>
+                  return (
+                    <tr
+                      className={
+                        selectionIsComplete(line)
+                          ? ""
+                          : "document-row-incomplete"
+                      }
+                      key={line.id}
+                    >
+                      <td className="document-row-number">{index + 1}</td>
 
-                      <span>الكود: {line.product.productCode ?? "—"}</span>
+                      <td className="document-barcode-cell" dir="ltr">
+                        {line.barcode}
+                      </td>
 
-                      <span>المخزون: {availability.stock ?? "غير محدد"}</span>
-                    </div>
+                      <td className="document-code-cell">
+                        {line.product.productCode ?? "—"}
+                      </td>
 
-                    <div className="sale-line-fields">
-                      {colors.length > 0 && (
-                        <label>
-                          <span>اللون</span>
+                      <td className="document-product-cell">
+                        <img src={line.product.image} alt="" />
 
+                        <div>
+                          <strong>{line.product.nameAr}</strong>
+
+                          <small>
+                            المخزون: {availability.stock ?? "غير محدد"}
+                          </small>
+                        </div>
+                      </td>
+
+                      <td className="document-control-cell">
+                        {colors.length > 0 ? (
                           <select
+                            data-line-id={line.id}
+                            data-line-field="color"
                             value={line.color ?? ""}
                             onChange={(event) =>
                               changeColor(line, event.target.value)
@@ -478,19 +676,19 @@ export default function SalePanel({
                               </option>
                             ))}
                           </select>
-                        </label>
-                      )}
+                        ) : (
+                          <span className="document-empty-value">—</span>
+                        )}
+                      </td>
 
-                      {sizes.length > 0 && (
-                        <label>
-                          <span>المقاس</span>
-
+                      <td className="document-control-cell">
+                        {sizes.length > 0 ? (
                           <select
+                            data-line-id={line.id}
+                            data-line-field="size"
                             value={line.size ?? ""}
                             onChange={(event) =>
-                              updateLine(line.id, {
-                                size: event.target.value || null,
-                              })
+                              changeSize(line, event.target.value)
                             }
                             disabled={!!line.product.mappedSize}
                           >
@@ -502,71 +700,80 @@ export default function SalePanel({
                               </option>
                             ))}
                           </select>
-                        </label>
-                      )}
+                        ) : (
+                          <span className="document-empty-value">—</span>
+                        )}
+                      </td>
 
-                      <label>
-                        <span>الكمية</span>
-
+                      <td className="document-control-cell document-quantity-cell">
                         <input
+                          data-line-id={line.id}
+                          data-line-field="quantity"
                           dir="ltr"
                           type="number"
                           min="1"
                           max="99"
                           step="1"
                           value={line.quantity}
+                          onFocus={(event) => event.currentTarget.select()}
                           onChange={(event) =>
                             updateLine(line.id, {
                               quantity: Number(event.target.value),
                             })
                           }
+                          onKeyDown={(event) =>
+                            moveAfterEnter(event, line.id, "price")
+                          }
                         />
-                      </label>
+                      </td>
 
-                      <label>
-                        <span>سعر البيع</span>
-
-                        <div className="money-input">
+                      <td className="document-control-cell document-price-cell">
+                        <div className="document-money-input">
                           <input
+                            data-line-id={line.id}
+                            data-line-field="price"
                             dir="ltr"
                             type="number"
                             min="0"
                             step="0.01"
                             value={line.soldUnitPrice}
+                            onFocus={(event) => event.currentTarget.select()}
                             onChange={(event) =>
                               updateLine(line.id, {
                                 soldUnitPrice: event.target.value,
                               })
                             }
+                            onKeyDown={(event) =>
+                              moveAfterEnter(event, line.id, "barcode")
+                            }
                           />
 
                           <span>₪</span>
                         </div>
-                      </label>
-                    </div>
-                  </div>
+                      </td>
 
-                  <div className="sale-line-total">
-                    <strong>
-                      {formatMinor(
-                        (moneyToMinor(line.soldUnitPrice) ?? 0) * line.quantity,
-                      )}
-                    </strong>
+                      <td className="document-total-cell">
+                        {formatMinor(lineTotal)}
+                      </td>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCart((current) =>
-                          current.filter((item) => item.id !== line.id),
-                        )
-                      }
-                    >
-                      حذف
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+                      <td className="document-remove-cell">
+                        <button
+                          type="button"
+                          aria-label={`حذف ${line.product.nameAr}`}
+                          onClick={() =>
+                            setCart((current) =>
+                              current.filter((item) => item.id !== line.id),
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
