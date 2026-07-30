@@ -71,6 +71,27 @@ function parseMoneyToMinor(
   return minor;
 }
 
+function parseSessionId(
+  value: unknown,
+): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" &&
+          value.trim()
+        ? Number(value)
+        : Number.NaN;
+
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed <= 0
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function getBusinessDate(): string {
   const formatter = new Intl.DateTimeFormat(
     "en-US",
@@ -152,6 +173,30 @@ function toCashSession(
   };
 }
 
+function toClosedSessionResult(
+  row: typeof cashSessionsTable.$inferSelect,
+  alreadyClosed: boolean,
+) {
+  const expectedBalanceMinor =
+    row.expectedBalanceMinor ??
+    row.openingBalanceMinor;
+
+  const closingBalanceMinor =
+    row.closingBalanceMinor ??
+    expectedBalanceMinor;
+
+  const varianceMinor =
+    closingBalanceMinor -
+    expectedBalanceMinor;
+
+  return {
+    session: toCashSession(row),
+    alreadyClosed,
+    varianceMinor,
+    variance: varianceMinor / 100,
+  };
+}
+
 type PosUser = NonNullable<
   Awaited<ReturnType<typeof getCurrentUser>>
 >;
@@ -224,6 +269,28 @@ async function findOpenSession(
     )
     .orderBy(
       desc(cashSessionsTable.openedAt),
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+async function findSessionById(
+  db: Db,
+  sessionId: number,
+  registerKey: string,
+) {
+  const rows = await db
+    .select()
+    .from(cashSessionsTable)
+    .where(
+      and(
+        eq(cashSessionsTable.id, sessionId),
+        eq(
+          cashSessionsTable.registerKey,
+          registerKey,
+        ),
+      ),
     )
     .limit(1);
 
@@ -438,6 +505,211 @@ async function handleOpenSession(
   }
 }
 
+async function handleCloseSession(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requirePosUser(
+    request,
+    db,
+    env,
+  );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body = await request
+    .json()
+    .catch(() => null);
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return json(
+      { error: "بيانات غير صالحة" },
+      400,
+    );
+  }
+
+  const payload =
+    body as Record<string, unknown>;
+
+  const sessionId = parseSessionId(
+    payload.sessionId,
+  );
+
+  if (sessionId === null) {
+    return json(
+      { error: "رقم الجلسة غير صالح" },
+      400,
+    );
+  }
+
+  const closingBalanceMinor =
+    parseMoneyToMinor(
+      payload.closingBalance,
+    );
+
+  if (closingBalanceMinor === null) {
+    return json(
+      {
+        error:
+          "رصيد إغلاق الصندوق غير صالح",
+      },
+      400,
+    );
+  }
+
+  const registerKey =
+    normalizeRegisterKey(
+      payload.registerKey ?? "main",
+    );
+
+  if (!registerKey) {
+    return json(
+      { error: "معرف صندوق غير صالح" },
+      400,
+    );
+  }
+
+  let closingNote: string | null = null;
+
+  if (
+    payload.closingNote !== undefined &&
+    payload.closingNote !== null
+  ) {
+    if (
+      typeof payload.closingNote !==
+      "string"
+    ) {
+      return json(
+        { error: "الملاحظات غير صالحة" },
+        400,
+      );
+    }
+
+    const note =
+      payload.closingNote.trim();
+
+    if (note.length > 500) {
+      return json(
+        {
+          error:
+            "الملاحظات طويلة جدًا",
+        },
+        400,
+      );
+    }
+
+    closingNote = note || null;
+  }
+
+  const existing = await findSessionById(
+    db,
+    sessionId,
+    registerKey,
+  );
+
+  if (!existing) {
+    return json(
+      { error: "جلسة الصندوق غير موجودة" },
+      404,
+    );
+  }
+
+  if (existing.status === "closed") {
+    return json(
+      toClosedSessionResult(
+        existing,
+        true,
+      ),
+    );
+  }
+
+  if (existing.status !== "open") {
+    return json(
+      {
+        error:
+          "حالة جلسة الصندوق غير صالحة",
+      },
+      409,
+    );
+  }
+
+  const expectedBalanceMinor =
+    existing.expectedBalanceMinor ??
+    existing.openingBalanceMinor;
+
+  const now = new Date();
+
+  const rows = await db
+    .update(cashSessionsTable)
+    .set({
+      closedByUserId: auth.user.id,
+      closingBalanceMinor,
+      expectedBalanceMinor,
+      status: "closed",
+      closingNote,
+      closedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(
+          cashSessionsTable.id,
+          sessionId,
+        ),
+        eq(
+          cashSessionsTable.registerKey,
+          registerKey,
+        ),
+        eq(
+          cashSessionsTable.status,
+          "open",
+        ),
+      ),
+    )
+    .returning();
+
+  const closed = rows[0];
+
+  if (!closed) {
+    const latest = await findSessionById(
+      db,
+      sessionId,
+      registerKey,
+    );
+
+    if (latest?.status === "closed") {
+      return json(
+        toClosedSessionResult(
+          latest,
+          true,
+        ),
+      );
+    }
+
+    return json(
+      {
+        error:
+          "تعذر إغلاق جلسة الصندوق",
+      },
+      409,
+    );
+  }
+
+  return json(
+    toClosedSessionResult(
+      closed,
+      false,
+    ),
+  );
+}
+
 export async function handleCashSessionRequest(
   request: Request,
   db: Db,
@@ -464,6 +736,18 @@ export async function handleCashSessionRequest(
       "/api/pos/cash-sessions/open"
   ) {
     return handleOpenSession(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path ===
+      "/api/pos/cash-sessions/close"
+  ) {
+    return handleCloseSession(
       request,
       db,
       env,
