@@ -11,3 +11,5 @@ export * from "./web-push-subscriptions";
 
 export * from "./product-barcodes";
 export * from "./security-audit-logs";
+
+export * from "./cash-sessions";

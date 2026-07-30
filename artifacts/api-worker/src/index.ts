@@ -11,6 +11,7 @@ import { handleNotificationRequest } from "./notification-routes";
 import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
+import { handleCashSessionRequest } from "./cash-session-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -73,6 +74,17 @@ export default {
     try {
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
+
+      const cashSessionResponse =
+        await handleCashSessionRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (cashSessionResponse) {
+        return cashSessionResponse;
+      }
 
       const passwordResetResponse =
         await handlePasswordResetRequest(request, db, env);
