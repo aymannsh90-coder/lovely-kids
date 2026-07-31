@@ -7,6 +7,7 @@ import DashboardPage from "../pages/DashboardPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import NewSalePage from "../pages/sales/NewSalePage";
+import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
 import TodaySalesPage from "../pages/sales/TodaySalesPage";
 
 export default function AppRouter() {
@@ -28,18 +29,7 @@ export default function AppRouter() {
           path="sales/returns"
           element={
             <RequireOpenSession>
-              <ComingSoonPage
-                icon="↩️"
-                title="مردودات المبيعات"
-                description="مرتجع آمن مرتبط بالفاتورة الأصلية والمخزون."
-                points={[
-                  "مرتجع بباركود الفاتورة.",
-                  "مرتجع بباركود الصنف.",
-                  "اختيار الفاتورة والكمية المرتجعة.",
-                  "إعادة اللون والمقاس الصحيحين إلى المخزون.",
-                  "اعتماد سعر البيع الأصلي وتحديث الصندوق.",
-                ]}
-              />
+              <SalesReturnsPage />
             </RequireOpenSession>
           }
         />

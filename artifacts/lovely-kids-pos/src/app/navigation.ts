@@ -68,7 +68,7 @@ export const posNavigation: PosNavigationItem[] = [
     description: "مرتجع بباركود الفاتورة أو باركود الصنف.",
     icon: "↩️",
     requiresOpenSession: true,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "invoice-check",
