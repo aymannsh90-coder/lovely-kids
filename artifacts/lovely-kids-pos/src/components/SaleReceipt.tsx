@@ -1,4 +1,4 @@
-import JsBarcode from "jsbarcode";
+import { QRCodeSVG } from "qrcode.react";
 
 import type { PosSaleResult } from "../lib/api";
 
@@ -17,22 +17,6 @@ function formatDateTime(value: string) {
 
 function shortProductName(value: string) {
   return value.trim().split(/\s+/)[0] || "صنف";
-}
-
-function renderBarcode(element: SVGSVGElement | null, value: string) {
-  if (!element) return;
-
-  try {
-    JsBarcode(element, value, {
-      format: "CODE128",
-      width: 1,
-      height: 34,
-      margin: 0,
-      displayValue: false,
-    });
-  } catch {
-    element.innerHTML = "";
-  }
 }
 
 export default function SaleReceipt({
@@ -127,15 +111,20 @@ export default function SaleReceipt({
       </div>
 
       <div className="receipt-invoice-barcode">
-        <svg ref={(element) => renderBarcode(element, result.sale.publicId)} />
-
-        <span dir="ltr">{result.sale.publicId}</span>
-
-        <small>امسح الباركود لاسترجاع تفاصيل الفاتورة</small>
+        <QRCodeSVG
+          value={result.sale.publicId}
+          size={96}
+          level="M"
+          aria-label={`رمز QR للفاتورة ${result.sale.publicId}`}
+        />
       </div>
 
       <footer className="receipt-footer">
         <strong>شكرًا لتسوقكم من Lovely Kids</strong>
+
+        <b className="receipt-exchange-reminder">
+          يرجى الاحتفاظ بالفاتورة لإتمام عملية التبديل.
+        </b>
 
         <span>الاستبدال بالبضاعة السليمة حسب سياسة المتجر</span>
       </footer>

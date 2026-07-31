@@ -6,7 +6,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import JsBarcode from "jsbarcode";
+import { QRCodeSVG } from "qrcode.react";
 
 import {
   ApiError,
@@ -1177,31 +1177,20 @@ export default function SalePanel({
           </div>
 
           <div className="receipt-invoice-barcode">
-            <svg
-              ref={(element) => {
-                if (!element) return;
-
-                try {
-                  JsBarcode(element, lastSale.sale.publicId, {
-                    format: "CODE128",
-                    width: 1,
-                    height: 34,
-                    margin: 0,
-                    displayValue: false,
-                  });
-                } catch {
-                  element.innerHTML = "";
-                }
-              }}
+            <QRCodeSVG
+              value={lastSale.sale.publicId}
+              size={96}
+              level="M"
+              aria-label={`رمز QR للفاتورة ${lastSale.sale.publicId}`}
             />
-
-            <span dir="ltr">{lastSale.sale.publicId}</span>
-
-            <small>امسح الباركود لاسترجاع تفاصيل الفاتورة</small>
           </div>
 
           <footer className="receipt-footer">
             <strong>شكرًا لتسوقكم من Lovely Kids</strong>
+
+            <b className="receipt-exchange-reminder">
+              يرجى الاحتفاظ بالفاتورة لإتمام عملية التبديل.
+            </b>
 
             <span>الاستبدال بالبضاعة السليمة حسب سياسة المتجر</span>
           </footer>

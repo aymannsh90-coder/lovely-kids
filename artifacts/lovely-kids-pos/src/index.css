@@ -2945,7 +2945,6 @@ textarea:disabled {
 /* Receipt complete layout isolation */
 
 @media print {
-  html,
   body[data-print-mode="receipt"],
   body[data-print-mode="receipt"] #root {
     width: 56mm !important;
@@ -3016,5 +3015,41 @@ textarea:disabled {
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
+  }
+}
+
+/* Final QR receipt adjustments */
+
+@media print {
+  .receipt-invoice-barcode svg {
+    width: 22mm !important;
+    max-width: 22mm !important;
+    height: 22mm !important;
+  }
+
+  .receipt-invoice-barcode small {
+    font-size: 7px;
+    font-weight: 700;
+  }
+
+  .receipt-exchange-reminder {
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1.5;
+  }
+
+  body[data-print-mode="receipt"] .route-content > .receipt-print-area {
+    display: block !important;
+    position: static !important;
+    width: 52mm !important;
+    min-width: 52mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-print-area {
+    zoom: 0.8 !important;
+    margin-right: auto !important;
+    margin-left: auto !important;
   }
 }
