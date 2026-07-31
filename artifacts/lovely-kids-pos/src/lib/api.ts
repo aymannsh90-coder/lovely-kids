@@ -359,3 +359,192 @@ export function getPosSaleByPublicId(token: string, publicId: string) {
     token,
   );
 }
+
+export interface PosSaleReturnPreviewItem {
+  id: string;
+  productId: string | null;
+  lineNumber: number;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  productImage: string | null;
+
+  color: string | null;
+  size: string | null;
+
+  soldQuantity: number;
+  returnedQuantity: number;
+  returnableQuantity: number;
+
+  soldUnitPriceMinor: number;
+  soldUnitPrice: number;
+
+  originalLineTotalMinor: number;
+  originalLineTotal: number;
+
+  returnableGrossMinor: number;
+  returnableGross: number;
+}
+
+export interface PosSaleReturnPreviewResult {
+  sale: {
+    id: string;
+    publicId: string;
+
+    status: string;
+    registerKey: string;
+    businessDate: string;
+
+    customerName: string | null;
+    customerPhone: string | null;
+
+    subtotalMinor: number;
+    subtotal: number;
+
+    discountMinor: number;
+    discount: number;
+
+    totalMinor: number;
+    total: number;
+
+    createdAt: string;
+  };
+
+  filter: {
+    barcode: string | null;
+  };
+
+  summary: {
+    soldQuantity: number;
+    returnedQuantity: number;
+    returnableQuantity: number;
+    fullyReturned: boolean;
+  };
+
+  items: PosSaleReturnPreviewItem[];
+}
+
+export function getPosSaleReturnPreview(
+  token: string,
+  publicId: string,
+  barcode?: string,
+) {
+  const params = new URLSearchParams({
+    publicId: publicId.trim().toUpperCase(),
+  });
+
+  const normalizedBarcode = barcode?.trim();
+
+  if (normalizedBarcode) {
+    params.set("barcode", normalizedBarcode);
+  }
+
+  return apiRequest<PosSaleReturnPreviewResult>(
+    `/api/pos/sales/returns/preview?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+export interface PosSaleReturnItemResult {
+  id: string;
+  originalSaleItemId: string;
+  productId: string | null;
+
+  lineNumber: number;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+
+  color: string | null;
+  size: string | null;
+
+  quantity: number;
+
+  soldUnitPriceMinor: number;
+  soldUnitPrice: number;
+
+  grossAmountMinor: number;
+  grossAmount: number;
+
+  allocatedDiscountMinor: number;
+  allocatedDiscount: number;
+
+  refundAmountMinor: number;
+  refundAmount: number;
+
+  generalStockBefore: number | null;
+  generalStockAfter: number | null;
+
+  variantStockBefore: number | null;
+  variantStockAfter: number | null;
+}
+
+export interface PosSaleReturnResult {
+  alreadyCreated: boolean;
+
+  saleReturn: {
+    id: string;
+    publicId: string;
+
+    originalSaleId: string;
+    cashSessionId: string;
+
+    registerKey: string;
+    businessDate: string;
+    cashierUserId: string;
+
+    status: string;
+    refundMethod: string;
+
+    grossAmountMinor: number;
+    grossAmount: number;
+
+    discountAmountMinor: number;
+    discountAmount: number;
+
+    refundAmountMinor: number;
+    refundAmount: number;
+
+    reason: string;
+    notes: string | null;
+
+    createdAt: string;
+  };
+
+  items: PosSaleReturnItemResult[];
+}
+
+export function createPosSaleReturn(
+  token: string,
+  input: {
+    registerKey: string;
+    idempotencyKey: string;
+    publicId: string;
+    reason: string;
+    notes?: string;
+
+    items: Array<{
+      originalSaleItemId: string;
+      quantity: number;
+    }>;
+  },
+) {
+  return apiRequest<PosSaleReturnResult>(
+    "/api/pos/sales/returns",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        registerKey: input.registerKey,
+        idempotencyKey: input.idempotencyKey,
+        publicId: input.publicId.trim().toUpperCase(),
+        reason: input.reason,
+        notes: input.notes || undefined,
+        items: input.items,
+      }),
+    },
+    token,
+  );
+}
