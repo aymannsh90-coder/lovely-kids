@@ -8,6 +8,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { handleCreatePosSaleReturn } from "./pos-sale-return-create";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -303,6 +304,10 @@ export async function handlePosSaleReturnRequest(
 
   if (request.method === "GET" && path === "/api/pos/sales/returns/preview") {
     return handleReturnPreview(request, db, env);
+  }
+
+  if (request.method === "POST" && path === "/api/pos/sales/returns") {
+    return handleCreatePosSaleReturn(request, db, env);
   }
 
   return null;
