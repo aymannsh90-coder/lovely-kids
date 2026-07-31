@@ -4,7 +4,7 @@ import {
   posSaleReturnsTable,
   posSalesTable,
 } from "@workspace/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -91,6 +91,60 @@ function normalizeOptionalBarcode(
   }
 
   return barcode;
+}
+
+async function getSaleNavigation(
+  db: Db,
+  sale: typeof posSalesTable.$inferSelect,
+) {
+  const [previousRows, nextRows] = await Promise.all([
+    db
+      .select({
+        publicId: posSalesTable.publicId,
+      })
+      .from(posSalesTable)
+      .where(
+        and(
+          eq(posSalesTable.registerKey, sale.registerKey),
+          eq(posSalesTable.status, "completed"),
+          or(
+            lt(posSalesTable.createdAt, sale.createdAt),
+            and(
+              eq(posSalesTable.createdAt, sale.createdAt),
+              lt(posSalesTable.id, sale.id),
+            ),
+          ),
+        ),
+      )
+      .orderBy(desc(posSalesTable.createdAt), desc(posSalesTable.id))
+      .limit(1),
+
+    db
+      .select({
+        publicId: posSalesTable.publicId,
+      })
+      .from(posSalesTable)
+      .where(
+        and(
+          eq(posSalesTable.registerKey, sale.registerKey),
+          eq(posSalesTable.status, "completed"),
+          or(
+            gt(posSalesTable.createdAt, sale.createdAt),
+            and(
+              eq(posSalesTable.createdAt, sale.createdAt),
+              gt(posSalesTable.id, sale.id),
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(posSalesTable.createdAt), asc(posSalesTable.id))
+      .limit(1),
+  ]);
+
+  return {
+    previousPublicId: previousRows[0]?.publicId ?? null,
+    nextPublicId: nextRows[0]?.publicId ?? null,
+  };
 }
 
 async function handleReturnPreview(request: Request, db: Db, env: Env) {
@@ -256,6 +310,8 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
     0,
   );
 
+  const navigation = await getSaleNavigation(db, sale);
+
   return json({
     sale: {
       id: String(sale.id),
@@ -279,6 +335,8 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
 
       createdAt: sale.createdAt.toISOString(),
     },
+
+    navigation,
 
     filter: {
       barcode: barcode ?? null,

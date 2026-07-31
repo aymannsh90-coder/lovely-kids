@@ -275,6 +275,10 @@ export interface PosSaleResult {
     notes: string | null;
     createdAt: string;
   };
+  navigation?: {
+    previousPublicId: string | null;
+    nextPublicId: string | null;
+  };
   items: PosSaleItemResult[];
 }
 
@@ -409,6 +413,11 @@ export interface PosSaleReturnPreviewResult {
     total: number;
 
     createdAt: string;
+  };
+
+  navigation?: {
+    previousPublicId: string | null;
+    nextPublicId: string | null;
   };
 
   filter: {

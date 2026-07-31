@@ -3454,8 +3454,45 @@ textarea:disabled {
   box-shadow: inset 0 0 0 2px #e91e8c;
 }
 
-.invoice-navigation-actions {
-  display: flex;
-  justify-content: flex-start;
+.invoice-sequence-navigation {
+  display: grid;
+  grid-template-columns: minmax(160px, auto) minmax(190px, 1fr) minmax(
+      160px,
+      auto
+    );
+  align-items: center;
+  gap: 12px;
   margin-top: 18px;
+}
+
+.invoice-sequence-navigation > button {
+  min-height: 44px;
+}
+
+.invoice-sequence-label {
+  color: #687788;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.invoice-list-button {
+  justify-self: center;
+}
+
+.sales-return-sequence-navigation {
+  margin: 0 0 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e3ebef;
+}
+
+@media (max-width: 650px) {
+  .invoice-sequence-navigation {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-list-button {
+    width: 100%;
+    justify-self: stretch;
+  }
 }

@@ -124,12 +124,12 @@ export default function SalesReturnsPage() {
     setQuantities(next);
   }
 
-  async function loadPreview(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-
-    const publicId = invoiceInput.trim().toUpperCase();
-
-    const barcode = barcodeInput.trim();
+  async function loadPreviewByPublicId(
+    rawPublicId: string,
+    rawBarcode: string,
+  ) {
+    const publicId = rawPublicId.trim().toUpperCase();
+    const barcode = rawBarcode.trim();
 
     if (!publicId) {
       setError("امسح رمز QR للفاتورة أو أدخل رقمها");
@@ -142,6 +142,8 @@ export default function SalesReturnsPage() {
     setError("");
     setPreview(null);
     setCompletedReturn(null);
+    setReason("");
+    setNotes("");
 
     try {
       const result = await getPosSaleReturnPreview(
@@ -152,6 +154,7 @@ export default function SalesReturnsPage() {
 
       setPreview(result);
       setInvoiceInput(result.sale.publicId);
+      setBarcodeInput(barcode);
 
       initializeQuantities(result, barcode);
 
@@ -166,6 +169,23 @@ export default function SalesReturnsPage() {
     } finally {
       setSearchBusy(false);
     }
+  }
+
+  async function loadPreview(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+
+    await loadPreviewByPublicId(invoiceInput, barcodeInput);
+  }
+
+  function navigateReturnInvoice(targetPublicId: string | null | undefined) {
+    if (!targetPublicId || searchBusy || submitBusy) {
+      return;
+    }
+
+    setInvoiceInput(targetPublicId);
+    setBarcodeInput("");
+
+    void loadPreviewByPublicId(targetPublicId, "");
   }
 
   function updateQuantity(
@@ -405,6 +425,40 @@ export default function SalesReturnsPage() {
       {preview && (
         <form onSubmit={handleSubmitReturn}>
           <article className="sales-return-invoice">
+            <div className="invoice-sequence-navigation sales-return-sequence-navigation">
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={
+                  !preview.navigation?.previousPublicId ||
+                  searchBusy ||
+                  submitBusy
+                }
+                onClick={() =>
+                  navigateReturnInvoice(preview.navigation?.previousPublicId)
+                }
+              >
+                ← الفاتورة السابقة
+              </button>
+
+              <span className="invoice-sequence-label">
+                التنقل بين فواتير المحل
+              </span>
+
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={
+                  !preview.navigation?.nextPublicId || searchBusy || submitBusy
+                }
+                onClick={() =>
+                  navigateReturnInvoice(preview.navigation?.nextPublicId)
+                }
+              >
+                الفاتورة التالية →
+              </button>
+            </div>
+
             <div className="sales-return-section-title">
               <div>
                 <h3>بيانات الفاتورة الأصلية</h3>

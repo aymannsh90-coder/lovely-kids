@@ -99,6 +99,14 @@ export default function InvoiceLookupPage() {
     void loadInvoice(publicId);
   }
 
+  function navigateToInvoice(targetPublicId: string) {
+    const fromToday = openedFromToday ? "&from=today" : "";
+
+    navigate(
+      `/sales/invoice-check?publicId=${encodeURIComponent(targetPublicId)}${fromToday}`,
+    );
+  }
+
   return (
     <section className="invoice-lookup-page">
       <div className="panel-heading">
@@ -139,17 +147,51 @@ export default function InvoiceLookupPage() {
 
       {result && (
         <>
-          {openedFromToday && (
-            <div className="invoice-navigation-actions">
+          <div className="invoice-sequence-navigation">
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!result.navigation?.previousPublicId || busy}
+              onClick={() => {
+                const target = result.navigation?.previousPublicId;
+
+                if (target) {
+                  navigateToInvoice(target);
+                }
+              }}
+            >
+              ← الفاتورة السابقة
+            </button>
+
+            {openedFromToday ? (
               <button
-                className="secondary-button"
+                className="secondary-button invoice-list-button"
                 type="button"
                 onClick={() => navigate("/sales/today")}
               >
-                ← العودة إلى مبيعات اليوم
+                العودة إلى مبيعات اليوم
               </button>
-            </div>
-          )}
+            ) : (
+              <span className="invoice-sequence-label">
+                التنقل بين فواتير المحل
+              </span>
+            )}
+
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!result.navigation?.nextPublicId || busy}
+              onClick={() => {
+                const target = result.navigation?.nextPublicId;
+
+                if (target) {
+                  navigateToInvoice(target);
+                }
+              }}
+            >
+              الفاتورة التالية →
+            </button>
+          </div>
 
           <div className="invoice-print-actions">
             <div>

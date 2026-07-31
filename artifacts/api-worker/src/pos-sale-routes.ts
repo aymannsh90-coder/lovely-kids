@@ -6,7 +6,7 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, lt, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -232,9 +232,17 @@ function toSaleResponse(
   sale: typeof posSalesTable.$inferSelect,
   items: Array<typeof posSaleItemsTable.$inferSelect>,
   alreadyCreated: boolean,
+  navigation: {
+    previousPublicId: string | null;
+    nextPublicId: string | null;
+  } = {
+    previousPublicId: null,
+    nextPublicId: null,
+  },
 ) {
   return {
     alreadyCreated,
+    navigation,
 
     sale: {
       id: String(sale.id),
@@ -1215,6 +1223,60 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
   });
 }
 
+async function getSaleNavigation(
+  db: Db,
+  sale: typeof posSalesTable.$inferSelect,
+) {
+  const [previousRows, nextRows] = await Promise.all([
+    db
+      .select({
+        publicId: posSalesTable.publicId,
+      })
+      .from(posSalesTable)
+      .where(
+        and(
+          eq(posSalesTable.registerKey, sale.registerKey),
+          eq(posSalesTable.status, "completed"),
+          or(
+            lt(posSalesTable.createdAt, sale.createdAt),
+            and(
+              eq(posSalesTable.createdAt, sale.createdAt),
+              lt(posSalesTable.id, sale.id),
+            ),
+          ),
+        ),
+      )
+      .orderBy(desc(posSalesTable.createdAt), desc(posSalesTable.id))
+      .limit(1),
+
+    db
+      .select({
+        publicId: posSalesTable.publicId,
+      })
+      .from(posSalesTable)
+      .where(
+        and(
+          eq(posSalesTable.registerKey, sale.registerKey),
+          eq(posSalesTable.status, "completed"),
+          or(
+            gt(posSalesTable.createdAt, sale.createdAt),
+            and(
+              eq(posSalesTable.createdAt, sale.createdAt),
+              gt(posSalesTable.id, sale.id),
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(posSalesTable.createdAt), asc(posSalesTable.id))
+      .limit(1),
+  ]);
+
+  return {
+    previousPublicId: previousRows[0]?.publicId ?? null,
+    nextPublicId: nextRows[0]?.publicId ?? null,
+  };
+}
+
 async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
 
@@ -1260,7 +1322,9 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
     .where(eq(posSaleItemsTable.saleId, sale.id))
     .orderBy(asc(posSaleItemsTable.lineNumber));
 
-  return json(toSaleResponse(sale, items, false));
+  const navigation = await getSaleNavigation(db, sale);
+
+  return json(toSaleResponse(sale, items, false, navigation));
 }
 
 export async function handlePosSaleRequest(
