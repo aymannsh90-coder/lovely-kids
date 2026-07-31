@@ -242,7 +242,7 @@ export default function InvoiceLookupPage() {
               <div>
                 <span>الإجمالي</span>
 
-                <strong>{formatMinor(result.sale.total)}</strong>
+                <strong>{formatMinor(result.sale.totalMinor)}</strong>
               </div>
             </div>
 
@@ -266,9 +266,11 @@ export default function InvoiceLookupPage() {
                   </div>
 
                   <div>
-                    <span>سعر البيع: {formatMinor(item.soldUnitPrice)}</span>
+                    <span>
+                      سعر البيع: {formatMinor(item.soldUnitPriceMinor)}
+                    </span>
 
-                    <span>مجموع الصنف: {formatMinor(item.lineTotal)}</span>
+                    <span>مجموع الصنف: {formatMinor(item.lineTotalMinor)}</span>
                   </div>
 
                   <div>
@@ -296,31 +298,31 @@ export default function InvoiceLookupPage() {
               <div>
                 <span>مجموع الأصناف</span>
 
-                <strong>{formatMinor(result.sale.subtotal)}</strong>
+                <strong>{formatMinor(result.sale.subtotalMinor)}</strong>
               </div>
 
               <div>
                 <span>الخصم</span>
 
-                <strong>{formatMinor(result.sale.discount)}</strong>
+                <strong>{formatMinor(result.sale.discountMinor)}</strong>
               </div>
 
               <div>
                 <span>الإجمالي النهائي</span>
 
-                <strong>{formatMinor(result.sale.total)}</strong>
+                <strong>{formatMinor(result.sale.totalMinor)}</strong>
               </div>
 
               <div>
                 <span>المدفوع</span>
 
-                <strong>{formatMinor(result.sale.paid)}</strong>
+                <strong>{formatMinor(result.sale.paidMinor)}</strong>
               </div>
 
               <div>
                 <span>الباقي</span>
 
-                <strong>{formatMinor(result.sale.change)}</strong>
+                <strong>{formatMinor(result.sale.changeMinor)}</strong>
               </div>
             </div>
 
