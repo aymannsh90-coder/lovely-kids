@@ -13,6 +13,7 @@ import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
 import { handlePosSaleRequest } from "./pos-sale-routes";
+import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -87,6 +88,16 @@ export default {
 
       if (posSaleResponse) {
         return posSaleResponse;
+      }
+
+      const posSaleReturnResponse = await handlePosSaleReturnRequest(
+        request,
+        db,
+        env,
+      );
+
+      if (posSaleReturnResponse) {
+        return posSaleReturnResponse;
       }
 
       const passwordResetResponse = await handlePasswordResetRequest(
