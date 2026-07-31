@@ -107,16 +107,10 @@ async function getSaleNavigation(
         and(
           eq(posSalesTable.registerKey, sale.registerKey),
           eq(posSalesTable.status, "completed"),
-          or(
-            lt(posSalesTable.createdAt, sale.createdAt),
-            and(
-              eq(posSalesTable.createdAt, sale.createdAt),
-              lt(posSalesTable.id, sale.id),
-            ),
-          ),
+          lt(posSalesTable.id, sale.id),
         ),
       )
-      .orderBy(desc(posSalesTable.createdAt), desc(posSalesTable.id))
+      .orderBy(desc(posSalesTable.id))
       .limit(1),
 
     db
@@ -128,16 +122,10 @@ async function getSaleNavigation(
         and(
           eq(posSalesTable.registerKey, sale.registerKey),
           eq(posSalesTable.status, "completed"),
-          or(
-            gt(posSalesTable.createdAt, sale.createdAt),
-            and(
-              eq(posSalesTable.createdAt, sale.createdAt),
-              gt(posSalesTable.id, sale.id),
-            ),
-          ),
+          gt(posSalesTable.id, sale.id),
         ),
       )
-      .orderBy(asc(posSalesTable.createdAt), asc(posSalesTable.id))
+      .orderBy(asc(posSalesTable.id))
       .limit(1),
   ]);
 
