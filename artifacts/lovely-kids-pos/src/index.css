@@ -3432,3 +3432,30 @@ textarea:disabled {
     width: 100%;
   }
 }
+
+/* Clickable daily sale invoices */
+.today-sale-clickable-row {
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.today-sale-clickable-row:hover {
+  background: #fff3f8;
+}
+
+.today-sale-clickable-row:focus {
+  outline: none;
+}
+
+.today-sale-clickable-row:focus-visible {
+  background: #fff3f8;
+  box-shadow: inset 0 0 0 2px #e91e8c;
+}
+
+.invoice-navigation-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 18px;
+}

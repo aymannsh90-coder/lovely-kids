@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
 import SaleReceipt from "../../components/SaleReceipt";
@@ -36,6 +37,13 @@ function printReceipt() {
 export default function InvoiceLookupPage() {
   const { token, clearAuthentication } = usePosRuntime();
 
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const queryPublicId =
+    searchParams.get("publicId")?.trim().toUpperCase() ?? "";
+  const openedFromToday = searchParams.get("from") === "today";
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [publicId, setPublicId] = useState("");
@@ -47,13 +55,17 @@ export default function InvoiceLookupPage() {
   const [result, setResult] = useState<PosSaleResult | null>(null);
 
   useEffect(() => {
+    if (queryPublicId) {
+      setPublicId(queryPublicId);
+      void loadInvoice(queryPublicId);
+      return;
+    }
+
     inputRef.current?.focus();
-  }, []);
+  }, [queryPublicId]);
 
-  async function handleSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const value = publicId.trim().toUpperCase();
+  async function loadInvoice(rawValue: string) {
+    const value = rawValue.trim().toUpperCase();
 
     if (!value) {
       setError("امسح باركود الفاتورة أو أدخل رقمها.");
@@ -80,6 +92,11 @@ export default function InvoiceLookupPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void loadInvoice(publicId);
   }
 
   return (
@@ -122,6 +139,18 @@ export default function InvoiceLookupPage() {
 
       {result && (
         <>
+          {openedFromToday && (
+            <div className="invoice-navigation-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => navigate("/sales/today")}
+              >
+                ← العودة إلى مبيعات اليوم
+              </button>
+            </div>
+          )}
+
           <div className="invoice-print-actions">
             <div>
               <strong>الفاتورة جاهزة للطباعة</strong>

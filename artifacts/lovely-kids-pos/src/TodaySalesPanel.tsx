@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import JsBarcode from "jsbarcode";
+import { useNavigate } from "react-router-dom";
 
 import {
   ApiError,
@@ -92,6 +93,8 @@ export default function TodaySalesPanel({
   refreshKey,
   onUnauthorized,
 }: TodaySalesPanelProps) {
+  const navigate = useNavigate();
+
   const [sales, setSales] = useState<PosSaleResult[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -192,6 +195,12 @@ export default function TodaySalesPanel({
     }
   }
 
+  function openSaleInvoice(publicId: string) {
+    navigate(
+      `/sales/invoice-check?publicId=${encodeURIComponent(publicId)}&from=today`,
+    );
+  }
+
   return (
     <>
       <section className="today-sales-panel" id="pos-today-sales">
@@ -279,7 +288,21 @@ export default function TodaySalesPanel({
 
               <tbody>
                 {rows.map((row, index) => (
-                  <tr key={`${row.sale.id}-${row.item.id}`}>
+                  <tr
+                    key={`${row.sale.id}-${row.item.id}`}
+                    className="today-sale-clickable-row"
+                    role="button"
+                    tabIndex={0}
+                    title="فتح الفاتورة"
+                    aria-label={`فتح الفاتورة ${row.sale.publicId}`}
+                    onClick={() => openSaleInvoice(row.sale.publicId)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openSaleInvoice(row.sale.publicId);
+                      }
+                    }}
+                  >
                     <td>{index + 1}</td>
 
                     <td>
