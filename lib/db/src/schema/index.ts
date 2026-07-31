@@ -15,3 +15,5 @@ export * from "./security-audit-logs";
 export * from "./cash-sessions";
 
 export * from "./pos-sales";
+
+export * from "./pos-sale-returns";
