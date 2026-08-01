@@ -1,43 +1,47 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 interface ClockWidgetProps {
-  showHomeButton: boolean;
+  showHomeButton?: boolean;
 }
 
-interface ClockParts {
-  hour: number;
-  minute: number;
-  second: number;
-}
-
-function getClockParts(date: Date): ClockParts {
-  const parts = new Intl.DateTimeFormat("en-GB", {
+function getPalestineDateParts(date: Date) {
+  const time = new Intl.DateTimeFormat("ar-PS-u-nu-latn", {
     timeZone: "Asia/Hebron",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hourCycle: "h23",
+    hour12: true,
+  }).format(date);
+
+  const weekday = new Intl.DateTimeFormat("ar-PS", {
+    timeZone: "Asia/Hebron",
+    weekday: "long",
+  }).format(date);
+
+  const dateParts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Hebron",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   }).formatToParts(date);
 
   const values = Object.fromEntries(
-    parts.map((part) => [part.type, part.value]),
+    dateParts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
   );
 
   return {
-    hour: Number(values.hour ?? 0),
-    minute: Number(values.minute ?? 0),
-    second: Number(values.second ?? 0),
+    time,
+    weekday,
+    fullDate: `${values.day}/${values.month}/${values.year}`,
   };
 }
 
-function rotationStyle(degrees: number): CSSProperties {
-  return {
-    "--rotation": `${degrees}deg`,
-  } as CSSProperties;
-}
-
-export default function ClockWidget({ showHomeButton }: ClockWidgetProps) {
+export default function ClockWidget({
+  showHomeButton = true,
+}: ClockWidgetProps) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -45,73 +49,27 @@ export default function ClockWidget({ showHomeButton }: ClockWidgetProps) {
       setNow(new Date());
     }, 1000);
 
-    return () => {
-      window.clearInterval(timer);
-    };
+    return () => window.clearInterval(timer);
   }, []);
 
-  const clock = useMemo(() => getClockParts(now), [now]);
-
-  const hourRotation = (clock.hour % 12) * 30 + clock.minute * 0.5;
-
-  const minuteRotation = clock.minute * 6 + clock.second * 0.1;
-
-  const secondRotation = clock.second * 6;
-
-  const dayLabel = new Intl.DateTimeFormat("ar-PS", {
-    weekday: "long",
-    timeZone: "Asia/Hebron",
-  }).format(now);
-
-  const dateLabel = new Intl.DateTimeFormat("ar-PS", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "Asia/Hebron",
-  }).format(now);
+  const dateParts = getPalestineDateParts(now);
 
   return (
-    <div className="topbar-clock-card">
-      <div className="analog-clock" aria-label={`${dayLabel} ${dateLabel}`}>
-        {Array.from({ length: 12 }, (_, index) => (
-          <span
-            className="clock-tick"
-            key={index}
-            style={
-              {
-                "--tick-rotation": `${index * 30}deg`,
-              } as CSSProperties
-            }
-          >
-            <i />
-          </span>
-        ))}
-
-        <span
-          className="clock-hand clock-hour-hand"
-          style={rotationStyle(hourRotation)}
-        />
-
-        <span
-          className="clock-hand clock-minute-hand"
-          style={rotationStyle(minuteRotation)}
-        />
-
-        <span
-          className="clock-hand clock-second-hand"
-          style={rotationStyle(secondRotation)}
-        />
-
-        <span className="clock-center-dot" />
+    <div
+      className="topbar-clock-card digital-clock-card"
+      aria-label={`${dateParts.weekday} ${dateParts.fullDate} ${dateParts.time}`}
+    >
+      <div className="digital-clock-time" dir="rtl">
+        {dateParts.time}
       </div>
 
-      <div className="clock-date">
-        <strong>{dayLabel}</strong>
-        <span dir="ltr">{dateLabel}</span>
+      <div className="digital-clock-date">
+        <strong>{dateParts.weekday}</strong>
+        <span dir="ltr">{dateParts.fullDate}</span>
       </div>
 
       {showHomeButton && (
-        <Link className="clock-home-button" to="/">
+        <Link className="digital-clock-home" to="/">
           الرئيسية
         </Link>
       )}

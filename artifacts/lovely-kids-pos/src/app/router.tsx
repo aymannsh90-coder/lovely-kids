@@ -17,10 +17,29 @@ export default function AppRouter() {
         <Route index element={<DashboardPage />} />
 
         <Route
-          path="sales/new"
+          path="sales/pos"
           element={
             <RequireOpenSession>
               <NewSalePage />
+            </RequireOpenSession>
+          }
+        />
+
+        <Route
+          path="sales/new"
+          element={
+            <RequireOpenSession>
+              <ComingSoonPage
+                icon="🧾"
+                title="فاتورة مبيعات"
+                description="شاشة فاتورة مبيعات محاسبية تفصيلية بتصميم Lovely Kids."
+                points={[
+                  "بيانات الفاتورة والزبون.",
+                  "جدول أصناف تفصيلي بعرض الشاشة.",
+                  "الحفظ والطباعة والتسديد.",
+                  "ربطها بالمخزون والصندوق.",
+                ]}
+              />
             </RequireOpenSession>
           }
         />

@@ -3496,3 +3496,669 @@ textarea:disabled {
     justify-self: stretch;
   }
 }
+
+/* Lovely Kids desktop accounting navigation */
+
+.pos-full-page.page {
+  padding: 10px 12px 26px;
+}
+
+.pos-full-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.pos-shamel-menu-shell {
+  position: sticky;
+  z-index: 1000;
+  top: 0;
+  padding-bottom: 7px;
+  background: rgba(247, 252, 255, 0.97);
+  backdrop-filter: blur(12px);
+}
+
+.pos-shamel-header {
+  display: grid;
+  grid-template-columns:
+    minmax(190px, auto)
+    minmax(260px, 1fr)
+    auto
+    auto
+    minmax(180px, auto);
+  min-height: 70px;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px;
+  border: 1px solid #d8e5eb;
+  border-radius: 15px 15px 8px 8px;
+  background:
+    linear-gradient(90deg, rgba(150, 223, 236, 0.12), transparent 35%), #fff;
+  box-shadow: 0 8px 22px rgba(29, 71, 93, 0.08);
+}
+
+.pos-shamel-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.pos-shamel-brand-mark {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #e91e8c, #b31868);
+  box-shadow: 0 7px 17px rgba(233, 30, 140, 0.24);
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.pos-shamel-brand > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pos-shamel-brand strong {
+  color: #172033;
+  font-size: 18px;
+}
+
+.pos-shamel-brand small {
+  color: #72808b;
+  font-size: 11px;
+}
+
+.pos-shamel-page-title {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding-inline: 18px;
+  border-inline-start: 1px solid #e0e9ed;
+}
+
+.pos-shamel-page-title strong {
+  overflow: hidden;
+  color: #1b2a36;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pos-shamel-page-title span {
+  overflow: hidden;
+  color: #74828d;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pos-shamel-session-state {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.pos-shamel-session-state small {
+  color: #667985;
+  font-size: 9px;
+}
+
+.pos-shamel-state {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.pos-shamel-state i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.pos-shamel-state-open {
+  color: #1d7246;
+  background: #e9f9ef;
+}
+
+.pos-shamel-state-open i {
+  background: #27a463;
+  box-shadow: 0 0 0 4px rgba(39, 164, 99, 0.12);
+}
+
+.pos-shamel-state-closed {
+  color: #a22e58;
+  background: #fff0f5;
+}
+
+.pos-shamel-state-closed i {
+  background: #d94e7e;
+  box-shadow: 0 0 0 4px rgba(217, 78, 126, 0.12);
+}
+
+.pos-shamel-header .topbar-clock-card {
+  position: static;
+  display: flex;
+  width: auto;
+  align-items: center;
+  justify-items: initial;
+  gap: 8px;
+  transform: none;
+}
+
+.pos-shamel-header .analog-clock {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+}
+
+.pos-shamel-header .clock-date {
+  min-width: 75px;
+  gap: 1px;
+  text-align: right;
+}
+
+.pos-shamel-header .clock-date strong {
+  font-size: 10px;
+}
+
+.pos-shamel-header .clock-date span {
+  font-size: 9px;
+}
+
+.pos-shamel-user {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pos-shamel-user > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  text-align: left;
+}
+
+.pos-shamel-user small {
+  color: #7a8791;
+  font-size: 10px;
+}
+
+.pos-shamel-user strong {
+  max-width: 145px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pos-shamel-user button {
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid #efbfd6;
+  border-radius: 9px;
+  color: #ad1b60;
+  background: #fff5fa;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.pos-shamel-user button:hover {
+  border-color: #e91e8c;
+  background: #ffe9f4;
+}
+
+.pos-shamel-primary-menu {
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  min-height: 43px;
+  padding: 4px 6px;
+  overflow-x: auto;
+  border-inline: 1px solid #24333d;
+  background: linear-gradient(180deg, #394953, #26353e);
+}
+
+.pos-shamel-primary-button {
+  display: inline-flex;
+  min-width: max-content;
+  min-height: 35px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 16px;
+  border: 1px solid #53636d;
+  border-radius: 7px 7px 2px 2px;
+  color: #f5f8fa;
+  background: linear-gradient(180deg, #52616a, #34434c);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pos-shamel-primary-button:hover,
+.pos-shamel-primary-button:focus-visible {
+  border-color: #96dfec;
+  background: linear-gradient(180deg, #60717a, #40515a);
+  outline: none;
+}
+
+.pos-shamel-primary-button.is-active {
+  border-color: #e91e8c;
+  color: #fff;
+  background: linear-gradient(180deg, #ed4da4, #c51976);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.24),
+    0 3px 10px rgba(233, 30, 140, 0.24);
+}
+
+.pos-shamel-secondary-menu {
+  display: flex;
+  min-height: 43px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  overflow-x: auto;
+  border: 1px solid #d6e2e7;
+  border-top: 0;
+  border-radius: 0 0 13px 13px;
+  background: linear-gradient(180deg, #ffffff, #f2f9fb);
+  box-shadow: 0 8px 18px rgba(29, 71, 93, 0.08);
+}
+
+.pos-shamel-secondary-title {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 8px;
+  color: #9e145b;
+  background: #ffe9f4;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pos-shamel-secondary-actions {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 5px;
+}
+
+.pos-shamel-secondary-button {
+  position: relative;
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #344956;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pos-shamel-secondary-button:hover,
+.pos-shamel-secondary-button:focus-visible {
+  border-color: #b9dfe7;
+  background: #eaf8fb;
+  outline: none;
+}
+
+.pos-shamel-secondary-button.is-active {
+  border-color: #e91e8c;
+  color: #a51460;
+  background: #fff0f7;
+  box-shadow: inset 0 -2px #e91e8c;
+}
+
+.pos-shamel-secondary-button small {
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: #8b5a0a;
+  background: #fff1cf;
+  font-size: 8px;
+}
+
+.pos-shamel-secondary-button.is-locked {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.pos-shamel-session-banner {
+  margin-top: 5px;
+  padding: 10px 15px;
+  border-radius: 12px;
+}
+
+.pos-shamel-session-banner .session-banner-value {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.route-content {
+  width: 100%;
+}
+
+@media (max-width: 1150px) {
+  .pos-shamel-header {
+    grid-template-columns:
+      minmax(170px, auto)
+      minmax(220px, 1fr)
+      auto
+      minmax(160px, auto);
+  }
+
+  .pos-shamel-header .topbar-clock-card {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .pos-full-page.page {
+    padding: 7px;
+  }
+
+  .pos-shamel-menu-shell {
+    position: relative;
+  }
+
+  .pos-shamel-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .pos-shamel-page-title,
+  .pos-shamel-session-state {
+    display: none;
+  }
+
+  .pos-shamel-user {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .pos-shamel-header {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-shamel-user {
+    justify-content: space-between;
+  }
+}
+
+@media print {
+  body[data-print-mode="receipt"] .pos-shamel-menu-shell,
+  body[data-print-mode="daily-sales"] .pos-shamel-menu-shell {
+    display: none !important;
+  }
+}
+
+/* Fix POS money direction and spacing */
+
+.sale-summary strong,
+.sale-summary .money-input,
+.document-total-cell,
+.last-sale-actions strong,
+.last-sale-actions span {
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sale-summary > div {
+  align-items: center;
+}
+
+.sale-summary > div > strong {
+  display: inline-block;
+  min-width: 105px;
+  padding-inline: 5px;
+  text-align: left;
+}
+
+.sale-grand-total strong {
+  min-width: 125px;
+  font-size: 20px;
+}
+
+.sale-summary .money-input {
+  overflow: hidden;
+}
+
+.sale-summary .money-input input {
+  direction: ltr;
+  text-align: left;
+}
+
+.sale-summary .money-input > span {
+  display: grid;
+  min-width: 30px;
+  place-items: center;
+  padding-inline: 6px;
+  border-inline-start: 1px solid #dbe5ea;
+  line-height: 1;
+}
+
+/* Lovely Kids compact digital clock */
+
+.pos-shamel-header .digital-clock-card {
+  position: static;
+  display: grid;
+  width: auto;
+  min-width: 160px;
+  grid-template-columns: minmax(82px, auto) minmax(62px, auto);
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px 11px;
+  border: 1px solid #d5e4ea;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #ffffff, #f1f8fb);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.8);
+  transform: none;
+}
+
+.pos-shamel-header .digital-clock-time {
+  direction: rtl;
+  color: #172d3a;
+  font-size: 14px;
+  font-weight: 950;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-shamel-header .digital-clock-date {
+  display: grid;
+  gap: 2px;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid #d9e5ea;
+  text-align: center;
+}
+
+.pos-shamel-header .digital-clock-date strong {
+  color: #3e5663;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.pos-shamel-header .digital-clock-date span {
+  direction: ltr;
+  color: #71818b;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-shamel-header .digital-clock-home {
+  display: none;
+}
+
+@media (max-width: 1150px) {
+  .pos-shamel-header .digital-clock-card {
+    display: grid;
+    min-width: 150px;
+  }
+}
+
+@media (max-width: 980px) {
+  .pos-shamel-header .digital-clock-card {
+    display: none;
+  }
+}
+
+/* Definitive POS currency layout fix */
+
+.sale-summary strong,
+.document-total-cell,
+.last-sale-actions strong,
+.last-sale-actions span {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  display: inline-block;
+  white-space: nowrap;
+  word-spacing: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sale-summary > div > strong {
+  min-width: 125px !important;
+  padding-inline: 8px !important;
+  text-align: left !important;
+}
+
+.sale-grand-total strong {
+  min-width: 145px !important;
+  font-size: 20px !important;
+}
+
+.sale-summary .money-input {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 40px !important;
+  direction: ltr !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
+}
+
+.sale-summary .money-input input {
+  grid-column: 1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: isolate !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.sale-summary .money-input > span {
+  position: static !important;
+  grid-column: 2 !important;
+  display: grid !important;
+  min-width: 40px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-inline-start: 1px solid #d8e4e9 !important;
+  direction: ltr !important;
+  color: #405866 !important;
+  background: #f4f9fb !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+/* Final clear digital clock and date */
+
+.pos-shamel-header .digital-clock-card {
+  position: static !important;
+  display: grid !important;
+  width: auto !important;
+  min-width: 215px !important;
+  grid-template-columns: minmax(112px, auto) minmax(78px, auto) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  padding: 9px 14px !important;
+  border: 1px solid #d5e4ea !important;
+  border-radius: 12px !important;
+  background: linear-gradient(180deg, #ffffff, #f1f8fb) !important;
+  transform: none !important;
+}
+
+.pos-shamel-header .digital-clock-time {
+  direction: rtl !important;
+  unicode-bidi: isolate !important;
+  color: #172d3a !important;
+  font-size: 18px !important;
+  font-weight: 950 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-shamel-header .digital-clock-date {
+  display: grid !important;
+  gap: 5px !important;
+  padding-inline-start: 12px !important;
+  border-inline-start: 1px solid #d5e2e8 !important;
+  text-align: center !important;
+}
+
+.pos-shamel-header .digital-clock-date strong {
+  color: #263e4b !important;
+  font-size: 13px !important;
+  font-weight: 950 !important;
+  line-height: 1.1 !important;
+}
+
+.pos-shamel-header .digital-clock-date span {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  color: #536b78 !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  letter-spacing: 0.2px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 980px) {
+  .pos-shamel-header .digital-clock-card {
+    display: none !important;
+  }
+}

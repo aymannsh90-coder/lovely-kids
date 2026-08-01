@@ -65,11 +65,12 @@ function moneyToMinor(value: string) {
 }
 
 function formatMinor(value: number) {
-  return new Intl.NumberFormat("ar-PS", {
-    style: "currency",
-    currency: "ILS",
+  const amount = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value / 100);
+
+  return `${amount}\u00A0₪`;
 }
 
 function getColors(product: PosProductLookup) {
