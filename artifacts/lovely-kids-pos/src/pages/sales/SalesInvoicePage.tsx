@@ -245,6 +245,9 @@ export default function SalesInvoicePage() {
   const [lines, setLines] = useState<InvoiceLine[]>([]);
   const [invoiceDiscount, setInvoiceDiscount] = useState("0.00");
   const [paidAmount, setPaidAmount] = useState("0.00");
+
+  const [paidAmountAuto, setPaidAmountAuto] = useState(true);
+
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [costCenter, setCostCenter] = useState("general");
 
@@ -352,6 +355,14 @@ export default function SalesInvoicePage() {
 
   const paidMinor = moneyToMinor(paidAmount);
   const changeMinor = Math.max(0, paidMinor - finalTotalMinor);
+
+  useEffect(() => {
+    if (!paidAmountAuto || loadedSale !== null || paymentMethod !== "cash") {
+      return;
+    }
+
+    setPaidAmount((finalTotalMinor / 100).toFixed(2));
+  }, [finalTotalMinor, loadedSale, paidAmountAuto, paymentMethod]);
 
   const invoiceLocked = invoiceBusy || (loadedSale !== null && !editMode);
 
@@ -975,7 +986,9 @@ export default function SalesInvoicePage() {
         ),
       );
 
+      setPaidAmountAuto(false);
       setPaidAmount(response.sale.paid.toFixed(2));
+
       setPaymentMethod(response.sale.paymentMethod);
       setCostCenter("general");
 
@@ -1040,6 +1053,7 @@ export default function SalesInvoicePage() {
     const sourcePublicId = loadedSale.sale.publicId;
 
     setLoadedSale(null);
+    setPaidAmountAuto(true);
     setEditMode(false);
 
     createIdempotencyKey.current = null;
@@ -1140,6 +1154,7 @@ export default function SalesInvoicePage() {
 
   function handleNewInvoice() {
     setLoadedSale(null);
+    setPaidAmountAuto(true);
     setEditMode(false);
 
     createIdempotencyKey.current = null;
@@ -1766,7 +1781,10 @@ export default function SalesInvoicePage() {
                     min="0"
                     step="0.01"
                     value={paidAmount}
-                    onChange={(event) => setPaidAmount(event.target.value)}
+                    onChange={(event) => {
+                      setPaidAmountAuto(false);
+                      setPaidAmount(event.target.value);
+                    }}
                   />
                   <span>₪</span>
                 </div>
