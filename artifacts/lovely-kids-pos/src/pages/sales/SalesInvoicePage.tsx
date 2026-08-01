@@ -600,10 +600,6 @@ export default function SalesInvoicePage() {
     let itemDiscountTotalMinor = 0;
 
     for (const line of lines) {
-      if (!line.barcode.trim()) {
-        return `باركود ${line.product.nameAr} غير صالح`;
-      }
-
       if (!selectionIsComplete(line)) {
         return `اختر اللون والمقاس للمنتج ${line.product.nameAr}`;
       }
