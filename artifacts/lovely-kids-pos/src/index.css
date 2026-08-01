@@ -4162,3 +4162,612 @@ textarea:disabled {
     display: none !important;
   }
 }
+
+/* Lovely Kids accounting sales invoice */
+
+.accounting-invoice-page {
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid #d4e2e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(29, 71, 93, 0.07);
+}
+
+.accounting-invoice-titlebar {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #dce7eb;
+  background:
+    linear-gradient(90deg, rgba(233, 30, 140, 0.08), transparent 40%), #fff;
+}
+
+.accounting-invoice-titlebar > div {
+  display: grid;
+  gap: 3px;
+}
+
+.accounting-invoice-titlebar span {
+  color: #e91e8c;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.accounting-invoice-titlebar h1 {
+  margin: 0;
+  color: #1e3440;
+  font-size: 22px;
+}
+
+.accounting-invoice-titlebar p {
+  margin: 0;
+  color: #71828d;
+  font-size: 11px;
+}
+
+.accounting-invoice-titlebar .accounting-invoice-draft-badge {
+  padding: 7px 12px;
+  border-radius: 999px;
+  color: #9b5f0c;
+  background: #fff2d5;
+  white-space: nowrap;
+}
+
+.accounting-invoice-toolbar {
+  display: flex;
+  min-height: 43px;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid #cbd9df;
+  background: linear-gradient(180deg, #f8fbfc, #eaf2f5);
+}
+
+.accounting-invoice-toolbar button {
+  display: inline-flex;
+  min-height: 31px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid #c6d6dc;
+  border-radius: 6px;
+  color: #314955;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.accounting-invoice-toolbar button:first-child {
+  border-color: #e91e8c;
+  color: #a51660;
+  background: #fff0f7;
+}
+
+.accounting-invoice-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.accounting-invoice-information {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  background: #f5fafc;
+}
+
+.accounting-invoice-card {
+  padding: 12px;
+  border: 1px solid #d6e3e8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.accounting-invoice-card h2,
+.accounting-payment-section h2 {
+  margin: 0 0 10px;
+  color: #2a424f;
+  font-size: 13px;
+}
+
+.accounting-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.accounting-fields-grid label,
+.accounting-item-entry label,
+.accounting-payment-grid label,
+.accounting-invoice-totals label {
+  display: grid;
+  gap: 5px;
+  color: #465c67;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.accounting-wide-field {
+  grid-column: 1 / -1;
+}
+
+.accounting-fields-grid input,
+.accounting-fields-grid select,
+.accounting-item-entry input,
+.accounting-payment-grid select,
+.accounting-money-input input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid #cbdbe2;
+  border-radius: 6px;
+  outline: none;
+  color: #1c3340;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+}
+
+.accounting-fields-grid input:focus,
+.accounting-fields-grid select:focus,
+.accounting-item-entry input:focus,
+.accounting-payment-grid select:focus,
+.accounting-money-input:focus-within {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 3px rgba(233, 30, 140, 0.09);
+}
+
+.accounting-item-entry {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border-block: 1px solid #d6e2e7;
+  background: #fff;
+}
+
+.accounting-item-entry > div {
+  display: grid;
+  width: min(820px, 100%);
+  grid-template-columns: minmax(0, 1fr) 130px;
+  align-items: end;
+  gap: 8px;
+}
+
+.accounting-item-entry button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  background: #e91e8c;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.accounting-item-entry small {
+  color: #a16c1b;
+  font-size: 10px;
+}
+
+.accounting-invoice-table-wrap {
+  min-height: 310px;
+  overflow: auto;
+  background: #fff;
+}
+
+.accounting-invoice-table {
+  width: 100%;
+  min-width: 1250px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.accounting-invoice-table th {
+  padding: 9px 6px;
+  border-inline-start: 1px solid #d3dfe4;
+  border-bottom: 1px solid #bdcdd4;
+  color: #304a57;
+  background: #e7f2f6;
+  font-size: 10px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.accounting-invoice-table td {
+  padding: 8px;
+  border-inline-start: 1px solid #e3ebee;
+  border-bottom: 1px solid #e1e9ec;
+  font-size: 11px;
+  text-align: center;
+}
+
+.accounting-empty-row td {
+  height: 250px;
+  color: #86949c;
+  background: #fff;
+}
+
+.accounting-invoice-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid #cedce2;
+  background: #f5fafc;
+}
+
+.accounting-payment-section,
+.accounting-invoice-totals {
+  padding: 12px;
+  border: 1px solid #d5e2e7;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.accounting-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.accounting-money-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  overflow: hidden;
+  border: 1px solid #cbdbe2;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.accounting-money-input input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: left;
+}
+
+.accounting-money-input span {
+  display: grid;
+  place-items: center;
+  border-inline-start: 1px solid #d8e4e9;
+  color: #405864;
+  background: #f1f7f9;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.accounting-invoice-totals {
+  display: grid;
+  gap: 8px;
+}
+
+.accounting-invoice-totals > div {
+  display: flex;
+  min-height: 31px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid #e1e9ec;
+}
+
+.accounting-invoice-totals > div span,
+.accounting-invoice-totals label > span {
+  color: #526975;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.accounting-invoice-totals strong {
+  color: #213945;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.accounting-invoice-totals .accounting-final-total {
+  padding: 10px;
+  border: 1px solid #f1bad5;
+  border-radius: 8px;
+  background: #fff0f7;
+}
+
+.accounting-invoice-totals .accounting-final-total span {
+  color: #a31861;
+  font-size: 13px;
+}
+
+.accounting-invoice-totals .accounting-final-total strong {
+  color: #e91e8c;
+  font-size: 20px;
+}
+
+@media (max-width: 1000px) {
+  .accounting-invoice-information,
+  .accounting-invoice-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .accounting-invoice-titlebar,
+  .accounting-item-entry {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .accounting-fields-grid,
+  .accounting-payment-grid,
+  .accounting-item-entry > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Compact accounting invoice workspace */
+
+.accounting-invoice-page {
+  display: grid;
+  height: calc(100vh - 292px);
+  min-height: 570px;
+  grid-template-rows:
+    auto
+    auto
+    auto
+    auto
+    minmax(165px, 1fr)
+    auto;
+  overflow: hidden;
+}
+
+.accounting-invoice-titlebar {
+  min-height: 58px;
+  padding: 8px 14px;
+}
+
+.accounting-invoice-titlebar h1 {
+  font-size: 18px;
+}
+
+.accounting-invoice-titlebar p {
+  font-size: 10px;
+}
+
+.accounting-invoice-titlebar .accounting-invoice-draft-badge {
+  padding: 5px 10px;
+  font-size: 10px;
+}
+
+.accounting-invoice-toolbar {
+  min-height: 36px;
+  padding: 3px 8px;
+}
+
+.accounting-invoice-toolbar button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 10px;
+}
+
+.accounting-invoice-information {
+  gap: 7px;
+  padding: 8px;
+}
+
+.accounting-invoice-card {
+  padding: 8px 10px;
+}
+
+.accounting-invoice-card h2,
+.accounting-payment-section h2 {
+  margin-bottom: 7px;
+  font-size: 12px;
+}
+
+.accounting-fields-grid {
+  gap: 6px 8px;
+}
+
+.accounting-fields-grid label,
+.accounting-item-entry label,
+.accounting-payment-grid label,
+.accounting-invoice-totals label {
+  gap: 3px;
+  font-size: 9px;
+}
+
+.accounting-fields-grid input,
+.accounting-fields-grid select,
+.accounting-item-entry input,
+.accounting-payment-grid select,
+.accounting-money-input input {
+  min-height: 29px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.accounting-item-entry {
+  min-height: 48px;
+  padding: 7px 10px;
+}
+
+.accounting-item-entry > div {
+  grid-template-columns: minmax(0, 1fr) 115px;
+  gap: 7px;
+}
+
+.accounting-item-entry button {
+  min-height: 29px;
+  font-size: 10px;
+}
+
+.accounting-item-entry small {
+  max-width: 390px;
+  font-size: 9px;
+}
+
+.accounting-invoice-table-wrap {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.accounting-invoice-table {
+  min-width: 1180px;
+}
+
+.accounting-invoice-table th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  padding: 7px 5px;
+  font-size: 9px;
+}
+
+.accounting-invoice-table td {
+  padding: 6px;
+  font-size: 10px;
+}
+
+.accounting-empty-row td {
+  height: 100%;
+  min-height: 145px;
+}
+
+.accounting-invoice-bottom {
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 8px;
+  padding: 8px;
+}
+
+.accounting-payment-section,
+.accounting-invoice-totals {
+  padding: 8px 10px;
+}
+
+.accounting-payment-grid {
+  gap: 7px;
+}
+
+.accounting-invoice-totals {
+  gap: 5px;
+}
+
+.accounting-invoice-totals > div {
+  min-height: 25px;
+  padding-bottom: 4px;
+}
+
+.accounting-invoice-totals > div span,
+.accounting-invoice-totals label > span {
+  font-size: 10px;
+}
+
+.accounting-invoice-totals strong {
+  font-size: 11px;
+}
+
+.accounting-invoice-totals .accounting-final-total {
+  padding: 7px 9px;
+}
+
+.accounting-invoice-totals .accounting-final-total span {
+  font-size: 11px;
+}
+
+.accounting-invoice-totals .accounting-final-total strong {
+  font-size: 17px;
+}
+
+@media (max-height: 800px) and (min-width: 1001px) {
+  .accounting-invoice-page {
+    height: calc(100vh - 268px);
+    min-height: 510px;
+  }
+
+  .accounting-invoice-titlebar p,
+  .accounting-invoice-titlebar .accounting-invoice-draft-badge,
+  .accounting-item-entry small {
+    display: none;
+  }
+
+  .accounting-invoice-information {
+    padding: 6px 8px;
+  }
+
+  .accounting-invoice-bottom {
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .accounting-invoice-page {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .accounting-invoice-table-wrap {
+    min-height: 300px;
+  }
+}
+
+/* Prevent accounting invoice totals clipping */
+
+.accounting-invoice-page {
+  grid-template-rows:
+    auto
+    auto
+    auto
+    auto
+    minmax(125px, 1fr)
+    auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.accounting-invoice-table-wrap {
+  min-height: 125px;
+}
+
+.accounting-invoice-bottom {
+  padding-bottom: 14px;
+}
+
+.accounting-invoice-totals {
+  gap: 4px;
+}
+
+.accounting-invoice-totals > div {
+  min-height: 23px;
+  padding-bottom: 3px;
+}
+
+.accounting-invoice-totals .accounting-final-total {
+  padding: 6px 9px;
+}
+
+@media (max-height: 800px) and (min-width: 1001px) {
+  .accounting-invoice-page {
+    grid-template-rows:
+      auto
+      auto
+      auto
+      auto
+      minmax(105px, 1fr)
+      auto;
+  }
+
+  .accounting-invoice-table-wrap {
+    min-height: 105px;
+  }
+}

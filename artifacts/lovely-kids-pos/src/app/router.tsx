@@ -7,6 +7,7 @@ import DashboardPage from "../pages/DashboardPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import NewSalePage from "../pages/sales/NewSalePage";
+import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
 import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
 import TodaySalesPage from "../pages/sales/TodaySalesPage";
 
@@ -29,17 +30,7 @@ export default function AppRouter() {
           path="sales/new"
           element={
             <RequireOpenSession>
-              <ComingSoonPage
-                icon="🧾"
-                title="فاتورة مبيعات"
-                description="شاشة فاتورة مبيعات محاسبية تفصيلية بتصميم Lovely Kids."
-                points={[
-                  "بيانات الفاتورة والزبون.",
-                  "جدول أصناف تفصيلي بعرض الشاشة.",
-                  "الحفظ والطباعة والتسديد.",
-                  "ربطها بالمخزون والصندوق.",
-                ]}
-              />
+              <SalesInvoicePage />
             </RequireOpenSession>
           }
         />
