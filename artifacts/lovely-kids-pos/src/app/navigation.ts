@@ -68,7 +68,7 @@ export const posNavigation: PosNavigationItem[] = [
     description: "فاتورة مبيعات محاسبية تفصيلية.",
     icon: "🧾",
     requiresOpenSession: true,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "sales-returns",
