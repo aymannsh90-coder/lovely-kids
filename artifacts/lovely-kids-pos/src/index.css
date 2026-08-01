@@ -4771,3 +4771,492 @@ textarea:disabled {
     min-height: 105px;
   }
 }
+
+/* Accounting invoice product search and draft lines */
+
+.accounting-item-entry {
+  position: relative;
+}
+
+.accounting-item-form {
+  display: grid;
+  width: min(820px, 100%);
+  grid-template-columns: minmax(0, 1fr) 115px;
+  align-items: end;
+  gap: 7px;
+}
+
+.accounting-item-form label {
+  display: grid;
+  gap: 3px;
+  color: #465c67;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.accounting-item-form input {
+  width: 100%;
+  min-height: 29px;
+  padding: 0 8px;
+  border: 1px solid #cbdbe2;
+  border-radius: 6px;
+  outline: none;
+  color: #1c3340;
+  background: #fff;
+  font: inherit;
+  font-size: 10px;
+}
+
+.accounting-item-form input:focus {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 3px rgba(233, 30, 140, 0.09);
+}
+
+.accounting-item-form button {
+  min-height: 29px;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  background: #e91e8c;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.accounting-item-form button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.accounting-entry-feedback {
+  display: flex;
+  max-width: 410px;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 9px;
+  text-align: left;
+}
+
+.accounting-entry-feedback small {
+  color: #a16c1b;
+}
+
+.accounting-entry-feedback .is-error {
+  color: #b4234f;
+  font-weight: 850;
+}
+
+.accounting-entry-feedback .is-success {
+  color: #177448;
+  font-weight: 850;
+}
+
+.accounting-search-panel {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% - 2px);
+  right: 10px;
+  left: 10px;
+  overflow: hidden;
+  border: 1px solid #cfdee4;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 34px rgba(24, 58, 76, 0.18);
+}
+
+.accounting-search-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 11px;
+  border-bottom: 1px solid #dce7eb;
+  background: #f1f8fa;
+}
+
+.accounting-search-panel > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.accounting-search-panel > header strong {
+  color: #263f4c;
+  font-size: 11px;
+}
+
+.accounting-search-panel > header span {
+  color: #71828c;
+  font-size: 9px;
+}
+
+.accounting-search-panel > header button {
+  border: 0;
+  color: #ad1c60;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.accounting-search-loading {
+  padding: 22px;
+  color: #687c86;
+  font-size: 11px;
+  text-align: center;
+}
+
+.accounting-search-results {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.accounting-search-results > button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 42px minmax(0, 1fr) 130px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #263e4b;
+  background: transparent;
+  font: inherit;
+  text-align: right;
+}
+
+.accounting-search-results > button:hover,
+.accounting-search-results > button.is-active {
+  border-color: #e5a6c5;
+  background: #fff1f8;
+}
+
+.accounting-search-results img {
+  width: 42px;
+  height: 42px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: #eef4f6;
+}
+
+.accounting-search-results > button > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.accounting-search-results > button > div strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounting-search-results > button > div span {
+  color: #71818b;
+  font-size: 9px;
+}
+
+.accounting-search-results aside {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
+.accounting-search-results aside strong {
+  direction: ltr;
+  color: #b01967;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.accounting-search-results aside span {
+  color: #627580;
+  font-size: 9px;
+}
+
+.accounting-invoice-table tbody tr.is-incomplete {
+  background: #fff8e9;
+}
+
+.accounting-invoice-table tbody tr:not(.accounting-empty-row):hover {
+  background: #f8fcfd;
+}
+
+.accounting-invoice-table tbody td {
+  padding: 4px;
+}
+
+.accounting-invoice-table tbody input,
+.accounting-invoice-table tbody select {
+  width: 100%;
+  min-width: 0;
+  min-height: 27px;
+  padding: 0 5px;
+  border: 1px solid #cbdbe2;
+  border-radius: 5px;
+  outline: none;
+  color: #203944;
+  background: #fff;
+  font: inherit;
+  font-size: 9px;
+}
+
+.accounting-invoice-table tbody input:focus,
+.accounting-invoice-table tbody select:focus {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 2px rgba(233, 30, 140, 0.09);
+}
+
+.accounting-invoice-table tbody select:disabled {
+  color: #304a57;
+  background: #eff5f7;
+  opacity: 1;
+}
+
+.accounting-product-cell {
+  display: flex;
+  min-width: 210px;
+  align-items: center;
+  gap: 7px;
+  text-align: right !important;
+}
+
+.accounting-product-cell img {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #eef3f5;
+}
+
+.accounting-product-cell > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.accounting-product-cell strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.accounting-product-cell small {
+  color: #71818b;
+  font-size: 8px;
+}
+
+.accounting-line-total {
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: #203945;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.accounting-remove-line {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: #ad2459;
+  background: #ffeaf3;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.accounting-remove-line:hover {
+  color: #fff;
+  background: #c92e66;
+}
+
+.accounting-invoice-table th:nth-child(1) {
+  width: 38px;
+}
+
+.accounting-invoice-table th:nth-child(2) {
+  width: 125px;
+}
+
+.accounting-invoice-table th:nth-child(3) {
+  width: 88px;
+}
+
+.accounting-invoice-table th:nth-child(4) {
+  width: 225px;
+}
+
+.accounting-invoice-table th:nth-child(5),
+.accounting-invoice-table th:nth-child(6) {
+  width: 105px;
+}
+
+.accounting-invoice-table th:nth-child(7) {
+  width: 65px;
+}
+
+.accounting-invoice-table th:nth-child(8) {
+  width: 72px;
+}
+
+.accounting-invoice-table th:nth-child(9),
+.accounting-invoice-table th:nth-child(10),
+.accounting-invoice-table th:nth-child(11) {
+  width: 100px;
+}
+
+.accounting-invoice-table th:nth-child(12) {
+  width: 50px;
+}
+
+@media (max-width: 700px) {
+  .accounting-item-form {
+    grid-template-columns: 1fr;
+  }
+
+  .accounting-entry-feedback {
+    max-width: none;
+    justify-content: flex-start;
+    text-align: right;
+  }
+
+  .accounting-search-results > button {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .accounting-search-results aside {
+    grid-column: 1 / -1;
+    text-align: right;
+  }
+}
+
+/* Readable accounting invoice columns */
+
+.accounting-invoice-table {
+  min-width: 1260px;
+}
+
+.accounting-invoice-table th {
+  padding: 8px 5px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.accounting-invoice-table td {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.accounting-invoice-table tbody tr:not(.accounting-empty-row) {
+  height: 47px;
+}
+
+.accounting-invoice-table tbody td {
+  padding: 5px;
+}
+
+.accounting-invoice-table tbody input,
+.accounting-invoice-table tbody select {
+  min-height: 32px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.accounting-product-cell {
+  min-width: 250px;
+  gap: 8px;
+}
+
+.accounting-product-cell img {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+}
+
+.accounting-product-cell strong {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.accounting-product-cell small {
+  font-size: 9px;
+}
+
+.accounting-line-total {
+  font-size: 11px;
+}
+
+.accounting-invoice-table th:nth-child(1) {
+  width: 36px;
+}
+
+.accounting-invoice-table th:nth-child(2) {
+  width: 120px;
+}
+
+.accounting-invoice-table th:nth-child(3) {
+  width: 78px;
+}
+
+.accounting-invoice-table th:nth-child(4) {
+  width: 250px;
+}
+
+.accounting-invoice-table th:nth-child(5) {
+  width: 115px;
+}
+
+.accounting-invoice-table th:nth-child(6) {
+  width: 105px;
+}
+
+.accounting-invoice-table th:nth-child(7) {
+  width: 58px;
+}
+
+.accounting-invoice-table th:nth-child(8) {
+  width: 68px;
+}
+
+.accounting-invoice-table th:nth-child(9) {
+  width: 92px;
+}
+
+.accounting-invoice-table th:nth-child(10) {
+  width: 88px;
+}
+
+.accounting-invoice-table th:nth-child(11) {
+  width: 100px;
+}
+
+.accounting-invoice-table th:nth-child(12) {
+  width: 46px;
+}
+
+/* Automatically reveal latest accounting invoice line */
+
+.accounting-invoice-table tbody tr.is-last-touched {
+  animation: accounting-last-line-flash 1.15s ease-out;
+}
+
+@keyframes accounting-last-line-flash {
+  0% {
+    background: #ffd9ec;
+    box-shadow: inset 0 0 0 2px #e91e8c;
+  }
+
+  100% {
+    background: inherit;
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+}
