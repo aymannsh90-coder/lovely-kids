@@ -1,0 +1,1202 @@
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { QRCodeSVG } from "qrcode.react";
+
+import {
+  ApiError,
+  createPosSale,
+  getCurrentCashSession,
+  lookupPosProductByBarcode,
+  searchPosProducts,
+  type CashSession,
+  type PosProductLookup,
+  type PosSaleResult,
+} from "./lib/api";
+
+interface CartLine {
+  id: string;
+  barcode: string;
+  product: PosProductLookup;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  soldUnitPrice: string;
+}
+
+type LineField = "color" | "size" | "quantity" | "price";
+
+interface SalePanelProps {
+  token: string;
+  session: CashSession;
+  cashierName: string;
+  onSessionChange: (session: CashSession) => void;
+  onUnauthorized: () => void;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "حدث خطأ غير متوقع";
+}
+
+function createKey() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function moneyToMinor(value: string) {
+  const amount = Number(value.trim().replace(",", "."));
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    return null;
+  }
+
+  return Math.round(amount * 100);
+}
+
+function formatMinor(value: number) {
+  const amount = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value / 100);
+
+  return `${amount}\u00A0₪`;
+}
+
+function getColors(product: PosProductLookup) {
+  return product.colorVariants.map((variant) => variant.color);
+}
+
+function getSizes(product: PosProductLookup, color: string | null) {
+  if (product.colorVariants.length > 0) {
+    const variant = product.colorVariants.find(
+      (entry) => entry.color === color,
+    );
+
+    return variant?.sizes.map((entry) => entry.size) ?? [];
+  }
+
+  return product.sizes;
+}
+
+function getLineAvailability(line: CartLine) {
+  if (line.product.colorVariants.length > 0 && line.color) {
+    const variant = line.product.colorVariants.find(
+      (entry) => entry.color === line.color,
+    );
+
+    if (line.size) {
+      const size = variant?.sizes.find((entry) => entry.size === line.size);
+
+      return {
+        stock: size?.stock ?? null,
+        outOfStock: !!size?.outOfStock,
+      };
+    }
+  }
+
+  return {
+    stock: line.product.stock,
+    outOfStock: line.product.outOfStock,
+  };
+}
+
+function selectionIsComplete(line: CartLine) {
+  if (line.product.colorVariants.length > 0) {
+    if (!line.color) return false;
+
+    const sizes = getSizes(line.product, line.color);
+
+    if (sizes.length > 0 && !line.size) {
+      return false;
+    }
+  } else if (line.product.sizes.length > 0 && !line.size) {
+    return false;
+  }
+
+  return true;
+}
+
+export default function SalePanel({
+  token,
+  session,
+  cashierName,
+  onSessionChange,
+  onUnauthorized,
+}: SalePanelProps) {
+  const barcodeInput = useRef<HTMLInputElement>(null);
+
+  const idempotencyKey = useRef<string | null>(null);
+
+  function focusBarcodeField() {
+    window.setTimeout(() => {
+      barcodeInput.current?.focus();
+      barcodeInput.current?.select();
+    }, 0);
+  }
+
+  function getLineField(lineId: string, field: LineField) {
+    return document.querySelector<HTMLInputElement | HTMLSelectElement>(
+      `[data-line-id="${lineId}"][data-line-field="${field}"]`,
+    );
+  }
+
+  function focusLineField(lineId: string, field: LineField) {
+    window.setTimeout(() => {
+      const element = getLineField(lineId, field);
+
+      if (!element || element.disabled) {
+        focusBarcodeField();
+        return;
+      }
+
+      element.focus();
+
+      if (element instanceof HTMLInputElement) {
+        element.select();
+      }
+    }, 0);
+  }
+
+  function moveAfterEnter(
+    event: KeyboardEvent<HTMLElement>,
+    lineId: string,
+    nextField: LineField | "barcode",
+  ) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (nextField === "barcode") {
+      focusBarcodeField();
+      return;
+    }
+
+    focusLineField(lineId, nextField);
+  }
+
+  const [barcode, setBarcode] = useState("");
+
+  const [searchResults, setSearchResults] = useState<PosProductLookup[]>([]);
+
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const [searchBusy, setSearchBusy] = useState(false);
+
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+
+  const [cart, setCart] = useState<CartLine[]>([]);
+
+  const [discountAmount, setDiscountAmount] = useState("0.00");
+
+  const [paidAmount, setPaidAmount] = useState("0.00");
+
+  const [customerName, setCustomerName] = useState("");
+
+  const [customerPhone, setCustomerPhone] = useState("");
+
+  const [notes, setNotes] = useState("");
+
+  const [lookupBusy, setLookupBusy] = useState(false);
+
+  const [saleBusy, setSaleBusy] = useState(false);
+
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const [lastSale, setLastSale] = useState<PosSaleResult | null>(null);
+
+  const subtotalMinor = useMemo(
+    () =>
+      cart.reduce((total, line) => {
+        const price = moneyToMinor(line.soldUnitPrice) ?? 0;
+
+        return total + price * line.quantity;
+      }, 0),
+    [cart],
+  );
+
+  const discountMinor = moneyToMinor(discountAmount) ?? 0;
+
+  const totalMinor = Math.max(0, subtotalMinor - discountMinor);
+
+  const paidMinor = moneyToMinor(paidAmount) ?? 0;
+
+  const changeMinor = Math.max(0, paidMinor - totalMinor);
+
+  useEffect(() => {
+    barcodeInput.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    setPaidAmount((totalMinor / 100).toFixed(2));
+  }, [totalMinor]);
+
+  function clearProductSearch() {
+    setSearchResults([]);
+    setSearchOpen(false);
+    setSearchBusy(false);
+    setActiveSearchIndex(0);
+  }
+
+  function addProductToCart(product: PosProductLookup) {
+    const colors = getColors(product);
+
+    const color =
+      product.mappedColor ?? (colors.length === 1 ? colors[0] : null);
+
+    const sizes = getSizes(product, color);
+
+    const size = product.mappedSize ?? (sizes.length === 1 ? sizes[0] : null);
+
+    const needsColor = colors.length > 0 && !color;
+
+    const needsSize = !needsColor && sizes.length > 0 && !size;
+
+    const selectionComplete = !needsColor && !needsSize;
+
+    const existingIndex = selectionComplete
+      ? cart.findIndex(
+          (line) =>
+            line.barcode === product.barcode &&
+            line.color === color &&
+            line.size === size,
+        )
+      : -1;
+
+    let focusTarget: {
+      lineId: string;
+      field: LineField;
+    } | null = null;
+
+    if (existingIndex >= 0) {
+      const existingLine = cart[existingIndex];
+
+      setCart(
+        cart.map((line, index) =>
+          index === existingIndex
+            ? {
+                ...line,
+                quantity: line.quantity + 1,
+              }
+            : line,
+        ),
+      );
+
+      setMessage(`تمت زيادة كمية ${product.nameAr}`);
+
+      focusTarget = {
+        lineId: existingLine.id,
+        field: "quantity",
+      };
+    } else {
+      const lineId = createKey();
+
+      setCart([
+        ...cart,
+        {
+          id: lineId,
+          barcode: product.barcode,
+          product,
+          color,
+          size,
+          quantity: 1,
+          soldUnitPrice: product.websiteUnitPrice.toFixed(2),
+        },
+      ]);
+
+      setMessage(`تمت إضافة ${product.nameAr}`);
+
+      if (needsColor) {
+        focusTarget = {
+          lineId,
+          field: "color",
+        };
+      } else if (needsSize) {
+        focusTarget = {
+          lineId,
+          field: "size",
+        };
+      }
+    }
+
+    setBarcode("");
+    setError("");
+    clearProductSearch();
+
+    if (focusTarget) {
+      focusLineField(focusTarget.lineId, focusTarget.field);
+    } else {
+      focusBarcodeField();
+    }
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" && searchResults.length > 0) {
+      event.preventDefault();
+
+      setActiveSearchIndex((current) => (current + 1) % searchResults.length);
+
+      return;
+    }
+
+    if (event.key === "ArrowUp" && searchResults.length > 0) {
+      event.preventDefault();
+
+      setActiveSearchIndex(
+        (current) =>
+          (current - 1 + searchResults.length) % searchResults.length,
+      );
+
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      clearProductSearch();
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      searchOpen &&
+      searchResults[activeSearchIndex]
+    ) {
+      event.preventDefault();
+
+      addProductToCart(searchResults[activeSearchIndex]);
+    }
+  }
+
+  async function handleBarcode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const value = barcode.trim();
+
+    if (!value) {
+      setError("أدخل الباركود أو الكود أو اسم الصنف");
+
+      focusBarcodeField();
+      return;
+    }
+
+    if (searchOpen && searchResults[activeSearchIndex]) {
+      addProductToCart(searchResults[activeSearchIndex]);
+
+      return;
+    }
+
+    setLookupBusy(true);
+    setError("");
+    setMessage("");
+    clearProductSearch();
+
+    try {
+      const product = await lookupPosProductByBarcode(token, value);
+
+      addProductToCart(product);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        onUnauthorized();
+        return;
+      }
+
+      if (caught instanceof ApiError && caught.status === 404) {
+        setSearchBusy(true);
+
+        try {
+          const result = await searchPosProducts(token, value);
+
+          setSearchResults(result.results);
+
+          setActiveSearchIndex(0);
+
+          setSearchOpen(result.results.length > 0);
+
+          if (result.results.length === 0) {
+            setError("لم يتم العثور على أصناف مطابقة");
+          } else {
+            setMessage(
+              `تم العثور على ${result.results.length} صنف، اختر الصنف المطلوب`,
+            );
+          }
+        } catch (searchError) {
+          if (searchError instanceof ApiError && searchError.status === 401) {
+            onUnauthorized();
+            return;
+          }
+
+          setError(errorMessage(searchError));
+        } finally {
+          setSearchBusy(false);
+        }
+      } else {
+        setError(errorMessage(caught));
+      }
+    } finally {
+      setLookupBusy(false);
+      focusBarcodeField();
+    }
+  }
+
+  function updateLine(id: string, patch: Partial<CartLine>) {
+    setCart((current) =>
+      current.map((line) =>
+        line.id === id
+          ? {
+              ...line,
+              ...patch,
+            }
+          : line,
+      ),
+    );
+  }
+
+  function updateVariantSelection(id: string, patch: Partial<CartLine>) {
+    const currentLine = cart.find((line) => line.id === id);
+
+    if (!currentLine) {
+      return id;
+    }
+
+    const updatedLine: CartLine = {
+      ...currentLine,
+      ...patch,
+    };
+
+    const duplicate = selectionIsComplete(updatedLine)
+      ? cart.find(
+          (line) =>
+            line.id !== id &&
+            line.barcode === updatedLine.barcode &&
+            line.color === updatedLine.color &&
+            line.size === updatedLine.size,
+        )
+      : undefined;
+
+    if (duplicate) {
+      setCart(
+        cart
+          .filter((line) => line.id !== id)
+          .map((line) =>
+            line.id === duplicate.id
+              ? {
+                  ...line,
+                  quantity: line.quantity + updatedLine.quantity,
+                }
+              : line,
+          ),
+      );
+
+      setMessage("تم دمج البند مع نفس اللون والمقاس");
+
+      return duplicate.id;
+    }
+
+    setCart(cart.map((line) => (line.id === id ? updatedLine : line)));
+
+    return id;
+  }
+
+  function changeColor(line: CartLine, colorValue: string) {
+    const color = colorValue || null;
+
+    const sizes = getSizes(line.product, color);
+
+    const targetId = updateVariantSelection(line.id, {
+      color,
+      size: sizes.length === 1 ? sizes[0] : null,
+    });
+
+    focusLineField(targetId, sizes.length > 1 ? "size" : "quantity");
+  }
+
+  function changeSize(line: CartLine, sizeValue: string) {
+    const targetId = updateVariantSelection(line.id, {
+      size: sizeValue || null,
+    });
+
+    focusLineField(targetId, "quantity");
+  }
+
+  async function completeSale() {
+    setError("");
+    setMessage("");
+
+    if (cart.length === 0) {
+      setError("أضف صنفًا واحدًا على الأقل");
+      return;
+    }
+
+    for (const line of cart) {
+      if (!selectionIsComplete(line)) {
+        setError(`اختر اللون والمقاس للمنتج ${line.product.nameAr}`);
+        return;
+      }
+
+      const price = moneyToMinor(line.soldUnitPrice);
+
+      if (price === null) {
+        setError(`سعر بيع ${line.product.nameAr} غير صالح`);
+        return;
+      }
+
+      if (
+        !Number.isSafeInteger(line.quantity) ||
+        line.quantity < 1 ||
+        line.quantity > 99
+      ) {
+        setError(`كمية ${line.product.nameAr} غير صالحة`);
+        return;
+      }
+
+      const availability = getLineAvailability(line);
+
+      if (
+        availability.outOfStock ||
+        (availability.stock !== null && line.quantity > availability.stock)
+      ) {
+        setError(`الكمية المطلوبة من ${line.product.nameAr} غير متوفرة`);
+        return;
+      }
+    }
+
+    if (discountMinor > subtotalMinor) {
+      setError("الخصم أكبر من مجموع الفاتورة");
+      return;
+    }
+
+    if (paidMinor < totalMinor) {
+      setError("المبلغ المدفوع أقل من قيمة الفاتورة");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `إتمام البيع بقيمة ${formatMinor(totalMinor)} وخصم المخزون؟`,
+    );
+
+    if (!confirmed) return;
+
+    const requestKey = idempotencyKey.current ?? `pos_${createKey()}`;
+
+    idempotencyKey.current = requestKey;
+    setSaleBusy(true);
+
+    try {
+      const result = await createPosSale(token, {
+        registerKey: session.registerKey,
+
+        idempotencyKey: requestKey,
+        paymentMethod: "cash",
+
+        discountAmount: discountAmount.trim(),
+
+        paidAmount: paidAmount.trim(),
+
+        customerName: customerName.trim() || undefined,
+
+        customerPhone: customerPhone.trim() || undefined,
+
+        notes: notes.trim() || undefined,
+
+        items: cart.map((line) => ({
+          barcode: line.barcode,
+          quantity: line.quantity,
+
+          soldUnitPrice: line.soldUnitPrice.trim(),
+
+          color: line.color ?? undefined,
+
+          size: line.size ?? undefined,
+        })),
+      });
+
+      idempotencyKey.current = null;
+      setLastSale(result);
+      setCart([]);
+      setDiscountAmount("0.00");
+      setCustomerName("");
+      setCustomerPhone("");
+      setNotes("");
+
+      setMessage(
+        result.alreadyCreated
+          ? "تم تحميل الفاتورة المحفوظة دون تكرار الخصم."
+          : `تم حفظ الفاتورة ${result.sale.publicId} وخصم المخزون.`,
+      );
+
+      const current = await getCurrentCashSession(token, session.registerKey);
+
+      if (current.session) {
+        onSessionChange(current.session);
+      }
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        onUnauthorized();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setSaleBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <section className="sale-panel" id="pos-sale">
+        <div className="panel-heading">
+          <div className="panel-icon">🧾</div>
+
+          <div>
+            <h2>فاتورة مبيعات</h2>
+            <p>امسح الباركود ثم راجع الكمية والسعر قبل إتمام البيع.</p>
+          </div>
+        </div>
+
+        <form className="barcode-form" onSubmit={handleBarcode}>
+          <label>
+            <span>مسح الباركود أو البحث بالكود أو اسم الصنف</span>
+
+            <input
+              ref={barcodeInput}
+              dir="ltr"
+              autoComplete="off"
+              value={barcode}
+              onChange={(event) => {
+                setBarcode(event.target.value);
+
+                if (searchOpen) {
+                  clearProductSearch();
+                }
+              }}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="امسح الباركود أو اكتب الكود أو اسم الصنف"
+              disabled={lookupBusy}
+            />
+          </label>
+
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={lookupBusy}
+          >
+            {lookupBusy ? "جاري البحث…" : "بحث / إضافة"}
+          </button>
+        </form>
+
+        {(searchBusy || searchOpen) && (
+          <section className="pos-product-search-panel">
+            <header>
+              <div>
+                <strong>نتائج البحث</strong>
+
+                <span>استخدم الأسهم ثم Enter للاختيار</span>
+              </div>
+
+              <button type="button" onClick={clearProductSearch}>
+                إغلاق
+              </button>
+            </header>
+
+            {searchBusy ? (
+              <div className="pos-search-loading">جاري البحث عن الأصناف…</div>
+            ) : (
+              <div className="pos-product-search-results">
+                {searchResults.map((product, index) => (
+                  <button
+                    className={index === activeSearchIndex ? "is-active" : ""}
+                    type="button"
+                    key={`${product.productId}-${product.barcode}`}
+                    onMouseEnter={() => setActiveSearchIndex(index)}
+                    onClick={() => addProductToCart(product)}
+                  >
+                    <img src={product.image} alt="" />
+
+                    <div className="pos-search-product-info">
+                      <strong>{product.nameAr}</strong>
+
+                      <div>
+                        <span>الكود: {product.productCode ?? "—"}</span>
+
+                        <span dir="ltr">{product.barcode}</span>
+                      </div>
+                    </div>
+
+                    <div className="pos-search-product-side">
+                      <strong>
+                        {formatMinor(product.websiteUnitPriceMinor)}
+                      </strong>
+
+                      <span
+                        className={product.outOfStock ? "out-of-stock" : ""}
+                      >
+                        {product.outOfStock
+                          ? "غير متوفر"
+                          : `المخزون: ${product.stock ?? "غير محدد"}`}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {error && <div className="alert error-alert sale-alert">{error}</div>}
+
+        {message && (
+          <div className="alert success-alert sale-alert">{message}</div>
+        )}
+
+        {cart.length === 0 ? (
+          <div className="empty-cart">لم تتم إضافة أصناف إلى الفاتورة بعد.</div>
+        ) : (
+          <div className="document-items-table-wrap">
+            <table className="document-items-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>الباركود</th>
+                  <th>الكود</th>
+                  <th>اسم الصنف</th>
+                  <th>اللون</th>
+                  <th>المقاس</th>
+                  <th>الكمية</th>
+                  <th>سعر البيع</th>
+                  <th>المجموع</th>
+                  <th>حذف</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {cart.map((line, index) => {
+                  const colors = getColors(line.product);
+
+                  const sizes = getSizes(line.product, line.color);
+
+                  const availability = getLineAvailability(line);
+
+                  const lineTotal =
+                    (moneyToMinor(line.soldUnitPrice) ?? 0) * line.quantity;
+
+                  return (
+                    <tr
+                      className={
+                        selectionIsComplete(line)
+                          ? ""
+                          : "document-row-incomplete"
+                      }
+                      key={line.id}
+                    >
+                      <td className="document-row-number">{index + 1}</td>
+
+                      <td className="document-barcode-cell" dir="ltr">
+                        {line.barcode}
+                      </td>
+
+                      <td className="document-code-cell">
+                        {line.product.productCode ?? "—"}
+                      </td>
+
+                      <td className="document-product-cell">
+                        <img src={line.product.image} alt="" />
+
+                        <div>
+                          <strong>{line.product.nameAr}</strong>
+
+                          <small>
+                            المخزون: {availability.stock ?? "غير محدد"}
+                          </small>
+                        </div>
+                      </td>
+
+                      <td className="document-control-cell">
+                        {colors.length > 0 ? (
+                          <select
+                            data-line-id={line.id}
+                            data-line-field="color"
+                            value={line.color ?? ""}
+                            onChange={(event) =>
+                              changeColor(line, event.target.value)
+                            }
+                            disabled={!!line.product.mappedColor}
+                          >
+                            <option value="">اختر اللون</option>
+
+                            {colors.map((color) => (
+                              <option key={color} value={color}>
+                                {color}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="document-empty-value">—</span>
+                        )}
+                      </td>
+
+                      <td className="document-control-cell">
+                        {sizes.length > 0 ? (
+                          <select
+                            data-line-id={line.id}
+                            data-line-field="size"
+                            value={line.size ?? ""}
+                            onChange={(event) =>
+                              changeSize(line, event.target.value)
+                            }
+                            disabled={!!line.product.mappedSize}
+                          >
+                            <option value="">اختر المقاس</option>
+
+                            {sizes.map((size) => (
+                              <option key={size} value={size}>
+                                {size}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="document-empty-value">—</span>
+                        )}
+                      </td>
+
+                      <td className="document-control-cell document-quantity-cell">
+                        <input
+                          data-line-id={line.id}
+                          data-line-field="quantity"
+                          dir="ltr"
+                          type="number"
+                          min="1"
+                          max="99"
+                          step="1"
+                          value={line.quantity}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) =>
+                            updateLine(line.id, {
+                              quantity: Number(event.target.value),
+                            })
+                          }
+                          onKeyDown={(event) =>
+                            moveAfterEnter(event, line.id, "price")
+                          }
+                        />
+                      </td>
+
+                      <td className="document-control-cell document-price-cell">
+                        <div className="document-money-input">
+                          <input
+                            data-line-id={line.id}
+                            data-line-field="price"
+                            dir="ltr"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.soldUnitPrice}
+                            onFocus={(event) => event.currentTarget.select()}
+                            onChange={(event) =>
+                              updateLine(line.id, {
+                                soldUnitPrice: event.target.value,
+                              })
+                            }
+                            onKeyDown={(event) =>
+                              moveAfterEnter(event, line.id, "barcode")
+                            }
+                          />
+
+                          <span>₪</span>
+                        </div>
+                      </td>
+
+                      <td className="document-total-cell">
+                        {formatMinor(lineTotal)}
+                      </td>
+
+                      <td className="document-remove-cell">
+                        <button
+                          type="button"
+                          aria-label={`حذف ${line.product.nameAr}`}
+                          onClick={() =>
+                            setCart((current) =>
+                              current.filter((item) => item.id !== line.id),
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="sale-checkout">
+          <div className="sale-customer-fields">
+            <label>
+              <span>
+                اسم الزبون
+                <small> اختياري</small>
+              </span>
+
+              <input
+                maxLength={150}
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+              />
+            </label>
+
+            <label>
+              <span>
+                هاتف الزبون
+                <small> اختياري</small>
+              </span>
+
+              <input
+                dir="ltr"
+                maxLength={50}
+                inputMode="tel"
+                value={customerPhone}
+                onChange={(event) => setCustomerPhone(event.target.value)}
+              />
+            </label>
+
+            <label className="sale-notes">
+              <span>
+                ملاحظات
+                <small> اختياري</small>
+              </span>
+
+              <textarea
+                rows={2}
+                maxLength={1000}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="sale-summary">
+            <div>
+              <span>مجموع الأصناف</span>
+              <strong>{formatMinor(subtotalMinor)}</strong>
+            </div>
+
+            <label>
+              <span>الخصم</span>
+
+              <div className="money-input">
+                <input
+                  dir="ltr"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={discountAmount}
+                  onChange={(event) => setDiscountAmount(event.target.value)}
+                />
+
+                <span>₪</span>
+              </div>
+            </label>
+
+            <div className="sale-grand-total">
+              <span>الإجمالي النهائي</span>
+              <strong>{formatMinor(totalMinor)}</strong>
+            </div>
+
+            <label>
+              <span>المبلغ المدفوع</span>
+
+              <div className="money-input">
+                <input
+                  dir="ltr"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={paidAmount}
+                  onChange={(event) => setPaidAmount(event.target.value)}
+                />
+
+                <span>₪</span>
+              </div>
+            </label>
+
+            <div>
+              <span>الباقي للزبون</span>
+              <strong>{formatMinor(changeMinor)}</strong>
+            </div>
+
+            <button
+              className="primary-button complete-sale-button"
+              type="button"
+              disabled={saleBusy || cart.length === 0}
+              onClick={() => void completeSale()}
+            >
+              {saleBusy ? "جاري حفظ البيع…" : "إتمام البيع وخصم المخزون"}
+            </button>
+          </div>
+        </div>
+
+        {lastSale && (
+          <div className="last-sale-actions">
+            <div>
+              <strong>آخر فاتورة: {lastSale.sale.publicId}</strong>
+
+              <span>الإجمالي: {formatMinor(lastSale.sale.totalMinor)}</span>
+            </div>
+
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                document.body.dataset.printMode = "receipt";
+
+                const cleanup = () => {
+                  delete document.body.dataset.printMode;
+                };
+
+                window.addEventListener("afterprint", cleanup, { once: true });
+
+                window.print();
+              }}
+            >
+              طباعة إيصال 56mm
+            </button>
+          </div>
+        )}
+      </section>
+
+      {lastSale && (
+        <section className="receipt-print-area" dir="rtl">
+          <header className="receipt-header">
+            <strong>Lovely Kids</strong>
+            <span>ملابس ومستلزمات الأطفال</span>
+            <span>نابلس - المركز التجاري</span>
+            <span dir="ltr">09-2376808</span>
+          </header>
+
+          <div className="receipt-divider" />
+
+          <div className="receipt-info">
+            <span>
+              رقم الفاتورة:
+              <b dir="ltr"> {lastSale.sale.publicId}</b>
+            </span>
+
+            <span>
+              التاريخ والوقت:{" "}
+              {new Intl.DateTimeFormat("ar-PS", {
+                dateStyle: "short",
+                timeStyle: "short",
+                timeZone: "Asia/Hebron",
+              }).format(new Date(lastSale.sale.createdAt))}
+            </span>
+
+            <span>الزبون: {lastSale.sale.customerName || "زبون نقدي"}</span>
+
+            <span>الكاشير: {cashierName}</span>
+
+            <span>طريقة الدفع: نقدي</span>
+          </div>
+
+          <div className="receipt-divider" />
+
+          <table className="receipt-items-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الصنف</th>
+                <th>الكود</th>
+                <th>الكمية</th>
+                <th>السعر</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {lastSale.items.map((item, index) => (
+                <tr key={item.id}>
+                  <td>{index + 1}</td>
+
+                  <td>{item.productNameAr.trim().split(/\s+/)[0] || "صنف"}</td>
+
+                  <td dir="ltr">{item.productCode ?? "—"}</td>
+
+                  <td>{item.quantity}</td>
+
+                  <td dir="ltr">{item.lineTotal.toFixed(2)} ₪</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="receipt-divider" />
+
+          <div className="receipt-totals">
+            <div>
+              <span>مجموع الأصناف</span>
+
+              <strong>{lastSale.sale.subtotal.toFixed(2)} ₪</strong>
+            </div>
+
+            {lastSale.sale.discountMinor > 0 && (
+              <div>
+                <span>قيمة الخصم</span>
+
+                <strong>{lastSale.sale.discount.toFixed(2)} ₪</strong>
+              </div>
+            )}
+
+            <div className="receipt-total">
+              <span>الإجمالي النهائي</span>
+
+              <strong>{lastSale.sale.total.toFixed(2)} ₪</strong>
+            </div>
+
+            <div>
+              <span>المدفوع</span>
+
+              <strong>{lastSale.sale.paid.toFixed(2)} ₪</strong>
+            </div>
+
+            <div>
+              <span>الباقي</span>
+
+              <strong>{lastSale.sale.change.toFixed(2)} ₪</strong>
+            </div>
+          </div>
+
+          <div className="receipt-invoice-barcode">
+            <QRCodeSVG
+              value={lastSale.sale.publicId}
+              size={96}
+              level="M"
+              aria-label={`رمز QR للفاتورة ${lastSale.sale.publicId}`}
+            />
+          </div>
+
+          <footer className="receipt-footer">
+            <strong>شكرًا لتسوقكم من Lovely Kids</strong>
+
+            <b className="receipt-exchange-reminder">
+              يرجى الاحتفاظ بالفاتورة لإتمام عملية التبديل.
+            </b>
+
+            <span>الاستبدال بالبضاعة السليمة حسب سياسة المتجر</span>
+          </footer>
+        </section>
+      )}
+    </>
+  );
+}
