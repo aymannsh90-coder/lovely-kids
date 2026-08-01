@@ -167,7 +167,8 @@ function parseOptionalText(
 
 interface ParsedSaleItem {
   lineNumber: number;
-  barcode: string;
+  productId: number | null;
+  barcode: string | null;
   quantity: number;
   soldUnitPriceMinor: number;
   lineDiscountMinor: number;
@@ -187,10 +188,43 @@ function parseSaleItems(value: unknown): ParsedSaleItem[] {
 
     const item = raw as Record<string, unknown>;
 
-    const barcode = normalizeBarcode(item.barcode);
+    const rawProductId = item.productId;
 
-    if (!barcode) {
+    const productId =
+      typeof rawProductId === "number"
+        ? rawProductId
+        : typeof rawProductId === "string" &&
+            rawProductId.trim()
+          ? Number(rawProductId)
+          : null;
+
+    if (
+      productId !== null &&
+      (
+        !Number.isSafeInteger(productId) ||
+        productId < 1
+      )
+    ) {
+      throw new PosSaleError("رقم أحد المنتجات غير صالح");
+    }
+
+    const hasBarcodeInput =
+      item.barcode !== undefined &&
+      item.barcode !== null &&
+      item.barcode !== "";
+
+    const barcode = hasBarcodeInput
+      ? normalizeBarcode(item.barcode)
+      : null;
+
+    if (hasBarcodeInput && !barcode) {
       throw new PosSaleError("باركود أحد الأصناف غير صالح");
+    }
+
+    if (productId === null && !barcode) {
+      throw new PosSaleError(
+        "يجب تحديد المنتج أو باركوده",
+      );
     }
 
     const quantity =
@@ -231,6 +265,7 @@ function parseSaleItems(value: unknown): ParsedSaleItem[] {
 
     return {
       lineNumber: index + 1,
+      productId,
       barcode,
       quantity,
       soldUnitPriceMinor,
@@ -381,7 +416,7 @@ async function getExistingSale(db: Db, idempotencyKey: string) {
 
 function toPosProductLookup(
   product: typeof productsTable.$inferSelect,
-  barcode: string,
+  barcode: string | null,
   color: string | null,
   size: string | null,
 ) {
@@ -567,10 +602,6 @@ async function handleProductSearch(request: Request, db: Db, env: Env) {
         primaryBarcode ??
         fallbackBarcode?.barcode ??
         null;
-
-      if (!selectedBarcode) {
-        return null;
-      }
 
       let rank = 4;
 
@@ -772,42 +803,92 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       > = [];
 
       for (const item of items) {
-        const mappingRows = await tx
-          .select()
-          .from(productBarcodesTable)
-          .where(eq(productBarcodesTable.barcode, item.barcode))
-          .limit(1);
+        if (item.barcode) {
+          const mappingRows = await tx
+            .select()
+            .from(productBarcodesTable)
+            .where(
+              eq(
+                productBarcodesTable.barcode,
+                item.barcode,
+              ),
+            )
+            .limit(1);
 
-        const mapping = mappingRows[0];
+          const mapping = mappingRows[0];
 
-        if (mapping) {
+          if (mapping) {
+            if (
+              item.productId !== null &&
+              item.productId !== mapping.productId
+            ) {
+              throw new PosSaleError(
+                "الباركود لا يطابق المنتج المحدد",
+                409,
+              );
+            }
+
+            resolvedItems.push({
+              ...item,
+              productId: mapping.productId,
+              mappedColor: mapping.color ?? null,
+              mappedSize: mapping.size ?? null,
+            });
+
+            continue;
+          }
+
+          const primaryRows = await tx
+            .select({
+              id: productsTable.id,
+            })
+            .from(productsTable)
+            .where(
+              eq(
+                productsTable.barcode,
+                item.barcode,
+              ),
+            )
+            .limit(1);
+
+          const primary = primaryRows[0];
+
+          if (!primary) {
+            throw new PosSaleError(
+              `الباركود ${item.barcode} غير موجود`,
+              404,
+            );
+          }
+
+          if (
+            item.productId !== null &&
+            item.productId !== primary.id
+          ) {
+            throw new PosSaleError(
+              "الباركود لا يطابق المنتج المحدد",
+              409,
+            );
+          }
+
           resolvedItems.push({
             ...item,
-            productId: mapping.productId,
-            mappedColor: mapping.color ?? null,
-            mappedSize: mapping.size ?? null,
+            productId: primary.id,
+            mappedColor: null,
+            mappedSize: null,
           });
 
           continue;
         }
 
-        const primaryRows = await tx
-          .select({
-            id: productsTable.id,
-          })
-          .from(productsTable)
-          .where(eq(productsTable.barcode, item.barcode))
-          .limit(1);
-
-        const primary = primaryRows[0];
-
-        if (!primary) {
-          throw new PosSaleError(`الباركود ${item.barcode} غير موجود`, 404);
+        if (item.productId === null) {
+          throw new PosSaleError(
+            "تعذر تحديد أحد المنتجات",
+          );
         }
 
         resolvedItems.push({
           ...item,
-          productId: primary.id,
+          productId: item.productId,
           mappedColor: null,
           mappedSize: null,
         });

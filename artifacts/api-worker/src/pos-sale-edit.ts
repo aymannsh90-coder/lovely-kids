@@ -42,7 +42,8 @@ class PosSaleEditError extends Error {
 
 interface ParsedEditItem {
   lineNumber: number;
-  barcode: string;
+  productId: number | null;
+  barcode: string | null;
   quantity: number;
   soldUnitPriceMinor: number;
   lineDiscountMinor: number;
@@ -187,10 +188,47 @@ function parseItems(value: unknown): ParsedEditItem[] {
 
     const item = raw as Record<string, unknown>;
 
-    const barcode = normalizeBarcode(item.barcode);
+    const rawProductId = item.productId;
 
-    if (!barcode) {
-      throw new PosSaleEditError("باركود أحد الأصناف غير صالح");
+    const productId =
+      typeof rawProductId === "number"
+        ? rawProductId
+        : typeof rawProductId === "string" &&
+            rawProductId.trim()
+          ? Number(rawProductId)
+          : null;
+
+    if (
+      productId !== null &&
+      (
+        !Number.isSafeInteger(productId) ||
+        productId < 1
+      )
+    ) {
+      throw new PosSaleEditError(
+        "رقم أحد المنتجات غير صالح",
+      );
+    }
+
+    const hasBarcodeInput =
+      item.barcode !== undefined &&
+      item.barcode !== null &&
+      item.barcode !== "";
+
+    const barcode = hasBarcodeInput
+      ? normalizeBarcode(item.barcode)
+      : null;
+
+    if (hasBarcodeInput && !barcode) {
+      throw new PosSaleEditError(
+        "باركود أحد الأصناف غير صالح",
+      );
+    }
+
+    if (productId === null && !barcode) {
+      throw new PosSaleEditError(
+        "يجب تحديد المنتج أو باركوده",
+      );
     }
 
     const quantity =
@@ -231,6 +269,7 @@ function parseItems(value: unknown): ParsedEditItem[] {
 
     return {
       lineNumber: index + 1,
+      productId,
       barcode,
       quantity,
       soldUnitPriceMinor,
@@ -893,42 +932,92 @@ export async function handleUpdatePosSale(
       const resolvedItems: ResolvedEditItem[] = [];
 
       for (const item of items) {
-        const mappingRows = await tx
-          .select()
-          .from(productBarcodesTable)
-          .where(eq(productBarcodesTable.barcode, item.barcode))
-          .limit(1);
+        if (item.barcode) {
+          const mappingRows = await tx
+            .select()
+            .from(productBarcodesTable)
+            .where(
+              eq(
+                productBarcodesTable.barcode,
+                item.barcode,
+              ),
+            )
+            .limit(1);
 
-        const mapping = mappingRows[0];
+          const mapping = mappingRows[0];
 
-        if (mapping) {
+          if (mapping) {
+            if (
+              item.productId !== null &&
+              item.productId !== mapping.productId
+            ) {
+              throw new PosSaleEditError(
+                "الباركود لا يطابق المنتج المحدد",
+                409,
+              );
+            }
+
+            resolvedItems.push({
+              ...item,
+              productId: mapping.productId,
+              mappedColor: mapping.color ?? null,
+              mappedSize: mapping.size ?? null,
+            });
+
+            continue;
+          }
+
+          const productRows = await tx
+            .select({
+              id: productsTable.id,
+            })
+            .from(productsTable)
+            .where(
+              eq(
+                productsTable.barcode,
+                item.barcode,
+              ),
+            )
+            .limit(1);
+
+          const product = productRows[0];
+
+          if (!product) {
+            throw new PosSaleEditError(
+              `الباركود ${item.barcode} غير موجود`,
+              404,
+            );
+          }
+
+          if (
+            item.productId !== null &&
+            item.productId !== product.id
+          ) {
+            throw new PosSaleEditError(
+              "الباركود لا يطابق المنتج المحدد",
+              409,
+            );
+          }
+
           resolvedItems.push({
             ...item,
-            productId: mapping.productId,
-            mappedColor: mapping.color ?? null,
-            mappedSize: mapping.size ?? null,
+            productId: product.id,
+            mappedColor: null,
+            mappedSize: null,
           });
 
           continue;
         }
 
-        const productRows = await tx
-          .select({
-            id: productsTable.id,
-          })
-          .from(productsTable)
-          .where(eq(productsTable.barcode, item.barcode))
-          .limit(1);
-
-        const product = productRows[0];
-
-        if (!product) {
-          throw new PosSaleEditError(`الباركود ${item.barcode} غير موجود`, 404);
+        if (item.productId === null) {
+          throw new PosSaleEditError(
+            "تعذر تحديد أحد المنتجات",
+          );
         }
 
         resolvedItems.push({
           ...item,
-          productId: product.id,
+          productId: item.productId,
           mappedColor: null,
           mappedSize: null,
         });

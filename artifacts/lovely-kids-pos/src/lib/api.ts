@@ -212,7 +212,7 @@ export interface PosColorVariant {
 
 export interface PosProductLookup {
   productId: string;
-  barcode: string;
+  barcode: string | null;
   productCode: string | null;
   nameAr: string;
   image: string;
@@ -331,7 +331,8 @@ export function createPosSale(
     customerPhone?: string;
     notes?: string;
     items: Array<{
-      barcode: string;
+      productId: string;
+      barcode?: string;
       quantity: number;
       soldUnitPrice: string;
       lineDiscount?: string;
@@ -397,7 +398,8 @@ export function updatePosSale(
     customerPhone?: string;
     notes?: string;
     items: Array<{
-      barcode: string;
+      productId: string;
+      barcode?: string;
       quantity: number;
       soldUnitPrice: string;
       lineDiscount?: string;

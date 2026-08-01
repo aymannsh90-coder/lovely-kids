@@ -418,7 +418,7 @@ export default function SalesInvoicePage() {
       ? lines.findIndex(
           (line) =>
             line.product.productId === product.productId &&
-            line.barcode === product.barcode &&
+            line.barcode === (product.barcode ?? "") &&
             line.color === color &&
             line.size === size,
         )
@@ -446,7 +446,7 @@ export default function SalesInvoicePage() {
         ...lines,
         {
           id: touchedLineId,
-          barcode: product.barcode,
+          barcode: product.barcode ?? "",
           product,
           color,
           size,
@@ -686,7 +686,8 @@ export default function SalesInvoicePage() {
 
   function getInvoiceRequestItems() {
     return lines.map((line) => ({
-      barcode: line.barcode.trim(),
+      productId: line.product.productId,
+      barcode: line.barcode.trim() || undefined,
       quantity: line.quantity,
       soldUnitPrice: line.unitPrice.trim(),
       lineDiscount: line.discount.trim(),
@@ -720,10 +721,13 @@ export default function SalesInvoicePage() {
       const refreshedLines = await Promise.all(
         lines.map(async (line) => {
           if (!line.barcode.trim()) {
-            throw new Error(`باركود ${line.product.nameAr} غير محفوظ`);
+            return line;
           }
 
-          const product = await lookupPosProductByBarcode(token, line.barcode);
+          const product = await lookupPosProductByBarcode(
+            token,
+            line.barcode,
+          );
 
           return {
             ...line,
@@ -1540,7 +1544,7 @@ export default function SalesInvoicePage() {
 
                         <span>
                           الكود: {product.productCode ?? "—"} · الباركود:{" "}
-                          <b dir="ltr">{product.barcode}</b>
+                          <b dir="ltr">{product.barcode ?? "بدون باركود"}</b>
                         </span>
                       </div>
 

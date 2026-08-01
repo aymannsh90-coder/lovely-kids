@@ -270,7 +270,8 @@ export default function SalePanel({
     const existingIndex = selectionComplete
       ? cart.findIndex(
           (line) =>
-            line.barcode === product.barcode &&
+            line.product.productId === product.productId &&
+            line.barcode === (product.barcode ?? "") &&
             line.color === color &&
             line.size === size,
         )
@@ -308,7 +309,7 @@ export default function SalePanel({
         ...cart,
         {
           id: lineId,
-          barcode: product.barcode,
+          barcode: product.barcode ?? "",
           product,
           color,
           size,
@@ -612,7 +613,8 @@ export default function SalePanel({
         notes: notes.trim() || undefined,
 
         items: cart.map((line) => ({
-          barcode: line.barcode,
+          productId: line.product.productId,
+          barcode: line.barcode || undefined,
           quantity: line.quantity,
 
           soldUnitPrice: line.soldUnitPrice.trim(),
@@ -731,7 +733,9 @@ export default function SalePanel({
                       <div>
                         <span>الكود: {product.productCode ?? "—"}</span>
 
-                        <span dir="ltr">{product.barcode}</span>
+                        <span dir="ltr">
+                          {product.barcode ?? "بدون باركود"}
+                        </span>
                       </div>
                     </div>
 
