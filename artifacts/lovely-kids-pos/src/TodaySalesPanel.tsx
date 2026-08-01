@@ -18,6 +18,16 @@ interface TodaySalesPanelProps {
   onUnauthorized: () => void;
 }
 
+interface TodaySaleResult extends PosSaleResult {
+  returnSummary?: {
+    refundAmountMinor: number;
+    refundAmount: number;
+    netAmountMinor: number;
+    netAmount: number;
+    fullyReturned: boolean;
+  };
+}
+
 interface ReportRow {
   sale: PosSaleResult["sale"];
   item: PosSaleItemResult;
@@ -95,7 +105,7 @@ export default function TodaySalesPanel({
 }: TodaySalesPanelProps) {
   const navigate = useNavigate();
 
-  const [sales, setSales] = useState<PosSaleResult[]>([]);
+  const [sales, setSales] = useState<TodaySaleResult[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -109,15 +119,23 @@ export default function TodaySalesPanel({
 
   const [selectedSale, setSelectedSale] = useState<PosSaleResult | null>(null);
 
+  const activeSales = useMemo(
+    () =>
+      sales.filter(
+        (result) => !result.returnSummary?.fullyReturned,
+      ),
+    [sales],
+  );
+
   const rows = useMemo<ReportRow[]>(
     () =>
-      sales.flatMap((result) =>
+      activeSales.flatMap((result) =>
         result.items.map((item) => ({
           sale: result.sale,
           item,
         })),
       ),
-    [sales],
+    [activeSales],
   );
 
   const totalPieces = useMemo(
@@ -126,18 +144,48 @@ export default function TodaySalesPanel({
   );
 
   const subtotalMinor = useMemo(
-    () => sales.reduce((total, result) => total + result.sale.subtotalMinor, 0),
-    [sales],
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          total + result.sale.subtotalMinor,
+        0,
+      ),
+    [activeSales],
   );
 
   const discountMinor = useMemo(
-    () => sales.reduce((total, result) => total + result.sale.discountMinor, 0),
-    [sales],
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          total + result.sale.discountMinor,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const returnedMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          total +
+          (result.returnSummary?.refundAmountMinor ?? 0),
+        0,
+      ),
+    [activeSales],
   );
 
   const netTotalMinor = useMemo(
-    () => sales.reduce((total, result) => total + result.sale.totalMinor, 0),
-    [sales],
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          total +
+          (
+            result.returnSummary?.netAmountMinor ??
+            result.sale.totalMinor
+          ),
+        0,
+      ),
+    [activeSales],
   );
 
   async function loadTodaySales() {
@@ -147,7 +195,7 @@ export default function TodaySalesPanel({
     try {
       const result = await getTodayPosSales(token, session.registerKey);
 
-      setSales(result.sales);
+      setSales(result.sales as TodaySaleResult[]);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         onUnauthorized();
@@ -238,7 +286,7 @@ export default function TodaySalesPanel({
         <div className="today-summary">
           <div>
             <span>عدد الفواتير</span>
-            <strong>{sales.length}</strong>
+            <strong>{activeSales.length}</strong>
           </div>
 
           <div>
@@ -254,6 +302,11 @@ export default function TodaySalesPanel({
           <div>
             <span>الخصومات</span>
             <strong>{formatMinor(discountMinor)}</strong>
+          </div>
+
+          <div>
+            <span>المردودات الجزئية</span>
+            <strong>{formatMinor(returnedMinor)}</strong>
           </div>
 
           <div>
@@ -462,13 +515,15 @@ export default function TodaySalesPanel({
         </header>
 
         <div className="daily-report-summary">
-          <span>الفواتير: {sales.length}</span>
+          <span>الفواتير: {activeSales.length}</span>
 
           <span>القطع: {totalPieces}</span>
 
           <span>قبل الخصم: {formatMinor(subtotalMinor)}</span>
 
           <span>الخصومات: {formatMinor(discountMinor)}</span>
+
+          <span>المردودات الجزئية: {formatMinor(returnedMinor)}</span>
 
           <strong>الصافي: {formatMinor(netTotalMinor)}</strong>
         </div>

@@ -1683,6 +1683,31 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
 
   const saleIds = sales.map((sale) => sale.id);
 
+  const completedReturns = await db
+    .select({
+      originalSaleId: posSaleReturnsTable.originalSaleId,
+      refundAmountMinor: posSaleReturnsTable.refundAmountMinor,
+    })
+    .from(posSaleReturnsTable)
+    .where(
+      and(
+        inArray(posSaleReturnsTable.originalSaleId, saleIds),
+        eq(posSaleReturnsTable.status, "completed"),
+      ),
+    );
+
+  const returnedMinorBySale = new Map<number, number>();
+
+  for (const saleReturn of completedReturns) {
+    const current =
+      returnedMinorBySale.get(saleReturn.originalSaleId) ?? 0;
+
+    returnedMinorBySale.set(
+      saleReturn.originalSaleId,
+      current + saleReturn.refundAmountMinor,
+    );
+  }
+
   const items = await db
     .select()
     .from(posSaleItemsTable)
@@ -1705,9 +1730,34 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
       businessDate: session.businessDate,
     },
 
-    sales: sales.map((sale) =>
-      toSaleResponse(sale, itemsBySale.get(sale.id) ?? [], false),
-    ),
+    sales: sales.map((sale) => {
+      const refundAmountMinor =
+        returnedMinorBySale.get(sale.id) ?? 0;
+
+      const netAmountMinor = Math.max(
+        0,
+        sale.totalMinor - refundAmountMinor,
+      );
+
+      return {
+        ...toSaleResponse(
+          sale,
+          itemsBySale.get(sale.id) ?? [],
+          false,
+        ),
+
+        returnSummary: {
+          refundAmountMinor,
+          refundAmount: refundAmountMinor / 100,
+          netAmountMinor,
+          netAmount: netAmountMinor / 100,
+
+          fullyReturned:
+            refundAmountMinor > 0 &&
+            refundAmountMinor >= sale.totalMinor,
+        },
+      };
+    }),
   });
 }
 
