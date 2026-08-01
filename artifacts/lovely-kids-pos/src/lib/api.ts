@@ -241,6 +241,8 @@ export interface PosSaleItemResult {
   websiteUnitPrice: number;
   soldUnitPriceMinor: number;
   soldUnitPrice: number;
+  lineDiscountMinor: number;
+  lineDiscount: number;
   lineTotalMinor: number;
   lineTotal: number;
   generalStockBefore: number | null;
@@ -264,6 +266,10 @@ export interface PosSaleResult {
     subtotal: number;
     discountMinor: number;
     discount: number;
+    itemDiscountMinor: number;
+    itemDiscount: number;
+    invoiceDiscountMinor: number;
+    invoiceDiscount: number;
     totalMinor: number;
     total: number;
     paidMinor: number;
@@ -273,7 +279,13 @@ export interface PosSaleResult {
     customerName: string | null;
     customerPhone: string | null;
     notes: string | null;
+
+    voidedAt: string | null;
+    voidedByUserId: string | null;
+    voidReason: string | null;
+
     createdAt: string;
+    updatedAt: string;
   };
   navigation?: {
     previousPublicId: string | null;
@@ -322,6 +334,7 @@ export function createPosSale(
       barcode: string;
       quantity: number;
       soldUnitPrice: string;
+      lineDiscount?: string;
       color?: string;
       size?: string;
     }>;
@@ -364,6 +377,65 @@ export function getPosSaleByPublicId(token: string, publicId: string) {
   );
 }
 
+export interface PosSaleEditResult extends PosSaleResult {
+  alreadyUpdated: boolean;
+  revisionNumber: number;
+}
+
+export function updatePosSale(
+  token: string,
+  input: {
+    publicId: string;
+    registerKey: string;
+    idempotencyKey: string;
+    expectedUpdatedAt: string;
+    reason: string;
+    paymentMethod: "cash";
+    discountAmount: string;
+    paidAmount: string;
+    customerName?: string;
+    customerPhone?: string;
+    notes?: string;
+    items: Array<{
+      barcode: string;
+      quantity: number;
+      soldUnitPrice: string;
+      lineDiscount?: string;
+      color?: string;
+      size?: string;
+    }>;
+  },
+) {
+  return apiRequest<PosSaleEditResult>(
+    "/api/pos/sales",
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        ...input,
+        publicId: input.publicId.trim().toUpperCase(),
+      }),
+    },
+    token,
+  );
+}
+
+export function voidPosSale(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<PosSaleResult>(
+    "/api/pos/sales/void",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
 export interface PosSaleReturnPreviewItem {
   id: string;
   productId: string | null;
@@ -383,6 +455,9 @@ export interface PosSaleReturnPreviewItem {
 
   soldUnitPriceMinor: number;
   soldUnitPrice: number;
+
+  lineDiscountMinor: number;
+  lineDiscount: number;
 
   originalLineTotalMinor: number;
   originalLineTotal: number;
@@ -408,6 +483,12 @@ export interface PosSaleReturnPreviewResult {
 
     discountMinor: number;
     discount: number;
+
+    itemDiscountMinor: number;
+    itemDiscount: number;
+
+    invoiceDiscountMinor: number;
+    invoiceDiscount: number;
 
     totalMinor: number;
     total: number;
@@ -477,6 +558,12 @@ export interface PosSaleReturnItemResult {
 
   grossAmountMinor: number;
   grossAmount: number;
+
+  lineDiscountMinor: number;
+  lineDiscount: number;
+
+  invoiceDiscountMinor: number;
+  invoiceDiscount: number;
 
   allocatedDiscountMinor: number;
   allocatedDiscount: number;

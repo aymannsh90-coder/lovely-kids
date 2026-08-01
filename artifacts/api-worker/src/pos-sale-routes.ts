@@ -1,6 +1,7 @@
 import {
   cashSessionsTable,
   posSaleItemsTable,
+  posSaleReturnsTable,
   posSalesTable,
   productBarcodesTable,
   productsTable,
@@ -10,6 +11,7 @@ import { and, asc, desc, eq, gt, ilike, inArray, lt, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { handleUpdatePosSale } from "./pos-sale-edit";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -168,6 +170,7 @@ interface ParsedSaleItem {
   barcode: string;
   quantity: number;
   soldUnitPriceMinor: number;
+  lineDiscountMinor: number;
   color: string | null;
   size: string | null;
 }
@@ -207,11 +210,31 @@ function parseSaleItems(value: unknown): ParsedSaleItem[] {
       throw new PosSaleError("سعر بيع أحد الأصناف غير صالح");
     }
 
+    const lineDiscountMinor =
+      item.lineDiscount === undefined
+        ? 0
+        : parseMoneyToMinor(item.lineDiscount);
+
+    if (lineDiscountMinor === null) {
+      throw new PosSaleError("خصم أحد الأصناف غير صالح");
+    }
+
+    const lineGrossMinor = soldUnitPriceMinor * quantity;
+
+    if (
+      !Number.isSafeInteger(lineGrossMinor) ||
+      lineGrossMinor > MAX_MINOR ||
+      lineDiscountMinor > lineGrossMinor
+    ) {
+      throw new PosSaleError("خصم أحد الأصناف أكبر من قيمة الصنف");
+    }
+
     return {
       lineNumber: index + 1,
       barcode,
       quantity,
       soldUnitPriceMinor,
+      lineDiscountMinor,
 
       color: parseOptionalText(item.color, 100, "اللون"),
 
@@ -260,6 +283,12 @@ function toSaleResponse(
       discountMinor: sale.discountMinor,
       discount: sale.discountMinor / 100,
 
+      itemDiscountMinor: sale.itemDiscountMinor,
+      itemDiscount: sale.itemDiscountMinor / 100,
+
+      invoiceDiscountMinor: sale.invoiceDiscountMinor,
+      invoiceDiscount: sale.invoiceDiscountMinor / 100,
+
       totalMinor: sale.totalMinor,
       total: sale.totalMinor / 100,
 
@@ -273,7 +302,15 @@ function toSaleResponse(
       customerPhone: sale.customerPhone,
       notes: sale.notes,
 
+      voidedAt: sale.voidedAt?.toISOString() ?? null,
+
+      voidedByUserId:
+        sale.voidedByUserId === null ? null : String(sale.voidedByUserId),
+
+      voidReason: sale.voidReason,
+
       createdAt: sale.createdAt.toISOString(),
+      updatedAt: sale.updatedAt.toISOString(),
     },
 
     items: items.map((item) => ({
@@ -298,6 +335,9 @@ function toSaleResponse(
       soldUnitPriceMinor: item.soldUnitPriceMinor,
 
       soldUnitPrice: item.soldUnitPriceMinor / 100,
+
+      lineDiscountMinor: item.lineDiscountMinor,
+      lineDiscount: item.lineDiscountMinor / 100,
 
       lineTotalMinor: item.lineTotalMinor,
 
@@ -667,13 +707,13 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
     const items = parseSaleItems(payload.items);
 
-    const discountMinor =
+    const invoiceDiscountMinor =
       payload.discountAmount === undefined
         ? 0
         : parseMoneyToMinor(payload.discountAmount);
 
-    if (discountMinor === null) {
-      throw new PosSaleError("قيمة الخصم غير صالحة");
+    if (invoiceDiscountMinor === null) {
+      throw new PosSaleError("خصم الفاتورة غير صالح");
     }
 
     const paidMinor = parseMoneyToMinor(payload.paidAmount);
@@ -799,6 +839,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       const saleLines: Array<typeof posSaleItemsTable.$inferInsert> = [];
 
       let subtotalMinor = 0;
+      let itemDiscountMinor = 0;
 
       for (const item of resolvedItems) {
         const productRows = await tx
@@ -967,20 +1008,36 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
         const websiteUnitPriceMinor = product.price * 100;
 
-        const lineTotalMinor = item.soldUnitPriceMinor * item.quantity;
+        const lineGrossMinor = item.soldUnitPriceMinor * item.quantity;
+
+        const lineDiscountMinor = item.lineDiscountMinor;
+
+        const lineTotalMinor = lineGrossMinor - lineDiscountMinor;
 
         if (
           !Number.isSafeInteger(websiteUnitPriceMinor) ||
           websiteUnitPriceMinor > MAX_MINOR ||
+          !Number.isSafeInteger(lineGrossMinor) ||
+          lineGrossMinor > MAX_MINOR ||
+          !Number.isSafeInteger(lineDiscountMinor) ||
+          lineDiscountMinor < 0 ||
+          lineDiscountMinor > lineGrossMinor ||
           !Number.isSafeInteger(lineTotalMinor) ||
+          lineTotalMinor < 0 ||
           lineTotalMinor > MAX_MINOR
         ) {
           throw new PosSaleError("قيمة الفاتورة تتجاوز الحد المسموح");
         }
 
-        subtotalMinor += lineTotalMinor;
+        subtotalMinor += lineGrossMinor;
+        itemDiscountMinor += lineDiscountMinor;
 
-        if (!Number.isSafeInteger(subtotalMinor) || subtotalMinor > MAX_MINOR) {
+        if (
+          !Number.isSafeInteger(subtotalMinor) ||
+          subtotalMinor > MAX_MINOR ||
+          !Number.isSafeInteger(itemDiscountMinor) ||
+          itemDiscountMinor > MAX_MINOR
+        ) {
           throw new PosSaleError("إجمالي الفاتورة يتجاوز الحد المسموح");
         }
 
@@ -997,6 +1054,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           quantity: item.quantity,
           websiteUnitPriceMinor,
           soldUnitPriceMinor: item.soldUnitPriceMinor,
+          lineDiscountMinor,
           lineTotalMinor,
           generalStockBefore,
           generalStockAfter,
@@ -1005,8 +1063,19 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         });
       }
 
-      if (discountMinor > subtotalMinor) {
-        throw new PosSaleError("الخصم أكبر من إجمالي الفاتورة");
+      const itemsNetMinor = subtotalMinor - itemDiscountMinor;
+
+      if (invoiceDiscountMinor > itemsNetMinor) {
+        throw new PosSaleError("خصم الفاتورة أكبر من صافي قيمة الأصناف");
+      }
+
+      const discountMinor = itemDiscountMinor + invoiceDiscountMinor;
+
+      if (
+        !Number.isSafeInteger(discountMinor) ||
+        discountMinor > subtotalMinor
+      ) {
+        throw new PosSaleError("إجمالي الخصومات غير صالح");
       }
 
       const totalMinor = subtotalMinor - discountMinor;
@@ -1039,6 +1108,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           paymentMethod: "cash",
           subtotalMinor,
           discountMinor,
+          itemDiscountMinor,
+          invoiceDiscountMinor,
           totalMinor,
           paidMinor,
           changeMinor,
@@ -1133,6 +1204,337 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
   }
 }
 
+async function handleVoidSale(request: Request, db: Db, env: Env) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  try {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      throw new PosSaleError("بيانات إلغاء الفاتورة غير صالحة");
+    }
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new PosSaleError("بيانات إلغاء الفاتورة غير صالحة");
+    }
+
+    const payload = body as Record<string, unknown>;
+
+    const publicId =
+      typeof payload.publicId === "string"
+        ? payload.publicId.trim().toUpperCase()
+        : "";
+
+    if (!publicId || publicId.length > 80 || !/^[A-Z0-9_-]+$/.test(publicId)) {
+      throw new PosSaleError("رقم الفاتورة غير صالح");
+    }
+
+    const reason = parseOptionalText(payload.reason, 500, "سبب الإلغاء");
+
+    if (!reason) {
+      throw new PosSaleError("يجب إدخال سبب إلغاء الفاتورة");
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const saleRows = await tx
+        .select()
+        .from(posSalesTable)
+        .where(eq(posSalesTable.publicId, publicId))
+        .for("update");
+
+      const sale = saleRows[0];
+
+      if (!sale) {
+        throw new PosSaleError("الفاتورة غير موجودة", 404);
+      }
+
+      const saleItems = await tx
+        .select()
+        .from(posSaleItemsTable)
+        .where(eq(posSaleItemsTable.saleId, sale.id))
+        .orderBy(asc(posSaleItemsTable.lineNumber));
+
+      if (sale.status === "voided") {
+        return {
+          sale,
+          items: saleItems,
+        };
+      }
+
+      if (sale.status !== "completed") {
+        throw new PosSaleError("لا يمكن إلغاء هذه الفاتورة", 409);
+      }
+
+      const completedReturnRows = await tx
+        .select({
+          id: posSaleReturnsTable.id,
+        })
+        .from(posSaleReturnsTable)
+        .where(
+          and(
+            eq(posSaleReturnsTable.originalSaleId, sale.id),
+            eq(posSaleReturnsTable.status, "completed"),
+          ),
+        )
+        .limit(1);
+
+      if (completedReturnRows[0]) {
+        throw new PosSaleError("لا يمكن إلغاء فاتورة تحتوي على مردودات", 409);
+      }
+
+      const sessionRows = await tx
+        .select()
+        .from(cashSessionsTable)
+        .where(
+          and(
+            eq(cashSessionsTable.id, sale.cashSessionId),
+            eq(cashSessionsTable.status, "open"),
+          ),
+        )
+        .for("update");
+
+      const session = sessionRows[0];
+
+      if (!session) {
+        throw new PosSaleError(
+          "لا يمكن إلغاء الفاتورة بعد إغلاق يوم الصندوق",
+          409,
+        );
+      }
+
+      const expectedBefore =
+        session.expectedBalanceMinor ?? session.openingBalanceMinor;
+
+      if (expectedBefore < sale.totalMinor) {
+        throw new PosSaleError("رصيد الصندوق لا يكفي لإلغاء الفاتورة", 409);
+      }
+
+      const orderedItems = [...saleItems].sort((left, right) => {
+        const leftId = left.productId ?? Number.MAX_SAFE_INTEGER;
+        const rightId = right.productId ?? Number.MAX_SAFE_INTEGER;
+
+        return leftId - rightId || left.lineNumber - right.lineNumber;
+      });
+
+      for (const item of orderedItems) {
+        if (item.productId === null) {
+          throw new PosSaleError(
+            `المنتج ${item.productNameAr} لم يعد موجودًا`,
+            409,
+          );
+        }
+
+        const productRows = await tx
+          .select()
+          .from(productsTable)
+          .where(eq(productsTable.id, item.productId))
+          .for("update");
+
+        const product = productRows[0];
+
+        if (!product) {
+          throw new PosSaleError(
+            `المنتج ${item.productNameAr} لم يعد موجودًا`,
+            409,
+          );
+        }
+
+        const updates: {
+          stock?: number;
+          colorVariants?: ColorVariant[];
+        } = {};
+
+        if (product.stock !== null && product.stock !== undefined) {
+          const nextStock = product.stock + item.quantity;
+
+          if (!Number.isSafeInteger(nextStock) || nextStock < 0) {
+            throw new PosSaleError(
+              `تعذر إعادة مخزون ${item.productNameAr}`,
+              409,
+            );
+          }
+
+          updates.stock = nextStock;
+        }
+
+        const colorVariants =
+          (product.colorVariants as ColorVariant[] | null) ?? [];
+
+        if (colorVariants.length > 0) {
+          if (!item.color) {
+            throw new PosSaleError(
+              `لون ${item.productNameAr} غير محفوظ في الفاتورة`,
+              409,
+            );
+          }
+
+          const variantIndex = colorVariants.findIndex(
+            (entry) => entry.color === item.color,
+          );
+
+          if (variantIndex < 0) {
+            throw new PosSaleError(
+              `لون ${item.productNameAr} لم يعد موجودًا`,
+              409,
+            );
+          }
+
+          const variant = colorVariants[variantIndex];
+          const sizes = Array.isArray(variant.sizes) ? variant.sizes : [];
+
+          if (sizes.length > 0) {
+            if (!item.size) {
+              throw new PosSaleError(
+                `مقاس ${item.productNameAr} غير محفوظ في الفاتورة`,
+                409,
+              );
+            }
+
+            const sizeIndex = sizes.findIndex(
+              (entry) => entry.size === item.size,
+            );
+
+            if (sizeIndex < 0) {
+              throw new PosSaleError(
+                `مقاس ${item.productNameAr} لم يعد موجودًا`,
+                409,
+              );
+            }
+
+            const selectedSize = sizes[sizeIndex];
+
+            if (
+              selectedSize.stock !== null &&
+              selectedSize.stock !== undefined
+            ) {
+              const nextVariantStock = selectedSize.stock + item.quantity;
+
+              if (
+                !Number.isSafeInteger(nextVariantStock) ||
+                nextVariantStock < 0
+              ) {
+                throw new PosSaleError(
+                  `تعذر إعادة مخزون ${item.productNameAr}`,
+                  409,
+                );
+              }
+
+              const nextSizes = sizes.map((entry, index) =>
+                index === sizeIndex
+                  ? {
+                      ...entry,
+                      stock: nextVariantStock,
+                      outOfStock: nextVariantStock <= 0,
+                    }
+                  : entry,
+              );
+
+              updates.colorVariants = colorVariants.map((entry, index) =>
+                index === variantIndex
+                  ? {
+                      ...entry,
+                      sizes: nextSizes,
+                    }
+                  : entry,
+              );
+            }
+          } else if (item.size) {
+            throw new PosSaleError(
+              `المقاس المسجل لم يعد مطابقًا للمنتج ${item.productNameAr}`,
+              409,
+            );
+          }
+        } else if (item.color) {
+          throw new PosSaleError(
+            `اللون المسجل لم يعد مطابقًا للمنتج ${item.productNameAr}`,
+            409,
+          );
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await tx
+            .update(productsTable)
+            .set(updates)
+            .where(eq(productsTable.id, product.id));
+        }
+      }
+
+      const expectedAfter = expectedBefore - sale.totalMinor;
+
+      const updatedSessionRows = await tx
+        .update(cashSessionsTable)
+        .set({
+          expectedBalanceMinor: expectedAfter,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(cashSessionsTable.id, session.id),
+            eq(cashSessionsTable.status, "open"),
+          ),
+        )
+        .returning({
+          id: cashSessionsTable.id,
+        });
+
+      if (!updatedSessionRows[0]) {
+        throw new PosSaleError("تم إغلاق الصندوق قبل إلغاء الفاتورة", 409);
+      }
+
+      const updatedSaleRows = await tx
+        .update(posSalesTable)
+        .set({
+          status: "voided",
+          voidedAt: new Date(),
+          voidedByUserId: auth.user.id,
+          voidReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(posSalesTable.id, sale.id),
+            eq(posSalesTable.status, "completed"),
+          ),
+        )
+        .returning();
+
+      const updatedSale = updatedSaleRows[0];
+
+      if (!updatedSale) {
+        throw new PosSaleError("تم تغيير حالة الفاتورة قبل إلغائها", 409);
+      }
+
+      return {
+        sale: updatedSale,
+        items: saleItems,
+      };
+    });
+
+    const navigation = await getSaleNavigation(db, result.sale);
+
+    return json(toSaleResponse(result.sale, result.items, false, navigation));
+  } catch (error) {
+    if (error instanceof PosSaleError) {
+      return json({ error: error.message }, error.status);
+    }
+
+    console.error("POS_SALE_VOID_FAILED", error);
+
+    return json(
+      {
+        error: "تعذر إلغاء الفاتورة",
+      },
+      500,
+    );
+  }
+}
+
 async function handleTodaySales(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
 
@@ -1179,7 +1581,12 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
   const sales = await db
     .select()
     .from(posSalesTable)
-    .where(eq(posSalesTable.cashSessionId, session.id))
+    .where(
+      and(
+        eq(posSalesTable.cashSessionId, session.id),
+        eq(posSalesTable.status, "completed"),
+      ),
+    )
     .orderBy(asc(posSalesTable.createdAt), asc(posSalesTable.id));
 
   if (sales.length === 0) {
@@ -1236,7 +1643,6 @@ async function getSaleNavigation(
       .where(
         and(
           eq(posSalesTable.registerKey, sale.registerKey),
-          eq(posSalesTable.status, "completed"),
           lt(posSalesTable.id, sale.id),
         ),
       )
@@ -1251,7 +1657,6 @@ async function getSaleNavigation(
       .where(
         and(
           eq(posSalesTable.registerKey, sale.registerKey),
-          eq(posSalesTable.status, "completed"),
           gt(posSalesTable.id, sale.id),
         ),
       )
@@ -1336,6 +1741,14 @@ export async function handlePosSaleRequest(
 
   if (request.method === "GET" && path === "/api/pos/sales/by-public-id") {
     return handleSaleByPublicId(request, db, env);
+  }
+
+  if (request.method === "PUT" && path === "/api/pos/sales") {
+    return handleUpdatePosSale(request, db, env);
+  }
+
+  if (request.method === "POST" && path === "/api/pos/sales/void") {
+    return handleVoidSale(request, db, env);
   }
 
   if (request.method === "POST" && path === "/api/pos/sales") {

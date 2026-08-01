@@ -37,26 +37,24 @@ export const posSalesTable = pgTable(
         onDelete: "restrict",
       }),
 
-    status: text("status")
-      .notNull()
-      .default("completed"),
+    status: text("status").notNull().default("completed"),
 
-    paymentMethod: text("payment_method")
-      .notNull()
-      .default("cash"),
+    paymentMethod: text("payment_method").notNull().default("cash"),
 
     subtotalMinor: integer("subtotal_minor").notNull(),
 
-    discountMinor: integer("discount_minor")
+    discountMinor: integer("discount_minor").notNull().default(0),
+
+    itemDiscountMinor: integer("item_discount_minor").notNull().default(0),
+
+    invoiceDiscountMinor: integer("invoice_discount_minor")
       .notNull()
       .default(0),
 
     totalMinor: integer("total_minor").notNull(),
     paidMinor: integer("paid_minor").notNull(),
 
-    changeMinor: integer("change_minor")
-      .notNull()
-      .default(0),
+    changeMinor: integer("change_minor").notNull().default(0),
 
     customerName: text("customer_name"),
     customerPhone: text("customer_phone"),
@@ -66,10 +64,12 @@ export const posSalesTable = pgTable(
       withTimezone: true,
     }),
 
-    voidedByUserId: integer("voided_by_user_id")
-      .references(() => usersTable.id, {
+    voidedByUserId: integer("voided_by_user_id").references(
+      () => usersTable.id,
+      {
         onDelete: "restrict",
-      }),
+      },
+    ),
 
     voidReason: text("void_reason"),
 
@@ -106,6 +106,8 @@ export const posSalesTable = pgTable(
       sql`
         ${table.subtotalMinor} >= 0
         and ${table.discountMinor} >= 0
+        and ${table.itemDiscountMinor} >= 0
+        and ${table.invoiceDiscountMinor} >= 0
         and ${table.totalMinor} >= 0
         and ${table.paidMinor} >= 0
         and ${table.changeMinor} >= 0
@@ -115,6 +117,14 @@ export const posSalesTable = pgTable(
     check(
       "pos_sales_discount_not_over_subtotal",
       sql`${table.discountMinor} <= ${table.subtotalMinor}`,
+    ),
+
+    check(
+      "pos_sales_discount_breakdown_matches",
+      sql`
+        ${table.discountMinor} =
+        ${table.itemDiscountMinor} + ${table.invoiceDiscountMinor}
+      `,
     ),
 
     check(
@@ -151,23 +161,17 @@ export const posSalesTable = pgTable(
       `,
     ),
 
-    uniqueIndex("pos_sales_public_id_idx")
-      .on(table.publicId),
+    uniqueIndex("pos_sales_public_id_idx").on(table.publicId),
 
-    uniqueIndex("pos_sales_idempotency_key_idx")
-      .on(table.idempotencyKey),
+    uniqueIndex("pos_sales_idempotency_key_idx").on(table.idempotencyKey),
 
-    index("pos_sales_cash_session_idx")
-      .on(table.cashSessionId),
+    index("pos_sales_cash_session_idx").on(table.cashSessionId),
 
-    index("pos_sales_business_date_idx")
-      .on(table.businessDate),
+    index("pos_sales_business_date_idx").on(table.businessDate),
 
-    index("pos_sales_cashier_idx")
-      .on(table.cashierUserId),
+    index("pos_sales_cashier_idx").on(table.cashierUserId),
 
-    index("pos_sales_created_at_idx")
-      .on(table.createdAt),
+    index("pos_sales_created_at_idx").on(table.createdAt),
   ],
 ).enableRLS();
 
@@ -184,10 +188,9 @@ export const posSaleItemsTable = pgTable(
 
     lineNumber: integer("line_number").notNull(),
 
-    productId: integer("product_id")
-      .references(() => productsTable.id, {
-        onDelete: "set null",
-      }),
+    productId: integer("product_id").references(() => productsTable.id, {
+      onDelete: "set null",
+    }),
 
     barcode: text("barcode"),
     productCode: text("product_code"),
@@ -199,26 +202,21 @@ export const posSaleItemsTable = pgTable(
 
     quantity: integer("quantity").notNull(),
 
-    websiteUnitPriceMinor:
-      integer("website_unit_price_minor").notNull(),
+    websiteUnitPriceMinor: integer("website_unit_price_minor").notNull(),
 
-    soldUnitPriceMinor:
-      integer("sold_unit_price_minor").notNull(),
+    soldUnitPriceMinor: integer("sold_unit_price_minor").notNull(),
 
-    lineTotalMinor:
-      integer("line_total_minor").notNull(),
+    lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
 
-    generalStockBefore:
-      integer("general_stock_before"),
+    lineTotalMinor: integer("line_total_minor").notNull(),
 
-    generalStockAfter:
-      integer("general_stock_after"),
+    generalStockBefore: integer("general_stock_before"),
 
-    variantStockBefore:
-      integer("variant_stock_before"),
+    generalStockAfter: integer("general_stock_after"),
 
-    variantStockAfter:
-      integer("variant_stock_after"),
+    variantStockBefore: integer("variant_stock_before"),
+
+    variantStockAfter: integer("variant_stock_after"),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -227,10 +225,7 @@ export const posSaleItemsTable = pgTable(
       .notNull(),
   },
   (table) => [
-    check(
-      "pos_sale_items_line_positive",
-      sql`${table.lineNumber} > 0`,
-    ),
+    check("pos_sale_items_line_positive", sql`${table.lineNumber} > 0`),
 
     check(
       "pos_sale_items_quantity_valid",
@@ -242,7 +237,16 @@ export const posSaleItemsTable = pgTable(
       sql`
         ${table.websiteUnitPriceMinor} >= 0
         and ${table.soldUnitPriceMinor} >= 0
+        and ${table.lineDiscountMinor} >= 0
         and ${table.lineTotalMinor} >= 0
+      `,
+    ),
+
+    check(
+      "pos_sale_items_line_discount_not_over_gross",
+      sql`
+        ${table.lineDiscountMinor} <=
+        ${table.soldUnitPriceMinor} * ${table.quantity}
       `,
     ),
 
@@ -251,6 +255,7 @@ export const posSaleItemsTable = pgTable(
       sql`
         ${table.lineTotalMinor} =
         ${table.soldUnitPriceMinor} * ${table.quantity}
+        - ${table.lineDiscountMinor}
       `,
     ),
 
@@ -284,22 +289,19 @@ export const posSaleItemsTable = pgTable(
       `,
     ),
 
-    uniqueIndex("pos_sale_items_sale_line_idx")
-      .on(table.saleId, table.lineNumber),
+    uniqueIndex("pos_sale_items_sale_line_idx").on(
+      table.saleId,
+      table.lineNumber,
+    ),
 
-    index("pos_sale_items_sale_idx")
-      .on(table.saleId),
+    index("pos_sale_items_sale_idx").on(table.saleId),
 
-    index("pos_sale_items_product_idx")
-      .on(table.productId),
+    index("pos_sale_items_product_idx").on(table.productId),
 
-    index("pos_sale_items_barcode_idx")
-      .on(table.barcode),
+    index("pos_sale_items_barcode_idx").on(table.barcode),
   ],
 ).enableRLS();
 
-export type PosSale =
-  typeof posSalesTable.$inferSelect;
+export type PosSale = typeof posSalesTable.$inferSelect;
 
-export type PosSaleItem =
-  typeof posSaleItemsTable.$inferSelect;
+export type PosSaleItem = typeof posSaleItemsTable.$inferSelect;

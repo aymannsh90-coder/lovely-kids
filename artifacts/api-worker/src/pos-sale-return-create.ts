@@ -287,6 +287,12 @@ function toReturnResponse(
       grossAmountMinor: item.grossAmountMinor,
       grossAmount: item.grossAmountMinor / 100,
 
+      lineDiscountMinor: item.lineDiscountMinor,
+      lineDiscount: item.lineDiscountMinor / 100,
+
+      invoiceDiscountMinor: item.invoiceDiscountMinor,
+      invoiceDiscount: item.invoiceDiscountMinor / 100,
+
       allocatedDiscountMinor: item.allocatedDiscountMinor,
 
       allocatedDiscount: item.allocatedDiscountMinor / 100,
@@ -505,14 +511,17 @@ export async function handleCreatePosSaleReturn(
 
       const returnedByOriginalItem = new Map<number, number>();
 
+      const returnedLineDiscountByOriginalItem = new Map<number, number>();
+
       let priorGrossMinor = 0;
-      let priorDiscountMinor = 0;
+      let priorLineDiscountMinor = 0;
+      let priorInvoiceDiscountMinor = 0;
 
       for (const returnedItem of priorReturnItems) {
-        const current =
+        const currentQuantity =
           returnedByOriginalItem.get(returnedItem.originalSaleItemId) ?? 0;
 
-        const nextQuantity = current + returnedItem.quantity;
+        const nextQuantity = currentQuantity + returnedItem.quantity;
 
         if (!Number.isSafeInteger(nextQuantity)) {
           throw new PosSaleReturnError(
@@ -526,16 +535,44 @@ export async function handleCreatePosSaleReturn(
           nextQuantity,
         );
 
-        priorGrossMinor += returnedItem.grossAmountMinor;
+        const currentLineDiscount =
+          returnedLineDiscountByOriginalItem.get(
+            returnedItem.originalSaleItemId,
+          ) ?? 0;
 
-        priorDiscountMinor += returnedItem.allocatedDiscountMinor;
+        const nextLineDiscount =
+          currentLineDiscount + returnedItem.lineDiscountMinor;
+
+        if (!Number.isSafeInteger(nextLineDiscount)) {
+          throw new PosSaleReturnError(
+            "خصومات المردودات السابقة غير صالحة",
+            409,
+          );
+        }
+
+        returnedLineDiscountByOriginalItem.set(
+          returnedItem.originalSaleItemId,
+          nextLineDiscount,
+        );
+
+        priorGrossMinor += returnedItem.grossAmountMinor;
+        priorLineDiscountMinor += returnedItem.lineDiscountMinor;
+        priorInvoiceDiscountMinor += returnedItem.invoiceDiscountMinor;
       }
+
+      const invoiceBaseMinor = sale.subtotalMinor - sale.itemDiscountMinor;
 
       if (
         !Number.isSafeInteger(priorGrossMinor) ||
-        !Number.isSafeInteger(priorDiscountMinor) ||
+        !Number.isSafeInteger(priorLineDiscountMinor) ||
+        !Number.isSafeInteger(priorInvoiceDiscountMinor) ||
+        !Number.isSafeInteger(invoiceBaseMinor) ||
+        invoiceBaseMinor < 0 ||
         priorGrossMinor > sale.subtotalMinor ||
-        priorDiscountMinor > sale.discountMinor
+        priorLineDiscountMinor > sale.itemDiscountMinor ||
+        priorInvoiceDiscountMinor > sale.invoiceDiscountMinor ||
+        priorGrossMinor - priorLineDiscountMinor > invoiceBaseMinor ||
+        priorLineDiscountMinor + priorInvoiceDiscountMinor > sale.discountMinor
       ) {
         throw new PosSaleReturnError(
           "بيانات المردودات السابقة غير متطابقة",
@@ -552,6 +589,9 @@ export async function handleCreatePosSaleReturn(
 
         const previouslyReturned =
           returnedByOriginalItem.get(originalItem.id) ?? 0;
+
+        const previouslyReturnedLineDiscount =
+          returnedLineDiscountByOriginalItem.get(originalItem.id) ?? 0;
 
         const returnableQuantity = originalItem.quantity - previouslyReturned;
 
@@ -580,50 +620,88 @@ export async function handleCreatePosSaleReturn(
           );
         }
 
+        const returnedAfter = previouslyReturned + quantity;
+
+        const targetLineDiscountMinor =
+          returnedAfter === originalItem.quantity
+            ? originalItem.lineDiscountMinor
+            : Number(
+                (BigInt(originalItem.lineDiscountMinor) *
+                  BigInt(returnedAfter)) /
+                  BigInt(originalItem.quantity),
+              );
+
+        const lineDiscountMinor =
+          targetLineDiscountMinor - previouslyReturnedLineDiscount;
+
+        if (
+          !Number.isSafeInteger(targetLineDiscountMinor) ||
+          !Number.isSafeInteger(lineDiscountMinor) ||
+          targetLineDiscountMinor < previouslyReturnedLineDiscount ||
+          targetLineDiscountMinor > originalItem.lineDiscountMinor ||
+          lineDiscountMinor < 0 ||
+          lineDiscountMinor > grossAmountMinor
+        ) {
+          throw new PosSaleReturnError(
+            `تعذر احتساب خصم ${originalItem.productNameAr}`,
+            409,
+          );
+        }
+
+        const netBeforeInvoiceMinor = grossAmountMinor - lineDiscountMinor;
+
         return {
           returnLineNumber: index + 1,
           originalItem,
           quantity,
           grossAmountMinor,
+          lineDiscountMinor,
+          netBeforeInvoiceMinor,
+          invoiceDiscountMinor: 0,
           allocatedDiscountMinor: 0,
           refundAmountMinor: 0,
         };
       });
 
-      let runningGrossMinor = priorGrossMinor;
-      let runningDiscountMinor = priorDiscountMinor;
+      let runningNetBeforeInvoiceMinor =
+        priorGrossMinor - priorLineDiscountMinor;
+
+      let runningInvoiceDiscountMinor = priorInvoiceDiscountMinor;
 
       for (const line of calculatedLines) {
-        const nextGrossMinor = runningGrossMinor + line.grossAmountMinor;
+        const nextNetBeforeInvoiceMinor =
+          runningNetBeforeInvoiceMinor + line.netBeforeInvoiceMinor;
 
         if (
-          !Number.isSafeInteger(nextGrossMinor) ||
-          nextGrossMinor > sale.subtotalMinor
+          !Number.isSafeInteger(nextNetBeforeInvoiceMinor) ||
+          nextNetBeforeInvoiceMinor > invoiceBaseMinor
         ) {
           throw new PosSaleReturnError(
-            "إجمالي المرتجع أكبر من إجمالي الفاتورة",
+            "صافي المرتجع أكبر من صافي الفاتورة",
             409,
           );
         }
 
-        let targetDiscountMinor = 0;
+        let targetInvoiceDiscountMinor = 0;
 
-        if (sale.subtotalMinor > 0) {
-          targetDiscountMinor =
-            nextGrossMinor === sale.subtotalMinor
-              ? sale.discountMinor
+        if (invoiceBaseMinor > 0) {
+          targetInvoiceDiscountMinor =
+            nextNetBeforeInvoiceMinor === invoiceBaseMinor
+              ? sale.invoiceDiscountMinor
               : Number(
-                  (BigInt(sale.discountMinor) * BigInt(nextGrossMinor)) /
-                    BigInt(sale.subtotalMinor),
+                  (BigInt(sale.invoiceDiscountMinor) *
+                    BigInt(nextNetBeforeInvoiceMinor)) /
+                    BigInt(invoiceBaseMinor),
                 );
         }
 
-        const allocatedDiscountMinor =
-          targetDiscountMinor - runningDiscountMinor;
+        const invoiceDiscountMinor =
+          targetInvoiceDiscountMinor - runningInvoiceDiscountMinor;
 
         if (
-          allocatedDiscountMinor < 0 ||
-          allocatedDiscountMinor > line.grossAmountMinor
+          !Number.isSafeInteger(invoiceDiscountMinor) ||
+          invoiceDiscountMinor < 0 ||
+          invoiceDiscountMinor > line.netBeforeInvoiceMinor
         ) {
           throw new PosSaleReturnError(
             "تعذر توزيع خصم الفاتورة على المرتجع",
@@ -631,12 +709,17 @@ export async function handleCreatePosSaleReturn(
           );
         }
 
-        line.allocatedDiscountMinor = allocatedDiscountMinor;
+        line.invoiceDiscountMinor = invoiceDiscountMinor;
 
-        line.refundAmountMinor = line.grossAmountMinor - allocatedDiscountMinor;
+        line.allocatedDiscountMinor =
+          line.lineDiscountMinor + line.invoiceDiscountMinor;
 
-        runningGrossMinor = nextGrossMinor;
-        runningDiscountMinor = targetDiscountMinor;
+        line.refundAmountMinor =
+          line.grossAmountMinor - line.allocatedDiscountMinor;
+
+        runningNetBeforeInvoiceMinor = nextNetBeforeInvoiceMinor;
+
+        runningInvoiceDiscountMinor = targetInvoiceDiscountMinor;
       }
 
       const grossAmountMinor = calculatedLines.reduce(
@@ -644,10 +727,18 @@ export async function handleCreatePosSaleReturn(
         0,
       );
 
-      const discountAmountMinor = calculatedLines.reduce(
-        (total, line) => total + line.allocatedDiscountMinor,
+      const lineDiscountAmountMinor = calculatedLines.reduce(
+        (total, line) => total + line.lineDiscountMinor,
         0,
       );
+
+      const invoiceDiscountAmountMinor = calculatedLines.reduce(
+        (total, line) => total + line.invoiceDiscountMinor,
+        0,
+      );
+
+      const discountAmountMinor =
+        lineDiscountAmountMinor + invoiceDiscountAmountMinor;
 
       const refundAmountMinor = calculatedLines.reduce(
         (total, line) => total + line.refundAmountMinor,
@@ -656,11 +747,16 @@ export async function handleCreatePosSaleReturn(
 
       if (
         !Number.isSafeInteger(grossAmountMinor) ||
+        !Number.isSafeInteger(lineDiscountAmountMinor) ||
+        !Number.isSafeInteger(invoiceDiscountAmountMinor) ||
         !Number.isSafeInteger(discountAmountMinor) ||
         !Number.isSafeInteger(refundAmountMinor) ||
         grossAmountMinor > MAX_MINOR ||
+        lineDiscountAmountMinor > MAX_MINOR ||
+        invoiceDiscountAmountMinor > MAX_MINOR ||
         discountAmountMinor > MAX_MINOR ||
-        refundAmountMinor > MAX_MINOR
+        refundAmountMinor > MAX_MINOR ||
+        refundAmountMinor !== grossAmountMinor - discountAmountMinor
       ) {
         throw new PosSaleReturnError("قيمة المرتجع تتجاوز الحد المسموح");
       }
@@ -867,6 +963,10 @@ export async function handleCreatePosSaleReturn(
           soldUnitPriceMinor: originalItem.soldUnitPriceMinor,
 
           grossAmountMinor: line.grossAmountMinor,
+
+          lineDiscountMinor: line.lineDiscountMinor,
+
+          invoiceDiscountMinor: line.invoiceDiscountMinor,
 
           allocatedDiscountMinor: line.allocatedDiscountMinor,
 

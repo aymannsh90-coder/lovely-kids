@@ -260,6 +260,9 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
       soldUnitPriceMinor: item.soldUnitPriceMinor,
       soldUnitPrice: item.soldUnitPriceMinor / 100,
 
+      lineDiscountMinor: item.lineDiscountMinor,
+      lineDiscount: item.lineDiscountMinor / 100,
+
       originalLineTotalMinor: item.lineTotalMinor,
       originalLineTotal: item.lineTotalMinor / 100,
 
@@ -317,6 +320,12 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
 
       discountMinor: sale.discountMinor,
       discount: sale.discountMinor / 100,
+
+      itemDiscountMinor: sale.itemDiscountMinor,
+      itemDiscount: sale.itemDiscountMinor / 100,
+
+      invoiceDiscountMinor: sale.invoiceDiscountMinor,
+      invoiceDiscount: sale.invoiceDiscountMinor / 100,
 
       totalMinor: sale.totalMinor,
       total: sale.totalMinor / 100,

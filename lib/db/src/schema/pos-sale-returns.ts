@@ -187,6 +187,13 @@ export const posSaleReturnItemsTable = pgTable(
 
     soldUnitPriceMinor: integer("sold_unit_price_minor").notNull(),
     grossAmountMinor: integer("gross_amount_minor").notNull(),
+
+    lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
+
+    invoiceDiscountMinor: integer("invoice_discount_minor")
+      .notNull()
+      .default(0),
+
     allocatedDiscountMinor: integer("allocated_discount_minor").notNull(),
     refundAmountMinor: integer("refund_amount_minor").notNull(),
 
@@ -215,8 +222,18 @@ export const posSaleReturnItemsTable = pgTable(
       sql`
         ${table.soldUnitPriceMinor} >= 0
         and ${table.grossAmountMinor} >= 0
+        and ${table.lineDiscountMinor} >= 0
+        and ${table.invoiceDiscountMinor} >= 0
         and ${table.allocatedDiscountMinor} >= 0
         and ${table.refundAmountMinor} >= 0
+      `,
+    ),
+
+    check(
+      "pos_sale_return_items_discount_breakdown_matches",
+      sql`
+        ${table.allocatedDiscountMinor} =
+        ${table.lineDiscountMinor} + ${table.invoiceDiscountMinor}
       `,
     ),
 

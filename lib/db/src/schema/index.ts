@@ -16,4 +16,6 @@ export * from "./cash-sessions";
 
 export * from "./pos-sales";
 
+export * from "./pos-sale-revisions";
+
 export * from "./pos-sale-returns";
