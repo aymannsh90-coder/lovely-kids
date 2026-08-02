@@ -49,6 +49,7 @@ export default function ProductsScreen({
     typeof category === "string" ? category : "all",
   );
   const [selectedSeason, setSelectedSeason] = useState<"all" | "summer" | "winter">("all");
+  const [selectedGender, setSelectedGender] = useState<null | "boys" | "girls">(null);
 
   useEffect(() => {
     if (typeof category === "string" && categories.some((c) => c.id === category)) {
@@ -73,15 +74,26 @@ export default function ProductsScreen({
       selectedCategory === "all" || p.category === selectedCategory;
     const matchSeason =
       selectedSeason === "all" || p.season === selectedSeason;
+    const matchGender =
+      Platform.OS !== "web" ||
+      selectedGender === null ||
+      p.gender === selectedGender;
     const matchSearch =
       !search || p.nameAr.includes(search) || p.name.toLowerCase().includes(search.toLowerCase());
-    return matchOffers && matchNew && matchCat && matchSeason && matchSearch;
+    return (
+      matchOffers &&
+      matchNew &&
+      matchCat &&
+      matchSeason &&
+      matchGender &&
+      matchSearch
+    );
   });
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+  const topContent = (
+    <>
       {/* Header */}
       <View
         style={[
@@ -126,6 +138,117 @@ export default function ProductsScreen({
         </View>
       </View>
 
+      {/* Gender Tabs — Web only */}
+
+      {Platform.OS === "web" && !isSpecialView ? (
+
+        <View style={[styles.genderTabsRow, { borderColor: colors.border }]}>
+
+          <Pressable
+
+            onPress={() => setSelectedGender(null)}
+
+            style={[
+
+              styles.genderTab,
+
+              selectedGender === null && { backgroundColor: colors.primary },
+
+            ]}
+
+          >
+
+            <Text
+
+              style={[
+
+                styles.genderTabText,
+
+                { color: selectedGender === null ? "#fff" : colors.foreground },
+
+              ]}
+
+            >
+
+              الكل
+
+            </Text>
+
+          </Pressable>
+
+
+          <Pressable
+
+            onPress={() => setSelectedGender("boys")}
+
+            style={[
+
+              styles.genderTab,
+
+              selectedGender === "boys" && { backgroundColor: "#3B82F6" },
+
+            ]}
+
+          >
+
+            <Text style={styles.genderEmoji}>👦</Text>
+
+            <Text
+
+              style={[
+
+                styles.genderTabText,
+
+                { color: selectedGender === "boys" ? "#fff" : colors.foreground },
+
+              ]}
+
+            >
+
+              ولادي
+
+            </Text>
+
+          </Pressable>
+
+
+          <Pressable
+
+            onPress={() => setSelectedGender("girls")}
+
+            style={[
+
+              styles.genderTab,
+
+              selectedGender === "girls" && { backgroundColor: "#EC4899" },
+
+            ]}
+
+          >
+
+            <Text style={styles.genderEmoji}>👧</Text>
+
+            <Text
+
+              style={[
+
+                styles.genderTabText,
+
+                { color: selectedGender === "girls" ? "#fff" : colors.foreground },
+
+              ]}
+
+            >
+
+              بناتي
+
+            </Text>
+
+          </Pressable>
+
+        </View>
+
+      ) : null}
       {/* Search */}
       <View
         style={[
@@ -237,15 +360,25 @@ export default function ProductsScreen({
       <Text style={[styles.count, { color: colors.mutedForeground }]}>
         {filtered.length} منتج
       </Text>
+    </>
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {Platform.OS !== "web" ? topContent : null}
 
       {/* Grid */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={styles.row}
+        columnWrapperStyle={[
+          styles.row,
+          Platform.OS === "web" ? { paddingHorizontal: 16 } : null,
+        ]}
+        ListHeaderComponent={Platform.OS === "web" ? topContent : null}
         contentContainerStyle={[
-          styles.list,
+          Platform.OS === "web" ? null : styles.list,
           { paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 110 },
         ]}
         renderItem={({ item }) => (
@@ -287,6 +420,29 @@ const styles = StyleSheet.create({
     borderRadius: 19,
   },
   title: { fontSize: 24, fontWeight: "800", textAlign: "right" },
+  genderTabsRow: {
+    flexDirection: "row-reverse",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  genderTab: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  genderEmoji: {
+    fontSize: 18,
+  },
+  genderTabText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
   searchRow: {
     marginHorizontal: 16,
     marginBottom: 12,
