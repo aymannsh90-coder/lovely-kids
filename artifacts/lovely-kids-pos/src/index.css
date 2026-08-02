@@ -5343,3 +5343,68 @@ textarea:disabled {
 .accounting-invoice-toolbar button:disabled kbd {
   opacity: 0.45;
 }
+
+/* Accounting invoice readability */
+
+.accounting-invoice-page {
+  font-size: 13px;
+}
+
+.accounting-invoice-titlebar h1 {
+  font-size: 20px;
+}
+
+.accounting-invoice-titlebar p {
+  font-size: 12px;
+}
+
+.accounting-invoice-titlebar .accounting-invoice-draft-badge {
+  font-size: 12px;
+}
+
+.accounting-invoice-page input,
+.accounting-invoice-page select,
+.accounting-invoice-page textarea {
+  font-size: 13px;
+}
+
+.accounting-invoice-page label,
+.accounting-invoice-page small,
+.accounting-invoice-page span {
+  font-size: 12px;
+}
+
+.accounting-invoice-toolbar {
+  min-height: 46px;
+}
+
+.accounting-invoice-toolbar button {
+  min-height: 35px;
+  padding: 6px 13px;
+  font-size: 12px;
+}
+
+.accounting-invoice-toolbar kbd {
+  min-width: 28px;
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
+.accounting-invoice-page table {
+  font-size: 12px;
+}
+
+.accounting-invoice-page th {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.accounting-invoice-page td {
+  font-size: 12px;
+}
+
+.accounting-invoice-page button {
+  font-size: 12px;
+}
+
+/* End accounting invoice readability */
