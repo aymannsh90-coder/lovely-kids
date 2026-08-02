@@ -5721,3 +5721,475 @@ textarea:disabled {
 }
 
 /* End Shamel Lite desktop layout v1 */
+
+/* Shamel Lite shared screens v1 */
+
+@media screen and (min-width: 1001px) {
+  .route-content .work-panel,
+  .route-content .sale-panel,
+  .route-content .sales-return-page,
+  .route-content .invoice-lookup-page,
+  .route-content .dashboard-page {
+    overflow: hidden;
+    border: 1px solid #b8ccd5;
+    border-radius: 5px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .route-content .panel-heading,
+  .route-content .sales-return-heading {
+    min-height: 48px;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-bottom: 1px solid #c7d7de;
+    background: linear-gradient(180deg, #fff8fb, #fceef5);
+  }
+
+  .route-content .panel-heading h1,
+  .route-content .sales-return-heading h1 {
+    margin: 0;
+    font-size: 17px;
+  }
+
+  .route-content .panel-heading p,
+  .route-content .sales-return-heading p {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .route-content .panel-icon {
+    width: 38px;
+    height: 38px;
+    border: 1px solid #bfd0d8;
+    border-radius: 4px;
+    background: #edf5f8;
+    box-shadow: none;
+  }
+
+  .route-content .primary-button,
+  .route-content .secondary-button,
+  .route-content .danger-button {
+    min-height: 32px;
+    padding: 5px 13px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 850;
+    box-shadow: none;
+  }
+
+  .route-content .primary-button {
+    border-color: #e91e8c;
+    background: #e91e8c;
+  }
+
+  .route-content .secondary-button {
+    border-color: #bdcfd7;
+    color: #314955;
+    background: #ffffff;
+  }
+
+  .route-content .danger-button {
+    border-color: #c62828;
+    color: #a71d1d;
+    background: #fff2f2;
+  }
+
+  .route-content input,
+  .route-content select,
+  .route-content textarea {
+    min-height: 30px;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+
+  /* نقطة البيع */
+
+  .sale-panel .barcode-form {
+    gap: 6px;
+    padding: 7px 9px;
+    border-bottom: 1px solid #c4d6de;
+    background: #f7fafb;
+  }
+
+  .sale-panel .barcode-form button {
+    min-width: 115px;
+    min-height: 32px;
+    border-radius: 4px;
+  }
+
+  .document-items-table-wrap {
+    min-height: 225px;
+    border: 1px solid #bed1d9;
+    border-radius: 0;
+  }
+
+  .document-items-table {
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .document-items-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 32px;
+    border: 1px solid #b7ccd5;
+    background: #dcecf2;
+    font-weight: 900;
+  }
+
+  .document-items-table td {
+    height: 35px;
+    border: 1px solid #d2e0e5;
+  }
+
+  .document-items-table tbody tr:nth-child(even) {
+    background: #f7fafb;
+  }
+
+  .document-product-cell img {
+    border: 1px solid #c5d5dc;
+    border-radius: 3px;
+  }
+
+  .sale-checkout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 7px;
+    padding: 7px;
+    border-top: 1px solid #bdcfd7;
+    background: #f2f7f9;
+  }
+
+  .sale-customer-fields,
+  .sale-summary {
+    border: 1px solid #bfd1d9;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .sale-summary {
+    padding: 8px;
+  }
+
+  .sale-grand-total {
+    border-radius: 3px;
+    background: #fff0f7;
+    font-size: 18px;
+  }
+
+  .complete-sale-button {
+    min-height: 40px !important;
+    font-size: 14px !important;
+  }
+
+  .empty-cart {
+    min-height: 125px;
+    border-radius: 0;
+    background: #fafcfd;
+  }
+
+  .pos-product-search-panel {
+    border: 1px solid #b9cdd6;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: 0 4px 12px rgb(30 55 67 / 14%);
+  }
+
+  /* مردودات المبيعات */
+
+  .sales-return-search-panel,
+  .sales-return-invoice,
+  .sales-return-completion-panel {
+    margin: 6px;
+    padding: 8px;
+    border: 1px solid #bfd1d9;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .sales-return-search-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 7px;
+    align-items: end;
+  }
+
+  .sales-return-search-button {
+    min-width: 125px;
+  }
+
+  .sales-return-session {
+    padding: 6px 10px;
+    border: 1px solid #b9d9c6;
+    border-radius: 4px;
+    background: #eefaf2;
+  }
+
+  .sales-return-section-title {
+    margin: 7px 0 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #d4e1e6;
+    font-size: 13px;
+  }
+
+  .sales-return-table-wrap {
+    border: 1px solid #bfd1d9;
+    border-radius: 0;
+  }
+
+  .sales-return-table {
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .sales-return-table th {
+    height: 32px;
+    border: 1px solid #b7ccd5;
+    background: #dcecf2;
+    font-weight: 900;
+  }
+
+  .sales-return-table td {
+    height: 36px;
+    border: 1px solid #d2e0e5;
+  }
+
+  .sales-return-table tbody tr:nth-child(even) {
+    background: #f7fafb;
+  }
+
+  .sales-return-form-grid,
+  .sales-return-summary-grid {
+    gap: 7px;
+  }
+
+  .sales-return-estimate,
+  .sales-return-final-row {
+    border-radius: 3px;
+    background: #fff0f7;
+  }
+
+  .sales-return-submit {
+    min-width: 180px;
+    min-height: 39px !important;
+  }
+
+  /* فحص الفاتورة */
+
+  .standalone-invoice-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+    padding: 8px;
+    border-bottom: 1px solid #c4d6de;
+    background: #f7fafb;
+  }
+
+  .standalone-invoice-result {
+    margin: 6px;
+    overflow: hidden;
+    border: 1px solid #bfd1d9;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .standalone-invoice-summary {
+    padding: 7px;
+    border-bottom: 1px solid #d0dee4;
+    background: #f4f8fa;
+  }
+
+  .standalone-invoice-items {
+    border-radius: 0;
+  }
+
+  .standalone-invoice-item {
+    min-height: 38px;
+    border-bottom: 1px solid #d4e1e6;
+  }
+
+  .standalone-invoice-totals {
+    border-top: 1px solid #bfd1d9;
+    background: #f7fafb;
+  }
+
+  .invoice-sequence-navigation {
+    min-height: 38px;
+    padding: 5px 8px;
+    border: 1px solid #c1d2d9;
+    border-radius: 4px;
+    background: #edf4f6;
+  }
+
+  /* الصندوق */
+
+  .cash-session-page .open-day-form,
+  .cash-session-page .close-day-block,
+  .cash-session-page .session-details {
+    margin: 7px;
+    padding: 9px;
+    border: 1px solid #bfd1d9;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .cash-session-page .close-day-heading {
+    padding-bottom: 6px;
+    border-bottom: 1px solid #d2e0e5;
+  }
+
+  .cash-session-page .close-day-form {
+    gap: 7px;
+  }
+
+  .cash-session-page .session-note {
+    border-radius: 3px;
+    background: #fff8df;
+  }
+
+  /* الصفحة الرئيسية */
+
+  .dashboard-hero {
+    margin: 6px;
+    padding: 12px;
+    border: 1px solid #bfd1d9;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #ffffff, #f3f8fa);
+    box-shadow: none;
+  }
+
+  .dashboard-hero h1 {
+    font-size: 20px;
+  }
+
+  .dashboard-session-summary {
+    border: 1px solid #bad7c5;
+    border-radius: 4px;
+    background: #eefaf2;
+  }
+
+  .dashboard-group {
+    margin: 6px;
+    padding: 7px;
+    border: 1px solid #c2d3da;
+    border-radius: 4px;
+    background: #f7fafb;
+  }
+
+  .dashboard-group-heading {
+    min-height: 35px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #cfdee4;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .dashboard-card {
+    min-height: 105px;
+    border: 1px solid #bfd1d9;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .dashboard-card:hover {
+    border-color: #e91e8c;
+    transform: none;
+  }
+
+  .dashboard-card-icon {
+    border-radius: 4px;
+    background: #edf4f6;
+  }
+
+  /* رسائل النظام */
+
+  .route-content .alert,
+  .route-content .route-message {
+    margin: 6px;
+    padding: 7px 10px;
+    border-radius: 4px;
+    box-shadow: none;
+  }
+}
+
+/* End Shamel Lite shared screens v1 */
+
+/* Shamel Lite compact quick sale */
+
+@media screen and (min-width: 1001px) {
+  .sale-panel {
+    padding: 0;
+  }
+
+  .sale-panel .panel-heading {
+    min-height: 46px;
+  }
+
+  .sale-panel .barcode-form {
+    grid-template-columns: minmax(0, 1fr) 125px;
+    margin: 0;
+    padding: 6px 8px;
+  }
+
+  .sale-panel .barcode-form label {
+    margin: 0;
+  }
+
+  .sale-panel .barcode-form input {
+    min-height: 32px;
+  }
+
+  .sale-panel .document-items-table-wrap {
+    min-height: 190px;
+    max-height: 265px;
+    margin: 0 8px;
+  }
+
+  .sale-panel .empty-cart {
+    min-height: 105px;
+  }
+
+  .sale-panel .sale-checkout {
+    grid-template-columns: minmax(0, 1fr) 275px;
+    padding: 6px 8px;
+  }
+
+  .sale-panel .sale-customer-fields {
+    padding: 7px;
+  }
+
+  .sale-panel .sale-customer-fields input,
+  .sale-panel .sale-customer-fields textarea {
+    min-height: 30px;
+  }
+
+  .sale-panel .sale-notes {
+    min-height: 58px;
+  }
+
+  .sale-panel .sale-summary {
+    padding: 7px;
+  }
+
+  .sale-panel .sale-grand-total {
+    padding: 7px;
+    font-size: 17px;
+  }
+
+  .sale-panel .complete-sale-button {
+    min-height: 38px !important;
+  }
+}
+
+/* End Shamel Lite compact quick sale */
