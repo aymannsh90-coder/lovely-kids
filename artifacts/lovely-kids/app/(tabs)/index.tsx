@@ -77,15 +77,40 @@ export default function HomeScreen() {
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
   const newArrivalsScrollRef = useRef<ScrollView>(null);
   const newArrivalsScrollX = useRef(0);
+  const newArrivalsMaxScrollX = useRef(0);
+  const newArrivalsContentWidth = useRef(0);
+  const newArrivalsViewportWidth = useRef(0);
+  const newArrivalsDirection = useRef<1 | -1>(1);
+  const newArrivalsAutoPaused = useRef(false);
+
+  const updateNewArrivalsBounds = () => {
+    const maxX = Math.max(
+      0,
+      newArrivalsContentWidth.current - newArrivalsViewportWidth.current,
+    );
+
+    newArrivalsMaxScrollX.current = maxX;
+
+    if (newArrivalsScrollX.current > maxX) {
+      newArrivalsScrollX.current = maxX;
+      newArrivalsScrollRef.current?.scrollTo({
+        x: maxX,
+        animated: false,
+      });
+    }
+  };
 
   const scrollNewArrivals = (direction: "left" | "right") => {
     const step = Math.max(180, Math.min(width * 0.75, 360));
-    const nextX = Math.max(
-      0,
-      newArrivalsScrollX.current + (direction === "left" ? step : -step),
+    const movement = direction === "left" ? step : -step;
+    const nextX = Math.min(
+      newArrivalsMaxScrollX.current,
+      Math.max(0, newArrivalsScrollX.current + movement),
     );
 
+    newArrivalsDirection.current = direction === "left" ? 1 : -1;
     newArrivalsScrollX.current = nextX;
+
     newArrivalsScrollRef.current?.scrollTo({
       x: nextX,
       animated: true,
@@ -165,12 +190,45 @@ export default function HomeScreen() {
 
   const newArrivals = genderFiltered.filter((p) => p.isNew);
 
+  useEffect(() => {
+    if (Platform.OS !== "web" || newArrivals.length <= 2) return;
+
+    const timer = setInterval(() => {
+      if (newArrivalsAutoPaused.current) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+
+      const maxX = newArrivalsMaxScrollX.current;
+      if (maxX <= 1) return;
+
+      const step = 182;
+      let nextX =
+        newArrivalsScrollX.current +
+        step * newArrivalsDirection.current;
+
+      if (nextX >= maxX) {
+        nextX = maxX;
+        newArrivalsDirection.current = -1;
+      } else if (nextX <= 0) {
+        nextX = 0;
+        newArrivalsDirection.current = 1;
+      }
+
+      newArrivalsScrollX.current = nextX;
+      newArrivalsScrollRef.current?.scrollTo({
+        x: nextX,
+        animated: true,
+      });
+    }, 2200);
+
+    return () => clearInterval(timer);
+  }, [newArrivals.length]);
+
   const selectedAgeForProducts =
     settings.homeAgeGroupsSectionEnabled !== false ? selectedAge : null;
 
   const filteredProducts = selectedAgeForProducts
     ? genderFiltered.filter((p) => p.ageGroup === selectedAgeForProducts)
-    : genderFiltered.slice(0, 6);
+    : genderFiltered.slice(0, Platform.OS === "web" ? 12 : 6);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
@@ -219,6 +277,8 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {Platform.OS !== "web" ? (
+        <>
       {/* Gender Tabs */}
       <View style={[styles.genderTabsRow, { borderColor: colors.border }]}>
         <Pressable
@@ -257,6 +317,8 @@ export default function HomeScreen() {
           </Text>
         </Pressable>
       </View>
+        </>
+      ) : null}
 
       {/* Search Bar */}
       <Pressable
@@ -601,9 +663,35 @@ export default function HomeScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.newArrivalsHorizontalScroll}
+              onLayout={(event) => {
+                newArrivalsViewportWidth.current =
+                  event.nativeEvent.layout.width;
+                updateNewArrivalsBounds();
+              }}
+              onContentSizeChange={(contentWidth) => {
+                newArrivalsContentWidth.current = contentWidth;
+                updateNewArrivalsBounds();
+              }}
+              onScrollBeginDrag={() => {
+                newArrivalsAutoPaused.current = true;
+              }}
+              onScrollEndDrag={() => {
+                newArrivalsAutoPaused.current = false;
+              }}
+              onMomentumScrollEnd={() => {
+                newArrivalsAutoPaused.current = false;
+              }}
               onScroll={(event) => {
-                newArrivalsScrollX.current =
-                  event.nativeEvent.contentOffset.x;
+                const currentX = event.nativeEvent.contentOffset.x;
+                newArrivalsScrollX.current = currentX;
+
+                if (currentX <= 1) {
+                  newArrivalsDirection.current = 1;
+                } else if (
+                  currentX >= newArrivalsMaxScrollX.current - 1
+                ) {
+                  newArrivalsDirection.current = -1;
+                }
               }}
               scrollEventThrottle={16}
             >
