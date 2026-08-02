@@ -25,6 +25,21 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useNewOrders } from "@/context/NewOrdersContext";
 import { useColors } from "@/hooks/useColors";
 
+function getReadableTextColor(backgroundColor: string) {
+  const hex = backgroundColor.replace("#", "").trim();
+
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return "#1F2937";
+  }
+
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+
+  return brightness > 155 ? "#1F2937" : "#FFFFFF";
+}
+
 const MENU_ITEMS = [
   { icon: "bag-outline" as const, label: "متابعة طلباتي", route: "/my-orders" as const },
   { icon: "heart-outline" as const, label: "المفضلة", route: "/wishlist" as const },
@@ -37,6 +52,16 @@ type ForgotStep = null | "phone" | "sent";
 
 export default function ProfileScreen() {
   const colors = useColors();
+  const aboutCardTextColor =
+    Platform.OS === "web"
+      ? getReadableTextColor(colors.secondary)
+      : colors.foreground;
+  const aboutCardSubTextColor =
+    Platform.OS === "web"
+      ? aboutCardTextColor === "#FFFFFF"
+        ? "rgba(255,255,255,0.92)"
+        : "#374151"
+      : colors.mutedForeground;
   const insets = useSafeAreaInsets();
   const { totalItems } = useCart();
   const { count } = useWishlist();
@@ -571,12 +596,28 @@ export default function ProfileScreen() {
 
       {/* About Card */}
       <View style={[styles.aboutCard, { backgroundColor: colors.secondary }]}>
-        <Ionicons name="storefront-outline" size={32} color={colors.foreground} />
-        <Text style={[styles.aboutTitle, { color: colors.foreground }]}>
+        <Ionicons
+          name="storefront-outline"
+          size={32}
+          color={aboutCardTextColor}
+        />
+        <Text
+          style={[
+            styles.aboutTitle,
+            { color: aboutCardTextColor },
+            Platform.OS === "web" && styles.aboutTitleWeb,
+          ]}
+        >
           {settings.contactInfo?.storeName ?? "Lovely Kids"}
         </Text>
         {(settings.aboutInfo?.intro ?? "").length > 0 && (
-          <Text style={[styles.aboutText, { color: colors.mutedForeground }]}>
+          <Text
+            style={[
+              styles.aboutText,
+              { color: aboutCardSubTextColor },
+              Platform.OS === "web" && styles.aboutTextWeb,
+            ]}
+          >
             {settings.aboutInfo.intro}
           </Text>
         )}
@@ -806,7 +847,9 @@ const styles = StyleSheet.create({
   newOrdersBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   aboutCard: { margin: 16, marginTop: 8, borderRadius: 20, padding: 24, alignItems: "center", gap: 10 },
   aboutTitle: { fontSize: 16, fontWeight: "800" },
+  aboutTitleWeb: { fontSize: 18, fontWeight: "900" },
   aboutText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
+  aboutTextWeb: { fontSize: 14, fontWeight: "600", lineHeight: 22 },
   contactBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, marginTop: 4 },
   contactBtnText: { fontSize: 14, fontWeight: "700" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 24 },
