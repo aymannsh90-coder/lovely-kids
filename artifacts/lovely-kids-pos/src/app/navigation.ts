@@ -155,10 +155,10 @@ export const posNavigation: PosNavigationItem[] = [
     group: "parties",
     path: "/parties/suppliers",
     title: "الموردون",
-    description: "بيانات الموردين والمشتريات والحسابات.",
+    description: "إدارة بيانات الموردين والبحث فيها.",
     icon: "🚚",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "expenses",

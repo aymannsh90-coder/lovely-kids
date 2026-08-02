@@ -5,6 +5,7 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
+import SuppliersPage from "../pages/parties/SuppliersPage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import NewSalePage from "../pages/sales/NewSalePage";
 import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
@@ -142,19 +143,7 @@ export default function AppRouter() {
 
         <Route
           path="parties/suppliers"
-          element={
-            <ComingSoonPage
-              icon="🚚"
-              title="الموردون"
-              description="إدارة الموردين والمشتريات والحسابات."
-              points={[
-                "بيانات المورد.",
-                "فواتير المشتريات والمردودات.",
-                "الأرصدة والدفعات.",
-                "الشيكات ومواعيد الاستحقاق.",
-              ]}
-            />
-          }
+          element={<SuppliersPage />}
         />
 
         <Route

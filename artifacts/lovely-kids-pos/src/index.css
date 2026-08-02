@@ -6193,3 +6193,127 @@ textarea:disabled {
 }
 
 /* End Shamel Lite compact quick sale */
+
+/* PURCHASE SUPPLIERS PAGE */
+
+.suppliers-page {
+  display: grid;
+  gap: 18px;
+}
+
+.supplier-protection-alert {
+  border: 1px solid #e5b94c;
+  background: #fff8dd;
+  color: #6b4b00;
+}
+
+.supplier-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.supplier-summary-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border-color, #d9e0e7);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.supplier-summary-grid span {
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.supplier-summary-grid strong {
+  font-size: 1.65rem;
+}
+
+.supplier-create-form,
+.supplier-list-card {
+  display: grid;
+  gap: 16px;
+}
+
+.supplier-form-actions,
+.supplier-list-heading,
+.supplier-search-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.supplier-form-actions {
+  justify-content: flex-end;
+}
+
+.supplier-list-heading {
+  justify-content: space-between;
+}
+
+.supplier-list-heading h2,
+.supplier-list-heading p {
+  margin: 0;
+}
+
+.supplier-list-heading p {
+  margin-top: 4px;
+  color: #64748b;
+}
+
+.supplier-search-form input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.supplier-search-form select {
+  min-width: 150px;
+}
+
+.supplier-table {
+  min-width: 940px;
+}
+
+.supplier-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.supplier-status.is-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.supplier-status.is-inactive {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+@media (max-width: 800px) {
+  .supplier-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .supplier-form-actions,
+  .supplier-list-heading,
+  .supplier-search-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .supplier-form-actions button,
+  .supplier-list-heading button,
+  .supplier-search-form button,
+  .supplier-search-form input,
+  .supplier-search-form select {
+    width: 100%;
+  }
+}

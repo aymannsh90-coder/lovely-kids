@@ -646,3 +646,172 @@ export function createPosSaleReturn(
     token,
   );
 }
+
+export interface PosSupplier {
+  id: string;
+  code: string;
+  name: string;
+  contactPerson: string | null;
+  phone: string | null;
+  mobile: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  status: "active" | "inactive";
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosSupplierListResult {
+  results: PosSupplier[];
+}
+
+export function getPosSuppliers(
+  token: string,
+  options: {
+    query?: string;
+    status?: "active" | "inactive";
+  } = {},
+) {
+  const params = new URLSearchParams();
+
+  const query = options.query?.trim();
+
+  if (query) {
+    params.set("q", query);
+  }
+
+  if (options.status) {
+    params.set("status", options.status);
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+
+  return apiRequest<PosSupplierListResult>(
+    `/api/pos/suppliers${suffix}`,
+    {},
+    token,
+  );
+}
+
+export function createPosSupplier(
+  token: string,
+  input: {
+    code: string;
+    name: string;
+    contactPerson?: string;
+    phone?: string;
+    mobile?: string;
+    email?: string;
+    address?: string;
+    notes?: string;
+    status?: "active" | "inactive";
+  },
+) {
+  return apiRequest<{ supplier: PosSupplier }>(
+    "/api/pos/suppliers",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export interface PosPurchaseItemResult {
+  id: string;
+  lineNumber: number;
+  productId: string | null;
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  productImage: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  freeQuantity: number;
+  unitCostMinor: number;
+  unitCost: number;
+  lineDiscountMinor: number;
+  lineDiscount: number;
+  lineTotalMinor: number;
+  lineTotal: number;
+  generalStockBefore: number | null;
+  generalStockAfter: number | null;
+  variantStockBefore: number | null;
+  variantStockAfter: number | null;
+}
+
+export interface PosPurchaseResult {
+  alreadyCreated: boolean;
+  purchase: {
+    id: string;
+    publicId: string;
+    supplierId: string;
+    supplier: {
+      id: string;
+      code: string;
+      name: string;
+    };
+    supplierInvoiceNumber: string | null;
+    businessDate: string;
+    warehouseKey: string;
+    currencyCode: string;
+    enteredByUserId: string;
+    status: "completed" | "voided";
+    paymentMethod: "cash" | "credit" | "mixed";
+    subtotalMinor: number;
+    subtotal: number;
+    discountMinor: number;
+    discount: number;
+    totalMinor: number;
+    total: number;
+    paidMinor: number;
+    paid: number;
+    dueMinor: number;
+    due: number;
+    notes: string | null;
+    voidedAt: string | null;
+    voidedByUserId: string | null;
+    voidReason: string | null;
+    createdAt: string;
+    updatedAt: string;
+    items: PosPurchaseItemResult[];
+  };
+}
+
+export function createPosPurchase(
+  token: string,
+  input: {
+    supplierId: string;
+    idempotencyKey: string;
+    supplierInvoiceNumber?: string;
+    businessDate: string;
+    warehouseKey: string;
+    currencyCode: string;
+    paymentMethod: "cash" | "credit" | "mixed";
+    invoiceDiscount: string;
+    paid: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      barcode?: string;
+      quantity: number;
+      freeQuantity?: number;
+      unitCost: string;
+      lineDiscount?: string;
+      color?: string;
+      size?: string;
+    }>;
+  },
+) {
+  return apiRequest<PosPurchaseResult>(
+    "/api/pos/purchases",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
