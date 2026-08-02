@@ -58,7 +58,7 @@ export default function ContactScreen() {
         <Pressable onPress={() => router.back()}>
           <Ionicons name="arrow-forward" size={24} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.title, { color: colors.foreground }]}>تواصل معنا</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>للتواصل معنا</Text>
         <View style={{ width: 24 }} />
       </View>
 
