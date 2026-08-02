@@ -35,6 +35,21 @@ type GenderTab = "boys" | "girls" | null;
 
 const { width } = Dimensions.get("window");
 
+function getReadableTextColor(backgroundColor: string) {
+  const hex = backgroundColor.replace("#", "").trim();
+
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return "#1F2937";
+  }
+
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+
+  return brightness > 155 ? "#1F2937" : "#FFFFFF";
+}
+
 const AGE_COLORS = [
   "#FFB5C8",
   "#96DFEC",
@@ -52,6 +67,16 @@ const TRUST_BADGES = [
 
 export default function HomeScreen() {
   const colors = useColors();
+  const contactTextColor =
+    Platform.OS === "web"
+      ? getReadableTextColor(colors.secondary)
+      : colors.foreground;
+  const contactSubTextColor =
+    Platform.OS === "web"
+      ? contactTextColor === "#FFFFFF"
+        ? "rgba(255,255,255,0.9)"
+        : "#374151"
+      : colors.mutedForeground;
   const insets = useSafeAreaInsets();
   const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
@@ -740,16 +765,32 @@ export default function HomeScreen() {
         onPress={() => router.push("/contact")}
         style={[styles.contactBanner, { backgroundColor: colors.secondary }]}
       >
-        <Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.foreground} />
+        <Ionicons
+          name="chatbubble-ellipses-outline"
+          size={28}
+          color={contactTextColor}
+        />
         <View style={styles.contactText}>
-          <Text style={[styles.contactTitle, { color: colors.foreground }]}>
+          <Text
+            style={[
+              styles.contactTitle,
+              { color: contactTextColor },
+              Platform.OS === "web" && styles.contactTitleWeb,
+            ]}
+          >
             للتواصل معنا
           </Text>
-          <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>
+          <Text
+            style={[
+              styles.contactSub,
+              { color: contactSubTextColor },
+              Platform.OS === "web" && styles.contactSubWeb,
+            ]}
+          >
             09-237-6808 · واتساب · نابلس
           </Text>
         </View>
-        <Ionicons name="arrow-back" size={20} color={colors.foreground} />
+        <Ionicons name="arrow-back" size={20} color={contactTextColor} />
       </Pressable>
     </ScrollView>
   );
@@ -1031,7 +1072,9 @@ const styles = StyleSheet.create({
   },
   contactText: { flex: 1, alignItems: Platform.OS === "web" ? "flex-end" : "flex-start" },
   contactTitle: { fontSize: 16, fontWeight: "700" },
+  contactTitleWeb: { fontSize: 17, fontWeight: "800" },
   contactSub: { fontSize: 12, marginTop: 2 },
+  contactSubWeb: { fontSize: 13, fontWeight: "600", marginTop: 3 },
   genderTabsRow: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     marginHorizontal: 16,
