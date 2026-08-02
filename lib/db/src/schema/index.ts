@@ -19,3 +19,5 @@ export * from "./pos-sales";
 export * from "./pos-sale-revisions";
 
 export * from "./pos-sale-returns";
+export * from "./suppliers";
+export * from "./pos-purchases";

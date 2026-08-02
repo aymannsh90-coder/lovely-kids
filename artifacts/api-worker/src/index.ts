@@ -14,6 +14,8 @@ import { handleUsersRequest } from "./users-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
 import { handlePosSaleRequest } from "./pos-sale-routes";
 import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
+import { handleSupplierRequest } from "./supplier-routes";
+import { handlePosPurchaseRequest } from "./pos-purchase-routes";
 
 const headers = {
   "Content-Type": "application/json",
@@ -99,6 +101,28 @@ export default {
       if (posSaleReturnResponse) {
         return posSaleReturnResponse;
       }
+      const supplierResponse = await handleSupplierRequest(
+        request,
+        db,
+        env,
+      );
+
+      if (supplierResponse) {
+        return supplierResponse;
+      }
+
+      const posPurchaseResponse =
+        await handlePosPurchaseRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (posPurchaseResponse) {
+        return posPurchaseResponse;
+      }
+
+
 
       const passwordResetResponse = await handlePasswordResetRequest(
         request,
