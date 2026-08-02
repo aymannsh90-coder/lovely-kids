@@ -743,7 +743,7 @@ export default function HomeScreen() {
         <Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.foreground} />
         <View style={styles.contactText}>
           <Text style={[styles.contactTitle, { color: colors.foreground }]}>
-            تواصلي معنا
+            للتواصل معنا
           </Text>
           <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>
             09-237-6808 · واتساب · نابلس

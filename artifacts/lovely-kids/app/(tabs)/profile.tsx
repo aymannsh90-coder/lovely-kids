@@ -28,7 +28,7 @@ import { useColors } from "@/hooks/useColors";
 const MENU_ITEMS = [
   { icon: "bag-outline" as const, label: "متابعة طلباتي", route: "/my-orders" as const },
   { icon: "heart-outline" as const, label: "المفضلة", route: "/wishlist" as const },
-  { icon: "call-outline" as const, label: "تواصل معنا", route: "/contact" as const },
+  { icon: "call-outline" as const, label: "للتواصل معنا", route: "/contact" as const },
   { icon: "information-circle-outline" as const, label: "عن المحل", route: "/about" as const },
 ];
 
@@ -584,7 +584,7 @@ export default function ProfileScreen() {
           onPress={() => router.push("/contact")}
           style={[styles.contactBtn, { backgroundColor: colors.foreground }]}
         >
-          <Text style={[styles.contactBtnText, { color: colors.background }]}>تواصل معنا</Text>
+          <Text style={[styles.contactBtnText, { color: colors.background }]}>للتواصل معنا</Text>
         </Pressable>
       </View>
 

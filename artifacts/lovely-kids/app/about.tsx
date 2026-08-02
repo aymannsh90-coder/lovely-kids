@@ -111,7 +111,7 @@ export default function AboutScreen() {
         style={[styles.ctaBtn, { backgroundColor: colors.primary }]}
       >
         <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-        <Text style={styles.ctaBtnText}>تواصل معنا الآن</Text>
+        <Text style={styles.ctaBtnText}>للتواصل معنا</Text>
       </Pressable>
     </ScrollView>
   );
