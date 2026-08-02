@@ -1152,7 +1152,26 @@ export default function SalesInvoicePage() {
     }
   }
 
-  function handleNewInvoice() {
+  function hasUnsavedInvoiceChanges() {
+    if (editMode) {
+      return true;
+    }
+
+    if (loadedSale) {
+      return false;
+    }
+
+    return (
+      lines.length > 0 ||
+      customerName.trim().length > 0 ||
+      customerPhone.trim().length > 0 ||
+      representative.trim().length > 0 ||
+      notes.trim().length > 0 ||
+      invoiceDiscount !== "0.00"
+    );
+  }
+
+  function resetInvoiceForm() {
     setLoadedSale(null);
     setPaidAmountAuto(true);
     setEditMode(false);
@@ -1186,6 +1205,113 @@ export default function SalesInvoicePage() {
     clearSearchResults();
     focusSearch();
   }
+
+  function handleNewInvoice() {
+    if (invoiceBusy) {
+      return;
+    }
+
+    if (
+      hasUnsavedInvoiceChanges() &&
+      !window.confirm(
+        "توجد تغييرات غير محفوظة. هل تريد تركها وفتح فاتورة جديدة؟",
+      )
+    ) {
+      return;
+    }
+
+    resetInvoiceForm();
+  }
+
+  function handleUndoInvoice() {
+    if (invoiceBusy || !hasUnsavedInvoiceChanges()) {
+      return;
+    }
+
+    if (editMode) {
+      if (
+        !window.confirm(
+          `هل تريد إلغاء التعديلات غير المحفوظة على الفاتورة ${
+            loadedSale?.sale.publicId ?? ""
+          }؟`,
+        )
+      ) {
+        return;
+      }
+
+      handleCancelEdit();
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "هل تريد مسح التغييرات غير المحفوظة من الفاتورة الجديدة؟",
+      )
+    ) {
+      return;
+    }
+
+    resetInvoiceForm();
+  }
+
+  useEffect(() => {
+    function handleInvoiceShortcut(event: globalThis.KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.metaKey
+      ) {
+        return;
+      }
+
+      if (
+        event.key === "F3" &&
+        !invoiceBusy &&
+        ACCOUNTING_WRITES_ENABLED &&
+        !(loadedSale && !editMode)
+      ) {
+        event.preventDefault();
+        void handleSaveInvoice();
+        return;
+      }
+
+      if (event.key === "F6" && !invoiceBusy) {
+        event.preventDefault();
+        handleNewInvoice();
+        return;
+      }
+
+      if (
+        event.key === "F7" &&
+        !invoiceBusy &&
+        hasUnsavedInvoiceChanges()
+      ) {
+        event.preventDefault();
+        handleUndoInvoice();
+        return;
+      }
+
+      if (
+        event.key === "F4" &&
+        !invoiceBusy &&
+        !editMode &&
+        ACCOUNTING_WRITES_ENABLED &&
+        loadedSale?.sale.status === "completed"
+      ) {
+        event.preventDefault();
+        void handleVoidInvoice();
+      }
+    }
+
+    window.addEventListener("keydown", handleInvoiceShortcut);
+
+    return () => {
+      window.removeEventListener("keydown", handleInvoiceShortcut);
+    };
+  });
 
   return (
     <section className="accounting-invoice-page">
@@ -1237,8 +1363,71 @@ export default function SalesInvoicePage() {
       <div className="accounting-invoice-toolbar">
         <button
           type="button"
+          disabled={invoiceBusy}
+          onClick={handleNewInvoice}
+        >
+          <span aria-hidden="true">＋</span>
+          جديد
+          <kbd>F6</kbd>
+        </button>
+
+        <button
+          className="is-primary-action"
+          type="button"
           disabled={
-            invoiceBusy || editMode || !loadedSale?.navigation?.previousPublicId
+            invoiceBusy ||
+            !ACCOUNTING_WRITES_ENABLED ||
+            (loadedSale !== null && !editMode)
+          }
+          title={
+            ACCOUNTING_WRITES_ENABLED
+              ? undefined
+              : "الحفظ محمي حتى تشغيل Migration وتجهيز الاختبار"
+          }
+          onClick={() => {
+            void handleSaveInvoice();
+          }}
+        >
+          <span aria-hidden="true">💾</span>
+          {editMode ? "حفظ التعديل" : "حفظ"}
+          <kbd>F3</kbd>
+        </button>
+
+        <button
+          type="button"
+          disabled={invoiceBusy || !hasUnsavedInvoiceChanges()}
+          onClick={handleUndoInvoice}
+        >
+          <span aria-hidden="true">↶</span>
+          تراجع
+          <kbd>F7</kbd>
+        </button>
+
+        <button
+          className="is-danger-action"
+          type="button"
+          disabled={
+            invoiceBusy ||
+            editMode ||
+            !ACCOUNTING_WRITES_ENABLED ||
+            !loadedSale ||
+            loadedSale.sale.status !== "completed"
+          }
+          onClick={() => {
+            void handleVoidInvoice();
+          }}
+        >
+          <span aria-hidden="true">✕</span>
+          إلغاء الفاتورة
+          <kbd>F4</kbd>
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            invoiceBusy ||
+            editMode ||
+            !loadedSale?.navigation?.previousPublicId
           }
           onClick={() => {
             const target = loadedSale?.navigation?.previousPublicId;
@@ -1263,17 +1452,10 @@ export default function SalesInvoicePage() {
 
         <button
           type="button"
-          disabled={invoiceBusy || editMode}
-          onClick={handleNewInvoice}
-        >
-          <span aria-hidden="true">＋</span>
-          جديد
-        </button>
-
-        <button
-          type="button"
           disabled={
-            invoiceBusy || editMode || !loadedSale?.navigation?.nextPublicId
+            invoiceBusy ||
+            editMode ||
+            !loadedSale?.navigation?.nextPublicId
           }
           onClick={() => {
             const target = loadedSale?.navigation?.nextPublicId;
@@ -1305,31 +1487,11 @@ export default function SalesInvoicePage() {
 
         <button
           type="button"
-          disabled={invoiceBusy || !editMode}
-          onClick={handleCancelEdit}
+          disabled={invoiceBusy || editMode || !loadedSale}
+          onClick={handleCopyInvoice}
         >
-          <span aria-hidden="true">↶</span>
-          إلغاء التعديل
-        </button>
-
-        <button
-          type="button"
-          disabled={
-            invoiceBusy ||
-            !ACCOUNTING_WRITES_ENABLED ||
-            (loadedSale !== null && !editMode)
-          }
-          title={
-            ACCOUNTING_WRITES_ENABLED
-              ? undefined
-              : "الحفظ محمي حتى تشغيل Migration وتجهيز الاختبار"
-          }
-          onClick={() => {
-            void handleSaveInvoice();
-          }}
-        >
-          <span aria-hidden="true">💾</span>
-          {editMode ? "حفظ التعديل" : "حفظ"}
+          <span aria-hidden="true">⧉</span>
+          نسخ
         </button>
 
         <button type="button" disabled>
@@ -1340,32 +1502,6 @@ export default function SalesInvoicePage() {
         <button type="button" disabled>
           <span aria-hidden="true">👁️</span>
           معاينة الطباعة
-        </button>
-
-        <button
-          type="button"
-          disabled={invoiceBusy || editMode || !loadedSale}
-          onClick={handleCopyInvoice}
-        >
-          <span aria-hidden="true">⧉</span>
-          نسخ
-        </button>
-
-        <button
-          type="button"
-          disabled={
-            invoiceBusy ||
-            editMode ||
-            !ACCOUNTING_WRITES_ENABLED ||
-            !loadedSale ||
-            loadedSale.sale.status !== "completed"
-          }
-          onClick={() => {
-            void handleVoidInvoice();
-          }}
-        >
-          <span aria-hidden="true">✕</span>
-          إلغاء الفاتورة
         </button>
       </div>
 

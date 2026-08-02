@@ -5312,3 +5312,34 @@ textarea:disabled {
 .accounting-voided-invoice-notice span {
   font-weight: 700;
 }
+
+
+/* Accounting invoice keyboard shortcuts */
+
+.accounting-invoice-toolbar kbd {
+  min-width: 25px;
+  padding: 2px 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 9px;
+  line-height: 1;
+  text-align: center;
+  opacity: 0.72;
+}
+
+.accounting-invoice-toolbar button.is-primary-action {
+  border-color: #e91e8c;
+  color: #ffffff;
+  background: #e91e8c;
+}
+
+.accounting-invoice-toolbar button.is-danger-action {
+  border-color: #c62828;
+  color: #a71d1d;
+  background: #fff2f2;
+}
+
+.accounting-invoice-toolbar button:disabled kbd {
+  opacity: 0.45;
+}
