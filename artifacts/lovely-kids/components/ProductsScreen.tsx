@@ -80,8 +80,8 @@ export default function ProductsScreen({
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+  const topContent = (
+    <>
       {/* Header */}
       <View
         style={[
@@ -237,15 +237,25 @@ export default function ProductsScreen({
       <Text style={[styles.count, { color: colors.mutedForeground }]}>
         {filtered.length} منتج
       </Text>
+    </>
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {Platform.OS !== "web" ? topContent : null}
 
       {/* Grid */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={styles.row}
+        columnWrapperStyle={[
+          styles.row,
+          Platform.OS === "web" ? { paddingHorizontal: 16 } : null,
+        ]}
+        ListHeaderComponent={Platform.OS === "web" ? topContent : null}
         contentContainerStyle={[
-          styles.list,
+          Platform.OS === "web" ? null : styles.list,
           { paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 110 },
         ]}
         renderItem={({ item }) => (
