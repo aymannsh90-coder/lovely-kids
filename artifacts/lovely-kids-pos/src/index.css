@@ -5408,3 +5408,316 @@ textarea:disabled {
 }
 
 /* End accounting invoice readability */
+
+/* Shamel Lite desktop layout v1 */
+
+@media (min-width: 1001px) {
+  .pos-full-page {
+    padding: 0;
+    background: #e8f1f5;
+  }
+
+  .pos-full-shell {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0 8px 8px;
+  }
+
+  .pos-shamel-menu-shell {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    overflow: hidden;
+    border: 1px solid #afc4cd;
+    border-top: 0;
+    border-radius: 0 0 5px 5px;
+    background: #f7fafb;
+    box-shadow: 0 2px 7px rgb(38 59 70 / 14%);
+  }
+
+  .pos-shamel-header {
+    display: grid;
+    grid-template-columns:
+      auto minmax(300px, 1fr) auto auto auto;
+    min-height: 64px;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 12px;
+    border-bottom: 1px solid #c5d5dc;
+    background: linear-gradient(180deg, #ffffff, #f2f7f9);
+  }
+
+  .pos-shamel-brand {
+    min-width: 175px;
+    padding-inline-end: 10px;
+    border-inline-end: 1px solid #d3e0e5;
+  }
+
+  .pos-shamel-brand-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    box-shadow: none;
+  }
+
+  .pos-shamel-brand strong {
+    font-size: 17px;
+  }
+
+  .pos-shamel-brand small,
+  .pos-shamel-page-title span {
+    font-size: 11px;
+  }
+
+  .pos-shamel-page-title {
+    min-width: 0;
+    padding-inline: 12px;
+  }
+
+  .pos-shamel-page-title strong {
+    font-size: 15px;
+  }
+
+  .pos-shamel-session-state,
+  .pos-shamel-user {
+    border: 1px solid #cbd9df;
+    border-radius: 4px;
+    background: #ffffff;
+  }
+
+  .pos-shamel-primary-menu {
+    display: flex;
+    min-height: 40px;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 4px 8px;
+    overflow-x: auto;
+    border-bottom: 1px solid #142933;
+    background: linear-gradient(180deg, #344d59, #233741);
+  }
+
+  .pos-shamel-primary-button {
+    min-width: 135px;
+    min-height: 32px;
+    padding: 5px 15px;
+    border: 1px solid #49616c;
+    border-radius: 4px;
+    color: #ffffff;
+    background: #314852;
+    font-size: 13px;
+    font-weight: 850;
+    box-shadow: none;
+  }
+
+  .pos-shamel-primary-button.is-active {
+    border-color: #e91e8c;
+    color: #ffffff;
+    background: #e91e8c;
+  }
+
+  .pos-shamel-secondary-menu {
+    display: flex;
+    min-height: 39px;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    overflow: hidden;
+    border-bottom: 1px solid #c0d1d8;
+    background: linear-gradient(180deg, #fafcfd, #edf4f6);
+  }
+
+  .pos-shamel-secondary-title {
+    flex: 0 0 auto;
+    padding: 5px 12px;
+    border-radius: 4px;
+    color: #a3155d;
+    background: #fde9f3;
+    font-size: 12px;
+  }
+
+  .pos-shamel-secondary-actions {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .pos-shamel-secondary-button {
+    min-height: 29px;
+    padding: 4px 11px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: #314955;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .pos-shamel-secondary-button.is-active {
+    border-color: #e91e8c;
+    color: #a3155d;
+    background: #fff0f7;
+  }
+
+  .pos-shamel-session-banner {
+    min-height: 34px;
+    margin: 5px 8px;
+    padding: 5px 11px;
+    border-radius: 4px;
+  }
+
+  .route-content {
+    padding: 2px 8px 0;
+  }
+
+  .accounting-invoice-page {
+    overflow: hidden;
+    border: 1px solid #b8ccd5;
+    border-radius: 5px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .accounting-invoice-titlebar {
+    min-height: 45px;
+    padding: 6px 12px;
+    border-bottom: 1px solid #c7d7de;
+    background: linear-gradient(180deg, #fff7fb, #fdf0f6);
+  }
+
+  .accounting-invoice-titlebar h1 {
+    margin: 0;
+    font-size: 17px;
+  }
+
+  .accounting-invoice-titlebar p {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .accounting-invoice-toolbar {
+    min-height: 41px;
+    gap: 4px;
+    padding: 4px 8px;
+    border-bottom: 1px solid #b9ccd4;
+    background: linear-gradient(180deg, #f9fbfc, #e8f0f3);
+  }
+
+  .accounting-invoice-toolbar button {
+    min-height: 31px;
+    padding: 5px 11px;
+    border-radius: 4px;
+    box-shadow: none;
+  }
+
+  .accounting-invoice-information {
+    gap: 6px;
+    padding: 6px;
+    background: #f4f8fa;
+  }
+
+  .accounting-invoice-card {
+    padding: 7px 9px;
+    border: 1px solid #bfd2da;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .accounting-invoice-card h2 {
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #d7e3e8;
+    font-size: 13px;
+  }
+
+  .accounting-fields-grid {
+    gap: 5px 7px;
+  }
+
+  .accounting-invoice-page input,
+  .accounting-invoice-page select,
+  .accounting-invoice-page textarea {
+    min-height: 29px;
+    border-radius: 3px;
+  }
+
+  .accounting-item-entry {
+    padding: 6px 8px;
+    border-top: 1px solid #c7d8df;
+    border-bottom: 1px solid #c7d8df;
+    background: #f8fbfc;
+  }
+
+  .accounting-item-form {
+    gap: 6px;
+  }
+
+  .accounting-item-form button {
+    min-width: 110px;
+    min-height: 31px;
+    border-radius: 4px;
+  }
+
+  .accounting-invoice-table-wrap {
+    min-height: 205px;
+    border-radius: 0;
+  }
+
+  .accounting-invoice-table {
+    border-collapse: collapse;
+  }
+
+  .accounting-invoice-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 31px;
+    border: 1px solid #b8cdd6;
+    background: #dcecf2;
+  }
+
+  .accounting-invoice-table td {
+    height: 34px;
+    border: 1px solid #d2e0e5;
+  }
+
+  .accounting-invoice-table tbody tr:nth-child(even) {
+    background: #f7fafb;
+  }
+
+  .accounting-invoice-bottom {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 290px;
+    gap: 6px;
+    padding: 6px;
+    border-top: 1px solid #bdd0d8;
+    background: #f2f7f9;
+  }
+
+  .accounting-payment-section,
+  .accounting-invoice-totals {
+    border: 1px solid #bfd1d9;
+    border-radius: 4px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .accounting-final-total {
+    border-radius: 3px;
+    background: #fff0f7;
+  }
+
+  .footer {
+    min-height: 36px;
+    margin: 5px 8px 0;
+    padding: 5px 11px;
+    border-radius: 4px;
+  }
+}
+
+/* End Shamel Lite desktop layout v1 */
