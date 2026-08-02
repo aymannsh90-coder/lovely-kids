@@ -68,7 +68,9 @@ export default function ProductsScreen({
   const isSpecialView = isOffersView || isNewArrivalsView;
 
   const filtered = products.filter((p) => {
-    const matchOffers = !isOffersView || p.showInOffers === true;
+    const matchOffers = isOffersView
+      ? p.showInOffers === true
+      : Platform.OS !== "web" || p.showInOffers !== true;
     const matchNew = !isNewArrivalsView || p.isNew === true;
     const matchCat =
       selectedCategory === "all" || p.category === selectedCategory;

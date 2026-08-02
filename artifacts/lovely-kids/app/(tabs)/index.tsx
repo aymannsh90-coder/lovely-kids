@@ -184,9 +184,14 @@ export default function HomeScreen() {
     }
   };
 
+  const regularProducts =
+    Platform.OS === "web"
+      ? products.filter((p) => p.showInOffers !== true)
+      : products;
+
   const genderFiltered = genderTab
-    ? products.filter((p) => p.gender === genderTab)
-    : products;
+    ? regularProducts.filter((p) => p.gender === genderTab)
+    : regularProducts;
 
   const newArrivals = genderFiltered.filter((p) => p.isNew);
 
