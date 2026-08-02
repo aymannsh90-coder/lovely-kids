@@ -759,6 +759,32 @@ export default function HomeScreen() {
         ))}
       </View>
 
+      {Platform.OS === "web" && (
+        <Pressable
+          onPress={() => router.push("/products")}
+          style={({ pressed }) => [
+            styles.bottomViewAllButton,
+            {
+              backgroundColor: colors.primary,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.bottomViewAllText,
+              { color: getReadableTextColor(colors.primary) },
+            ]}
+          >
+            عرض جميع المنتجات
+          </Text>
+          <Ionicons
+            name="arrow-back"
+            size={20}
+            color={getReadableTextColor(colors.primary)}
+          />
+        </Pressable>
+      )}
 
       {/* Contact Banner */}
       <Pressable
@@ -1060,6 +1086,23 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 4,
     marginBottom: 20,
+  },
+  bottomViewAllButton: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 14,
+    minHeight: 48,
+    borderRadius: 16,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  bottomViewAllText: {
+    fontSize: 15,
+    fontWeight: "700",
   },
   contactBanner: {
     marginHorizontal: 16,
