@@ -255,7 +255,7 @@ export default function AdminDashboardScreen() {
               Hero Slider
             </Text>
             <Text style={[styles.quickButtonValue, { color: colors.mutedForeground }]}>
-              {(settings.heroSlides ?? []).filter((slide) => slide.active).length} من 3 شرائح
+              {(settings.heroSlides ?? []).filter((slide) => slide.active).length} من 5 شرائح
             </Text>
           </Pressable>
 

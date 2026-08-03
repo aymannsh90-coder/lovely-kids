@@ -26,7 +26,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
-const MAX_SLIDES = 3;
+const MAX_SLIDES = 5;
 const MAX_VIDEO_BYTES = 8 * 1024 * 1024;
 
 type UploadResponse = {
@@ -502,7 +502,7 @@ export default function AdminHeroScreen() {
                 { color: colors.foreground },
               ]}
             >
-              حتى 3 شرائح
+              حتى 5 شرائح
             </Text>
             <Text
               style={[
@@ -749,7 +749,7 @@ export default function AdminHeroScreen() {
                 textAlign: "center",
               }}
             >
-              وصلت للحد الأقصى: 3 شرائح
+              وصلت للحد الأقصى: 5 شرائح
             </Text>
           </View>
         )}

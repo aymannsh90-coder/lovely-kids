@@ -831,10 +831,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  headerLeft: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 8, flex: 1 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-  logoImage: { width: 110, height: 52 },
-  greetingBlock: { alignItems: "flex-end" },
+  headerLeft: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: Platform.OS === "web" ? 4 : 8,
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  logoImage: {
+    width: Platform.OS === "web" ? 54 : 110,
+    height: Platform.OS === "web" ? 44 : 52,
+  },
+  greetingBlock: {
+    alignItems: "flex-end",
+    flexShrink: 1,
+  },
   greetingHi: {
     fontSize: 15,
     fontWeight: "800",
