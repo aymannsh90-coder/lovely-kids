@@ -151,7 +151,7 @@ export function HeroSlider({ slides }: Props) {
       [...slides]
         .filter((slide) => slide.active && slide.url)
         .sort((a, b) => a.order - b.order)
-        .slice(0, 3),
+        .slice(0, 5),
     [slides],
   );
 
@@ -251,7 +251,8 @@ export function HeroSlider({ slides }: Props) {
     return null;
   }
 
-  const current = activeSlides[activeIndex];
+  const current =
+    activeSlides[activeIndex] ?? activeSlides[0];
 
   return (
     <View style={styles.outer}>
