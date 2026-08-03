@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Image,
+  PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -15,7 +17,7 @@ type Props = {
   slides: HeroSlide[];
 };
 
-function HeroVideo({ uri }: { uri: string }) {
+function NativeHeroVideo({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = true;
     instance.muted = true;
@@ -33,6 +35,101 @@ function HeroVideo({ uri }: { uri: string }) {
   );
 }
 
+function WebHeroVideo({ uri }: { uri: string }) {
+  const videoRef = useRef<any>(null);
+  const [muted, setMuted] = useState(false);
+
+  const toggleSound = (event: any) => {
+    event?.stopPropagation?.();
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    const nextMuted = !video.muted;
+    video.muted = nextMuted;
+    setMuted(nextMuted);
+
+    if (!nextMuted) {
+      void video.play().catch(() => undefined);
+    }
+  };
+
+  return (
+    <View style={[styles.media, { position: "relative" }]}>
+      {React.createElement(
+        "video",
+        {
+          ref: (node: any) => {
+            videoRef.current = node;
+          },
+          src: uri,
+          autoPlay: true,
+          muted,
+          loop: true,
+          playsInline: true,
+          preload: "auto",
+          controls: false,
+          style: {
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            backgroundColor: "#e5e7eb",
+          },
+          onCanPlay: (event: any) => {
+            const video = event.currentTarget;
+            video.muted = muted;
+
+            void video.play().catch(() => {
+              video.muted = true;
+              setMuted(true);
+              void video.play().catch(() => undefined);
+            });
+          },
+        } as any,
+      )}
+
+      {React.createElement(
+        "button",
+        {
+          type: "button",
+          onPointerDown: (event: any) => event.stopPropagation(),
+          onClick: toggleSound,
+          "aria-label": muted ? "تشغيل صوت الفيديو" : "كتم صوت الفيديو",
+          style: {
+            position: "absolute",
+            left: "12px",
+            bottom: "12px",
+            zIndex: 10,
+            border: "none",
+            borderRadius: "999px",
+            width: "36px",
+            height: "36px",
+            padding: "0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.58)",
+            color: "#ffffff",
+            fontSize: "18px",
+            lineHeight: "1",
+            cursor: "pointer",
+          },
+        } as any,
+        muted ? "🔇" : "🔊",
+      )}
+    </View>
+  );
+}
+
+function HeroVideo({ uri }: { uri: string }) {
+  return Platform.OS === "web" ? (
+    <WebHeroVideo uri={uri} />
+  ) : (
+    <NativeHeroVideo uri={uri} />
+  );
+}
+
 export function HeroSlider({ slides }: Props) {
   const activeSlides = useMemo(
     () =>
@@ -45,6 +142,7 @@ export function HeroSlider({ slides }: Props) {
 
   const [activeIndex, setActiveIndex] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
+  const swipeJustHappened = useRef(false);
 
   useEffect(() => {
     if (activeIndex >= activeSlides.length) {
@@ -75,12 +173,54 @@ export function HeroSlider({ slides }: Props) {
     });
   };
 
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          activeSlides.length > 1 &&
+          Math.abs(gesture.dx) > 12 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+
+        onPanResponderRelease: (_, gesture) => {
+          const isHorizontalSwipe =
+            Math.abs(gesture.dx) >= 45 &&
+            Math.abs(gesture.dx) > Math.abs(gesture.dy);
+
+          if (
+            activeSlides.length <= 1 ||
+            !isHorizontalSwipe
+          ) {
+            return;
+          }
+
+          swipeJustHappened.current = true;
+
+          const nextIndex =
+            gesture.dx < 0
+              ? (activeIndex + 1) % activeSlides.length
+              : (activeIndex - 1 + activeSlides.length) %
+                activeSlides.length;
+
+          changeSlide(nextIndex);
+
+          setTimeout(() => {
+            swipeJustHappened.current = false;
+          }, 300);
+        },
+
+        onPanResponderTerminationRequest: () => true,
+      }),
+    [activeIndex, activeSlides.length],
+  );
+
   useEffect(() => {
     if (activeSlides.length <= 1) return;
 
     const current = activeSlides[activeIndex];
     const delay =
-      current?.type === "video" ? 8000 : 5000;
+      current?.type === "video" ? (Platform.OS === "web" ? 30000 : 8000) : 5000;
 
     const timer = setTimeout(() => {
       const next =
@@ -102,6 +242,9 @@ export function HeroSlider({ slides }: Props) {
     <View style={styles.outer}>
       <View style={styles.slider}>
         <Animated.View
+          {...(Platform.OS === "web"
+            ? panResponder.panHandlers
+            : {})}
           style={[
             styles.slide,
             {
@@ -111,7 +254,10 @@ export function HeroSlider({ slides }: Props) {
         >
           <Pressable
             style={styles.pressable}
-            onPress={() => router.push("/products")}
+            onPress={() => {
+              if (swipeJustHappened.current) return;
+              router.push("/products");
+            }}
           >
             {current.type === "video" ? (
               <HeroVideo
