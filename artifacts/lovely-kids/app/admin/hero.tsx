@@ -346,9 +346,14 @@ export default function AdminHeroScreen() {
       swapped[index],
     ];
 
+    const reorderedSlides = swapped.map((item, itemIndex) => ({
+      ...item,
+      order: itemIndex + 1,
+    }));
+
     setBusyId(slide.id);
     const saved = await updateSettings({
-      heroSlides: normalizeSlides(swapped),
+      heroSlides: reorderedSlides,
     });
 
     setMessage(

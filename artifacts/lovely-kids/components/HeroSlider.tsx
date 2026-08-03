@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -36,8 +36,9 @@ function NativeHeroVideo({ uri }: { uri: string }) {
 }
 
 function WebHeroVideo({ uri }: { uri: string }) {
+  const pathname = usePathname();
   const videoRef = useRef<any>(null);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
 
   const toggleSound = (event: any) => {
     event?.stopPropagation?.();
@@ -53,6 +54,20 @@ function WebHeroVideo({ uri }: { uri: string }) {
       void video.play().catch(() => undefined);
     }
   };
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.muted = true;
+    setMuted(true);
+
+    if (pathname === "/") {
+      void video.play().catch(() => undefined);
+    } else {
+      video.pause();
+    }
+  }, [pathname, uri]);
 
   return (
     <View style={[styles.media, { position: "relative" }]}>
