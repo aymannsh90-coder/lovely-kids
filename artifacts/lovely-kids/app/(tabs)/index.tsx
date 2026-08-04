@@ -82,6 +82,7 @@ export default function HomeScreen() {
   const { settings } = useAppSettings();
   const { user, getAuthToken } = useAuth();
   const { count: wishlistCount } = useWishlist();
+  const firstName = user?.name?.trim().split(/\s+/)[0] || "";
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const ageGroups = AGE_GROUP_IDS.map((id) => ({
     id,
@@ -277,18 +278,39 @@ export default function HomeScreen() {
       >
         <View style={styles.headerLeft}>
           <CategoryMenu />
-          <Image
-            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
+
+          {Platform.OS !== "web" && (
+            <Image
+              source={
+                settings.logoUrl
+                  ? { uri: settings.logoUrl }
+                  : require("@/assets/images/logo.jpg")
+              }
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          )}
+
           {user && (
             <View style={styles.greetingBlock}>
-              <Text style={[styles.greetingHi, { color: colors.primary }]}>أهلاً وسهلاً 🌸</Text>
-              <Text style={[styles.greetingName, { color: colors.foreground }]}>{user.name}</Text>
+              <Text style={[styles.greetingHi, { color: colors.primary }]}>
+                أهلاً وسهلاً
+              </Text>
+              <Text style={[styles.greetingName, { color: colors.foreground }]}>
+                {Platform.OS === "web" ? firstName : user.name}
+              </Text>
             </View>
           )}
         </View>
+
+        {Platform.OS === "web" && (
+          <Image
+            source={require("@/assets/images/lovely-kids-logo-horizontal.png")}
+            style={[styles.logoImage, styles.webCenteredLogo]}
+            resizeMode="contain"
+          />
+        )}
+
         <View style={styles.headerRight}>
           <Pressable
             onPress={() => router.push("/wishlist")}
@@ -830,6 +852,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 12,
+    position: "relative",
   },
   headerLeft: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
@@ -843,8 +866,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   logoImage: {
-    width: Platform.OS === "web" ? 54 : 110,
-    height: Platform.OS === "web" ? 44 : 52,
+    width: Platform.OS === "web" ? 110 : 110,
+    height: Platform.OS === "web" ? 48 : 52,
+  },
+  webCenteredLogo: {
+    position: "absolute",
+    left: "50%",
+    transform: [{ translateX: -55 }],
+    zIndex: 1,
   },
   greetingBlock: {
     alignItems: "flex-end",
