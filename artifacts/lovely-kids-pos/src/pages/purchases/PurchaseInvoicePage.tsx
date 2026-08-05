@@ -666,7 +666,7 @@ export default function PurchaseInvoicePage() {
 
   return (
     <section className="accounting-invoice-page purchase-invoice-page">
-      <header className="accounting-invoice-header">
+      <header className="accounting-invoice-titlebar">
         <div>
           <span>المشتريات والموردون</span>
           <h1>فاتورة مشتريات</h1>
@@ -676,7 +676,7 @@ export default function PurchaseInvoicePage() {
           </p>
         </div>
 
-        <strong>
+        <strong className="accounting-invoice-draft-badge">
           {savedPurchase
             ? savedPurchase.purchase.publicId
             : PURCHASE_WRITES_ENABLED
