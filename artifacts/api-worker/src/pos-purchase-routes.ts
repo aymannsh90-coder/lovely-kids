@@ -10,6 +10,10 @@ import { and, asc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  isPurchaseWriteEnabled,
+  purchaseWritesDisabledResponse,
+} from "./purchase-feature";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -1232,6 +1236,10 @@ export async function handlePosPurchaseRequest(
     request.method === "POST" &&
     path === "/api/pos/purchases"
   ) {
+    if (!isPurchaseWriteEnabled(env)) {
+      return purchaseWritesDisabledResponse();
+    }
+
     return handleCreatePurchase(request, db, env);
   }
 

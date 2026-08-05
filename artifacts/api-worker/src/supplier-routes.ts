@@ -2,6 +2,12 @@ import { suppliersTable } from "@workspace/db/schema";
 import { asc } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  isPurchaseApiEnabled,
+  isPurchaseWriteEnabled,
+  purchaseFeatureDisabledResponse,
+  purchaseWritesDisabledResponse,
+} from "./purchase-feature";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -314,6 +320,10 @@ export async function handleSupplierRequest(
     request.method === "GET" &&
     path === "/api/pos/suppliers"
   ) {
+    if (!isPurchaseApiEnabled(env)) {
+      return purchaseFeatureDisabledResponse();
+    }
+
     return handleListSuppliers(request, db, env);
   }
 
@@ -321,6 +331,10 @@ export async function handleSupplierRequest(
     request.method === "POST" &&
     path === "/api/pos/suppliers"
   ) {
+    if (!isPurchaseWriteEnabled(env)) {
+      return purchaseWritesDisabledResponse();
+    }
+
     return handleCreateSupplier(request, db, env);
   }
 
