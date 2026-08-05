@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -261,7 +262,7 @@ export default function HomeScreen() {
     ? genderFiltered.filter((p) => p.ageGroup === selectedAgeForProducts)
     : genderFiltered.slice(0, Platform.OS === "web" ? 12 : 6);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
 
   return (
     <ScrollView

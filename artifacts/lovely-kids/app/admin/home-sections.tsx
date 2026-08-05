@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -22,7 +23,7 @@ export default function HomeSectionsScreen() {
   const insets = useSafeAreaInsets();
   const { settings, settingsReady, updateSettings } = useAppSettings();
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 20;
 
   const [specialOffers, setSpecialOffers] = useState(

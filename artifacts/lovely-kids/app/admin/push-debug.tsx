@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
@@ -104,7 +105,7 @@ export default function PushDebugScreen() {
     setLocalNotifSent(true);
   };
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const topPad = getResponsiveTopPadding(insets.top);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

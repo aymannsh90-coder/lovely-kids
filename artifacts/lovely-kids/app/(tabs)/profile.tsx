@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -107,7 +108,7 @@ export default function ProfileScreen() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
 
   // ─── Auth submit ──────────────────────────────────────────────────
   const handleAuthSubmit = async () => {

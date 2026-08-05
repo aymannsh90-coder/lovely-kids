@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
@@ -27,7 +28,7 @@ export default function AboutScreen() {
   const insets = useSafeAreaInsets();
   const { settings } = useAppSettings();
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
   return (

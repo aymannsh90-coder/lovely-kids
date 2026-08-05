@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
@@ -25,7 +26,7 @@ export default function WishlistScreen() {
   const { items } = useWishlist();
   const { products } = useVisibleProducts();
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
   const wishlisted = products.filter((p) => items.some((i) => i.id === p.id));
 
   return (

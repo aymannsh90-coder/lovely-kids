@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
@@ -162,7 +163,7 @@ export default function ProductDetailScreen() {
   };
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom + 16;
-  const topOffset = Platform.OS === "web" ? 67 : insets.top;
+  const topOffset = getResponsiveTopPadding(insets.top);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

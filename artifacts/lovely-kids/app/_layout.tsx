@@ -114,7 +114,7 @@ export default function RootLayout() {
   }, [fontsReady]);
 
   if (!fontsReady) {
-    return <View style={{ flex: 1, backgroundColor: "#E91E8C" }} />;
+    return <View style={{ flex: 1, backgroundColor: Platform.OS === "web" ? "#FFFFFF" : "#E91E8C" }} />;
   }
 
   return (
@@ -128,7 +128,7 @@ export default function RootLayout() {
                   <CartProvider>
                     <WishlistProvider>
                       <NewOrdersProvider>
-                        <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#E91E8C" }}>
+                        <GestureHandlerRootView style={{ flex: 1, backgroundColor: Platform.OS === "web" ? "#FFFFFF" : "#E91E8C" }}>
                           {Platform.OS !== "web" ? (
                             <KeyboardProvider>
                               <RootLayoutNav />
