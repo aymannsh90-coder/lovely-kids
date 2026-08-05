@@ -85,6 +85,11 @@ function ClassicTabLayout() {
           fontSize: 11,
           fontWeight: "600",
         },
+        tabBarItemStyle: isCompactWeb
+          ? {
+              transform: [{ translateY: 7 }],
+            }
+          : undefined,
       }}
     >
       <Tabs.Screen
