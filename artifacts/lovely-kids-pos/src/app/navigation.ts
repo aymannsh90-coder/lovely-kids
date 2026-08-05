@@ -85,10 +85,10 @@ export const posNavigation: PosNavigationItem[] = [
     group: "purchases",
     path: "/purchases/new",
     title: "فاتورة مشتريات",
-    description: "إدخال مشتريات جديدة من الموردين.",
+    description: "استلام الأصناف وزيادة المخزون من الموردين.",
     icon: "🛒",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "purchase-returns",

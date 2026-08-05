@@ -6317,3 +6317,43 @@ textarea:disabled {
     width: 100%;
   }
 }
+
+
+/* PURCHASE INVOICE PAGE */
+
+.purchase-invoice-page {
+  display: grid;
+  gap: 14px;
+}
+
+.purchase-invoice-fieldset {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.purchase-invoice-table {
+  min-width: 1400px;
+}
+
+.purchase-invoice-table input,
+.purchase-invoice-table select {
+  width: 100%;
+  min-width: 72px;
+}
+
+.purchase-invoice-table th:nth-child(4) {
+  min-width: 220px;
+}
+
+.purchase-invoice-table th:nth-child(5),
+.purchase-invoice-table th:nth-child(6) {
+  min-width: 115px;
+}
+
+.purchase-invoice-table th:nth-child(9),
+.purchase-invoice-table th:nth-child(10) {
+  min-width: 115px;
+}

@@ -6,6 +6,7 @@ import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
+import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import NewSalePage from "../pages/sales/NewSalePage";
 import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
@@ -58,19 +59,7 @@ export default function AppRouter() {
 
         <Route
           path="purchases/new"
-          element={
-            <ComingSoonPage
-              icon="🛒"
-              title="فاتورة مشتريات"
-              description="تسجيل مشتريات الموردين وإضافة الكميات إلى المخزون."
-              points={[
-                "اختيار المورد أو إضافته.",
-                "إدخال الأصناف والكميات والتكلفة.",
-                "تحديث المخزون بشكل ذري.",
-                "تسجيل طريقة الدفع والرصيد المستحق.",
-              ]}
-            />
-          }
+          element={<PurchaseInvoicePage />}
         />
 
         <Route
