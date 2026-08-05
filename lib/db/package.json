@@ -12,7 +12,7 @@
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
     "migrate:pos:plan": "node ./scripts/run-pos-migrations.cjs --plan",
     "migrate:pos:preflight": "node ./scripts/run-pos-migrations.cjs --preflight",
-    "migrate:pos:apply": "node ./scripts/run-pos-migrations.cjs --apply --target 20260801_harden_app_sql_migrations.sql"
+    "migrate:pos:apply": "node ./scripts/run-pos-migrations.cjs --apply --target 20260802_create_suppliers_and_pos_purchases.sql"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
