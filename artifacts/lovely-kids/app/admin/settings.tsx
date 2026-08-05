@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -63,7 +64,7 @@ export default function SettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
   const [draftPrimary, setDraftPrimary] = useState(settings.primaryColor);

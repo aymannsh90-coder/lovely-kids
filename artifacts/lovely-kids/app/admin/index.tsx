@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useMemo } from "react";
@@ -72,7 +73,7 @@ export default function AdminDashboardScreen() {
   const { products } = useProducts();
   const { settings, updateSettings } = useAppSettings();
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 20;
 
   const activeCategories = useMemo(() => {

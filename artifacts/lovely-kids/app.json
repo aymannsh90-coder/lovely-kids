@@ -39,7 +39,9 @@
     "web": {
       "favicon": "./assets/images/icon.png",
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "themeColor": "#FFFFFF",
+      "backgroundColor": "#FFFFFF"
     },
     "plugins": [
       [

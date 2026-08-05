@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -13,7 +14,7 @@ export default function AdminSeasonScreen() {
   const { settings, updateSettings } = useAppSettings();
   const [saving, setSaving] = useState(false);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
 
   const choose = async (season: "summer" | "winter") => {
     setSaving(true);

@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -58,7 +59,7 @@ export default function AdminUsersScreen() {
   const [roleError, setRoleError] = useState("");
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
 
   const fetchUsers = useCallback(async () => {
     try {

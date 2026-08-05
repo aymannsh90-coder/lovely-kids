@@ -1,3 +1,4 @@
+import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -139,7 +140,7 @@ export default function CartScreen() {
   const [proofUploaded, setProofUploaded] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 84 + 8 : insets.bottom + 49 + 8;
 
   useEffect(() => {
