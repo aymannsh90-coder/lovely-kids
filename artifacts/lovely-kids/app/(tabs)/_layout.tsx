@@ -43,6 +43,8 @@ function ClassicTabLayout() {
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const isCompactWeb =
+    isWeb && typeof window !== "undefined" && window.innerWidth <= 768;
 
   return (
     <Tabs
@@ -56,7 +58,13 @@ function ClassicTabLayout() {
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          ...(isWeb
+            ? {
+                height: isCompactWeb ? 58 : 84,
+                paddingTop: isCompactWeb ? 2 : 10,
+                paddingBottom: isCompactWeb ? 2 : 12,
+              }
+            : {}),
         },
         tabBarBackground: () =>
           isIOS ? (
