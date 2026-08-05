@@ -16,6 +16,12 @@ import { handlePosSaleRequest } from "./pos-sale-routes";
 import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
 import { handleSupplierRequest } from "./supplier-routes";
 import { handlePosPurchaseRequest } from "./pos-purchase-routes";
+import {
+  isPurchaseApiEnabled,
+  isPurchaseWriteEnabled,
+  purchaseFeatureDisabledResponse,
+  purchaseWritesDisabledResponse,
+} from "./purchase-feature";
 
 const headers = {
   "Content-Type": "application/json",
@@ -70,6 +76,26 @@ export default {
     }
 
     const path = new URL(request.url).pathname;
+
+    if (
+      request.method === "GET" &&
+      path === "/api/pos/suppliers" &&
+      !isPurchaseApiEnabled(env)
+    ) {
+      return purchaseFeatureDisabledResponse();
+    }
+
+    if (
+      request.method === "POST" &&
+      (
+        path === "/api/pos/suppliers" ||
+        path === "/api/pos/purchases"
+      ) &&
+      !isPurchaseWriteEnabled(env)
+    ) {
+      return purchaseWritesDisabledResponse();
+    }
+
     const { client, db } = await openDb(env);
 
     try {
