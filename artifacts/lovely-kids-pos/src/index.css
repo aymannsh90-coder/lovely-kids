@@ -6357,3 +6357,11 @@ textarea:disabled {
 .purchase-invoice-table th:nth-child(10) {
   min-width: 115px;
 }
+
+/* Suppliers page document scrolling fix */
+.suppliers-page {
+  height: auto;
+  min-height: 0;
+  grid-template-rows: none;
+  overflow: visible;
+}
