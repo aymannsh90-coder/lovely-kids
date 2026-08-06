@@ -503,6 +503,301 @@ async function getExistingPurchase(
   };
 }
 
+
+async function handleVoidPurchase(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body = await request.json().catch(() => null);
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return json({ error: "بيانات إلغاء الفاتورة غير صالحة" }, 400);
+  }
+
+  const payload = body as Record<string, unknown>;
+
+  try {
+    const publicId = optionalText(
+      payload.publicId,
+      "رقم الفاتورة",
+      100,
+    );
+
+    const reason = optionalText(
+      payload.reason,
+      "سبب الإلغاء",
+      500,
+    );
+
+    if (!publicId) {
+      throw new PurchaseError("رقم الفاتورة مطلوب");
+    }
+
+    if (!reason) {
+      throw new PurchaseError("يجب إدخال سبب حذف الفاتورة");
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const purchaseRows = await tx
+        .select()
+        .from(posPurchasesTable)
+        .where(eq(posPurchasesTable.publicId, publicId))
+        .for("update");
+
+      const purchase = purchaseRows[0];
+
+      if (!purchase) {
+        throw new PurchaseError("فاتورة المشتريات غير موجودة", 404);
+      }
+
+      const purchaseItems = await tx
+        .select()
+        .from(posPurchaseItemsTable)
+        .where(eq(posPurchaseItemsTable.purchaseId, purchase.id))
+        .orderBy(asc(posPurchaseItemsTable.lineNumber));
+
+      const supplierRows = await tx
+        .select()
+        .from(suppliersTable)
+        .where(eq(suppliersTable.id, purchase.supplierId))
+        .limit(1);
+
+      const supplier = supplierRows[0];
+
+      if (!supplier) {
+        throw new PurchaseError("مورد الفاتورة غير موجود", 409);
+      }
+
+      if (purchase.status === "voided") {
+        return {
+          purchase,
+          items: purchaseItems,
+          supplier,
+        };
+      }
+
+      if (purchase.status !== "completed") {
+        throw new PurchaseError("لا يمكن حذف هذه الفاتورة", 409);
+      }
+
+      const orderedItems = [...purchaseItems].sort((left, right) => {
+        const leftId = left.productId ?? Number.MAX_SAFE_INTEGER;
+        const rightId = right.productId ?? Number.MAX_SAFE_INTEGER;
+
+        return leftId - rightId || left.lineNumber - right.lineNumber;
+      });
+
+      for (const item of orderedItems) {
+        if (item.productId === null) {
+          throw new PurchaseError(
+            `المنتج ${item.productNameAr} لم يعد موجودًا`,
+            409,
+          );
+        }
+
+        const productRows = await tx
+          .select()
+          .from(productsTable)
+          .where(eq(productsTable.id, item.productId))
+          .for("update");
+
+        const product = productRows[0];
+
+        if (!product) {
+          throw new PurchaseError(
+            `المنتج ${item.productNameAr} لم يعد موجودًا`,
+            409,
+          );
+        }
+
+        const receivedQuantity =
+          item.quantity + item.freeQuantity;
+
+        const updates: {
+          stock?: number;
+          colorVariants?: ColorVariant[];
+        } = {};
+
+        if (
+          item.generalStockBefore !== null &&
+          item.generalStockAfter !== null
+        ) {
+          if (product.stock === null || product.stock === undefined) {
+            throw new PurchaseError(
+              `تعذر التحقق من مخزون ${item.productNameAr}`,
+              409,
+            );
+          }
+
+          const nextStock = product.stock - receivedQuantity;
+
+          if (!Number.isSafeInteger(nextStock) || nextStock < 0) {
+            throw new PurchaseError(
+              `لا يمكن حذف الفاتورة لأن مخزون ${item.productNameAr} لا يكفي`,
+              409,
+            );
+          }
+
+          updates.stock = nextStock;
+        }
+
+        if (
+          item.variantStockBefore !== null &&
+          item.variantStockAfter !== null
+        ) {
+          if (!item.color || !item.size) {
+            throw new PurchaseError(
+              `بيانات اللون أو المقاس ناقصة للمنتج ${item.productNameAr}`,
+              409,
+            );
+          }
+
+          const colorVariants =
+            (product.colorVariants as ColorVariant[] | null) ?? [];
+
+          const variantIndex = colorVariants.findIndex(
+            (entry) => entry.color === item.color,
+          );
+
+          if (variantIndex < 0) {
+            throw new PurchaseError(
+              `لون ${item.productNameAr} لم يعد موجودًا`,
+              409,
+            );
+          }
+
+          const variant = colorVariants[variantIndex];
+          const sizes = Array.isArray(variant.sizes)
+            ? variant.sizes
+            : [];
+
+          const sizeIndex = sizes.findIndex(
+            (entry) => entry.size === item.size,
+          );
+
+          if (sizeIndex < 0) {
+            throw new PurchaseError(
+              `مقاس ${item.productNameAr} لم يعد موجودًا`,
+              409,
+            );
+          }
+
+          const selectedSize = sizes[sizeIndex];
+
+          if (
+            selectedSize.stock === null ||
+            selectedSize.stock === undefined
+          ) {
+            throw new PurchaseError(
+              `تعذر التحقق من مخزون ${item.productNameAr}`,
+              409,
+            );
+          }
+
+          const nextVariantStock =
+            selectedSize.stock - receivedQuantity;
+
+          if (
+            !Number.isSafeInteger(nextVariantStock) ||
+            nextVariantStock < 0
+          ) {
+            throw new PurchaseError(
+              `لا يمكن حذف الفاتورة لأن مخزون ${item.productNameAr} بالمقاس المحدد لا يكفي`,
+              409,
+            );
+          }
+
+          const nextSizes = sizes.map((entry, index) =>
+            index === sizeIndex
+              ? {
+                  ...entry,
+                  stock: nextVariantStock,
+                  outOfStock: nextVariantStock <= 0,
+                }
+              : entry,
+          );
+
+          updates.colorVariants = colorVariants.map(
+            (entry, index) =>
+              index === variantIndex
+                ? {
+                    ...entry,
+                    sizes: nextSizes,
+                  }
+                : entry,
+          );
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await tx
+            .update(productsTable)
+            .set(updates)
+            .where(eq(productsTable.id, product.id));
+        }
+      }
+
+      const updatedPurchaseRows = await tx
+        .update(posPurchasesTable)
+        .set({
+          status: "voided",
+          voidedAt: new Date(),
+          voidedByUserId: auth.user.id,
+          voidReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(posPurchasesTable.id, purchase.id),
+            eq(posPurchasesTable.status, "completed"),
+          ),
+        )
+        .returning();
+
+      const updatedPurchase = updatedPurchaseRows[0];
+
+      if (!updatedPurchase) {
+        throw new PurchaseError(
+          "تم تغيير حالة الفاتورة قبل حذفها",
+          409,
+        );
+      }
+
+      return {
+        purchase: updatedPurchase,
+        items: purchaseItems,
+        supplier,
+      };
+    });
+
+    return json(
+      toPurchaseResponse(
+        result.purchase,
+        result.items,
+        result.supplier,
+        false,
+      ),
+    );
+  } catch (error) {
+    if (error instanceof PurchaseError) {
+      return json({ error: error.message }, error.status);
+    }
+
+    console.error("POS_PURCHASE_VOID_FAILED", error);
+
+    return json(
+      { error: "تعذر حذف فاتورة المشتريات" },
+      500,
+    );
+  }
+}
+
 async function handleCreatePurchase(
   request: Request,
   db: Db,
@@ -1231,6 +1526,17 @@ export async function handlePosPurchaseRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/purchases/void"
+  ) {
+    if (!isPurchaseWriteEnabled(env)) {
+      return purchaseWritesDisabledResponse();
+    }
+
+    return handleVoidPurchase(request, db, env);
+  }
 
   if (
     request.method === "POST" &&
