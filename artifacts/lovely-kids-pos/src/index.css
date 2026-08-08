@@ -6386,3 +6386,11 @@ textarea:disabled {
   color: #912018;
   background: #fef3f2;
 }
+
+/* Purchase invoice document scrolling fix */
+.purchase-invoice-page {
+  height: auto;
+  min-height: 0;
+  grid-template-rows: none;
+  overflow: visible;
+}
