@@ -6365,3 +6365,24 @@ textarea:disabled {
   grid-template-rows: none;
   overflow: visible;
 }
+
+/* Purchase voided invoice state */
+.accounting-invoice-toolbar .is-danger-action:hover:not(:disabled) {
+  background: #fee4e2;
+}
+
+.accounting-invoice-draft-badge.is-voided {
+  border-color: #fda29b;
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.purchase-voided-alert {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-color: #fda29b;
+  color: #912018;
+  background: #fef3f2;
+}

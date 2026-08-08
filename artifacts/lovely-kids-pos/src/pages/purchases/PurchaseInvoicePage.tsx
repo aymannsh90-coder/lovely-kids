@@ -11,6 +11,7 @@ import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
   createPosPurchase,
+  voidPosPurchase,
   getPosSuppliers,
   lookupPosProductByBarcode,
   searchPosProducts,
@@ -647,6 +648,79 @@ export default function PurchaseInvoicePage() {
     }
   }
 
+  async function handleVoidInvoice() {
+    const current = savedPurchase;
+
+    if (!current || current.purchase.status === "voided") {
+      return;
+    }
+
+    if (!PURCHASE_WRITES_ENABLED) {
+      setError("حذف فواتير المشتريات غير مفعل.");
+      return;
+    }
+
+    const enteredReason = window.prompt(
+      "أدخل سبب حذف فاتورة المشتريات:",
+    );
+
+    if (enteredReason === null) {
+      return;
+    }
+
+    const reason = enteredReason.trim();
+
+    if (!reason) {
+      setError("يجب إدخال سبب حذف الفاتورة.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        `سيتم حذف الفاتورة: ${current.purchase.publicId}`,
+        `المورد: ${current.purchase.supplier.name}`,
+        "",
+        "سيتم خصم الكميات التي أضافتها من المخزون.",
+        "ستبقى الفاتورة محفوظة في السجل بحالة محذوفة.",
+        "",
+        "هل تريد المتابعة؟",
+      ].join("\n"),
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setInvoiceBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result = await voidPosPurchase(token, {
+        publicId: current.purchase.publicId,
+        reason,
+      });
+
+      setSavedPurchase(result);
+
+      setMessage(
+        `تم حذف الفاتورة ${result.purchase.publicId} وعكس كمياتها من المخزون.`,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
   function resetInvoice() {
     setSupplierInvoiceNumber("");
     setBusinessDate(localBusinessDate());
@@ -676,9 +750,20 @@ export default function PurchaseInvoicePage() {
           </p>
         </div>
 
-        <strong className="accounting-invoice-draft-badge">
+        <strong
+          className={[
+            "accounting-invoice-draft-badge",
+            savedPurchase?.purchase.status === "voided"
+              ? "is-voided"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           {savedPurchase
-            ? savedPurchase.purchase.publicId
+            ? savedPurchase.purchase.status === "voided"
+              ? `محذوفة — ${savedPurchase.purchase.publicId}`
+              : savedPurchase.purchase.publicId
             : PURCHASE_WRITES_ENABLED
               ? "مسودة فاتورة جديدة"
               : "واجهة تطوير — الحفظ محمي"}
@@ -706,7 +791,43 @@ export default function PurchaseInvoicePage() {
         >
           {invoiceBusy ? "جاري الحفظ…" : "حفظ الفاتورة"}
         </button>
+
+        {savedPurchase && (
+          <button
+            className="is-danger-action"
+            type="button"
+            disabled={
+              invoiceBusy ||
+              !PURCHASE_WRITES_ENABLED ||
+              savedPurchase.purchase.status === "voided"
+            }
+            onClick={() => void handleVoidInvoice()}
+          >
+            {savedPurchase.purchase.status === "voided"
+              ? "الفاتورة محذوفة"
+              : invoiceBusy
+                ? "جاري الحذف…"
+                : "حذف الفاتورة"}
+          </button>
+        )}
       </div>
+
+      {savedPurchase?.purchase.status === "voided" && (
+        <div className="alert purchase-voided-alert">
+          <strong>فاتورة محذوفة</strong>
+          <span>
+            السبب: {savedPurchase.purchase.voidReason ?? "—"}
+          </span>
+          <span>
+            تاريخ الحذف:{" "}
+            {savedPurchase.purchase.voidedAt
+              ? new Date(
+                  savedPurchase.purchase.voidedAt,
+                ).toLocaleString("ar-PS")
+              : "—"}
+          </span>
+        </div>
+      )}
 
       {!PURCHASE_API_ENABLED && (
         <div className="alert supplier-protection-alert">

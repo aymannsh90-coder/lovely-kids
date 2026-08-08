@@ -815,3 +815,20 @@ export function createPosPurchase(
     token,
   );
 }
+
+export function voidPosPurchase(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<PosPurchaseResult>(
+    "/api/pos/purchases/void",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
