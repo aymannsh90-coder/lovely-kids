@@ -6,7 +6,7 @@ import {
   suppliersTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -386,9 +386,17 @@ function toPurchaseResponse(
   items: Array<typeof posPurchaseItemsTable.$inferSelect>,
   supplier: typeof suppliersTable.$inferSelect,
   alreadyCreated: boolean,
+  navigation: {
+    previousPublicId: string | null;
+    nextPublicId: string | null;
+  } = {
+    previousPublicId: null,
+    nextPublicId: null,
+  },
 ) {
   return {
     alreadyCreated,
+    navigation,
     purchase: {
       id: String(purchase.id),
       publicId: purchase.publicId,
@@ -503,6 +511,111 @@ async function getExistingPurchase(
   };
 }
 
+
+async function getPurchaseNavigation(
+  db: Db,
+  purchase: typeof posPurchasesTable.$inferSelect,
+) {
+  const [previousRows, nextRows] = await Promise.all([
+    db
+      .select({ publicId: posPurchasesTable.publicId })
+      .from(posPurchasesTable)
+      .where(
+        and(
+          eq(posPurchasesTable.warehouseKey, purchase.warehouseKey),
+          lt(posPurchasesTable.id, purchase.id),
+        ),
+      )
+      .orderBy(desc(posPurchasesTable.id))
+      .limit(1),
+
+    db
+      .select({ publicId: posPurchasesTable.publicId })
+      .from(posPurchasesTable)
+      .where(
+        and(
+          eq(posPurchasesTable.warehouseKey, purchase.warehouseKey),
+          gt(posPurchasesTable.id, purchase.id),
+        ),
+      )
+      .orderBy(asc(posPurchasesTable.id))
+      .limit(1),
+  ]);
+
+  return {
+    previousPublicId: previousRows[0]?.publicId ?? null,
+    nextPublicId: nextRows[0]?.publicId ?? null,
+  };
+}
+
+async function handlePurchaseByPublicId(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+  const publicId = (url.searchParams.get("publicId") ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (
+    !publicId ||
+    publicId.length > 80 ||
+    !/^[A-Z0-9_-]+$/.test(publicId)
+  ) {
+    return json({ error: "رقم فاتورة المشتريات غير صالح" }, 400);
+  }
+
+  const purchaseRows = await db
+    .select()
+    .from(posPurchasesTable)
+    .where(eq(posPurchasesTable.publicId, publicId))
+    .limit(1);
+
+  const purchase = purchaseRows[0];
+
+  if (!purchase) {
+    return json({ error: "فاتورة المشتريات غير موجودة" }, 404);
+  }
+
+  const [items, supplierRows, navigation] = await Promise.all([
+    db
+      .select()
+      .from(posPurchaseItemsTable)
+      .where(eq(posPurchaseItemsTable.purchaseId, purchase.id))
+      .orderBy(asc(posPurchaseItemsTable.lineNumber)),
+
+    db
+      .select()
+      .from(suppliersTable)
+      .where(eq(suppliersTable.id, purchase.supplierId))
+      .limit(1),
+
+    getPurchaseNavigation(db, purchase),
+  ]);
+
+  const supplier = supplierRows[0];
+
+  if (!supplier) {
+    return json({ error: "بيانات مورد الفاتورة غير موجودة" }, 500);
+  }
+
+  return json(
+    toPurchaseResponse(
+      purchase,
+      items,
+      supplier,
+      false,
+      navigation,
+    ),
+  );
+}
 
 async function handleVoidPurchase(
   request: Request,
@@ -1526,6 +1639,13 @@ export async function handlePosPurchaseRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/purchases/by-public-id"
+  ) {
+    return handlePurchaseByPublicId(request, db, env);
+  }
 
   if (
     request.method === "POST" &&

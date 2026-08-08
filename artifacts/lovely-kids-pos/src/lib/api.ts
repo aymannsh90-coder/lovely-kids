@@ -745,6 +745,10 @@ export interface PosPurchaseItemResult {
 
 export interface PosPurchaseResult {
   alreadyCreated: boolean;
+  navigation?: {
+    previousPublicId: string | null;
+    nextPublicId: string | null;
+  };
   purchase: {
     id: string;
     publicId: string;
@@ -779,6 +783,17 @@ export interface PosPurchaseResult {
     updatedAt: string;
     items: PosPurchaseItemResult[];
   };
+}
+
+export function getPosPurchaseByPublicId(
+  token: string,
+  publicId: string,
+) {
+  return apiRequest<PosPurchaseResult>(
+    `/api/pos/purchases/by-public-id?publicId=${encodeURIComponent(publicId)}`,
+    {},
+    token,
+  );
 }
 
 export function createPosPurchase(

@@ -8,9 +8,11 @@ import {
 } from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
+import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
   ApiError,
   createPosPurchase,
+  getPosPurchaseByPublicId,
   voidPosPurchase,
   getPosSuppliers,
   lookupPosProductByBarcode,
@@ -115,6 +117,30 @@ function errorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
     : "حدث خطأ غير متوقع";
+}
+
+function printPurchaseA4() {
+  document.body.dataset.printMode = "purchase-a4";
+
+  const pageStyle = document.createElement("style");
+  pageStyle.id = "purchase-a4-page-style";
+  pageStyle.textContent =
+    "@page { size: A4 portrait; margin: 12mm; }";
+
+  document.head.appendChild(pageStyle);
+
+  const cleanup = () => {
+    delete document.body.dataset.printMode;
+    document
+      .getElementById("purchase-a4-page-style")
+      ?.remove();
+  };
+
+  window.addEventListener("afterprint", cleanup, {
+    once: true,
+  });
+
+  window.print();
 }
 
 export default function PurchaseInvoicePage() {
@@ -560,7 +586,9 @@ export default function PurchaseInvoicePage() {
     return null;
   }
 
-  async function handleSaveInvoice() {
+  async function handleSaveInvoice(
+    printAfterSave = false,
+  ) {
     if (!PURCHASE_WRITES_ENABLED) {
       setError(
         "حفظ المشتريات محمي حتى نشر Worker وتفعيل الكتابة.",
@@ -628,6 +656,12 @@ export default function PurchaseInvoicePage() {
       requestKey.current = null;
       setSavedPurchase(result);
 
+      if (printAfterSave) {
+        window.setTimeout(() => {
+          printPurchaseA4();
+        }, 100);
+      }
+
       setMessage(
         result.alreadyCreated
           ? `تم تحميل الفاتورة ${result.purchase.publicId} دون تكرارها.`
@@ -646,6 +680,107 @@ export default function PurchaseInvoicePage() {
     } finally {
       setInvoiceBusy(false);
     }
+  }
+
+  function applyStoredPurchase(result: PosPurchaseResult) {
+    setSupplierId(result.purchase.supplierId);
+    setSupplierInvoiceNumber(
+      result.purchase.supplierInvoiceNumber ?? "",
+    );
+    setBusinessDate(result.purchase.businessDate);
+    setWarehouseKey(result.purchase.warehouseKey);
+    setNotes(result.purchase.notes ?? "");
+
+    if (
+      result.purchase.paymentMethod === "cash" ||
+      result.purchase.paymentMethod === "credit" ||
+      result.purchase.paymentMethod === "mixed"
+    ) {
+      setPaymentMethod(result.purchase.paymentMethod);
+    }
+
+    setInvoiceDiscount(result.purchase.discount.toFixed(2));
+    setPaid(result.purchase.paid.toFixed(2));
+
+    setLines(
+      result.purchase.items.map((item) => ({
+        id: item.id,
+        barcode: item.barcode ?? "",
+        product: {
+          productId: item.productId ?? `saved-${item.id}`,
+          barcode: item.barcode,
+          productCode: item.productCode,
+          nameAr: item.productNameAr,
+          image: item.productImage ?? "",
+          websiteUnitPrice: 0,
+          websiteUnitPriceMinor: 0,
+          mappedColor: item.color,
+          mappedSize: item.size,
+          sizes: [],
+          colorVariants: [],
+          stock: item.generalStockAfter,
+          outOfStock: false,
+        },
+        color: item.color,
+        size: item.size,
+        quantity: item.quantity,
+        freeQuantity: item.freeQuantity,
+        unitCost: item.unitCost.toFixed(2),
+        lineDiscount: item.lineDiscount.toFixed(2),
+      })),
+    );
+
+    setSavedPurchase(result);
+    setError("");
+    setMessage(`تم فتح الفاتورة ${result.purchase.publicId}.`);
+    clearSearchResults();
+    requestKey.current = null;
+  }
+
+  async function loadStoredPurchase(rawPublicId: string) {
+    const publicId = rawPublicId.trim().toUpperCase();
+
+    if (!publicId) {
+      return;
+    }
+
+    setInvoiceBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result = await getPosPurchaseByPublicId(
+        token,
+        publicId,
+      );
+
+      applyStoredPurchase(result);
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
+  function handleOpenPurchaseInvoice() {
+    const value = window.prompt(
+      "أدخل رقم فاتورة المشتريات",
+      savedPurchase?.purchase.publicId ?? "",
+    );
+
+    if (!value?.trim()) {
+      return;
+    }
+
+    void loadStoredPurchase(value);
   }
 
   async function handleVoidInvoice() {
@@ -780,6 +915,53 @@ export default function PurchaseInvoicePage() {
         </button>
 
         <button
+          type="button"
+          disabled={
+            invoiceBusy ||
+            !savedPurchase?.navigation?.previousPublicId
+          }
+          onClick={() => {
+            const target =
+              savedPurchase?.navigation?.previousPublicId;
+
+            if (target) {
+              void loadStoredPurchase(target);
+            }
+          }}
+        >
+          <span aria-hidden="true">←</span>
+          السابق
+        </button>
+
+        <button
+          type="button"
+          disabled={invoiceBusy}
+          onClick={handleOpenPurchaseInvoice}
+        >
+          <span aria-hidden="true">🔎</span>
+          فتح فاتورة
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            invoiceBusy ||
+            !savedPurchase?.navigation?.nextPublicId
+          }
+          onClick={() => {
+            const target =
+              savedPurchase?.navigation?.nextPublicId;
+
+            if (target) {
+              void loadStoredPurchase(target);
+            }
+          }}
+        >
+          <span aria-hidden="true">→</span>
+          التالي
+        </button>
+
+        <button
           className="is-primary-action"
           type="button"
           disabled={
@@ -790,6 +972,37 @@ export default function PurchaseInvoicePage() {
           onClick={() => void handleSaveInvoice()}
         >
           {invoiceBusy ? "جاري الحفظ…" : "حفظ الفاتورة"}
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            invoiceBusy ||
+            !PURCHASE_WRITES_ENABLED ||
+            savedPurchase !== null
+          }
+          onClick={() => void handleSaveInvoice(true)}
+        >
+          <span aria-hidden="true">🖨️</span>
+          حفظ وطباعة A4
+        </button>
+
+        <button
+          type="button"
+          disabled={invoiceBusy || !savedPurchase}
+          onClick={printPurchaseA4}
+        >
+          <span aria-hidden="true">👁️</span>
+          معاينة / طباعة A4
+        </button>
+
+        <button
+          type="button"
+          disabled={invoiceBusy}
+          onClick={() => window.history.back()}
+        >
+          <span aria-hidden="true">↩</span>
+          رجوع
         </button>
 
         {savedPurchase && (
@@ -1113,7 +1326,9 @@ export default function PurchaseInvoicePage() {
                       </td>
 
                       <td>
-                        {colors.length > 0 ? (
+                        {savedPurchase ? (
+                          line.color ?? "—"
+                        ) : colors.length > 0 ? (
                           <select
                             value={line.color ?? ""}
                             onChange={(event) =>
@@ -1142,7 +1357,9 @@ export default function PurchaseInvoicePage() {
                       </td>
 
                       <td>
-                        {sizes.length > 0 ? (
+                        {savedPurchase ? (
+                          line.size ?? "—"
+                        ) : sizes.length > 0 ? (
                           <select
                             value={line.size ?? ""}
                             onChange={(event) =>
@@ -1348,6 +1565,10 @@ export default function PurchaseInvoicePage() {
           </div>
         </section>
       </fieldset>
+
+      {savedPurchase && (
+        <PurchaseA4Invoice result={savedPurchase} />
+      )}
     </section>
   );
 }
