@@ -236,8 +236,8 @@ export default function AddProductScreen() {
     const previousImageIndex = previousUrl ? images.indexOf(previousUrl) : -1;
     const needsNewGallerySlot = previousImageIndex < 0;
 
-    if (needsNewGallerySlot && images.length >= 6) {
-      setErrors(["يمكنك إضافة حتى 6 صور للمنتج"]);
+    if (needsNewGallerySlot && images.length >= 8) {
+      setErrors(["يمكنك إضافة حتى 8 صور للمنتج"]);
       return;
     }
 
@@ -259,7 +259,7 @@ export default function AddProductScreen() {
       }
 
       if (prev.includes(url)) return prev;
-      if (prev.length >= 6) return prev;
+      if (prev.length >= 8) return prev;
       return [...prev, url];
     });
 
@@ -1240,7 +1240,7 @@ export default function AddProductScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.foreground }]}>صور المنتج *</Text>
           <Text style={[styles.hint, { color: colors.mutedForeground, marginBottom: 4 }]}>
-            الصورة الأولى هي الصورة الرئيسية — يمكنك إضافة حتى 6 صور
+            الصورة الأولى هي الصورة الرئيسية — يمكنك إضافة حتى 8 صور
           </Text>
 
           {/* Image Grid */}
@@ -1273,7 +1273,7 @@ export default function AddProductScreen() {
               ))}
 
               {/* Add more button */}
-              {images.length < 6 && (
+              {images.length < 8 && (
                 <Pressable
                   onPress={handleAddImage}
                   disabled={uploading}
@@ -1308,7 +1308,7 @@ export default function AddProductScreen() {
                 {uploading ? "جارٍ رفع الصورة..." : "اضغط لاختيار صورة من جهازك"}
               </Text>
               <Text style={[styles.uploadHint, { color: colors.mutedForeground }]}>
-                يمكنك إضافة حتى 6 صور للمنتج
+                يمكنك إضافة حتى 8 صور للمنتج
               </Text>
             </Pressable>
           )}
