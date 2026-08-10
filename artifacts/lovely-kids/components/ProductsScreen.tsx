@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   FlatList,
+  SectionList,
   Platform,
   Pressable,
   ScrollView,
@@ -94,7 +95,32 @@ export default function ProductsScreen({
     );
   });
 
-  const topPadding = getResponsiveTopPadding(insets.top);
+  const shouldGroupByCategory =
+  Platform.OS === "web" &&
+  selectedCategory === "all" &&
+  !isSpecialView;
+
+const groupedSections = shouldGroupByCategory
+  ? categories
+      .filter((cat) => cat.id !== "all")
+      .map((cat) => {
+        const categoryProducts = filtered.filter(
+          (product) => product.category === cat.id,
+        );
+
+        return {
+          id: cat.id,
+          label: cat.label,
+          data: Array.from(
+            { length: Math.ceil(categoryProducts.length / 2) },
+            (_, index) => categoryProducts.slice(index * 2, index * 2 + 2),
+          ),
+        };
+      })
+      .filter((section) => section.data.length > 0)
+  : [];
+
+const topPadding = getResponsiveTopPadding(insets.top);
 
   const topContent = (
     <>
@@ -366,6 +392,66 @@ export default function ProductsScreen({
       </Text>
     </>
   );
+
+  if (shouldGroupByCategory) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <SectionList
+          sections={groupedSections}
+          keyExtractor={(row, index) => `${row[0]?.id ?? "row"}-${index}`}
+          ListHeaderComponent={topContent}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          renderSectionHeader={({ section }) => (
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingTop: 18,
+                paddingBottom: 10,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.foreground,
+                  fontSize: 21,
+                  fontWeight: "800",
+                  textAlign: "right",
+                }}
+              >
+                {section.label}
+              </Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <View style={[styles.row, { paddingHorizontal: 16 }]}>
+              {item.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  style={{ width: (width - 48) / 2 }}
+                />
+              ))}
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons
+                name="search-outline"
+                size={48}
+                color={colors.mutedForeground}
+              />
+              <Text
+                style={[styles.emptyText, { color: colors.mutedForeground }]}
+              >
+                لا توجد منتجات
+              </Text>
+            </View>
+          }
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
