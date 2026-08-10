@@ -16,8 +16,26 @@ export function useProductCategories() {
       settings.hiddenCategories ?? [];
     const customCategories =
       settings.customCategories ?? [];
+    const categoryOrder =
+      settings.categoryOrder ?? [];
 
-    return [...CATEGORY_IDS, ...customCategories]
+    const availableCategoryIds = [...CATEGORY_IDS, ...customCategories]
+      .filter(
+        (id, index, ids) =>
+          id !== "all" &&
+          ids.indexOf(id) === index,
+      );
+
+    const orderedCategoryIds = [
+      ...categoryOrder.filter((id) =>
+        availableCategoryIds.includes(id),
+      ),
+      ...availableCategoryIds.filter(
+        (id) => !categoryOrder.includes(id),
+      ),
+    ];
+
+    return ["all", ...orderedCategoryIds]
       .filter(
         (id) =>
           id === "all" ||
@@ -34,5 +52,6 @@ export function useProductCategories() {
     settings.categoryLabels,
     settings.hiddenCategories,
     settings.customCategories,
+    settings.categoryOrder,
   ]);
 }
