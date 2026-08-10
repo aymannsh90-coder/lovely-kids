@@ -76,10 +76,11 @@ export default function ProductsScreen({
     const matchCat =
       selectedCategory === "all" || p.category === selectedCategory;
     const matchSeason =
-      selectedSeason === "all" || p.season === selectedSeason;
+      selectedSeason === "all" || p.season == null || p.season === selectedSeason;
     const matchGender =
       Platform.OS !== "web" ||
       selectedGender === null ||
+      p.gender == null ||
       p.gender === selectedGender;
     const matchSearch =
       !search || p.nameAr.includes(search) || p.name.toLowerCase().includes(search.toLowerCase());
