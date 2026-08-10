@@ -2,7 +2,7 @@ import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -18,13 +18,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ProductCard } from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
 import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
-import { getAvailableStock, isSizeOutOfStock } from "@/data/products";
+import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -32,6 +33,175 @@ function calcDiscount(price: number, originalPrice?: number | null): number | nu
   if (!originalPrice || originalPrice <= 0 || originalPrice <= price) return null;
   const pct = Math.round(((originalPrice - price) / originalPrice) * 100);
   return pct > 0 ? Math.min(pct, 99) : null;
+}
+
+function normalizeArabic(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferProductGender(product: Product): "boys" | "girls" | null {
+  if (product.gender) return product.gender;
+
+  const name = normalizeArabic(product.nameAr);
+
+  if (/(ولادي|اولاد|ولد)/.test(name)) return "boys";
+  if (/(بناتي|بنات|بنت)/.test(name)) return "girls";
+
+  return null;
+}
+
+const PRODUCT_TYPE_PATTERNS: Array<[string, RegExp]> = [
+  ["dress", /(فستان|فساتين)/],
+  ["set", /(طقم|اطقم)/],
+  ["overall", /(افرهول|افرول|اوفرول)/],
+  ["pajamas", /(بيجام|بجام)/],
+  ["shirt", /(قميص|قمصان)/],
+  ["tshirt", /(تي ?شيرت|تشيرت)/],
+  ["blouse", /(بلوز|بلوزه)/],
+  ["pants", /(بنطلون|بناطيل|بلاطين)/],
+  ["shorts", /شورت/],
+  ["skirt", /(تنوره|تنور)/],
+  ["jacket", /(جاكيت|معطف)/],
+  ["romper", /(سالوبت|رومبر)/],
+  ["towel", /(بشكير|بشاكير)/],
+  ["bib", /(قبه|مريله)/],
+];
+
+function inferProductType(product: Product): string | null {
+  const name = normalizeArabic(product.nameAr);
+
+  for (const [type, pattern] of PRODUCT_TYPE_PATTERNS) {
+    if (pattern.test(name)) return type;
+  }
+
+  return null;
+}
+
+function normalizeSize(value: string, ageGroup: string): string | null {
+  let size = normalizeArabic(value)
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+    .replace(/أشهر|اشهر|شهور|شهر/g, "m")
+    .replace(/سنوات|سنين|سنه/g, "y")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+
+  if (!size || /one.?size/.test(size)) return null;
+
+  if (/^\d+(?:-\d+)?$/.test(size)) {
+    const unit =
+      ageGroup === "newborn" || ageGroup === "infant"
+        ? "m"
+        : "y";
+    size = `${unit}:${size}`;
+  } else if (/^\d+(?:-\d+)?m$/.test(size)) {
+    size = `m:${size.slice(0, -1)}`;
+  } else if (/^\d+(?:-\d+)?y$/.test(size)) {
+    size = `y:${size.slice(0, -1)}`;
+  }
+
+  return size;
+}
+
+function getProductSizes(product: Product): Set<string> {
+  const rawSizes = [
+    ...(product.sizes ?? []),
+    ...(product.colorVariants ?? []).flatMap((variant) =>
+      (variant.sizes ?? []).map((entry) => entry.size),
+    ),
+  ];
+
+  return new Set(
+    rawSizes
+      .map((size) => normalizeSize(String(size), product.ageGroup))
+      .filter((size): size is string => !!size),
+  );
+}
+
+function isProductFullyOutOfStock(product: Product): boolean {
+  const variantSizes =
+    product.colorVariants?.flatMap((variant) => variant.sizes ?? []) ?? [];
+
+  if (variantSizes.length > 0) {
+    return variantSizes.every(isSizeOutOfStock);
+  }
+
+  return (
+    product.stock !== undefined &&
+    product.stock !== null &&
+    product.stock <= 0
+  );
+}
+
+function similarityScore(current: Product, candidate: Product): number {
+  if (candidate.id === current.id || isProductFullyOutOfStock(candidate)) {
+    return -1;
+  }
+
+  const currentGender = inferProductGender(current);
+  const candidateGender = inferProductGender(candidate);
+
+  if (
+    currentGender &&
+    candidateGender &&
+    currentGender !== candidateGender
+  ) {
+    return -1;
+  }
+
+  const currentSizes = getProductSizes(current);
+  const candidateSizes = getProductSizes(candidate);
+
+  let sharedSizes = 0;
+  for (const size of currentSizes) {
+    if (candidateSizes.has(size)) sharedSizes += 1;
+  }
+
+  const sameAgeGroup = candidate.ageGroup === current.ageGroup;
+
+  // المنتج المقترح يجب أن يكون من نفس الفئة العمرية
+  // أو يشارك المنتج الحالي بمقاس فعلي.
+  if (!sameAgeGroup && sharedSizes === 0) {
+    return -1;
+  }
+
+  let score = 0;
+
+  const currentType = inferProductType(current);
+  const candidateType = inferProductType(candidate);
+
+  if (currentType && candidateType && currentType === candidateType) {
+    score += 8;
+  }
+
+  if (currentGender && candidateGender && currentGender === candidateGender) {
+    score += 5;
+  } else if (currentGender && !candidateGender) {
+    score += 1;
+  }
+
+  if (sameAgeGroup) score += 5;
+
+  if (sharedSizes > 0) {
+    score += Math.min(5, 2 + sharedSizes);
+  }
+
+  if (current.category === candidate.category) score += 1;
+
+  if (
+    current.season &&
+    candidate.season &&
+    current.season === candidate.season
+  ) {
+    score += 1;
+  }
+
+  return score;
 }
 
 export default function ProductDetailScreen() {
@@ -44,6 +214,20 @@ export default function ProductDetailScreen() {
   const { products, loading } = useVisibleProducts();
 
   const product = products.find((p) => p.id === id);
+
+  const similarProducts = useMemo(() => {
+    if (!product || Platform.OS !== "web") return [];
+
+    return products
+      .map((candidate) => ({
+        product: candidate,
+        score: similarityScore(product, candidate),
+      }))
+      .filter((entry) => entry.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((entry) => entry.product);
+  }, [product, products]);
 
   const hasColorVariants = !!product?.colorVariants && product.colorVariants.length > 0;
   const [selectedColor, setSelectedColor] = useState<string | undefined>(undefined);
@@ -524,6 +708,33 @@ export default function ProductDetailScreen() {
               </View>
             ))}
           </View>
+
+          {Platform.OS === "web" && similarProducts.length > 0 ? (
+            <View style={styles.similarSection}>
+              <View style={styles.similarHeader}>
+                <Text style={[styles.similarTitle, { color: colors.foreground }]}>
+                  قد يعجبك أيضًا
+                </Text>
+                <Text style={[styles.similarSubtitle, { color: colors.mutedForeground }]}>
+                  منتجات مشابهة مناسبة لنفس العمر
+                </Text>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.similarList}
+              >
+                {similarProducts.map((item) => (
+                  <ProductCard
+                    key={item.id}
+                    product={item}
+                    style={styles.similarCard}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -693,6 +904,33 @@ const styles = StyleSheet.create({
   featuresBox: { borderRadius: 12, padding: 14, gap: 10, borderWidth: 1, marginTop: 4 },
   featureRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   featureText: { fontSize: 13, textAlign: "right" },
+  similarSection: {
+    marginTop: 14,
+    gap: 10,
+  },
+  similarHeader: {
+    alignItems: "flex-end",
+    gap: 2,
+  },
+  similarTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  similarSubtitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    textAlign: "right",
+  },
+  similarList: {
+    gap: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 1,
+  },
+  similarCard: {
+    width: 205,
+    flexShrink: 0,
+  },
   footer: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
   addBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: 16 },
   addBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
