@@ -27,18 +27,52 @@ export default function CategoriesScreen() {
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
+  const AGE_GROUP_IDS = ["newborn", "infant", "toddler", "kids", "boys", "girls"];
+  const CATEGORY_IDS = ["all", "clothes", "stroller", "feeding", "bath", "toys", "accessories"];
+
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const hiddenCategories = settings.hiddenCategories ?? [];
   const customCategories = settings.customCategories ?? [];
+
+  const defaultProductCategoryIds = CATEGORY_IDS.filter((id) => id !== "all");
+  const availableCategoryIds = [...defaultProductCategoryIds, ...customCategories]
+    .filter((id, index, ids) => ids.indexOf(id) === index);
+  const savedCategoryOrder = settings.categoryOrder ?? [];
+  const initialCategoryOrder = [
+    ...savedCategoryOrder.filter((id) => availableCategoryIds.includes(id)),
+    ...availableCategoryIds.filter((id) => !savedCategoryOrder.includes(id)),
+  ];
+
+  const [localCategoryOrder, setLocalCategoryOrder] = useState(initialCategoryOrder);
 
   const [localAgeGroups, setLocalAgeGroups] = useState({ ...ageGroupLabels });
   const [localCategories, setLocalCategories] = useState({ ...categoryLabels });
   const [saved, setSaved] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
-  const AGE_GROUP_IDS = ["newborn", "infant", "toddler", "kids", "boys", "girls"];
-  const CATEGORY_IDS = ["all", "clothes", "stroller", "feeding", "bath", "toys", "accessories"];
+
+  const moveCategory = (id: string, direction: -1 | 1) => {
+    const currentIndex = localCategoryOrder.indexOf(id);
+    const nextIndex = currentIndex + direction;
+
+    if (
+      currentIndex < 0 ||
+      nextIndex < 0 ||
+      nextIndex >= localCategoryOrder.length
+    ) {
+      return;
+    }
+
+    const updated = [...localCategoryOrder];
+    [updated[currentIndex], updated[nextIndex]] = [
+      updated[nextIndex],
+      updated[currentIndex],
+    ];
+
+    Haptics.selectionAsync();
+    setLocalCategoryOrder(updated);
+  };
 
   const toggleCategoryVisibility = (id: string) => {
     const isHidden = hiddenCategories.includes(id);
@@ -55,12 +89,15 @@ export default function CategoriesScreen() {
     const id = `custom_${Date.now()}`;
     const updatedCustom = [...customCategories, id];
     const updatedLabels = { ...localCategories, [id]: label };
+    const updatedOrder = [...localCategoryOrder, id];
     setLocalCategories(updatedLabels);
+    setLocalCategoryOrder(updatedOrder);
     setNewCategoryName("");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateSettings({
       customCategories: updatedCustom,
       categoryLabels: updatedLabels,
+      categoryOrder: updatedOrder,
     });
   };
 
@@ -69,12 +106,15 @@ export default function CategoriesScreen() {
     const updatedLabels = { ...localCategories };
     delete updatedLabels[id];
     const updatedHidden = hiddenCategories.filter((c) => c !== id);
+    const updatedOrder = localCategoryOrder.filter((c) => c !== id);
     setLocalCategories(updatedLabels);
+    setLocalCategoryOrder(updatedOrder);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     updateSettings({
       customCategories: updatedCustom,
       categoryLabels: updatedLabels,
       hiddenCategories: updatedHidden,
+      categoryOrder: updatedOrder,
     });
   };
 
@@ -82,6 +122,7 @@ export default function CategoriesScreen() {
     updateSettings({
       ageGroupLabels: localAgeGroups,
       categoryLabels: localCategories,
+      categoryOrder: localCategoryOrder,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaved(true);
@@ -91,10 +132,12 @@ export default function CategoriesScreen() {
   const handleReset = () => {
     setLocalAgeGroups({ ...DEFAULT_AGE_GROUP_LABELS });
     setLocalCategories({ ...DEFAULT_CATEGORY_LABELS });
+    setLocalCategoryOrder(CATEGORY_IDS.filter((id) => id !== "all"));
     updateSettings({
       ageGroupLabels: DEFAULT_AGE_GROUP_LABELS,
       categoryLabels: DEFAULT_CATEGORY_LABELS,
       customCategories: [],
+      categoryOrder: CATEGORY_IDS.filter((id) => id !== "all"),
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
@@ -329,6 +372,149 @@ export default function CategoriesScreen() {
         <Text style={[styles.hint, { color: colors.mutedForeground, paddingHorizontal: 0, paddingTop: 6 }]}>
           الفئات الجديدة تظهر تلقائياً عند إضافة منتج جديد
         </Text>
+      </View>
+
+      {/* Category Order */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          ↕️ ترتيب الأصناف
+        </Text>
+
+        <Text
+          style={[
+            styles.hint,
+            {
+              color: colors.mutedForeground,
+              paddingHorizontal: 0,
+              paddingTop: 0,
+            },
+          ]}
+        >
+          استخدم الأسهم لتحديد ترتيب ظهور الأصناف في صفحة كل المنتجات
+        </Text>
+
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          {localCategoryOrder.map((id, index) => {
+            const isHidden = hiddenCategories.includes(id);
+
+            return (
+              <View key={id}>
+                {index > 0 && (
+                  <View
+                    style={[
+                      styles.divider,
+                      { backgroundColor: colors.border },
+                    ]}
+                  />
+                )}
+
+                <View
+                  style={[
+                    styles.catRow,
+                    isHidden ? { opacity: 0.55 } : null,
+                  ]}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: colors.secondary,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "800",
+                      }}
+                    >
+                      {index + 1}
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: colors.foreground,
+                      fontSize: 15,
+                      fontWeight: "700",
+                      textAlign: "right",
+                    }}
+                  >
+                    {localCategories[id] ??
+                      categoryLabels[id] ??
+                      DEFAULT_CATEGORY_LABELS[id] ??
+                      id}
+                  </Text>
+
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 6,
+                    }}
+                  >
+                    <Pressable
+                      disabled={index === 0}
+                      onPress={() => moveCategory(id, -1)}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor:
+                          index === 0
+                            ? colors.background
+                            : colors.secondary,
+                        opacity: index === 0 ? 0.4 : 1,
+                      }}
+                    >
+                      <Ionicons
+                        name="arrow-up"
+                        size={19}
+                        color={colors.foreground}
+                      />
+                    </Pressable>
+
+                    <Pressable
+                      disabled={index === localCategoryOrder.length - 1}
+                      onPress={() => moveCategory(id, 1)}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor:
+                          index === localCategoryOrder.length - 1
+                            ? colors.background
+                            : colors.secondary,
+                        opacity:
+                          index === localCategoryOrder.length - 1 ? 0.4 : 1,
+                      }}
+                    >
+                      <Ionicons
+                        name="arrow-down"
+                        size={19}
+                        color={colors.foreground}
+                      />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
       </View>
 
       {/* Save Button */}
