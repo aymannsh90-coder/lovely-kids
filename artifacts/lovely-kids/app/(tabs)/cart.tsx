@@ -839,7 +839,21 @@ export default function CartScreen() {
                   </Pressable>
                   <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
                   <Pressable
-                    onPress={() => updateQuantity(item.id, item.quantity - 1, item.size, item.color)}
+                    onPress={() => {
+                      if (item.quantity === 1) {
+                        confirmRemoveFromCart(() =>
+                          removeItem(item.id, item.size, item.color),
+                        );
+                        return;
+                      }
+
+                      updateQuantity(
+                        item.id,
+                        item.quantity - 1,
+                        item.size,
+                        item.color,
+                      );
+                    }}
                     style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
                   >
                     <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
