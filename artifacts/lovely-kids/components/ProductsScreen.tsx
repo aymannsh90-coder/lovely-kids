@@ -411,16 +411,27 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 paddingBottom: 10,
               }}
             >
-              <Text
+              <View
                 style={{
-                  color: colors.foreground,
-                  fontSize: 21,
-                  fontWeight: "800",
-                  textAlign: "right",
+                  backgroundColor: colors.card,
+                  borderColor: colors.primary,
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
                 }}
               >
-                {section.label}
-              </Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 20,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  {section.label}
+                </Text>
+              </View>
             </View>
           )}
           renderItem={({ item }) => (
