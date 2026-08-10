@@ -217,7 +217,7 @@ export default function HomeScreen() {
       : products;
 
   const genderFiltered = genderTab
-    ? regularProducts.filter((p) => p.gender === genderTab)
+    ? regularProducts.filter((p) => p.gender == null || p.gender === genderTab)
     : regularProducts;
 
   const newArrivals = genderFiltered.filter((p) => p.isNew);
