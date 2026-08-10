@@ -409,18 +409,51 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 paddingHorizontal: 16,
                 paddingTop: 18,
                 paddingBottom: 10,
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 10,
               }}
             >
-              <Text
+              <View
                 style={{
-                  color: colors.foreground,
-                  fontSize: 21,
-                  fontWeight: "800",
-                  textAlign: "right",
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 8,
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  paddingVertical: 8,
+                  paddingHorizontal: 14,
                 }}
               >
-                {section.label}
-              </Text>
+                <View
+                  style={{
+                    width: 4,
+                    height: 22,
+                    borderRadius: 2,
+                    backgroundColor: colors.primary,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: colors.foreground,
+                    fontSize: 18,
+                    fontWeight: "900",
+                    textAlign: "right",
+                  }}
+                >
+                  {section.label}
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                  height: 1,
+                  backgroundColor: colors.border,
+                }}
+              />
             </View>
           )}
           renderItem={({ item }) => (

@@ -24,6 +24,12 @@ const ADMIN_CARDS = [
     route: "/admin/products" as const,
   },
   {
+    label: "ترتيب المنتجات",
+    subtitle: "تحديد ترتيب ظهور المنتجات",
+    icon: "swap-vertical-outline" as const,
+    route: "/admin/product-ordering" as never,
+  },
+  {
     label: "الطلبات",
     subtitle: "متابعة طلبات الزبائن",
     icon: "bag-handle-outline" as const,
