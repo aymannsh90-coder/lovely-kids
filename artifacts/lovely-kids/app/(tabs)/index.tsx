@@ -264,6 +264,57 @@ export default function HomeScreen() {
 
   const topPadding = getResponsiveTopPadding(insets.top);
 
+  const renderHomeSectionHeader = (title: string, onPress: () => void) => {
+    if (Platform.OS !== "web") {
+      return (
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+            {title}
+          </Text>
+          <Pressable onPress={onPress}>
+            <Text style={[styles.seeAll, { color: colors.primary }]}>
+              عرض الكل
+            </Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.homeBannerHeader}>
+        <View
+          style={[
+            styles.homeBannerTitleBox,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.homeBannerAccent,
+              { backgroundColor: colors.primary },
+            ]}
+          />
+          <Text style={[styles.homeBannerTitle, { color: colors.foreground }]}>
+            {title}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.homeBannerLine,
+            { backgroundColor: colors.border },
+          ]}
+        />
+
+        <Pressable onPress={onPress}>
+          <Text style={[styles.seeAll, { color: colors.primary }]}>
+            عرض الكل
+          </Text>
+        </Pressable>
+      </View>
+    );
+  };
+
   return (
     <ScrollView
       style={[styles.scroll, { backgroundColor: colors.background }]}
@@ -654,17 +705,10 @@ export default function HomeScreen() {
       {/* New Arrivals */}
       {newArrivals.length > 0 ? (
         <>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              وصل حديثاً
-            </Text>
-
-            <Pressable onPress={() => router.push("/new-arrivals")}>
-              <Text style={[styles.seeAll, { color: colors.primary }]}>
-                عرض الكل
-              </Text>
-            </Pressable>
-          </View>
+          {renderHomeSectionHeader(
+            "وصل حديثاً",
+            () => router.push("/new-arrivals"),
+          )}
 
           <View style={styles.newArrivalsScrollWrapper}>
             {newArrivals.length > 2 ? (
@@ -761,16 +805,12 @@ export default function HomeScreen() {
       ) : null}
 
       {/* Products Grid */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {selectedAgeForProducts
-            ? ageGroups.find((a) => a.id === selectedAgeForProducts)?.label
-            : "كل المنتجات"}
-        </Text>
-        <Pressable onPress={() => router.push("/products")}>
-          <Text style={[styles.seeAll, { color: colors.primary }]}>عرض الكل</Text>
-        </Pressable>
-      </View>
+      {renderHomeSectionHeader(
+        selectedAgeForProducts
+          ? ageGroups.find((a) => a.id === selectedAgeForProducts)?.label ?? "كل المنتجات"
+          : "كل المنتجات",
+        () => router.push("/products"),
+      )}
 
       <View style={styles.productsGrid}>
         {filteredProducts.map((product, idx) => (
@@ -1092,6 +1132,36 @@ const styles = StyleSheet.create({
   },
   trustTitle: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   trustSubtitle: { fontSize: 10, textAlign: "center" },
+  homeBannerHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  homeBannerTitleBox: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  homeBannerAccent: {
+    width: 4,
+    height: 22,
+    borderRadius: 2,
+  },
+  homeBannerTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  homeBannerLine: {
+    flex: 1,
+    height: 1,
+  },
   productsGrid: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     flexWrap: "wrap",
