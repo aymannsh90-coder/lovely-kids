@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
+import { CategoryMenu } from "@/components/CategoryMenu";
 import { SEASON_IDS, DEFAULT_SEASON_LABELS, SEASON_ICONS } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
@@ -165,6 +166,12 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 ? "وصل حديثاً"
                 : "المنتجات"}
           </Text>
+
+          {Platform.OS === "web" && !isSpecialView ? (
+            <View style={styles.headerMenuSlot}>
+              <CategoryMenu />
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -534,6 +541,15 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 8,
+    position: "relative",
+    minHeight: 38,
+  },
+  headerMenuSlot: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
   },
   backButton: {
     width: 38,
