@@ -1,4 +1,7 @@
-import { getResponsiveTopPadding } from "@/utils/webLayout";
+import {
+  getResponsiveTopPadding,
+  WEB_DESKTOP_MIN_WIDTH,
+} from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -13,11 +16,16 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
-import { CategoryMenu } from "@/components/CategoryMenu";
+import {
+  CategoryMenu,
+  DesktopCategorySidebar,
+  DESKTOP_CATEGORY_SIDEBAR_WIDTH,
+} from "@/components/CategoryMenu";
 import { SEASON_IDS, DEFAULT_SEASON_LABELS, SEASON_ICONS } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
@@ -38,7 +46,44 @@ export default function ProductsScreen({
     fromMenu?: string;
   }>();
   const colors = useColors();
+  const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  const isDesktopWeb =
+    Platform.OS === "web" &&
+    viewportWidth >= WEB_DESKTOP_MIN_WIDTH;
+
+  const desktopWorkspaceWidth = isDesktopWeb
+    ? Math.max(
+        viewportWidth - DESKTOP_CATEGORY_SIDEBAR_WIDTH,
+        0,
+      )
+    : viewportWidth;
+
+  // Use the space left beside the permanent Desktop sidebar.
+  const desktopContentWidth = Math.min(
+    Math.max(desktopWorkspaceWidth - 48, 0),
+    1450,
+  );
+
+  const desktopCardWidth = isDesktopWeb
+    ? (desktopContentWidth - 32) / 3
+    : (width - 48) / 2;
+
+  const desktopShellStyle = isDesktopWeb
+    ? {
+        width: desktopContentWidth,
+        alignSelf: "center" as const,
+      }
+    : null;
+
+  const desktopFlushShellStyle = isDesktopWeb
+    ? {
+        width: desktopContentWidth,
+        alignSelf: "center" as const,
+        marginHorizontal: 0,
+      }
+    : null;
   const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
   const categories = useProductCategories();
@@ -109,12 +154,18 @@ const groupedSections = shouldGroupByCategory
           (product) => product.category === cat.id,
         );
 
+        const groupSize = isDesktopWeb ? 3 : 2;
+
         return {
           id: cat.id,
           label: cat.label,
           data: Array.from(
-            { length: Math.ceil(categoryProducts.length / 2) },
-            (_, index) => categoryProducts.slice(index * 2, index * 2 + 2),
+            { length: Math.ceil(categoryProducts.length / groupSize) },
+            (_, index) =>
+              categoryProducts.slice(
+                index * groupSize,
+                index * groupSize + groupSize,
+              ),
           ),
         };
       })
@@ -122,6 +173,8 @@ const groupedSections = shouldGroupByCategory
   : [];
 
 const topPadding = getResponsiveTopPadding(insets.top);
+  const productsTopPadding =
+    isDesktopWeb ? 18 : topPadding + 12;
 
   const topContent = (
     <>
@@ -129,7 +182,11 @@ const topPadding = getResponsiveTopPadding(insets.top);
       <View
         style={[
           styles.header,
-          { paddingTop: topPadding + 12, backgroundColor: colors.background },
+          {
+            paddingTop: productsTopPadding,
+            backgroundColor: colors.background,
+          },
+          desktopShellStyle,
         ]}
       >
         <View style={styles.headerRow}>
@@ -167,7 +224,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 : "المنتجات"}
           </Text>
 
-          {Platform.OS === "web" && !isSpecialView ? (
+          {Platform.OS === "web" && !isSpecialView && !isDesktopWeb ? (
             <View style={styles.headerMenuSlot}>
               <CategoryMenu />
             </View>
@@ -179,7 +236,13 @@ const topPadding = getResponsiveTopPadding(insets.top);
 
       {Platform.OS === "web" && !isSpecialView ? (
 
-        <View style={[styles.genderTabsRow, { borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.genderTabsRow,
+            { borderColor: colors.border },
+            desktopFlushShellStyle,
+          ]}
+        >
 
           <Pressable
 
@@ -290,7 +353,11 @@ const topPadding = getResponsiveTopPadding(insets.top);
       <View
         style={[
           styles.searchRow,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+          desktopFlushShellStyle,
         ]}
       >
         <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
@@ -313,10 +380,26 @@ const topPadding = getResponsiveTopPadding(insets.top);
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoriesScroll}
+        contentContainerStyle={[
+          styles.categoriesScroll,
+          isDesktopWeb
+            ? {
+                flexGrow: 1,
+                justifyContent: "center",
+                paddingHorizontal: 0,
+              }
+            : null,
+        ]}
         style={[
-          { marginBottom: 8, height: 44, minHeight: 44, maxHeight: 44, flexShrink: 0 },
+          {
+            marginBottom: 8,
+            height: 44,
+            minHeight: 44,
+            maxHeight: 44,
+            flexShrink: 0,
+          },
           Platform.OS === "web" ? { direction: "rtl" } : null,
+          desktopFlushShellStyle,
         ]}
       >
         {categories.map((cat) => (
@@ -352,10 +435,26 @@ const topPadding = getResponsiveTopPadding(insets.top);
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoriesScroll}
+        contentContainerStyle={[
+          styles.categoriesScroll,
+          isDesktopWeb
+            ? {
+                flexGrow: 1,
+                justifyContent: "center",
+                paddingHorizontal: 0,
+              }
+            : null,
+        ]}
         style={[
-          { marginBottom: 4, height: 44, minHeight: 44, maxHeight: 44, flexShrink: 0 },
+          {
+            marginBottom: 4,
+            height: 44,
+            minHeight: 44,
+            maxHeight: 44,
+            flexShrink: 0,
+          },
           Platform.OS === "web" ? { direction: "rtl" } : null,
+          desktopFlushShellStyle,
         ]}
       >
         {seasons.map((s) => (
@@ -394,7 +493,13 @@ const topPadding = getResponsiveTopPadding(insets.top);
       </ScrollView>
 
       {/* Count */}
-      <Text style={[styles.count, { color: colors.mutedForeground }]}>
+      <Text
+        style={[
+          styles.count,
+          { color: colors.mutedForeground },
+          desktopShellStyle,
+        ]}
+      >
         {filtered.length} منتج
       </Text>
     </>
@@ -404,6 +509,14 @@ const topPadding = getResponsiveTopPadding(insets.top);
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <SectionList
+          style={
+            isDesktopWeb
+              ? {
+                  width: desktopWorkspaceWidth,
+                  alignSelf: "flex-start",
+                }
+              : undefined
+          }
           sections={groupedSections}
           keyExtractor={(row, index) => `${row[0]?.id ?? "row"}-${index}`}
           ListHeaderComponent={topContent}
@@ -412,14 +525,23 @@ const topPadding = getResponsiveTopPadding(insets.top);
           showsVerticalScrollIndicator={false}
           renderSectionHeader={({ section }) => (
             <View
-              style={{
-                paddingHorizontal: 16,
-                paddingTop: 18,
-                paddingBottom: 10,
-                flexDirection: "row-reverse",
-                alignItems: "center",
-                gap: 10,
-              }}
+              style={[
+                {
+                  paddingHorizontal: 16,
+                  paddingTop: 18,
+                  paddingBottom: 10,
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 10,
+                },
+                isDesktopWeb
+                  ? {
+                      width: desktopContentWidth,
+                      alignSelf: "center",
+                      paddingHorizontal: 0,
+                    }
+                  : null,
+              ]}
             >
               <View
                 style={{
@@ -464,12 +586,25 @@ const topPadding = getResponsiveTopPadding(insets.top);
             </View>
           )}
           renderItem={({ item }) => (
-            <View style={[styles.row, { paddingHorizontal: 16 }]}>
+            <View
+              style={[
+                styles.row,
+                isDesktopWeb
+                  ? {
+                      width: desktopContentWidth,
+                      alignSelf: "center",
+                      paddingHorizontal: 0,
+                      gap: 16,
+                    }
+                  : { paddingHorizontal: 16 },
+              ]}
+            >
               {item.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
-                  style={{ width: (width - 48) / 2 }}
+                  style={{ width: desktopCardWidth }}
+                  imageHeight={isDesktopWeb ? 300 : undefined}
                 />
               ))}
             </View>
@@ -489,6 +624,10 @@ const topPadding = getResponsiveTopPadding(insets.top);
             </View>
           }
         />
+
+        {isDesktopWeb && !isSpecialView ? (
+          <DesktopCategorySidebar />
+        ) : null}
       </View>
     );
   }
@@ -499,12 +638,30 @@ const topPadding = getResponsiveTopPadding(insets.top);
 
       {/* Grid */}
       <FlatList
+        style={
+          isDesktopWeb
+            ? {
+                width: desktopWorkspaceWidth,
+                alignSelf: "flex-start",
+              }
+            : undefined
+        }
+        key={isDesktopWeb ? "desktop-products-3" : "products-2"}
         data={filtered}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        numColumns={isDesktopWeb ? 3 : 2}
         columnWrapperStyle={[
           styles.row,
-          Platform.OS === "web" ? { paddingHorizontal: 16 } : null,
+          isDesktopWeb
+            ? {
+                width: desktopContentWidth,
+                alignSelf: "center",
+                paddingHorizontal: 0,
+                gap: 16,
+              }
+            : Platform.OS === "web"
+              ? { paddingHorizontal: 16 }
+              : null,
         ]}
         ListHeaderComponent={Platform.OS === "web" ? topContent : null}
         contentContainerStyle={[
@@ -514,7 +671,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
         renderItem={({ item }) => (
           <ProductCard
             product={item}
-            style={{ width: (width - 48) / 2 }}
+            style={{ width: desktopCardWidth }}
+                  imageHeight={isDesktopWeb ? 300 : undefined}
           />
         )}
         ListEmptyComponent={
@@ -527,6 +685,10 @@ const topPadding = getResponsiveTopPadding(insets.top);
         }
         showsVerticalScrollIndicator={false}
       />
+
+      {isDesktopWeb && !isSpecialView ? (
+        <DesktopCategorySidebar />
+      ) : null}
     </View>
   );
 }

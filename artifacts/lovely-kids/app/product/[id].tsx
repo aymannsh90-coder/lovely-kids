@@ -15,6 +15,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -207,7 +208,28 @@ function similarityScore(current: Product, candidate: Product): number {
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
+  const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  const isDesktopWeb =
+    Platform.OS === "web" && viewportWidth >= 1200;
+
+  const desktopProductWidth = Math.min(
+    Math.max(viewportWidth - 64, 0),
+    1280,
+  );
+
+  const desktopGalleryWidth = Math.min(
+    620,
+    Math.floor(desktopProductWidth * 0.5),
+  );
+
+  const desktopInfoWidth =
+    desktopProductWidth - desktopGalleryWidth - 36;
+
+  const carouselPageWidth = isDesktopWeb
+    ? desktopGalleryWidth
+    : SCREEN_WIDTH;
   const { addItem, items } = useCart();
   const { toggleItem, isWishlisted } = useWishlist();
   const { settings } = useAppSettings();
@@ -352,9 +374,31 @@ export default function ProductDetailScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        <View
+          style={
+            isDesktopWeb
+              ? {
+                  width: desktopProductWidth,
+                  alignSelf: "center",
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  gap: 36,
+                  paddingTop: 28,
+                  paddingBottom: 30,
+                }
+              : undefined
+          }
+        >
 
         {/* ── Image Carousel ── */}
-        <View style={styles.carouselWrapper}>
+        <View
+          style={[
+            styles.carouselWrapper,
+            isDesktopWeb
+              ? { width: desktopGalleryWidth, flexShrink: 0 }
+              : null,
+          ]}
+        >
           <FlatList
             ref={flatRef}
             data={allImages}
@@ -363,16 +407,31 @@ export default function ProductDetailScreen() {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             getItemLayout={(_, index) => ({
-              length: SCREEN_WIDTH,
-              offset: SCREEN_WIDTH * index,
+              length: carouselPageWidth,
+              offset: carouselPageWidth * index,
               index,
             })}
             onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              const idx = Math.round(
+                e.nativeEvent.contentOffset.x / carouselPageWidth,
+              );
               setActiveIdx(idx);
             }}
             renderItem={({ item }) => (
-              <View style={[styles.imageSlide, isOutOfStock && styles.imageDimmed]}>
+              <View
+                style={[
+                  styles.imageSlide,
+                  { width: carouselPageWidth },
+                  isDesktopWeb
+                    ? {
+                        height: 600,
+                        borderRadius: 24,
+                        overflow: "hidden",
+                      }
+                    : null,
+                  isOutOfStock && styles.imageDimmed,
+                ]}
+              >
                 <Image
                   source={{ uri: item }}
                   style={styles.slideImage}
@@ -412,7 +471,13 @@ export default function ProductDetailScreen() {
           {/* Back Button */}
           <Pressable
             onPress={() => router.back()}
-            style={[styles.backBtn, { top: topOffset + 8, backgroundColor: colors.card }]}
+            style={[
+              styles.backBtn,
+              {
+                top: isDesktopWeb ? 14 : topOffset + 8,
+                backgroundColor: colors.card,
+              },
+            ]}
           >
             <Ionicons name="arrow-forward" size={22} color={colors.foreground} />
           </Pressable>
@@ -423,7 +488,13 @@ export default function ProductDetailScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               toggleItem({ id: product.id, name: product.nameAr, price: product.price, image: product.image, category: product.category });
             }}
-            style={[styles.wishlistBtn, { top: topOffset + 8, backgroundColor: colors.card }]}
+            style={[
+              styles.wishlistBtn,
+              {
+                top: isDesktopWeb ? 14 : topOffset + 8,
+                backgroundColor: colors.card,
+              },
+            ]}
           >
             <Ionicons
               name={wishlisted ? "heart" : "heart-outline"}
@@ -469,11 +540,43 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* Content */}
-        <View style={[styles.content, { backgroundColor: colors.background }]}>
-          <Text style={[styles.name, { color: colors.foreground }]}>{product.nameAr}</Text>
+        <View
+          style={[
+            styles.content,
+            { backgroundColor: colors.background },
+            isDesktopWeb
+              ? {
+                  width: desktopInfoWidth,
+                  maxWidth: desktopInfoWidth,
+                  paddingHorizontal: 0,
+                  paddingTop: 8,
+                  paddingBottom: 0,
+                }
+              : null,
+          ]}
+        >
+          <Text
+            style={[
+              styles.name,
+              { color: colors.foreground },
+              isDesktopWeb ? styles.desktopName : null,
+            ]}
+          >
+            {product.nameAr}
+          </Text>
 
           <View style={styles.priceRow}>
-            <Text style={[styles.price, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
+            <Text
+              style={[
+                styles.price,
+                {
+                  color: isOutOfStock
+                    ? colors.mutedForeground
+                    : colors.primary,
+                },
+                isDesktopWeb ? styles.desktopPrice : null,
+              ]}
+            >
               {product.price} ₪
             </Text>
             {product.originalPrice && !isOutOfStock && (
@@ -736,10 +839,30 @@ export default function ProductDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        </View>
       </ScrollView>
 
       {/* Add to Cart Footer */}
-      <View style={[styles.footer, { backgroundColor: colors.background, borderColor: colors.border, paddingBottom: bottomPad }]}>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: colors.background,
+            borderColor: colors.border,
+            paddingBottom: isDesktopWeb ? 16 : bottomPad,
+          },
+          isDesktopWeb
+            ? {
+                width: desktopProductWidth,
+                alignSelf: "center",
+                borderWidth: 1,
+                borderRadius: 18,
+                marginBottom: 18,
+              }
+            : null,
+        ]}
+      >
         {isOutOfStock ? (
           <View style={[styles.outOfStockBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}>
             <Ionicons name="close-circle-outline" size={20} color={colors.mutedForeground} />
@@ -786,7 +909,22 @@ export default function ProductDetailScreen() {
         onRequestClose={() => setCartModal(false)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setCartModal(false)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+              isDesktopWeb
+                ? {
+                    maxWidth: 560,
+                    paddingHorizontal: 28,
+                    paddingVertical: 26,
+                  }
+                : null,
+            ]}
+          >
             <View style={[styles.modalIconWrap, { backgroundColor: colors.primary + "18" }]}>
               <Ionicons name="checkmark-circle" size={44} color={colors.primary} />
             </View>
@@ -870,8 +1008,16 @@ const styles = StyleSheet.create({
   discountText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, gap: 8, width: "100%", maxWidth: 760, alignSelf: "center" },
   name: { fontSize: 18, fontWeight: "800", textAlign: "right", lineHeight: 25 },
+  desktopName: {
+    fontSize: 24,
+    lineHeight: 34,
+    marginBottom: 4,
+  },
   priceRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
   price: { fontSize: 22, fontWeight: "800" },
+  desktopPrice: {
+    fontSize: 30,
+  },
   originalPrice: { fontSize: 14, textDecorationLine: "line-through" },
   sectionTitle: { fontSize: 14, fontWeight: "700", textAlign: "right" },
   description: { fontSize: 13, textAlign: "right", lineHeight: 20 },

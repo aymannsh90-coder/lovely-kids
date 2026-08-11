@@ -15,6 +15,7 @@ import {
   TextInput,
   Image,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -53,6 +54,43 @@ type ForgotStep = null | "phone" | "sent";
 
 export default function ProfileScreen() {
   const colors = useColors();
+  const { width: viewportWidth } = useWindowDimensions();
+
+  const isDesktopWeb =
+    Platform.OS === "web" && viewportWidth >= 1200;
+
+  const desktopPageWidth = Math.min(
+    Math.max(viewportWidth - 48, 0),
+    1200,
+  );
+
+  const desktopHeroStyle = isDesktopWeb
+    ? {
+        width: desktopPageWidth,
+        alignSelf: "center" as const,
+        marginTop: 24,
+        borderRadius: 24,
+        overflow: "hidden" as const,
+      }
+    : null;
+
+  const desktopCardStyle = isDesktopWeb
+    ? {
+        width: Math.min(desktopPageWidth, 820),
+        alignSelf: "center" as const,
+        marginHorizontal: 0,
+      }
+    : null;
+
+  const desktopAuthStyle = isDesktopWeb
+    ? {
+        width: Math.min(desktopPageWidth, 620),
+        alignSelf: "center" as const,
+        marginHorizontal: 0,
+        marginTop: 24,
+      }
+    : null;
+
   const aboutCardTextColor =
     Platform.OS === "web"
       ? getReadableTextColor(colors.secondary)
@@ -292,7 +330,11 @@ export default function ProfileScreen() {
     // Step 2 of registration: email verification
     if (pendingVerification) {
       return (
-        <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[
+          styles.authCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          desktopAuthStyle,
+        ]}>
           <Ionicons name="mail-open-outline" size={36} color={colors.primary} style={{ alignSelf: "center" }} />
           <Text style={[styles.authSectionLabel, { color: colors.foreground, fontWeight: "700" }]}>
             تحقق من بريدك الإلكتروني
@@ -328,7 +370,11 @@ export default function ProfileScreen() {
     }
 
     return (
-      <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[
+          styles.authCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          desktopAuthStyle,
+        ]}>
         <Text style={[styles.authSectionLabel, { color: colors.mutedForeground }]}>
           سجّل دخولك أو أنشئ حسابك
         </Text>
@@ -439,7 +485,16 @@ export default function ProfileScreen() {
       }}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.primary }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: isDesktopWeb ? 28 : topPadding + 12,
+            backgroundColor: colors.primary,
+          },
+          desktopHeroStyle,
+        ]}
+      >
         <View style={styles.avatarContainer}>
           <Image
             source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
@@ -474,7 +529,11 @@ export default function ProfileScreen() {
       ) : user ? (
         <>
           {/* User Info Card */}
-          <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[
+            styles.accountCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            desktopCardStyle,
+          ]}>
             {user.avatarUrl ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.accountAvatarImage} />
             ) : (
@@ -496,7 +555,11 @@ export default function ProfileScreen() {
           </View>
 
           {/* Personal Details Card */}
-          <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[
+            styles.detailsCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            desktopCardStyle,
+          ]}>
             <View style={styles.detailsHeader}>
               <Pressable onPress={openEditProfile} style={[styles.editBtn, { backgroundColor: colors.primary + "18" }]}>
                 <Ionicons name="create-outline" size={16} color={colors.primary} />
@@ -554,7 +617,11 @@ export default function ProfileScreen() {
       )}
 
       {/* Menu */}
-      <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[
+        styles.menuCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
+        desktopCardStyle,
+      ]}>
         {MENU_ITEMS.map((item, idx) => (
           <React.Fragment key={item.label}>
             <Pressable
@@ -578,7 +645,11 @@ export default function ProfileScreen() {
       {user?.isAdmin && (
         <Pressable
           onPress={() => { clearNew(); router.push("/admin"); }}
-          style={[styles.adminCard, { backgroundColor: colors.primary }]}
+          style={[
+          styles.adminCard,
+          { backgroundColor: colors.primary },
+          desktopCardStyle,
+        ]}
         >
           <View style={{ position: "relative" }}>
             <Ionicons name="shield-checkmark-outline" size={24} color="#fff" />
@@ -596,7 +667,11 @@ export default function ProfileScreen() {
       )}
 
       {/* About Card */}
-      <View style={[styles.aboutCard, { backgroundColor: colors.secondary }]}>
+      <View style={[
+        styles.aboutCard,
+        { backgroundColor: colors.secondary },
+        desktopCardStyle,
+      ]}>
         <Ionicons
           name="storefront-outline"
           size={32}

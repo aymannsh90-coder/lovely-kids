@@ -18,6 +18,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -121,7 +122,16 @@ function getShippingCost(
 
 export default function CartScreen() {
   const colors = useColors();
+  const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  const isDesktopWeb =
+    Platform.OS === "web" && viewportWidth >= 1200;
+
+  const desktopCartWidth = Math.min(
+    Math.max(viewportWidth - 48, 0),
+    1200,
+  );
   const { settings } = useAppSettings();
   const { user, updateProfile, getAuthToken } = useAuth();
   const { items, updateQuantity, removeItem, totalPrice, totalItems, clearCart } = useCart();
@@ -541,7 +551,21 @@ export default function CartScreen() {
     const canSubmit = name.trim().length > 0 && phone.trim().length > 0 && address.trim().length > 0 && selectedZone !== null;
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
+        <View
+        style={[
+          styles.header,
+          {
+            paddingTop: isDesktopWeb ? 28 : topPadding + 12,
+          },
+          isDesktopWeb
+            ? {
+                width: desktopCartWidth,
+                alignSelf: "center",
+                paddingHorizontal: 0,
+              }
+            : null,
+        ]}
+      >
           <Pressable onPress={() => setStep("cart")}>
             <Ionicons name="arrow-forward" size={24} color={colors.foreground} />
           </Pressable>
@@ -776,13 +800,45 @@ export default function CartScreen() {
           </Pressable>
         </View>
       ) : (
-        <>
+        <View
+          style={[
+            styles.cartBody,
+            isDesktopWeb
+              ? {
+                  width: desktopCartWidth,
+                  alignSelf: "center",
+                  flexDirection: "row-reverse",
+                  gap: 24,
+                  paddingBottom: 24,
+                }
+              : null,
+          ]}
+        >
           <FlatList
+            style={isDesktopWeb ? { flex: 1 } : undefined}
             data={items}
             keyExtractor={(item) => `${item.id}-${item.color ?? ""}-${item.size ?? ""}`}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[
+              styles.list,
+              isDesktopWeb
+                ? {
+                    paddingHorizontal: 0,
+                    paddingTop: 0,
+                    paddingBottom: 20,
+                  }
+                : null,
+            ]}
             renderItem={({ item }) => (
-              <View style={[styles.cartItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View
+                style={[
+                  styles.cartItem,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                  isDesktopWeb ? styles.desktopCartItem : null,
+                ]}
+              >
                 <View style={styles.itemRight}>
                   <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
                   {(item.size || item.color) && (
@@ -807,8 +863,19 @@ export default function CartScreen() {
                     <Text style={styles.deleteText}>حذف</Text>
                   </Pressable>
                 </View>
-                <Image source={{ uri: item.image }} style={styles.itemImage} />
-                <View style={styles.quantityRow}>
+                <Image
+                  source={{ uri: item.image }}
+                  style={[
+                    styles.itemImage,
+                    isDesktopWeb ? styles.desktopItemImage : null,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.quantityRow,
+                    isDesktopWeb ? styles.desktopQuantityRow : null,
+                  ]}
+                >
                   <Pressable
                     onPress={() => {
                       const product = products.find(
@@ -863,7 +930,17 @@ export default function CartScreen() {
             )}
           />
 
-          <View style={[styles.summary, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: bottomPadding }]}>
+          <View
+            style={[
+              styles.summary,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                paddingBottom: isDesktopWeb ? 20 : bottomPadding,
+              },
+              isDesktopWeb ? styles.desktopSummary : null,
+            ]}
+          >
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>{totalItems} منتج</Text>
               <Text style={[styles.summaryValue, { color: colors.foreground }]}>المجموع</Text>
@@ -909,7 +986,7 @@ export default function CartScreen() {
               <Text style={styles.orderBtnText}>متابعة الطلب</Text>
             </Pressable>
           </View>
-        </>
+        </View>
       )}
     </View>
   );
@@ -944,6 +1021,31 @@ const styles = StyleSheet.create({
   shopBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 8 },
   shopBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   list: { padding: 16, gap: 12 },
+  cartBody: {
+    flex: 1,
+  },
+  desktopCartItem: {
+    minHeight: 150,
+    padding: 18,
+  },
+  desktopItemImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+  },
+  desktopQuantityRow: {
+    flexDirection: "row-reverse",
+    gap: 10,
+  },
+  desktopSummary: {
+    width: 350,
+    flexShrink: 0,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 0,
+  },
   cartItem: {
     flexDirection: "row-reverse",
     alignItems: "center",

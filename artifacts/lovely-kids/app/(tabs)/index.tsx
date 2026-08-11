@@ -1,4 +1,7 @@
-import { getResponsiveTopPadding } from "@/utils/webLayout";
+import {
+  getResponsiveTopPadding,
+  getWebViewport,
+} from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -12,11 +15,16 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CartBadge } from "@/components/CartBadge";
-import { CategoryMenu } from "@/components/CategoryMenu";
+import {
+  CategoryMenu,
+  DesktopCategorySidebar,
+  DESKTOP_CATEGORY_SIDEBAR_WIDTH,
+} from "@/components/CategoryMenu";
 import { HeroSlider } from "@/components/HeroSlider";
 import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS } from "@/data/products";
@@ -68,6 +76,59 @@ const TRUST_BADGES = [
 
 export default function HomeScreen() {
   const colors = useColors();
+  const { width: viewportWidth } = useWindowDimensions();
+
+  const webViewport =
+    Platform.OS === "web" ? getWebViewport(viewportWidth) : "phone";
+
+  const isTabletWeb =
+    Platform.OS === "web" && webViewport === "tablet";
+
+  const isDesktopWeb =
+    Platform.OS === "web" && webViewport === "desktop";
+
+  const isWideWeb = isTabletWeb || isDesktopWeb;
+
+  const desktopWorkspaceWidth = isDesktopWeb
+    ? Math.max(
+        viewportWidth - DESKTOP_CATEGORY_SIDEBAR_WIDTH,
+        0,
+      )
+    : viewportWidth;
+
+  const responsiveShellWidth = Math.min(
+    Math.max(desktopWorkspaceWidth - 32, 0),
+    1200,
+  );
+
+  const homeProductCardWidth = isWideWeb
+    ? (responsiveShellWidth - 32 - 24) / 3
+    : (width - 48) / 2;
+
+  const homeProductImageHeight =
+    isDesktopWeb ? 280 : undefined;
+
+  const newArrivalCardWidth = isDesktopWeb
+    ? (responsiveShellWidth - 24) / 3
+    : 170;
+
+  const newArrivalImageHeight =
+    isDesktopWeb ? 250 : undefined;
+
+  const responsiveShellStyle = isWideWeb
+    ? {
+        width: responsiveShellWidth,
+        alignSelf: "center" as const,
+      }
+    : null;
+
+  const desktopBannerStyle = isDesktopWeb
+    ? {
+        width: responsiveShellWidth,
+        alignSelf: "center" as const,
+        marginHorizontal: 0,
+      }
+    : null;
   const contactTextColor =
     Platform.OS === "web"
       ? getReadableTextColor(colors.secondary)
@@ -128,7 +189,9 @@ export default function HomeScreen() {
   };
 
   const scrollNewArrivals = (direction: "left" | "right") => {
-    const step = Math.max(180, Math.min(width * 0.75, 360));
+    const step = isDesktopWeb
+      ? newArrivalCardWidth + 12
+      : Math.max(180, Math.min(width * 0.75, 360));
     const movement = direction === "left" ? step : -step;
     const nextX = Math.min(
       newArrivalsMaxScrollX.current,
@@ -232,7 +295,9 @@ export default function HomeScreen() {
       const maxX = newArrivalsMaxScrollX.current;
       if (maxX <= 1) return;
 
-      const step = 182;
+      const step = isDesktopWeb
+        ? newArrivalCardWidth + 12
+        : 182;
       let nextX =
         newArrivalsScrollX.current +
         step * newArrivalsDirection.current;
@@ -253,7 +318,11 @@ export default function HomeScreen() {
     }, 2200);
 
     return () => clearInterval(timer);
-  }, [newArrivals.length]);
+  }, [
+    newArrivals.length,
+    isDesktopWeb,
+    newArrivalCardWidth,
+  ]);
 
   const selectedAgeForProducts =
     settings.homeAgeGroupsSectionEnabled !== false ? selectedAge : null;
@@ -281,7 +350,12 @@ export default function HomeScreen() {
     }
 
     return (
-      <View style={styles.homeBannerHeader}>
+      <View
+        style={[
+          styles.homeBannerHeader,
+          responsiveShellStyle,
+        ]}
+      >
         <View
           style={[
             styles.homeBannerTitleBox,
@@ -316,12 +390,28 @@ export default function HomeScreen() {
   };
 
   return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+      }}
+    >
     <ScrollView
-      style={[styles.scroll, { backgroundColor: colors.background }]}
+      style={[
+        styles.scroll,
+        { backgroundColor: colors.background },
+        isDesktopWeb
+          ? {
+              width: desktopWorkspaceWidth,
+              alignSelf: "flex-start",
+            }
+          : null,
+      ]}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 }}
     >
-      {/* Header */}
+      {/* Header — keep existing header on phone/tablet only */}
+      {!isDesktopWeb ? (
       <View
         style={[
           styles.header,
@@ -380,6 +470,7 @@ export default function HomeScreen() {
           <CartBadge />
         </View>
       </View>
+      ) : null}
 
       {Platform.OS !== "web" ? (
         <>
@@ -430,6 +521,7 @@ export default function HomeScreen() {
         style={[
           styles.searchBar,
           { backgroundColor: colors.card, borderColor: colors.border },
+          desktopBannerStyle,
         ]}
       >
         <Ionicons name="search-outline" size={20} color={colors.mutedForeground} />
@@ -515,7 +607,11 @@ export default function HomeScreen() {
           onPress={() =>
             router.push("/offers")
           }
-          style={[styles.installBtn, { backgroundColor: "#FFD54F" }]}
+          style={[
+            styles.installBtn,
+            { backgroundColor: "#FFD54F" },
+            desktopBannerStyle,
+          ]}
         >
           <Text style={[styles.installBtnText, { color: "#3D2B00" }]}>
             🔥قسم العروض🔥
@@ -527,7 +623,11 @@ export default function HomeScreen() {
       {Platform.OS === "web" && !isInstalled && (installPrompt || isIos) ? (
         <Pressable
           onPress={() => void handleInstall()}
-          style={[styles.installBtn, { backgroundColor: colors.primary }]}
+          style={[
+            styles.installBtn,
+            { backgroundColor: colors.primary },
+            desktopBannerStyle,
+          ]}
         >
           <Ionicons name="download-outline" size={20} color="#fff" />
           <Text style={styles.installBtnText}>تثبيت تطبيق Lovely Kids</Text>
@@ -537,7 +637,11 @@ export default function HomeScreen() {
       {Platform.OS === "web" && !webPushEnabled ? (
         <Pressable
           onPress={() => void handleEnableWebPush()}
-          style={[styles.installBtn, { backgroundColor: colors.primary }]}
+          style={[
+            styles.installBtn,
+            { backgroundColor: colors.primary },
+            desktopBannerStyle,
+          ]}
         >
           <Ionicons name="notifications-outline" size={20} color="#fff" />
           <Text style={styles.installBtnText}>تفعيل الإشعارات</Text>
@@ -547,9 +651,39 @@ export default function HomeScreen() {
       {/* Trust Badges */}
       {settings.homeTopBenefitsSectionEnabled !== false ? (
         <>
-      <View style={styles.trustRow}>
+      <View
+        style={[
+          styles.trustRow,
+          isDesktopWeb
+            ? {
+                width: Math.min(responsiveShellWidth, 920),
+                alignSelf: "center",
+                paddingHorizontal: 0,
+                justifyContent: "center",
+                gap: 18,
+                marginTop: 20,
+                marginBottom: 22,
+              }
+            : null,
+        ]}
+      >
         {TRUST_BADGES.map((t) => (
-          <View key={t.title} style={styles.trustItem}>
+          <View
+            key={t.title}
+            style={[
+              styles.trustItem,
+              isDesktopWeb
+                ? {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: 18,
+                    paddingVertical: 18,
+                    paddingHorizontal: 14,
+                  }
+                : null,
+            ]}
+          >
             <View style={[styles.trustIconCircle, { backgroundColor: t.color + "20" }]}>
               <Ionicons name={t.icon} size={24} color={t.color} />
             </View>
@@ -710,7 +844,12 @@ export default function HomeScreen() {
             () => router.push("/new-arrivals"),
           )}
 
-          <View style={styles.newArrivalsScrollWrapper}>
+          <View
+            style={[
+              styles.newArrivalsScrollWrapper,
+              isDesktopWeb ? responsiveShellStyle : null,
+            ]}
+          >
             {newArrivals.length > 2 ? (
               <>
                 <Pressable
@@ -759,7 +898,10 @@ export default function HomeScreen() {
               ref={newArrivalsScrollRef}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.newArrivalsHorizontalScroll}
+              contentContainerStyle={[
+                styles.newArrivalsHorizontalScroll,
+                isDesktopWeb ? { paddingHorizontal: 0 } : null,
+              ]}
               onLayout={(event) => {
                 newArrivalsViewportWidth.current =
                   event.nativeEvent.layout.width;
@@ -796,7 +938,8 @@ export default function HomeScreen() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  style={{ width: 170 }}
+                  style={{ width: newArrivalCardWidth }}
+                  imageHeight={newArrivalImageHeight}
                 />
               ))}
             </ScrollView>
@@ -812,12 +955,18 @@ export default function HomeScreen() {
         () => router.push("/products"),
       )}
 
-      <View style={styles.productsGrid}>
+      <View
+        style={[
+          styles.productsGrid,
+          responsiveShellStyle,
+        ]}
+      >
         {filteredProducts.map((product, idx) => (
           <ProductCard
             key={product.id}
             product={product}
-            style={{ width: (width - 48) / 2 }}
+            style={{ width: homeProductCardWidth }}
+            imageHeight={homeProductImageHeight}
           />
         ))}
       </View>
@@ -827,6 +976,7 @@ export default function HomeScreen() {
           onPress={() => router.push("/products")}
           style={({ pressed }) => [
             styles.bottomViewAllButton,
+            desktopBannerStyle,
             {
               backgroundColor: colors.primary,
               opacity: pressed ? 0.85 : 1,
@@ -852,7 +1002,11 @@ export default function HomeScreen() {
       {/* Contact Banner */}
       <Pressable
         onPress={() => router.push("/contact")}
-        style={[styles.contactBanner, { backgroundColor: colors.secondary }]}
+        style={[
+          styles.contactBanner,
+          { backgroundColor: colors.secondary },
+          desktopBannerStyle,
+        ]}
       >
         <Ionicons
           name="chatbubble-ellipses-outline"
@@ -882,6 +1036,11 @@ export default function HomeScreen() {
         <Ionicons name="arrow-back" size={20} color={contactTextColor} />
       </Pressable>
     </ScrollView>
+
+    {isDesktopWeb ? (
+      <DesktopCategorySidebar />
+    ) : null}
+    </View>
   );
 }
 

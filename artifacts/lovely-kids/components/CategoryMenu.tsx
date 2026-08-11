@@ -23,6 +23,8 @@ const BRAND_BLUE = "#96DFEC";
 const BRAND_BG = "#F0FAFE";
 const BRAND_NAVY = "#172554";
 
+export const DESKTOP_CATEGORY_SIDEBAR_WIDTH = 270;
+
 function getCategoryEmoji(id: string, label: string): string | null {
   const text = label.trim().toLowerCase();
 
@@ -387,7 +389,195 @@ export function CategoryMenu() {
   );
 }
 
+
+export function DesktopCategorySidebar() {
+  const categories = useProductCategories();
+  const { category } = useLocalSearchParams<{
+    category?: string;
+  }>();
+
+  const activeCategory =
+    typeof category === "string" ? category : "all";
+
+  const openDesktopCategory = (categoryId: string) => {
+    router.push({
+      pathname: "/(tabs)/products",
+      params: { category: categoryId },
+    });
+  };
+
+  return (
+    <View style={styles.desktopSidebar}>
+      <View style={styles.desktopSidebarHeader}>
+        <View style={styles.webTitleWrap}>
+          <Text style={styles.webSparkle}>✦</Text>
+          <Ionicons
+            name="heart-outline"
+            size={22}
+            color={BRAND_PINK}
+          />
+          <Text style={styles.webTitle}>التصنيفات</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.categories,
+          styles.webCategories,
+          styles.desktopSidebarCategories,
+        ]}
+      >
+        {categories.map((categoryItem) => {
+          const isSelected =
+            categoryItem.id === activeCategory;
+
+          return (
+            <Pressable
+              key={categoryItem.id}
+              onPress={() =>
+                openDesktopCategory(categoryItem.id)
+              }
+              style={({ pressed }) => [
+                styles.webCategoryCard,
+                {
+                  backgroundColor: isSelected
+                    ? pressed
+                      ? "#FBDCEC"
+                      : "#FFF0F7"
+                    : pressed
+                      ? "#F6FCFE"
+                      : "#FFFFFF",
+                  borderColor: isSelected
+                    ? BRAND_PINK + "70"
+                    : BRAND_BLUE + "65",
+                  borderRightColor: isSelected
+                    ? BRAND_PINK
+                    : BRAND_BLUE + "65",
+                  borderRightWidth: isSelected ? 4 : 1,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.webIconBubble,
+                  {
+                    backgroundColor: isSelected
+                      ? BRAND_PINK + "18"
+                      : BRAND_BLUE + "28",
+                  },
+                ]}
+              >
+                {categoryItem.id === "all" ? (
+                  <Ionicons
+                    name="grid-outline"
+                    size={19}
+                    color={
+                      isSelected
+                        ? BRAND_PINK
+                        : "#25A9D6"
+                    }
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.categoryEmoji,
+                      categoryItem.label.includes("طقم") ||
+                      categoryItem.label.includes("أطقم") ||
+                      categoryItem.label.includes("اطقم")
+                        ? styles.categoryEmojiWide
+                        : null,
+                    ]}
+                  >
+                    {getCategoryEmoji(
+                      categoryItem.id,
+                      categoryItem.label,
+                    )}
+                  </Text>
+                )}
+              </View>
+
+              <Text
+                style={[
+                  styles.webCategoryText,
+                  {
+                    color: isSelected
+                      ? BRAND_PINK
+                      : BRAND_NAVY,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {categoryItem.label}
+              </Text>
+
+              <Ionicons
+                name="chevron-forward-outline"
+                size={18}
+                color={
+                  isSelected
+                    ? BRAND_PINK
+                    : "#25A9D6"
+                }
+              />
+            </Pressable>
+          );
+        })}
+
+        <View style={styles.webFooter}>
+          <View style={styles.webFooterIcon}>
+            <Ionicons
+              name="heart"
+              size={21}
+              color={BRAND_PINK}
+            />
+          </View>
+
+          <View style={styles.webFooterTextWrap}>
+            <Text style={styles.webFooterTitle}>
+              كل ما يحتاجه طفلك
+            </Text>
+            <Text style={styles.webFooterSubtitle}>
+              بجودة عالية وحب كبير
+            </Text>
+          </View>
+
+          <Text style={styles.webFooterSparkles}>
+            ✦ ✧
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  desktopSidebar: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: DESKTOP_CATEGORY_SIDEBAR_WIDTH,
+    backgroundColor: BRAND_BG,
+    borderLeftWidth: 1,
+    borderLeftColor: BRAND_BLUE + "80",
+    zIndex: 30,
+    overflow: "hidden",
+  },
+  desktopSidebarHeader: {
+    minHeight: 64,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND_BLUE + "70",
+    backgroundColor: "#F8FDFF",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  desktopSidebarCategories: {
+    paddingTop: 14,
+    paddingBottom: 28,
+  },
   menuButton: {
     width: 42,
     height: 42,

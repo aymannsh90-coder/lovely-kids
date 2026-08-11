@@ -23,6 +23,7 @@ import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
 interface Props {
   product: Product;
   style?: object;
+  imageHeight?: number;
 }
 
 function calcDiscount(price: number, originalPrice?: number | null): number | null {
@@ -31,7 +32,7 @@ function calcDiscount(price: number, originalPrice?: number | null): number | nu
   return pct > 0 ? Math.min(pct, 99) : null;
 }
 
-export function ProductCard({ product, style }: Props) {
+export function ProductCard({ product, style, imageHeight }: Props) {
   const colors = useColors();
   const { settings } = useAppSettings();
   const { addItem, items } = useCart();
@@ -127,7 +128,12 @@ export function ProductCard({ product, style }: Props) {
         style,
       ]}
     >
-      <View style={styles.imageWrapper}>
+      <View
+        style={[
+          styles.imageWrapper,
+          imageHeight ? { height: imageHeight } : null,
+        ]}
+      >
         <Image source={{ uri: product.image }} style={[styles.image, isOutOfStock && styles.imageDimmed]} />
 
         {/* Out of Stock Overlay */}

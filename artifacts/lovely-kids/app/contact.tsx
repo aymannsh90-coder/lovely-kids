@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -18,7 +19,31 @@ import { useColors } from "@/hooks/useColors";
 
 export default function ContactScreen() {
   const colors = useColors();
+  const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  const isDesktopWeb =
+    Platform.OS === "web" && viewportWidth >= 1200;
+
+  const desktopPageWidth = Math.min(
+    Math.max(viewportWidth - 48, 0),
+    1200,
+  );
+
+  const desktopShellStyle = isDesktopWeb
+    ? {
+        width: desktopPageWidth,
+        alignSelf: "center" as const,
+      }
+    : null;
+
+  const desktopHeroStyle = isDesktopWeb
+    ? {
+        width: desktopPageWidth,
+        alignSelf: "center" as const,
+        marginHorizontal: 0,
+      }
+    : null;
   const { settings } = useAppSettings();
   const contact = settings.contactInfo;
 
@@ -55,7 +80,15 @@ export default function ContactScreen() {
       contentContainerStyle={{ paddingBottom: bottomPadding }}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: isDesktopWeb ? 28 : topPadding + 12,
+          },
+          desktopShellStyle,
+        ]}
+      >
         <Pressable onPress={() => router.back()}>
           <Ionicons name="arrow-forward" size={24} color={colors.foreground} />
         </Pressable>
@@ -64,7 +97,13 @@ export default function ContactScreen() {
       </View>
 
       {/* Hero */}
-      <View style={[styles.hero, { backgroundColor: colors.primary }]}>
+      <View
+        style={[
+          styles.hero,
+          { backgroundColor: colors.primary },
+          desktopHeroStyle,
+        ]}
+      >
         <Ionicons name="storefront-outline" size={48} color="#fff" />
         <Text style={styles.heroTitle}>{contact.storeName}</Text>
         <Text style={styles.heroSub}>نابلس · فلسطين</Text>
@@ -72,32 +111,89 @@ export default function ContactScreen() {
       </View>
 
       {/* Direct Contact */}
-      <View style={styles.section}>
+      <View
+        style={[
+          styles.section,
+          desktopShellStyle,
+          isDesktopWeb ? { paddingHorizontal: 0 } : null,
+        ]}
+      >
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           تواصل مباشر
         </Text>
 
-        <Pressable onPress={openWhatsapp} style={[styles.contactCard, { backgroundColor: "#25D366" }]}>
-          <Ionicons name="logo-whatsapp" size={28} color="#fff" />
-          <View style={styles.contactInfo}>
-            <Text style={styles.contactLabel}>واتساب</Text>
-            <Text style={styles.contactValue}>{settings.whatsappNumber}</Text>
-          </View>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
-        </Pressable>
+        <View
+          style={[
+            styles.directContactGroup,
+            isDesktopWeb ? styles.directContactDesktop : null,
+          ]}
+        >
+          <Pressable
+            onPress={openWhatsapp}
+            style={[
+              styles.contactCard,
+              { backgroundColor: "#25D366" },
+              isDesktopWeb ? styles.desktopContactCard : null,
+            ]}
+          >
+            <Ionicons name="logo-whatsapp" size={28} color="#fff" />
+            <View style={styles.contactInfo}>
+              <Text style={styles.contactLabel}>واتساب</Text>
+              <Text style={styles.contactValue}>
+                {settings.whatsappNumber}
+              </Text>
+            </View>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </Pressable>
 
-        <Pressable onPress={openPhone} style={[styles.contactCard, { backgroundColor: colors.secondary }]}>
-          <Ionicons name="call-outline" size={28} color={colors.foreground} />
-          <View style={styles.contactInfo}>
-            <Text style={[styles.contactLabel, { color: colors.foreground }]}>اتصال مباشر</Text>
-            <Text style={[styles.contactValue, { color: colors.foreground }]}>{contact.phoneNumber}</Text>
-          </View>
-          <Ionicons name="arrow-back" size={20} color={colors.foreground} />
-        </Pressable>
+          <Pressable
+            onPress={openPhone}
+            style={[
+              styles.contactCard,
+              { backgroundColor: colors.secondary },
+              isDesktopWeb ? styles.desktopContactCard : null,
+            ]}
+          >
+            <Ionicons
+              name="call-outline"
+              size={28}
+              color={colors.foreground}
+            />
+            <View style={styles.contactInfo}>
+              <Text
+                style={[
+                  styles.contactLabel,
+                  { color: colors.foreground },
+                ]}
+              >
+                اتصال مباشر
+              </Text>
+              <Text
+                style={[
+                  styles.contactValue,
+                  { color: colors.foreground },
+                ]}
+              >
+                {contact.phoneNumber}
+              </Text>
+            </View>
+            <Ionicons
+              name="arrow-back"
+              size={20}
+              color={colors.foreground}
+            />
+          </Pressable>
+        </View>
       </View>
 
       {/* Social Media */}
-      <View style={styles.section}>
+      <View
+        style={[
+          styles.section,
+          desktopShellStyle,
+          isDesktopWeb ? { paddingHorizontal: 0 } : null,
+        ]}
+      >
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           تابعنا على السوشيال ميديا
         </Text>
@@ -127,14 +223,24 @@ export default function ContactScreen() {
       </View>
 
       {/* Info Cards */}
-      <View style={styles.section}>
+      <View
+        style={[
+          styles.section,
+          desktopShellStyle,
+          isDesktopWeb ? { paddingHorizontal: 0 } : null,
+        ]}
+      >
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           معلومات المتجر
         </Text>
 
         <Pressable
           onPress={openMaps}
-          style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[
+          styles.infoCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          isDesktopWeb ? styles.desktopInfoCard : null,
+        ]}
         >
           <View style={[styles.infoIcon, { backgroundColor: colors.muted }]}>
             <Ionicons name="location-outline" size={22} color={colors.primary} />
@@ -170,7 +276,11 @@ export default function ContactScreen() {
         ].map((item) => (
           <View
             key={item.title}
-            style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+          styles.infoCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          isDesktopWeb ? styles.desktopInfoCard : null,
+        ]}
           >
             <View style={[styles.infoIcon, { backgroundColor: colors.muted }]}>
               <Ionicons name={item.icon} size={22} color={colors.primary} />
@@ -209,6 +319,16 @@ const styles = StyleSheet.create({
   heroTagline: { fontSize: 13, color: "rgba(255,255,255,0.8)", textAlign: "center" },
   section: { paddingHorizontal: 16, marginBottom: 20, gap: 12 },
   sectionTitle: { fontSize: 17, fontWeight: "700", textAlign: "right" },
+  directContactGroup: {
+    gap: 12,
+  },
+  directContactDesktop: {
+    flexDirection: "row-reverse",
+    gap: 16,
+  },
+  desktopContactCard: {
+    flex: 1,
+  },
   contactCard: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
@@ -229,6 +349,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   socialLabel: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  desktopInfoCard: {
+    width: 760,
+    alignSelf: "center",
+  },
   infoCard: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "flex-start",
