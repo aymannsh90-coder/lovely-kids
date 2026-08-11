@@ -49,7 +49,7 @@ export default function AdminProductsScreen() {
   // Per-color/size variant stock adjustment
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
-  const [stockFilter, setStockFilter] = useState<"all" | "out">("all");
+  const [stockFilter, setStockFilter] = useState<"all" | "out" | "offers">("all");
   const [search, setSearch] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
@@ -256,6 +256,7 @@ export default function AdminProductsScreen() {
 
   const filteredProducts = products.filter((product) => {
     if (stockFilter === "out" && !isProductOutOfStock(product)) return false;
+    if (stockFilter === "offers" && product.showInOffers !== true) return false;
 
     const query = search.trim().toLowerCase();
     if (!query) return true;
@@ -373,6 +374,18 @@ export default function AdminProductsScreen() {
             الكل
           </Text>
         </Pressable>
+
+        <Pressable onPress={() => setStockFilter("offers")}>
+          <Text
+            style={{
+              fontWeight: "700",
+              color: stockFilter === "offers" ? "#f97316" : colors.foreground,
+            }}
+          >
+            🔥 العروض
+          </Text>
+        </Pressable>
+
         <Pressable onPress={() => setStockFilter("out")}>
           <Text style={{ fontWeight: "700", color: stockFilter === "out" ? "#ef4444" : colors.foreground }}>
             منتهي من المخزون
@@ -420,6 +433,32 @@ export default function AdminProductsScreen() {
                     <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{getAgeLabel(item.ageGroup)}</Text>
                   </View>
                 </View>
+
+                {item.showInOffers === true ? (
+                  <View
+                    style={{
+                      alignSelf: "flex-end",
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      backgroundColor: "#fff7ed",
+                      borderColor: "#fb923c",
+                      borderWidth: 1,
+                      borderRadius: 10,
+                      paddingHorizontal: 9,
+                      paddingVertical: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#ea580c",
+                        fontSize: 12,
+                        fontWeight: "800",
+                      }}
+                    >
+                      🔥 عرض
+                    </Text>
+                  </View>
+                ) : null}
 
                 {productOutOfStock ? (
                   <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "800" }}>
