@@ -3,7 +3,7 @@ import {
   getWebViewport,
 } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -27,7 +27,7 @@ import {
 } from "@/components/CategoryMenu";
 import { HeroSlider } from "@/components/HeroSlider";
 import { ProductCard } from "@/components/ProductCard";
-import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS } from "@/data/products";
+import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS, type Product } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { enableWebPushNotifications } from "@/hooks/usePushNotifications";
 import { useAppSettings } from "@/context/AppSettingsContext";
@@ -43,6 +43,52 @@ type InstallPromptEvent = Event & {
 type GenderTab = "boys" | "girls" | null;
 
 const { width } = Dimensions.get("window");
+
+function getDiverseRandomProducts(products: Product[], limit: number): Product[] {
+  const shuffle = <T,>(items: T[]): T[] => {
+    const copy = [...items];
+
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+
+    return copy;
+  };
+
+  const groups = new Map<string, Product[]>();
+
+  for (const product of products) {
+    const category = product.category || "other";
+    const group = groups.get(category) ?? [];
+    group.push(product);
+    groups.set(category, group);
+  }
+
+  const shuffledGroups = shuffle(
+    Array.from(groups.values()).map((group) => shuffle(group)),
+  );
+
+  const result: Product[] = [];
+
+  while (result.length < limit) {
+    let added = false;
+
+    for (const group of shuffledGroups) {
+      const product = group.shift();
+      if (!product) continue;
+
+      result.push(product);
+      added = true;
+
+      if (result.length >= limit) break;
+    }
+
+    if (!added) break;
+  }
+
+  return result;
+}
 
 function getReadableTextColor(backgroundColor: string) {
   const hex = backgroundColor.replace("#", "").trim();
@@ -324,12 +370,45 @@ export default function HomeScreen() {
     newArrivalCardWidth,
   ]);
 
+  const [homeProductsShuffleKey, setHomeProductsShuffleKey] = useState(0);
+  const homeProductsFocusedOnce = React.useRef(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (Platform.OS !== "web") return;
+
+      if (homeProductsFocusedOnce.current) {
+        setHomeProductsShuffleKey((value) => value + 1);
+      } else {
+        homeProductsFocusedOnce.current = true;
+      }
+    }, []),
+  );
+
+  const activeSeasonHomeProducts =
+    Platform.OS === "web" && settings.activeSeason
+      ? genderFiltered.filter(
+          (product) => product.season === settings.activeSeason,
+        )
+      : genderFiltered;
+
+  const homeProductsSourceKey = activeSeasonHomeProducts
+    .map((product) => `${product.id}:${product.category}:${product.season ?? ""}`)
+    .join("|");
+
+  const randomizedHomeProducts = React.useMemo(
+    () => getDiverseRandomProducts(activeSeasonHomeProducts, 12),
+    [homeProductsShuffleKey, homeProductsSourceKey],
+  );
+
   const selectedAgeForProducts =
     settings.homeAgeGroupsSectionEnabled !== false ? selectedAge : null;
 
   const filteredProducts = selectedAgeForProducts
     ? genderFiltered.filter((p) => p.ageGroup === selectedAgeForProducts)
-    : genderFiltered.slice(0, Platform.OS === "web" ? 12 : 6);
+    : Platform.OS === "web"
+      ? randomizedHomeProducts
+      : genderFiltered.slice(0, 6);
 
   const topPadding = getResponsiveTopPadding(insets.top);
 
