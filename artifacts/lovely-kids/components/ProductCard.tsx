@@ -19,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
 import { getProductShareUrl } from "@/utils/productShare";
 import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
+import { trackMetaEvent } from "@/utils/metaPixel";
 
 interface Props {
   product: Product;
@@ -70,6 +71,15 @@ export function ProductCard({ product, style, imageHeight }: Props) {
         price: product.price,
         image: product.image,
         category: product.category,
+      });
+
+      trackMetaEvent("AddToCart", {
+        content_ids: [product.id],
+        content_name: product.nameAr,
+        content_category: product.category,
+        content_type: "product",
+        value: product.price,
+        currency: "ILS",
       });
     };
 

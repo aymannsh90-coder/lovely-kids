@@ -34,6 +34,8 @@ import { confirmRemoveFromCart, showStockLimit } from "@/utils/cartPrompts";
 
 import { API_BASE } from "@/constants/api";
 
+import { trackMetaEvent } from "@/utils/metaPixel";
+
 type Step = "cart" | "checkout" | "payment" | "success";
 
 function getStoreDate(): string {
@@ -266,6 +268,23 @@ export default function CartScreen() {
         ) {
           currentTotal = order.totalPrice;
         }
+
+        trackMetaEvent("Purchase", {
+          content_ids: currentItems.map((item) => item.id),
+          contents: currentItems.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            item_price: item.price,
+          })),
+          content_type: "product",
+          num_items: currentItems.reduce(
+            (sum, item) => sum + item.quantity,
+            0,
+          ),
+          value: currentTotal,
+          currency: "ILS",
+          order_id: String(order.id),
+        });
       } catch (error) {
         Alert.alert(
           "تعذّر إنشاء الطلب",
@@ -979,7 +998,22 @@ export default function CartScreen() {
               </View>
             )}
             <Pressable
-              onPress={() => setStep("checkout")}
+              onPress={() => {
+                trackMetaEvent("InitiateCheckout", {
+                  content_ids: items.map((item) => item.id),
+                  contents: items.map((item) => ({
+                    id: item.id,
+                    quantity: item.quantity,
+                    item_price: item.price,
+                  })),
+                  content_type: "product",
+                  num_items: totalItems,
+                  value: totalPrice,
+                  currency: "ILS",
+                });
+
+                setStep("checkout");
+              }}
               style={[styles.orderBtn, { backgroundColor: colors.primary }]}
             >
               <Ionicons name="arrow-back" size={20} color="#fff" />

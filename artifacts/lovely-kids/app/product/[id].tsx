@@ -27,6 +27,7 @@ import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
 import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
+import { trackMetaEvent } from "@/utils/metaPixel";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -267,6 +268,19 @@ export default function ProductDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedColor]);
 
+  useEffect(() => {
+    if (!product) return;
+
+    trackMetaEvent("ViewContent", {
+      content_ids: [product.id],
+      content_name: product.nameAr,
+      content_category: product.category,
+      content_type: "product",
+      value: product.price,
+      currency: "ILS",
+    });
+  }, [product?.id]);
+
   if (!product) {
     return (
       <View
@@ -349,6 +363,15 @@ export default function ProductDetailScreen() {
         size: selectedSize,
         color: selectedColor,
       });
+      trackMetaEvent("AddToCart", {
+        content_ids: [product.id],
+        content_name: product.nameAr,
+        content_category: product.category,
+        content_type: "product",
+        value: product.price,
+        currency: "ILS",
+      });
+
       setCartModal(true);
     };
 
