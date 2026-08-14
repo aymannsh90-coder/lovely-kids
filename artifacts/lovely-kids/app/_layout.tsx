@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ClerkProviderWrapper } from "@/components/ClerkProviderWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { PromotionalPopup } from "@/components/PromotionalPopup";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
 import { AppSettingsProvider } from "@/context/AppSettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -58,6 +59,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/shipping" />
       <Stack.Screen name="admin/colors" />
       <Stack.Screen name="admin/hero" />
+      <Stack.Screen name="admin/promo-popup" />
       <Stack.Screen name="admin/offers" />
       <Stack.Screen name="admin/product-offers" />
       <Stack.Screen name="admin/orders" />
@@ -152,6 +154,7 @@ export default function RootLayout() {
                                   }}
                                 />
                               )}
+                              {!showWelcome && <PromotionalPopup />}
                             </>
                           )}
                         </GestureHandlerRootView>

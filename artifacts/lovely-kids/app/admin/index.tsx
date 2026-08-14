@@ -254,6 +254,19 @@ export default function AdminDashboardScreen() {
           </Pressable>
 
           <Pressable
+            onPress={() => router.push("/admin/promo-popup" as never)}
+            style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Ionicons name="megaphone-outline" size={28} color={colors.primary} />
+            <Text style={[styles.quickButtonTitle, { color: colors.foreground }]}>
+              الإعلان المنبثق
+            </Text>
+            <Text style={[styles.quickButtonValue, { color: colors.mutedForeground }]}>
+              {settings.promoPopupEnabled ? "مفعّل" : "غير مفعّل"}
+            </Text>
+          </Pressable>
+
+          <Pressable
             onPress={() => router.push("/admin/hero" as never)}
             style={[styles.quickButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           >

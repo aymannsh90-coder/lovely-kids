@@ -111,6 +111,12 @@ export interface AppSettings {
   shippingPromotionThreshold: number;
   shippingPromotionStartDate: string;
   shippingPromotionEndDate: string;
+  promoPopupEnabled: boolean;
+  promoPopupImageUrl: string;
+  promoPopupObjectPath: string;
+  promoPopupLink: string;
+  promoPopupStartDate: string;
+  promoPopupEndDate: string;
   productShareBaseUrl: string;
 }
 
@@ -195,6 +201,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   shippingPromotionThreshold: 500,
   shippingPromotionStartDate: "",
   shippingPromotionEndDate: "",
+  promoPopupEnabled: false,
+  promoPopupImageUrl: "",
+  promoPopupObjectPath: "",
+  promoPopupLink: "",
+  promoPopupStartDate: "",
+  promoPopupEndDate: "",
   productShareBaseUrl: "https://lovelykids.net",
 };
 
