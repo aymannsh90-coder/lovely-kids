@@ -261,7 +261,7 @@ export default function SettingsScreen() {
         </Field>
       </Section>
 
-      {/* ── الموسم النشط ── */}
+{/* ── الموسم النشط ── */}
       <Section title="🌤️ الموسم النشط">
         <View style={{ flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 10 }}>
           <Pressable
