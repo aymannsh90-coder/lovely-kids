@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { openDb, type Env } from "./db";
 import { handleAuthRequest } from "./auth-routes";
 import { handleProductRequest } from "./product-routes";
+import { handleMetaCatalogRequest } from "./meta-catalog-routes";
 import { handleSettingsRequest } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
 import { handleImageRequest } from "./image-routes";
@@ -99,6 +100,13 @@ export default {
     const { client, db } = await openDb(env);
 
     try {
+      const metaCatalogResponse =
+        await handleMetaCatalogRequest(request, db);
+
+      if (metaCatalogResponse) {
+        return metaCatalogResponse;
+      }
+
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
 
