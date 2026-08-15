@@ -114,6 +114,7 @@ export default function ProductsScreen({
   const isOffersView = offersOnly;
   const isNewArrivalsView = newOnly;
   const isSpecialView = isOffersView || isNewArrivalsView;
+  const showCatalogNavigation = !isNewArrivalsView;
 
   const filtered = products.filter((p) => {
     const matchOffers = isOffersView
@@ -144,7 +145,7 @@ export default function ProductsScreen({
   const shouldGroupByCategory =
   Platform.OS === "web" &&
   selectedCategory === "all" &&
-  !isSpecialView;
+  showCatalogNavigation;
 
 const groupedSections = shouldGroupByCategory
   ? categories
@@ -224,9 +225,9 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 : "المنتجات"}
           </Text>
 
-          {Platform.OS === "web" && !isSpecialView && !isDesktopWeb ? (
+          {Platform.OS === "web" && showCatalogNavigation && !isDesktopWeb ? (
             <View style={styles.headerMenuSlot}>
-              <CategoryMenu />
+              <CategoryMenu offersOnly={isOffersView} />
             </View>
           ) : null}
         </View>
@@ -234,7 +235,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
 
       {/* Gender Tabs — Web only */}
 
-      {Platform.OS === "web" && !isSpecialView ? (
+      {Platform.OS === "web" && showCatalogNavigation ? (
 
         <View
           style={[
@@ -625,8 +626,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
           }
         />
 
-        {isDesktopWeb && !isSpecialView ? (
-          <DesktopCategorySidebar />
+        {isDesktopWeb && showCatalogNavigation ? (
+          <DesktopCategorySidebar offersOnly={isOffersView} />
         ) : null}
       </View>
     );
@@ -686,8 +687,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
         showsVerticalScrollIndicator={false}
       />
 
-      {isDesktopWeb && !isSpecialView ? (
-        <DesktopCategorySidebar />
+      {isDesktopWeb && showCatalogNavigation ? (
+        <DesktopCategorySidebar offersOnly={isOffersView} />
       ) : null}
     </View>
   );

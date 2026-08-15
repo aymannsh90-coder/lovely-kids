@@ -72,7 +72,7 @@ function getCategoryEmoji(id: string, label: string): string | null {
   return "⭐";
 }
 
-export function CategoryMenu() {
+export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
   const colors = useColors();
   const categories = useProductCategories();
   const { width } = useWindowDimensions();
@@ -118,6 +118,14 @@ export function CategoryMenu() {
 
   const openCategory = (categoryId: string) => {
     closeMenu(() => {
+      if (offersOnly) {
+        router.push({
+          pathname: "/offers",
+          params: { category: categoryId },
+        });
+        return;
+      }
+
       router.push({
         pathname: "/(tabs)/products",
         params: { category: categoryId, fromMenu: "1" },
@@ -390,7 +398,7 @@ export function CategoryMenu() {
 }
 
 
-export function DesktopCategorySidebar() {
+export function DesktopCategorySidebar({ offersOnly = false }: { offersOnly?: boolean }) {
   const categories = useProductCategories();
   const { category } = useLocalSearchParams<{
     category?: string;
@@ -400,6 +408,14 @@ export function DesktopCategorySidebar() {
     typeof category === "string" ? category : "all";
 
   const openDesktopCategory = (categoryId: string) => {
+    if (offersOnly) {
+      router.push({
+        pathname: "/offers",
+        params: { category: categoryId },
+      });
+      return;
+    }
+
     router.push({
       pathname: "/(tabs)/products",
       params: { category: categoryId },
