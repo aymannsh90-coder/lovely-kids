@@ -55,6 +55,12 @@ const ADMIN_CARDS = [
     route: "/admin/product-offers" as const,
   },
   {
+    label: "ترتيب منتجات قسم العروض",
+    subtitle: "ترتيب تبويبات وأقسام العروض",
+    icon: "reorder-four-outline" as const,
+    route: "/admin/offers-category-order" as never,
+  },
+  {
     label: "عرض التوصيل",
     subtitle: "الحد الأدنى والفترة وأسعار العرض",
     icon: "car-outline" as const,

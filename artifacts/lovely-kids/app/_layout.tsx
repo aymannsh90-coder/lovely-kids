@@ -62,6 +62,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/promo-popup" />
       <Stack.Screen name="admin/offers" />
       <Stack.Screen name="admin/product-offers" />
+      <Stack.Screen name="admin/offers-category-order" />
       <Stack.Screen name="admin/orders" />
       <Stack.Screen name="admin/categories" />
       <Stack.Screen name="admin/users" />

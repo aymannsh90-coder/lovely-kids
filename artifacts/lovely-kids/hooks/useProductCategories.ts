@@ -6,7 +6,7 @@ import {
   DEFAULT_CATEGORY_LABELS,
 } from "@/data/products";
 
-export function useProductCategories() {
+export function useProductCategories(offersOnly = false) {
   const { settings } = useAppSettings();
 
   return useMemo(() => {
@@ -16,8 +16,18 @@ export function useProductCategories() {
       settings.hiddenCategories ?? [];
     const customCategories =
       settings.customCategories ?? [];
-    const categoryOrder =
+    const regularCategoryOrder =
       settings.categoryOrder ?? [];
+
+    const savedOffersOrder =
+      settings.offersCategoryOrder ?? [];
+
+    // أول مرة فقط: العروض تحافظ على الترتيب الحالي.
+    // بعد الحفظ يصبح لها ترتيب مستقل تماماً.
+    const categoryOrder =
+      offersOnly && savedOffersOrder.length > 0
+        ? savedOffersOrder
+        : regularCategoryOrder;
 
     const availableCategoryIds = [...CATEGORY_IDS, ...customCategories]
       .filter(
@@ -53,5 +63,7 @@ export function useProductCategories() {
     settings.hiddenCategories,
     settings.customCategories,
     settings.categoryOrder,
+    settings.offersCategoryOrder,
+    offersOnly,
   ]);
 }

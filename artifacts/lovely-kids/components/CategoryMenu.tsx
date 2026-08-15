@@ -74,7 +74,7 @@ function getCategoryEmoji(id: string, label: string): string | null {
 
 export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
   const colors = useColors();
-  const categories = useProductCategories();
+  const categories = useProductCategories(offersOnly);
   const { width } = useWindowDimensions();
   const { openCategories, category } = useLocalSearchParams<{
     openCategories?: string;
@@ -399,7 +399,7 @@ export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
 
 
 export function DesktopCategorySidebar({ offersOnly = false }: { offersOnly?: boolean }) {
-  const categories = useProductCategories();
+  const categories = useProductCategories(offersOnly);
   const { category } = useLocalSearchParams<{
     category?: string;
   }>();
