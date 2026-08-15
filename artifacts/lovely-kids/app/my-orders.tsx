@@ -12,8 +12,10 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -89,6 +91,11 @@ export default function MyOrdersScreen() {
   const [confirmOrder, setConfirmOrder] = useState<Order | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [guestOrderId, setGuestOrderId] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [guestOrder, setGuestOrder] = useState<Order | null>(null);
+  const [guestSearching, setGuestSearching] = useState(false);
+
   const topPadding = getResponsiveTopPadding(insets.top);
 
   const fetchOrders = useCallback(async (silent = false) => {
@@ -141,6 +148,42 @@ export default function MyOrdersScreen() {
 
     return () => clearInterval(intervalId);
   }, [fetchOrders]);
+
+  const lookupGuestOrder = async () => {
+    const orderId = Number(guestOrderId.trim());
+    const phone = guestPhone.trim();
+
+    if (!Number.isInteger(orderId) || orderId <= 0 || !phone) {
+      setErrorMsg("أدخل رقم الطلب ورقم الجوال بشكل صحيح");
+      return;
+    }
+
+    setGuestSearching(true);
+    setGuestOrder(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/orders/lookup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          customerPhone: phone,
+        }),
+      });
+
+      if (!res.ok) {
+        setErrorMsg("لم يتم العثور على طلب بهذه البيانات");
+        return;
+      }
+
+      const order = (await res.json()) as Order;
+      setGuestOrder(order);
+    } catch {
+      setErrorMsg("تعذّر الاتصال بالسيرفر، حاول مجدداً");
+    } finally {
+      setGuestSearching(false);
+    }
+  };
 
   // Called when user confirms cancellation in the modal
   const doCancel = async (order: Order) => {
@@ -206,16 +249,17 @@ export default function MyOrdersScreen() {
 
     try {
       const token = await getAuthToken();
-      if (!token) throw new Error("يجب تسجيل الدخول لرفع وصل الدفع");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(`${API_BASE}/api/orders/${order.id}/payment-proof`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           paymentProof: `data:image/jpeg;base64,${processed.base64}`,
+          customerPhone: order.customerPhone,
         }),
       });
 
@@ -243,7 +287,7 @@ export default function MyOrdersScreen() {
 
   const renderOrder = ({ item }: { item: Order }) => {
     const st = statusInfo(item.status);
-    const cancellable = canCancel(item.status);
+    const cancellable = !!user && canCancel(item.status);
     const isCancelling = cancelling === item.id;
     const isProofUploading = proofUploading === item.id;
     const canUploadProof = item.paymentMethod === "bank_transfer" && item.paymentStatus !== "confirmed" && item.status !== "cancelled" && item.status !== "done";
@@ -354,25 +398,120 @@ export default function MyOrdersScreen() {
           <Ionicons name="arrow-forward" size={24} color="#fff" />
         </Pressable>
         <Text style={styles.headerTitle}>طلباتي</Text>
-        <Pressable onPress={() => void fetchOrders()} style={styles.refreshBtn}>
+        <Pressable
+          onPress={() => {
+            if (user) void fetchOrders();
+            else if (guestOrderId.trim() && guestPhone.trim()) void lookupGuestOrder();
+          }}
+          style={styles.refreshBtn}
+        >
           <Ionicons name="refresh-outline" size={22} color="#fff" />
         </Pressable>
       </View>
 
       {!user ? (
-        <View style={styles.emptyBox}>
-          <Ionicons name="person-outline" size={60} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>سجّل دخولك أولاً</Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-            تحتاج إلى تسجيل الدخول لعرض طلباتك
-          </Text>
-          <Pressable
-            onPress={() => router.push("/(tabs)/profile")}
-            style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
+        <ScrollView
+          contentContainerStyle={[
+            styles.guestContent,
+            { paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View
+            style={[
+              styles.guestLookupCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
           >
-            <Text style={styles.emptyBtnText}>تسجيل الدخول</Text>
-          </Pressable>
-        </View>
+            <Ionicons name="search-outline" size={44} color={colors.primary} />
+
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              متابعة طلبك
+            </Text>
+
+            <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+              أدخل رقم الطلب ورقم الجوال المستخدم عند إجراء الطلب
+            </Text>
+
+            <View
+              style={[
+                styles.guestInputWrap,
+                { backgroundColor: colors.background, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons
+                name="receipt-outline"
+                size={19}
+                color={colors.mutedForeground}
+              />
+              <TextInput
+                value={guestOrderId}
+                onChangeText={setGuestOrderId}
+                placeholder="رقم الطلب"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="number-pad"
+                style={[styles.guestInput, { color: colors.foreground }]}
+                textAlign="right"
+              />
+            </View>
+
+            <View
+              style={[
+                styles.guestInputWrap,
+                { backgroundColor: colors.background, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons
+                name="call-outline"
+                size={19}
+                color={colors.mutedForeground}
+              />
+              <TextInput
+                value={guestPhone}
+                onChangeText={setGuestPhone}
+                placeholder="رقم الجوال"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="phone-pad"
+                style={[styles.guestInput, { color: colors.foreground }]}
+                textAlign="right"
+              />
+            </View>
+
+            <Pressable
+              onPress={() => void lookupGuestOrder()}
+              disabled={guestSearching}
+              style={[
+                styles.guestSearchBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: guestSearching ? 0.6 : 1,
+                },
+              ]}
+            >
+              {guestSearching ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="search-outline" size={19} color="#fff" />
+              )}
+              <Text style={styles.guestSearchBtnText}>
+                {guestSearching ? "جاري البحث..." : "بحث عن الطلب"}
+              </Text>
+            </Pressable>
+
+            <View style={styles.loginLink}>
+              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                لديك حساب؟
+              </Text>
+              <Pressable onPress={() => router.push("/(tabs)/profile")}>
+                <Text style={[styles.loginLinkText, { color: colors.primary }]}>
+                  تسجيل الدخول
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {guestOrder ? renderOrder({ item: guestOrder }) : null}
+        </ScrollView>
       ) : loading && orders.length === 0 ? (
         <View style={styles.emptyBox}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -497,6 +636,57 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   emptyBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  guestContent: {
+    padding: 16,
+    gap: 16,
+  },
+  guestLookupCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 20,
+    gap: 12,
+    alignItems: "center",
+  },
+  guestInputWrap: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  guestInput: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
+  },
+  guestSearchBtn: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 13,
+    marginTop: 4,
+  },
+  guestSearchBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  loginLink: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  loginLinkText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
   card: {
     borderRadius: 16,
     borderWidth: 1,

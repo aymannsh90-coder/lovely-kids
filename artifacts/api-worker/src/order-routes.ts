@@ -70,10 +70,6 @@ async function handleCreateOrder(
       env,
     );
 
-    if (!authUser) {
-      return json({ error: "يجب تسجيل الدخول لإتمام الطلب" }, 401);
-    }
-
     const newOrder = await createTrustedOrder(
       db,
       {
@@ -160,6 +156,44 @@ async function handleGetOrders(
   return json(orders);
 }
 
+async function handleLookupOrder(
+  request: Request,
+  db: Db,
+) {
+  const body = await request.json().catch(() => null) as {
+    orderId?: number;
+    customerPhone?: string;
+  } | null;
+
+  const orderId = Number(body?.orderId);
+  const customerPhone = body?.customerPhone?.trim() ?? "";
+
+  if (
+    !Number.isInteger(orderId) ||
+    orderId <= 0 ||
+    customerPhone.length === 0
+  ) {
+    return json({ error: "بيانات البحث غير صالحة" }, 400);
+  }
+
+  const rows = await db
+    .select()
+    .from(ordersTable)
+    .where(
+      and(
+        eq(ordersTable.id, orderId),
+        eq(ordersTable.customerPhone, customerPhone),
+      ),
+    )
+    .limit(1);
+
+  if (!rows[0]) {
+    return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  return json(rows[0]);
+}
+
 async function handleGetMyOrders(
   request: Request,
   db: Db,
@@ -228,6 +262,13 @@ export async function handleOrderRequest(
     path === "/api/orders"
   ) {
     return handleCreateOrder(request, db, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/orders/lookup"
+  ) {
+    return handleLookupOrder(request, db);
   }
 
   if (
@@ -535,12 +576,9 @@ async function handlePaymentProof(
     env,
   );
 
-  if (!user) {
-    return json({ error: "يجب تسجيل الدخول" }, 401);
-  }
-
   const body = await request.json().catch(() => null) as {
     paymentProof?: string;
+    customerPhone?: string;
   } | null;
 
   const paymentProof = body?.paymentProof;
@@ -572,17 +610,26 @@ async function handlePaymentProof(
     return json({ error: "الطلب غير موجود" }, 404);
   }
 
-  if (
-    !user.isAdmin &&
-    current[0].userId !== user.id &&
+  const guestPhone = body?.customerPhone?.trim() ?? "";
+
+  const canAccess =
+    user?.isAdmin === true ||
+    (user ? current[0].userId === user.id : false) ||
     (
-      current[0].userId !== null ||
-      !user.phone ||
-      current[0].customerPhone !== user.phone
-    )
-  ) {
+      !!user?.phone &&
+      current[0].userId === null &&
+      current[0].customerPhone === user.phone
+    ) ||
+    (
+      !user &&
+      current[0].userId === null &&
+      guestPhone.length > 0 &&
+      current[0].customerPhone === guestPhone
+    );
+
+  if (!canAccess) {
     return json(
-      { error: "لا يمكنك تعديل طلب لا يخص حسابك" },
+      { error: "لا يمكنك تعديل هذا الطلب" },
       403,
     );
   }

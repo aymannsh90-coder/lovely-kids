@@ -1,5 +1,5 @@
-import { pushTokensTable, webPushSubscriptionsTable } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { ordersTable, pushTokensTable, webPushSubscriptionsTable } from "@workspace/db/schema";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import webpush from "web-push";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -51,6 +51,48 @@ function isValidExpoPushToken(token: string) {
   );
 }
 
+async function resolveNotificationPhone(
+  db: Db,
+  user: { phone?: string | null } | null | undefined,
+  requestedPhone: string,
+  requestedOrderId: number,
+): Promise<{ ok: true; phone: string | null } | { ok: false }> {
+  const accountPhone = user?.phone?.trim();
+
+  if (accountPhone) {
+    return { ok: true, phone: accountPhone };
+  }
+
+  if (!requestedPhone) {
+    return { ok: true, phone: null };
+  }
+
+  if (
+    !Number.isInteger(requestedOrderId) ||
+    requestedOrderId <= 0
+  ) {
+    return { ok: false };
+  }
+
+  const rows = await db
+    .select({ id: ordersTable.id })
+    .from(ordersTable)
+    .where(
+      and(
+        eq(ordersTable.id, requestedOrderId),
+        eq(ordersTable.customerPhone, requestedPhone),
+        isNull(ordersTable.userId),
+      ),
+    )
+    .limit(1);
+
+  if (!rows[0]) {
+    return { ok: false };
+  }
+
+  return { ok: true, phone: requestedPhone };
+}
+
 async function handleRegisterToken(
   request: Request,
   db: Db,
@@ -61,6 +103,7 @@ async function handleRegisterToken(
     .catch(() => null) as {
       token?: unknown;
       phone?: unknown;
+      orderId?: unknown;
     } | null;
 
   if (
@@ -93,10 +136,26 @@ async function handleRegisterToken(
       ? body.phone.trim()
       : "";
 
-  const phone =
-    user?.phone?.trim() ||
-    requestedPhone ||
-    null;
+  const requestedOrderId =
+    typeof body.orderId === "number"
+      ? body.orderId
+      : Number(body.orderId);
+
+  const resolvedPhone = await resolveNotificationPhone(
+    db,
+    user,
+    requestedPhone,
+    requestedOrderId,
+  );
+
+  if (!resolvedPhone.ok) {
+    return json(
+      { error: "تعذر ربط الإشعارات بهذا الطلب" },
+      403,
+    );
+  }
+
+  const phone = resolvedPhone.phone;
 
   await db
     .insert(pushTokensTable)
@@ -121,6 +180,8 @@ async function handleRegisterWebPush(request: Request, db: Db, env: Env) {
     endpoint?: unknown;
     p256dh?: unknown;
     auth?: unknown;
+    phone?: unknown;
+    orderId?: unknown;
   } | null;
 
   if (
@@ -134,18 +195,44 @@ async function handleRegisterWebPush(request: Request, db: Db, env: Env) {
 
   const user = await getCurrentUser(db, request, env);
 
+  const requestedPhone =
+    typeof body.phone === "string"
+      ? body.phone.trim()
+      : "";
+
+  const requestedOrderId =
+    typeof body.orderId === "number"
+      ? body.orderId
+      : Number(body.orderId);
+
+  const resolvedPhone = await resolveNotificationPhone(
+    db,
+    user,
+    requestedPhone,
+    requestedOrderId,
+  );
+
+  if (!resolvedPhone.ok) {
+    return json(
+      { error: "تعذر ربط الإشعارات بهذا الطلب" },
+      403,
+    );
+  }
+
+  const phone = resolvedPhone.phone;
+
   await db.insert(webPushSubscriptionsTable).values({
     endpoint: body.endpoint,
     p256dh: body.p256dh,
     auth: body.auth,
-    phone: user?.phone ?? null,
+    phone,
     isAdmin: user?.isAdmin ?? false,
   }).onConflictDoUpdate({
     target: webPushSubscriptionsTable.endpoint,
     set: {
       p256dh: body.p256dh,
       auth: body.auth,
-      phone: user?.phone ?? null,
+      phone,
       isAdmin: user?.isAdmin ?? false,
     },
   });
