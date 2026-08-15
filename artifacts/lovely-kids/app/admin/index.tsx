@@ -1,7 +1,7 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -76,7 +77,9 @@ const ADMIN_CARDS = [
 export default function AdminDashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { products } = useProducts();
+  const [showInventoryDetails, setShowInventoryDetails] = useState(false);
   const { settings, updateSettings } = useAppSettings();
 
   const topPadding = getResponsiveTopPadding(insets.top);
@@ -93,6 +96,84 @@ export default function AdminDashboardScreen() {
     () => products.filter((product) => product.showInOffers === true).length,
     [products],
   );
+
+  const inventoryValue = useMemo(() => {
+    const getProductQuantity = (
+      product: (typeof products)[number],
+    ): number | null => {
+      const variantSizes =
+        product.colorVariants?.flatMap((variant) => variant.sizes ?? []) ?? [];
+
+      const allVariantStocksTracked =
+        variantSizes.length > 0 &&
+        variantSizes.every((size) => typeof size.stock === "number");
+
+      const variantStock =
+        allVariantStocksTracked
+          ? variantSizes.reduce(
+              (sum, size) => sum + Math.max(0, size.stock ?? 0),
+              0,
+            )
+          : null;
+
+      const generalStock =
+        typeof product.stock === "number"
+          ? Math.max(0, product.stock)
+          : null;
+
+      // عند وجود المخزون العام ومخزون المقاسات معاً:
+      // كلاهما ينقص عند البيع، لذلك نأخذ الحد الفعلي ولا نجمعهما.
+      if (generalStock !== null && variantStock !== null) {
+        return Math.min(generalStock, variantStock);
+      }
+
+      if (generalStock !== null) return generalStock;
+      if (variantStock !== null) return variantStock;
+
+      return null;
+    };
+
+    let regularPieces = 0;
+    let offerPieces = 0;
+    let regularValue = 0;
+    let offerValue = 0;
+    const untrackedProducts: { id: string; name: string }[] = [];
+
+    for (const product of products) {
+      const quantity = getProductQuantity(product);
+
+      if (quantity === null) {
+        untrackedProducts.push({
+          id: product.id,
+          name: product.nameAr || product.name || `منتج #${product.id}`,
+        });
+        continue;
+      }
+
+      const value = quantity * Math.max(0, Number(product.price) || 0);
+
+      if (product.showInOffers === true) {
+        offerPieces += quantity;
+        offerValue += value;
+      } else {
+        regularPieces += quantity;
+        regularValue += value;
+      }
+    }
+
+    return {
+      regularPieces,
+      offerPieces,
+      totalPieces: regularPieces + offerPieces,
+      regularValue,
+      offerValue,
+      totalValue: regularValue + offerValue,
+      untrackedProducts,
+    };
+  }, [products]);
+
+  const formatMoney = (value: number) =>
+    `${Math.round(value).toLocaleString("en-US")} ₪`;
 
 
 
@@ -167,6 +248,337 @@ export default function AdminDashboardScreen() {
             </Text>
           </View>
         </View>
+
+        {user?.isOwner === true ? (
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderColor: colors.primary + "45",
+              borderWidth: 1.5,
+              borderRadius: 18,
+              marginTop: 16,
+              marginBottom: 8,
+              overflow: "hidden",
+            }}
+          >
+            <Pressable
+              onPress={() => setShowInventoryDetails((prev) => !prev)}
+              style={{
+                padding: 16,
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 9,
+                }}
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 21,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.secondary,
+                  }}
+                >
+                  <Ionicons
+                    name="wallet-outline"
+                    size={24}
+                    color={colors.primary}
+                  />
+                </View>
+
+                <View>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontSize: 18,
+                      fontWeight: "900",
+                      textAlign: "right",
+                    }}
+                  >
+                    قيمة المخزون
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontSize: 12,
+                      textAlign: "right",
+                    }}
+                  >
+                    خاص بالمالك
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  {showInventoryDetails ? "إخفاء" : "عرض التفاصيل"}
+                </Text>
+
+                <Ionicons
+                  name={
+                    showInventoryDetails
+                      ? "chevron-up-outline"
+                      : "chevron-down-outline"
+                  }
+                  size={18}
+                  color={colors.primary}
+                />
+              </View>
+            </Pressable>
+
+            {showInventoryDetails ? (
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingBottom: 16,
+                  gap: 14,
+                }}
+              >
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: colors.border,
+                  }}
+                />
+
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 13,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  إجمالي المخزون:{" "}
+                  {inventoryValue.totalPieces.toLocaleString("en-US")} قطعة
+                </Text>
+
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      flex: 1,
+                      minWidth: 130,
+                      padding: 12,
+                      borderRadius: 14,
+                      backgroundColor: colors.background,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.mutedForeground,
+                        fontSize: 12,
+                        textAlign: "right",
+                      }}
+                    >
+                      كل المنتجات
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontSize: 18,
+                        fontWeight: "900",
+                        textAlign: "right",
+                        marginTop: 4,
+                      }}
+                    >
+                      {formatMoney(inventoryValue.regularValue)}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.mutedForeground,
+                        fontSize: 11,
+                        textAlign: "right",
+                        marginTop: 3,
+                      }}
+                    >
+                      {inventoryValue.regularPieces.toLocaleString("en-US")} قطعة
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                      minWidth: 130,
+                      padding: 12,
+                      borderRadius: 14,
+                      backgroundColor: colors.background,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.mutedForeground,
+                        fontSize: 12,
+                        textAlign: "right",
+                      }}
+                    >
+                      منتجات العروض
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontSize: 18,
+                        fontWeight: "900",
+                        textAlign: "right",
+                        marginTop: 4,
+                      }}
+                    >
+                      {formatMoney(inventoryValue.offerValue)}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.mutedForeground,
+                        fontSize: 11,
+                        textAlign: "right",
+                        marginTop: 3,
+                      }}
+                    >
+                      {inventoryValue.offerPieces.toLocaleString("en-US")} قطعة
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                      minWidth: 130,
+                      padding: 12,
+                      borderRadius: 14,
+                      backgroundColor: colors.primary + "10",
+                      borderWidth: 1.5,
+                      borderColor: colors.primary + "55",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontSize: 12,
+                        fontWeight: "800",
+                        textAlign: "right",
+                      }}
+                    >
+                      إجمالي قيمة البضاعة
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontSize: 21,
+                        fontWeight: "900",
+                        textAlign: "right",
+                        marginTop: 4,
+                      }}
+                    >
+                      {formatMoney(inventoryValue.totalValue)}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.mutedForeground,
+                        fontSize: 11,
+                        textAlign: "right",
+                        marginTop: 3,
+                      }}
+                    >
+                      {inventoryValue.totalPieces.toLocaleString("en-US")} قطعة
+                    </Text>
+                  </View>
+                </View>
+
+                {inventoryValue.untrackedProducts.length > 0 ? (
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={16}
+                      color={colors.mutedForeground}
+                    />
+                    <Text
+                      style={{
+                        flex: 1,
+                        color: colors.mutedForeground,
+                        fontSize: 11,
+                        textAlign: "right",
+                      }}
+                    >
+                      يوجد {inventoryValue.untrackedProducts.length} منتج بدون كمية رقمية،
+                      لذلك لم يدخل في قيمة المخزون.
+                    </Text>
+
+                    <View style={{ marginTop: 8, gap: 4 }}>
+                      {inventoryValue.untrackedProducts.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/admin/add-product",
+                              params: { productId: item.id },
+                            })
+                          }
+                          style={{
+                            flexDirection: "row-reverse",
+                            alignItems: "center",
+                            gap: 5,
+                            paddingVertical: 3,
+                          }}
+                        >
+                          <Ionicons
+                            name="create-outline"
+                            size={15}
+                            color={colors.primary}
+                          />
+                          <Text
+                            style={{
+                              flex: 1,
+                              color: colors.primary,
+                              fontSize: 12,
+                              fontWeight: "800",
+                              textAlign: "right",
+                              textDecorationLine: "underline",
+                            }}
+                          >
+                            {item.name}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Main admin cards */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
