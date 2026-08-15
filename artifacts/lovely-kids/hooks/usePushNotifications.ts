@@ -91,8 +91,9 @@ export async function registerForPushNotificationsAsync():
 
 export async function saveTokenToServer(
   token: string,
-  _phone?: string | null,
+  phone?: string | null,
   getAuthToken?: GetAuthToken,
+  orderId?: number | null,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const subscription = JSON.parse(token) as WebPushData;
@@ -111,7 +112,11 @@ export async function saveTokenToServer(
       {
         method: "POST",
         headers,
-        body: JSON.stringify(subscription),
+        body: JSON.stringify({
+          ...subscription,
+          phone: phone ?? undefined,
+          orderId: orderId ?? undefined,
+        }),
       },
     );
 
@@ -138,6 +143,7 @@ export async function saveTokenToServer(
 export async function enableWebPushNotifications(
   phone?: string | null,
   getAuthToken?: GetAuthToken,
+  orderId?: number | null,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isWebPushSupported()) {
     return {
@@ -168,6 +174,7 @@ export async function enableWebPushNotifications(
     token,
     phone,
     getAuthToken,
+    orderId,
   );
 }
 

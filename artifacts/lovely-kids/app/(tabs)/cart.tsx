@@ -33,6 +33,7 @@ import { getAvailableStock } from "@/data/products";
 import { confirmRemoveFromCart, showStockLimit } from "@/utils/cartPrompts";
 
 import { API_BASE } from "@/constants/api";
+import GuestOrderNotificationPrompt from "@/components/GuestOrderNotificationPrompt";
 
 import { trackMetaEvent } from "@/utils/metaPixel";
 
@@ -168,32 +169,7 @@ export default function CartScreen() {
   const whatsapp = settings.whatsappNumber || "97292376808";
 
   const handleCheckout = async () => {
-    if (!user) {
-      if (Platform.OS === "web") {
-        window.alert("لإتمام الطلب يرجى التسجيل أو تسجيل الدخول");
-        router.push("/(tabs)/profile");
-      } else {
-        Alert.alert(
-          "تسجيل الدخول مطلوب",
-          "يجب تسجيل الدخول أو إنشاء حساب لإتمام الطلب.",
-          [
-            { text: "إلغاء", style: "cancel" },
-            { text: "تسجيل الدخول", onPress: () => router.push("/(tabs)/profile") },
-          ],
-        );
-      }
-      return;
-    }
-
     if (!name.trim() || !phone.trim() || !address.trim() || !selectedZone) return;
-
-    if (paymentMethod === "bank_transfer" && (!user || !user.phone)) {
-      Alert.alert(
-        "تسجيل الدخول مطلوب",
-        "التحويل البنكي ورفع وصل الدفع يتطلبان حسابًا يحتوي على رقم هاتف."
-      );
-      return;
-    }
 
     setLoading(true);
 
@@ -386,15 +362,19 @@ export default function CartScreen() {
 
     setProofUploading(true);
     try {
-        const token = await getAuthToken();
-        if (!token) {
-          throw new Error("يجب تسجيل الدخول لرفع وصل الدفع");
-        }
+      const token = await getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(`${API_BASE}/api/orders/${orderId}/payment-proof`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ paymentProof: `data:image/jpeg;base64,${base64}` }),
+        headers,
+        body: JSON.stringify({
+          paymentProof: `data:image/jpeg;base64,${base64}`,
+          customerPhone: phone.trim(),
+        }),
       });
       if (res.ok) {
         setProofUploaded(true);
@@ -456,6 +436,44 @@ export default function CartScreen() {
           </View>
         </View>
 
+        {!user && orderId ? (
+          <View
+            style={[
+              styles.guestOrderNumberCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.primary + "55",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.guestOrderNumberLabel,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              رقم طلبك
+            </Text>
+            <Text
+              selectable
+              style={[
+                styles.guestOrderNumberValue,
+                { color: colors.primary },
+              ]}
+            >
+              #{orderId}
+            </Text>
+            <Text
+              style={[
+                styles.guestOrderNumberHint,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              احتفظ بهذا الرقم لمتابعة حالة طلبك
+            </Text>
+          </View>
+        ) : null}
+
         {/* Upload Receipt */}
         <View style={[styles.uploadCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.uploadTitle, { color: colors.foreground }]}>
@@ -484,6 +502,13 @@ export default function CartScreen() {
             </Pressable>
           )}
         </View>
+
+        {!user && orderId ? (
+          <GuestOrderNotificationPrompt
+            phone={phone}
+            orderId={orderId}
+          />
+        ) : null}
 
         {proofUploaded && (
           <Pressable
@@ -517,12 +542,56 @@ export default function CartScreen() {
         <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
           سيتم التواصل معك قريباً على رقم الهاتف المُدخل
         </Text>
+        {!user && orderId ? (
+          <View
+            style={[
+              styles.guestOrderNumberCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.primary + "55",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.guestOrderNumberLabel,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              رقم طلبك
+            </Text>
+            <Text
+              selectable
+              style={[
+                styles.guestOrderNumberValue,
+                { color: colors.primary },
+              ]}
+            >
+              #{orderId}
+            </Text>
+            <Text
+              style={[
+                styles.guestOrderNumberHint,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              احتفظ بهذا الرقم لمتابعة حالة طلبك
+            </Text>
+          </View>
+        ) : null}
+
         <View style={[styles.successInfo, { backgroundColor: colors.secondary + "40", borderColor: colors.secondary }]}>
           <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
           <Text style={[styles.successInfoText, { color: colors.foreground }]}>
             تم إرسال تفاصيل طلبك عبر WhatsApp للمتجر
           </Text>
         </View>
+        {!user && orderId ? (
+          <GuestOrderNotificationPrompt
+            phone={phone}
+            orderId={orderId}
+          />
+        ) : null}
         <Pressable
           onPress={() => { setStep("cart"); router.push("/my-orders"); }}
           style={[styles.backHomeBtn, { backgroundColor: colors.primary }]}
@@ -1150,6 +1219,27 @@ const styles = StyleSheet.create({
   successSub: { fontSize: 14, textAlign: "center", maxWidth: 280 },
   successInfo: { flexDirection: "row-reverse", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginTop: 8 },
   successInfoText: { fontSize: 13, textAlign: "right", flex: 1 },
+  guestOrderNumberCard: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+    gap: 4,
+  },
+  guestOrderNumberLabel: {
+    fontSize: 12,
+    textAlign: "center",
+  },
+  guestOrderNumberValue: {
+    fontSize: 26,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  guestOrderNumberHint: {
+    fontSize: 12,
+    textAlign: "center",
+  },
   backHomeBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 16, marginTop: 8 },
   backHomeBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
   bankCard: { width: "100%", borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 12 },
