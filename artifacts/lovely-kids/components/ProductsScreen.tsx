@@ -86,7 +86,7 @@ export default function ProductsScreen({
     : null;
   const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
-  const categories = useProductCategories();
+  const categories = useProductCategories(offersOnly);
   const seasonLabels = settings.seasonLabels ?? DEFAULT_SEASON_LABELS;
   const seasons = SEASON_IDS.map((id) => ({
     id,

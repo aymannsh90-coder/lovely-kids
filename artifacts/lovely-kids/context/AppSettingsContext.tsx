@@ -99,6 +99,7 @@ export interface AppSettings {
   hiddenCategories: string[];
   customCategories: string[];
   categoryOrder: string[];
+  offersCategoryOrder: string[];
   productOrderByCategory: Record<string, string[]>;
   seasonLabels: Record<string, string>;
   activeSeason: "summer" | "winter" | null;
@@ -154,6 +155,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   hiddenCategories: [],
   customCategories: [],
   categoryOrder: [],
+  offersCategoryOrder: [],
   productOrderByCategory: {},
   seasonLabels: DEFAULT_SEASON_LABELS,
   activeSeason: null,
