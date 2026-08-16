@@ -316,7 +316,7 @@ export default function HomeScreen() {
     }
 
     if (isIos) {
-      window.alert("من Safari اضغط زر المشاركة ثم اختر: إضافة إلى الشاشة الرئيسية");
+      window.alert("اضغط على زر المشاركة ثم عرض المزيد ثم إضافة إلى الصفحة الرئيسية ثم إضافة");
     }
   };
 
