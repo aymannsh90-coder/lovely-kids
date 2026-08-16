@@ -426,7 +426,7 @@ export default function AddProductScreen() {
       )
     );
 
-    if (index === 0 || image === previousUrl) {
+    if (image === previousUrl) {
       setImage(url);
     }
   };
@@ -1240,21 +1240,46 @@ export default function AddProductScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.foreground }]}>صور المنتج *</Text>
           <Text style={[styles.hint, { color: colors.mutedForeground, marginBottom: 4 }]}>
-            الصورة الأولى هي الصورة الرئيسية — يمكنك إضافة حتى 8 صور
+            اختر الصورة الرئيسية بالضغط على ⭐ — يمكنك إضافة حتى 8 صور
           </Text>
 
           {/* Image Grid */}
           {images.length > 0 && (
             <View style={styles.imageGrid}>
               {images.map((img, idx) => (
-                <View key={idx} style={[styles.gridItem, { borderColor: idx === 0 ? colors.primary : colors.border }]}>
-                  {idx === 0 && (
+                <View key={idx} style={[styles.gridItem, { borderColor: image === img ? colors.primary : colors.border }]}>
+                  {image === img && (
                     <View style={[styles.mainBadge, { backgroundColor: colors.primary }]}>
                       <Text style={styles.mainBadgeText}>رئيسية</Text>
                     </View>
                   )}
                   <Image source={{ uri: img }} style={styles.gridImage} resizeMode="contain" />
                   <View style={styles.gridActions}>
+                    <Pressable
+                      onPress={() => setImage(img)}
+                      disabled={image === img}
+                      accessibilityLabel={
+                        image === img
+                          ? "الصورة الرئيسية"
+                          : "اجعلها الصورة الرئيسية"
+                      }
+                      style={[
+                        styles.gridBtn,
+                        {
+                          backgroundColor:
+                            image === img
+                              ? colors.primary + "25"
+                              : colors.primary + "10",
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={image === img ? "star" : "star-outline"}
+                        size={15}
+                        color={colors.primary}
+                      />
+                    </Pressable>
+
                     <Pressable
                       onPress={() => handleReplaceImage(idx)}
                       disabled={uploading}
@@ -1321,15 +1346,29 @@ export default function AddProductScreen() {
           <TextInput
             value={image}
             onChangeText={(v) => {
-              const previousUrl = images[0] ?? image;
+              const previousUrl = image;
               setImage(v);
 
               if (!v) return;
 
               setImages((prev) => {
                 if (prev.length === 0) return [v];
+
                 const updated = [...prev];
-                updated[0] = v;
+                const mainIndex = previousUrl
+                  ? updated.indexOf(previousUrl)
+                  : -1;
+
+                if (mainIndex >= 0) {
+                  updated[mainIndex] = v;
+                } else if (!updated.includes(v)) {
+                  updated.unshift(v);
+
+                  if (updated.length > 8) {
+                    updated.pop();
+                  }
+                }
+
                 return [...new Set(updated)];
               });
 
