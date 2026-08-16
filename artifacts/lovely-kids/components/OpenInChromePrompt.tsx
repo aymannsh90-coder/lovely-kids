@@ -32,6 +32,19 @@ export function OpenInChromePrompt() {
 
     const ua = navigator.userAgent || "";
 
+    const navigatorWithStandalone = navigator as Navigator & {
+      standalone?: boolean;
+    };
+
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      navigatorWithStandalone.standalone === true;
+
+    if (isStandalone) {
+      setShow(false);
+      return;
+    }
+
     const android = /Android/i.test(ua);
 
     const ios =
