@@ -66,10 +66,46 @@ function getCountry(request: Request) {
   return /^[A-Z]{2}$/.test(value) ? value : "XX";
 }
 
+function isLikelyAutomatedRequest(request: Request) {
+  const userAgent =
+    request.headers.get("user-agent")?.trim() ?? "";
+
+  const purpose = [
+    request.headers.get("purpose"),
+    request.headers.get("sec-purpose"),
+    request.headers.get("x-purpose"),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    purpose.includes("prefetch") ||
+    purpose.includes("preview")
+  ) {
+    return true;
+  }
+
+  if (!userAgent) {
+    return false;
+  }
+
+  return /(?:facebookexternalhit|facebot|meta-externalagent|meta-externalfetcher|googlebot|google-inspectiontool|bingbot|bingpreview|yandexbot|baiduspider|duckduckbot|slurp|petalbot|applebot|bytespider|crawler|spider|headlesschrome|lighthouse|pagespeed|\bbot\b|curl\/|wget\/|python-requests|postmanruntime|insomnia|node-fetch|undici)/i.test(
+    userAgent,
+  );
+}
+
 async function recordVisit(
   request: Request,
   db: Db,
 ) {
+  if (isLikelyAutomatedRequest(request)) {
+    return json({
+      ok: true,
+      ignored: "automated",
+    });
+  }
+
   const body = await request.json().catch(() => null) as
     | { visitorId?: string }
     | null;
