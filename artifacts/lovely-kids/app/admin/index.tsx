@@ -1,7 +1,7 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
@@ -80,12 +81,50 @@ const ADMIN_CARDS = [
   },
 ];
 
+type VisitorAnalyticsStats = {
+  today: number;
+  last7Days: number;
+  last30Days: number;
+  total: number;
+  countries: {
+    country: string;
+    visitors: number;
+  }[];
+};
+
+const ANALYTICS_COUNTRY_LABELS: Record<string, string> = {
+  PS: "فلسطين",
+  IL: "إسرائيل",
+  JO: "الأردن",
+  EG: "مصر",
+  SA: "السعودية",
+  AE: "الإمارات",
+  QA: "قطر",
+  KW: "الكويت",
+  TR: "تركيا",
+  US: "الولايات المتحدة",
+  CA: "كندا",
+  DE: "ألمانيا",
+  GB: "بريطانيا",
+  XX: "غير معروف",
+};
+
+function analyticsCountryLabel(code: string) {
+  return ANALYTICS_COUNTRY_LABELS[code] ?? code;
+}
+
 export default function AdminDashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, getAuthToken } = useAuth();
   const { products } = useProducts();
   const [showInventoryDetails, setShowInventoryDetails] = useState(false);
+  const [visitorStats, setVisitorStats] =
+    useState<VisitorAnalyticsStats | null>(null);
+  const [visitorStatsLoading, setVisitorStatsLoading] =
+    useState(false);
+  const [showVisitorDetails, setShowVisitorDetails] =
+    useState(false);
   const { settings, updateSettings } = useAppSettings();
 
   const topPadding = getResponsiveTopPadding(insets.top);
@@ -102,6 +141,52 @@ export default function AdminDashboardScreen() {
     () => products.filter((product) => product.showInOffers === true).length,
     [products],
   );
+
+  useEffect(() => {
+    if (user?.isOwner !== true) {
+      setVisitorStats(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      setVisitorStatsLoading(true);
+
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+
+        const response = await fetch(
+          `${API_BASE}/api/analytics/summary`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (!response.ok) return;
+
+        const data =
+          (await response.json()) as VisitorAnalyticsStats;
+
+        if (!cancelled) {
+          setVisitorStats(data);
+        }
+      } catch {
+        // لا نعطل لوحة الإدارة إذا تعطلت الإحصائيات مؤقتاً.
+      } finally {
+        if (!cancelled) {
+          setVisitorStatsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.isOwner, getAuthToken]);
 
   const inventoryValue = useMemo(() => {
     const getProductQuantity = (
@@ -581,6 +666,267 @@ export default function AdminDashboardScreen() {
                     </View>
                   </View>
                 ) : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {user?.isOwner === true ? (
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderColor: colors.primary + "45",
+              borderWidth: 1.5,
+              borderRadius: 18,
+              marginTop: 12,
+              marginBottom: 8,
+              overflow: "hidden",
+            }}
+          >
+            <Pressable
+              onPress={() =>
+                setShowVisitorDetails((prev) => !prev)
+              }
+              style={{
+                padding: 16,
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 10,
+                  flex: 1,
+                }}
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 21,
+                    backgroundColor: colors.primary + "16",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="analytics-outline"
+                    size={24}
+                    color={colors.primary}
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontSize: 17,
+                      fontWeight: "900",
+                      textAlign: "right",
+                    }}
+                  >
+                    إحصائيات الزوار
+                  </Text>
+
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontSize: 12,
+                      textAlign: "right",
+                      marginTop: 2,
+                    }}
+                  >
+                    زوار فريدون • خاص بالمالك
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  {showVisitorDetails
+                    ? "إخفاء"
+                    : "عرض التفاصيل"}
+                </Text>
+
+                <Ionicons
+                  name={
+                    showVisitorDetails
+                      ? "chevron-up"
+                      : "chevron-down"
+                  }
+                  size={18}
+                  color={colors.primary}
+                />
+              </View>
+            </Pressable>
+
+            {showVisitorDetails ? (
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingBottom: 16,
+                }}
+              >
+                {visitorStatsLoading && !visitorStats ? (
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      textAlign: "center",
+                      paddingVertical: 12,
+                    }}
+                  >
+                    جاري تحميل الإحصائيات...
+                  </Text>
+                ) : visitorStats ? (
+                  <>
+                    <View
+                      style={{
+                        flexDirection: "row-reverse",
+                        flexWrap: "wrap",
+                        gap: 8,
+                      }}
+                    >
+                      {[
+                        {
+                          label: "اليوم",
+                          value: visitorStats.today,
+                        },
+                        {
+                          label: "آخر 7 أيام",
+                          value: visitorStats.last7Days,
+                        },
+                        {
+                          label: "آخر 30 يوم",
+                          value: visitorStats.last30Days,
+                        },
+                        {
+                          label: "إجمالي الزوار",
+                          value: visitorStats.total,
+                        },
+                      ].map((item) => (
+                        <View
+                          key={item.label}
+                          style={{
+                            width: "48%",
+                            flexGrow: 1,
+                            backgroundColor: colors.background,
+                            borderRadius: 13,
+                            padding: 11,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors.primary,
+                              fontSize: 21,
+                              fontWeight: "900",
+                              textAlign: "center",
+                            }}
+                          >
+                            {item.value.toLocaleString("en-US")}
+                          </Text>
+
+                          <Text
+                            style={{
+                              color: colors.mutedForeground,
+                              fontSize: 11,
+                              fontWeight: "700",
+                              textAlign: "center",
+                              marginTop: 3,
+                            }}
+                          >
+                            {item.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    {visitorStats.countries.length > 0 ? (
+                      <View
+                        style={{
+                          marginTop: 14,
+                          borderTopWidth: 1,
+                          borderTopColor: colors.border,
+                          paddingTop: 12,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.foreground,
+                            fontSize: 14,
+                            fontWeight: "900",
+                            textAlign: "right",
+                            marginBottom: 8,
+                          }}
+                        >
+                          الدول • آخر 30 يوم
+                        </Text>
+
+                        {visitorStats.countries
+                          .slice(0, 6)
+                          .map((item) => (
+                            <View
+                              key={item.country}
+                              style={{
+                                flexDirection: "row-reverse",
+                                justifyContent: "space-between",
+                                paddingVertical: 5,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: colors.foreground,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                {analyticsCountryLabel(
+                                  item.country,
+                                )}
+                              </Text>
+
+                              <Text
+                                style={{
+                                  color: colors.primary,
+                                  fontWeight: "900",
+                                }}
+                              >
+                                {item.visitors.toLocaleString(
+                                  "en-US",
+                                )}{" "}
+                                زائر
+                              </Text>
+                            </View>
+                          ))}
+                      </View>
+                    ) : null}
+                  </>
+                ) : (
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      textAlign: "center",
+                      paddingVertical: 8,
+                    }}
+                  >
+                    لا توجد بيانات زوار حتى الآن.
+                  </Text>
+                )}
               </View>
             ) : null}
           </View>

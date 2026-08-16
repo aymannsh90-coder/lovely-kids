@@ -12,6 +12,7 @@ import { handleNotificationRequest } from "./notification-routes";
 import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
+import { handleVisitorAnalyticsRequest } from "./visitor-analytics-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
 import { handlePosSaleRequest } from "./pos-sale-routes";
 import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
@@ -202,6 +203,17 @@ export default {
 
       if (usersResponse) {
         return usersResponse;
+      }
+
+      const visitorAnalyticsResponse =
+        await handleVisitorAnalyticsRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (visitorAnalyticsResponse) {
+        return visitorAnalyticsResponse;
       }
 
       if (path === "/api/health" || path === "/api/healthz") {
