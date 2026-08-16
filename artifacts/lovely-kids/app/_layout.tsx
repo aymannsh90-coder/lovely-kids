@@ -17,6 +17,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ClerkProviderWrapper } from "@/components/ClerkProviderWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PromotionalPopup } from "@/components/PromotionalPopup";
+import { StoreShareButton } from "@/components/StoreShareButton";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
 import { AppSettingsProvider } from "@/context/AppSettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -25,6 +26,7 @@ import { NewOrdersProvider } from "@/context/NewOrdersContext";
 import { ProductsProvider } from "@/context/ProductsContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useVisitorAnalytics } from "@/hooks/useVisitorAnalytics";
 
 SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({
@@ -42,6 +44,8 @@ const SPLASH_HARD_TIMEOUT_MS = 3500;
 function RootLayoutNav() {
   const { user, getAuthToken } = useAuth();
   usePushNotifications(user?.phone, getAuthToken);
+  useVisitorAnalytics();
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
@@ -155,7 +159,12 @@ export default function RootLayout() {
                                   }}
                                 />
                               )}
-                              {!showWelcome && <PromotionalPopup />}
+                              {!showWelcome && (
+                                <>
+                                  <PromotionalPopup />
+                                  <StoreShareButton />
+                                </>
+                              )}
                             </>
                           )}
                         </GestureHandlerRootView>
