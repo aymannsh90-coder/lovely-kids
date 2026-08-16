@@ -21,12 +21,14 @@ export function StoreShareButton() {
   const [showLabel, setShowLabel] = useState(true);
 
   useEffect(() => {
+    if (!showLabel) return;
+
     const timer = setTimeout(() => {
       setShowLabel(false);
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [showLabel]);
 
   if (pathname.startsWith("/admin")) {
     return null;
@@ -85,7 +87,14 @@ export function StoreShareButton() {
       }}
     >
       <Pressable
-        onPress={() => void shareStore()}
+        onPress={() => {
+          if (!showLabel) {
+            setShowLabel(true);
+            return;
+          }
+
+          void shareStore();
+        }}
         accessibilityRole="button"
         accessibilityLabel="مشاركة المتجر مع الأصدقاء"
         style={({ pressed }) => ({
