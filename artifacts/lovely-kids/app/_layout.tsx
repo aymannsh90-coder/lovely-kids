@@ -18,6 +18,7 @@ import { ClerkProviderWrapper } from "@/components/ClerkProviderWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PromotionalPopup } from "@/components/PromotionalPopup";
 import { StoreShareButton } from "@/components/StoreShareButton";
+import { OpenInChromePrompt } from "@/components/OpenInChromePrompt";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
 import { AppSettingsProvider } from "@/context/AppSettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -163,6 +164,7 @@ export default function RootLayout() {
                                 <>
                                   <PromotionalPopup />
                                   <StoreShareButton />
+                                  <OpenInChromePrompt />
                                 </>
                               )}
                             </>
