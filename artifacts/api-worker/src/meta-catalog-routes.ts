@@ -113,6 +113,9 @@ export async function handleMetaCatalogRequest(
     .orderBy(desc(productsTable.createdAt));
 
   const eligibleProducts = products.filter((product) => {
+    // Hidden or trashed products must never reach Meta/Facebook Catalog.
+    if (product.isHidden || product.deletedAt) return false;
+
     const isInActiveSeason = product.season === activeSeason;
     const hasNoSeason = !product.season;
     const isInOffers = !!product.showInOffers;

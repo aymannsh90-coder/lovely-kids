@@ -47,6 +47,8 @@ export interface Product {
   isNew?: boolean;
   isPinned?: boolean;
   showInOffers?: boolean;
+  isHidden?: boolean;
+  deletedAt?: string | null;
   facebookUrl?: string | null;
   instagramUrl?: string | null;
   tiktokUrl?: string | null;

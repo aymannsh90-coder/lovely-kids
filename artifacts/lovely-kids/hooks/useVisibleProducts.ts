@@ -9,10 +9,14 @@ export function useVisibleProducts() {
   const hidden = settings.hiddenCategories ?? [];
 
   const visibleProducts = useMemo(() => {
+    const availableProducts = products.filter(
+      (p) => !p.isHidden && !p.deletedAt
+    );
+
     const filtered =
       hidden.length > 0
-        ? products.filter((p) => !hidden.includes(p.category))
-        : products;
+        ? availableProducts.filter((p) => !hidden.includes(p.category))
+        : availableProducts;
 
     const activeSeason = settings.activeSeason;
 
