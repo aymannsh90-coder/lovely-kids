@@ -336,6 +336,9 @@ export default function AdminProductsScreen() {
   };
 
   const trashCount = products.filter((product) => !!product.deletedAt).length;
+  const hiddenCount = products.filter(
+    (product) => !product.deletedAt && product.isHidden,
+  ).length;
 
   const filteredProducts = products.filter((product) => {
     const isDeleted = !!product.deletedAt;
@@ -463,76 +466,83 @@ export default function AdminProductsScreen() {
         style={{
           flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
           flexWrap: "wrap",
-          gap: 10,
+          gap: 7,
           paddingHorizontal: 16,
           paddingVertical: 10,
           alignItems: "center",
         }}
       >
-        <Pressable onPress={() => setStockFilter("all")}>
-          <Text style={{ fontWeight: "700", color: stockFilter === "all" ? colors.primary : colors.foreground }}>
-            الكل
-          </Text>
-        </Pressable>
+        {[
+          {
+            key: "all" as const,
+            label: "الكل",
+            icon: "grid-outline" as const,
+            activeColor: colors.primary,
+          },
+          {
+            key: "offers" as const,
+            label: "العروض",
+            icon: "flame-outline" as const,
+            activeColor: "#f97316",
+          },
+          {
+            key: "out" as const,
+            label: "منتهي المخزون",
+            icon: "alert-circle-outline" as const,
+            activeColor: "#ef4444",
+          },
+          {
+            key: "hidden" as const,
+            label: hiddenCount ? `المخفي (${hiddenCount})` : "المخفي",
+            icon: "eye-off-outline" as const,
+            activeColor: "#d97706",
+          },
+          {
+            key: "trash" as const,
+            label: trashCount
+              ? `المحذوفات (${trashCount})`
+              : "المحذوفات",
+            icon: "trash-outline" as const,
+            activeColor: "#dc2626",
+          },
+        ].map((filter) => {
+          const active = stockFilter === filter.key;
 
-        <Pressable onPress={() => setStockFilter("offers")}>
-          <Text
-            style={{
-              fontWeight: "700",
-              color: stockFilter === "offers" ? "#f97316" : colors.foreground,
-            }}
-          >
-            🔥 العروض
-          </Text>
-        </Pressable>
-
-        <Pressable onPress={() => setStockFilter("out")}>
-          <Text style={{ fontWeight: "700", color: stockFilter === "out" ? "#ef4444" : colors.foreground }}>
-            منتهي من المخزون
-          </Text>
-        </Pressable>
-
-        <Pressable onPress={() => setStockFilter("hidden")}>
-          <Text
-            style={{
-              fontWeight: "700",
-              color: stockFilter === "hidden" ? "#d97706" : colors.foreground,
-            }}
-          >
-            👁️ المخفي
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setStockFilter("trash")}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 4,
-            borderWidth: 1,
-            borderColor: stockFilter === "trash" ? "#ef4444" : colors.border,
-            borderRadius: 10,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            backgroundColor:
-              stockFilter === "trash" ? "#fee2e2" : colors.card,
-          }}
-        >
-          <Ionicons
-            name="trash-outline"
-            size={15}
-            color={stockFilter === "trash" ? "#dc2626" : colors.mutedForeground}
-          />
-          <Text
-            style={{
-              fontWeight: "800",
-              fontSize: 12,
-              color: stockFilter === "trash" ? "#dc2626" : colors.foreground,
-            }}
-          >
-            المحذوفات{trashCount ? ` (${trashCount})` : ""}
-          </Text>
-        </Pressable>
+          return (
+            <Pressable
+              key={filter.key}
+              onPress={() => setStockFilter(filter.key)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                borderWidth: 1,
+                borderColor: active ? filter.activeColor : colors.border,
+                borderRadius: 10,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                backgroundColor: active
+                  ? `${filter.activeColor}18`
+                  : colors.card,
+              }}
+            >
+              <Ionicons
+                name={filter.icon}
+                size={14}
+                color={active ? filter.activeColor : colors.mutedForeground}
+              />
+              <Text
+                style={{
+                  fontWeight: "800",
+                  fontSize: 12,
+                  color: active ? filter.activeColor : colors.foreground,
+                }}
+              >
+                {filter.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* Products List */}
