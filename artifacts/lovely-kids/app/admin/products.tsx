@@ -340,6 +340,40 @@ export default function AdminProductsScreen() {
     (product) => !product.deletedAt && product.isHidden,
   ).length;
 
+  const visibleProducts = products.filter(
+    (product) => !product.deletedAt && !product.isHidden,
+  );
+
+  const allCount = visibleProducts.length;
+
+  const offersCount = visibleProducts.filter(
+    (product) => !!product.showInOffers,
+  ).length;
+
+  const outOfStockCount = visibleProducts.filter((product) => {
+    if (typeof product.stock === "number") {
+      return product.stock <= 0;
+    }
+
+    const variants = Array.isArray(product.colorVariants)
+      ? product.colorVariants
+      : [];
+
+    const sizes = variants.flatMap((variant) =>
+      Array.isArray(variant.sizes) ? variant.sizes : [],
+    );
+
+    if (sizes.length === 0) return false;
+
+    return sizes.every((size) => {
+      if (typeof size.stock === "number") {
+        return size.stock <= 0;
+      }
+
+      return !!size.outOfStock;
+    });
+  }).length;
+
   const filteredProducts = products.filter((product) => {
     const isDeleted = !!product.deletedAt;
 
@@ -475,19 +509,19 @@ export default function AdminProductsScreen() {
         {[
           {
             key: "all" as const,
-            label: "الكل",
+            label: `الكل (${allCount})`,
             icon: "grid-outline" as const,
             activeColor: colors.primary,
           },
           {
             key: "offers" as const,
-            label: "العروض",
+            label: `العروض (${offersCount})`,
             icon: "flame-outline" as const,
             activeColor: "#f97316",
           },
           {
             key: "out" as const,
-            label: "منتهي المخزون",
+            label: `منتهي المخزون (${outOfStockCount})`,
             icon: "alert-circle-outline" as const,
             activeColor: "#ef4444",
           },
