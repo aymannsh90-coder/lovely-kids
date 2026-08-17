@@ -53,6 +53,44 @@ export default function AdminProductsScreen() {
   const [search, setSearch] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
+
+  // Product image preview
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  const openImagePreview = (product: Product) => {
+    const images = [
+      product.image,
+      ...(product.images ?? []),
+    ].filter(
+      (url): url is string =>
+        typeof url === "string" && url.trim().length > 0
+    );
+
+    const uniqueImages = Array.from(new Set(images));
+    if (uniqueImages.length === 0) return;
+
+    setPreviewImages(uniqueImages);
+    setPreviewIndex(0);
+  };
+
+  const closeImagePreview = () => {
+    setPreviewImages([]);
+    setPreviewIndex(0);
+  };
+
+  const showPreviousImage = () => {
+    setPreviewIndex((current) =>
+      current === 0 ? previewImages.length - 1 : current - 1
+    );
+  };
+
+  const showNextImage = () => {
+    setPreviewIndex((current) =>
+      current === previewImages.length - 1 ? 0 : current + 1
+    );
+  };
+
   const variantKey = (color: string, size: string) => `${color}|${size}`;
 
   useEffect(() => {
@@ -416,7 +454,13 @@ export default function AdminProductsScreen() {
                 borderColor: productOutOfStock ? "#ef444460" : colors.border,
               },
             ]}>
-              <Image source={{ uri: item.image }} style={styles.productImage} />
+              <Pressable
+                onPress={() => openImagePreview(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`معاينة صورة ${item.nameAr}`}
+              >
+                <Image source={{ uri: item.image }} style={styles.productImage} />
+              </Pressable>
 
               <View style={styles.productInfo}>
                 <Text style={[styles.productName, { color: colors.foreground }]} numberOfLines={2}>
@@ -507,6 +551,118 @@ export default function AdminProductsScreen() {
           );
         }}
       />
+
+      {/* ── Product Image Preview ── */}
+      <Modal
+        visible={previewImages.length > 0}
+        transparent
+        animationType="fade"
+        onRequestClose={closeImagePreview}
+      >
+        <Pressable
+          onPress={closeImagePreview}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.88)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 950,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pressable
+              onPress={closeImagePreview}
+              style={{
+                position: "absolute",
+                top: -6,
+                right: 0,
+                zIndex: 10,
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                backgroundColor: "rgba(255,255,255,0.95)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="close" size={26} color="#111" />
+            </Pressable>
+
+            {previewImages[previewIndex] ? (
+              <Image
+                source={{ uri: previewImages[previewIndex] }}
+                resizeMode="contain"
+                style={{
+                  width: "100%",
+                  height: Platform.OS === "web" ? 620 : 520,
+                  maxHeight: "78%",
+                  borderRadius: 14,
+                }}
+              />
+            ) : null}
+
+            {previewImages.length > 1 ? (
+              <View
+                style={{
+                  marginTop: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 20,
+                }}
+              >
+                <Pressable
+                  onPress={showPreviousImage}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#FFFFFF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="chevron-back" size={26} color="#111" />
+                </Pressable>
+
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 15,
+                    fontWeight: "800",
+                    minWidth: 55,
+                    textAlign: "center",
+                  }}
+                >
+                  {previewIndex + 1} / {previewImages.length}
+                </Text>
+
+                <Pressable
+                  onPress={showNextImage}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#FFFFFF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="chevron-forward" size={26} color="#111" />
+                </Pressable>
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Stock Adjustment Modal ── */}
       <Modal
