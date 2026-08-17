@@ -683,19 +683,27 @@ export default function HomeScreen() {
 
       {showProductOffersButton ? (
         <Pressable
-          onPress={() =>
-            router.push("/offers")
-          }
+          onPress={() => router.push("/offers")}
           style={[
             styles.installBtn,
-            { backgroundColor: "#FFD54F" },
+            {
+              paddingHorizontal: 0,
+              paddingVertical: 0,
+              height: 150,
+              overflow: "hidden",
+              backgroundColor: "#FFFFFF",
+            },
             desktopBannerStyle,
           ]}
         >
-          <Text style={[styles.installBtnText, { color: "#3D2B00" }]}>
-            🔥قسم العروض🔥
-          </Text>
-          <Ionicons name="arrow-back" size={18} color="#3D2B00" />
+          <Image
+            source={require("../../assets/images/offers-banner.png")}
+            resizeMode="contain"
+            style={{
+              width: "100%",
+              height: "100%",
+            }}
+          />
         </Pressable>
       ) : null}
 
