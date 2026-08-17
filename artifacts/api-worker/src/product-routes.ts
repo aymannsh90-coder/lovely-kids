@@ -6,7 +6,7 @@ import {
   type ColorVariant,
   productsTable,
 } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, lte } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import { deleteProductImageObjects, getProductImageObjectPath } from "./image-routes";
@@ -162,6 +162,8 @@ function toProduct(
     reviews: row.reviews,
     isPinned: !!row.isPinned,
     showInOffers: !!row.showInOffers,
+    isHidden: !!row.isHidden,
+    deletedAt: row.deletedAt?.toISOString() ?? null,
     facebookUrl: row.facebookUrl ?? null,
     instagramUrl: row.instagramUrl ?? null,
     tiktokUrl: row.tiktokUrl ?? null,
@@ -491,6 +493,21 @@ export async function handleProductRequest(
 
   if (
     request.method === "GET" &&
+    path === "/api/products/admin"
+  ) {
+    const authError = await requireAdmin(request, db, env);
+    if (authError) return authError;
+
+    const rows = await db
+      .select()
+      .from(productsTable)
+      .orderBy(desc(productsTable.createdAt));
+
+    return json(rows.map((row) => toProduct(row)));
+  }
+
+  if (
+    request.method === "GET" &&
     path === "/api/products/barcodes"
   ) {
     const authError = await requireAdmin(
@@ -559,6 +576,73 @@ export async function handleProductRequest(
     );
   }
 
+  const visibilityMatch = path.match(
+    /^\/api\/products\/(\d+)\/visibility$/,
+  );
+
+  if (request.method === "PATCH" && visibilityMatch) {
+    const authError = await requireAdmin(request, db, env);
+    if (authError) return authError;
+
+    const body = await request.json().catch(() => null) as
+      | { hidden?: boolean }
+      | null;
+
+    if (typeof body?.hidden !== "boolean") {
+      return json({ error: "hidden مطلوب" }, 400);
+    }
+
+    const rows = await db
+      .update(productsTable)
+      .set({ isHidden: body.hidden })
+      .where(eq(productsTable.id, Number(visibilityMatch[1])))
+      .returning();
+
+    if (!rows[0]) return json({ error: "المنتج غير موجود" }, 404);
+
+    const barcodes = await getAdditionalBarcodes(
+      db,
+      Number(visibilityMatch[1]),
+    );
+
+    return json(toProduct(rows[0], barcodes));
+  }
+
+  const restoreMatch = path.match(
+    /^\/api\/products\/(\d+)\/restore$/,
+  );
+
+  if (request.method === "PATCH" && restoreMatch) {
+    const authError = await requireAdmin(request, db, env);
+    if (authError) return authError;
+
+    const id = Number(restoreMatch[1]);
+
+    const rows = await db
+      .update(productsTable)
+      .set({ deletedAt: null })
+      .where(eq(productsTable.id, id))
+      .returning();
+
+    if (!rows[0]) return json({ error: "المنتج غير موجود" }, 404);
+
+    const barcodes = await getAdditionalBarcodes(db, id);
+    return json(toProduct(rows[0], barcodes));
+  }
+
+  const permanentMatch = path.match(
+    /^\/api\/products\/(\d+)\/permanent$/,
+  );
+
+  if (request.method === "DELETE" && permanentMatch) {
+    return handleDeleteProduct(
+      request,
+      db,
+      env,
+      Number(permanentMatch[1]),
+    );
+  }
+
   const productMatch = path.match(
     /^\/api\/products\/(\d+)$/,
   );
@@ -579,12 +663,21 @@ export async function handleProductRequest(
     request.method === "DELETE" &&
     productMatch
   ) {
-    return handleDeleteProduct(
-      request,
-      db,
-      env,
-      Number(productMatch[1]),
-    );
+    const authError = await requireAdmin(request, db, env);
+    if (authError) return authError;
+
+    const id = Number(productMatch[1]);
+
+    const rows = await db
+      .update(productsTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(productsTable.id, id))
+      .returning();
+
+    if (!rows[0]) return json({ error: "المنتج غير موجود" }, 404);
+
+    const barcodes = await getAdditionalBarcodes(db, id);
+    return json(toProduct(rows[0], barcodes));
   }
 
   return null;
@@ -712,20 +805,11 @@ async function handleVariantStock(
   return json(toProduct(product, additionalBarcodes));
 }
 
-async function handleDeleteProduct(
-  request: Request,
+async function deleteProductPermanently(
   db: Db,
   env: Env,
   id: number,
-) {
-  const authError = await requireAdmin(
-    request,
-    db,
-    env,
-  );
-
-  if (authError) return authError;
-
+): Promise<boolean> {
   let rows;
 
   try {
@@ -738,16 +822,10 @@ async function handleDeleteProduct(
       productId: id,
       error,
     });
-
-    return json(
-      { error: "تعذر حذف المنتج" },
-      500,
-    );
+    throw error;
   }
 
-  if (!rows[0]) {
-    return json({ error: "المنتج غير موجود" }, 404);
-  }
+  if (!rows[0]) return false;
 
   try {
     const deletedProduct = rows[0];
@@ -762,8 +840,10 @@ async function handleDeleteProduct(
       if (url) deletedImageUrls.add(url);
     }
 
-    for (const variant of (deletedProduct.colorVariants as ColorVariant[]) ??
-      []) {
+    for (
+      const variant of
+        (deletedProduct.colorVariants as ColorVariant[]) ?? []
+    ) {
       if (variant.image) deletedImageUrls.add(variant.image);
     }
 
@@ -784,7 +864,10 @@ async function handleDeleteProduct(
         if (url) usedImageUrls.add(url);
       }
 
-      for (const variant of (product.colorVariants as ColorVariant[]) ?? []) {
+      for (
+        const variant of
+          (product.colorVariants as ColorVariant[]) ?? []
+      ) {
         if (variant.image) usedImageUrls.add(variant.image);
       }
     }
@@ -794,7 +877,8 @@ async function handleDeleteProduct(
       .from(ordersTable);
 
     for (const order of existingOrders) {
-      const items = (order.items as Array<{ image?: string }>) ?? [];
+      const items =
+        (order.items as Array<{ image?: string }>) ?? [];
 
       for (const item of items) {
         if (item.image) usedImageUrls.add(item.image);
@@ -814,5 +898,86 @@ async function handleDeleteProduct(
     });
   }
 
-  return json({ success: true });
+  return true;
+}
+
+async function handleDeleteProduct(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const authError = await requireAdmin(request, db, env);
+  if (authError) return authError;
+
+  const current = await db
+    .select({
+      deletedAt: productsTable.deletedAt,
+    })
+    .from(productsTable)
+    .where(eq(productsTable.id, id))
+    .limit(1);
+
+  if (!current[0]) {
+    return json({ error: "المنتج غير موجود" }, 404);
+  }
+
+  if (!current[0].deletedAt) {
+    return json(
+      { error: "يجب نقل المنتج إلى سلة المحذوفات أولاً" },
+      400,
+    );
+  }
+
+  try {
+    const deleted = await deleteProductPermanently(
+      db,
+      env,
+      id,
+    );
+
+    if (!deleted) {
+      return json({ error: "المنتج غير موجود" }, 404);
+    }
+
+    return json({ success: true });
+  } catch {
+    return json({ error: "تعذر حذف المنتج نهائيًا" }, 500);
+  }
+}
+
+export async function purgeExpiredTrashedProducts(
+  db: Db,
+  env: Env,
+  now = new Date(),
+): Promise<number> {
+  const cutoff = new Date(
+    now.getTime() - 15 * 24 * 60 * 60 * 1000,
+  );
+
+  const expiredProducts = await db
+    .select({ id: productsTable.id })
+    .from(productsTable)
+    .where(lte(productsTable.deletedAt, cutoff));
+
+  let purged = 0;
+
+  for (const product of expiredProducts) {
+    try {
+      const deleted = await deleteProductPermanently(
+        db,
+        env,
+        product.id,
+      );
+
+      if (deleted) purged += 1;
+    } catch (error) {
+      console.error("AUTO_DELETE_PRODUCT_FAILED", {
+        productId: product.id,
+        error,
+      });
+    }
+  }
+
+  return purged;
 }

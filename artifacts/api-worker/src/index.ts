@@ -1,8 +1,11 @@
 import { appSettingsTable, productsTable } from "@workspace/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { openDb, type Env } from "./db";
 import { handleAuthRequest } from "./auth-routes";
-import { handleProductRequest } from "./product-routes";
+import {
+  handleProductRequest,
+  purgeExpiredTrashedProducts,
+} from "./product-routes";
 import { handleMetaCatalogRequest } from "./meta-catalog-routes";
 import { handleSettingsRequest } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
@@ -54,6 +57,8 @@ function toProduct(r: typeof productsTable.$inferSelect) {
     reviews: r.reviews,
     isPinned: !!r.isPinned,
     showInOffers: !!r.showInOffers,
+    isHidden: !!r.isHidden,
+    deletedAt: r.deletedAt?.toISOString() ?? null,
     facebookUrl: r.facebookUrl ?? null,
     instagramUrl: r.instagramUrl ?? null,
     tiktokUrl: r.tiktokUrl ?? null,
@@ -229,6 +234,12 @@ export default {
         const rows = await db
           .select()
           .from(productsTable)
+          .where(
+            and(
+              eq(productsTable.isHidden, false),
+              isNull(productsTable.deletedAt),
+            ),
+          )
           .orderBy(desc(productsTable.createdAt));
         return json(rows.map(toProduct));
       }
@@ -245,5 +256,35 @@ export default {
     } finally {
       await client.end().catch(() => {});
     }
+
+  },
+
+  async scheduled(
+    _controller: unknown,
+    env: Env,
+    ctx: { waitUntil(promise: Promise<unknown>): void },
+  ): Promise<void> {
+    ctx.waitUntil(
+      (async () => {
+        const { client, db } = await openDb(env);
+
+        try {
+          const purged =
+            await purgeExpiredTrashedProducts(db, env);
+
+          console.log("PRODUCT_TRASH_PURGE_COMPLETE", {
+            purged,
+          });
+        } catch (error) {
+          console.error(
+            "PRODUCT_TRASH_PURGE_FAILED",
+            error,
+          );
+          throw error;
+        } finally {
+          await client.end().catch(() => {});
+        }
+      })(),
+    );
   },
 };

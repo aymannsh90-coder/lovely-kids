@@ -33,7 +33,16 @@ export default function AdminProductsScreen() {
   const insets = useSafeAreaInsets();
   const barcodeBeep = useAudioPlayer(require("../../assets/sounds/barcode-beep.wav"));
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const { products, updateProduct, deleteProduct, adjustStock, adjustVariantStock } = useProducts();
+  const {
+    products,
+    updateProduct,
+    deleteProduct,
+    setProductHidden,
+    restoreProduct,
+    permanentlyDeleteProduct,
+    adjustStock,
+    adjustVariantStock,
+  } = useProducts();
   const { settings } = useAppSettings();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
@@ -49,7 +58,9 @@ export default function AdminProductsScreen() {
   // Per-color/size variant stock adjustment
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
-  const [stockFilter, setStockFilter] = useState<"all" | "out" | "offers">("all");
+  const [stockFilter, setStockFilter] = useState<
+    "all" | "out" | "offers" | "hidden" | "trash"
+  >("all");
   const [search, setSearch] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
@@ -195,31 +206,63 @@ export default function AdminProductsScreen() {
   }, [scannerOpen, barcodeBeep]);
 
   const handleDelete = (id: string, name: string) => {
+    const message =
+      `نقل "${name}" إلى سلة المحذوفات؟\nسيتم حذفه نهائيًا تلقائيًا بعد 15 يوم.`;
+
     if (Platform.OS === "web") {
-      const confirmed = window.confirm(
-        `هل أنت متأكدة من حذف "${name}"؟\nهذا الإجراء لا يمكن التراجع عنه.`
-      );
-      if (confirmed) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        deleteProduct(id);
+      if (window.confirm(message)) {
+        void deleteProduct(id);
       }
-    } else {
-      Alert.alert(
-        "حذف المنتج",
-        `هل أنت متأكدة من حذف "${name}"؟\nهذا الإجراء لا يمكن التراجع عنه.`,
-        [
-          { text: "إلغاء", style: "cancel" },
-          {
-            text: "حذف نهائياً",
-            style: "destructive",
-            onPress: () => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              deleteProduct(id);
-            },
-          },
-        ]
-      );
+      return;
     }
+
+    Alert.alert("نقل إلى سلة المحذوفات", message, [
+      { text: "إلغاء", style: "cancel" },
+      {
+        text: "نقل للسلة",
+        style: "destructive",
+        onPress: () => void deleteProduct(id),
+      },
+    ]);
+  };
+
+  const handleToggleHidden = async (product: Product) => {
+    await setProductHidden(product.id, !product.isHidden);
+  };
+
+  const handleRestore = async (product: Product) => {
+    await restoreProduct(product.id);
+  };
+
+  const handlePermanentDelete = (product: Product) => {
+    const message =
+      `حذف "${product.nameAr}" نهائيًا؟\nلن تتمكن من استرجاعه بعد ذلك.`;
+
+    const run = () => void permanentlyDeleteProduct(product.id);
+
+    if (Platform.OS === "web") {
+      if (window.confirm(message)) run();
+      return;
+    }
+
+    Alert.alert("حذف نهائي", message, [
+      { text: "إلغاء", style: "cancel" },
+      {
+        text: "حذف نهائي",
+        style: "destructive",
+        onPress: run,
+      },
+    ]);
+  };
+
+  const getTrashDaysRemaining = (deletedAt?: string | null) => {
+    if (!deletedAt) return 15;
+    const deletedTime = new Date(deletedAt).getTime();
+    const expiresAt = deletedTime + 15 * 24 * 60 * 60 * 1000;
+    return Math.max(
+      0,
+      Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)),
+    );
   };
 
   const openStockModal = (product: Product) => {
@@ -292,9 +335,19 @@ export default function AdminProductsScreen() {
     return product.stock === 0;
   };
 
+  const trashCount = products.filter((product) => !!product.deletedAt).length;
+
   const filteredProducts = products.filter((product) => {
-    if (stockFilter === "out" && !isProductOutOfStock(product)) return false;
-    if (stockFilter === "offers" && product.showInOffers !== true) return false;
+    const isDeleted = !!product.deletedAt;
+
+    if (stockFilter === "trash") {
+      if (!isDeleted) return false;
+    } else {
+      if (isDeleted) return false;
+      if (stockFilter === "hidden" && !product.isHidden) return false;
+      if (stockFilter === "out" && !isProductOutOfStock(product)) return false;
+      if (stockFilter === "offers" && product.showInOffers !== true) return false;
+    }
 
     const query = search.trim().toLowerCase();
     if (!query) return true;
@@ -406,7 +459,16 @@ export default function AdminProductsScreen() {
         </View>
       </View>
 
-      <View style={{ flexDirection: Platform.OS === "web" ? "row-reverse" : "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10 }}>
+      <View
+        style={{
+          flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+          flexWrap: "wrap",
+          gap: 10,
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          alignItems: "center",
+        }}
+      >
         <Pressable onPress={() => setStockFilter("all")}>
           <Text style={{ fontWeight: "700", color: stockFilter === "all" ? colors.primary : colors.foreground }}>
             الكل
@@ -427,6 +489,48 @@ export default function AdminProductsScreen() {
         <Pressable onPress={() => setStockFilter("out")}>
           <Text style={{ fontWeight: "700", color: stockFilter === "out" ? "#ef4444" : colors.foreground }}>
             منتهي من المخزون
+          </Text>
+        </Pressable>
+
+        <Pressable onPress={() => setStockFilter("hidden")}>
+          <Text
+            style={{
+              fontWeight: "700",
+              color: stockFilter === "hidden" ? "#d97706" : colors.foreground,
+            }}
+          >
+            👁️ المخفي
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setStockFilter("trash")}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            borderWidth: 1,
+            borderColor: stockFilter === "trash" ? "#ef4444" : colors.border,
+            borderRadius: 10,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            backgroundColor:
+              stockFilter === "trash" ? "#fee2e2" : colors.card,
+          }}
+        >
+          <Ionicons
+            name="trash-outline"
+            size={15}
+            color={stockFilter === "trash" ? "#dc2626" : colors.mutedForeground}
+          />
+          <Text
+            style={{
+              fontWeight: "800",
+              fontSize: 12,
+              color: stockFilter === "trash" ? "#dc2626" : colors.foreground,
+            }}
+          >
+            المحذوفات{trashCount ? ` (${trashCount})` : ""}
           </Text>
         </Pressable>
       </View>
@@ -504,7 +608,31 @@ export default function AdminProductsScreen() {
                   </View>
                 ) : null}
 
-                {productOutOfStock ? (
+                {item.isHidden && !item.deletedAt ? (
+                  <Text
+                    style={{
+                      color: "#d97706",
+                      fontSize: 12,
+                      fontWeight: "800",
+                    }}
+                  >
+                    👁️ مخفي عن المتجر
+                  </Text>
+                ) : null}
+
+                {item.deletedAt ? (
+                  <Text
+                    style={{
+                      color: "#dc2626",
+                      fontSize: 12,
+                      fontWeight: "800",
+                    }}
+                  >
+                    🗑️ متبقي {getTrashDaysRemaining(item.deletedAt)} يوم للحذف النهائي
+                  </Text>
+                ) : null}
+
+                {productOutOfStock && !item.deletedAt ? (
                   <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "800" }}>
                     🔴 منتهي من المخزون
                   </Text>
@@ -534,18 +662,59 @@ export default function AdminProductsScreen() {
               </View>
 
               <View style={styles.actions}>
-                <Pressable
-                  onPress={() => router.push({ pathname: "/admin/add-product", params: { productId: item.id } })}
-                  style={[styles.actionBtn, { backgroundColor: colors.secondary }]}
-                >
-                  <Ionicons name="pencil-outline" size={18} color={colors.foreground} />
-                </Pressable>
-                <Pressable
-                  onPress={() => handleDelete(item.id, item.nameAr)}
-                  style={[styles.actionBtn, { backgroundColor: "#fee2e2" }]}
-                >
-                  <Ionicons name="trash-outline" size={18} color={colors.destructive} />
-                </Pressable>
+                {item.deletedAt ? (
+                  <>
+                    <Pressable
+                      onPress={() => void handleRestore(item)}
+                      style={[styles.actionBtn, { backgroundColor: "#dcfce7" }]}
+                    >
+                      <Ionicons name="refresh-outline" size={18} color="#16a34a" />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handlePermanentDelete(item)}
+                      style={[styles.actionBtn, { backgroundColor: "#fee2e2" }]}
+                    >
+                      <Ionicons name="trash-bin-outline" size={18} color="#dc2626" />
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Pressable
+                      onPress={() => void handleToggleHidden(item)}
+                      style={[
+                        styles.actionBtn,
+                        {
+                          backgroundColor: item.isHidden
+                            ? "#fef3c7"
+                            : colors.muted,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.isHidden ? "eye-outline" : "eye-off-outline"}
+                        size={18}
+                        color={item.isHidden ? "#d97706" : colors.foreground}
+                      />
+                    </Pressable>
+                    <Pressable
+                      onPress={() =>
+                        router.push({
+                          pathname: "/admin/add-product",
+                          params: { productId: item.id },
+                        })
+                      }
+                      style={[styles.actionBtn, { backgroundColor: colors.secondary }]}
+                    >
+                      <Ionicons name="pencil-outline" size={18} color={colors.foreground} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleDelete(item.id, item.nameAr)}
+                      style={[styles.actionBtn, { backgroundColor: "#fee2e2" }]}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+                    </Pressable>
+                  </>
+                )}
               </View>
             </View>
           );

@@ -20,6 +20,9 @@ interface ProductsContextType {
   addProduct: (product: Omit<Product, "id">) => Promise<void>;
   updateProduct: (product: Product) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
+  setProductHidden: (id: string, hidden: boolean) => Promise<Product>;
+  restoreProduct: (id: string) => Promise<Product>;
+  permanentlyDeleteProduct: (id: string) => Promise<void>;
   refreshProducts: () => Promise<void>;
   adjustStock: (id: string, action: "set" | "add" | "subtract", amount: number) => Promise<Product>;
   adjustVariantStock: (
@@ -37,6 +40,9 @@ const ProductsContext = createContext<ProductsContextType>({
   addProduct: async () => {},
   updateProduct: async () => {},
   deleteProduct: async () => {},
+  setProductHidden: async () => ({} as Product),
+  restoreProduct: async () => ({} as Product),
+  permanentlyDeleteProduct: async () => {},
   refreshProducts: async () => {},
   adjustStock: async () => ({} as Product),
   adjustVariantStock: async () => ({} as Product),
@@ -90,14 +96,24 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProducts = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/products`);
+      const adminHeaders = user?.isAdmin
+        ? await getAdminHeaders()
+        : undefined;
+
+      const res = await fetch(
+        user?.isAdmin
+          ? `${API_BASE}/api/products/admin`
+          : `${API_BASE}/api/products`,
+        adminHeaders ? { headers: adminHeaders } : undefined,
+      );
+
       if (!res.ok) throw new Error("فشل تحميل المنتجات");
 
       let data: Product[] = await res.json();
 
       if (user?.isAdmin) {
         try {
-          const headers = await getAdminHeaders();
+          const headers = adminHeaders!;
           const barcodeRes = await fetch(
             `${API_BASE}/api/products/barcodes`,
             { headers },
@@ -216,8 +232,47 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProduct = useCallback(async (id: string) => {
     const headers = await getAdminHeaders();
-    const res = await fetch(`${API_BASE}/api/products/${id}`, { method: "DELETE", headers });
-    if (!res.ok) throw new Error("فشل حذف المنتج");
+    const res = await fetch(`${API_BASE}/api/products/${id}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) throw new Error("فشل نقل المنتج إلى سلة المحذوفات");
+    const updated: Product = await res.json();
+    setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+  }, [getAdminHeaders]);
+
+  const setProductHidden = useCallback(async (id: string, hidden: boolean) => {
+    const headers = await getAdminHeaders();
+    const res = await fetch(`${API_BASE}/api/products/${id}/visibility`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ hidden }),
+    });
+    if (!res.ok) throw new Error("فشل تغيير حالة ظهور المنتج");
+    const updated: Product = await res.json();
+    setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    return updated;
+  }, [getAdminHeaders]);
+
+  const restoreProduct = useCallback(async (id: string) => {
+    const headers = await getAdminHeaders();
+    const res = await fetch(`${API_BASE}/api/products/${id}/restore`, {
+      method: "PATCH",
+      headers,
+    });
+    if (!res.ok) throw new Error("فشل استرجاع المنتج");
+    const updated: Product = await res.json();
+    setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    return updated;
+  }, [getAdminHeaders]);
+
+  const permanentlyDeleteProduct = useCallback(async (id: string) => {
+    const headers = await getAdminHeaders();
+    const res = await fetch(`${API_BASE}/api/products/${id}/permanent`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) throw new Error("فشل الحذف النهائي");
     setProducts((prev) => prev.filter((p) => p.id !== id));
   }, [getAdminHeaders]);
 
@@ -255,7 +310,19 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ProductsContext.Provider
-      value={{ products, loading, addProduct, updateProduct, deleteProduct, refreshProducts, adjustStock, adjustVariantStock }}
+      value={{
+        products,
+        loading,
+        addProduct,
+        updateProduct,
+        deleteProduct,
+        setProductHidden,
+        restoreProduct,
+        permanentlyDeleteProduct,
+        refreshProducts,
+        adjustStock,
+        adjustVariantStock,
+      }}
     >
       {children}
     </ProductsContext.Provider>
