@@ -685,13 +685,21 @@ export default function HomeScreen() {
         <Pressable
           onPress={() => router.push("/offers")}
           style={[
-            styles.installBtn,
             {
-              paddingHorizontal: 0,
-              paddingVertical: 0,
+              marginHorizontal: 16,
+              marginTop: 8,
+              marginBottom: 10,
               height: 150,
+              borderRadius: 20,
               overflow: "hidden",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: "#FFF8FB",
+              borderWidth: 3,
+              borderColor: "#F43F7A",
+              shadowColor: "#F43F7A",
+              shadowOpacity: 0.13,
+              shadowRadius: 7,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 3,
             },
             desktopBannerStyle,
           ]}
@@ -704,6 +712,56 @@ export default function HomeScreen() {
               height: "100%",
             }}
           />
+
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: -1,
+              left: 0,
+              right: 0,
+              alignItems: "center",
+              zIndex: 10,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: "#FFF8FB",
+                paddingHorizontal: 5,
+                marginTop: -9,
+              }}
+            >
+              <Text style={{ fontSize: 21 }}>
+                {String.fromCodePoint(0x1F380)}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              position: "absolute",
+              bottom: 8,
+              left: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "rgba(255,255,255,0.94)",
+              borderRadius: 20,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+            }}
+          >
+            <Ionicons name="arrow-back" size={14} color="#E91E8C" />
+            <Text
+              style={{
+                color: "#E91E8C",
+                fontSize: 11,
+                fontWeight: "700",
+                marginLeft: 5,
+              }}
+            >
+              اضغط للدخول لقسم العروض
+            </Text>
+          </View>
         </Pressable>
       ) : null}
 
@@ -1227,7 +1285,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignSelf: "flex-end",
   },
-  heroBadgeText: { fontSize: 12, fontWeight: "700", color: "#333" },
+  heroBadgeText: { fontSize: 10, fontWeight: "700", color: "#333" },
   heroTitle: {
     fontSize: 24,
     fontWeight: "800",
@@ -1401,7 +1459,7 @@ const styles = StyleSheet.create({
   },
   homeBannerTitle: {
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "800",
     textAlign: "right",
   },
   homeBannerLine: {
@@ -1475,7 +1533,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   contactText: { flex: 1, alignItems: Platform.OS === "web" ? "flex-end" : "flex-start" },
-  contactTitle: { fontSize: 16, fontWeight: "700" },
+  contactTitle: { fontSize: 12, fontWeight: "700" },
   contactTitleWeb: { fontSize: 17, fontWeight: "800" },
   contactSub: { fontSize: 12, marginTop: 2 },
   contactSubWeb: { fontSize: 13, fontWeight: "600", marginTop: 3 },
