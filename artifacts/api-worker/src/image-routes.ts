@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
+import { rewriteMediaUrlsForPublic } from "./media-url";
+import { getMediaFilename, toPublicMediaUrl } from "./media-url";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -21,7 +23,7 @@ type AllowedMimeType =
   keyof typeof MIME_TO_EXTENSION;
 
 const json = (data: unknown, status = 200) =>
-  Response.json(data, {
+  Response.json(rewriteMediaUrlsForPublic(data), {
     status,
     headers: {
       "Access-Control-Allow-Origin": "*",
@@ -30,31 +32,9 @@ const json = (data: unknown, status = 200) =>
 
 export function getProductImageObjectPath(
   url: string | undefined,
-  env: Env,
+  _env: Env,
 ): string | null {
-  if (!url) return null;
-
-  const supabaseUrl = env.SUPABASE_URL?.replace(/\/+$/, "");
-  if (!supabaseUrl) return null;
-
-  const prefix =
-    `${supabaseUrl}/storage/v1/object/public/${BUCKET}/`;
-
-  if (!url.startsWith(prefix)) return null;
-
-  const encoded = url.slice(prefix.length).split("?")[0];
-
-  try {
-    const filename = decodeURIComponent(encoded);
-
-    if (!filename || filename.includes("/") || filename.includes("..")) {
-      return null;
-    }
-
-    return filename;
-  } catch {
-    return null;
-  }
+  return getMediaFilename(url);
 }
 
 
@@ -390,7 +370,7 @@ async function handleLegacyUpload(
     `${supabaseUrl}/storage/v1/object/public/` +
     `${BUCKET}/${encodeURIComponent(filename)}`;
 
-  return Response.redirect(url, 301);
+  return Response.redirect(toPublicMediaUrl(url), 301);
 }
 
 export async function handleImageRequest(

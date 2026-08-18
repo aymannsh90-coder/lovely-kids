@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
+import { rewriteMediaUrlsForPublic } from "./media-url";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -18,7 +19,7 @@ const MIME_TO_EXTENSION = {
 type AllowedMimeType = keyof typeof MIME_TO_EXTENSION;
 
 const json = (data: unknown, status = 200) =>
-  Response.json(data, {
+  Response.json(rewriteMediaUrlsForPublic(data), {
     status,
     headers: { "Access-Control-Allow-Origin": "*" },
   });

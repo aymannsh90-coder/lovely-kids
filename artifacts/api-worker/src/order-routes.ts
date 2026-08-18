@@ -14,13 +14,14 @@ import {
   sendOrderStatusNotification,
   sendNewOrderNotification,
 } from "./notification-routes";
+import { rewriteMediaUrlsForPublic } from "./media-url";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
 >["db"];
 
 const json = (data: unknown, status = 200) =>
-  Response.json(data, {
+  Response.json(rewriteMediaUrlsForPublic(data), {
     status,
     headers: {
       "Access-Control-Allow-Origin": "*",

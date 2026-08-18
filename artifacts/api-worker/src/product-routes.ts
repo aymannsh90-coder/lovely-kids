@@ -10,13 +10,15 @@ import { desc, eq, inArray, lte } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import { deleteProductImageObjects, getProductImageObjectPath } from "./image-routes";
+import { rewriteMediaUrlsForPublic } from "./media-url";
+import { rewriteMediaUrlsForStorage } from "./media-url";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
 >["db"];
 
 const json = (data: unknown, status = 200) =>
-  Response.json(data, {
+  Response.json(rewriteMediaUrlsForPublic(data), {
     status,
     headers: {
       "Access-Control-Allow-Origin": "*",
@@ -212,6 +214,9 @@ async function handleCreateProduct(
   const additionalBarcodes =
     normalizeAdditionalBarcodes(rawAdditionalBarcodes);
 
+  const storageProductData =
+    rewriteMediaUrlsForStorage(productData, env);
+
   const allBarcodes = [
     productData.barcode?.trim() || null,
     ...additionalBarcodes.map((item) => item.barcode),
@@ -242,8 +247,8 @@ async function handleCreateProduct(
     const rows = await tx
       .insert(productsTable)
       .values({
-        ...productData,
-        barcode: productData.barcode?.trim() || null,
+        ...storageProductData,
+        barcode: storageProductData.barcode?.trim() || null,
       })
       .returning();
 
@@ -328,6 +333,9 @@ async function handleUpdateProduct(
       ? currentAdditionalBarcodes
       : normalizeAdditionalBarcodes(rawAdditionalBarcodes);
 
+  const storageProductData =
+    rewriteMediaUrlsForStorage(productData, env);
+
   const primaryBarcode =
     productData.barcode === undefined
       ? currentProduct.barcode?.trim() || null
@@ -367,9 +375,9 @@ async function handleUpdateProduct(
       const rows = await tx
         .update(productsTable)
         .set({
-          ...productData,
-          ...(productData.barcode !== undefined
-            ? { barcode: productData.barcode?.trim() || null }
+          ...storageProductData,
+          ...(storageProductData.barcode !== undefined
+            ? { barcode: storageProductData.barcode?.trim() || null }
             : {}),
         })
         .where(eq(productsTable.id, id))

@@ -2,13 +2,15 @@ import { appSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
+import { rewriteMediaUrlsForPublic } from "./media-url";
+import { rewriteMediaUrlsForStorage } from "./media-url";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
 >["db"];
 
 const json = (data: unknown, status = 200) =>
-  Response.json(data, {
+  Response.json(rewriteMediaUrlsForPublic(data), {
     status,
     headers: {
       "Access-Control-Allow-Origin": "*",
@@ -45,9 +47,12 @@ async function handleUpdateSettings(
   const existing =
     (rows[0]?.data as Record<string, unknown>) ?? {};
 
+  const storedPartial =
+    rewriteMediaUrlsForStorage(partial, env);
+
   const merged = {
     ...existing,
-    ...partial,
+    ...storedPartial,
   };
 
   await db

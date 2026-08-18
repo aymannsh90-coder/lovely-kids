@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import { handleUpdatePosSale } from "./pos-sale-edit";
+import { rewriteMediaUrlsForPublic } from "./media-url";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -25,7 +26,7 @@ const headers = {
 };
 
 const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), {
+  new Response(JSON.stringify(rewriteMediaUrlsForPublic(data)), {
     status,
     headers,
   });

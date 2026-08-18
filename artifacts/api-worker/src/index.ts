@@ -27,6 +27,7 @@ import {
   purchaseFeatureDisabledResponse,
   purchaseWritesDisabledResponse,
 } from "./purchase-feature";
+import { rewriteMediaUrlsForPublic } from "./media-url";
 
 const headers = {
   "Content-Type": "application/json",
@@ -34,7 +35,7 @@ const headers = {
 };
 
 const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers });
+  new Response(JSON.stringify(rewriteMediaUrlsForPublic(data)), { status, headers });
 
 function toProduct(r: typeof productsTable.$inferSelect) {
   return {
