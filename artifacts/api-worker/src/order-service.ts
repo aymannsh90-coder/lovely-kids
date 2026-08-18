@@ -81,6 +81,8 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
   return [...grouped.values()];
 }
 
+const STORE_PICKUP_LABEL = "استلام من المحل";
+
 const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   { label: "الضفة الغربية", cost: 20, promoCost: 20 },
   { label: "القدس", cost: 30, promoCost: 30 },
@@ -91,6 +93,16 @@ function resolveShippingZone(
   settingsData: unknown,
   requestedLabel?: string,
 ): ShippingZone {
+  const requested = requestedLabel?.trim();
+
+  if (requested === STORE_PICKUP_LABEL) {
+    return {
+      label: STORE_PICKUP_LABEL,
+      cost: 0,
+      promoCost: 0,
+    };
+  }
+
   const rawZones = (
     settingsData as { shippingZones?: unknown } | null | undefined
   )?.shippingZones;

@@ -261,6 +261,7 @@ export default function ProductDetailScreen() {
   const [added, setAdded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [cartModal, setCartModal] = useState(false);
+  const [selectionAlert, setSelectionAlert] = useState<string | null>(null);
   const flatRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -334,7 +335,32 @@ export default function ProductDetailScreen() {
   const selectionIncomplete = needsColor || needsSize;
 
   const handleAddToCart = () => {
-    if (isOutOfStock || selectionIncomplete) return;
+    if (isOutOfStock) return;
+
+    if (selectionIncomplete) {
+      const productHasSizes = hasColorVariants
+        ? product.colorVariants!.some(
+            (variant) => Array.isArray(variant.sizes) && variant.sizes.length > 0,
+          )
+        : Array.isArray(product.sizes) && product.sizes.length > 0;
+
+      let message = "يرجى إكمال الاختيارات المطلوبة قبل إضافة المنتج إلى السلة.";
+
+      if (needsColor && productHasSizes) {
+        message = "يرجى اختيار اللون والمقاس أولاً.";
+      } else if (needsColor) {
+        message = "يرجى اختيار اللون أولاً.";
+      } else if (needsSize) {
+        message = "يرجى اختيار المقاس أولاً.";
+      }
+
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Warning,
+      ).catch(() => {});
+
+      setSelectionAlert(message);
+      return;
+    }
 
     const selectedColor = activeColorVariant?.color;
     const availableStock = getAvailableStock(
@@ -900,21 +926,20 @@ export default function ProductDetailScreen() {
             )}
             <Pressable
               onPress={handleAddToCart}
-              disabled={selectionIncomplete}
               style={[
                 styles.addBtn,
-                { backgroundColor: selectionIncomplete ? colors.muted : colors.primary },
+                { backgroundColor: colors.primary },
               ]}
             >
               <Ionicons
                 name="bag-add-outline"
                 size={20}
-                color={selectionIncomplete ? colors.mutedForeground : "#fff"}
+                color="#fff"
               />
               <Text
                 style={[
                   styles.addBtnText,
-                  { color: selectionIncomplete ? colors.mutedForeground : "#fff" },
+                  { color: "#fff" },
                 ]}
               >
                 أضف إلى السلة
@@ -923,6 +948,74 @@ export default function ProductDetailScreen() {
           </>
         )}
       </View>
+
+      {/* ── Missing product selection modal ── */}
+      <Modal
+        transparent
+        visible={!!selectionAlert}
+        animationType="fade"
+        onRequestClose={() => setSelectionAlert(null)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setSelectionAlert(null)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.modalIconWrap,
+                { backgroundColor: colors.primary + "18" },
+              ]}
+            >
+              <Ionicons
+                name="alert-circle"
+                size={44}
+                color={colors.primary}
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.modalTitle,
+                { color: colors.foreground },
+              ]}
+            >
+              أكمل اختيار المنتج
+            </Text>
+
+            <Text
+              style={[
+                styles.modalSub,
+                {
+                  color: colors.mutedForeground,
+                  textAlign: "center",
+                  fontSize: 15,
+                },
+              ]}
+            >
+              {selectionAlert}
+            </Text>
+
+            <Pressable
+              style={[
+                styles.modalPrimaryBtn,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => setSelectionAlert(null)}
+            >
+              <Text style={styles.modalPrimaryBtnText}>حسنًا، سأختار الآن</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Added-to-cart modal ── */}
       <Modal

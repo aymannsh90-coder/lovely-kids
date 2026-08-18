@@ -45,6 +45,8 @@ type Order = {
   paymentMethod: string;
   paymentStatus: string;
   notes: string | null;
+  shippingZone?: string | null;
+  shippingCost?: number | null;
   createdAt: string;
 };
 
@@ -77,6 +79,29 @@ function payMethodLabel(m: string) {
   return m === "bank_transfer" ? "تحويل بنكي" : "الدفع عند الاستلام";
 }
 
+const STORE_PICKUP_LABEL = "استلام من المحل";
+const STORE_PICKUP_HOLD_MS = 48 * 60 * 60 * 1000;
+
+function getPickupRemaining(createdAt: string, now: number) {
+  const created = new Date(createdAt).getTime();
+  if (!Number.isFinite(created)) return null;
+
+  const remaining = created + STORE_PICKUP_HOLD_MS - now;
+
+  if (remaining <= 0) {
+    return "انتهت مهلة الحجز — سيتم إلغاء الطلب من قبل المتجر";
+  }
+
+  const totalMinutes = Math.ceil(remaining / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `متبقي ${days} يوم و ${hours} ساعة`;
+  if (hours > 0) return `متبقي ${hours} ساعة و ${minutes} دقيقة`;
+  return `متبقي ${minutes} دقيقة`;
+}
+
 export default function MyOrdersScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -86,6 +111,7 @@ export default function MyOrdersScreen() {
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState<number | null>(null);
   const [proofUploading, setProofUploading] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
 
   // In-app confirmation modal (replaces Alert.alert which is blocked in iframes)
   const [confirmOrder, setConfirmOrder] = useState<Order | null>(null);
@@ -126,28 +152,23 @@ export default function MyOrdersScreen() {
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS === "web") return;
-
       void fetchOrders();
-
-      const intervalId = setInterval(() => {
-        void fetchOrders(true);
-      }, 10000);
-
-      return () => clearInterval(intervalId);
     }, [fetchOrders])
   );
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
-
     void fetchOrders();
+  }, [fetchOrders]);
 
+  // تحديث العداد محلياً فقط — لا يوجد أي اتصال بقاعدة البيانات
+  useEffect(() => {
     const intervalId = setInterval(() => {
-      void fetchOrders(true);
-    }, 10000);
+      setNow(Date.now());
+    }, 60000);
 
     return () => clearInterval(intervalId);
-  }, [fetchOrders]);
+  }, []);
 
   const lookupGuestOrder = async () => {
     const orderId = Number(guestOrderId.trim());
@@ -290,6 +311,13 @@ export default function MyOrdersScreen() {
     const cancellable = !!user && canCancel(item.status);
     const isCancelling = cancelling === item.id;
     const isProofUploading = proofUploading === item.id;
+    const pickupRemaining =
+      item.shippingZone === STORE_PICKUP_LABEL &&
+      item.status !== "cancelled" &&
+      item.status !== "done"
+        ? getPickupRemaining(item.createdAt, now)
+        : null;
+
     const canUploadProof = item.paymentMethod === "bank_transfer" && item.paymentStatus !== "confirmed" && item.status !== "cancelled" && item.status !== "done";
 
     return (
@@ -305,6 +333,31 @@ export default function MyOrdersScreen() {
             <Text style={[styles.orderTime, { color: colors.mutedForeground }]}>{timeAgo(item.createdAt)}</Text>
           </View>
         </View>
+
+        {pickupRemaining ? (
+          <View
+            style={{
+              marginTop: 10,
+              borderWidth: 1,
+              borderColor: "#F59E0B",
+              backgroundColor: "#FFF7ED",
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              gap: 4,
+            }}
+          >
+            <Text style={{ color: "#B45309", fontWeight: "900", textAlign: "right" }}>
+              🏪 استلام من المحل
+            </Text>
+            <Text style={{ color: "#92400E", fontWeight: "800", textAlign: "right" }}>
+              ⏳ {pickupRemaining}
+            </Text>
+            <Text style={{ color: "#92400E", fontSize: 12, lineHeight: 18, textAlign: "right" }}>
+              يتم حجز الكمية لمدة 48 ساعة فقط من وقت إنشاء الطلب.
+            </Text>
+          </View>
+        ) : null}
 
         {canUploadProof && (
           <Pressable
@@ -536,6 +589,7 @@ export default function MyOrdersScreen() {
       ) : (
         <FlatList
           data={orders}
+          extraData={now}
           keyExtractor={(o) => String(o.id)}
           renderItem={renderOrder}
           contentContainerStyle={{
