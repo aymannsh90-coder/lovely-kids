@@ -2,14 +2,35 @@
   "name": "lovely-kids-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-15",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "triggers": {
-    "crons": ["15 2 * * *"]
+    "crons": [
+      "15 2 * * *"
+    ]
   },
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
       "id": "165581b7907f47b6884b71e02abab3c7"
     }
-  ]
+  ],
+  "cache": {
+    "enabled": false
+  },
+  "exports": {
+    "default": {
+      "type": "worker",
+      "cache": {
+        "enabled": false
+      }
+    },
+    "PublicAPI": {
+      "type": "worker",
+      "cache": {
+        "enabled": true
+      }
+    }
+  }
 }

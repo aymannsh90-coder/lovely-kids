@@ -13,7 +13,7 @@ import { DEFAULT_AGE_GROUP_LABELS, DEFAULT_CATEGORY_LABELS, DEFAULT_SEASON_LABEL
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 
-const POLL_INTERVAL_MS = 300000;
+const SETTINGS_STALE_MS = 5 * 60 * 1000;
 // Timeout for the initial settings fetch — after this the app proceeds with
 // cached / default settings so the startup flow is never blocked indefinitely.
 const INITIAL_FETCH_TIMEOUT_MS = 5000;
@@ -233,6 +233,7 @@ const AppSettingsContext = createContext<AppSettingsContextType>({
 });
 
 const STORAGE_KEY = "lovely_kids_app_settings";
+const STORAGE_TS_KEY = "lovely_kids_app_settings_ts";
 
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
   const { getAuthToken } = useAuth();
@@ -241,11 +242,20 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   const getAuthTokenRef = useRef(getAuthToken);
   getAuthTokenRef.current = getAuthToken;
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const lastSuccessfulFetchAtRef = useRef(0);
 
   const applyRemote = useCallback((data: Partial<AppSettings>) => {
     const merged = { ...DEFAULT_SETTINGS, ...data };
+    const now = Date.now();
+
+    lastSuccessfulFetchAtRef.current = now;
     setSettings(merged);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+
+    void AsyncStorage.multiSet([
+      [STORAGE_KEY, JSON.stringify(merged)],
+      [STORAGE_TS_KEY, String(now)],
+    ]);
+
     return merged;
   }, []);
 
@@ -264,43 +274,68 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   }, [applyRemote]);
 
   useEffect(() => {
-    (async () => {
-      // 1. Load from cache instantly so the UI has something to show.
+    let cancelled = false;
+
+    void (async () => {
+      let cacheFresh = false;
+
       try {
-        const cached = await AsyncStorage.getItem(STORAGE_KEY);
+        const values = await AsyncStorage.multiGet([
+          STORAGE_KEY,
+          STORAGE_TS_KEY,
+        ]);
+
+        const cached = values[0]?.[1];
+        const cachedAt = Number(values[1]?.[1] ?? 0);
+
         if (cached) {
           const saved = JSON.parse(cached) as Partial<AppSettings>;
-          setSettings({ ...DEFAULT_SETTINGS, ...saved });
+
+          if (!cancelled) {
+            setSettings({ ...DEFAULT_SETTINGS, ...saved });
+          }
+
+          lastSuccessfulFetchAtRef.current = cachedAt;
+
+          cacheFresh =
+            cachedAt > 0 &&
+            Date.now() - cachedAt < SETTINGS_STALE_MS;
         }
       } catch {
-        // ignore cache errors
+        // Ignore local cache failures and fall back to the network.
       }
-      // 2. Fetch from server (with timeout). Always mark ready afterwards
-      //    so the startup flow is never blocked indefinitely.
+
       try {
-        await fetchSettings();
+        if (!cacheFresh) {
+          await fetchSettings();
+        }
       } finally {
-        console.log("[Startup] Settings ready");
-        setSettingsReady(true);
+        if (!cancelled) {
+          console.log("[Startup] Settings ready");
+          setSettingsReady(true);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchSettings]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (AppState.currentState === "active") {
-        fetchSettings();
-      }
-    }, POLL_INTERVAL_MS);
-
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") fetchSettings();
+      if (state !== "active") return;
+
+      const stale =
+        Date.now() - lastSuccessfulFetchAtRef.current >=
+        SETTINGS_STALE_MS;
+
+      if (stale) {
+        void fetchSettings();
+      }
     });
 
-    return () => {
-      clearInterval(interval);
-      sub.remove();
-    };
+    return () => sub.remove();
   }, [fetchSettings]);
 
   const sendSettings = useCallback(
@@ -315,6 +350,12 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
           },
           body: JSON.stringify(partial),
         });
+        if (res.ok) {
+          const now = Date.now();
+          lastSuccessfulFetchAtRef.current = now;
+          void AsyncStorage.setItem(STORAGE_TS_KEY, String(now));
+        }
+
         return res.ok;
       } catch {
         return false;

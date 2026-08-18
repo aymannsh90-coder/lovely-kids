@@ -1,8 +1,10 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { AppState } from "react-native";
@@ -12,7 +14,9 @@ import { Product } from "@/data/products";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 
-const POLL_INTERVAL_MS = 300000;
+const PUBLIC_PRODUCTS_CACHE_KEY = "lovely_kids_public_products_v1";
+const PUBLIC_PRODUCTS_CACHE_TS_KEY = "lovely_kids_public_products_ts_v1";
+const PUBLIC_PRODUCTS_STALE_MS = 5 * 60 * 1000;
 
 interface ProductsContextType {
   products: Product[];
@@ -88,6 +92,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const { getAuthToken, user } = useAuth();
+  const lastSuccessfulFetchAtRef = useRef(0);
   const getAdminHeaders = useCallback(async () => {
     const token = await getAuthToken();
     if (!token) throw new Error("يجب تسجيل الدخول كمشرف");
@@ -163,6 +168,16 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       }
 
       setProducts(data);
+
+      const now = Date.now();
+      lastSuccessfulFetchAtRef.current = now;
+
+      if (!user?.isAdmin) {
+        void AsyncStorage.multiSet([
+          [PUBLIC_PRODUCTS_CACHE_KEY, JSON.stringify(data)],
+          [PUBLIC_PRODUCTS_CACHE_TS_KEY, String(now)],
+        ]);
+      }
     } catch (e) {
       console.warn("ProductsContext: failed to load products", e);
     } finally {
@@ -171,26 +186,66 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   }, [getAdminHeaders, user?.isAdmin]);
 
   useEffect(() => {
-    refreshProducts();
-  }, [refreshProducts]);
+    let cancelled = false;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (AppState.currentState === "active") {
-        refreshProducts();
+    void (async () => {
+      if (!user?.isAdmin) {
+        try {
+          const values = await AsyncStorage.multiGet([
+            PUBLIC_PRODUCTS_CACHE_KEY,
+            PUBLIC_PRODUCTS_CACHE_TS_KEY,
+          ]);
+
+          const cached = values[0]?.[1];
+          const cachedAt = Number(values[1]?.[1] ?? 0);
+
+          if (cached) {
+            const parsed = JSON.parse(cached) as Product[];
+
+            if (!cancelled && Array.isArray(parsed)) {
+              setProducts(parsed);
+              setLoading(false);
+            }
+
+            lastSuccessfulFetchAtRef.current = cachedAt;
+
+            if (
+              cachedAt > 0 &&
+              Date.now() - cachedAt < PUBLIC_PRODUCTS_STALE_MS
+            ) {
+              return;
+            }
+          }
+        } catch {
+          // Ignore local cache failures and use the network.
+        }
       }
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [refreshProducts]);
+
+      if (!cancelled) {
+        await refreshProducts();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshProducts, user?.isAdmin]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        refreshProducts();
+      if (state !== "active") return;
+
+      const stale =
+        Date.now() - lastSuccessfulFetchAtRef.current >=
+        PUBLIC_PRODUCTS_STALE_MS;
+
+      if (user?.isAdmin || stale) {
+        void refreshProducts();
       }
     });
+
     return () => subscription.remove();
-  }, [refreshProducts]);
+  }, [refreshProducts, user?.isAdmin]);
 
   const addProduct = useCallback(async (product: Omit<Product, "id">) => {
     const headers = await getAdminHeaders();
