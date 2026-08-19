@@ -44,6 +44,7 @@ export const productsTable = pgTable("products", {
   description: text("description").notNull().default(""),
   stock: integer("stock"),
   isHidden: boolean("is_hidden").notNull().default(false),
+  autoHiddenOutOfStock: boolean("auto_hidden_out_of_stock").notNull().default(false),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }).enableRLS();
@@ -52,6 +53,7 @@ export const insertProductSchema = createInsertSchema(productsTable).omit({
   id: true,
   createdAt: true,
   isHidden: true,
+  autoHiddenOutOfStock: true,
   deletedAt: true,
 }).extend({
   sizes: z.array(z.string()).optional(),

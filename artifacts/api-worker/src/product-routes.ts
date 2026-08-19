@@ -602,7 +602,7 @@ export async function handleProductRequest(
 
     const rows = await db
       .update(productsTable)
-      .set({ isHidden: body.hidden })
+      .set({ isHidden: body.hidden, autoHiddenOutOfStock: false })
       .where(eq(productsTable.id, Number(visibilityMatch[1])))
       .returning();
 
