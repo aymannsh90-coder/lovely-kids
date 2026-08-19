@@ -39,6 +39,8 @@ import { trackMetaEvent } from "@/utils/metaPixel";
 
 type Step = "cart" | "checkout" | "payment" | "success";
 
+const STORE_PICKUP_LABEL = "استلام من المحل";
+
 function getStoreDate(): string {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
@@ -147,6 +149,7 @@ export default function CartScreen() {
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedZone, setSelectedZone] = useState<ShippingZone | null>(null);
+  const isStorePickup = selectedZone?.label === STORE_PICKUP_LABEL;
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "bank_transfer">("cod");
   const [orderId, setOrderId] = useState<number | null>(null);
   const [proofUploading, setProofUploading] = useState(false);
@@ -169,7 +172,12 @@ export default function CartScreen() {
   const whatsapp = settings.whatsappNumber || "97292376808";
 
   const handleCheckout = async () => {
-    if (!name.trim() || !phone.trim() || !address.trim() || !selectedZone) return;
+    if (
+      !name.trim() ||
+      !phone.trim() ||
+      !selectedZone ||
+      (!isStorePickup && !address.trim())
+    ) return;
 
     setLoading(true);
 
@@ -196,7 +204,9 @@ export default function CartScreen() {
         body: JSON.stringify({
           customerName: name.trim(),
           customerPhone: phone.trim(),
-          customerAddress: address.trim(),
+          customerAddress: isStorePickup
+            ? STORE_PICKUP_LABEL
+            : address.trim(),
           notes: notes.trim() || null,
           items: currentItems.map((i) => ({
             id: i.id,
@@ -290,8 +300,9 @@ export default function CartScreen() {
       `🛍️ *طلب جديد من Lovely Kids*\n\n` +
       `👤 الاسم: ${name}\n` +
       `📞 الهاتف: ${phone}\n` +
-      `📍 العنوان: ${address}\n` +
-      `🚚 منطقة التوصيل: ${selectedZone.label}\n` +
+      (isStorePickup
+        ? `🏪 طريقة الاستلام: استلام من المحل\n`
+        : `📍 العنوان: ${address}\n🚚 منطقة التوصيل: ${selectedZone.label}\n`) +
       (notes ? `📝 ملاحظات: ${notes}\n` : "") +
       `💳 طريقة الدفع: ${payLabel}\n` +
       `\n──────────────\n` +
@@ -306,7 +317,7 @@ export default function CartScreen() {
     clearCart();
     setLoading(false);
 
-    if (user && !user.deliveryAddress && address.trim()) {
+    if (user && !isStorePickup && !user.deliveryAddress && address.trim()) {
       const savedAddr = address.trim();
       setTimeout(() => {
         Alert.alert(
@@ -611,10 +622,17 @@ export default function CartScreen() {
 
   // ── Checkout Form ──
   if (step === "checkout") {
-    const shippingZones = settings.shippingZones ?? [
+    const configuredShippingZones = settings.shippingZones ?? [
       { label: "الضفة الغربية", cost: 20 },
       { label: "القدس", cost: 30 },
       { label: "أراضي الـ48", cost: 70 },
+    ];
+
+    const shippingZones: ShippingZone[] = [
+      { label: STORE_PICKUP_LABEL, cost: 0 },
+      ...configuredShippingZones.filter(
+        (zone) => zone.label !== STORE_PICKUP_LABEL,
+      ),
     ];
     const promotionActive = isShippingPromotionActive(
       totalPrice,
@@ -636,7 +654,11 @@ export default function CartScreen() {
       : 0;
 
     const finalTotal = totalPrice + shippingCost;
-    const canSubmit = name.trim().length > 0 && phone.trim().length > 0 && address.trim().length > 0 && selectedZone !== null;
+    const canSubmit =
+      name.trim().length > 0 &&
+      phone.trim().length > 0 &&
+      selectedZone !== null &&
+      (isStorePickup || address.trim().length > 0);
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View
@@ -696,12 +718,16 @@ export default function CartScreen() {
           </View>
 
           {/* Form Fields */}
-          <Text style={[styles.formSection, { color: colors.foreground }]}>بيانات التوصيل</Text>
+          <Text style={[styles.formSection, { color: colors.foreground }]}>
+            {isStorePickup ? "بيانات الاستلام" : "بيانات التوصيل"}
+          </Text>
 
           {[
             { label: "الاسم الكامل *", value: name, set: setName, placeholder: "محمد أحمد", icon: "person-outline" },
             { label: "رقم الهاتف *", value: phone, set: setPhone, placeholder: "059XXXXXXX", icon: "call-outline", keyType: "phone-pad" as const },
-            { label: "العنوان *", value: address, set: setAddress, placeholder: "المدينة، الشارع، رقم المنزل", icon: "location-outline" },
+            ...(isStorePickup
+              ? []
+              : [{ label: "العنوان *", value: address, set: setAddress, placeholder: "المدينة، الشارع، رقم المنزل", icon: "location-outline" }]),
           ].map((f) => (
             <View key={f.label} style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{f.label}</Text>
@@ -749,16 +775,18 @@ export default function CartScreen() {
                 >
                   <View style={styles.zoneOptionContent}>
                     <Text style={[styles.zoneOptionCost, { color: isSelected ? colors.primary : colors.foreground }]}>
-                      {promotionActive && displayedCost !== zone.cost
-                        ? `${displayedCost}₪ بدل ${zone.cost}₪`
-                        : `${displayedCost}₪`}
+                      {zone.label === STORE_PICKUP_LABEL
+                        ? "مجانًا"
+                        : promotionActive && displayedCost !== zone.cost
+                          ? `${displayedCost}₪ بدل ${zone.cost}₪`
+                          : `${displayedCost}₪`}
                     </Text>
                     <Text style={[styles.zoneOptionLabel, { color: isSelected ? colors.primary : colors.foreground }]}>
                       {zone.label}
                     </Text>
                   </View>
                   <Ionicons
-                    name="bicycle-outline"
+                    name={zone.label === STORE_PICKUP_LABEL ? "storefront-outline" : "bicycle-outline"}
                     size={20}
                     color={isSelected ? colors.primary : colors.mutedForeground}
                   />
@@ -769,6 +797,27 @@ export default function CartScreen() {
               );
             })}
           </View>
+
+          {isStorePickup ? (
+            <View
+              style={{
+                backgroundColor: "#FFF7ED",
+                borderWidth: 1,
+                borderColor: "#F59E0B",
+                borderRadius: 14,
+                padding: 13,
+                gap: 5,
+              }}
+            >
+              <Text style={{ color: "#B45309", fontWeight: "900", textAlign: "right" }}>
+                🏪 استلام من المحل — التوصيل 0₪
+              </Text>
+              <Text style={{ color: "#92400E", textAlign: "right", lineHeight: 21, fontSize: 13 }}>
+                يتم حجز الكمية لمدة يومين فقط (48 ساعة) من وقت إنشاء الطلب.
+                بعد انتهاء المدة يعتبر الحجز منتهيًا ويتم إلغاء الطلب من قبل المتجر.
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.fieldLabel, { color: colors.foreground }]}>ملاحظات (اختياري)</Text>

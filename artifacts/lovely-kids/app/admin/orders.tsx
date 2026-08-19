@@ -93,6 +93,24 @@ function paymentStatusInfo(s: string) {
   }
 }
 
+const STORE_PICKUP_HOLD_MS = 48 * 60 * 60 * 1000;
+
+function pickupRemaining(createdAt: string, now: number) {
+  const remaining =
+    new Date(createdAt).getTime() + STORE_PICKUP_HOLD_MS - now;
+
+  if (remaining <= 0) return "انتهت مهلة الحجز";
+
+  const mins = Math.ceil(remaining / 60000);
+  const days = Math.floor(mins / 1440);
+  const hours = Math.floor((mins % 1440) / 60);
+  const minutes = mins % 60;
+
+  if (days > 0) return `متبقي ${days} يوم و ${hours} ساعة`;
+  if (hours > 0) return `متبقي ${hours} ساعة و ${minutes} دقيقة`;
+  return `متبقي ${minutes} دقيقة`;
+}
+
 function timeAgo(dateStr: string) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
   if (diff < 60) return "الآن";
@@ -109,12 +127,15 @@ export default function AdminOrdersScreen() {
   const params = useLocalSearchParams<{ orderId?: string | string[] }>();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [proofModal, setProofModal] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [pickupConfirmOrder, setPickupConfirmOrder] = useState<Order | null>(null);
+  const [pickupConvertingId, setPickupConvertingId] = useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
   const [printingId, setPrintingId] = useState<number | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -198,6 +219,12 @@ export default function AdminOrdersScreen() {
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
+  // عداد الاستلام يتحرك محلياً فقط بدون أي طلبات للسيرفر
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const updateStatus = async (id: number, status: string) => {
     if (pendingOrderIdsRef.current.has(id)) return;
     const order = orders.find((o) => o.id === id);
@@ -278,6 +305,67 @@ export default function AdminOrdersScreen() {
 
   const confirmDeleteOrder = (id: number) => {
     setDeleteConfirmId(id);
+  };
+
+  const convertToStorePickup = async (order: Order) => {
+    if (pickupConvertingId !== null) return;
+
+    setPickupConfirmOrder(null);
+    setPickupConvertingId(order.id);
+
+    try {
+      const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("انتهت جلسة تسجيل الدخول");
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/orders/${order.id}/store-pickup`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const body = await res.json().catch(() => null) as
+        | Order
+        | { error?: string }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(
+          body && "error" in body && body.error
+            ? body.error
+            : "تعذر تحويل الطلب إلى استلام من المحل",
+        );
+      }
+
+      const updatedOrder = body as Order;
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item.id === order.id
+            ? { ...item, ...updatedOrder }
+            : item,
+        ),
+      );
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "تعذر تحويل الطلب إلى استلام من المحل";
+
+      showError(msg);
+
+      if (Platform.OS !== "web") {
+        Alert.alert("تعذر تعديل الطلب", msg);
+      }
+    } finally {
+      setPickupConvertingId(null);
+    }
   };
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
@@ -989,12 +1077,68 @@ export default function AdminOrdersScreen() {
                       </View>
                       {item.shippingZone ? (
                         <View style={styles.infoRow}>
-                          <Ionicons name="bicycle-outline" size={16} color={colors.mutedForeground} />
+                          <Ionicons
+                            name={
+                              item.shippingZone === "استلام من المحل"
+                                ? "storefront-outline"
+                                : "bicycle-outline"
+                            }
+                            size={16}
+                            color={colors.mutedForeground}
+                          />
                           <Text style={[styles.infoText, { color: colors.foreground }]}>
-                            منطقة التوصيل: {item.shippingZone}
+                            {item.shippingZone === "استلام من المحل"
+                              ? "طريقة الاستلام: استلام من المحل"
+                              : `منطقة التوصيل: ${item.shippingZone}`}
                             {item.shippingCost != null ? ` — ${item.shippingCost}₪` : ""}
                           </Text>
                         </View>
+                      ) : null}
+
+                      {item.shippingZone !== "استلام من المحل" &&
+                      item.status !== "done" &&
+                      item.status !== "cancelled" ? (
+                        <Pressable
+                          disabled={pickupConvertingId !== null}
+                          onPress={() => setPickupConfirmOrder(item)}
+                          style={{
+                            marginTop: 4,
+                            borderWidth: 1,
+                            borderColor: "#F59E0B",
+                            backgroundColor: "#FFF7ED",
+                            borderRadius: 10,
+                            paddingHorizontal: 12,
+                            paddingVertical: 9,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            opacity:
+                              pickupConvertingId === item.id
+                                ? 0.55
+                                : 1,
+                          }}
+                        >
+                          {pickupConvertingId === item.id ? (
+                            <ActivityIndicator size="small" color="#B45309" />
+                          ) : (
+                            <Ionicons
+                              name="storefront-outline"
+                              size={17}
+                              color="#B45309"
+                            />
+                          )}
+
+                          <Text
+                            style={{
+                              color: "#B45309",
+                              fontWeight: "800",
+                              fontSize: 13,
+                            }}
+                          >
+                            تحويل إلى استلام من المحل
+                          </Text>
+                        </Pressable>
                       ) : null}
                       <View style={styles.infoRow}>
                         <Ionicons name="call-outline" size={16} color={colors.mutedForeground} />
@@ -1007,6 +1151,49 @@ export default function AdminOrdersScreen() {
                         </View>
                       ) : null}
                     </View>
+
+                    {item.shippingZone === "استلام من المحل" &&
+                    item.status !== "done" &&
+                    item.status !== "cancelled" ? (
+                      <View
+                        style={{
+                          backgroundColor: "#FFF7ED",
+                          borderWidth: 1,
+                          borderColor: "#F59E0B",
+                          borderRadius: 12,
+                          padding: 10,
+                          gap: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#B45309",
+                            fontWeight: "900",
+                            textAlign: "right",
+                          }}
+                        >
+                          🏪 استلام من المحل
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#92400E",
+                            fontWeight: "800",
+                            textAlign: "right",
+                          }}
+                        >
+                          ⏳ {pickupRemaining(item.createdAt, now)}
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#92400E",
+                            fontSize: 11,
+                            textAlign: "right",
+                          }}
+                        >
+                          يتم حجز الكمية لمدة 48 ساعة، وبعدها يتم إلغاء الطلب يدوياً من المتجر.
+                        </Text>
+                      </View>
+                    ) : null}
 
                     {/* Items */}
                     <View style={[styles.itemsSection, { backgroundColor: colors.background }]}>
@@ -1394,6 +1581,115 @@ export default function AdminOrdersScreen() {
                 ]}
               >
                 إغلاق
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Store Pickup Confirmation Modal */}
+      <Modal
+        visible={pickupConfirmOrder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickupConfirmOrder(null)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setPickupConfirmOrder(null)}
+        >
+          <Pressable
+            style={[
+              styles.deleteConfirmCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <View
+              style={[
+                styles.deleteConfirmIcon,
+                { backgroundColor: "#FFF7ED" },
+              ]}
+            >
+              <Ionicons
+                name="storefront-outline"
+                size={36}
+                color="#F59E0B"
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.deleteConfirmTitle,
+                { color: colors.foreground },
+              ]}
+            >
+              تحويل إلى استلام من المحل
+            </Text>
+
+            <Text
+              style={[
+                styles.deleteConfirmSub,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              {pickupConfirmOrder
+                ? `سيتم تحويل الطلب #${pickupConfirmOrder.id} إلى استلام من المحل، وإلغاء رسوم التوصيل من الإجمالي.`
+                : ""}
+            </Text>
+
+            {pickupConfirmOrder ? (
+              <Text
+                style={{
+                  color: "#B45309",
+                  fontWeight: "800",
+                  textAlign: "center",
+                  marginBottom: 4,
+                }}
+              >
+                الإجمالي الجديد:{" "}
+                {Math.max(
+                  0,
+                  pickupConfirmOrder.totalPrice -
+                    (pickupConfirmOrder.shippingCost ?? 0),
+                )}
+                ₪
+              </Text>
+            ) : null}
+
+            <Pressable
+              style={[
+                styles.deleteConfirmBtn,
+                { backgroundColor: "#F59E0B" },
+              ]}
+              onPress={() => {
+                if (pickupConfirmOrder) {
+                  void convertToStorePickup(pickupConfirmOrder);
+                }
+              }}
+            >
+              <Text style={styles.deleteConfirmBtnText}>
+                تأكيد التحويل
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.deleteCancelBtn,
+                { borderColor: colors.border },
+              ]}
+              onPress={() => setPickupConfirmOrder(null)}
+            >
+              <Text
+                style={[
+                  styles.deleteCancelBtnText,
+                  { color: colors.foreground },
+                ]}
+              >
+                رجوع
               </Text>
             </Pressable>
           </Pressable>
