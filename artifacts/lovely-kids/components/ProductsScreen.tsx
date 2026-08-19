@@ -219,7 +219,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
           </Pressable>
           <Text style={[styles.title, { color: colors.foreground }]}>
             {isOffersView
-              ? "🔥 العروض"
+              ? "🔥 قسم العروض 🔥"
               : isNewArrivalsView
                 ? "وصل حديثاً"
                 : "المنتجات"}
