@@ -334,6 +334,22 @@ export async function handleOrderRequest(
     );
   }
 
+  const storePickupMatch = path.match(
+    /^\/api\/orders\/(\d+)\/store-pickup$/,
+  );
+
+  if (
+    request.method === "PATCH" &&
+    storePickupMatch
+  ) {
+    return handleConvertOrderToStorePickup(
+      request,
+      db,
+      env,
+      Number(storePickupMatch[1]),
+    );
+  }
+
   const statusMatch = path.match(
     /^\/api\/orders\/(\d+)\/status$/,
   );
@@ -465,6 +481,78 @@ async function handleCancelOrder(
   }
 
   return json(result.order);
+}
+
+async function handleConvertOrderToStorePickup(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const user = await getCurrentUser(db, request, env);
+
+  if (!user) {
+    return json({ error: "يجب تسجيل الدخول" }, 401);
+  }
+
+  if (!user.isAdmin) {
+    return json({ error: "غير مصرح" }, 403);
+  }
+
+  const rows = await db
+    .select({
+      id: ordersTable.id,
+      status: ordersTable.status,
+      shippingZone: ordersTable.shippingZone,
+      shippingCost: ordersTable.shippingCost,
+      totalPrice: ordersTable.totalPrice,
+    })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  const order = rows[0];
+
+  if (!order) {
+    return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (order.status === "done" || order.status === "cancelled") {
+    return json(
+      { error: "لا يمكن تعديل طريقة استلام طلب مكتمل أو ملغي" },
+      409,
+    );
+  }
+
+  if (order.shippingZone === "استلام من المحل") {
+    const current = await db
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.id, id))
+      .limit(1);
+
+    return json(current[0]);
+  }
+
+  const oldShippingCost =
+    typeof order.shippingCost === "number" && order.shippingCost > 0
+      ? order.shippingCost
+      : 0;
+
+  const newTotal = Math.max(0, order.totalPrice - oldShippingCost);
+
+  const updated = await db
+    .update(ordersTable)
+    .set({
+      shippingZone: "استلام من المحل",
+      shippingCost: 0,
+      totalPrice: newTotal,
+      customerAddress: "استلام من المحل",
+    })
+    .where(eq(ordersTable.id, id))
+    .returning();
+
+  return json(updated[0]);
 }
 
 async function handleUpdateOrderStatus(
