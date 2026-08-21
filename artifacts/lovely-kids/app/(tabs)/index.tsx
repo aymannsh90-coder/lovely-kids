@@ -121,6 +121,28 @@ const TRUST_BADGES = [
 ];
 
 export default function HomeScreen() {
+  const offersCtaPulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(offersCtaPulse, {
+          toValue: 1,
+          duration: 850,
+          useNativeDriver: false,
+        }),
+        Animated.timing(offersCtaPulse, {
+          toValue: 0,
+          duration: 850,
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+
+    pulse.start();
+    return () => pulse.stop();
+  }, [offersCtaPulse]);
+
   const colors = useColors();
   const { width: viewportWidth } = useWindowDimensions();
 
@@ -737,31 +759,54 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View
-            style={{
+          <Animated.View
+            style={[{
               position: "absolute",
-              bottom: 8,
+              bottom: 3,
               left: 10,
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: "rgba(255,255,255,0.94)",
-              borderRadius: 20,
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-            }}
+              backgroundColor: "rgba(255,255,255,0.96)",
+              borderRadius: 16,
+              paddingHorizontal: 7,
+              paddingVertical: 3,
+              borderWidth: 1,
+              borderColor: "rgba(233,30,140,0.35)",
+              shadowColor: "#E91E8C",
+              shadowOffset: { width: 0, height: 0 },
+              elevation: 4,
+            },
+            {
+              shadowOpacity: offersCtaPulse.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.08, 0.55],
+              }),
+              shadowRadius: offersCtaPulse.interpolate({
+                inputRange: [0, 1],
+                outputRange: [3, 15],
+              }),
+              borderColor: offersCtaPulse.interpolate({
+                inputRange: [0, 1],
+                outputRange: [
+                  "rgba(233,30,140,0.25)",
+                  "rgba(233,30,140,0.90)",
+                ],
+              }),
+            },
+          ]}
           >
-            <Ionicons name="arrow-back" size={14} color="#E91E8C" />
+            <Ionicons name="arrow-back" size={12} color="#E91E8C" />
             <Text
               style={{
                 color: "#E91E8C",
-                fontSize: 11,
+                fontSize: 9,
                 fontWeight: "700",
-                marginLeft: 5,
+                marginLeft: 4,
               }}
             >
               اضغط للدخول لقسم العروض
             </Text>
-          </View>
+          </Animated.View>
         </Pressable>
       ) : null}
 
