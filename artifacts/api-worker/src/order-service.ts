@@ -250,8 +250,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
   const notes = input.notes?.trim() || null;
   const paymentMethod = input.paymentMethod ?? "cod";
 
-  if (!customerName || !customerPhone || !customerAddress) {
-    throw new OrderValidationError("بيانات العميل غير مكتملة");
+  if (!customerName || !customerPhone) {
+    throw new OrderValidationError("الاسم ورقم الهاتف مطلوبان");
   }
 
   const groupedItems = groupItems(input.items);
@@ -268,6 +268,20 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       settingsData,
       input.shippingZone,
     );
+
+    const trustedCustomerAddress =
+      shipping.label === STORE_PICKUP_LABEL
+        ? STORE_PICKUP_LABEL
+        : customerAddress;
+
+    if (
+      shipping.label !== STORE_PICKUP_LABEL &&
+      !trustedCustomerAddress
+    ) {
+      throw new OrderValidationError(
+        "العنوان مطلوب لإتمام طلب التوصيل",
+      );
+    }
 
     const trustedItems: TrustedStoredItem[] = [];
     let productsTotal = 0;
@@ -471,7 +485,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         userId: input.userId ?? null,
         customerName,
         customerPhone,
-        customerAddress,
+        customerAddress: trustedCustomerAddress,
         notes,
         items: trustedItems,
         totalPrice,

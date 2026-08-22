@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   FlatList,
   Image,
   Linking,
@@ -149,6 +150,8 @@ export default function CartScreen() {
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedZone, setSelectedZone] = useState<ShippingZone | null>(null);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [checkoutValidationMessage, setCheckoutValidationMessage] = useState<string | null>(null);
   const isStorePickup = selectedZone?.label === STORE_PICKUP_LABEL;
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "bank_transfer">("cod");
   const [orderId, setOrderId] = useState<number | null>(null);
@@ -172,13 +175,30 @@ export default function CartScreen() {
   const whatsapp = settings.whatsappNumber || "97292376808";
 
   const handleCheckout = async () => {
-    if (
-      !name.trim() ||
-      !phone.trim() ||
-      !selectedZone ||
-      (!isStorePickup && !address.trim())
-    ) return;
+    const missingFields: string[] = [];
 
+    if (!name.trim()) missingFields.push("الاسم الكامل");
+    if (!phone.trim()) missingFields.push("رقم الهاتف");
+    if (!selectedZone) {
+      missingFields.push("منطقة التوصيل أو الاستلام من المحل");
+    }
+    if (!isStorePickup && !address.trim()) {
+      missingFields.push("العنوان");
+    }
+
+    if (missingFields.length > 0) {
+      setShowValidationErrors(true);
+      setCheckoutValidationMessage(
+        `يرجى إكمال البيانات التالية:\n\n• ${missingFields.join("\n• ")}`
+      );
+      return;
+    }
+
+    // TypeScript guard — عمليًا تم التحقق منها بالأعلى
+    if (!selectedZone) return;
+
+    setShowValidationErrors(false);
+    setCheckoutValidationMessage(null);
     setLoading(true);
 
     let shippingCost = getShippingCost(
@@ -730,8 +750,30 @@ export default function CartScreen() {
               : [{ label: "العنوان *", value: address, set: setAddress, placeholder: "المدينة، الشارع، رقم المنزل", icon: "location-outline" }]),
           ].map((f) => (
             <View key={f.label} style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{f.label}</Text>
-              <View style={[styles.inputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  {
+                    color:
+                      showValidationErrors &&
+                      !f.value.trim()
+                        ? "#DC2626"
+                        : colors.foreground,
+                  },
+                ]}
+              >
+                {f.label}
+              </Text>
+              <View
+                style={[
+                  styles.inputRow,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                  showValidationErrors &&
+                  !f.value.trim()
+                    ? { borderColor: "#DC2626", borderWidth: 1.5 }
+                    : null,
+                ]}
+              >
                 <Ionicons name={f.icon as "person-outline"} size={18} color={colors.mutedForeground} />
                 <TextInput
                   value={f.value}
@@ -747,8 +789,27 @@ export default function CartScreen() {
           ))}
 
           {/* Shipping Zone */}
-          <Text style={[styles.formSection, { color: colors.foreground }]}>منطقة التوصيل *</Text>
-          <View style={styles.zoneOptions}>
+          <Text
+            style={[
+              styles.formSection,
+              { color: showValidationErrors && !selectedZone ? "#DC2626" : colors.foreground },
+            ]}
+          >
+            منطقة التوصيل *
+          </Text>
+          <View
+            style={[
+              styles.zoneOptions,
+              showValidationErrors && !selectedZone
+                ? {
+                    borderWidth: 1.5,
+                    borderColor: "#DC2626",
+                    borderRadius: 14,
+                    padding: 4,
+                  }
+                : null,
+            ]}
+          >
             {shippingZones.map((zone) => {
               const isSelected = selectedZone?.label === zone.label;
 
@@ -881,10 +942,10 @@ export default function CartScreen() {
           {/* Confirm Button */}
           <Pressable
             onPress={handleCheckout}
-            disabled={loading || !canSubmit}
+            disabled={loading}
             style={[
               styles.confirmBtn,
-              { backgroundColor: canSubmit ? colors.primary : colors.muted, opacity: loading ? 0.8 : 1 }
+              { backgroundColor: colors.primary, opacity: loading ? 0.8 : 1 }
             ]}
           >
             {loading ? (
@@ -897,11 +958,80 @@ export default function CartScreen() {
             </Text>
           </Pressable>
 
-          {!canSubmit && (
-            <Text style={[styles.validationHint, { color: colors.mutedForeground }]}>
-              * يرجى ملء جميع الحقول المطلوبة
+          {showValidationErrors && !canSubmit && (
+            <Text style={[styles.validationHint, { color: "#DC2626" }]}>
+              * الحقول المحددة بالأحمر مطلوبة لإتمام الطلب
             </Text>
           )}
+
+          <Modal
+            transparent
+            visible={checkoutValidationMessage !== null}
+            animationType="fade"
+            onRequestClose={() => setCheckoutValidationMessage(null)}
+          >
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.42)",
+                justifyContent: "center",
+                padding: 24,
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: 20,
+                  padding: 20,
+                  gap: 12,
+                }}
+              >
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={40}
+                  color="#DC2626"
+                  style={{ alignSelf: "center" }}
+                />
+
+                <Text
+                  style={{
+                    color: colors.foreground,
+                    fontSize: 18,
+                    fontWeight: "900",
+                    textAlign: "center",
+                  }}
+                >
+                  أكمل بيانات الطلب
+                </Text>
+
+                <Text
+                  style={{
+                    color: colors.foreground,
+                    fontSize: 14,
+                    lineHeight: 24,
+                    textAlign: "right",
+                  }}
+                >
+                  {checkoutValidationMessage}
+                </Text>
+
+                <Pressable
+                  onPress={() => setCheckoutValidationMessage(null)}
+                  style={{
+                    backgroundColor: colors.primary,
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    marginTop: 4,
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>
+                    حسنًا، سأكمل البيانات
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
         </ScrollView>
       </View>
     );
