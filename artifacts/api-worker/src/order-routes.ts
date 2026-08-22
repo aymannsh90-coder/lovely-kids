@@ -13,6 +13,7 @@ import {
   cancelOrderAndRestoreStock,
   editOrderItemsAndAdjustStock,
   OrderEditError,
+  restoreCancelledOrderAndDeductStock,
 } from "./order-stock";
 import {
   sendOrderStatusNotification,
@@ -38,7 +39,7 @@ const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
   confirmed: ["new", "confirmed", "delivering", "cancelled"],
   delivering: ["new", "confirmed", "delivering", "done", "cancelled"],
   done: ["done"],
-  cancelled: ["cancelled"],
+  cancelled: ["confirmed", "delivering", "done"],
 };
 
 
@@ -663,6 +664,56 @@ async function handleUpdateOrderStatus(
 
   if (!allowed.includes(body.status)) {
     return json({ error: "لا يمكن نقل الطلب إلى هذه الحالة" }, 409);
+  }
+
+  if (
+    current[0].status === "cancelled" &&
+    body.status !== "cancelled"
+  ) {
+    try {
+      const updatedOrder =
+        await restoreCancelledOrderAndDeductStock(
+          db,
+          id,
+          body.status,
+        );
+
+      if (current[0].customerPhone) {
+        try {
+          await sendOrderStatusNotification(
+            db,
+            env,
+            id,
+            current[0].customerPhone,
+            body.status,
+          );
+        } catch (error) {
+          console.error(
+            "Order status notification failed:",
+            error,
+          );
+        }
+      }
+
+      return json(updatedOrder);
+    } catch (error) {
+      if (error instanceof OrderEditError) {
+        return json(
+          { error: error.message },
+          error.status,
+        );
+      }
+
+      console.error(
+        "Restore cancelled order failed:",
+        error,
+      );
+
+      return json(
+        { error: "تعذر إعادة تفعيل الطلب" },
+        500,
+      );
+    }
   }
 
   if (body.status === "cancelled") {

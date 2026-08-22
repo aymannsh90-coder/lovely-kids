@@ -101,7 +101,7 @@ const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
   confirmed: ["new", "delivering", "cancelled"],
   delivering: ["new", "confirmed", "done", "cancelled"],
   done: [],
-  cancelled: [],
+  cancelled: ["confirmed", "delivering", "done"],
 };
 
 function statusInfo(s: string) {
