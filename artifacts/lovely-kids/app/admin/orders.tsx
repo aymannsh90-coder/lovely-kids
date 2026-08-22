@@ -41,6 +41,34 @@ interface OrderItem {
   color?: string;
 }
 
+interface AdminOrderEditSize {
+  size: string;
+  stock?: number | null;
+  outOfStock?: boolean;
+}
+
+interface AdminOrderEditVariant {
+  color: string;
+  image?: string;
+  sizes?: AdminOrderEditSize[];
+}
+
+interface AdminOrderEditProduct {
+  id: string;
+  name?: string;
+  nameAr: string;
+  price: number;
+  image?: string;
+  productCode?: string | null;
+  barcode?: string | null;
+  stock?: number | null;
+  sizes?: string[];
+  colorVariants?: AdminOrderEditVariant[];
+  deletedAt?: string | null;
+}
+
+interface EditableOrderItem extends OrderItem {}
+
 interface Order {
   id: number;
   customerName: string;
@@ -142,6 +170,17 @@ export default function AdminOrdersScreen() {
   const [qrScanned, setQrScanned] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
   const [printConfirmVisible, setPrintConfirmVisible] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editItems, setEditItems] = useState<EditableOrderItem[]>([]);
+  const [editProducts, setEditProducts] = useState<AdminOrderEditProduct[]>([]);
+  const [editProductsLoading, setEditProductsLoading] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSearch, setEditSearch] = useState("");
+  const [editPickedProduct, setEditPickedProduct] =
+    useState<AdminOrderEditProduct | null>(null);
+  const [editPickedColor, setEditPickedColor] = useState<string | null>(null);
+  const [editPickedSize, setEditPickedSize] = useState<string | null>(null);
+  const [editOrderError, setEditOrderError] = useState<string | null>(null);
 
   const printConfirmResolverRef =
     useRef<((confirmed: boolean) => void) | null>(null);
@@ -367,6 +406,321 @@ export default function AdminOrdersScreen() {
       setPickupConvertingId(null);
     }
   };
+
+  const closeOrderEditor = () => {
+    if (editSaving) return;
+    setEditingOrder(null);
+    setEditItems([]);
+    setEditSearch("");
+    setEditPickedProduct(null);
+    setEditPickedColor(null);
+    setEditPickedSize(null);
+    setEditOrderError(null);
+  };
+
+  const loadEditProducts = async () => {
+    setEditProductsLoading(true);
+
+    try {
+      const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("انتهت جلسة تسجيل الدخول");
+      }
+
+      const res = await fetch(`${API_BASE}/api/products/admin`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const body = await res.json().catch(() => null) as
+        | AdminOrderEditProduct[]
+        | { error?: string }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(
+          body && !Array.isArray(body) && body.error
+            ? body.error
+            : "تعذر تحميل المنتجات",
+        );
+      }
+
+      setEditProducts(
+        Array.isArray(body)
+          ? body.filter((product) => !product.deletedAt)
+          : [],
+      );
+    } catch (error) {
+      setEditOrderError(
+        error instanceof Error
+          ? error.message
+          : "تعذر تحميل المنتجات",
+      );
+    } finally {
+      setEditProductsLoading(false);
+    }
+  };
+
+  const openOrderEditor = async (order: Order) => {
+    if (order.status !== "new" && order.status !== "confirmed") {
+      showError("يمكن تعديل الطلبات الجديدة أو المؤكدة فقط");
+      return;
+    }
+
+    setEditingOrder(order);
+    setEditItems(order.items.map((item) => ({ ...item })));
+    setEditSearch("");
+    setEditPickedProduct(null);
+    setEditPickedColor(null);
+    setEditPickedSize(null);
+    setEditOrderError(null);
+
+    await loadEditProducts();
+  };
+
+  const changeEditItemQuantity = (
+    index: number,
+    change: number,
+  ) => {
+    setEditItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+
+        const nextQuantity = Math.max(
+          1,
+          Math.min(99, item.quantity + change),
+        );
+
+        return {
+          ...item,
+          quantity: nextQuantity,
+        };
+      }),
+    );
+  };
+
+  const removeEditItem = (index: number) => {
+    setEditItems((current) =>
+      current.filter((_, itemIndex) => itemIndex !== index),
+    );
+    setEditOrderError(null);
+  };
+
+  const chooseEditProduct = (product: AdminOrderEditProduct) => {
+    setEditPickedProduct(product);
+    setEditPickedColor(null);
+    setEditPickedSize(null);
+    setEditOrderError(null);
+  };
+
+  const addPickedProductToEdit = () => {
+    const product = editPickedProduct;
+
+    if (!product) return;
+
+    const variants = Array.isArray(product.colorVariants)
+      ? product.colorVariants
+      : [];
+
+    if (variants.length > 0 && !editPickedColor) {
+      setEditOrderError(`اختر لون المنتج ${product.nameAr}`);
+      return;
+    }
+
+    const selectedVariant =
+      variants.length > 0
+        ? variants.find((variant) => variant.color === editPickedColor)
+        : undefined;
+
+    const availableSizes =
+      variants.length > 0
+        ? selectedVariant?.sizes ?? []
+        : (product.sizes ?? []).map((size) => ({ size }));
+
+    if (availableSizes.length > 0 && !editPickedSize) {
+      setEditOrderError(`اختر مقاس المنتج ${product.nameAr}`);
+      return;
+    }
+
+    const color = editPickedColor ?? undefined;
+    const size = editPickedSize ?? undefined;
+
+    setEditItems((current) => {
+      const existingIndex = current.findIndex(
+        (item) =>
+          item.id === product.id &&
+          (item.color ?? "") === (color ?? "") &&
+          (item.size ?? "") === (size ?? ""),
+      );
+
+      if (existingIndex >= 0) {
+        return current.map((item, index) =>
+          index === existingIndex
+            ? {
+                ...item,
+                quantity: Math.min(99, item.quantity + 1),
+              }
+            : item,
+        );
+      }
+
+      return [
+        ...current,
+        {
+          id: product.id,
+          name: product.nameAr,
+          price: product.price,
+          quantity: 1,
+          image: selectedVariant?.image || product.image,
+          color,
+          size,
+        },
+      ];
+    });
+
+    setEditPickedProduct(null);
+    setEditPickedColor(null);
+    setEditPickedSize(null);
+    setEditSearch("");
+    setEditOrderError(null);
+  };
+
+  const saveOrderItemsEdit = async () => {
+    if (!editingOrder || editSaving) return;
+
+    if (editItems.length === 0) {
+      setEditOrderError("يجب أن يحتوي الطلب على منتج واحد على الأقل");
+      return;
+    }
+
+    setEditSaving(true);
+    setEditOrderError(null);
+
+    pendingOrderIdsRef.current.add(editingOrder.id);
+    ordersFetchVersionRef.current += 1;
+    setPendingOrderIds((prev) => new Set(prev).add(editingOrder.id));
+
+    try {
+      const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("انتهت جلسة تسجيل الدخول");
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/orders/${editingOrder.id}/items`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            items: editItems.map((item) => ({
+              id: item.id,
+              quantity: item.quantity,
+              color: item.color,
+              size: item.size,
+            })),
+          }),
+        },
+      );
+
+      const body = await res.json().catch(() => null) as
+        | Order
+        | { error?: string }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(
+          body && "error" in body && body.error
+            ? body.error
+            : "تعذر تعديل الطلب",
+        );
+      }
+
+      const updatedOrder = body as Order;
+
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === updatedOrder.id
+            ? { ...order, ...updatedOrder }
+            : order,
+        ),
+      );
+
+      setEditingOrder(null);
+      setEditItems([]);
+      setEditPickedProduct(null);
+      setEditPickedColor(null);
+      setEditPickedSize(null);
+      setEditSearch("");
+    } catch (error) {
+      setEditOrderError(
+        error instanceof Error
+          ? error.message
+          : "تعذر تعديل الطلب",
+      );
+    } finally {
+      pendingOrderIdsRef.current.delete(editingOrder.id);
+      setPendingOrderIds((prev) => {
+        const next = new Set(prev);
+        next.delete(editingOrder.id);
+        return next;
+      });
+      setEditSaving(false);
+    }
+  };
+
+  const normalizedEditSearch = editSearch.trim().toLowerCase();
+
+  const filteredEditProducts = normalizedEditSearch
+    ? editProducts
+        .filter((product) => {
+          const haystack = [
+            product.nameAr,
+            product.name ?? "",
+            product.productCode ?? "",
+            product.barcode ?? "",
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          return haystack.includes(normalizedEditSearch);
+        })
+        .slice(0, 12)
+    : [];
+
+  const pickedVariants = editPickedProduct?.colorVariants ?? [];
+
+  const pickedVariant =
+    editPickedColor && pickedVariants.length > 0
+      ? pickedVariants.find(
+          (variant) => variant.color === editPickedColor,
+        )
+      : undefined;
+
+  const pickedSizes: AdminOrderEditSize[] = editPickedProduct
+    ? pickedVariants.length > 0
+      ? pickedVariant?.sizes ?? []
+      : (editPickedProduct.sizes ?? []).map((size) => ({
+          size,
+          stock: undefined,
+          outOfStock: false,
+        }))
+    : [];
+
+  const editProductsTotal = editItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
+
+  const editShippingCost = editingOrder?.shippingCost ?? 0;
+
+  const editPreviewTotal =
+    editProductsTotal + editShippingCost;
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
   const whatsappCustomer = (phone: string, orderId: number) => {
@@ -1376,6 +1730,38 @@ export default function AdminOrdersScreen() {
                       </Pressable>
                     </View>
 
+                    {(item.status === "new" || item.status === "confirmed") && (
+                      <Pressable
+                        disabled={pendingOrderIds.has(item.id)}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          void openOrderEditor(item);
+                        }}
+                        style={[
+                          styles.editOrderBtn,
+                          {
+                            backgroundColor: colors.primary + "14",
+                            borderColor: colors.primary,
+                            opacity: pendingOrderIds.has(item.id) ? 0.55 : 1,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="create-outline"
+                          size={18}
+                          color={colors.primary}
+                        />
+                        <Text
+                          style={[
+                            styles.editOrderBtnText,
+                            { color: colors.primary },
+                          ]}
+                        >
+                          تعديل منتجات الطلب
+                        </Text>
+                      </Pressable>
+                    )}
+
                     {/* Status Change */}
                     <Text style={[styles.sectionLabel, { color: colors.foreground }]}>تغيير الحالة:</Text>
                     <View style={styles.statusBtns}>
@@ -1585,6 +1971,692 @@ export default function AdminOrdersScreen() {
             </Pressable>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Edit Order Items Modal */}
+      <Modal
+        visible={editingOrder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeOrderEditor}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.editOrderModalCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.editOrderModalHeader}>
+              <Pressable
+                onPress={closeOrderEditor}
+                disabled={editSaving}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name="close"
+                  size={25}
+                  color={colors.foreground}
+                />
+              </Pressable>
+
+              <View style={{ flex: 1, alignItems: "flex-end" }}>
+                <Text
+                  style={[
+                    styles.editOrderModalTitle,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  تعديل الطلب #{editingOrder?.id}
+                </Text>
+                <Text
+                  style={[
+                    styles.editOrderModalSub,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  أضف، احذف أو عدّل كميات المنتجات
+                </Text>
+              </View>
+
+              <Ionicons
+                name="create-outline"
+                size={24}
+                color={colors.primary}
+              />
+            </View>
+
+            {editOrderError ? (
+              <View style={styles.editOrderErrorBox}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={18}
+                  color="#DC2626"
+                />
+                <Text style={styles.editOrderErrorText}>
+                  {editOrderError}
+                </Text>
+              </View>
+            ) : null}
+
+            <ScrollView
+              style={styles.editOrderScroll}
+              contentContainerStyle={styles.editOrderScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text
+                style={[
+                  styles.editOrderSectionTitle,
+                  { color: colors.foreground },
+                ]}
+              >
+                منتجات الطلب الحالية
+              </Text>
+
+              {editItems.length === 0 ? (
+                <View
+                  style={[
+                    styles.editOrderEmpty,
+                    { borderColor: colors.border },
+                  ]}
+                >
+                  <Ionicons
+                    name="basket-outline"
+                    size={26}
+                    color={colors.mutedForeground}
+                  />
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      textAlign: "center",
+                    }}
+                  >
+                    لا يوجد منتجات في الطلب
+                  </Text>
+                </View>
+              ) : (
+                editItems.map((orderItem, index) => (
+                  <View
+                    key={`${orderItem.id}-${orderItem.color ?? ""}-${orderItem.size ?? ""}-${index}`}
+                    style={[
+                      styles.editOrderLine,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
+                  >
+                    {orderItem.image ? (
+                      <Image
+                        source={{ uri: orderItem.image }}
+                        style={styles.editOrderLineImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.editOrderLineImage,
+                          styles.orderItemImagePlaceholder,
+                          { backgroundColor: colors.secondary },
+                        ]}
+                      >
+                        <Ionicons
+                          name="image-outline"
+                          size={20}
+                          color={colors.mutedForeground}
+                        />
+                      </View>
+                    )}
+
+                    <View style={styles.editOrderLineInfo}>
+                      <Text
+                        style={{
+                          color: colors.foreground,
+                          fontWeight: "700",
+                          textAlign: "right",
+                        }}
+                        numberOfLines={2}
+                      >
+                        {orderItem.name}
+                      </Text>
+
+                      <View style={styles.editOrderVariantRow}>
+                        {orderItem.color ? (
+                          <Text
+                            style={[
+                              styles.editOrderVariantText,
+                              {
+                                color: colors.foreground,
+                                backgroundColor: colors.secondary,
+                              },
+                            ]}
+                          >
+                            {orderItem.color}
+                          </Text>
+                        ) : null}
+
+                        {orderItem.size ? (
+                          <Text
+                            style={[
+                              styles.editOrderVariantText,
+                              {
+                                color: colors.foreground,
+                                backgroundColor: colors.secondary,
+                              },
+                            ]}
+                          >
+                            مقاس {orderItem.size}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <Text
+                        style={{
+                          color: colors.primary,
+                          fontWeight: "800",
+                          textAlign: "right",
+                        }}
+                      >
+                        {orderItem.price}₪ × {orderItem.quantity}
+                      </Text>
+                    </View>
+
+                    <View style={styles.editOrderQtyBox}>
+                      <Pressable
+                        onPress={() =>
+                          changeEditItemQuantity(index, 1)
+                        }
+                        style={[
+                          styles.editOrderQtyBtn,
+                          { borderColor: colors.border },
+                        ]}
+                      >
+                        <Ionicons
+                          name="add"
+                          size={17}
+                          color={colors.foreground}
+                        />
+                      </Pressable>
+
+                      <Text
+                        style={[
+                          styles.editOrderQtyText,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {orderItem.quantity}
+                      </Text>
+
+                      <Pressable
+                        onPress={() =>
+                          changeEditItemQuantity(index, -1)
+                        }
+                        style={[
+                          styles.editOrderQtyBtn,
+                          { borderColor: colors.border },
+                        ]}
+                      >
+                        <Ionicons
+                          name="remove"
+                          size={17}
+                          color={colors.foreground}
+                        />
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => removeEditItem(index)}
+                        style={styles.editOrderRemoveBtn}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={17}
+                          color="#DC2626"
+                        />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))
+              )}
+
+              <View
+                style={[
+                  styles.editOrderDivider,
+                  { backgroundColor: colors.border },
+                ]}
+              />
+
+              <Text
+                style={[
+                  styles.editOrderSectionTitle,
+                  { color: colors.foreground },
+                ]}
+              >
+                إضافة منتج
+              </Text>
+
+              <View
+                style={[
+                  styles.editOrderSearchBox,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={20}
+                  color={colors.mutedForeground}
+                />
+                <TextInput
+                  value={editSearch}
+                  onChangeText={(value) => {
+                    setEditSearch(value);
+                    setEditPickedProduct(null);
+                    setEditPickedColor(null);
+                    setEditPickedSize(null);
+                    setEditOrderError(null);
+                  }}
+                  placeholder="ابحث باسم المنتج أو الكود أو الباركود"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[
+                    styles.editOrderSearchInput,
+                    { color: colors.foreground },
+                  ]}
+                  textAlign="right"
+                />
+              </View>
+
+              {editProductsLoading ? (
+                <View style={styles.editOrderLoadingProducts}>
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.primary}
+                  />
+                  <Text style={{ color: colors.mutedForeground }}>
+                    جاري تحميل المنتجات...
+                  </Text>
+                </View>
+              ) : null}
+
+              {!editProductsLoading &&
+              normalizedEditSearch &&
+              filteredEditProducts.length === 0 ? (
+                <Text
+                  style={{
+                    color: colors.mutedForeground,
+                    textAlign: "center",
+                    paddingVertical: 12,
+                  }}
+                >
+                  لم يتم العثور على منتج
+                </Text>
+              ) : null}
+
+              {filteredEditProducts.map((product) => (
+                <Pressable
+                  key={product.id}
+                  onPress={() => chooseEditProduct(product)}
+                  style={[
+                    styles.editOrderSearchResult,
+                    {
+                      borderColor:
+                        editPickedProduct?.id === product.id
+                          ? colors.primary
+                          : colors.border,
+                      backgroundColor:
+                        editPickedProduct?.id === product.id
+                          ? colors.primary + "0D"
+                          : colors.background,
+                    },
+                  ]}
+                >
+                  {product.image ? (
+                    <Image
+                      source={{ uri: product.image }}
+                      style={styles.editOrderSearchImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.editOrderSearchImage,
+                        styles.orderItemImagePlaceholder,
+                        { backgroundColor: colors.secondary },
+                      ]}
+                    >
+                      <Ionicons
+                        name="image-outline"
+                        size={18}
+                        color={colors.mutedForeground}
+                      />
+                    </View>
+                  )}
+
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "700",
+                        textAlign: "right",
+                      }}
+                      numberOfLines={2}
+                    >
+                      {product.nameAr}
+                    </Text>
+
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "800",
+                        marginTop: 3,
+                      }}
+                    >
+                      {product.price}₪
+                    </Text>
+
+                    {product.productCode ? (
+                      <Text
+                        style={{
+                          color: colors.mutedForeground,
+                          fontSize: 11,
+                        }}
+                      >
+                        كود: {product.productCode}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <Ionicons
+                    name={
+                      editPickedProduct?.id === product.id
+                        ? "checkmark-circle"
+                        : "add-circle-outline"
+                    }
+                    size={25}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              ))}
+
+              {editPickedProduct ? (
+                <View
+                  style={[
+                    styles.editOrderPickedBox,
+                    {
+                      borderColor: colors.primary,
+                      backgroundColor: colors.primary + "0A",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.editOrderPickedTitle,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    {editPickedProduct.nameAr}
+                  </Text>
+
+                  {pickedVariants.length > 0 ? (
+                    <>
+                      <Text
+                        style={[
+                          styles.editOrderChoiceLabel,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        اختر اللون:
+                      </Text>
+
+                      <View style={styles.editOrderChoiceRow}>
+                        {pickedVariants.map((variant) => (
+                          <Pressable
+                            key={variant.color}
+                            onPress={() => {
+                              setEditPickedColor(variant.color);
+                              setEditPickedSize(null);
+                              setEditOrderError(null);
+                            }}
+                            style={[
+                              styles.editOrderChoiceChip,
+                              {
+                                borderColor:
+                                  editPickedColor === variant.color
+                                    ? colors.primary
+                                    : colors.border,
+                                backgroundColor:
+                                  editPickedColor === variant.color
+                                    ? colors.primary
+                                    : colors.card,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  editPickedColor === variant.color
+                                    ? "#fff"
+                                    : colors.foreground,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {variant.color}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+
+                  {pickedSizes.length > 0 ? (
+                    <>
+                      <Text
+                        style={[
+                          styles.editOrderChoiceLabel,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        اختر المقاس:
+                      </Text>
+
+                      <View style={styles.editOrderChoiceRow}>
+                        {pickedSizes.map((entry) => (
+                          <Pressable
+                            key={entry.size}
+                            disabled={entry.outOfStock === true}
+                            onPress={() => {
+                              setEditPickedSize(entry.size);
+                              setEditOrderError(null);
+                            }}
+                            style={[
+                              styles.editOrderChoiceChip,
+                              {
+                                borderColor:
+                                  editPickedSize === entry.size
+                                    ? colors.primary
+                                    : colors.border,
+                                backgroundColor:
+                                  editPickedSize === entry.size
+                                    ? colors.primary
+                                    : colors.card,
+                                opacity: entry.outOfStock ? 0.55 : 1,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  editPickedSize === entry.size
+                                    ? "#fff"
+                                    : colors.foreground,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {entry.size}
+                              {typeof entry.stock === "number"
+                                ? ` (${entry.stock})`
+                                : ""}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+
+                  <Pressable
+                    onPress={addPickedProductToEdit}
+                    style={[
+                      styles.editOrderAddBtn,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={19}
+                      color="#fff"
+                    />
+                    <Text style={styles.editOrderAddBtnText}>
+                      إضافة للطلب
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.editOrderSummary,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+              >
+                <View style={styles.editOrderSummaryRow}>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontWeight: "600",
+                    }}
+                  >
+                    المنتجات
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {editProductsTotal}₪
+                  </Text>
+                </View>
+
+                <View style={styles.editOrderSummaryRow}>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontWeight: "600",
+                    }}
+                  >
+                    التوصيل
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {editShippingCost}₪
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.editOrderDivider,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+
+                <View style={styles.editOrderSummaryRow}>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontSize: 16,
+                      fontWeight: "900",
+                    }}
+                  >
+                    الإجمالي الجديد
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontSize: 18,
+                      fontWeight: "900",
+                    }}
+                  >
+                    {editPreviewTotal}₪
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View
+              style={[
+                styles.editOrderFooter,
+                { borderTopColor: colors.border },
+              ]}
+            >
+              <Pressable
+                disabled={editSaving}
+                onPress={closeOrderEditor}
+                style={[
+                  styles.editOrderCancelBtn,
+                  { borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: colors.foreground,
+                    fontWeight: "700",
+                  }}
+                >
+                  إلغاء
+                </Text>
+              </Pressable>
+
+              <Pressable
+                disabled={editSaving}
+                onPress={() => void saveOrderItemsEdit()}
+                style={[
+                  styles.editOrderSaveBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: editSaving ? 0.7 : 1,
+                  },
+                ]}
+              >
+                {editSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={20}
+                    color="#fff"
+                  />
+                )}
+
+                <Text style={styles.editOrderSaveBtnText}>
+                  {editSaving
+                    ? "جاري حفظ التعديل..."
+                    : "حفظ تعديل الطلب"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Store Pickup Confirmation Modal */}
@@ -1857,6 +2929,270 @@ const styles = StyleSheet.create({
   statusBtns: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", flexWrap: "wrap", gap: 6 },
   statusBtn: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20 },
   statusBtnText: { fontSize: 12, fontWeight: "700" },
+  editOrderBtn: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  editOrderBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  editOrderModalCard: {
+    width: Platform.OS === "web" ? 760 : "94%",
+    maxWidth: "96%",
+    height: Platform.OS === "web" ? "88%" : "92%",
+    maxHeight: 850,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  editOrderModalHeader: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  editOrderModalTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  editOrderModalSub: {
+    fontSize: 12,
+    marginTop: 2,
+    textAlign: "right",
+  },
+  editOrderErrorBox: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  editOrderErrorText: {
+    flex: 1,
+    color: "#B91C1C",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  editOrderScroll: {
+    flex: 1,
+  },
+  editOrderScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    gap: 9,
+  },
+  editOrderSectionTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "right",
+    marginTop: 4,
+    marginBottom: 3,
+  },
+  editOrderEmpty: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: 18,
+  },
+  editOrderLine: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 9,
+    gap: 9,
+  },
+  editOrderLineImage: {
+    width: 58,
+    height: 58,
+    borderRadius: 9,
+  },
+  editOrderLineInfo: {
+    flex: 1,
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  editOrderVariantRow: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  editOrderVariantText: {
+    fontSize: 10,
+    fontWeight: "700",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 7,
+    overflow: "hidden",
+  },
+  editOrderQtyBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  editOrderQtyBtn: {
+    width: 30,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editOrderQtyText: {
+    minWidth: 28,
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  editOrderRemoveBtn: {
+    width: 30,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FEE2E2",
+    marginTop: 3,
+  },
+  editOrderDivider: {
+    height: 1,
+    width: "100%",
+    marginVertical: 7,
+  },
+  editOrderSearchBox: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 11,
+    minHeight: 45,
+    gap: 8,
+  },
+  editOrderSearchInput: {
+    flex: 1,
+    minHeight: 42,
+    fontSize: 14,
+    outlineStyle: "none",
+  } as any,
+  editOrderLoadingProducts: {
+    paddingVertical: 12,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  editOrderSearchResult: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 11,
+    padding: 8,
+    gap: 9,
+  },
+  editOrderSearchImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+  editOrderPickedBox: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 12,
+    gap: 9,
+    marginTop: 4,
+  },
+  editOrderPickedTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  editOrderChoiceLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  editOrderChoiceRow: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  editOrderChoiceChip: {
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 9,
+  },
+  editOrderAddBtn: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingVertical: 11,
+    borderRadius: 10,
+    marginTop: 2,
+  },
+  editOrderAddBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  editOrderSummary: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 7,
+    marginTop: 8,
+  },
+  editOrderSummaryRow: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  editOrderFooter: {
+    borderTopWidth: 1,
+    padding: 12,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    gap: 8,
+  },
+  editOrderCancelBtn: {
+    minWidth: 100,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editOrderSaveBtn: {
+    flex: 1,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  editOrderSaveBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "900",
+  },
   deleteBtn: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, marginTop: 4 },
   deleteBtnText: { color: "#ef4444", fontSize: 13, fontWeight: "700" },
   deleteConfirmCard: { width: 300, borderRadius: 20, borderWidth: 1, padding: 24, alignItems: "center", gap: 8, margin: 24 },
