@@ -666,3 +666,178 @@ export async function editOrderItemsAndAdjustStock(
     return updatedRows[0];
   });
 }
+
+
+export async function restoreCancelledOrderAndDeductStock(
+  db: Db,
+  orderId: number,
+  targetStatus: string,
+) {
+  const allowedTargets = new Set([
+    "confirmed",
+    "delivering",
+    "done",
+  ]);
+
+  if (!allowedTargets.has(targetStatus)) {
+    throw new OrderEditError(
+      "الحالة المطلوبة لإرجاع الطلب غير صالحة",
+      400,
+    );
+  }
+
+  return db.transaction(async (tx) => {
+    const orderRows = await tx
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.id, orderId))
+      .for("update");
+
+    const order = orderRows[0];
+
+    if (!order) {
+      throw new OrderEditError("الطلب غير موجود", 404);
+    }
+
+    if (order.status !== "cancelled") {
+      throw new OrderEditError(
+        "يمكن استخدام هذه العملية للطلبات الملغية فقط",
+        409,
+      );
+    }
+
+    const storedItems = Array.isArray(order.items)
+      ? (order.items as Array<
+          StoredOrderItem & {
+            price?: number;
+          }
+        >)
+      : [];
+
+    if (storedItems.length === 0) {
+      throw new OrderEditError(
+        "الطلب لا يحتوي على منتجات صالحة",
+        409,
+      );
+    }
+
+    const productIds = [
+      ...new Set(
+        storedItems.map((item) => {
+          const id = Number(item.id);
+
+          if (!Number.isSafeInteger(id) || id <= 0) {
+            throw new OrderEditError(
+              "أحد منتجات الطلب غير صالح",
+              409,
+            );
+          }
+
+          return id;
+        }),
+      ),
+    ].sort((a, b) => a - b);
+
+    const products = await tx
+      .select()
+      .from(productsTable)
+      .where(inArray(productsTable.id, productIds))
+      .orderBy(asc(productsTable.id))
+      .for("update");
+
+    if (products.length !== productIds.length) {
+      throw new OrderEditError(
+        "أحد منتجات الطلب لم يعد موجودًا",
+        409,
+      );
+    }
+
+    const states = new Map<number, EditableProductState>();
+
+    for (const product of products) {
+      states.set(product.id, {
+        row: product,
+        stock: product.stock ?? null,
+        colorVariants: cloneColorVariants(product.colorVariants),
+        changed: false,
+      });
+    }
+
+    for (const storedItem of storedItems) {
+      const productId = Number(storedItem.id);
+      const quantity = Number(storedItem.quantity);
+
+      if (
+        !Number.isSafeInteger(quantity) ||
+        quantity <= 0 ||
+        quantity > 99
+      ) {
+        throw new OrderEditError(
+          "كمية أحد منتجات الطلب غير صالحة",
+          409,
+        );
+      }
+
+      const state = states.get(productId);
+
+      if (!state) {
+        throw new OrderEditError(
+          "أحد منتجات الطلب لم يعد موجودًا",
+          409,
+        );
+      }
+
+      applyEditedOrderItemStock(
+        state,
+        {
+          id: productId,
+          quantity,
+          color:
+            typeof storedItem.color === "string" &&
+            storedItem.color.trim()
+              ? storedItem.color.trim()
+              : undefined,
+          size:
+            typeof storedItem.size === "string" &&
+            storedItem.size.trim()
+              ? storedItem.size.trim()
+              : undefined,
+        },
+        typeof storedItem.price === "number"
+          ? storedItem.price
+          : undefined,
+      );
+    }
+
+    for (const state of [...states.values()].sort(
+      (a, b) => a.row.id - b.row.id,
+    )) {
+      if (!state.changed) continue;
+
+      await tx
+        .update(productsTable)
+        .set({
+          stock: state.stock,
+          colorVariants: state.colorVariants,
+        })
+        .where(eq(productsTable.id, state.row.id));
+    }
+
+    const updatedRows = await tx
+      .update(ordersTable)
+      .set({
+        status: targetStatus,
+      })
+      .where(eq(ordersTable.id, orderId))
+      .returning();
+
+    if (!updatedRows[0]) {
+      throw new OrderEditError(
+        "تعذر إعادة تفعيل الطلب",
+        409,
+      );
+    }
+
+    return updatedRows[0];
+  });
+}
