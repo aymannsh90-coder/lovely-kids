@@ -9,7 +9,11 @@ import {
   createTrustedOrder,
   OrderValidationError,
 } from "./order-service";
-import { cancelOrderAndRestoreStock } from "./order-stock";
+import {
+  cancelOrderAndRestoreStock,
+  editOrderItemsAndAdjustStock,
+  OrderEditError,
+} from "./order-stock";
 import {
   sendOrderStatusNotification,
   sendNewOrderNotification,
@@ -334,6 +338,22 @@ export async function handleOrderRequest(
     );
   }
 
+  const editItemsMatch = path.match(
+    /^\/api\/orders\/(\d+)\/items$/,
+  );
+
+  if (
+    request.method === "PATCH" &&
+    editItemsMatch
+  ) {
+    return handleEditOrderItems(
+      request,
+      db,
+      env,
+      Number(editItemsMatch[1]),
+    );
+  }
+
   const storePickupMatch = path.match(
     /^\/api\/orders\/(\d+)\/store-pickup$/,
   );
@@ -399,6 +419,48 @@ export async function handleOrderRequest(
   }
 
   return null;
+}
+
+async function handleEditOrderItems(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const user = await getCurrentUser(db, request, env);
+
+  if (!user) {
+    return json({ error: "يجب تسجيل الدخول" }, 401);
+  }
+
+  if (!user.isAdmin) {
+    return json({ error: "غير مصرح" }, 403);
+  }
+
+  const body = await request.json().catch(() => null) as
+    | { items?: unknown }
+    | null;
+
+  if (!body || body.items === undefined) {
+    return json({ error: "المنتجات مطلوبة" }, 400);
+  }
+
+  try {
+    const updated = await editOrderItemsAndAdjustStock(
+      db,
+      id,
+      body.items,
+    );
+
+    return json(updated);
+  } catch (error) {
+    if (error instanceof OrderEditError) {
+      return json({ error: error.message }, error.status);
+    }
+
+    console.error("Edit order items failed:", error);
+    return json({ error: "تعذر تعديل الطلب" }, 500);
+  }
 }
 
 async function handleCancelOrder(
