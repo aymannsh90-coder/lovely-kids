@@ -47,6 +47,29 @@ const AuthContext = createContext<AuthContextType>({
 
 const SESSION_KEY = "session_token";
 
+function isTrustedPosParentOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    const host = url.hostname.toLowerCase();
+
+    if (host === "localhost" || host === "127.0.0.1") {
+      return true;
+    }
+
+    if (url.protocol !== "https:") {
+      return false;
+    }
+
+    return (
+      host === "pos.lovelykids.net" ||
+      host === "lovely-kids-pos.pages.dev" ||
+      host.endsWith(".lovely-kids-pos.pages.dev")
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function parseError(res: Response, fallback: string): Promise<string> {
   try {
     const d = await res.json();
@@ -91,6 +114,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionToken(token);
     setDbUser(user);
   }, []);
+
+  // Allow the trusted POS app to reuse the same admin session when the
+  // storefront admin is embedded inside pos.lovelykids.net.
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !window.parent ||
+      window.parent === window
+    ) {
+      return;
+    }
+
+    function handlePosSessionMessage(event: MessageEvent) {
+      if (event.source !== window.parent) return;
+      if (!isTrustedPosParentOrigin(event.origin)) return;
+
+      const message = event.data as {
+        type?: unknown;
+        token?: unknown;
+      } | null;
+
+      if (
+        message?.type !== "lovely-pos-session" ||
+        typeof message.token !== "string" ||
+        message.token.length < 20
+      ) {
+        return;
+      }
+
+      const token = message.token;
+
+      void (async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!res.ok) return;
+
+          const bridgedUser = (await res.json()) as AuthUser;
+
+          if (!bridgedUser.isAdmin && !bridgedUser.isOwner) {
+            return;
+          }
+
+          await saveSession(token, bridgedUser);
+          setInitialized(true);
+        } catch {
+          // Keep the normal login flow if the POS bridge is unavailable.
+        }
+      })();
+    }
+
+    window.addEventListener("message", handlePosSessionMessage);
+
+    // No secret is sent here. This only tells the trusted parent that the
+    // iframe listener is ready to receive the existing POS session.
+    window.parent.postMessage({ type: "lovely-admin-ready" }, "*");
+
+    return () => {
+      window.removeEventListener("message", handlePosSessionMessage);
+    };
+  }, [saveSession]);
 
   // ─── register ─────────────────────────────────────────────────────────────
   const register = useCallback(

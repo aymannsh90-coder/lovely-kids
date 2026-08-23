@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import {
   findNavigationItem,
@@ -64,11 +64,13 @@ function findMenuSection(group: NavigationGroup | undefined) {
 
 export default function DashboardLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, session, handleLogout } = usePosRuntime();
 
   const currentItem = findNavigationItem(location.pathname);
   const routeSection = findMenuSection(currentItem?.group);
   const isDashboard = location.pathname === "/";
+  const isAdminPanel = location.pathname === "/admin";
 
   const [activeSectionKey, setActiveSectionKey] =
     useState<MenuSectionKey>("documents");
@@ -94,11 +96,15 @@ export default function DashboardLayout() {
 
   const pageTitle = isDashboard
     ? "نظام إدارة Lovely Kids"
-    : (currentItem?.title ?? "نظام إدارة Lovely Kids");
+    : isAdminPanel
+      ? "لوحة الإدارة"
+      : (currentItem?.title ?? "نظام إدارة Lovely Kids");
 
   const pageDescription = isDashboard
     ? "المبيعات والمخزون والحسابات من شاشة واحدة."
-    : (currentItem?.description ?? "إدارة عمليات المتجر.");
+    : isAdminPanel
+      ? "إدارة المتجر الإلكتروني من داخل نظام نقطة البيع."
+      : (currentItem?.description ?? "إدارة عمليات المتجر.");
 
   return (
     <main className="page routed-page pos-full-page">
@@ -157,22 +163,51 @@ export default function DashboardLayout() {
             {menuSections.map((section) => (
               <button
                 className={
-                  activeSectionKey === section.key
+                  !isAdminPanel && activeSectionKey === section.key
                     ? "pos-shamel-primary-button is-active"
                     : "pos-shamel-primary-button"
                 }
                 type="button"
-                aria-pressed={activeSectionKey === section.key}
+                aria-pressed={!isAdminPanel && activeSectionKey === section.key}
                 key={section.key}
-                onClick={() => setActiveSectionKey(section.key)}
+                onClick={() => {
+                  setActiveSectionKey(section.key);
+
+                  if (isAdminPanel) {
+                    const firstItem = posNavigation.find((item) =>
+                      section.groups.includes(item.group),
+                    );
+
+                    if (firstItem) {
+                      navigate(firstItem.path);
+                    }
+                  }
+                }}
               >
                 <span aria-hidden="true">{section.icon}</span>
                 {section.title}
               </button>
             ))}
+
+            {(user?.isAdmin || user?.isOwner) && (
+              <button
+                className={
+                  isAdminPanel
+                    ? "pos-shamel-primary-button is-active"
+                    : "pos-shamel-primary-button"
+                }
+                type="button"
+                aria-pressed={isAdminPanel}
+                onClick={() => navigate("/admin")}
+              >
+                <span aria-hidden="true">⚙️</span>
+                لوحة الإدارة
+              </button>
+            )}
           </nav>
 
           <nav
+            hidden={isAdminPanel}
             className="pos-shamel-secondary-menu"
             aria-label={`عمليات ${activeSection.title}`}
           >
@@ -221,6 +256,7 @@ export default function DashboardLayout() {
         </div>
 
         <section
+          hidden={isAdminPanel}
           className={
             session
               ? "session-banner session-open pos-shamel-session-banner"
@@ -256,11 +292,17 @@ export default function DashboardLayout() {
           )}
         </section>
 
-        <section className="route-content">
+        <section
+          className={
+            isAdminPanel
+              ? "route-content pos-admin-route-content"
+              : "route-content"
+          }
+        >
           <Outlet />
         </section>
 
-        <footer className="footer">
+        <footer hidden={isAdminPanel} className="footer">
           <div>
             <strong>المخزون:</strong>
             <span>مركزي وموحّد مع المتجر والتطبيق</span>
