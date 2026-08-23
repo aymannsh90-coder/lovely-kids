@@ -58,7 +58,7 @@ export async function createOrderPrintHtml(
 
   const qrSvg = await QRCode.toString(qrLink, {
     type: "svg",
-    width: 180,
+    width: 120,
     margin: 1,
     errorCorrectionLevel: "M",
   });
@@ -103,7 +103,7 @@ export async function createOrderPrintHtml(
 <meta charset="utf-8">
 <title>طلب #${order.id} - Lovely Kids</title>
 <style>
-  @page { size: A4; margin: 10mm; }
+  @page { size: A4 portrait; margin: 5mm; }
   * { box-sizing: border-box; }
   body {
     font-family: Arial, sans-serif;
@@ -111,42 +111,49 @@ export async function createOrderPrintHtml(
     color: #222;
     margin: 0;
     background: #fff;
+    font-size: 12px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  .page { max-width: 760px; margin: 0 auto; }
+  .page {
+    width: 100%;
+    max-width: none;
+    margin: 0 auto;
+  }
   .header {
     text-align: center;
-    border-bottom: 3px solid #E91E8C;
-    padding-bottom: 14px;
-    margin-bottom: 18px;
+    border-bottom: 2px solid #E91E8C;
+    padding-bottom: 6px;
+    margin-bottom: 7px;
   }
-  .brand { font-size: 26px; font-weight: 800; color: #E91E8C; }
-  .order-number { font-size: 20px; font-weight: 800; margin-top: 7px; }
-  .date { color: #666; font-size: 13px; margin-top: 5px; }
+  .brand { font-size: 21px; font-weight: 800; color: #E91E8C; }
+  .order-number { font-size: 16px; font-weight: 800; margin-top: 3px; }
+  .date { color: #666; font-size: 10px; margin-top: 2px; }
   .box {
     border: 1px solid #ddd;
-    border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 14px;
+    border-radius: 7px;
+    padding: 7px;
+    margin-bottom: 7px;
   }
-  .box-title { font-weight: 800; margin-bottom: 8px; }
-  .row { margin: 5px 0; line-height: 1.6; }
+  .box-title { font-weight: 800; margin-bottom: 4px; }
+  .row { margin: 2px 0; line-height: 1.35; }
   .image-cell {
-    width: 68px;
+    width: 50px;
     text-align: center;
   }
   .product-image {
-    width: 58px;
-    height: 58px;
+    width: 42px;
+    height: 42px;
     object-fit: cover;
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid #ddd;
     display: block;
     margin: auto;
   }
   .no-image {
-    width: 58px;
-    height: 58px;
-    border-radius: 8px;
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
     background: #f5f5f5;
     display: flex;
     align-items: center;
@@ -157,36 +164,37 @@ export async function createOrderPrintHtml(
   table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 8px;
+    margin-top: 4px;
   }
   th, td {
     border-bottom: 1px solid #ddd;
-    padding: 9px 6px;
+    padding: 4px 4px;
     text-align: right;
-    vertical-align: top;
+    vertical-align: middle;
+    line-height: 1.25;
   }
   th { background: #f8f8f8; }
-  .muted { color: #666; font-size: 12px; margin-top: 3px; }
-  .totals { margin-top: 14px; font-size: 15px; }
+  .muted { color: #666; font-size: 10px; margin-top: 1px; }
+  .totals { margin-top: 5px; font-size: 12px; }
   .total {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 800;
     color: #E91E8C;
-    border-top: 2px solid #ddd;
-    padding-top: 10px;
-    margin-top: 10px;
+    border-top: 1px solid #ddd;
+    padding-top: 4px;
+    margin-top: 4px;
   }
-  .qr { text-align: center; margin-top: 20px; }
-  .qr svg { width: 155px; height: 155px; }
-  .qr-title { font-weight: 800; margin-top: 5px; }
-  .qr-sub { color: #666; font-size: 11px; margin-top: 4px; }
+  .qr { text-align: center; margin-top: 5px; }
+  .qr svg { width: 92px; height: 92px; }
+  .qr-title { font-weight: 800; margin-top: 2px; }
+  .qr-sub { color: #666; font-size: 9px; margin-top: 1px; }
   .footer {
     text-align: center;
-    margin-top: 18px;
-    padding-top: 12px;
+    margin-top: 5px;
+    padding-top: 4px;
     border-top: 1px dashed #ccc;
     color: #666;
-    font-size: 12px;
+    font-size: 9px;
   }
 </style>
 </head>
