@@ -439,7 +439,14 @@ async function handleEditOrderItems(
   }
 
   const body = await request.json().catch(() => null) as
-    | { items?: unknown }
+    | {
+        items?: unknown;
+        customerName?: unknown;
+        customerPhone?: unknown;
+        customerAddress?: unknown;
+        shippingZone?: unknown;
+        notes?: unknown;
+      }
     | null;
 
   if (!body || body.items === undefined) {
@@ -451,6 +458,13 @@ async function handleEditOrderItems(
       db,
       id,
       body.items,
+      {
+        customerName: body.customerName,
+        customerPhone: body.customerPhone,
+        customerAddress: body.customerAddress,
+        shippingZone: body.shippingZone,
+        notes: body.notes,
+      },
     );
 
     return json(updated);

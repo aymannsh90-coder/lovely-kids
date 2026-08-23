@@ -1,10 +1,16 @@
 import {
+  appSettingsTable,
   ordersTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import type { openDb } from "./db";
+import {
+  resolveShippingCost,
+  resolveShippingZone,
+  STORE_PICKUP_LABEL,
+} from "./order-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -156,6 +162,58 @@ export class OrderEditError extends Error {
   ) {
     super(message);
   }
+}
+
+interface EditOrderDetailsInput {
+  customerName?: unknown;
+  customerPhone?: unknown;
+  customerAddress?: unknown;
+  shippingZone?: unknown;
+  notes?: unknown;
+}
+
+function parseRequiredOrderEditText(
+  value: unknown,
+  fieldName: string,
+  maxLength: number,
+): string {
+  if (typeof value !== "string") {
+    throw new OrderEditError(`${fieldName} غير صالح`);
+  }
+
+  const text = value.trim();
+
+  if (!text) {
+    throw new OrderEditError(`${fieldName} مطلوب`);
+  }
+
+  if (text.length > maxLength) {
+    throw new OrderEditError(`${fieldName} طويل جدًا`);
+  }
+
+  return text;
+}
+
+function parseOptionalOrderEditText(
+  value: unknown,
+  fieldName: string,
+  maxLength: number,
+): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new OrderEditError(`${fieldName} غير صالح`);
+  }
+
+  const text = value.trim();
+
+  if (text.length > maxLength) {
+    throw new OrderEditError(`${fieldName} طويل جدًا`);
+  }
+
+  return text || null;
 }
 
 interface EditOrderItemInput {
@@ -470,6 +528,7 @@ export async function editOrderItemsAndAdjustStock(
   db: Db,
   orderId: number,
   rawItems: unknown,
+  rawDetails?: EditOrderDetailsInput,
 ) {
   const requestedItems = parseEditOrderItems(rawItems);
 
@@ -634,29 +693,119 @@ export async function editOrderItemsAndAdjustStock(
         .where(eq(productsTable.id, state.row.id));
     }
 
-    const oldProductsTotal = oldItems.reduce((sum, item) => {
-      const stored = item as StoredOrderItem & { price?: number };
-      const price =
-        typeof stored.price === "number" &&
-        Number.isFinite(stored.price)
-          ? stored.price
-          : 0;
+    const details = rawDetails ?? {};
 
-      return sum + price * Number(item.quantity || 0);
-    }, 0);
+    const customerName =
+      details.customerName === undefined
+        ? order.customerName
+        : parseRequiredOrderEditText(
+            details.customerName,
+            "اسم الزبون",
+            200,
+          );
 
-    const shippingCost =
-      typeof order.shippingCost === "number" &&
-      Number.isSafeInteger(order.shippingCost) &&
-      order.shippingCost >= 0
-        ? order.shippingCost
-        : Math.max(0, order.totalPrice - oldProductsTotal);
+    const customerPhone =
+      details.customerPhone === undefined
+        ? order.customerPhone
+        : parseRequiredOrderEditText(
+            details.customerPhone,
+            "رقم الهاتف",
+            50,
+          );
+
+    const requestedShippingZone =
+      details.shippingZone === undefined
+        ? order.shippingZone
+        : parseRequiredOrderEditText(
+            details.shippingZone,
+            "منطقة التوصيل",
+            100,
+          );
+
+    if (!requestedShippingZone) {
+      throw new OrderEditError("منطقة التوصيل مطلوبة");
+    }
+
+    const settingsRows = await tx
+      .select({ data: appSettingsTable.data })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.id, 1));
+
+    const settingsData = settingsRows[0]?.data;
+
+    let shipping;
+
+    try {
+      shipping = resolveShippingZone(
+        settingsData,
+        requestedShippingZone,
+      );
+    } catch (error) {
+      throw new OrderEditError(
+        error instanceof Error
+          ? error.message
+          : "منطقة التوصيل غير صالحة",
+      );
+    }
+
+    const rawCustomerAddress =
+      details.customerAddress === undefined
+        ? order.customerAddress
+        : typeof details.customerAddress === "string"
+          ? details.customerAddress.trim()
+          : "";
+
+    const customerAddress =
+      shipping.label === STORE_PICKUP_LABEL
+        ? STORE_PICKUP_LABEL
+        : rawCustomerAddress;
+
+    if (
+      shipping.label !== STORE_PICKUP_LABEL &&
+      !customerAddress
+    ) {
+      throw new OrderEditError(
+        "العنوان مطلوب لطلبات التوصيل",
+      );
+    }
+
+    if (customerAddress.length > 500) {
+      throw new OrderEditError("العنوان طويل جدًا");
+    }
+
+    const notes =
+      details.notes === undefined
+        ? order.notes
+        : parseOptionalOrderEditText(
+            details.notes,
+            "الملاحظات",
+            1000,
+          );
+
+    const shippingCost = resolveShippingCost(
+      settingsData,
+      shipping,
+      productsTotal,
+    );
 
     const totalPrice = productsTotal + shippingCost;
+
+    if (
+      !Number.isSafeInteger(totalPrice) ||
+      totalPrice < 0
+    ) {
+      throw new OrderEditError("إجمالي الطلب غير صالح");
+    }
 
     const updatedRows = await tx
       .update(ordersTable)
       .set({
+        customerName,
+        customerPhone,
+        customerAddress,
+        shippingZone: shipping.label,
+        shippingCost,
+        notes,
         items: trustedItems,
         totalPrice,
       })
