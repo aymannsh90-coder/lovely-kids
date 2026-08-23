@@ -13,7 +13,7 @@ type Db = Awaited<
 
 export class OrderValidationError extends Error {}
 
-interface ShippingZone {
+export interface ShippingZone {
   label: string;
   cost: number;
   promoCost?: number;
@@ -81,7 +81,7 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
   return [...grouped.values()];
 }
 
-const STORE_PICKUP_LABEL = "استلام من المحل";
+export const STORE_PICKUP_LABEL = "استلام من المحل";
 
 const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   { label: "الضفة الغربية", cost: 20, promoCost: 20 },
@@ -89,7 +89,7 @@ const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   { label: "أراضي الـ48", cost: 70, promoCost: 70 },
 ];
 
-function resolveShippingZone(
+export function resolveShippingZone(
   settingsData: unknown,
   requestedLabel?: string,
 ): ShippingZone {
@@ -165,7 +165,7 @@ function isValidDateOnly(value: string): boolean {
   );
 }
 
-function resolveShippingCost(
+export function resolveShippingCost(
   settingsData: unknown,
   shipping: ShippingZone,
   productsTotal: number,

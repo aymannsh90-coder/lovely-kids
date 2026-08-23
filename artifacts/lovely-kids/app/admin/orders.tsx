@@ -23,6 +23,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  useAppSettings,
+  type AppSettings,
+  type ShippingZone,
+} from "@/context/AppSettingsContext";
 import { useNewOrders } from "@/context/NewOrdersContext";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -88,6 +93,79 @@ interface Order {
   createdAt: string;
 }
 
+const ADMIN_STORE_PICKUP_LABEL = "استلام من المحل";
+
+const ADMIN_DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
+  { label: "الضفة الغربية", cost: 20, promoCost: 20 },
+  { label: "القدس", cost: 30, promoCost: 30 },
+  { label: "أراضي الـ48", cost: 70, promoCost: 70 },
+];
+
+function getAdminStoreDate() {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+
+    const values = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
+
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function getAdminEditShippingCost(
+  settings: AppSettings,
+  shipping: ShippingZone,
+  productsTotal: number,
+) {
+  if (shipping.label === ADMIN_STORE_PICKUP_LABEL) {
+    return 0;
+  }
+
+  if (settings.shippingPromotionEnabled !== true) {
+    return shipping.cost;
+  }
+
+  const threshold = settings.shippingPromotionThreshold;
+
+  if (
+    !Number.isInteger(threshold) ||
+    threshold < 0 ||
+    productsTotal < threshold
+  ) {
+    return shipping.cost;
+  }
+
+  const today = getAdminStoreDate();
+  const startDate =
+    settings.shippingPromotionStartDate?.trim() ?? "";
+  const endDate =
+    settings.shippingPromotionEndDate?.trim() ?? "";
+
+  if (startDate && today < startDate) {
+    return shipping.cost;
+  }
+
+  if (endDate && today > endDate) {
+    return shipping.cost;
+  }
+
+  const promoCost = shipping.promoCost;
+
+  return typeof promoCost === "number" &&
+    Number.isInteger(promoCost) &&
+    promoCost >= 0
+    ? promoCost
+    : shipping.cost;
+}
+
 const STATUS_OPTIONS = [
   { key: "new", label: "جديد", color: "#E91E8C", icon: "star-outline" as const },
   { key: "confirmed", label: "مؤكد", color: "#2196F3", icon: "checkmark-circle-outline" as const },
@@ -149,6 +227,7 @@ function timeAgo(dateStr: string) {
 
 export default function AdminOrdersScreen() {
   const colors = useColors();
+  const { settings } = useAppSettings();
   const insets = useSafeAreaInsets();
   const { newCount, clearNew } = useNewOrders();
   const { getAuthToken } = useAuth();
@@ -181,6 +260,11 @@ export default function AdminOrdersScreen() {
   const [editPickedColor, setEditPickedColor] = useState<string | null>(null);
   const [editPickedSize, setEditPickedSize] = useState<string | null>(null);
   const [editOrderError, setEditOrderError] = useState<string | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState("");
+  const [editCustomerPhone, setEditCustomerPhone] = useState("");
+  const [editCustomerAddress, setEditCustomerAddress] = useState("");
+  const [editShippingZone, setEditShippingZone] = useState("");
+  const [editNotes, setEditNotes] = useState("");
 
   const printConfirmResolverRef =
     useRef<((confirmed: boolean) => void) | null>(null);
@@ -416,6 +500,11 @@ export default function AdminOrdersScreen() {
     setEditPickedColor(null);
     setEditPickedSize(null);
     setEditOrderError(null);
+    setEditCustomerName("");
+    setEditCustomerPhone("");
+    setEditCustomerAddress("");
+    setEditShippingZone("");
+    setEditNotes("");
   };
 
   const loadEditProducts = async () => {
@@ -471,6 +560,17 @@ export default function AdminOrdersScreen() {
 
     setEditingOrder(order);
     setEditItems(order.items.map((item) => ({ ...item })));
+    setEditCustomerName(order.customerName);
+    setEditCustomerPhone(order.customerPhone);
+    setEditCustomerAddress(
+      order.shippingZone === ADMIN_STORE_PICKUP_LABEL
+        ? ""
+        : order.customerAddress,
+    );
+    setEditShippingZone(
+      order.shippingZone ?? "",
+    );
+    setEditNotes(order.notes ?? "");
     setEditSearch("");
     setEditPickedProduct(null);
     setEditPickedColor(null);
@@ -595,6 +695,29 @@ export default function AdminOrdersScreen() {
       return;
     }
 
+    if (!editCustomerName.trim()) {
+      setEditOrderError("اسم الزبون مطلوب");
+      return;
+    }
+
+    if (!editCustomerPhone.trim()) {
+      setEditOrderError("رقم الهاتف مطلوب");
+      return;
+    }
+
+    if (!editShippingZone) {
+      setEditOrderError("اختر منطقة التوصيل أو الاستلام من المحل");
+      return;
+    }
+
+    if (
+      editShippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+      !editCustomerAddress.trim()
+    ) {
+      setEditOrderError("العنوان مطلوب لطلبات التوصيل");
+      return;
+    }
+
     setEditSaving(true);
     setEditOrderError(null);
 
@@ -618,6 +741,14 @@ export default function AdminOrdersScreen() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            customerName: editCustomerName.trim(),
+            customerPhone: editCustomerPhone.trim(),
+            customerAddress:
+              editShippingZone === ADMIN_STORE_PICKUP_LABEL
+                ? ADMIN_STORE_PICKUP_LABEL
+                : editCustomerAddress.trim(),
+            shippingZone: editShippingZone,
+            notes: editNotes.trim(),
             items: editItems.map((item) => ({
               id: item.id,
               quantity: item.quantity,
@@ -717,7 +848,32 @@ export default function AdminOrdersScreen() {
     0,
   );
 
-  const editShippingCost = editingOrder?.shippingCost ?? 0;
+  const editShippingZones: ShippingZone[] = [
+    {
+      label: ADMIN_STORE_PICKUP_LABEL,
+      cost: 0,
+      promoCost: 0,
+    },
+    ...(settings.shippingZones?.length
+      ? settings.shippingZones
+      : ADMIN_DEFAULT_SHIPPING_ZONES
+    ).filter(
+      (zone) => zone.label !== ADMIN_STORE_PICKUP_LABEL,
+    ),
+  ];
+
+  const editSelectedShippingZone =
+    editShippingZones.find(
+      (zone) => zone.label === editShippingZone,
+    ) ?? null;
+
+  const editShippingCost = editSelectedShippingZone
+    ? getAdminEditShippingCost(
+        settings,
+        editSelectedShippingZone,
+        editProductsTotal,
+      )
+    : 0;
 
   const editPreviewTotal =
     editProductsTotal + editShippingCost;
@@ -2018,7 +2174,7 @@ export default function AdminOrdersScreen() {
                     { color: colors.mutedForeground },
                   ]}
                 >
-                  أضف، احذف أو عدّل كميات المنتجات
+                  عدّل بيانات الزبون، التوصيل والمنتجات
                 </Text>
               </View>
 
@@ -2047,6 +2203,221 @@ export default function AdminOrdersScreen() {
               contentContainerStyle={styles.editOrderScrollContent}
               keyboardShouldPersistTaps="handled"
             >
+              <Text
+                style={[
+                  styles.editOrderSectionTitle,
+                  { color: colors.foreground },
+                ]}
+              >
+                بيانات الزبون والتوصيل
+              </Text>
+
+              <View
+                style={[
+                  styles.editOrderDetailsBox,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+              >
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  الاسم الكامل *
+                </Text>
+                <TextInput
+                  value={editCustomerName}
+                  onChangeText={(value) => {
+                    setEditCustomerName(value);
+                    setEditOrderError(null);
+                  }}
+                  style={[
+                    styles.editOrderFieldInput,
+                    {
+                      color: colors.foreground,
+                      borderColor: !editCustomerName.trim()
+                        ? "#DC2626"
+                        : colors.border,
+                      backgroundColor: colors.card,
+                    },
+                  ]}
+                  textAlign="right"
+                />
+
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  رقم الهاتف *
+                </Text>
+                <TextInput
+                  value={editCustomerPhone}
+                  onChangeText={(value) => {
+                    setEditCustomerPhone(value);
+                    setEditOrderError(null);
+                  }}
+                  keyboardType="phone-pad"
+                  style={[
+                    styles.editOrderFieldInput,
+                    {
+                      color: colors.foreground,
+                      borderColor: !editCustomerPhone.trim()
+                        ? "#DC2626"
+                        : colors.border,
+                      backgroundColor: colors.card,
+                    },
+                  ]}
+                  textAlign="right"
+                />
+
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  منطقة التوصيل / الاستلام *
+                </Text>
+
+                <View style={styles.editOrderShippingZones}>
+                  {editShippingZones.map((zone) => {
+                    const selected =
+                      editShippingZone === zone.label;
+
+                    const cost = getAdminEditShippingCost(
+                      settings,
+                      zone,
+                      editProductsTotal,
+                    );
+
+                    return (
+                      <Pressable
+                        key={zone.label}
+                        onPress={() => {
+                          setEditShippingZone(zone.label);
+                          setEditOrderError(null);
+
+                          if (
+                            zone.label ===
+                            ADMIN_STORE_PICKUP_LABEL
+                          ) {
+                            setEditCustomerAddress("");
+                          }
+                        }}
+                        style={[
+                          styles.editOrderShippingZoneBtn,
+                          {
+                            borderColor: selected
+                              ? colors.primary
+                              : colors.border,
+                            backgroundColor: selected
+                              ? colors.primary
+                              : colors.card,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.editOrderShippingZoneText,
+                            {
+                              color: selected
+                                ? "#fff"
+                                : colors.foreground,
+                            },
+                          ]}
+                        >
+                          {zone.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.editOrderShippingZoneCost,
+                            {
+                              color: selected
+                                ? "#fff"
+                                : colors.primary,
+                            },
+                          ]}
+                        >
+                          {cost}₪
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {editShippingZone !== ADMIN_STORE_PICKUP_LABEL ? (
+                  <>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                      العنوان *
+                    </Text>
+                    <TextInput
+                      value={editCustomerAddress}
+                      onChangeText={(value) => {
+                        setEditCustomerAddress(value);
+                        setEditOrderError(null);
+                      }}
+                      placeholder="اكتب عنوان التوصيل"
+                      placeholderTextColor={colors.mutedForeground}
+                      multiline
+                      style={[
+                        styles.editOrderFieldInput,
+                        styles.editOrderAddressInput,
+                        {
+                          color: colors.foreground,
+                          borderColor:
+                            editShippingZone &&
+                            !editCustomerAddress.trim()
+                              ? "#DC2626"
+                              : colors.border,
+                          backgroundColor: colors.card,
+                        },
+                      ]}
+                      textAlign="right"
+                    />
+                  </>
+                ) : (
+                  <View
+                    style={[
+                      styles.editOrderPickupNotice,
+                      { borderColor: colors.primary + "55" },
+                    ]}
+                  >
+                    <Ionicons
+                      name="storefront-outline"
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "700",
+                      }}
+                    >
+                      استلام من المحل — رسوم التوصيل 0₪
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  ملاحظات الطلب
+                </Text>
+                <TextInput
+                  value={editNotes}
+                  onChangeText={setEditNotes}
+                  placeholder="ملاحظات إضافية..."
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  style={[
+                    styles.editOrderFieldInput,
+                    styles.editOrderNotesInput,
+                    {
+                      color: colors.foreground,
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                    },
+                  ]}
+                  textAlign="right"
+                />
+              </View>
+
+              <View
+                style={[
+                  styles.editOrderDivider,
+                  { backgroundColor: colors.border },
+                ]}
+              />
+
               <Text
                 style={[
                   styles.editOrderSectionTitle,
@@ -3000,6 +3371,72 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: 4,
     marginBottom: 3,
+  },
+  editOrderDetailsBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 7,
+  },
+  editOrderFieldLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+    marginTop: 3,
+  },
+  editOrderFieldInput: {
+    width: "100%",
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    fontSize: 14,
+  },
+  editOrderAddressInput: {
+    minHeight: 66,
+    textAlignVertical: "top",
+  },
+  editOrderNotesInput: {
+    minHeight: 64,
+    textAlignVertical: "top",
+  },
+  editOrderShippingZones: {
+    flexDirection:
+      Platform.OS === "web" ? "row-reverse" : "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  editOrderShippingZoneBtn: {
+    minWidth: 115,
+    flexGrow: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  editOrderShippingZoneText: {
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  editOrderShippingZoneCost: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  editOrderPickupNotice: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 9,
+    flexDirection:
+      Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 10,
   },
   editOrderEmpty: {
     borderWidth: 1,
