@@ -9,6 +9,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 import {
+  previewAndPrintProductQrs,
+  shareProductQrPdfToDlabel,
+} from "@/utils/productQrPrint";
+import {
   ActivityIndicator,
   Image,
   Modal,
@@ -106,9 +110,452 @@ export default function AddProductScreen() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [qrGenerateOpen, setQrGenerateOpen] = useState(false);
+  const [qrGenerationMessage, setQrGenerationMessage] = useState("");
+  const [printingQrs, setPrintingQrs] = useState(false);
+  const [qrPrintOpen, setQrPrintOpen] = useState(false);
+  const [qrPrintSelected, setQrPrintSelected] = useState<Record<string, boolean>>({});
+  const [qrPrintCopies, setQrPrintCopies] = useState<Record<string, string>>({});
+  const [sharingDlabel, setSharingDlabel] = useState(false);
 
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
+
+  const normalizeVariantPart = (value?: string | null) =>
+    (value ?? "").trim().toLocaleLowerCase();
+
+  const sameQrVariant = (
+    item: ProductBarcode,
+    color?: string | null,
+    size?: string | null,
+  ) =>
+    normalizeVariantPart(item.color) === normalizeVariantPart(color) &&
+    normalizeVariantPart(item.size) === normalizeVariantPart(size);
+
+  const buildGeneratedVariantQrValue = (
+    id: string,
+    color?: string | null,
+    size?: string | null,
+  ) => {
+    const source = [
+      id,
+      normalizeVariantPart(color),
+      normalizeVariantPart(size),
+    ].join("|");
+
+    let hash = 2166136261;
+
+    for (let i = 0; i < source.length; i += 1) {
+      hash ^= source.charCodeAt(i);
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+
+    const cleanId =
+      id.replace(/[^A-Za-z0-9]/g, "").slice(-10).toUpperCase() || "0";
+
+    const hashPart = hash
+      .toString(36)
+      .toUpperCase()
+      .padStart(7, "0");
+
+    return `LKQR-${cleanId}-${hashPart}`;
+  };
+
+  const getQrVariantCombinations = () => {
+    const combinations: Array<{
+      color: string | null;
+      size: string | null;
+    }> = [];
+
+    if (colorVariants.length > 0) {
+      colorVariants.forEach((variant) => {
+        const cleanColor = variant.color.trim();
+
+        if (variant.sizes.length > 0) {
+          variant.sizes.forEach((sizeEntry) => {
+            const cleanSize = sizeEntry.size.trim();
+
+            if (!cleanSize) return;
+
+            combinations.push({
+              color: cleanColor || null,
+              size: cleanSize,
+            });
+          });
+        } else if (cleanColor) {
+          combinations.push({
+            color: cleanColor,
+            size: null,
+          });
+        }
+      });
+    } else if (sizes.length > 0) {
+      sizes.forEach((sizeValue) => {
+        const cleanSize = sizeValue.trim();
+
+        if (!cleanSize) return;
+
+        combinations.push({
+          color: null,
+          size: cleanSize,
+        });
+      });
+    } else {
+      combinations.push({
+        color: null,
+        size: null,
+      });
+    }
+
+    return combinations.filter(
+      (item, index, all) =>
+        all.findIndex((candidate) =>
+          sameQrVariant(
+            {
+              barcode: "",
+              color: candidate.color,
+              size: candidate.size,
+            },
+            item.color,
+            item.size,
+          ),
+        ) === index,
+    );
+  };
+
+  const getGeneratedQrBarcodes = () =>
+    additionalBarcodes.filter((item) =>
+      item.barcode.trim().startsWith("LKQR-"),
+    );
+
+  const getQrStockQuantity = (
+    item: ProductBarcode,
+  ): number | null => {
+    if (item.color && item.size) {
+      const variant = colorVariants.find(
+        (entry) =>
+          normalizeVariantPart(entry.color) ===
+          normalizeVariantPart(item.color),
+      );
+
+      const sizeEntry = variant?.sizes.find(
+        (entry) =>
+          normalizeVariantPart(entry.size) ===
+          normalizeVariantPart(item.size),
+      );
+
+      if (
+        sizeEntry?.stock !== undefined &&
+        sizeEntry?.stock !== null
+      ) {
+        return Math.max(
+          0,
+          Math.floor(sizeEntry.stock),
+        );
+      }
+    }
+
+    if (!item.color && !item.size) {
+      const currentGeneralStock =
+        stock.trim() &&
+        !Number.isNaN(Number(stock))
+          ? Number(stock)
+          : editProduct?.stock;
+
+      if (
+        currentGeneralStock !== undefined &&
+        currentGeneralStock !== null
+      ) {
+        return Math.max(
+          0,
+          Math.floor(currentGeneralStock),
+        );
+      }
+    }
+
+    return null;
+  };
+
+  const openQrPrintOptions = () => {
+    const generated = getGeneratedQrBarcodes();
+
+    if (generated.length === 0) {
+      setQrGenerationMessage(
+        "لا يوجد QR مولّد لهذا الموديل. ولّد الرموز أولاً.",
+      );
+      return;
+    }
+
+    const selected: Record<string, boolean> = {};
+    const copies: Record<string, string> = {};
+
+    generated.forEach((item) => {
+      const stockQty = getQrStockQuantity(item);
+      const outOfStock = stockQty === 0;
+
+      selected[item.barcode] = !outOfStock;
+      copies[item.barcode] = outOfStock ? "0" : "1";
+    });
+
+    setQrPrintSelected(selected);
+    setQrPrintCopies(copies);
+    setQrGenerationMessage("");
+    setQrPrintOpen(true);
+  };
+
+  const selectAllQrPrintRows = (
+    selected: boolean,
+  ) => {
+    const next: Record<string, boolean> = {};
+
+    getGeneratedQrBarcodes().forEach((item) => {
+      const stockQty = getQrStockQuantity(item);
+
+      next[item.barcode] =
+        selected && stockQty !== 0;
+    });
+
+    setQrPrintSelected(next);
+  };
+
+  const applyQrCopiesFromStock = () => {
+    setQrPrintCopies((previous) => {
+      const next = { ...previous };
+
+      getGeneratedQrBarcodes().forEach((item) => {
+        const quantity =
+          getQrStockQuantity(item);
+
+        if (quantity !== null) {
+          next[item.barcode] =
+            String(quantity);
+        } else if (!next[item.barcode]) {
+          next[item.barcode] = "1";
+        }
+      });
+
+      return next;
+    });
+  };
+
+  const getSelectedQrLabels = () =>
+    getGeneratedQrBarcodes().flatMap(
+      (item) => {
+        if (!qrPrintSelected[item.barcode]) {
+          return [];
+        }
+
+        const stockQty =
+          getQrStockQuantity(item);
+
+        // QR stays saved, but zero-stock items are never printed.
+        if (stockQty === 0) {
+          return [];
+        }
+
+        const requestedCopies =
+          Number.parseInt(
+            qrPrintCopies[item.barcode] || "0",
+            10,
+          );
+
+        const copies =
+          Number.isFinite(requestedCopies)
+            ? Math.max(
+                0,
+                Math.min(999, requestedCopies),
+              )
+            : 0;
+
+        if (copies <= 0) {
+          return [];
+        }
+
+        return Array.from(
+          { length: copies },
+          () => ({ ...item }),
+        );
+      },
+    );
+
+  const getQrPrintProductData = (
+    selectedBarcodes: ProductBarcode[],
+  ) => ({
+    nameAr:
+      nameAr.trim() ||
+      editProduct?.nameAr ||
+      "",
+
+    productCode:
+      productCode.trim() ||
+      editProduct?.productCode ||
+      null,
+
+    price:
+      price.trim() &&
+      !Number.isNaN(Number(price))
+        ? Number(price)
+        : editProduct?.price ?? 0,
+
+    barcodes: selectedBarcodes,
+  });
+
+  const handlePreviewAndPrintQrs = async () => {
+    if (!editProduct) return;
+
+    const selectedBarcodes =
+      getSelectedQrLabels();
+
+    if (selectedBarcodes.length === 0) {
+      setQrGenerationMessage(
+        "اختر لون أو نمرة واحدة على الأقل وحدد عدد نسخ أكبر من صفر.",
+      );
+      return;
+    }
+
+    try {
+      setPrintingQrs(true);
+      setQrGenerationMessage("");
+
+      const count =
+        await previewAndPrintProductQrs(
+          getQrPrintProductData(
+            selectedBarcodes,
+          ),
+        );
+
+      setQrPrintOpen(false);
+
+      setQrGenerationMessage(
+        `✓ تم تجهيز ${count} ملصق QR للطباعة.`,
+      );
+    } catch (error) {
+      setQrGenerationMessage(
+        error instanceof Error
+          ? error.message
+          : "فشل فتح معاينة الطباعة.",
+      );
+    } finally {
+      setPrintingQrs(false);
+    }
+  };
+
+  const handleShareQrsToDlabel = async () => {
+    if (!editProduct) return;
+
+    const selectedBarcodes =
+      getSelectedQrLabels();
+
+    if (selectedBarcodes.length === 0) {
+      setQrGenerationMessage(
+        "اختر لون أو نمرة واحدة على الأقل وحدد عدد نسخ أكبر من صفر.",
+      );
+      return;
+    }
+
+    try {
+      setSharingDlabel(true);
+      setQrGenerationMessage("");
+
+      const count =
+        await shareProductQrPdfToDlabel(
+          getQrPrintProductData(
+            selectedBarcodes,
+          ),
+        );
+
+      setQrPrintOpen(false);
+
+      setQrGenerationMessage(
+        `✓ تم تحميل ${count} ملصق. افتح DLabel ثم Photo Print.`,
+      );
+    } catch (error) {
+      setQrPrintOpen(false);
+
+      setQrGenerationMessage(
+        error instanceof Error
+          ? error.message
+          : "فشل تجهيز صورة DLabel.",
+      );
+    } finally {
+      setSharingDlabel(false);
+    }
+  };
+
+  const handleGenerateVariantQrs = (
+    mode: "missing" | "all",
+  ) => {
+    if (!editProduct) return;
+
+    const combinations = getQrVariantCombinations();
+
+    const current = additionalBarcodes.filter(
+      (item) => item.barcode.trim().length > 0,
+    );
+
+    const reservedValues = new Set(
+      [
+        barcode.trim(),
+        ...current.map((item) => item.barcode.trim()),
+      ].filter(Boolean),
+    );
+
+    const generated: ProductBarcode[] = [];
+
+    combinations.forEach((combination) => {
+      const alreadyCovered = current.some((item) =>
+        sameQrVariant(
+          item,
+          combination.color,
+          combination.size,
+        ),
+      );
+
+      if (mode === "missing" && alreadyCovered) {
+        return;
+      }
+
+      const qrValue = buildGeneratedVariantQrValue(
+        editProduct.id,
+        combination.color,
+        combination.size,
+      );
+
+      if (reservedValues.has(qrValue)) {
+        return;
+      }
+
+      reservedValues.add(qrValue);
+
+      generated.push({
+        barcode: qrValue,
+        color: combination.color,
+        size: combination.size,
+      });
+    });
+
+    if (generated.length === 0) {
+      setQrGenerationMessage(
+        mode === "missing"
+          ? "✓ جميع الألوان والنمر لديها رمز QR."
+          : "✓ رموز QR التلقائية للموديل موجودة بالفعل.",
+      );
+
+      setQrGenerateOpen(false);
+      return;
+    }
+
+    setAdditionalBarcodes((previous) => [
+      ...previous,
+      ...generated,
+    ]);
+
+    setQrGenerationMessage(
+      `✓ تم تجهيز ${generated.length} رمز QR. اضغط "حفظ التعديلات" لتثبيتها.`,
+    );
+
+    setQrGenerateOpen(false);
+  };
 
   const addAdditionalBarcode = () => {
     setAdditionalBarcodes((prev) => [
@@ -1708,6 +2155,118 @@ export default function AddProductScreen() {
         {isNew && <Pressable onPress={() => { setNewDaysMode("14"); setNewDays("14"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="14"?colors.primary:colors.card,borderColor:newDaysMode==="14"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="14"?"#fff":colors.foreground}}>14 يوم</Text></Pressable>}
         {isNew && <Pressable onPress={() => { setNewDaysMode("custom"); setNewDays(""); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="custom"?colors.primary:colors.card,borderColor:newDaysMode==="custom"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="custom"?"#fff":colors.foreground}}>مخصص</Text></Pressable>}
         {isNew && newDaysMode === "custom" && <TextInput value={newDays} onChangeText={(value) => { setNewDays(value); setNewDurationChanged(true); }} placeholder="عدد الأيام" keyboardType="number-pad" style={[styles.input, { borderColor: colors.border, color: colors.foreground }]} />}
+        {isEdit && (
+          <View style={{ gap: 8 }}>
+            <Pressable
+              onPress={() => {
+                setQrGenerationMessage("");
+                setQrGenerateOpen(true);
+              }}
+              disabled={saving || uploading}
+              style={{
+                minHeight: 52,
+                borderRadius: 14,
+                backgroundColor: "#111827",
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection:
+                  Platform.OS === "web"
+                    ? "row-reverse"
+                    : "row",
+                gap: 10,
+                paddingHorizontal: 16,
+              }}
+            >
+              <Ionicons
+                name="qr-code-outline"
+                size={23}
+                color="#fff"
+              />
+
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: "800",
+                }}
+              >
+                توليد QR للموديل
+              </Text>
+            </Pressable>
+
+            {!!qrGenerationMessage && (
+              <Text
+                style={{
+                  color: colors.foreground,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  textAlign: "center",
+                }}
+              >
+                {qrGenerationMessage}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {isEdit && (
+          <Pressable
+            onPress={openQrPrintOptions}
+            disabled={
+              saving ||
+              uploading ||
+              printingQrs
+            }
+            style={{
+              minHeight: 52,
+              borderRadius: 14,
+
+              backgroundColor: "#0f766e",
+
+              alignItems: "center",
+              justifyContent: "center",
+
+              flexDirection:
+                Platform.OS === "web"
+                  ? "row-reverse"
+                  : "row",
+
+              gap: 10,
+
+              paddingHorizontal: 16,
+
+              opacity:
+                printingQrs
+                  ? 0.7
+                  : 1,
+            }}
+          >
+
+            <Ionicons
+              name="print-outline"
+              size={22}
+              color="#fff"
+            />
+
+            <Text
+              style={{
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: "800",
+              }}
+            >
+
+              {
+                printingQrs
+                  ? "جارٍ تجهيز المعاينة..."
+                  : "معاينة وطباعة QR"
+              }
+
+            </Text>
+
+          </Pressable>
+        )}
+
         {/* Save Button */}
         <Pressable
           onPress={handleSave}
@@ -1720,6 +2279,644 @@ export default function AddProductScreen() {
           </Text>
         </Pressable>
       </View>
+      <Modal
+        visible={qrPrintOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setQrPrintOpen(false)
+        }
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor:
+              "rgba(0,0,0,0.58)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <View
+            style={{
+              width: "96%",
+              maxWidth: 560,
+              maxHeight: "92%",
+              borderRadius: 20,
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
+              overflow: "hidden",
+            }}
+          >
+            <View
+              style={{
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor:
+                  colors.border,
+                gap: 5,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.foreground,
+                  fontSize: 19,
+                  fontWeight: "900",
+                  textAlign: "center",
+                }}
+              >
+                اختيار ملصقات QR
+              </Text>
+
+              <Text
+                style={{
+                  color:
+                    colors.mutedForeground,
+                  fontSize: 12,
+                  textAlign: "center",
+                }}
+              >
+                اختر الألوان والنمر وحدد عدد النسخ
+              </Text>
+            </View>
+
+            <View
+              style={{
+                flexDirection:
+                  Platform.OS === "web"
+                    ? "row-reverse"
+                    : "row",
+                flexWrap: "wrap",
+                gap: 7,
+                padding: 12,
+                borderBottomWidth: 1,
+                borderBottomColor:
+                  colors.border,
+              }}
+            >
+              <Pressable
+                onPress={() =>
+                  selectAllQrPrintRows(true)
+                }
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  backgroundColor:
+                    colors.primary,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  تحديد الكل
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() =>
+                  selectAllQrPrintRows(false)
+                }
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  backgroundColor:
+                    colors.muted,
+                }}
+              >
+                <Text
+                  style={{
+                    color:
+                      colors.foreground,
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  إلغاء التحديد
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={
+                  applyQrCopiesFromStock
+                }
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  backgroundColor:
+                    "#0f766e",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  العدد حسب المخزون
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={{
+                maxHeight:
+                  Platform.OS === "web"
+                    ? 430
+                    : 440,
+              }}
+              contentContainerStyle={{
+                padding: 12,
+                gap: 8,
+              }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {getGeneratedQrBarcodes().map(
+                (item) => {
+                  const selected =
+                    !!qrPrintSelected[
+                      item.barcode
+                    ];
+
+                  const stockQty =
+                    getQrStockQuantity(item);
+
+                  return (
+                    <View
+                      key={item.barcode}
+                      style={{
+                        flexDirection:
+                          Platform.OS ===
+                          "web"
+                            ? "row-reverse"
+                            : "row",
+                        alignItems:
+                          "center",
+                        gap: 10,
+                        padding: 11,
+                        borderWidth: 1,
+                        borderColor:
+                          selected
+                            ? colors.primary
+                            : colors.border,
+                        borderRadius: 13,
+                        opacity:
+                          selected
+                            ? 1
+                            : 0.55,
+                        backgroundColor:
+                          colors.background,
+                      }}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          if (stockQty === 0) return;
+
+                          setQrPrintSelected(
+                            (previous) => ({
+                              ...previous,
+                              [item.barcode]:
+                                !selected,
+                            }),
+                          );
+                        }}
+                        style={{
+                          width: 25,
+                          height: 25,
+                          borderRadius: 7,
+                          borderWidth: 2,
+                          borderColor:
+                            selected
+                              ? colors.primary
+                              : colors.border,
+                          backgroundColor:
+                            selected
+                              ? colors.primary
+                              : "transparent",
+                          alignItems:
+                            "center",
+                          justifyContent:
+                            "center",
+                        }}
+                      >
+                        {selected && (
+                          <Ionicons
+                            name="checkmark"
+                            size={17}
+                            color="#fff"
+                          />
+                        )}
+                      </Pressable>
+
+                      <View
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              colors.foreground,
+                            fontSize: 14,
+                            fontWeight: "800",
+                          }}
+                        >
+                          {item.color ||
+                            "بدون لون"}
+                          {"  •  "}
+                          نمرة{" "}
+                          {item.size ||
+                            "—"}
+                        </Text>
+
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color:
+                              colors.mutedForeground,
+                            fontSize: 10,
+                            marginTop: 3,
+                          }}
+                        >
+                          {stockQty === null
+                            ? "المخزون غير محدد لهذه النمرة"
+                            : stockQty === 0
+                              ? "نفد من المخزون — لن يُطبع"
+                              : `المخزون: ${stockQty}`}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={{
+                          alignItems:
+                            "center",
+                          gap: 3,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              colors.mutedForeground,
+                            fontSize: 10,
+                            fontWeight: "700",
+                          }}
+                        >
+                          النسخ
+                        </Text>
+
+                        <TextInput
+                          editable={stockQty !== 0}
+                          value={
+                            stockQty === 0
+                              ? "0"
+                              : qrPrintCopies[
+                                  item.barcode
+                                ] ?? "1"
+                          }
+                          onChangeText={(
+                            value,
+                          ) =>
+                            setQrPrintCopies(
+                              (previous) => ({
+                                ...previous,
+                                [item.barcode]:
+                                  value.replace(
+                                    /[^0-9]/g,
+                                    "",
+                                  ),
+                              }),
+                            )
+                          }
+                          keyboardType="number-pad"
+                          selectTextOnFocus
+                          style={{
+                            width: 58,
+                            height: 38,
+                            borderRadius: 9,
+                            borderWidth: 1,
+                            borderColor:
+                              colors.border,
+                            backgroundColor:
+                              colors.card,
+                            color:
+                              colors.foreground,
+                            textAlign:
+                              "center",
+                            fontSize: 15,
+                            fontWeight: "900",
+                            paddingHorizontal: 5,
+                          }}
+                        />
+                      </View>
+                    </View>
+                  );
+                },
+              )}
+            </ScrollView>
+
+            <Pressable
+              onPress={() =>
+                void handleShareQrsToDlabel()
+              }
+              disabled={
+                sharingDlabel ||
+                printingQrs
+              }
+              style={{
+                marginHorizontal: 12,
+                marginTop: 10,
+                minHeight: 50,
+                borderRadius: 12,
+                backgroundColor: "#2563eb",
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection:
+                  Platform.OS === "web"
+                    ? "row-reverse"
+                    : "row",
+                gap: 8,
+                opacity:
+                  sharingDlabel
+                    ? 0.65
+                    : 1,
+              }}
+            >
+              <Ionicons
+                name="phone-portrait-outline"
+                size={20}
+                color="#fff"
+              />
+
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: "900",
+                }}
+              >
+                {sharingDlabel
+                  ? "جارٍ تجهيز صورة DLabel..."
+                  : "تحميل صورة DLabel"}
+              </Text>
+            </Pressable>
+
+            <View
+              style={{
+                padding: 12,
+                borderTopWidth: 1,
+                borderTopColor:
+                  colors.border,
+                flexDirection:
+                  Platform.OS === "web"
+                    ? "row-reverse"
+                    : "row",
+                gap: 8,
+              }}
+            >
+              <Pressable
+                onPress={() =>
+                  void handlePreviewAndPrintQrs()
+                }
+                disabled={printingQrs}
+                style={{
+                  flex: 1,
+                  minHeight: 48,
+                  borderRadius: 12,
+                  backgroundColor:
+                    "#0f766e",
+                  alignItems: "center",
+                  justifyContent:
+                    "center",
+                  flexDirection:
+                    Platform.OS === "web"
+                      ? "row-reverse"
+                      : "row",
+                  gap: 8,
+                  opacity:
+                    printingQrs
+                      ? 0.65
+                      : 1,
+                }}
+              >
+                <Ionicons
+                  name="print-outline"
+                  size={20}
+                  color="#fff"
+                />
+
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "900",
+                    fontSize: 14,
+                  }}
+                >
+                  {printingQrs
+                    ? "جارٍ التجهيز..."
+                    : "معاينة وطباعة"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() =>
+                  setQrPrintOpen(false)
+                }
+                style={{
+                  minWidth: 90,
+                  minHeight: 48,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor:
+                    colors.border,
+                  alignItems: "center",
+                  justifyContent:
+                    "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color:
+                      colors.foreground,
+                    fontWeight: "800",
+                  }}
+                >
+                  إلغاء
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={qrGenerateOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQrGenerateOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              width: Platform.OS === "web" ? 420 : "100%",
+              maxWidth: 420,
+              borderRadius: 20,
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: 20,
+              gap: 12,
+            }}
+          >
+            <View
+              style={{
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 4,
+              }}
+            >
+              <Ionicons
+                name="qr-code-outline"
+                size={44}
+                color={colors.primary}
+              />
+
+              <Text
+                style={{
+                  color: colors.foreground,
+                  fontSize: 19,
+                  fontWeight: "800",
+                  textAlign: "center",
+                }}
+              >
+                توليد QR للموديل
+              </Text>
+
+              <Text
+                style={{
+                  color: colors.mutedForeground,
+                  fontSize: 13,
+                  textAlign: "center",
+                  lineHeight: 20,
+                }}
+              >
+                سيتم إنشاء رمز QR منفصل لكل لون ونمرة.
+                الباركود القديم لن يتم حذفه أو تغييره.
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() =>
+                handleGenerateVariantQrs("missing")
+              }
+              style={{
+                minHeight: 60,
+                borderRadius: 14,
+                backgroundColor: colors.primary,
+                paddingHorizontal: 14,
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: "800",
+                  textAlign: "center",
+                }}
+              >
+                توليد QR للناقص فقط
+              </Text>
+
+              <Text
+                style={{
+                  color: "#fff",
+                  opacity: 0.9,
+                  fontSize: 12,
+                  textAlign: "center",
+                  marginTop: 3,
+                }}
+              >
+                يترك أي لون ونمرة لديها رمز سابق كما هي
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() =>
+                handleGenerateVariantQrs("all")
+              }
+              style={{
+                minHeight: 60,
+                borderRadius: 14,
+                backgroundColor: "#111827",
+                paddingHorizontal: 14,
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: "800",
+                  textAlign: "center",
+                }}
+              >
+                توليد QR للكل
+              </Text>
+
+              <Text
+                style={{
+                  color: "#fff",
+                  opacity: 0.85,
+                  fontSize: 12,
+                  textAlign: "center",
+                  marginTop: 3,
+                }}
+              >
+                ينشئ QR خاص بـ Lovely Kids لكل لون ونمرة مع إبقاء الرموز القديمة
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setQrGenerateOpen(false)}
+              style={{
+                minHeight: 44,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.foreground,
+                  fontWeight: "700",
+                }}
+              >
+                إلغاء
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={scannerOpen}
         animationType="fade"
