@@ -10,7 +10,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 import {
   previewAndPrintProductQrs,
-  shareProductQrPdfToDlabel,
 } from "@/utils/productQrPrint";
 import {
   ActivityIndicator,
@@ -116,8 +115,6 @@ export default function AddProductScreen() {
   const [qrPrintOpen, setQrPrintOpen] = useState(false);
   const [qrPrintSelected, setQrPrintSelected] = useState<Record<string, boolean>>({});
   const [qrPrintCopies, setQrPrintCopies] = useState<Record<string, string>>({});
-  const [sharingDlabel, setSharingDlabel] = useState(false);
-
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
@@ -440,47 +437,6 @@ export default function AddProductScreen() {
     }
   };
 
-  const handleShareQrsToDlabel = async () => {
-    if (!editProduct) return;
-
-    const selectedBarcodes =
-      getSelectedQrLabels();
-
-    if (selectedBarcodes.length === 0) {
-      setQrGenerationMessage(
-        "اختر لون أو نمرة واحدة على الأقل وحدد عدد نسخ أكبر من صفر.",
-      );
-      return;
-    }
-
-    try {
-      setSharingDlabel(true);
-      setQrGenerationMessage("");
-
-      const count =
-        await shareProductQrPdfToDlabel(
-          getQrPrintProductData(
-            selectedBarcodes,
-          ),
-        );
-
-      setQrPrintOpen(false);
-
-      setQrGenerationMessage(
-        `✓ تم تحميل ${count} ملصق. افتح DLabel ثم Photo Print.`,
-      );
-    } catch (error) {
-      setQrPrintOpen(false);
-
-      setQrGenerationMessage(
-        error instanceof Error
-          ? error.message
-          : "فشل تجهيز صورة DLabel.",
-      );
-    } finally {
-      setSharingDlabel(false);
-    }
-  };
 
   const handleGenerateVariantQrs = (
     mode: "missing" | "all",
@@ -2623,52 +2579,7 @@ export default function AddProductScreen() {
               )}
             </ScrollView>
 
-            <Pressable
-              onPress={() =>
-                void handleShareQrsToDlabel()
-              }
-              disabled={
-                sharingDlabel ||
-                printingQrs
-              }
-              style={{
-                marginHorizontal: 12,
-                marginTop: 10,
-                minHeight: 50,
-                borderRadius: 12,
-                backgroundColor: "#2563eb",
-                alignItems: "center",
-                justifyContent: "center",
-                flexDirection:
-                  Platform.OS === "web"
-                    ? "row-reverse"
-                    : "row",
-                gap: 8,
-                opacity:
-                  sharingDlabel
-                    ? 0.65
-                    : 1,
-              }}
-            >
-              <Ionicons
-                name="phone-portrait-outline"
-                size={20}
-                color="#fff"
-              />
-
-              <Text
-                style={{
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: "900",
-                }}
-              >
-                {sharingDlabel
-                  ? "جارٍ تجهيز صورة DLabel..."
-                  : "تحميل صورة DLabel"}
-              </Text>
-            </Pressable>
-
+            
             <View
               style={{
                 padding: 12,

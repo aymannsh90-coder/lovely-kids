@@ -71,7 +71,6 @@
     "expo-notifications": "^0.32.17",
     "expo-print": "~15.0.8",
     "expo-secure-store": "~15.0.8",
-    "expo-sharing": "~14.0.8",
     "expo-video": "~3.0.16",
     "qrcode": "^1.5.4",
     "react": "19.1.0",
