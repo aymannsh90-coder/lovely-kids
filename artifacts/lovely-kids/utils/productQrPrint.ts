@@ -250,7 +250,7 @@ body {
 }
 
 .label {
-  width: 44mm;
+  width: 49mm;
   height: 25mm;
 
   direction: rtl;
@@ -271,8 +271,8 @@ body {
 }
 
 .qr-side {
-  width: 22mm;
-  min-width: 22mm;
+  width: 24mm;
+  min-width: 24mm;
 
   height: 100%;
 
@@ -285,17 +285,17 @@ body {
 }
 
 .qr-code {
-  width: 21.5mm;
-  height: 21.5mm;
+  width: 24mm;
+  height: 24mm;
 
-  flex: 0 0 21.5mm;
+  flex: 0 0 24mm;
 }
 
 .qr-code svg {
   display: block;
 
-  width: 21.5mm;
-  height: 21.5mm;
+  width: 24mm;
+  height: 24mm;
 
   shape-rendering: crispEdges;
 }
@@ -369,16 +369,16 @@ body {
 }
 
 @page receipt {
-  size: 56mm auto;
-  margin: 2mm;
+  size: 58mm auto;
+  margin: 0;
 }
 
 @media print {
 
   html,
   body {
-    width: 56mm !important;
-    min-width: 56mm !important;
+    width: 58mm !important;
+    min-width: 58mm !important;
 
     height: auto !important;
     min-height: 0 !important;
@@ -400,13 +400,14 @@ body {
 
     display: block !important;
 
-    width: 52mm !important;
-    min-width: 52mm !important;
+    width: 58mm !important;
+    min-width: 58mm !important;
 
     height: auto !important;
     min-height: 0 !important;
 
-    margin: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
     padding: 0 !important;
 
     overflow: visible !important;
@@ -415,7 +416,7 @@ body {
   }
 
   .label-row {
-    width: 52mm !important;
+    width: 58mm !important;
     height: 28.5mm !important;
 
     margin: 0 !important;
@@ -433,11 +434,17 @@ body {
   }
 
   .label {
-    width: 44mm !important;
+    width: 49mm !important;
     height: 25mm !important;
 
-    margin: 0 !important;
-    transform: translateX(-1.70mm);
+    margin-left: auto !important;
+    margin-right: auto !important;
+
+    position: relative !important;
+    left: -5.4mm !important;
+
+    transform: scale(0.9) !important;
+    transform-origin: top center !important;
 
     background: #fff !important;
     color: #000 !important;
@@ -448,8 +455,8 @@ body {
 
   .qr-code,
   .qr-code svg {
-    width: 18.2mm !important;
-    height: 18.2mm !important;
+    width: 21.5mm !important;
+    height: 21.5mm !important;
   }
 
   .qr-code svg {
