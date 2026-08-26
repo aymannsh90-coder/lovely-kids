@@ -498,38 +498,374 @@ body {
   };
 }
 
+const PRINT_BRIDGE_BASE =
+  "http://127.0.0.1:17858";
+
+const RAW_LABEL_WIDTH_DOTS = 384;
+const RAW_LABEL_HEIGHT_DOTS = 200;
+
+function fitCanvasText(
+  context: any,
+  value: string,
+  maxWidth: number,
+) {
+  const clean = value.trim();
+
+  if (
+    context.measureText(clean).width <=
+    maxWidth
+  ) {
+    return clean;
+  }
+
+  let shortened = clean;
+
+  while (
+    shortened.length > 1 &&
+    context.measureText(
+      `${shortened}…`,
+    ).width > maxWidth
+  ) {
+    shortened =
+      shortened.slice(0, -1);
+  }
+
+  return `${shortened}…`;
+}
+
+function buildRawQrLabelCanvas(
+  input: ProductQrPrintInput,
+  item: ProductBarcode,
+) {
+  const documentRef =
+    (globalThis as any).document;
+
+  if (!documentRef?.createElement) {
+    throw new Error(
+      "إنشاء ملصق الطباعة المباشرة غير متاح.",
+    );
+  }
+
+  const canvas =
+    documentRef.createElement("canvas");
+
+  canvas.width =
+    RAW_LABEL_WIDTH_DOTS;
+
+  canvas.height =
+    RAW_LABEL_HEIGHT_DOTS;
+
+  const context =
+    canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error(
+      "تعذر إنشاء صورة الملصق.",
+    );
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(
+    0,
+    0,
+    RAW_LABEL_WIDTH_DOTS,
+    RAW_LABEL_HEIGHT_DOTS,
+  );
+
+  /*
+   * QR side
+   *
+   * Keep every QR module on whole printer dots.
+   * This avoids browser scaling / anti-aliasing.
+   */
+  const qrValue =
+    item.barcode.trim();
+
+  const qr =
+    QRCode.create(qrValue, {
+      errorCorrectionLevel: "L",
+    }) as any;
+
+  const modules = qr.modules;
+  const moduleCount = modules.size;
+  const quiet = 4;
+
+  const qrAreaWidth = 190;
+  const maxQrDots = 184;
+
+  const moduleDots =
+    Math.max(
+      3,
+      Math.floor(
+        maxQrDots /
+          (moduleCount + quiet * 2),
+      ),
+    );
+
+  const qrDots =
+    (moduleCount + quiet * 2) *
+    moduleDots;
+
+  const qrStartX =
+    Math.floor(
+      (qrAreaWidth - qrDots) / 2,
+    );
+
+  const qrStartY =
+    Math.floor(
+      (
+        RAW_LABEL_HEIGHT_DOTS -
+        qrDots
+      ) / 2,
+    );
+
+  context.fillStyle = "#000000";
+
+  for (
+    let row = 0;
+    row < moduleCount;
+    row += 1
+  ) {
+    for (
+      let col = 0;
+      col < moduleCount;
+      col += 1
+    ) {
+      if (
+        modules.get(row, col)
+      ) {
+        context.fillRect(
+          qrStartX +
+            (col + quiet) *
+              moduleDots,
+          qrStartY +
+            (row + quiet) *
+              moduleDots,
+          moduleDots,
+          moduleDots,
+        );
+      }
+    }
+  }
+
+  /*
+   * Product information side
+   */
+  const right = 376;
+  const textWidth = 178;
+
+  context.fillStyle = "#000000";
+  context.textAlign = "right";
+  context.textBaseline = "alphabetic";
+
+  context.direction = "ltr";
+  context.font =
+    "900 24px Arial, Tahoma, sans-serif";
+
+  context.fillText(
+    "Lovely Kids",
+    right,
+    31,
+  );
+
+  context.direction = "rtl";
+  context.font =
+    "800 18px Arial, Tahoma, sans-serif";
+
+  context.fillText(
+    fitCanvasText(
+      context,
+      input.nameAr,
+      textWidth,
+    ),
+    right,
+    60,
+  );
+
+  context.font =
+    "700 14px Arial, Tahoma, sans-serif";
+
+  const productCode =
+    input.productCode?.trim() || "—";
+
+  const color =
+    item.color?.trim() || "—";
+
+  const size =
+    item.size?.trim() || "—";
+
+  context.fillText(
+    `الكود: ${productCode}`,
+    right,
+    89,
+  );
+
+  context.fillText(
+    `اللون: ${color}`,
+    right,
+    113,
+  );
+
+  context.fillText(
+    `النمرة: ${size}`,
+    right,
+    137,
+  );
+
+  context.font =
+    "900 27px Arial, Tahoma, sans-serif";
+
+  context.fillText(
+    `${input.price} ₪`,
+    right,
+    178,
+  );
+
+  return canvas;
+}
+
+function canvasToPngBlob(
+  canvas: any,
+) {
+  return new Promise<any>(
+    (resolve, reject) => {
+      canvas.toBlob(
+        (blob: any) => {
+          if (!blob) {
+            reject(
+              new Error(
+                "تعذر إنشاء صورة الملصق.",
+              ),
+            );
+            return;
+          }
+
+          resolve(blob);
+        },
+        "image/png",
+      );
+    },
+  );
+}
+
+async function ensurePrintBridge() {
+  try {
+    const response =
+      await fetch(
+        `${PRINT_BRIDGE_BASE}/health`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        `HTTP ${response.status}`,
+      );
+    }
+
+    const result =
+      await response.json();
+
+    if (!result?.ok) {
+      throw new Error(
+        "Bridge is not ready",
+      );
+    }
+  } catch {
+    throw new Error(
+      "برنامج Lovely Kids Print Bridge غير شغال على هذا الكمبيوتر. شغّله ثم حاول مرة أخرى، وتأكد أن Chrome يسمح بالوصول إلى التطبيقات على الجهاز.",
+    );
+  }
+}
+
+async function printProductQrsViaBridge(
+  input: ProductQrPrintInput,
+) {
+  const labels =
+    input.barcodes.filter(
+      (item) =>
+        item.barcode
+          .trim()
+          .startsWith("LKQR-"),
+    );
+
+  if (labels.length === 0) {
+    throw new Error(
+      "لا يوجد QR مولّد لهذا الموديل.",
+    );
+  }
+
+  await ensurePrintBridge();
+
+  let printed = 0;
+
+  for (const item of labels) {
+    const canvas =
+      buildRawQrLabelCanvas(
+        input,
+        item,
+      );
+
+    const png =
+      await canvasToPngBlob(
+        canvas,
+      );
+
+    const response =
+      await fetch(
+        `${PRINT_BRIDGE_BASE}/print-png?width=${RAW_LABEL_WIDTH_DOTS}&copies=1`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "image/png",
+          },
+          body: png,
+        },
+      );
+
+    if (!response.ok) {
+      let detail = "";
+
+      try {
+        detail =
+          await response.text();
+      } catch {
+        detail = "";
+      }
+
+      throw new Error(
+        `فشلت الطباعة المباشرة عند الملصق ${
+          printed + 1
+        }${
+          detail
+            ? `: ${detail}`
+            : ""
+        }`,
+      );
+    }
+
+    printed += 1;
+  }
+
+  return printed;
+}
+
 export async function previewAndPrintProductQrs(
   input: ProductQrPrintInput,
 ) {
+  if (Platform.OS === "web") {
+    return printProductQrsViaBridge(
+      input,
+    );
+  }
+
   const {
     html,
     count,
   } = buildProductQrHtml(input);
-
-  if (Platform.OS === "web") {
-    const browserWindow =
-      (globalThis as any).window;
-
-    const popup =
-      browserWindow?.open(
-        "",
-        "_blank",
-        "width=900,height=750",
-      );
-
-    if (!popup) {
-      throw new Error(
-        "المتصفح منع نافذة المعاينة. اسمح بالنوافذ المنبثقة.",
-      );
-    }
-
-    popup.document.open();
-    popup.document.write(html);
-    popup.document.close();
-    popup.focus();
-
-    return count;
-  }
 
   const Print =
     await import("expo-print");
