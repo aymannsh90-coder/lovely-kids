@@ -302,7 +302,13 @@ export default function ProductDetailScreen() {
               المنتج غير متوفر
             </Text>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/");
+              }
+            }}
               style={[styles.backToShop, { backgroundColor: colors.primary }]}
             >
               <Text style={styles.backToShopText}>الرجوع</Text>
@@ -519,7 +525,13 @@ export default function ProductDetailScreen() {
 
           {/* Back Button */}
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/");
+              }
+            }}
             style={[
               styles.backBtn,
               {
