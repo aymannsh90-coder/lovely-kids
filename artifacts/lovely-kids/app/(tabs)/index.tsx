@@ -29,6 +29,7 @@ import { HeroSlider } from "@/components/HeroSlider";
 import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS, type Product } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
+import { useProductCategories } from "@/hooks/useProductCategories";
 import { enableWebPushNotifications } from "@/hooks/usePushNotifications";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
@@ -120,6 +121,57 @@ const TRUST_BADGES = [
   { icon: "ribbon-outline" as const, color: "#FFB84D", title: "جودة تدوم", subtitle: "طويلاً" },
 ];
 
+
+const HOME_CATEGORY_IMAGES = {
+  all: require("../../assets/images/category-cards/all.png"),
+  boysSets: require("../../assets/images/category-cards/boys-sets.png"),
+  girlsSets: require("../../assets/images/category-cards/girls-sets.png"),
+  babySets: require("../../assets/images/category-cards/baby-sets.png"),
+  pants: require("../../assets/images/category-cards/pants.png"),
+  tops: require("../../assets/images/category-cards/tops.png"),
+  shorts: require("../../assets/images/category-cards/shorts.png"),
+  dresses: require("../../assets/images/category-cards/dresses.png"),
+  shirts: require("../../assets/images/category-cards/shirts.png"),
+  babyEssentials: require("../../assets/images/category-cards/baby-essentials.png"),
+};
+
+function normalizeHomeCategoryLabel(label: string) {
+  return label
+    .replace(/[أإآ]/g, "ا")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getHomeCategoryImage(label: string): any {
+  const value = normalizeHomeCategoryLabel(label);
+
+  if (value === "الكل") return HOME_CATEGORY_IMAGES.all;
+
+  if (value.includes("مستلزمات") && value.includes("بيبي")) {
+    return HOME_CATEGORY_IMAGES.babyEssentials;
+  }
+
+  if (value.includes("اطقم") && value.includes("ولاد")) {
+    return HOME_CATEGORY_IMAGES.boysSets;
+  }
+
+  if (value.includes("اطقم") && value.includes("بنات")) {
+    return HOME_CATEGORY_IMAGES.girlsSets;
+  }
+
+  if (value.includes("اطقم") && value.includes("بيبي")) {
+    return HOME_CATEGORY_IMAGES.babySets;
+  }
+
+  if (value.includes("بلاط")) return HOME_CATEGORY_IMAGES.pants;
+  if (value.includes("بلايز") || value.includes("بلوز")) return HOME_CATEGORY_IMAGES.tops;
+  if (value.includes("شورت")) return HOME_CATEGORY_IMAGES.shorts;
+  if (value.includes("فساتين") || value.includes("فستان")) return HOME_CATEGORY_IMAGES.dresses;
+  if (value.includes("قمصان") || value.includes("قميص")) return HOME_CATEGORY_IMAGES.shirts;
+
+  return null;
+}
+
 export default function HomeScreen() {
   const offersCtaPulse = useRef(new Animated.Value(0)).current;
 
@@ -145,6 +197,14 @@ export default function HomeScreen() {
 
   const colors = useColors();
   const { width: viewportWidth } = useWindowDimensions();
+  const homeProductCategories = useProductCategories();
+
+  const homeCategoryCards = homeProductCategories
+    .map((category) => ({
+      ...category,
+      image: getHomeCategoryImage(category.label),
+    }))
+    .filter((category) => Boolean(category.image));
 
   const webViewport =
     Platform.OS === "web" ? getWebViewport(viewportWidth) : "phone";
@@ -1137,6 +1197,51 @@ export default function HomeScreen() {
         </>
       ) : null}
 
+      {/* Shop by Category */}
+      {homeCategoryCards.length > 0 ? (
+        <>
+          {renderHomeSectionHeader("تسوّق حسب القسم", () =>
+            router.push("/products"),
+          )}
+
+          <View
+            style={[
+              styles.productsGrid,
+              responsiveShellStyle,
+            ]}
+          >
+            {homeCategoryCards.map((category) => (
+              <Pressable
+                key={category.id}
+                accessibilityRole="button"
+                accessibilityLabel={category.label}
+                onPress={() =>
+                  router.push({
+                    pathname: "/products",
+                    params: { category: category.id },
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.homeCategoryCard,
+                  {
+                    width: homeProductCardWidth,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    opacity: pressed ? 0.86 : 1,
+                  },
+                ]}
+              >
+                <Image
+                  source={category.image}
+                  style={styles.homeCategoryImage}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+
       {/* Products Grid */}
       {renderHomeSectionHeader(
         selectedAgeForProducts
@@ -1510,6 +1615,19 @@ const styles = StyleSheet.create({
   homeBannerLine: {
     flex: 1,
     height: 1,
+  },
+  homeCategoryCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    overflow: "hidden",
+    aspectRatio: 1,
+    alignSelf: "flex-start",
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  homeCategoryImage: {
+    width: "100%",
+    height: "100%",
   },
   productsGrid: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
