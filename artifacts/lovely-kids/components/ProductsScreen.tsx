@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   FlatList,
+  Image,
   SectionList,
   Platform,
   Pressable,
@@ -33,6 +34,62 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 
 const { width } = Dimensions.get("window");
+
+const PRODUCT_CATEGORY_IMAGES = {
+  all: require("../assets/images/category-cards/all.png"),
+  boysSets: require("../assets/images/category-cards/boys-sets.png"),
+  girlsSets: require("../assets/images/category-cards/girls-sets.png"),
+  babySets: require("../assets/images/category-cards/baby-sets.png"),
+  pants: require("../assets/images/category-cards/pants.png"),
+  tops: require("../assets/images/category-cards/tops.png"),
+  shorts: require("../assets/images/category-cards/shorts.png"),
+  dresses: require("../assets/images/category-cards/dresses.png"),
+  shirts: require("../assets/images/category-cards/shirts.png"),
+  babyEssentials: require("../assets/images/category-cards/baby-essentials.png"),
+};
+
+function normalizeCategoryLabel(label: string) {
+  return label
+    .replace(/[أإآ]/g, "ا")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCategoryImage(label: string): any {
+  const value = normalizeCategoryLabel(label);
+
+  if (value === "الكل") return PRODUCT_CATEGORY_IMAGES.all;
+
+  if (value.includes("مستلزمات") && value.includes("بيبي"))
+    return PRODUCT_CATEGORY_IMAGES.babyEssentials;
+
+  if (value.includes("اطقم") && value.includes("ولاد"))
+    return PRODUCT_CATEGORY_IMAGES.boysSets;
+
+  if (value.includes("اطقم") && value.includes("بنات"))
+    return PRODUCT_CATEGORY_IMAGES.girlsSets;
+
+  if (value.includes("اطقم") && value.includes("بيبي"))
+    return PRODUCT_CATEGORY_IMAGES.babySets;
+
+  if (value.includes("بلاط"))
+    return PRODUCT_CATEGORY_IMAGES.pants;
+
+  if (value.includes("بلايز") || value.includes("بلوز"))
+    return PRODUCT_CATEGORY_IMAGES.tops;
+
+  if (value.includes("شورت"))
+    return PRODUCT_CATEGORY_IMAGES.shorts;
+
+  if (value.includes("فساتين") || value.includes("فستان"))
+    return PRODUCT_CATEGORY_IMAGES.dresses;
+
+  if (value.includes("قمصان") || value.includes("قميص"))
+    return PRODUCT_CATEGORY_IMAGES.shirts;
+
+  return null;
+}
+
 
 export default function ProductsScreen({
   offersOnly = false,
@@ -98,6 +155,72 @@ export default function ProductsScreen({
   );
   const [selectedSeason, setSelectedSeason] = useState<"all" | "summer" | "winter">("all");
   const [selectedGender, setSelectedGender] = useState<null | "boys" | "girls">(null);
+
+  const visualCategories = categories
+    .map((item) => ({
+      ...item,
+      image: getCategoryImage(item.label),
+    }))
+    .filter((item) => Boolean(item.image));
+
+  const [showCompactCategories, setShowCompactCategories] = useState(false);
+
+  const handleCatalogScroll = (event: any) => {
+    if (isSpecialView || isDesktopWeb) return;
+
+    const y = event?.nativeEvent?.contentOffset?.y ?? 0;
+    const shouldShow = y > 170;
+
+    setShowCompactCategories((current) =>
+      current === shouldShow ? current : shouldShow
+    );
+  };
+
+  const renderCompactCategories = () => (
+    <View
+      style={[
+        styles.stickyCategoriesBar,
+        {
+          backgroundColor: colors.background,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.stickyCategoriesScroll}
+        style={Platform.OS === "web" ? { direction: "rtl" } : undefined}
+      >
+        {visualCategories.map((item) => {
+          const selected = selectedCategory === item.id;
+
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => setSelectedCategory(item.id)}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              style={({ pressed }) => [
+                styles.stickyCategoryCard,
+                {
+                  borderColor: selected ? colors.primary : colors.border,
+                  opacity: pressed ? 0.82 : 1,
+                },
+                selected && styles.stickyCategoryCardSelected,
+              ]}
+            >
+              <Image
+                source={item.image}
+                style={styles.stickyCategoryImage}
+                resizeMode="cover"
+              />
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 
   useEffect(() => {
     if (typeof category === "string" && categories.some((c) => c.id === category)) {
@@ -378,6 +501,48 @@ const topPadding = getResponsiveTopPadding(insets.top);
       </View>
 
       {/* Categories */}
+      {/* Visual category image strip */}
+      {!isSpecialView ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.visualCategoriesScroll}
+          style={[
+            styles.visualCategoriesStrip,
+            Platform.OS === "web" ? { direction: "rtl" } : null,
+            desktopFlushShellStyle,
+          ]}
+        >
+          {visualCategories.map((item) => {
+            const selected = selectedCategory === item.id;
+
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setSelectedCategory(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                style={({ pressed }) => [
+                  styles.visualCategoryCard,
+                  {
+                    borderColor: selected
+                      ? colors.primary
+                      : colors.border,
+                    opacity: pressed ? 0.82 : 1,
+                  },
+                  selected && styles.visualCategoryCardSelected,
+                ]}
+              >
+                <Image
+                  source={item.image}
+                  style={styles.visualCategoryImage}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -431,6 +596,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
           </Pressable>
         ))}
       </ScrollView>
+
+      )}
 
       {/* Seasons */}
       <ScrollView
@@ -524,6 +691,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
+          onScroll={handleCatalogScroll}
+          scrollEventThrottle={16}
           renderSectionHeader={({ section }) => (
             <View
               style={[
@@ -626,6 +795,20 @@ const topPadding = getResponsiveTopPadding(insets.top);
           }
         />
 
+        {!isSpecialView &&
+        !isDesktopWeb &&
+        showCompactCategories &&
+        visualCategories.length > 0 ? (
+          <View
+            style={[
+              styles.stickyCategoriesOverlay,
+              { top: Math.max(insets.top, 8) },
+            ]}
+          >
+            {renderCompactCategories()}
+          </View>
+        ) : null}
+
         {isDesktopWeb && showCatalogNavigation ? (
           <DesktopCategorySidebar offersOnly={isOffersView} />
         ) : null}
@@ -685,7 +868,23 @@ const topPadding = getResponsiveTopPadding(insets.top);
           </View>
         }
         showsVerticalScrollIndicator={false}
+        onScroll={handleCatalogScroll}
+        scrollEventThrottle={16}
       />
+
+      {!isSpecialView &&
+      !isDesktopWeb &&
+      showCompactCategories &&
+      visualCategories.length > 0 ? (
+        <View
+            style={[
+              styles.stickyCategoriesOverlay,
+              { top: Math.max(insets.top, 8) },
+            ]}
+          >
+          {renderCompactCategories()}
+        </View>
+      ) : null}
 
       {isDesktopWeb && showCatalogNavigation ? (
         <DesktopCategorySidebar offersOnly={isOffersView} />
@@ -764,6 +963,67 @@ const styles = StyleSheet.create({
     flexWrap: "nowrap",
     alignItems: "center",
   },
+  stickyCategoriesOverlay: {
+    position: "absolute",
+    top: 2,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    elevation: 20,
+  },
+  stickyCategoriesBar: {
+    borderBottomWidth: 1,
+    paddingVertical: 8,
+  },
+  stickyCategoriesScroll: {
+    paddingHorizontal: 12,
+    gap: 10,
+    alignItems: "center",
+  },
+  stickyCategoryCard: {
+    width: 80,
+    height: 80,
+    borderRadius: 999,
+    borderWidth: 2,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+  },
+  stickyCategoryCardSelected: {
+    borderWidth: 3,
+  },
+  stickyCategoryImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  visualCategoriesStrip: {
+    marginBottom: 10,
+    height: 106,
+    minHeight: 106,
+    maxHeight: 106,
+    flexShrink: 0,
+  },
+  visualCategoriesScroll: {
+    paddingHorizontal: 16,
+    gap: 9,
+    alignItems: "center",
+  },
+  visualCategoryCard: {
+    width: 82,
+    height: 82,
+    borderRadius: 999,
+    borderWidth: 2,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+  },
+  visualCategoryCardSelected: {
+    borderWidth: 3,
+  },
+  visualCategoryImage: {
+    width: "100%",
+    height: "100%",
+  },
+
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
