@@ -146,9 +146,8 @@ export async function handleMetaCatalogRequest(
   ].join(",");
 
   const lines = eligibleProducts.map((product) => {
-    const baseTitle = product.nameAr?.trim() || product.name?.trim() || `Product ${product.id}`;
-    const title = `${baseTitle} - ${product.price} شيكل`;
-    const description = product.description?.trim() || baseTitle;
+    const title = product.nameAr?.trim() || product.name?.trim() || `Product ${product.id}`;
+    const description = product.description?.trim() || title;
 
     return [
       csvValue(String(product.id)),
