@@ -424,13 +424,13 @@ export default function AddProductScreen() {
       setQrPrintOpen(false);
 
       setQrGenerationMessage(
-        `✓ تم تجهيز ${count} ملصق QR للطباعة.`,
+        `✓ تمت طباعة ${count} ملصق QR مباشرة.`,
       );
     } catch (error) {
       setQrGenerationMessage(
         error instanceof Error
           ? error.message
-          : "فشل فتح معاينة الطباعة.",
+          : "فشلت الطباعة المباشرة.",
       );
     } finally {
       setPrintingQrs(false);
@@ -2215,7 +2215,7 @@ export default function AddProductScreen() {
               {
                 printingQrs
                   ? "جارٍ تجهيز المعاينة..."
-                  : "معاينة وطباعة QR"
+                  : "طباعة QR مباشرة"
               }
 
             </Text>
