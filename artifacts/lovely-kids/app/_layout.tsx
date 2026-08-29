@@ -18,6 +18,7 @@ import { ClerkProviderWrapper } from "@/components/ClerkProviderWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PromotionalPopup } from "@/components/PromotionalPopup";
 import { StoreShareButton } from "@/components/StoreShareButton";
+import { StickyCartBar } from "@/components/StickyCartBar";
 import { OpenInChromePrompt } from "@/components/OpenInChromePrompt";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
 import { AppSettingsProvider } from "@/context/AppSettingsContext";
@@ -140,6 +141,7 @@ export default function RootLayout() {
                           {Platform.OS !== "web" ? (
                             <KeyboardProvider>
                               <RootLayoutNav />
+                              {!showWelcome && <StickyCartBar />}
                               {showWelcome && (
                                 <WelcomeSplash
                                   onFinish={() => {
@@ -152,6 +154,7 @@ export default function RootLayout() {
                           ) : (
                             <>
                               <RootLayoutNav />
+                              {!showWelcome && <StickyCartBar />}
                               {showWelcome && (
                                 <WelcomeSplash
                                   onFinish={() => {
