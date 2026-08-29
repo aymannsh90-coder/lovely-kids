@@ -502,7 +502,7 @@ const PRINT_BRIDGE_BASE =
   "http://127.0.0.1:17858";
 
 const RAW_LABEL_WIDTH_DOTS = 384;
-const RAW_LABEL_HEIGHT_DOTS = 200;
+const RAW_LABEL_HEIGHT_DOTS = 195;
 
 function fitCanvasText(
   context: any,
@@ -660,7 +660,7 @@ function buildRawQrLabelCanvas(
 
   context.direction = "ltr";
   context.font =
-    "900 24px Arial, Tahoma, sans-serif";
+    "900 26px Arial, Tahoma, sans-serif";
 
   context.fillText(
     "Lovely Kids",
@@ -670,7 +670,7 @@ function buildRawQrLabelCanvas(
 
   context.direction = "rtl";
   context.font =
-    "800 18px Arial, Tahoma, sans-serif";
+    "800 20px Arial, Tahoma, sans-serif";
 
   context.fillText(
     fitCanvasText(
@@ -683,7 +683,7 @@ function buildRawQrLabelCanvas(
   );
 
   context.font =
-    "700 14px Arial, Tahoma, sans-serif";
+    "700 15px Arial, Tahoma, sans-serif";
 
   const productCode =
     input.productCode?.trim() || "—";
@@ -712,13 +712,18 @@ function buildRawQrLabelCanvas(
     137,
   );
 
+  context.direction = "rtl";
   context.font =
-    "900 27px Arial, Tahoma, sans-serif";
+    "900 21px Arial, Tahoma, sans-serif";
 
   context.fillText(
-    `${input.price} ₪`,
+    fitCanvasText(
+      context,
+      `السعر ${input.price} شيكل`,
+      textWidth,
+    ),
     right,
-    178,
+    170,
   );
 
   return canvas;
