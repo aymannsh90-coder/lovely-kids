@@ -10,6 +10,112 @@ type ProductQrPrintInput = {
   barcodes: ProductBarcode[];
 };
 
+export type QrLabelElementId =
+  | "qr"
+  | "brand"
+  | "name"
+  | "code"
+  | "color"
+  | "variantSize"
+  | "price";
+
+export type QrLabelElementLayout = {
+  x: number;
+  y: number;
+  size: number;
+  visible: boolean;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  text: string;
+  inverted: boolean;
+};
+
+export type QrLabelLayout = Record<
+  QrLabelElementId,
+  QrLabelElementLayout
+>;
+
+export const DEFAULT_QR_LABEL_LAYOUT: QrLabelLayout = {
+  qr: {
+    x: 0,
+    y: 0,
+    size: 184,
+    visible: true,
+    bold: false,
+    italic: false,
+    underline: false,
+    text: "",
+    inverted: false,
+  },
+  brand: {
+    x: 0,
+    y: 0,
+    size: 26,
+    visible: true,
+    bold: true,
+    italic: false,
+    underline: false,
+    text: "Lovely Kids",
+    inverted: false,
+  },
+  name: {
+    x: 0,
+    y: 0,
+    size: 20,
+    visible: true,
+    bold: true,
+    italic: false,
+    underline: false,
+    text: "{name}",
+    inverted: false,
+  },
+  code: {
+    x: 0,
+    y: 0,
+    size: 15,
+    visible: true,
+    bold: true,
+    italic: false,
+    underline: false,
+    text: "الكود: {code}",
+    inverted: false,
+  },
+  color: {
+    x: 0,
+    y: 0,
+    size: 15,
+    visible: true,
+    bold: true,
+    italic: false,
+    underline: false,
+    text: "اللون: {color}",
+    inverted: false,
+  },
+  variantSize: {
+    x: 0,
+    y: 0,
+    size: 15,
+    visible: true,
+    bold: true,
+    italic: false,
+    underline: false,
+    text: "النمرة: {size}",
+    inverted: false,
+  },
+  price: {
+    x: 0,
+    y: 0,
+    size: 21,
+    visible: true,
+    bold: true,
+    italic: false,
+    underline: false,
+    text: "السعر {price} شيكل",
+    inverted: false,
+  },
+};
+
 const LABEL_WIDTH_PX = 142;
 const LABEL_HEIGHT_PX = 71;
 
@@ -533,9 +639,184 @@ function fitCanvasText(
   return `${shortened}…`;
 }
 
+function resolveQrLabelText(
+  template: string,
+  values: {
+    name: string;
+    code: string;
+    color: string;
+    size: string;
+    price: number;
+  },
+) {
+  return template
+    .replaceAll("{name}", values.name)
+    .replaceAll("{code}", values.code)
+    .replaceAll("{color}", values.color)
+    .replaceAll("{size}", values.size)
+    .replaceAll(
+      "{price}",
+      String(values.price),
+    );
+}
+
+function drawQrLabelCanvasText(
+  context: any,
+  value: string,
+  x: number,
+  y: number,
+  element: QrLabelElementLayout,
+  boldWeight: number,
+  maxWidth?: number,
+) {
+  const weight =
+    element.bold
+      ? boldWeight
+      : 400;
+
+  const italic =
+    element.italic
+      ? "italic "
+      : "";
+
+  context.font =
+    `${italic}${weight} ${Math.round(
+      element.size,
+    )}px Arial, Tahoma, sans-serif`;
+
+  const renderedValue =
+    maxWidth
+      ? fitCanvasText(
+          context,
+          value,
+          maxWidth,
+        )
+      : value;
+
+  const metrics =
+    context.measureText(
+      renderedValue,
+    );
+
+  const width =
+    metrics.width;
+
+  const ascent =
+    metrics.actualBoundingBoxAscent ??
+    element.size * 0.8;
+
+  const descent =
+    metrics.actualBoundingBoxDescent ??
+    element.size * 0.2;
+
+  const paddingX =
+    Math.max(
+      3,
+      Math.round(
+        element.size * 0.18,
+      ),
+    );
+
+  const paddingY =
+    Math.max(
+      2,
+      Math.round(
+        element.size * 0.12,
+      ),
+    );
+
+  if (element.inverted) {
+    context.save();
+
+    context.fillStyle =
+      "#000000";
+
+    context.fillRect(
+      Math.floor(
+        x -
+          width -
+          paddingX,
+      ),
+      Math.floor(
+        y -
+          ascent -
+          paddingY,
+      ),
+      Math.ceil(
+        width +
+          paddingX * 2,
+      ),
+      Math.ceil(
+        ascent +
+          descent +
+          paddingY * 2,
+      ),
+    );
+
+    context.restore();
+
+    context.fillStyle =
+      "#ffffff";
+  } else {
+    context.fillStyle =
+      "#000000";
+  }
+
+  context.fillText(
+    renderedValue,
+    x,
+    y,
+  );
+
+  if (element.underline) {
+    const underlineY =
+      y +
+      Math.max(
+        2,
+        Math.round(
+          element.size * 0.12,
+        ),
+      );
+
+    context.save();
+    context.beginPath();
+
+    context.lineWidth =
+      Math.max(
+        1,
+        Math.round(
+          element.size / 12,
+        ),
+      );
+
+    context.strokeStyle =
+      element.inverted
+        ? "#ffffff"
+        : "#000000";
+
+    context.moveTo(
+      x - width,
+      underlineY,
+    );
+
+    context.lineTo(
+      x,
+      underlineY,
+    );
+
+    context.stroke();
+    context.restore();
+  }
+
+  context.fillStyle =
+    "#000000";
+}
+
 function buildRawQrLabelCanvas(
   input: ProductQrPrintInput,
   item: ProductBarcode,
+  layout: QrLabelLayout =
+    DEFAULT_QR_LABEL_LAYOUT,
 ) {
   const documentRef =
     (globalThis as any).document;
@@ -591,7 +872,14 @@ function buildRawQrLabelCanvas(
   const quiet = 4;
 
   const qrAreaWidth = 190;
-  const maxQrDots = 184;
+  const maxQrDots =
+    Math.max(
+      110,
+      Math.min(
+        190,
+        Math.round(layout.qr.size),
+      ),
+    );
 
   const moduleDots =
     Math.max(
@@ -608,7 +896,8 @@ function buildRawQrLabelCanvas(
 
   const qrStartX =
     Math.floor(
-      (qrAreaWidth - qrDots) / 2,
+      (qrAreaWidth - qrDots) / 2 +
+        layout.qr.x,
     );
 
   const qrStartY =
@@ -616,34 +905,37 @@ function buildRawQrLabelCanvas(
       (
         RAW_LABEL_HEIGHT_DOTS -
         qrDots
-      ) / 2,
+      ) / 2 +
+        layout.qr.y,
     );
 
   context.fillStyle = "#000000";
 
-  for (
-    let row = 0;
-    row < moduleCount;
-    row += 1
-  ) {
+  if (layout.qr.visible) {
     for (
-      let col = 0;
-      col < moduleCount;
-      col += 1
+      let row = 0;
+      row < moduleCount;
+      row += 1
     ) {
-      if (
-        modules.get(row, col)
+      for (
+        let col = 0;
+        col < moduleCount;
+        col += 1
       ) {
-        context.fillRect(
-          qrStartX +
-            (col + quiet) *
-              moduleDots,
-          qrStartY +
-            (row + quiet) *
-              moduleDots,
-          moduleDots,
-          moduleDots,
-        );
+        if (
+          modules.get(row, col)
+        ) {
+          context.fillRect(
+            qrStartX +
+              (col + quiet) *
+                moduleDots,
+            qrStartY +
+              (row + quiet) *
+                moduleDots,
+            moduleDots,
+            moduleDots,
+          );
+        }
       }
     }
   }
@@ -658,33 +950,6 @@ function buildRawQrLabelCanvas(
   context.textAlign = "right";
   context.textBaseline = "alphabetic";
 
-  context.direction = "ltr";
-  context.font =
-    "900 26px Arial, Tahoma, sans-serif";
-
-  context.fillText(
-    "Lovely Kids",
-    right,
-    31,
-  );
-
-  context.direction = "rtl";
-  context.font =
-    "800 20px Arial, Tahoma, sans-serif";
-
-  context.fillText(
-    fitCanvasText(
-      context,
-      input.nameAr,
-      textWidth,
-    ),
-    right,
-    60,
-  );
-
-  context.font =
-    "700 15px Arial, Tahoma, sans-serif";
-
   const productCode =
     input.productCode?.trim() || "—";
 
@@ -694,39 +959,146 @@ function buildRawQrLabelCanvas(
   const size =
     item.size?.trim() || "—";
 
-  context.fillText(
-    `الكود: ${productCode}`,
-    right,
-    89,
-  );
+  const labelValues = {
+    name: input.nameAr,
+    code: productCode,
+    color,
+    size,
+    price: input.price,
+  };
 
-  context.fillText(
-    `اللون: ${color}`,
-    right,
-    113,
-  );
+  if (layout.brand.visible) {
+    context.direction = "ltr";
+    drawQrLabelCanvasText(
+      context,
+      resolveQrLabelText(
+        layout.brand.text,
+        labelValues,
+      ),
+      right + layout.brand.x,
+      31 + layout.brand.y,
+      layout.brand,
+      900,
+    );
+  }
 
-  context.fillText(
-    `النمرة: ${size}`,
-    right,
-    137,
-  );
+  if (layout.name.visible) {
+    context.direction = "rtl";
+    drawQrLabelCanvasText(
+      context,
+      resolveQrLabelText(
+        layout.name.text,
+        labelValues,
+      ),
+      right + layout.name.x,
+      60 + layout.name.y,
+      layout.name,
+      800,
+      textWidth,
+    );
+  }
 
   context.direction = "rtl";
-  context.font =
-    "900 21px Arial, Tahoma, sans-serif";
 
-  context.fillText(
-    fitCanvasText(
+  if (layout.code.visible) {
+    drawQrLabelCanvasText(
       context,
-      `السعر ${input.price} شيكل`,
+      resolveQrLabelText(
+        layout.code.text,
+        labelValues,
+      ),
+      right + layout.code.x,
+      89 + layout.code.y,
+      layout.code,
+      700,
+    );
+  }
+
+  if (layout.color.visible) {
+    drawQrLabelCanvasText(
+      context,
+      resolveQrLabelText(
+        layout.color.text,
+        labelValues,
+      ),
+      right + layout.color.x,
+      113 + layout.color.y,
+      layout.color,
+      700,
+    );
+  }
+
+  if (layout.variantSize.visible) {
+    drawQrLabelCanvasText(
+      context,
+      resolveQrLabelText(
+        layout.variantSize.text,
+        labelValues,
+      ),
+      right + layout.variantSize.x,
+      137 + layout.variantSize.y,
+      layout.variantSize,
+      700,
+    );
+  }
+
+  if (layout.price.visible) {
+    context.direction = "rtl";
+    drawQrLabelCanvasText(
+      context,
+      resolveQrLabelText(
+        layout.price.text,
+        labelValues,
+      ),
+      right + layout.price.x,
+      170 + layout.price.y,
+      layout.price,
+      900,
       textWidth,
-    ),
-    right,
-    170,
-  );
+    );
+  }
 
   return canvas;
+}
+
+export function createProductQrLabelPreview(
+  input: ProductQrPrintInput,
+  layout: QrLabelLayout =
+    DEFAULT_QR_LABEL_LAYOUT,
+) {
+  const item =
+    input.barcodes.find(
+      (entry) =>
+        entry.barcode
+          .trim()
+          .startsWith("LKQR-"),
+    );
+
+  if (!item) {
+    throw new Error(
+      "لا يوجد QR صالح للمعاينة.",
+    );
+  }
+
+  const canvas =
+    buildRawQrLabelCanvas(
+      input,
+      item,
+      layout,
+    );
+
+  if (
+    typeof canvas.toDataURL !==
+    "function"
+  ) {
+    throw new Error(
+      "معاينة الملصق متاحة من المتصفح فقط.",
+    );
+  }
+
+  return canvas.toDataURL(
+    "image/png",
+  );
 }
 
 function canvasToPngBlob(
@@ -787,6 +1159,8 @@ async function ensurePrintBridge() {
 
 async function printProductQrsViaBridge(
   input: ProductQrPrintInput,
+  layout: QrLabelLayout =
+    DEFAULT_QR_LABEL_LAYOUT,
 ) {
   const labels =
     input.barcodes.filter(
@@ -811,6 +1185,7 @@ async function printProductQrsViaBridge(
       buildRawQrLabelCanvas(
         input,
         item,
+        layout,
       );
 
     const png =
@@ -860,10 +1235,13 @@ async function printProductQrsViaBridge(
 
 export async function previewAndPrintProductQrs(
   input: ProductQrPrintInput,
+  layout: QrLabelLayout =
+    DEFAULT_QR_LABEL_LAYOUT,
 ) {
   if (Platform.OS === "web") {
     return printProductQrsViaBridge(
       input,
+      layout,
     );
   }
 
