@@ -9,6 +9,11 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 
 import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "./lib/scannerKeyboard";
+
+import {
   ApiError,
   createPosSale,
   getCurrentCashSession,
@@ -135,6 +140,14 @@ export default function SalePanel({
   onUnauthorized,
 }: SalePanelProps) {
   const barcodeInput = useRef<HTMLInputElement>(null);
+
+  const scannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
+  const scannerSubmitValue = useRef<string | null>(
+    null,
+  );
 
   const idempotencyKey = useRef<string | null>(null);
 
@@ -345,6 +358,32 @@ export default function SalePanel({
   }
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const scannedValue =
+      captureScannerKeyboardEvent(
+        scannerKeyboard.current,
+        event,
+      );
+
+    if (
+      event.key === "Enter" &&
+      scannedValue
+    ) {
+      event.preventDefault();
+
+      scannerSubmitValue.current =
+        scannedValue;
+
+      setBarcode(scannedValue);
+      clearProductSearch();
+
+      event.currentTarget.form?.requestSubmit();
+      return;
+    }
+
     if (event.key === "ArrowDown" && searchResults.length > 0) {
       event.preventDefault();
 
@@ -384,7 +423,14 @@ export default function SalePanel({
   async function handleBarcode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const value = barcode.trim();
+    const scannerValue =
+      scannerSubmitValue.current;
+
+    scannerSubmitValue.current = null;
+
+    const value = (
+      scannerValue ?? barcode
+    ).trim();
 
     if (!value) {
       setError("أدخل الباركود أو الكود أو اسم الصنف");

@@ -10,6 +10,10 @@ import { useSearchParams } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
 import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "../../lib/scannerKeyboard";
+import {
   ApiError,
   createPosSale,
   getCurrentCashSession,
@@ -236,6 +240,15 @@ export default function SalesInvoicePage() {
   const [notes, setNotes] = useState("");
 
   const [query, setQuery] = useState("");
+
+  const scannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
+  const scannerSubmitValue = useRef<string | null>(
+    null,
+  );
+
   const [lookupBusy, setLookupBusy] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -472,6 +485,28 @@ export default function SalesInvoicePage() {
       return;
     }
 
+    const scannedValue =
+      captureScannerKeyboardEvent(
+        scannerKeyboard.current,
+        event,
+      );
+
+    if (
+      event.key === "Enter" &&
+      scannedValue
+    ) {
+      event.preventDefault();
+
+      scannerSubmitValue.current =
+        scannedValue;
+
+      setQuery(scannedValue);
+      clearSearchResults();
+
+      event.currentTarget.form?.requestSubmit();
+      return;
+    }
+
     if (event.key === "ArrowDown" && searchResults.length > 0) {
       event.preventDefault();
 
@@ -512,7 +547,14 @@ export default function SalesInvoicePage() {
   async function handleProductSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const value = query.trim();
+    const scannerValue =
+      scannerSubmitValue.current;
+
+    scannerSubmitValue.current = null;
+
+    const value = (
+      scannerValue ?? query
+    ).trim();
 
     if (!value) {
       setError("أدخل الباركود أو الكود أو اسم الصنف");
