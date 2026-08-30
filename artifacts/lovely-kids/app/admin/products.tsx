@@ -1,11 +1,15 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "@/utils/scannerKeyboard";
 import * as Haptics from "expo-haptics";
 import { useAudioPlayer } from "expo-audio";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -62,6 +66,58 @@ export default function AdminProductsScreen() {
     "all" | "out" | "offers" | "hidden" | "trash"
   >("all");
   const [search, setSearch] = useState("");
+
+  const scannerKeyboard =
+    useRef(createScannerKeyboardBuffer());
+
+  const scannerSearchFocused =
+    useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    const windowRef =
+      (globalThis as any).window;
+
+    if (!windowRef?.addEventListener) return;
+
+    const handleScannerKeyDown = (
+      event: any,
+    ) => {
+      if (!scannerSearchFocused.current) {
+        return;
+      }
+
+      const scannedValue =
+        captureScannerKeyboardEvent(
+          scannerKeyboard.current,
+          event,
+        );
+
+      if (
+        event.key === "Enter" &&
+        scannedValue
+      ) {
+        event.preventDefault?.();
+        setSearch(scannedValue);
+      }
+    };
+
+    windowRef.addEventListener(
+      "keydown",
+      handleScannerKeyDown,
+      true,
+    );
+
+    return () => {
+      windowRef.removeEventListener(
+        "keydown",
+        handleScannerKeyDown,
+        true,
+      );
+    };
+  }, []);
+
   const [scannerOpen, setScannerOpen] = useState(false);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
 
@@ -480,6 +536,16 @@ export default function AdminProductsScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
+            onFocus={() => {
+              scannerSearchFocused.current = true;
+              scannerKeyboard.current =
+                createScannerKeyboardBuffer();
+            }}
+            onBlur={() => {
+              scannerSearchFocused.current = false;
+              scannerKeyboard.current =
+                createScannerKeyboardBuffer();
+            }}
             placeholder="ابحث بالاسم أو الكود أو الباركود"
             placeholderTextColor={colors.mutedForeground}
             style={{ flex: 1, paddingVertical: 12, color: colors.foreground, textAlign: "right" }}
