@@ -9,7 +9,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 import {
+  createProductQrLabelPreview,
+  DEFAULT_QR_LABEL_LAYOUT,
   previewAndPrintProductQrs,
+  type QrLabelElementId,
+  type QrLabelLayout,
 } from "@/utils/productQrPrint";
 import {
   ActivityIndicator,
@@ -115,8 +119,96 @@ export default function AddProductScreen() {
   const [qrPrintOpen, setQrPrintOpen] = useState(false);
   const [qrPrintSelected, setQrPrintSelected] = useState<Record<string, boolean>>({});
   const [qrPrintCopies, setQrPrintCopies] = useState<Record<string, string>>({});
+  const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
+  const [qrPreviewUri, setQrPreviewUri] = useState("");
+  const [qrPreviewItem, setQrPreviewItem] =
+    useState<ProductBarcode | null>(null);
+
+  const [qrLabelLayout, setQrLabelLayout] =
+    useState<QrLabelLayout>(() =>
+      JSON.parse(
+        JSON.stringify(
+          DEFAULT_QR_LABEL_LAYOUT,
+        ),
+      ),
+    );
+
+  const [
+    qrLabelSelectedElement,
+    setQrLabelSelectedElement,
+  ] = useState<QrLabelElementId>("qr");
+
+  const [
+    qrLabelLayoutMessage,
+    setQrLabelLayoutMessage,
+  ] = useState("");
+
+  const qrLabelPreviewSize = useRef({
+    width: 384,
+    height: 195,
+  });
+
+  const qrLabelDrag = useRef<{
+    element: QrLabelElementId | null;
+    pageX: number;
+    pageY: number;
+    startX: number;
+    startY: number;
+  }>({
+    element: null,
+    pageX: 0,
+    pageY: 0,
+    startX: 0,
+    startY: 0,
+  });
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    try {
+      const storage =
+        (globalThis as any).localStorage;
+
+      const saved =
+        storage?.getItem(
+          "lovely_kids_qr_label_layout_v1",
+        );
+
+      if (!saved) return;
+
+      const parsed =
+        JSON.parse(saved);
+
+      const next =
+        JSON.parse(
+          JSON.stringify(
+            DEFAULT_QR_LABEL_LAYOUT,
+          ),
+        ) as QrLabelLayout;
+
+      (
+        Object.keys(next) as
+          QrLabelElementId[]
+      ).forEach((elementId) => {
+        if (
+          parsed?.[elementId] &&
+          typeof parsed[elementId] ===
+            "object"
+        ) {
+          next[elementId] = {
+            ...next[elementId],
+            ...parsed[elementId],
+          };
+        }
+      });
+
+      setQrLabelLayout(next);
+    } catch {
+      // Ignore invalid saved editor data.
+    }
+  }, []);
 
   const normalizeVariantPart = (value?: string | null) =>
     (value ?? "").trim().toLocaleLowerCase();
@@ -397,6 +489,456 @@ export default function AddProductScreen() {
     barcodes: selectedBarcodes,
   });
 
+  const qrLabelElementNames:
+    Record<QrLabelElementId, string> = {
+      qr: "QR",
+      brand: "Lovely Kids",
+      name: "اسم المنتج",
+      code: "الكود",
+      color: "اللون",
+      variantSize: "النمرة",
+      price: "السعر",
+    };
+
+  const refreshQrLabelPreview = (
+    nextLayout: QrLabelLayout,
+    item: ProductBarcode | null =
+      qrPreviewItem,
+  ) => {
+    if (!item) return;
+
+    try {
+      const previewUri =
+        createProductQrLabelPreview(
+          getQrPrintProductData([item]),
+          nextLayout,
+        );
+
+      setQrPreviewUri(previewUri);
+    } catch {
+      // Keep the previous preview if rendering fails.
+    }
+  };
+
+  const updateQrLabelElement = (
+    elementId: QrLabelElementId,
+    patch: Partial<
+      QrLabelLayout[QrLabelElementId]
+    >,
+  ) => {
+    const next: QrLabelLayout = {
+      ...qrLabelLayout,
+      [elementId]: {
+        ...qrLabelLayout[elementId],
+        ...patch,
+      },
+    };
+
+    setQrLabelLayout(next);
+    refreshQrLabelPreview(next);
+    setQrLabelLayoutMessage("");
+  };
+
+  const changeQrLabelElementPosition = (
+    dx: number,
+    dy: number,
+  ) => {
+    const current =
+      qrLabelLayout[
+        qrLabelSelectedElement
+      ];
+
+    updateQrLabelElement(
+      qrLabelSelectedElement,
+      {
+        x: Math.round(
+          Math.max(
+            -190,
+            Math.min(
+              190,
+              current.x + dx,
+            ),
+          ),
+        ),
+        y: Math.round(
+          Math.max(
+            -190,
+            Math.min(
+              190,
+              current.y + dy,
+            ),
+          ),
+        ),
+      },
+    );
+  };
+
+  const changeQrLabelElementSize = (
+    direction: number,
+  ) => {
+    const elementId =
+      qrLabelSelectedElement;
+
+    const current =
+      qrLabelLayout[elementId];
+
+    const step =
+      elementId === "qr"
+        ? 8
+        : 1;
+
+    const minimum =
+      elementId === "qr"
+        ? 110
+        : 8;
+
+    const maximum =
+      elementId === "qr"
+        ? 190
+        : 42;
+
+    updateQrLabelElement(
+      elementId,
+      {
+        size: Math.max(
+          minimum,
+          Math.min(
+            maximum,
+            current.size +
+              direction * step,
+          ),
+        ),
+      },
+    );
+  };
+
+  const setQrLabelNumericValue = (
+    field: "x" | "y" | "size",
+    rawValue: string,
+  ) => {
+    const clean =
+      rawValue.trim();
+
+    if (
+      clean === "" ||
+      clean === "-"
+    ) {
+      return;
+    }
+
+    const numericValue =
+      Number(clean);
+
+    if (
+      !Number.isFinite(
+        numericValue,
+      )
+    ) {
+      return;
+    }
+
+    const elementId =
+      qrLabelSelectedElement;
+
+    if (
+      field === "x" ||
+      field === "y"
+    ) {
+      updateQrLabelElement(
+        elementId,
+        {
+          [field]: Math.round(
+            Math.max(
+              -190,
+              Math.min(
+                190,
+                numericValue,
+              ),
+            ),
+          ),
+        },
+      );
+
+      return;
+    }
+
+    const minimum =
+      elementId === "qr"
+        ? 110
+        : 8;
+
+    const maximum =
+      elementId === "qr"
+        ? 190
+        : 42;
+
+    updateQrLabelElement(
+      elementId,
+      {
+        size: Math.round(
+          Math.max(
+            minimum,
+            Math.min(
+              maximum,
+              numericValue,
+            ),
+          ),
+        ),
+      },
+    );
+  };
+
+  const toggleQrLabelTextStyle = (
+    field: "bold" | "italic" | "underline" | "inverted",
+  ) => {
+    const elementId =
+      qrLabelSelectedElement;
+
+    if (elementId === "qr") {
+      return;
+    }
+
+    updateQrLabelElement(
+      elementId,
+      {
+        [field]:
+          !qrLabelLayout[
+            elementId
+          ][field],
+      },
+    );
+  };
+
+  const saveQrLabelLayout = () => {
+    if (Platform.OS !== "web") {
+      setQrLabelLayoutMessage(
+        "حفظ التصميم متاح من المتصفح.",
+      );
+      return;
+    }
+
+    try {
+      const storage =
+        (globalThis as any).localStorage;
+
+      storage?.setItem(
+        "lovely_kids_qr_label_layout_v1",
+        JSON.stringify(
+          qrLabelLayout,
+        ),
+      );
+
+      setQrLabelLayoutMessage(
+        "✓ تم حفظ تصميم الملصق على هذا الكمبيوتر.",
+      );
+    } catch {
+      setQrLabelLayoutMessage(
+        "تعذر حفظ التصميم.",
+      );
+    }
+  };
+
+  const resetQrLabelLayout = () => {
+    const next =
+      JSON.parse(
+        JSON.stringify(
+          DEFAULT_QR_LABEL_LAYOUT,
+        ),
+      ) as QrLabelLayout;
+
+    setQrLabelLayout(next);
+    refreshQrLabelPreview(next);
+
+    setQrLabelLayoutMessage(
+      "تمت إعادة التصميم الأصلي. اضغط حفظ لتثبيته.",
+    );
+  };
+
+  const getQrLabelEditorBox = (
+    elementId: QrLabelElementId,
+  ) => {
+    const element =
+      qrLabelLayout[elementId];
+
+    const bases = {
+      qr: {
+        left: 0,
+        top: 0,
+        width: 190,
+        height: 195,
+      },
+      brand: {
+        left: 198,
+        top: 2,
+        width: 178,
+        height: 36,
+      },
+      name: {
+        left: 198,
+        top: 36,
+        width: 178,
+        height: 30,
+      },
+      code: {
+        left: 198,
+        top: 68,
+        width: 178,
+        height: 27,
+      },
+      color: {
+        left: 198,
+        top: 94,
+        width: 178,
+        height: 26,
+      },
+      variantSize: {
+        left: 198,
+        top: 118,
+        width: 178,
+        height: 27,
+      },
+      price: {
+        left: 198,
+        top: 145,
+        width: 178,
+        height: 43,
+      },
+    };
+
+    const base = bases[elementId];
+
+    return {
+      left:
+        ((base.left + element.x) /
+          384) *
+        100,
+      top:
+        ((base.top + element.y) /
+          195) *
+        100,
+      width:
+        (base.width / 384) * 100,
+      height:
+        (base.height / 195) * 100,
+    };
+  };
+
+  const beginQrLabelDrag = (
+    elementId: QrLabelElementId,
+    event: any,
+  ) => {
+    setQrLabelSelectedElement(
+      elementId,
+    );
+
+    const element =
+      qrLabelLayout[elementId];
+
+    qrLabelDrag.current = {
+      element: elementId,
+      pageX:
+        event.nativeEvent.pageX ?? 0,
+      pageY:
+        event.nativeEvent.pageY ?? 0,
+      startX: element.x,
+      startY: element.y,
+    };
+  };
+
+  const moveQrLabelDrag = (
+    event: any,
+  ) => {
+    const drag =
+      qrLabelDrag.current;
+
+    if (!drag.element) return;
+
+    const width =
+      qrLabelPreviewSize.current
+        .width || 384;
+
+    const height =
+      qrLabelPreviewSize.current
+        .height || 195;
+
+    const currentPageX =
+      event.nativeEvent.pageX ??
+      drag.pageX;
+
+    const currentPageY =
+      event.nativeEvent.pageY ??
+      drag.pageY;
+
+    const dx =
+      ((currentPageX -
+        drag.pageX) /
+        width) *
+      384;
+
+    const dy =
+      ((currentPageY -
+        drag.pageY) /
+        height) *
+      195;
+
+    updateQrLabelElement(
+      drag.element,
+      {
+        x: Math.round(
+          drag.startX + dx,
+        ),
+        y: Math.round(
+          drag.startY + dy,
+        ),
+      },
+    );
+  };
+
+  const endQrLabelDrag = () => {
+    qrLabelDrag.current.element =
+      null;
+  };
+
+  const handleQrLabelPreview = () => {
+    if (!editProduct) return;
+
+    const selectedBarcodes =
+      getSelectedQrLabels();
+
+    if (selectedBarcodes.length === 0) {
+      setQrGenerationMessage(
+        "اختر لون أو نمرة واحدة على الأقل وحدد عدد نسخ أكبر من صفر.",
+      );
+      return;
+    }
+
+    try {
+      setQrGenerationMessage("");
+
+      const previewItem =
+        selectedBarcodes[0];
+
+      const previewUri =
+        createProductQrLabelPreview(
+          getQrPrintProductData([
+            previewItem,
+          ]),
+          qrLabelLayout,
+        );
+
+      setQrPreviewItem(previewItem);
+      setQrPreviewUri(previewUri);
+      setQrPrintOpen(false);
+      setQrPreviewOpen(true);
+    } catch (error) {
+      setQrGenerationMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر إنشاء معاينة الملصق.",
+      );
+    }
+  };
+
   const handlePreviewAndPrintQrs = async () => {
     if (!editProduct) return;
 
@@ -419,9 +961,11 @@ export default function AddProductScreen() {
           getQrPrintProductData(
             selectedBarcodes,
           ),
+          qrLabelLayout,
         );
 
       setQrPrintOpen(false);
+      setQrPreviewOpen(false);
 
       setQrGenerationMessage(
         `✓ تمت طباعة ${count} ملصق QR مباشرة.`,
@@ -2595,7 +3139,7 @@ export default function AddProductScreen() {
             >
               <Pressable
                 onPress={() =>
-                  void handlePreviewAndPrintQrs()
+                  handleQrLabelPreview()
                 }
                 disabled={printingQrs}
                 style={{
@@ -2633,7 +3177,7 @@ export default function AddProductScreen() {
                 >
                   {printingQrs
                     ? "جارٍ التجهيز..."
-                    : "معاينة وطباعة"}
+                    : "معاينة الملصق"}
                 </Text>
               </Pressable>
 
@@ -2661,6 +3205,1057 @@ export default function AddProductScreen() {
                   }}
                 >
                   إلغاء
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={qrPreviewOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setQrPreviewOpen(false)
+        }
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor:
+              "rgba(0,0,0,0.72)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 18,
+          }}
+        >
+          <View
+            style={{
+              width: "96%",
+              maxWidth: 650,
+              borderRadius: 20,
+              backgroundColor:
+                colors.card,
+              borderWidth: 1,
+              borderColor:
+                colors.border,
+              padding: 18,
+              gap: 16,
+            }}
+          >
+            <Text
+              style={{
+                color:
+                  colors.foreground,
+                fontSize: 20,
+                fontWeight: "900",
+                textAlign: "center",
+              }}
+            >
+              معاينة ملصق QR
+            </Text>
+
+            <Text
+              style={{
+                color:
+                  colors.mutedForeground,
+                fontSize: 12,
+                textAlign: "center",
+              }}
+            >
+              المقاس الفعلي 50 × 25 مم
+              — المعاينة من نفس تصميم الطباعة
+            </Text>
+
+            <View
+              onLayout={(event) => {
+                qrLabelPreviewSize.current = {
+                  width:
+                    event.nativeEvent.layout.width,
+                  height:
+                    event.nativeEvent.layout.height,
+                };
+              }}
+              style={{
+                width: "100%",
+                aspectRatio:
+                  384 / 195,
+                backgroundColor:
+                  "#ffffff",
+                borderRadius: 14,
+                borderWidth: 7,
+                borderColor:
+                  "#e5e7eb",
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              {qrPreviewUri ? (
+                <Image
+                  source={{
+                    uri: qrPreviewUri,
+                  }}
+                  resizeMode="stretch"
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: "100%",
+                    height: "100%",
+                    backgroundColor:
+                      "#ffffff",
+                  }}
+                />
+              ) : null}
+
+              {(
+                [
+                  "qr",
+                  "brand",
+                  "name",
+                  "code",
+                  "color",
+                  "variantSize",
+                  "price",
+                ] as QrLabelElementId[]
+              ).map((elementId) => {
+                const box =
+                  getQrLabelEditorBox(
+                    elementId,
+                  );
+
+                const selected =
+                  qrLabelSelectedElement ===
+                  elementId;
+
+                const visible =
+                  qrLabelLayout[
+                    elementId
+                  ].visible;
+
+                if (!visible) {
+                  return null;
+                }
+
+                return (
+                  <View
+                    key={elementId}
+                    onStartShouldSetResponder={() =>
+                      true
+                    }
+                    onMoveShouldSetResponder={() =>
+                      true
+                    }
+                    onResponderGrant={(
+                      event,
+                    ) =>
+                      beginQrLabelDrag(
+                        elementId,
+                        event,
+                      )
+                    }
+                    onResponderMove={
+                      moveQrLabelDrag
+                    }
+                    onResponderRelease={
+                      endQrLabelDrag
+                    }
+                    onResponderTerminate={
+                      endQrLabelDrag
+                    }
+                    style={{
+                      position:
+                        "absolute",
+                      left:
+                        `${box.left}%`,
+                      top:
+                        `${box.top}%`,
+                      width:
+                        `${box.width}%`,
+                      height:
+                        `${box.height}%`,
+                      borderWidth:
+                        selected ? 2 : 1,
+                      borderColor:
+                        selected
+                          ? "#e91e8c"
+                          : "rgba(15,118,110,0.28)",
+                      backgroundColor:
+                        selected
+                          ? "rgba(233,30,140,0.05)"
+                          : "transparent",
+                    }}
+                  />
+                );
+              })}
+            </View>
+
+            <View
+              style={{
+                gap: 9,
+                padding: 10,
+                borderWidth: 1,
+                borderColor:
+                  colors.border,
+                borderRadius: 12,
+                backgroundColor:
+                  colors.background,
+              }}
+            >
+              <Text
+                style={{
+                  color:
+                    colors.foreground,
+                  fontSize: 13,
+                  fontWeight: "900",
+                  textAlign: "center",
+                }}
+              >
+                اختر العنصر ثم اسحبه بالماوس داخل الملصق
+              </Text>
+
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  flexWrap: "wrap",
+                  justifyContent:
+                    "center",
+                  gap: 5,
+                }}
+              >
+                {(
+                  [
+                    "qr",
+                    "brand",
+                    "name",
+                    "code",
+                    "color",
+                    "variantSize",
+                    "price",
+                  ] as QrLabelElementId[]
+                ).map((elementId) => {
+                  const active =
+                    qrLabelSelectedElement ===
+                    elementId;
+
+                  return (
+                    <Pressable
+                      key={elementId}
+                      onPress={() =>
+                        setQrLabelSelectedElement(
+                          elementId,
+                        )
+                      }
+                      style={{
+                        paddingHorizontal: 9,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor:
+                          active
+                            ? colors.primary
+                            : colors.muted,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color:
+                            active
+                              ? "#fff"
+                              : colors.foreground,
+                          fontSize: 11,
+                          fontWeight: "800",
+                        }}
+                      >
+                        {
+                          qrLabelElementNames[
+                            elementId
+                          ]
+                        }
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  alignItems: "flex-end",
+                  justifyContent:
+                    "center",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <View
+                  style={{
+                    gap: 4,
+                    alignItems:
+                      "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      fontSize: 11,
+                      fontWeight: "800",
+                    }}
+                  >
+                    X يمين / يسار
+                  </Text>
+
+                  <TextInput
+                    key={`x-${qrLabelSelectedElement}`}
+                    value={String(
+                      qrLabelLayout[
+                        qrLabelSelectedElement
+                      ].x,
+                    )}
+                    onChangeText={(value) =>
+                      setQrLabelNumericValue(
+                        "x",
+                        value,
+                      )
+                    }
+                    selectTextOnFocus
+                    style={{
+                      width: 90,
+                      height: 38,
+                      borderWidth: 1,
+                      borderColor:
+                        colors.border,
+                      borderRadius: 8,
+                      backgroundColor:
+                        colors.card,
+                      color:
+                        colors.foreground,
+                      textAlign:
+                        "center",
+                      fontSize: 14,
+                      fontWeight: "900",
+                      paddingHorizontal: 6,
+                    }}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    gap: 4,
+                    alignItems:
+                      "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      fontSize: 11,
+                      fontWeight: "800",
+                    }}
+                  >
+                    Y فوق / تحت
+                  </Text>
+
+                  <TextInput
+                    key={`y-${qrLabelSelectedElement}`}
+                    value={String(
+                      qrLabelLayout[
+                        qrLabelSelectedElement
+                      ].y,
+                    )}
+                    onChangeText={(value) =>
+                      setQrLabelNumericValue(
+                        "y",
+                        value,
+                      )
+                    }
+                    selectTextOnFocus
+                    style={{
+                      width: 90,
+                      height: 38,
+                      borderWidth: 1,
+                      borderColor:
+                        colors.border,
+                      borderRadius: 8,
+                      backgroundColor:
+                        colors.card,
+                      color:
+                        colors.foreground,
+                      textAlign:
+                        "center",
+                      fontSize: 14,
+                      fontWeight: "900",
+                      paddingHorizontal: 6,
+                    }}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    gap: 4,
+                    alignItems:
+                      "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      fontSize: 11,
+                      fontWeight: "800",
+                    }}
+                  >
+                    الحجم
+                  </Text>
+
+                  <TextInput
+                    key={`size-${qrLabelSelectedElement}`}
+                    value={String(
+                      qrLabelLayout[
+                        qrLabelSelectedElement
+                      ].size,
+                    )}
+                    onChangeText={(value) =>
+                      setQrLabelNumericValue(
+                        "size",
+                        value,
+                      )
+                    }
+                    selectTextOnFocus
+                    style={{
+                      width: 90,
+                      height: 38,
+                      borderWidth: 1,
+                      borderColor:
+                        colors.border,
+                      borderRadius: 8,
+                      backgroundColor:
+                        colors.card,
+                      color:
+                        colors.foreground,
+                      textAlign:
+                        "center",
+                      fontSize: 14,
+                      fontWeight: "900",
+                      paddingHorizontal: 6,
+                    }}
+                  />
+                </View>
+              </View>
+
+              {qrLabelSelectedElement !== "qr" && (
+                <View
+                  style={{
+                    gap: 5,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      fontSize: 11,
+                      fontWeight: "800",
+                      textAlign: "right",
+                    }}
+                  >
+                    النص
+                  </Text>
+
+                  <TextInput
+                    value={
+                      qrLabelLayout[
+                        qrLabelSelectedElement
+                      ].text
+                    }
+                    onChangeText={(value) =>
+                      updateQrLabelElement(
+                        qrLabelSelectedElement,
+                        {
+                          text: value,
+                        },
+                      )
+                    }
+                    autoCorrect={false}
+                    style={{
+                      minHeight: 40,
+                      borderWidth: 1,
+                      borderColor:
+                        colors.border,
+                      borderRadius: 8,
+                      backgroundColor:
+                        colors.card,
+                      color:
+                        colors.foreground,
+                      textAlign: "right",
+                      fontSize: 14,
+                      fontWeight: "700",
+                      paddingHorizontal: 10,
+                    }}
+                  />
+
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      fontSize: 9,
+                      textAlign: "center",
+                    }}
+                  >
+                    المتغيرات: {"{name}"} {"{code}"} {"{color}"} {"{size}"} {"{price}"}
+                  </Text>
+                </View>
+              )}
+
+              {qrLabelSelectedElement !== "qr" && (
+                <View
+                  style={{
+                    flexDirection:
+                      "row-reverse",
+                    justifyContent:
+                      "center",
+                    alignItems:
+                      "center",
+                    flexWrap: "wrap",
+                    gap: 7,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      fontSize: 11,
+                      fontWeight: "800",
+                      marginLeft: 4,
+                    }}
+                  >
+                    تنسيق النص
+                  </Text>
+
+                  <Pressable
+                    onPress={() =>
+                      toggleQrLabelTextStyle(
+                        "bold",
+                      )
+                    }
+                    style={{
+                      width: 42,
+                      height: 38,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].bold
+                          ? colors.primary
+                          : colors.border,
+                      backgroundColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].bold
+                          ? colors.primary
+                          : colors.card,
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          qrLabelLayout[
+                            qrLabelSelectedElement
+                          ].bold
+                            ? "#fff"
+                            : colors.foreground,
+                        fontSize: 17,
+                        fontWeight: "900",
+                      }}
+                    >
+                      B
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() =>
+                      toggleQrLabelTextStyle(
+                        "italic",
+                      )
+                    }
+                    style={{
+                      width: 42,
+                      height: 38,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].italic
+                          ? colors.primary
+                          : colors.border,
+                      backgroundColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].italic
+                          ? colors.primary
+                          : colors.card,
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          qrLabelLayout[
+                            qrLabelSelectedElement
+                          ].italic
+                            ? "#fff"
+                            : colors.foreground,
+                        fontSize: 17,
+                        fontStyle: "italic",
+                        fontWeight: "700",
+                      }}
+                    >
+                      I
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() =>
+                      toggleQrLabelTextStyle(
+                        "underline",
+                      )
+                    }
+                    style={{
+                      width: 42,
+                      height: 38,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].underline
+                          ? colors.primary
+                          : colors.border,
+                      backgroundColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].underline
+                          ? colors.primary
+                          : colors.card,
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          qrLabelLayout[
+                            qrLabelSelectedElement
+                          ].underline
+                            ? "#fff"
+                            : colors.foreground,
+                        fontSize: 17,
+                        fontWeight: "700",
+                        textDecorationLine:
+                          "underline",
+                      }}
+                    >
+                      U
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() =>
+                      toggleQrLabelTextStyle(
+                        "inverted",
+                      )
+                    }
+                    style={{
+                      minWidth: 86,
+                      height: 38,
+                      paddingHorizontal: 9,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].inverted
+                          ? "#000000"
+                          : colors.border,
+                      backgroundColor:
+                        qrLabelLayout[
+                          qrLabelSelectedElement
+                        ].inverted
+                          ? "#000000"
+                          : colors.card,
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          qrLabelLayout[
+                            qrLabelSelectedElement
+                          ].inverted
+                            ? "#ffffff"
+                            : colors.foreground,
+                        fontSize: 11,
+                        fontWeight: "900",
+                      }}
+                    >
+                      ⬛ تظليل
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  flexWrap: "wrap",
+                  justifyContent:
+                    "center",
+                  gap: 6,
+                }}
+              >
+                <Pressable
+                  onPress={() =>
+                    changeQrLabelElementPosition(
+                      0,
+                      -3,
+                    )
+                  }
+                  style={{
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text>↑</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    changeQrLabelElementPosition(
+                      0,
+                      3,
+                    )
+                  }
+                  style={{
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text>↓</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    changeQrLabelElementPosition(
+                      -3,
+                      0,
+                    )
+                  }
+                  style={{
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text>←</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    changeQrLabelElementPosition(
+                      3,
+                      0,
+                    )
+                  }
+                  style={{
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text>→</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    changeQrLabelElementSize(
+                      -1,
+                    )
+                  }
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontWeight: "900",
+                    }}
+                  >
+                    − الحجم
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    changeQrLabelElementSize(
+                      1,
+                    )
+                  }
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontWeight: "900",
+                    }}
+                  >
+                    + الحجم
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    updateQrLabelElement(
+                      qrLabelSelectedElement,
+                      {
+                        visible:
+                          !qrLabelLayout[
+                            qrLabelSelectedElement
+                          ].visible,
+                      },
+                    )
+                  }
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontWeight: "800",
+                    }}
+                  >
+                    {qrLabelLayout[
+                      qrLabelSelectedElement
+                    ].visible
+                      ? "إخفاء العنصر"
+                      : "إظهار العنصر"}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  gap: 6,
+                }}
+              >
+                <Pressable
+                  onPress={
+                    saveQrLabelLayout
+                  }
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor:
+                      colors.primary,
+                    alignItems:
+                      "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "900",
+                    }}
+                  >
+                    حفظ التصميم
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={
+                    resetQrLabelLayout
+                  }
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    alignItems:
+                      "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.foreground,
+                      fontWeight: "800",
+                    }}
+                  >
+                    التصميم الأصلي
+                  </Text>
+                </Pressable>
+              </View>
+
+              {!!qrLabelLayoutMessage && (
+                <Text
+                  style={{
+                    color:
+                      qrLabelLayoutMessage.startsWith(
+                        "✓",
+                      )
+                        ? "#15803d"
+                        : colors.mutedForeground,
+                    fontSize: 11,
+                    fontWeight: "700",
+                    textAlign: "center",
+                  }}
+                >
+                  {qrLabelLayoutMessage}
+                </Text>
+              )}
+            </View>
+
+            <Text
+              style={{
+                color:
+                  colors.mutedForeground,
+                fontSize: 11,
+                textAlign: "center",
+              }}
+            >
+              أول ملصق محدد ظاهر في المعاينة.
+              الطباعة ستشمل جميع الملصقات والنسخ التي اخترتها.
+            </Text>
+
+            <View
+              style={{
+                flexDirection:
+                  Platform.OS === "web"
+                    ? "row-reverse"
+                    : "row",
+                gap: 8,
+              }}
+            >
+              <Pressable
+                onPress={() =>
+                  void handlePreviewAndPrintQrs()
+                }
+                disabled={printingQrs}
+                style={{
+                  flex: 1,
+                  minHeight: 48,
+                  borderRadius: 12,
+                  backgroundColor:
+                    "#0f766e",
+                  alignItems: "center",
+                  justifyContent:
+                    "center",
+                  flexDirection:
+                    Platform.OS === "web"
+                      ? "row-reverse"
+                      : "row",
+                  gap: 8,
+                  opacity:
+                    printingQrs
+                      ? 0.65
+                      : 1,
+                }}
+              >
+                <Ionicons
+                  name="print-outline"
+                  size={20}
+                  color="#fff"
+                />
+
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "900",
+                    fontSize: 14,
+                  }}
+                >
+                  {printingQrs
+                    ? "جارٍ الطباعة..."
+                    : "طباعة الآن"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setQrPreviewOpen(false);
+                  setQrPrintOpen(true);
+                }}
+                disabled={printingQrs}
+                style={{
+                  minWidth: 120,
+                  minHeight: 48,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor:
+                    colors.border,
+                  alignItems: "center",
+                  justifyContent:
+                    "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color:
+                      colors.foreground,
+                    fontWeight: "800",
+                  }}
+                >
+                  رجوع للتحديد
                 </Text>
               </Pressable>
             </View>
