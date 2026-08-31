@@ -1,10 +1,12 @@
 import { QRCodeSVG } from "qrcode.react";
+import type { Ref } from "react";
 
 import type { PosSaleResult } from "../lib/api";
 
 interface SaleReceiptProps {
   result: PosSaleResult;
   isReprint?: boolean;
+  receiptRef?: Ref<HTMLElement>;
 }
 
 function formatDateTime(value: string) {
@@ -22,9 +24,10 @@ function shortProductName(value: string) {
 export default function SaleReceipt({
   result,
   isReprint = false,
+  receiptRef,
 }: SaleReceiptProps) {
   return (
-    <section className="receipt-print-area" dir="rtl">
+    <section ref={receiptRef} className="receipt-print-area" dir="rtl">
       <header className="receipt-header">
         <strong>Lovely Kids</strong>
         <span>ملابس ومستلزمات الأطفال</span>

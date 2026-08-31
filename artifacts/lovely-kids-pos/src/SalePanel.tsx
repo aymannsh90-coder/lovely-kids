@@ -13,6 +13,8 @@ import {
   createScannerKeyboardBuffer,
 } from "./lib/scannerKeyboard";
 
+import { printReceiptElementDirect } from "./lib/directReceiptPrint";
+
 import {
   ApiError,
   createPosSale,
@@ -139,6 +141,23 @@ export default function SalePanel({
   onSessionChange,
   onUnauthorized,
 }: SalePanelProps) {
+  const directReceiptRef = useRef<HTMLElement>(null);
+
+  async function handleDirectReceiptPrint() {
+    const source = directReceiptRef.current;
+
+    if (!source) {
+      window.alert("تعذر تجهيز الإيصال للطباعة.");
+      return;
+    }
+
+    try {
+      await printReceiptElementDirect(source);
+    } catch (caught) {
+      window.alert(errorMessage(caught));
+    }
+  }
+
   const barcodeInput = useRef<HTMLInputElement>(null);
 
   const scannerKeyboard = useRef(
@@ -1110,26 +1129,16 @@ export default function SalePanel({
             <button
               className="secondary-button"
               type="button"
-              onClick={() => {
-                document.body.dataset.printMode = "receipt";
-
-                const cleanup = () => {
-                  delete document.body.dataset.printMode;
-                };
-
-                window.addEventListener("afterprint", cleanup, { once: true });
-
-                window.print();
-              }}
+              onClick={() => void handleDirectReceiptPrint()}
             >
-              طباعة إيصال 56mm
+              طباعة الإيصال مباشرة
             </button>
           </div>
         )}
       </section>
 
       {lastSale && (
-        <section className="receipt-print-area" dir="rtl">
+        <section ref={directReceiptRef} className="receipt-print-area" dir="rtl">
           <header className="receipt-header">
             <strong>Lovely Kids</strong>
             <span>ملابس ومستلزمات الأطفال</span>

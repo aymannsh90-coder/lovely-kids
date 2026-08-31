@@ -9,6 +9,8 @@ import {
 import { useSearchParams } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
+import SaleReceipt from "../../components/SaleReceipt";
+import { printReceiptElementDirect } from "../../lib/directReceiptPrint";
 import {
   captureScannerKeyboardEvent,
   createScannerKeyboardBuffer,
@@ -271,6 +273,8 @@ export default function SalesInvoicePage() {
 
   const [editMode, setEditMode] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const receiptRef = useRef<HTMLElement>(null);
+  const printAfterSaveRef = useRef(false);
 
   useEffect(() => {
     if (requestedPublicId) {
@@ -812,7 +816,7 @@ export default function SalesInvoicePage() {
     void loadStoredInvoice(publicId);
   }
 
-  async function handleSaveInvoice() {
+  async function handleSaveInvoice(printAfterSave = false) {
     if (!ACCOUNTING_WRITES_ENABLED) {
       setError("الحفظ محمي حاليًا حتى تشغيل الـMigration وتجهيز بيئة الاختبار");
       return;
@@ -897,6 +901,9 @@ export default function SalesInvoicePage() {
         );
 
         setLoadedSale(refreshed);
+
+        printAfterSaveRef.current = printAfterSave;
+
         setLines(refreshed.items.map(toStoredInvoiceLine));
 
         setInvoiceDiscount(
@@ -947,6 +954,9 @@ export default function SalesInvoicePage() {
 
       createIdempotencyKey.current = null;
       setLoadedSale(result);
+
+      printAfterSaveRef.current = printAfterSave;
+
       setEditMode(false);
 
       setSearchParams(
@@ -1065,6 +1075,41 @@ export default function SalesInvoicePage() {
         replace: true,
       },
     );
+  }
+
+  useEffect(() => {
+    if (!printAfterSaveRef.current || !loadedSale) {
+      return;
+    }
+
+    printAfterSaveRef.current = false;
+
+    const timer = window.setTimeout(() => {
+      void printLoadedSaleDirect();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadedSale]);
+
+  async function printLoadedSaleDirect() {
+    const source = receiptRef.current;
+
+    if (!loadedSale || !source) {
+      setError("لا توجد فاتورة جاهزة للطباعة.");
+      return;
+    }
+
+    try {
+      setError("");
+      await printReceiptElementDirect(source);
+      setMessage(`تم إرسال الفاتورة ${loadedSale.sale.publicId} إلى الطابعة.`);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "تعذر إرسال الفاتورة إلى الطابعة",
+      );
+    }
   }
 
   function handleOpenInvoice() {
@@ -1536,9 +1581,20 @@ export default function SalesInvoicePage() {
           نسخ
         </button>
 
-        <button type="button" disabled>
+        <button
+          type="button"
+          disabled={invoiceBusy || (editMode && !loadedSale)}
+          onClick={() => {
+            if (loadedSale && !editMode) {
+              void printLoadedSaleDirect();
+              return;
+            }
+
+            void handleSaveInvoice(true);
+          }}
+        >
           <span aria-hidden="true">🖨️</span>
-          حفظ وطباعة
+          {loadedSale && !editMode ? "طباعة" : "حفظ وطباعة"}
         </button>
 
         <button type="button" disabled>
@@ -2018,6 +2074,13 @@ export default function SalesInvoicePage() {
           </div>
         </section>
       </fieldset>
+
+      {loadedSale ? (
+        <SaleReceipt
+          result={loadedSale}
+          receiptRef={receiptRef}
+        />
+      ) : null}
     </section>
   );
 }

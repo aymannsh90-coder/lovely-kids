@@ -9,6 +9,7 @@ import {
   type PosSaleResult,
 } from "../../lib/api";
 import { formatDateTime, formatMinor } from "../../lib/format";
+import { printReceiptElementDirect } from "../../lib/directReceiptPrint";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "حدث خطأ غير متوقع";
@@ -45,6 +46,7 @@ export default function InvoiceLookupPage() {
   const openedFromToday = searchParams.get("from") === "today";
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const receiptRef = useRef<HTMLElement>(null);
 
   const [publicId, setPublicId] = useState("");
 
@@ -105,6 +107,22 @@ export default function InvoiceLookupPage() {
     navigate(
       `/sales/invoice-check?publicId=${encodeURIComponent(targetPublicId)}${fromToday}`,
     );
+  }
+
+  async function handleDirectReceiptPrint() {
+    const source = receiptRef.current;
+
+    if (!source) {
+      setError("تعذر تجهيز الإيصال للطباعة.");
+      return;
+    }
+
+    try {
+      setError("");
+      await printReceiptElementDirect(source);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
   }
 
   return (
@@ -203,9 +221,17 @@ export default function InvoiceLookupPage() {
             <button
               className="secondary-button"
               type="button"
+              onClick={() => void handleDirectReceiptPrint()}
+            >
+              إعادة طباعة مباشرة
+            </button>
+
+            <button
+              className="secondary-button"
+              type="button"
               onClick={printReceipt}
             >
-              إعادة طباعة الإيصال
+              طباعة عبر المتصفح
             </button>
           </div>
 
@@ -334,7 +360,7 @@ export default function InvoiceLookupPage() {
             )}
           </article>
 
-          <SaleReceipt result={result} isReprint />
+          <SaleReceipt result={result} isReprint receiptRef={receiptRef} />
         </>
       )}
     </section>
