@@ -171,10 +171,12 @@ export default function SalePanel({
   const idempotencyKey = useRef<string | null>(null);
 
   function focusBarcodeField() {
-    window.setTimeout(() => {
-      barcodeInput.current?.focus();
-      barcodeInput.current?.select();
-    }, 0);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        barcodeInput.current?.focus({ preventScroll: true });
+        barcodeInput.current?.select();
+      }, 0);
+    });
   }
 
   function getLineField(lineId: string, field: LineField) {
