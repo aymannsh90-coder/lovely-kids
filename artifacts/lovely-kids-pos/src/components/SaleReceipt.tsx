@@ -1,10 +1,12 @@
 import { QRCodeSVG } from "qrcode.react";
+import type { Ref } from "react";
 
 import type { PosSaleResult } from "../lib/api";
 
 interface SaleReceiptProps {
   result: PosSaleResult;
   isReprint?: boolean;
+  receiptRef?: Ref<HTMLElement>;
 }
 
 function formatDateTime(value: string) {
@@ -22,13 +24,14 @@ function shortProductName(value: string) {
 export default function SaleReceipt({
   result,
   isReprint = false,
+  receiptRef,
 }: SaleReceiptProps) {
   return (
-    <section className="receipt-print-area" dir="rtl">
+    <section ref={receiptRef} className="receipt-print-area" dir="rtl">
       <header className="receipt-header">
-        <strong>Lovely Kids</strong>
-        <span>ملابس ومستلزمات الأطفال</span>
-        <span>نابلس - المركز التجاري</span>
+        <img className="receipt-logo" src="/lovely-kids-receipt-logo.png" alt="Lovely Kids" />
+        <span>لملابس الأطفال وتجهيز المواليد</span>
+        <span>نابلس - المركز التجاري - شارع عمر المختار</span>
         <span dir="ltr">09-2376808</span>
 
         {isReprint && <b className="receipt-copy-label">نسخة معاد طباعتها</b>}
@@ -128,6 +131,39 @@ export default function SaleReceipt({
 
         <span>الاستبدال بالبضاعة السليمة حسب سياسة المتجر</span>
       </footer>
+
+      <div className="receipt-social-qrs" aria-label="روابط Lovely Kids">
+        <div className="receipt-social-qr-item">
+          <QRCodeSVG
+            value="https://www.facebook.com/lovely.kids.nablus1"
+            size={112}
+            level="M"
+            aria-label="فيسبوك Lovely Kids"
+          />
+          <span>فيسبوك</span>
+        </div>
+
+        <div className="receipt-social-qr-item">
+          <QRCodeSVG
+            value="https://wa.me/97292376808"
+            size={112}
+            level="M"
+            aria-label="واتساب Lovely Kids"
+          />
+          <span>واتساب</span>
+        </div>
+
+        <div className="receipt-social-qr-item">
+          <QRCodeSVG
+            value="https://lovelykids.net"
+            size={112}
+            level="M"
+            aria-label="متجر Lovely Kids الإلكتروني"
+          />
+          <span>المتجر الإلكتروني</span>
+        </div>
+      </div>
+
     </section>
   );
 }
