@@ -660,6 +660,10 @@ export default function AdminProductsScreen() {
         renderItem={({ item }) => {
           const productOutOfStock = isProductOutOfStock(item);
           const stockInfo = getStockLabel(item.stock);
+          const hasGeneratedQr = (item.additionalBarcodes ?? []).some(
+            (barcodeItem) =>
+              barcodeItem.barcode.trim().startsWith("LKQR-"),
+          );
           return (
             <View style={[
               styles.productRow,
@@ -690,6 +694,39 @@ export default function AdminProductsScreen() {
                   <View style={[styles.tag, { backgroundColor: colors.muted }]}>
                     <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{getAgeLabel(item.ageGroup)}</Text>
                   </View>
+
+                  {hasGeneratedQr ? (
+                    <View
+                      style={[
+                        styles.tag,
+                        {
+                          backgroundColor: "#dcfce7",
+                          borderWidth: 1,
+                          borderColor: "#86efac",
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={13}
+                        color="#16a34a"
+                      />
+                      <Text
+                        style={[
+                          styles.tagText,
+                          {
+                            color: "#15803d",
+                            fontWeight: "800",
+                          },
+                        ]}
+                      >
+                        QR
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 {item.showInOffers === true ? (

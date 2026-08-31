@@ -74,6 +74,8 @@ export default function AddProductScreen() {
   const [additionalBarcodes, setAdditionalBarcodes] = useState<ProductBarcode[]>(
     editProduct?.additionalBarcodes ?? [],
   );
+  const [additionalBarcodesExpanded, setAdditionalBarcodesExpanded] =
+    useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const barcodeScanTargetRef = useRef<"primary" | number>("primary");
   const [barcodeScanned, setBarcodeScanned] = useState(false);
@@ -1739,7 +1741,69 @@ export default function AddProductScreen() {
         {/* Additional Barcodes */}
         <View style={styles.field}>
           <Pressable
-            onPress={addAdditionalBarcode}
+            onPress={() =>
+              setAdditionalBarcodesExpanded(
+                (current) => !current,
+              )
+            }
+            style={{
+              flexDirection:
+                Platform.OS === "web"
+                  ? "row-reverse"
+                  : "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 14,
+              paddingVertical: 13,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+            }}
+          >
+            <View
+              style={{
+                flexDirection:
+                  Platform.OS === "web"
+                    ? "row-reverse"
+                    : "row",
+                alignItems: "center",
+                gap: 7,
+              }}
+            >
+              <Ionicons
+                name="barcode-outline"
+                size={20}
+                color={colors.primary}
+              />
+              <Text
+                style={{
+                  color: colors.foreground,
+                  fontWeight: "800",
+                }}
+              >
+                الباركودات الإضافية و QR ({additionalBarcodes.length})
+              </Text>
+            </View>
+
+            <Ionicons
+              name={
+                additionalBarcodesExpanded
+                  ? "chevron-up"
+                  : "chevron-down"
+              }
+              size={20}
+              color={colors.primary}
+            />
+          </Pressable>
+
+          {additionalBarcodesExpanded ? (
+            <>
+          <Pressable
+            onPress={() => {
+              addAdditionalBarcode();
+              setAdditionalBarcodesExpanded(true);
+            }}
             style={{
               flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
               alignItems: "center",
@@ -1987,6 +2051,8 @@ export default function AddProductScreen() {
               </View>
             </View>
           ))}
+            </>
+          ) : null}
         </View>
 
         {/* Price Row */}
