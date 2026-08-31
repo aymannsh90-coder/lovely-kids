@@ -63,7 +63,7 @@ export default function AdminProductsScreen() {
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
   const [stockFilter, setStockFilter] = useState<
-    "all" | "out" | "offers" | "hidden" | "trash"
+    "all" | "out" | "offers" | "hidden" | "trash" | "qr_missing"
   >("all");
   const [search, setSearch] = useState("");
 
@@ -400,10 +400,20 @@ export default function AdminProductsScreen() {
     (product) => !product.deletedAt && !product.isHidden,
   );
 
+  const productHasGeneratedQr = (product: Product) =>
+    (product.additionalBarcodes ?? []).some(
+      (barcodeItem) =>
+        barcodeItem.barcode.trim().startsWith("LKQR-"),
+    );
+
   const allCount = visibleProducts.length;
 
   const offersCount = visibleProducts.filter(
     (product) => !!product.showInOffers,
+  ).length;
+
+  const missingQrCount = visibleProducts.filter(
+    (product) => !productHasGeneratedQr(product),
   ).length;
 
   const outOfStockCount = visibleProducts.filter((product) => {
@@ -438,6 +448,10 @@ export default function AdminProductsScreen() {
     } else {
       if (isDeleted) return false;
       if (stockFilter === "hidden" && !product.isHidden) return false;
+      if (
+        stockFilter === "qr_missing" &&
+        (product.isHidden || productHasGeneratedQr(product))
+      ) return false;
       if (stockFilter === "out" && !isProductOutOfStock(product)) return false;
       if (stockFilter === "offers" && product.showInOffers !== true) return false;
     }
@@ -590,6 +604,12 @@ export default function AdminProductsScreen() {
             label: `منتهي المخزون (${outOfStockCount})`,
             icon: "alert-circle-outline" as const,
             activeColor: "#ef4444",
+          },
+          {
+            key: "qr_missing" as const,
+            label: `بدون QR (${missingQrCount})`,
+            icon: "qr-code-outline" as const,
+            activeColor: "#7c3aed",
           },
           {
             key: "hidden" as const,
