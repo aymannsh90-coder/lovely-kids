@@ -1,4 +1,10 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
 import {
@@ -10,6 +16,10 @@ import {
   type PosSaleReturnResult,
 } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "../../lib/scannerKeyboard";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "حدث خطأ غير متوقع";
@@ -36,6 +46,14 @@ export default function SalesReturnsPage() {
   const { token, session, setSession, clearAuthentication } = usePosRuntime();
 
   const invoiceInputRef = useRef<HTMLInputElement>(null);
+
+  const invoiceScannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
+  const barcodeScannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
 
   const [invoiceInput, setInvoiceInput] = useState("");
 
@@ -168,6 +186,58 @@ export default function SalesReturnsPage() {
       setError(errorMessage(caught));
     } finally {
       setSearchBusy(false);
+    }
+  }
+
+  function handleInvoiceScannerKeyDown(
+    event: KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const scannedValue = captureScannerKeyboardEvent(
+      invoiceScannerKeyboard.current,
+      event,
+    );
+
+    if (event.key === "Enter" && scannedValue) {
+      event.preventDefault();
+
+      setInvoiceInput(scannedValue);
+
+      void loadPreviewByPublicId(
+        scannedValue,
+        barcodeInput,
+      );
+    }
+  }
+
+  function handleBarcodeScannerKeyDown(
+    event: KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const scannedValue = captureScannerKeyboardEvent(
+      barcodeScannerKeyboard.current,
+      event,
+    );
+
+    if (event.key === "Enter" && scannedValue) {
+      event.preventDefault();
+
+      setBarcodeInput(scannedValue);
+
+      if (invoiceInput.trim()) {
+        void loadPreviewByPublicId(
+          invoiceInput,
+          scannedValue,
+        );
+      } else {
+        invoiceInputRef.current?.focus();
+      }
     }
   }
 
@@ -368,6 +438,7 @@ export default function SalesReturnsPage() {
               autoComplete="off"
               value={invoiceInput}
               onChange={(event) => setInvoiceInput(event.target.value)}
+              onKeyDown={handleInvoiceScannerKeyDown}
               placeholder="POS-YYYYMMDD-XXXXXXXXXXXX"
               disabled={searchBusy || submitBusy}
             />
@@ -384,6 +455,7 @@ export default function SalesReturnsPage() {
               autoComplete="off"
               value={barcodeInput}
               onChange={(event) => setBarcodeInput(event.target.value)}
+              onKeyDown={handleBarcodeScannerKeyDown}
               placeholder="امسح باركود الصنف"
               disabled={searchBusy || submitBusy}
             />

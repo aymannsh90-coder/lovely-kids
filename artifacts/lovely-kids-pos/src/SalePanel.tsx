@@ -13,6 +13,8 @@ import {
   createScannerKeyboardBuffer,
 } from "./lib/scannerKeyboard";
 
+import { printReceiptElementDirect } from "./lib/directReceiptPrint";
+
 import {
   ApiError,
   createPosSale,
@@ -139,6 +141,23 @@ export default function SalePanel({
   onSessionChange,
   onUnauthorized,
 }: SalePanelProps) {
+  const directReceiptRef = useRef<HTMLElement>(null);
+
+  async function handleDirectReceiptPrint() {
+    const source = directReceiptRef.current;
+
+    if (!source) {
+      window.alert("تعذر تجهيز الإيصال للطباعة.");
+      return;
+    }
+
+    try {
+      await printReceiptElementDirect(source);
+    } catch (caught) {
+      window.alert(errorMessage(caught));
+    }
+  }
+
   const barcodeInput = useRef<HTMLInputElement>(null);
 
   const scannerKeyboard = useRef(
@@ -1110,30 +1129,20 @@ export default function SalePanel({
             <button
               className="secondary-button"
               type="button"
-              onClick={() => {
-                document.body.dataset.printMode = "receipt";
-
-                const cleanup = () => {
-                  delete document.body.dataset.printMode;
-                };
-
-                window.addEventListener("afterprint", cleanup, { once: true });
-
-                window.print();
-              }}
+              onClick={() => void handleDirectReceiptPrint()}
             >
-              طباعة إيصال 56mm
+              طباعة الإيصال مباشرة
             </button>
           </div>
         )}
       </section>
 
       {lastSale && (
-        <section className="receipt-print-area" dir="rtl">
+        <section ref={directReceiptRef} className="receipt-print-area" dir="rtl">
           <header className="receipt-header">
-            <strong>Lovely Kids</strong>
-            <span>ملابس ومستلزمات الأطفال</span>
-            <span>نابلس - المركز التجاري</span>
+            <img className="receipt-logo" src="/lovely-kids-receipt-logo.png" alt="Lovely Kids" />
+            <span>لملابس الأطفال وتجهيز المواليد</span>
+            <span>نابلس - المركز التجاري - شارع عمر المختار</span>
             <span dir="ltr">09-2376808</span>
           </header>
 
@@ -1155,8 +1164,6 @@ export default function SalePanel({
             </span>
 
             <span>الزبون: {lastSale.sale.customerName || "زبون نقدي"}</span>
-
-            <span>الكاشير: {cashierName}</span>
 
             <span>طريقة الدفع: نقدي</span>
           </div>
@@ -1245,6 +1252,39 @@ export default function SalePanel({
 
             <span>الاستبدال بالبضاعة السليمة حسب سياسة المتجر</span>
           </footer>
+
+      <div className="receipt-social-qrs" aria-label="روابط Lovely Kids">
+        <div className="receipt-social-qr-item">
+          <QRCodeSVG
+            value="https://www.facebook.com/lovely.kids.nablus1"
+            size={112}
+            level="M"
+            aria-label="فيسبوك Lovely Kids"
+          />
+          <span>فيسبوك</span>
+        </div>
+
+        <div className="receipt-social-qr-item">
+          <QRCodeSVG
+            value="https://wa.me/97292376808"
+            size={112}
+            level="M"
+            aria-label="واتساب Lovely Kids"
+          />
+          <span>واتساب</span>
+        </div>
+
+        <div className="receipt-social-qr-item">
+          <QRCodeSVG
+            value="https://lovelykids.net"
+            size={112}
+            level="M"
+            aria-label="متجر Lovely Kids الإلكتروني"
+          />
+          <span>المتجر الإلكتروني</span>
+        </div>
+      </div>
+
         </section>
       )}
     </>

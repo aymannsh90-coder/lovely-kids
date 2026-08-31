@@ -6689,3 +6689,629 @@ textarea:disabled {
   height: calc(100vh - 225px);
   min-height: 700px;
 }
+
+/* =========================================================
+   Lovely Kids receipt refinement v1
+   Applies to sale receipt + invoice reprint
+   ========================================================= */
+
+@media print {
+  body[data-print-mode="receipt"] .receipt-print-area {
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-header {
+    gap: 1mm !important;
+    text-align: center !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-header strong {
+    font-size: 17px !important;
+    font-weight: 900 !important;
+    line-height: 1.15 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-header span {
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-divider {
+    margin: 1.8mm 0 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-info {
+    gap: 1mm !important;
+    font-size: 8.7px !important;
+    line-height: 1.35 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-info b {
+    font-weight: 900 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table {
+    font-size: 8.4px !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th,
+  body[data-print-mode="receipt"] .receipt-items-table td {
+    padding: 1mm 0.25mm !important;
+    line-height: 1.2 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th {
+    font-size: 8px !important;
+    font-weight: 900 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(2) {
+    font-weight: 900 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(3),
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(5) {
+    font-size: 7.7px !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-totals {
+    gap: 1.2mm !important;
+    font-size: 9px !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-totals > div {
+    align-items: baseline !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-totals strong {
+    font-weight: 900 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-total {
+    margin: 0.8mm 0 !important;
+    padding: 1.5mm 0 !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-total strong {
+    font-size: 13px !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-invoice-barcode {
+    margin-top: 2.5mm !important;
+    gap: 0 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-invoice-barcode svg {
+    width: 20mm !important;
+    max-width: 20mm !important;
+    height: 20mm !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-footer {
+    gap: 1mm !important;
+    margin-top: 2.5mm !important;
+    padding-top: 2mm !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-footer > strong {
+    font-size: 9.5px !important;
+    font-weight: 900 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-exchange-reminder {
+    font-size: 8.3px !important;
+    font-weight: 900 !important;
+    line-height: 1.35 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-footer > span {
+    font-size: 7.6px !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+  }
+}
+
+/* Direct 58mm receipt capture — native 384-dot raster */
+[data-direct-receipt-capture="true"] {
+  direction: rtl;
+  width: 384px;
+  background: #fff;
+  color: #000;
+}
+
+[data-direct-receipt-capture="true"] .receipt-print-area {
+  display: block !important;
+  position: static !important;
+  box-sizing: border-box;
+  width: 384px !important;
+  min-width: 384px !important;
+  max-width: 384px !important;
+  margin: 0 !important;
+  padding: 8px 10px 6px !important;
+  overflow: visible !important;
+  background: #fff !important;
+  color: #000 !important;
+  font-family: Arial, Tahoma, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+[data-direct-receipt-capture="true"] .receipt-header {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+[data-direct-receipt-capture="true"] .receipt-header strong {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+[data-direct-receipt-capture="true"] .receipt-divider {
+  margin: 9px 0;
+  border-top: 2px dashed #000;
+}
+
+[data-direct-receipt-capture="true"] .receipt-info,
+[data-direct-receipt-capture="true"] .receipt-totals {
+  display: grid;
+  gap: 5px;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th,
+[data-direct-receipt-capture="true"] .receipt-items-table td {
+  padding: 5px 2px;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th {
+  font-weight: 900;
+}
+
+[data-direct-receipt-capture="true"] .receipt-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+[data-direct-receipt-capture="true"] .receipt-total {
+  margin: 3px 0;
+  padding: 6px 0;
+  border-top: 2px solid #000;
+  border-bottom: 2px solid #000;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+[data-direct-receipt-capture="true"] .receipt-invoice-barcode {
+  display: grid;
+  justify-items: center;
+  margin-top: 12px;
+}
+
+[data-direct-receipt-capture="true"] .receipt-invoice-barcode svg {
+  width: 128px !important;
+  height: 128px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-footer {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 2px dashed #000;
+  text-align: center;
+}
+
+[data-direct-receipt-capture="true"] .receipt-footer strong,
+[data-direct-receipt-capture="true"] .receipt-exchange-reminder {
+  font-weight: 900;
+}
+
+/* =========================================================
+   Lovely Kids receipt readability v2
+   Larger item text + tighter columns
+   ========================================================= */
+
+/* Browser receipt printing */
+@media print {
+  body[data-print-mode="receipt"] .receipt-items-table {
+    font-size: 10.2px !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th,
+  body[data-print-mode="receipt"] .receipt-items-table td {
+    padding: 0.8mm 0.08mm !important;
+    line-height: 1.15 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th {
+    font-size: 9.7px !important;
+    font-weight: 900 !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th:nth-child(1),
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(1) {
+    width: 7% !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th:nth-child(2),
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(2) {
+    width: 31% !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th:nth-child(3),
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(3) {
+    width: 23% !important;
+    font-size: 9.5px !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th:nth-child(4),
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(4) {
+    width: 14% !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-items-table th:nth-child(5),
+  body[data-print-mode="receipt"] .receipt-items-table td:nth-child(5) {
+    width: 25% !important;
+    font-size: 9.5px !important;
+  }
+}
+
+/* Direct 384-dot thermal receipt */
+[data-direct-receipt-capture="true"] .receipt-items-table {
+  font-size: 13px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th,
+[data-direct-receipt-capture="true"] .receipt-items-table td {
+  padding: 4px 1px !important;
+  line-height: 1.1 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th {
+  font-size: 12.5px !important;
+  font-weight: 900 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th:nth-child(1),
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(1) {
+  width: 7% !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th:nth-child(2),
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(2) {
+  width: 31% !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th:nth-child(3),
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(3) {
+  width: 23% !important;
+  font-size: 12.5px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th:nth-child(4),
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(4) {
+  width: 14% !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th:nth-child(5),
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(5) {
+  width: 25% !important;
+  font-size: 12.5px !important;
+}
+
+
+/* =========================================================
+   Lovely Kids DIRECT receipt capture
+   Used by html2canvas / Print Bridge, NOT browser @media print
+   ========================================================= */
+
+[data-direct-receipt-capture="true"] .receipt-print-area {
+  width: 384px !important;
+  min-width: 384px !important;
+  max-width: 384px !important;
+  box-sizing: border-box !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  padding: 10px 12px !important;
+  background: #fff !important;
+  color: #000 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-header {
+  gap: 4px !important;
+  text-align: center !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-header strong {
+  font-size: 21px !important;
+  font-weight: 900 !important;
+  line-height: 1.1 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-header span {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-divider {
+  margin: 7px 0 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-info {
+  gap: 4px !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-info b {
+  font-weight: 900 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table {
+  width: 100% !important;
+  font-size: 10.5px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th,
+[data-direct-receipt-capture="true"] .receipt-items-table td {
+  padding: 4px 1px !important;
+  line-height: 1.2 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th {
+  font-size: 10px !important;
+  font-weight: 900 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(2) {
+  font-weight: 900 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(3),
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(5) {
+  font-size: 9.5px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-totals {
+  gap: 5px !important;
+  font-size: 11px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-totals strong {
+  font-weight: 900 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-total {
+  margin: 4px 0 !important;
+  padding: 6px 0 !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-total strong {
+  font-size: 16px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-invoice-barcode {
+  margin-top: 9px !important;
+  gap: 0 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-invoice-barcode svg {
+  width: 200px !important;
+  height: 200px !important;
+  max-width: 200px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-footer {
+  gap: 4px !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-footer strong {
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-exchange-reminder {
+  font-size: 10.5px !important;
+  font-weight: 900 !important;
+}
+
+
+/* =========================================================
+   Lovely Kids direct receipt clarity calibration
+   FINAL test override
+   ========================================================= */
+
+[data-direct-receipt-capture="true"] .receipt-print-area {
+  font-family: Tahoma, Arial, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-header strong {
+  font-size: 24px !important;
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-header span {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-info {
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-info b {
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table th {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(2) {
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(3),
+[data-direct-receipt-capture="true"] .receipt-items-table td:nth-child(5) {
+  font-size: 13.5px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-totals {
+  font-size: 14px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-totals strong {
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-total {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-total strong {
+  font-size: 19px !important;
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-footer {
+  font-size: 13px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-footer strong {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-exchange-reminder {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+
+[data-direct-receipt-capture="true"] .receipt-footer small {
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.45 !important;
+}
+
+/* Lovely Kids receipt logo */
+[data-direct-receipt-capture="true"] .receipt-logo {
+  display: block !important;
+  width: 248px !important;
+  max-width: 248px !important;
+  height: auto !important;
+  margin: 0 auto 6px !important;
+  object-fit: contain !important;
+  filter: none !important;
+}
+
+@media print {
+  body[data-print-mode="receipt"] .receipt-logo {
+    display: block !important;
+    width: 31mm !important;
+    max-width: 31mm !important;
+    height: auto !important;
+    margin: 0 auto 1.5mm !important;
+    object-fit: contain !important;
+    filter: none !important;
+  }
+}
+
+
+/* Lovely Kids receipt social QR links */
+.receipt-social-qrs {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
+  margin: 8px auto 0;
+  direction: ltr;
+}
+
+.receipt-social-qr-item {
+  width: 112px;
+  max-width: 31%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+}
+
+.receipt-social-qr-item svg {
+  display: block;
+  width: 100% !important;
+  max-width: 112px !important;
+  height: auto !important;
+  background: #ffffff !important;
+  shape-rendering: crispEdges;
+}
+
+.receipt-social-qr-item span {
+  display: block;
+  direction: rtl;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+[data-direct-receipt-capture="true"] .receipt-social-qrs {
+  gap: 14px !important;
+  margin-top: 8px !important;
+}
+
+[data-direct-receipt-capture="true"] .receipt-social-qr-item span {
+  font-size: 14px !important;
+  line-height: 1.3 !important;
+  font-weight: 800 !important;
+}
+
+@media print {
+  body[data-print-mode="receipt"] .receipt-social-qrs {
+    gap: 1.8mm !important;
+    margin-top: 2mm !important;
+  }
+
+  body[data-print-mode="receipt"] .receipt-social-qr-item span {
+    font-size: 3.2mm !important;
+    font-weight: 800 !important;
+  }
+}
