@@ -24,11 +24,16 @@ Store QR label canvas:
 - Width: 384 dots
 - Height: 195 dots
 
-Important:
-The stale v1.0.2 binaries previously copied into this folder are
-intentionally not included.
+Included tested Windows binary:
+LovelyKidsPrintBridgeStandalone-v1.0.3.exe
 
-Build a fresh v1.0.3 executable on Windows from:
+SHA256:
+8D0D59354490C8BDEDC31B2DF1D8F12CBFECC2C3F86680539EB87BD5CF3DAA16
+
+Important:
+The stale v1.0.2 binaries are not included.
+
+Source can be rebuilt from:
 Build-LovelyKidsPrintBridge-Standalone.ps1
 
 Verify after installation:
