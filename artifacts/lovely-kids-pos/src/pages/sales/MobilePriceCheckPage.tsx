@@ -1,3 +1,4 @@
+import { playMobileScanSound, unlockMobileScanSound } from "../../lib/mobile-scan-sound";
 import {
   useEffect,
   useRef,
@@ -223,6 +224,7 @@ export default function MobilePriceCheckPage() {
                 at: now,
               };
 
+              void playMobileScanSound();
               await checkBarcode(value);
 
               lastScannedRef.current = {
@@ -307,6 +309,7 @@ export default function MobilePriceCheckPage() {
               onClick={() => {
                 setCameraError("");
                 setError("");
+                void unlockMobileScanSound();
                 setCameraOpen(true);
               }}
             >

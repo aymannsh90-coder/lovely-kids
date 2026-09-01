@@ -1,3 +1,4 @@
+import { playMobileScanSound, unlockMobileScanSound } from "../../lib/mobile-scan-sound";
 import {
   useEffect,
   useMemo,
@@ -537,6 +538,7 @@ export default function MobileReturnsPage() {
                     at: now,
                   };
 
+                void playMobileScanSound();
                 await lookupAndAddBarcode(
                   value,
                 );
@@ -879,6 +881,7 @@ export default function MobileReturnsPage() {
               onClick={() => {
                 setCameraError("");
                 setError("");
+                void unlockMobileScanSound();
                 setCameraOpen(true);
               }}
             >

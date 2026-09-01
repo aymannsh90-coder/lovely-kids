@@ -19,6 +19,87 @@ import { formatMoney } from "./lib/format";
 
 const tokenStorageKey = "lovely_kids_pos_session";
 
+function isMobilePosHost() {
+  const host = window.location.hostname;
+
+  return (
+    host === "mpos.lovelykids.net" ||
+    host === "lovely-kids-mobile-pos.pages.dev" ||
+    host.endsWith(".lovely-kids-mobile-pos.pages.dev")
+  );
+}
+
+function getStoredToken(): string | null {
+  const sessionToken =
+    sessionStorage.getItem(tokenStorageKey);
+
+  if (!isMobilePosHost()) {
+    return sessionToken;
+  }
+
+  try {
+    const persistentToken =
+      localStorage.getItem(tokenStorageKey);
+
+    if (persistentToken) {
+      return persistentToken;
+    }
+
+    if (sessionToken) {
+      localStorage.setItem(
+        tokenStorageKey,
+        sessionToken,
+      );
+
+      sessionStorage.removeItem(
+        tokenStorageKey,
+      );
+    }
+  } catch {
+    // إذا منع المتصفح التخزين الدائم نستخدم جلسة عادية.
+  }
+
+  return sessionToken;
+}
+
+function storeToken(value: string) {
+  if (isMobilePosHost()) {
+    try {
+      localStorage.setItem(
+        tokenStorageKey,
+        value,
+      );
+
+      sessionStorage.removeItem(
+        tokenStorageKey,
+      );
+
+      return;
+    } catch {
+      // نرجع إلى sessionStorage إذا تعذر التخزين الدائم.
+    }
+  }
+
+  sessionStorage.setItem(
+    tokenStorageKey,
+    value,
+  );
+}
+
+function removeStoredToken() {
+  sessionStorage.removeItem(
+    tokenStorageKey,
+  );
+
+  try {
+    localStorage.removeItem(
+      tokenStorageKey,
+    );
+  } catch {
+    // لا شيء.
+  }
+}
+
 function errorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -29,7 +110,7 @@ function errorMessage(error: unknown) {
 
 export default function App() {
   const [token, setToken] = useState<string | null>(() =>
-    sessionStorage.getItem(tokenStorageKey),
+    getStoredToken(),
   );
 
   const [phase, setPhase] = useState<"booting" | "logged-out" | "ready">(
@@ -61,7 +142,7 @@ export default function App() {
   const [closeError, setCloseError] = useState("");
 
   function clearAuthentication() {
-    sessionStorage.removeItem(tokenStorageKey);
+    removeStoredToken();
     setToken(null);
     setUser(null);
     setSession(null);
@@ -146,7 +227,7 @@ export default function App() {
         POS_REGISTER_KEY,
       );
 
-      sessionStorage.setItem(tokenStorageKey, result.token);
+      storeToken(result.token);
 
       setUser(result.user);
       setSession(current.session);
@@ -323,6 +404,7 @@ export default function App() {
               <input
                 dir="ltr"
                 inputMode="tel"
+                name="username"
                 autoComplete="username"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
@@ -336,6 +418,7 @@ export default function App() {
               <input
                 dir="ltr"
                 type="password"
+                name="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}

@@ -1,3 +1,4 @@
+import { playMobileScanSound, unlockMobileScanSound } from "../../lib/mobile-scan-sound";
 import {
   useEffect,
   useMemo,
@@ -348,6 +349,7 @@ export default function MobileSalePage() {
               value,
               at: now,
             };
+            void playMobileScanSound();
 
             if ("vibrate" in navigator) {
               navigator.vibrate(80);
@@ -804,6 +806,7 @@ export default function MobileSalePage() {
               type="button"
               onClick={() => {
                 setCameraError("");
+                void unlockMobileScanSound();
                 setCameraOpen(true);
               }}
             >
