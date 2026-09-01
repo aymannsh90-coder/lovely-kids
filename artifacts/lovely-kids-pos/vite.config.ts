@@ -8,48 +8,22 @@ export default defineConfig({
     VitePWA({
       registerType: "prompt",
       injectRegister: "auto",
+
+      // لدينا Manifest مستقل للـ POS العادي وManifest آخر للموبايل
+      manifest: false,
+
       includeAssets: [
         "icon-192.png",
         "icon-512.png",
         "apple-touch-icon.png"
       ],
-      manifest: {
-        id: "/",
-        name: "Lovely Kids POS",
-        short_name: "Lovely Kids",
-        description: "نظام المبيعات وإدارة متجر Lovely Kids",
-        lang: "ar",
-        dir: "rtl",
-        start_url: "/",
-        scope: "/",
-        display: "standalone",
-        orientation: "landscape-primary",
-        background_color: "#F0FAFE",
-        theme_color: "#E91E8C",
-        categories: ["business", "finance", "shopping"],
-        icons: [
-          {
-            src: "/icon-192.png",
-            sizes: "192x192",
-            type: "image/png"
-          },
-          {
-            src: "/icon-512.png",
-            sizes: "512x512",
-            type: "image/png"
-          },
-          {
-            src: "/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable"
-          }
-        ]
-      },
+
       workbox: {
         cleanupOutdatedCaches: true,
         navigateFallback: "/index.html",
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff,woff2}"],
+        globPatterns: [
+          "**/*.{js,css,html,ico,png,svg,webp,woff,woff2,webmanifest}"
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.lovelykids\.net\//,
@@ -80,14 +54,17 @@ export default defineConfig({
       }
     })
   ],
+
   build: {
     outDir: "dist",
     emptyOutDir: true
   },
+
   server: {
     host: "0.0.0.0",
     allowedHosts: true
   },
+
   preview: {
     host: "0.0.0.0",
     allowedHosts: true

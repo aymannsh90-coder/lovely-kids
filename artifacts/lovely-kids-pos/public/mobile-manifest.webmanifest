@@ -1,0 +1,33 @@
+{
+  "id": "/sales/mobile?app=mobile-pos",
+  "name": "Lovely Kids POS Mobile",
+  "short_name": "LK POS Mobile",
+  "description": "نقطة بيع Lovely Kids المخصصة للهاتف",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/sales/mobile?source=pwa",
+  "scope": "/sales/mobile",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F0FAFE",
+  "theme_color": "#E91E8C",
+  "categories": ["business", "finance", "shopping"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

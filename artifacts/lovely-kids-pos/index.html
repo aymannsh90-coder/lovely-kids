@@ -4,14 +4,58 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#E91E8C" />
-    <meta name="application-name" content="Lovely Kids POS" />
+
+    <meta
+      name="application-name"
+      content="Lovely Kids POS"
+      id="application-name"
+    />
+
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lovely Kids POS" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="default"
+    />
+
+    <meta
+      name="apple-mobile-web-app-title"
+      content="Lovely Kids POS"
+      id="apple-app-title"
+    />
+
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="/icon-192.png" />
+
     <title>Lovely Kids POS</title>
+
+    <script>
+      (() => {
+        const isMobilePos =
+          /^\/sales\/mobile(?:\/|$)/.test(window.location.pathname);
+
+        const manifest = document.createElement("link");
+        manifest.rel = "manifest";
+        manifest.href = isMobilePos
+          ? "/mobile-manifest.webmanifest"
+          : "/manifest.webmanifest";
+
+        document.head.appendChild(manifest);
+
+        if (isMobilePos) {
+          document.title = "Lovely Kids POS Mobile";
+
+          document
+            .getElementById("application-name")
+            ?.setAttribute("content", "Lovely Kids POS Mobile");
+
+          document
+            .getElementById("apple-app-title")
+            ?.setAttribute("content", "Lovely Kids POS Mobile");
+        }
+      })();
+    </script>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
