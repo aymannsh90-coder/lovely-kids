@@ -8311,3 +8311,89 @@ textarea:disabled {
 .daily-report-table .today-mobile-return-row td {
   font-weight: 700;
 }
+
+
+/* Compact mobile price check with live stock */
+.mobile-price-check-page .mobile-pos-camera {
+  height: clamp(185px, 27vh, 250px);
+  min-height: 0;
+}
+
+.mobile-price-check-page .mobile-pos-camera video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mobile-price-check-page .mobile-pos-scan-card {
+  margin-bottom: 5px;
+}
+
+.mobile-price-check-page .mobile-price-result {
+  margin: 7px 16px 10px;
+  padding: 11px 14px;
+  border-radius: 18px;
+}
+
+.mobile-price-check-page .mobile-price-result-check {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 4px;
+  font-size: 19px;
+}
+
+.mobile-price-check-page .mobile-price-result h2 {
+  margin: 4px 0 1px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.mobile-price-check-page .mobile-price-result p {
+  margin: 1px 0;
+  font-size: 13px;
+}
+
+.mobile-price-summary {
+  width: 100%;
+  margin-top: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mobile-price-summary-item {
+  min-width: 0;
+  padding: 8px 5px;
+  border-radius: 13px;
+  background: #ffffff;
+  border: 1px solid #f0d5e4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.mobile-price-summary-item span {
+  font-size: 11px;
+  color: #767d87;
+  font-weight: 700;
+}
+
+.mobile-price-summary-item strong {
+  color: #e91e8c;
+  font-size: 25px;
+  line-height: 1.1;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.mobile-price-stock strong {
+  color: #168544;
+  font-size: 21px;
+}
+
+.mobile-price-check-page .mobile-price-result small {
+  margin-top: 5px;
+  font-size: 10px;
+}

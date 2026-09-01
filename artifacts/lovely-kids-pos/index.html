@@ -23,7 +23,7 @@
       id="apple-app-title"
     />
 
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="/icon-192.png" />
 
     <title>Lovely Kids POS</title>
@@ -64,6 +64,10 @@
           document
             .getElementById("apple-app-title")
             ?.setAttribute("content", "Lovely Kids POS Mobile");
+
+          document
+            .getElementById("apple-touch-icon")
+            ?.setAttribute("href", "/mobile-pos-apple-touch-icon.png");
         }
       })();
     </script>

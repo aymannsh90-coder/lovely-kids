@@ -262,7 +262,7 @@ export default function MobilePriceCheckPage() {
   }, [cameraOpen]);
 
   return (
-    <main className="mobile-pos-page" dir="rtl">
+    <main className="mobile-pos-page mobile-price-check-page" dir="rtl">
       <div className="mobile-pos-shell">
         <header className="mobile-pos-header">
           <div>
@@ -376,11 +376,90 @@ export default function MobilePriceCheckPage() {
               </p>
             )}
 
-            <strong>
-              {product.websiteUnitPrice.toFixed(2)}
-              {" "}
-              ₪
-            </strong>
+            {(() => {
+              const colorVariant = product.mappedColor
+                ? product.colorVariants.find(
+                    (variant) => variant.color === product.mappedColor,
+                  )
+                : null;
+
+              const exactSize =
+                colorVariant && product.mappedSize
+                  ? colorVariant.sizes.find(
+                      (size) => size.size === product.mappedSize,
+                    )
+                  : null;
+
+              let availableStock: number | null = null;
+
+              if (typeof exactSize?.stock === "number") {
+                availableStock = exactSize.stock;
+              } else if (colorVariant && !product.mappedSize) {
+                const stocks = colorVariant.sizes
+                  .map((size) => size.stock)
+                  .filter(
+                    (stock): stock is number =>
+                      typeof stock === "number",
+                  );
+
+                if (stocks.length > 0) {
+                  availableStock = stocks.reduce(
+                    (total, stock) => total + stock,
+                    0,
+                  );
+                }
+              } else if (product.mappedSize && !product.mappedColor) {
+                const stocks = product.colorVariants
+                  .flatMap((variant) => variant.sizes)
+                  .filter(
+                    (size) =>
+                      size.size === product.mappedSize &&
+                      typeof size.stock === "number",
+                  )
+                  .map((size) => size.stock as number);
+
+                if (stocks.length > 0) {
+                  availableStock = stocks.reduce(
+                    (total, stock) => total + stock,
+                    0,
+                  );
+                }
+              }
+
+              if (
+                availableStock === null &&
+                typeof product.stock === "number"
+              ) {
+                availableStock = product.stock;
+              }
+
+              if (availableStock !== null) {
+                availableStock = Math.max(
+                  0,
+                  Math.trunc(availableStock),
+                );
+              }
+
+              return (
+                <div className="mobile-price-summary">
+                  <div className="mobile-price-summary-item">
+                    <span>السعر</span>
+                    <strong dir="ltr">
+                      {product.websiteUnitPrice.toFixed(2)} ₪
+                    </strong>
+                  </div>
+
+                  <div className="mobile-price-summary-item mobile-price-stock">
+                    <span>المتوفر حاليًا</span>
+                    <strong>
+                      {availableStock === null
+                        ? "—"
+                        : `${availableStock} قطعة`}
+                    </strong>
+                  </div>
+                </div>
+              );
+            })()}
 
             {product.barcode && (
               <small dir="ltr">
