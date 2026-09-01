@@ -89,6 +89,7 @@ export default function MobilePriceCheckPage() {
         );
 
       setProduct(result);
+      stopCamera();
 
       if ("vibrate" in navigator) {
         navigator.vibrate(80);
@@ -359,6 +360,34 @@ export default function MobilePriceCheckPage() {
 
         {product && (
           <section className="mobile-price-result">
+            {(() => {
+              const mappedColor = product.mappedColor?.trim();
+
+              const colorVariant = mappedColor
+                ? product.colorVariants.find(
+                    (variant) =>
+                      variant.color.trim() === mappedColor,
+                  )
+                : null;
+
+              const productImage =
+                colorVariant?.image?.trim() ||
+                product.image?.trim() ||
+                "";
+
+              if (!productImage) {
+                return null;
+              }
+
+              return (
+                <div className="mobile-price-product-image">
+                  <img
+                    src={productImage}
+                    alt={product.nameAr}
+                  />
+                </div>
+              );
+            })()}
             <div className="mobile-price-result-check">
               ✓
             </div>

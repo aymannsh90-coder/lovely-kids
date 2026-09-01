@@ -8397,3 +8397,99 @@ textarea:disabled {
   margin-top: 5px;
   font-size: 10px;
 }
+
+/* Mobile POS price check - scanned color image */
+.mobile-price-check-page .mobile-price-product-image {
+  width: min(100%, 240px);
+  margin: 0 auto 10px;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.mobile-price-check-page .mobile-price-product-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+
+
+.mobile-price-check-page .mobile-pos-scan-card {
+  margin-bottom: 10px;
+}
+
+.mobile-price-check-page .mobile-pos-camera {
+  min-height: 180px;
+  max-height: 180px;
+}
+
+.mobile-price-check-page .mobile-pos-camera video {
+  height: 180px;
+  object-fit: cover;
+}
+
+.mobile-price-check-page .mobile-price-result {
+  padding: 14px 14px 12px;
+}
+
+.mobile-price-product-image {
+  width: 118px;
+  margin: 0 auto 10px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid rgba(233, 30, 140, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-price-product-image img {
+  display: block;
+  width: 100%;
+  height: 118px;
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.mobile-price-check-page .mobile-price-result-check {
+  margin-bottom: 8px;
+}
+
+.mobile-price-check-page .mobile-price-result h2 {
+  font-size: 28px;
+  line-height: 1.25;
+  margin: 0 0 6px;
+}
+
+.mobile-price-check-page .mobile-price-result p {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.mobile-price-summary {
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.mobile-price-summary-item {
+  padding: 10px 12px;
+}
+
+.mobile-price-summary-item span {
+  font-size: 14px;
+}
+
+.mobile-price-summary-item strong {
+  font-size: 18px;
+}
+
+.mobile-price-check-page .mobile-price-result small {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
