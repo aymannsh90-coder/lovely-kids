@@ -30,7 +30,20 @@
 
     <script>
       (() => {
+        const host = window.location.hostname;
+
+        const isMobileHost =
+          host === "mpos.lovelykids.net" ||
+          host === "lovely-kids-mobile-pos.pages.dev" ||
+          host.endsWith(".lovely-kids-mobile-pos.pages.dev");
+
+        if (isMobileHost && window.location.pathname === "/") {
+          window.location.replace("/sales/mobile");
+          return;
+        }
+
         const isMobilePos =
+          isMobileHost ||
           /^\/sales\/mobile(?:\/|$)/.test(window.location.pathname);
 
         const manifest = document.createElement("link");
