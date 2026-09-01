@@ -25,7 +25,6 @@ export const posSaleReturnsTable = pgTable(
     idempotencyKey: text("idempotency_key").notNull(),
 
     originalSaleId: integer("original_sale_id")
-      .notNull()
       .references(() => posSalesTable.id, {
         onDelete: "restrict",
       }),
@@ -165,7 +164,6 @@ export const posSaleReturnItemsTable = pgTable(
       }),
 
     originalSaleItemId: integer("original_sale_item_id")
-      .notNull()
       .references(() => posSaleItemsTable.id, {
         onDelete: "restrict",
       }),

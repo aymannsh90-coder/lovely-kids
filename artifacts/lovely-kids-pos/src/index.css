@@ -7315,3 +7315,999 @@ textarea:disabled {
     font-weight: 800 !important;
   }
 }
+
+
+/* =========================================================
+   Mobile POS - emergency phone sales
+   ========================================================= */
+
+.mobile-pos-page {
+  min-height: 100dvh;
+  background: #f4f6f8;
+  padding: 0;
+}
+
+.mobile-pos-shell {
+  width: 100%;
+  max-width: 560px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  background: #ffffff;
+  padding-bottom: 116px;
+}
+
+.mobile-pos-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #eceff3;
+}
+
+.mobile-pos-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mobile-pos-header > div:first-child strong {
+  font-size: 18px;
+  color: #e91e8c;
+}
+
+.mobile-pos-header > div:first-child span {
+  font-size: 13px;
+  color: #5f6773;
+}
+
+.mobile-pos-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.mobile-pos-header-actions a {
+  text-decoration: none;
+  color: #333;
+  padding: 7px 10px;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.mobile-pos-online {
+  color: #168544;
+}
+
+.mobile-pos-offline {
+  color: #c62828;
+}
+
+.mobile-pos-user {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: #606873;
+  background: #fafbfc;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.mobile-pos-scan-card {
+  padding: 14px 16px 10px;
+}
+
+.mobile-pos-camera-button {
+  width: 100%;
+  min-height: 124px;
+  border: 2px dashed #e91e8c;
+  border-radius: 18px;
+  background: #fff6fb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.mobile-pos-camera-button > span {
+  font-size: 38px;
+}
+
+.mobile-pos-camera-button strong {
+  font-size: 18px;
+  color: #20242a;
+}
+
+.mobile-pos-camera-button small {
+  color: #707782;
+  font-size: 12px;
+}
+
+.mobile-pos-camera {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #111;
+  min-height: 240px;
+}
+
+.mobile-pos-camera video {
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
+.mobile-pos-camera-target {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 90px;
+  transform: translateY(-50%);
+  border: 2px solid #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 28%);
+}
+
+.mobile-pos-camera button {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  background: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mobile-pos-search {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mobile-pos-search input {
+  min-width: 0;
+  flex: 1;
+  height: 48px;
+  border: 1px solid #d9dee5;
+  border-radius: 12px;
+  padding: 0 13px;
+  font-size: 15px;
+  background: #fff;
+}
+
+.mobile-pos-search button {
+  flex: 0 0 72px;
+  border: 0;
+  border-radius: 12px;
+  background: #20242a;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mobile-pos-search-results {
+  margin-top: 8px;
+  border: 1px solid #e3e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mobile-pos-search-results button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #edf0f3;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: right;
+  cursor: pointer;
+}
+
+.mobile-pos-search-results button:last-child {
+  border-bottom: 0;
+}
+
+.mobile-pos-alert {
+  margin: 8px 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobile-pos-error {
+  background: #fff0f0;
+  color: #ad1f1f;
+  border: 1px solid #ffd3d3;
+}
+
+.mobile-pos-success {
+  background: #effbf3;
+  color: #18733b;
+  border: 1px solid #ccefd7;
+}
+
+.mobile-pos-last-sale {
+  margin: 10px 16px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #ccefd7;
+  border-radius: 14px;
+  background: #f4fff7;
+}
+
+.mobile-pos-last-sale-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #1e9b50;
+  color: #fff;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.mobile-pos-last-sale > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mobile-pos-last-sale span {
+  font-size: 12px;
+  color: #65706b;
+}
+
+.mobile-pos-cart {
+  padding: 6px 16px 16px;
+}
+
+.mobile-pos-cart-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0 10px;
+}
+
+.mobile-pos-cart-title strong {
+  font-size: 17px;
+}
+
+.mobile-pos-cart-title span {
+  font-size: 13px;
+  color: #6f7680;
+}
+
+.mobile-pos-empty-cart {
+  min-height: 150px;
+  border: 1px solid #eceff2;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #656d77;
+  background: #fbfcfd;
+}
+
+.mobile-pos-empty-cart > span {
+  font-size: 34px;
+}
+
+.mobile-pos-empty-cart small {
+  color: #8a919a;
+}
+
+.mobile-pos-cart-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mobile-pos-line {
+  border: 1px solid #e4e7eb;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+}
+
+.mobile-pos-line-top,
+.mobile-pos-line-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-pos-line-top > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobile-pos-line-top strong {
+  font-size: 15px;
+}
+
+.mobile-pos-line-top small {
+  color: #828893;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-pos-remove {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff0f0;
+  color: #c62828;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.mobile-pos-variants {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.mobile-pos-variants select {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #dfe3e8;
+  border-radius: 9px;
+  padding: 0 8px;
+  background: #fff;
+}
+
+.mobile-pos-line-bottom {
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f1f3;
+}
+
+.mobile-pos-line-bottom > strong {
+  font-size: 17px;
+  color: #20242a;
+}
+
+.mobile-pos-quantity {
+  display: grid;
+  grid-template-columns: 38px 40px 38px;
+  align-items: center;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mobile-pos-quantity button {
+  height: 36px;
+  border: 0;
+  background: #f6f7f9;
+  font-size: 21px;
+  cursor: pointer;
+}
+
+.mobile-pos-quantity span {
+  text-align: center;
+  font-weight: 700;
+}
+
+.mobile-pos-checkout {
+  position: fixed;
+  z-index: 30;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  grid-template-columns: minmax(100px, 0.8fr) minmax(170px, 1.2fr);
+  gap: 10px;
+  padding: 11px 16px calc(11px + env(safe-area-inset-bottom));
+  background: rgb(255 255 255 / 96%);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid #e2e6ea;
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 7%);
+}
+
+.mobile-pos-checkout > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mobile-pos-checkout > div span {
+  font-size: 12px;
+  color: #737b85;
+}
+
+.mobile-pos-checkout > div strong {
+  font-size: 20px;
+  direction: ltr;
+  text-align: right;
+}
+
+.mobile-pos-checkout > button {
+  min-height: 54px;
+  border: 0;
+  border-radius: 14px;
+  background: #e91e8c;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mobile-pos-checkout > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (min-width: 700px) {
+  .mobile-pos-page {
+    padding: 24px 0;
+  }
+
+  .mobile-pos-shell {
+    min-height: calc(100dvh - 48px);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgb(0 0 0 / 10%);
+  }
+}
+
+.mobile-pos-scan-feedback {
+  position: absolute;
+  z-index: 5;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 96%);
+  color: #168544;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 22%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.mobile-pos-scan-feedback span {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #168544;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.mobile-pos-scan-feedback strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+/* Mobile POS editable price */
+.mobile-pos-price-area {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-pos-price-area > span {
+  font-size: 11px;
+  color: #737b85;
+}
+
+.mobile-pos-price-area > small {
+  font-size: 11px;
+  color: #69717b;
+}
+
+.mobile-pos-price-input {
+  width: 120px;
+  height: 39px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.mobile-pos-price-input input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0 8px;
+  font-size: 16px;
+  font-weight: 800;
+  background: transparent;
+}
+
+.mobile-pos-price-input b {
+  padding: 0 8px;
+  font-size: 13px;
+  color: #5d6570;
+}
+
+/* Mobile POS checkout + invoice discount */
+.mobile-pos-shell {
+  padding-bottom: 220px;
+}
+
+.mobile-pos-checkout {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mobile-pos-checkout-details {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px;
+}
+
+.mobile-pos-checkout-row,
+.mobile-pos-final-total,
+.mobile-pos-discount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-pos-checkout-row span,
+.mobile-pos-discount-row > span {
+  font-size: 12px;
+  color: #68717b;
+}
+
+.mobile-pos-checkout-row strong {
+  font-size: 15px;
+}
+
+.mobile-pos-discount-row > div {
+  width: 116px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #dfe3e8;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.mobile-pos-discount-row input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0 7px;
+  font-size: 15px;
+  font-weight: 700;
+  background: transparent;
+}
+
+.mobile-pos-discount-row b {
+  padding: 0 7px;
+  font-size: 12px;
+  color: #606873;
+}
+
+.mobile-pos-final-total {
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px solid #eceff2;
+}
+
+.mobile-pos-final-total span {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mobile-pos-final-total strong {
+  font-size: 22px;
+  color: #e91e8c;
+  direction: ltr;
+}
+
+.mobile-pos-checkout > button {
+  width: 100%;
+  min-height: 52px;
+}
+
+
+/* Mobile POS top tabs */
+.mobile-pos-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #eceff2;
+}
+
+.mobile-pos-tabs a {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  border-radius: 11px;
+  background: #f4f5f7;
+  color: #4d5560;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mobile-pos-tabs a.is-active {
+  background: #e91e8c;
+  color: #ffffff;
+}
+
+
+/* Mobile sales returns */
+.mobile-return-content {
+  padding: 4px 16px 20px;
+}
+
+.mobile-return-invoice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  padding: 13px;
+  margin-bottom: 12px;
+  border: 1px solid #e3e7eb;
+  border-radius: 14px;
+  background: #fafbfc;
+}
+
+.mobile-return-invoice > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobile-return-invoice span {
+  font-size: 11px;
+  color: #747c86;
+}
+
+.mobile-return-invoice strong {
+  font-size: 14px;
+}
+
+.mobile-return-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 0 9px;
+}
+
+.mobile-return-actions button {
+  border: 1px solid #d8dde3;
+  border-radius: 9px;
+  padding: 7px 11px;
+  background: #fff;
+  font-weight: 700;
+}
+
+.mobile-return-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mobile-return-line {
+  padding: 12px;
+  border: 1px solid #e3e7eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.mobile-return-line-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-return-line-main img {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #f4f5f7;
+}
+
+.mobile-return-line-main > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobile-return-line-main strong {
+  font-size: 14px;
+}
+
+.mobile-return-line-main small {
+  color: #747b84;
+  font-size: 11px;
+}
+
+.mobile-return-line-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #f0f1f3;
+  font-size: 12px;
+  color: #69717b;
+}
+
+.mobile-return-quantity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.mobile-return-quantity-row > span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobile-return-checkout {
+  position: fixed;
+  z-index: 30;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+  padding: 11px 16px calc(11px + env(safe-area-inset-bottom));
+  background: rgb(255 255 255 / 96%);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid #e2e6ea;
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 7%);
+}
+
+.mobile-return-checkout > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.mobile-return-checkout span,
+.mobile-return-checkout small {
+  font-size: 11px;
+  color: #707782;
+}
+
+.mobile-return-checkout strong {
+  font-size: 18px;
+}
+
+.mobile-return-checkout > button {
+  min-height: 54px;
+  border: 0;
+  border-radius: 14px;
+  background: #e91e8c;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.mobile-return-checkout > button:disabled {
+  opacity: 0.45;
+}
+
+
+/* Mobile price check */
+.mobile-pos-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mobile-pos-tabs a {
+  padding: 0 5px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.mobile-price-result {
+  margin: 10px 16px 20px;
+  padding: 24px 16px;
+  border: 2px solid #e91e8c;
+  border-radius: 20px;
+  background: #fff7fb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.mobile-price-result-check {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: #168544;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.mobile-price-result > span {
+  font-size: 12px;
+  color: #767d87;
+}
+
+.mobile-price-result h2 {
+  margin: 7px 0 3px;
+  font-size: 20px;
+}
+
+.mobile-price-result p {
+  margin: 3px 0;
+  color: #646c76;
+  font-size: 14px;
+}
+
+.mobile-price-result > strong {
+  margin: 13px 0 7px;
+  font-size: 42px;
+  line-height: 1;
+  color: #e91e8c;
+  direction: ltr;
+}
+
+.mobile-price-result small {
+  color: #858b94;
+}
+
+.mobile-price-check-loading,
+.mobile-price-empty {
+  margin: 12px 16px;
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eceff2;
+  border-radius: 16px;
+  background: #fafbfc;
+  color: #68717b;
+  font-weight: 700;
+}
+
+.mobile-price-empty {
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mobile-price-empty span {
+  font-size: 34px;
+}
+
+/* Mobile returns barcode cart */
+.mobile-return-line .mobile-pos-line-top {
+  margin-bottom: 2px;
+}
+
+.mobile-return-line .mobile-pos-line-top > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobile-return-line .mobile-pos-line-top small {
+  font-size: 11px;
+  color: #737b85;
+}
+
+.mobile-return-checkout strong {
+  direction: ltr;
+}
+
+/* Emergency mobile return editable price */
+.mobile-return-price-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eef0f2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-return-price-row > label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #5f6872;
+}
+
+.mobile-return-price-row > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mobile-return-price-row input {
+  width: 92px;
+  height: 40px;
+  border: 1px solid #d8dde2;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 9px;
+  direction: ltr;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.mobile-return-price-row input:focus {
+  outline: 2px solid rgba(233, 30, 140, 0.15);
+  border-color: #e91e8c;
+}
+
+/* Independent emergency mobile return inside Today Sales */
+.today-sales-table .today-mobile-return-row {
+  background: rgba(233, 30, 140, 0.08);
+}
+
+.today-sales-table .today-mobile-return-row td {
+  font-weight: 700;
+}
+
+.daily-report-table .today-mobile-return-row td {
+  font-weight: 700;
+}

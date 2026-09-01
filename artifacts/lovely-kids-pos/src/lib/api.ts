@@ -357,7 +357,10 @@ export interface PosTodaySalesResult {
     registerKey: string;
     businessDate: string;
   } | null;
+
   sales: PosSaleResult[];
+
+  mobileReturns: PosMobileReturnResult[];
 }
 
 export function getTodayPosSales(token: string, registerKey = "main") {
@@ -437,6 +440,7 @@ export function voidPosSale(
     token,
   );
 }
+
 
 export interface PosSaleReturnPreviewItem {
   id: string;
@@ -842,6 +846,91 @@ export function voidPosPurchase(
     "/api/pos/purchases/void",
     {
       method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+
+export interface CreatePosMobileReturnInput {
+  registerKey: string;
+  idempotencyKey: string;
+
+  items: Array<{
+    barcode: string;
+    color?: string | null;
+    size?: string | null;
+    quantity: number;
+    refundUnitPrice: string;
+  }>;
+}
+
+export interface PosMobileReturnResult {
+  alreadyCreated: boolean;
+
+  saleReturn: {
+    id: string;
+    publicId: string;
+
+    cashSessionId: string;
+
+    registerKey: string;
+    businessDate: string;
+
+    cashierUserId: string;
+
+    status: string;
+
+    grossAmountMinor: number;
+    grossAmount: number;
+
+    refundAmountMinor: number;
+    refundAmount: number;
+
+    reason: string;
+
+    createdAt: string;
+  };
+
+  items: Array<{
+    id: string;
+
+    productId: string | null;
+
+    barcode: string | null;
+    productCode: string | null;
+
+    productNameAr: string;
+
+    color: string | null;
+    size: string | null;
+
+    quantity: number;
+
+    refundUnitPriceMinor: number;
+    refundUnitPrice: number;
+
+    refundAmountMinor: number;
+    refundAmount: number;
+
+    generalStockBefore: number | null;
+    generalStockAfter: number | null;
+
+    variantStockBefore: number | null;
+    variantStockAfter: number | null;
+  }>;
+}
+
+export function createPosMobileReturn(
+  token: string,
+  input: CreatePosMobileReturnInput,
+) {
+  return apiRequest<PosMobileReturnResult>(
+    "/api/pos/sales/returns/mobile",
+    {
+      method: "POST",
+
       body: JSON.stringify(input),
     },
     token,

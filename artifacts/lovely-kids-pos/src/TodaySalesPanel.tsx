@@ -9,6 +9,7 @@ import {
   type CashSession,
   type PosSaleItemResult,
   type PosSaleResult,
+  type PosMobileReturnResult,
 } from "./lib/api";
 
 interface TodaySalesPanelProps {
@@ -107,6 +108,9 @@ export default function TodaySalesPanel({
 
   const [sales, setSales] = useState<TodaySaleResult[]>([]);
 
+  const [mobileReturns, setMobileReturns] =
+    useState<PosMobileReturnResult[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   const [loadError, setLoadError] = useState("");
@@ -136,6 +140,17 @@ export default function TodaySalesPanel({
         })),
       ),
     [activeSales],
+  );
+
+  const mobileReturnRows = useMemo(
+    () =>
+      mobileReturns.flatMap((result) =>
+        result.items.map((item) => ({
+          saleReturn: result.saleReturn,
+          item,
+        })),
+      ),
+    [mobileReturns],
   );
 
   const totalPieces = useMemo(
@@ -170,8 +185,13 @@ export default function TodaySalesPanel({
           total +
           (result.returnSummary?.refundAmountMinor ?? 0),
         0,
+      ) +
+      mobileReturns.reduce(
+        (total, result) =>
+          total + result.saleReturn.refundAmountMinor,
+        0,
       ),
-    [activeSales],
+    [activeSales, mobileReturns],
   );
 
   const netTotalMinor = useMemo(
@@ -184,8 +204,13 @@ export default function TodaySalesPanel({
             result.sale.totalMinor
           ),
         0,
+      ) -
+      mobileReturns.reduce(
+        (total, result) =>
+          total + result.saleReturn.refundAmountMinor,
+        0,
       ),
-    [activeSales],
+    [activeSales, mobileReturns],
   );
 
   async function loadTodaySales() {
@@ -196,6 +221,7 @@ export default function TodaySalesPanel({
       const result = await getTodayPosSales(token, session.registerKey);
 
       setSales(result.sales as TodaySaleResult[]);
+      setMobileReturns(result.mobileReturns ?? []);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         onUnauthorized();
@@ -275,7 +301,7 @@ export default function TodaySalesPanel({
             <button
               className="primary-button"
               type="button"
-              disabled={loading || rows.length === 0}
+              disabled={loading || (rows.length === 0 && mobileReturnRows.length === 0)}
               onClick={printDailyReport}
             >
               طباعة تقرير A4
@@ -305,7 +331,7 @@ export default function TodaySalesPanel({
           </div>
 
           <div>
-            <span>المردودات الجزئية</span>
+            <span>المردودات</span>
             <strong>{formatMinor(returnedMinor)}</strong>
           </div>
 
@@ -317,13 +343,13 @@ export default function TodaySalesPanel({
 
         {loadError && <div className="alert error-alert">{loadError}</div>}
 
-        {!loading && !loadError && rows.length === 0 && (
+        {!loading && !loadError && rows.length === 0 && mobileReturnRows.length === 0 && (
           <div className="empty-cart">
             لا توجد مبيعات مسجلة في جلسة اليوم حتى الآن.
           </div>
         )}
 
-        {rows.length > 0 && (
+        {(rows.length > 0 || mobileReturnRows.length > 0) && (
           <div className="today-sales-table-wrap">
             <table className="today-sales-table">
               <thead>
@@ -375,6 +401,34 @@ export default function TodaySalesPanel({
                     <td>{row.sale.customerName || "زبون نقدي"}</td>
 
                     <td>{row.sale.notes || "—"}</td>
+                  </tr>
+                ))}
+
+                {mobileReturnRows.map((row, index) => (
+                  <tr
+                    key={`mobile-return-${row.saleReturn.id}-${row.item.id}`}
+                    className="today-mobile-return-row"
+                  >
+                    <td>{rows.length + index + 1}</td>
+
+                    <td>
+                      <strong>↩️ {row.item.productNameAr}</strong>
+                      <small dir="ltr">{row.saleReturn.publicId}</small>
+                    </td>
+
+                    <td dir="ltr">{row.item.productCode ?? "—"}</td>
+
+                    <td dir="ltr">{row.item.barcode ?? "—"}</td>
+
+                    <td>-{row.item.quantity}</td>
+
+                    <td>
+                      -{formatMinor(row.item.refundUnitPriceMinor)}
+                    </td>
+
+                    <td>مردود نقدي</td>
+
+                    <td>{row.saleReturn.reason}</td>
                   </tr>
                 ))}
               </tbody>
@@ -570,6 +624,39 @@ export default function TodaySalesPanel({
                 <td>{row.sale.customerName || "زبون نقدي"}</td>
 
                 <td>{row.sale.notes || "—"}</td>
+              </tr>
+            ))}
+
+            {mobileReturnRows.map((row, index) => (
+              <tr
+                key={`print-mobile-return-${row.saleReturn.id}-${row.item.id}`}
+                className="today-mobile-return-row"
+              >
+                <td>{rows.length + index + 1}</td>
+
+                <td>↩️ {row.item.productNameAr}</td>
+
+                <td dir="ltr">{row.item.productCode ?? "—"}</td>
+
+                <td className="daily-report-barcode">
+                  {row.item.barcode ? (
+                    <svg
+                      ref={(element) =>
+                        renderBarcode(element, row.item.barcode, true)
+                      }
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </td>
+
+                <td>-{row.item.quantity}</td>
+
+                <td>-{row.item.refundUnitPrice.toFixed(2)} ₪</td>
+
+                <td>مردود نقدي</td>
+
+                <td>{row.saleReturn.reason}</td>
               </tr>
             ))}
           </tbody>

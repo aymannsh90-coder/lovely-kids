@@ -9,6 +9,7 @@ import { and, asc, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import { handleCreatePosSaleReturn } from "./pos-sale-return-create";
+import { handleCreateMobileEmergencyReturn } from "./pos-mobile-return-create";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -225,6 +226,11 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
   const returnedByOriginalItem = new Map<number, number>();
 
   for (const returnedItem of completedReturnItems) {
+    // مردود الهاتف الاحتياطي ليس مرتبطًا بسطر فاتورة أصلية.
+    if (returnedItem.originalSaleItemId === null) {
+      continue;
+    }
+
     const current =
       returnedByOriginalItem.get(returnedItem.originalSaleItemId) ?? 0;
 
@@ -350,6 +356,7 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
   });
 }
 
+
 export async function handlePosSaleReturnRequest(
   request: Request,
   db: Db,
@@ -359,6 +366,17 @@ export async function handlePosSaleReturnRequest(
 
   if (request.method === "GET" && path === "/api/pos/sales/returns/preview") {
     return handleReturnPreview(request, db, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/sales/returns/mobile"
+  ) {
+    return handleCreateMobileEmergencyReturn(
+      request,
+      db,
+      env,
+    );
   }
 
   if (request.method === "POST" && path === "/api/pos/sales/returns") {

@@ -9,6 +9,9 @@ import CashSessionPage from "../pages/finance/CashSessionPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
+import MobileSalePage from "../pages/sales/MobileSalePage";
+import MobileReturnsPage from "../pages/sales/MobileReturnsPage";
+import MobilePriceCheckPage from "../pages/sales/MobilePriceCheckPage";
 import NewSalePage from "../pages/sales/NewSalePage";
 import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
 import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
@@ -17,6 +20,33 @@ import TodaySalesPage from "../pages/sales/TodaySalesPage";
 export default function AppRouter() {
   return (
     <Routes>
+      <Route
+        path="sales/mobile"
+        element={
+          <RequireOpenSession>
+            <MobileSalePage />
+          </RequireOpenSession>
+        }
+      />
+
+      <Route
+        path="sales/mobile/returns"
+        element={
+          <RequireOpenSession>
+            <MobileReturnsPage />
+          </RequireOpenSession>
+        }
+      />
+
+      <Route
+        path="sales/mobile/price-check"
+        element={
+          <RequireOpenSession>
+            <MobilePriceCheckPage />
+          </RequireOpenSession>
+        }
+      />
+
       <Route element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="admin" element={<AdminPanelPage />} />

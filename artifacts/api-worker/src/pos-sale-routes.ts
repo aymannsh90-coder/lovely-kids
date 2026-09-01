@@ -1,13 +1,14 @@
 import {
   cashSessionsTable,
   posSaleItemsTable,
+  posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
   productBarcodesTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, desc, eq, gt, ilike, inArray, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -1657,49 +1658,67 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     return json({
       session: null,
       sales: [],
+      mobileReturns: [],
     });
   }
 
-  const sales = await db
-    .select()
-    .from(posSalesTable)
-    .where(
-      and(
-        eq(posSalesTable.cashSessionId, session.id),
-        eq(posSalesTable.status, "completed"),
+  const [sales, mobileReturns] = await Promise.all([
+    db
+      .select()
+      .from(posSalesTable)
+      .where(
+        and(
+          eq(posSalesTable.cashSessionId, session.id),
+          eq(posSalesTable.status, "completed"),
+        ),
+      )
+      .orderBy(asc(posSalesTable.createdAt), asc(posSalesTable.id)),
+
+    db
+      .select()
+      .from(posSaleReturnsTable)
+      .where(
+        and(
+          eq(posSaleReturnsTable.cashSessionId, session.id),
+          eq(posSaleReturnsTable.status, "completed"),
+          isNull(posSaleReturnsTable.originalSaleId),
+          eq(
+            posSaleReturnsTable.reason,
+            "مردود مبيعات من الهاتف",
+          ),
+        ),
+      )
+      .orderBy(
+        asc(posSaleReturnsTable.createdAt),
+        asc(posSaleReturnsTable.id),
       ),
-    )
-    .orderBy(asc(posSalesTable.createdAt), asc(posSalesTable.id));
-
-  if (sales.length === 0) {
-    return json({
-      session: {
-        id: String(session.id),
-        registerKey: session.registerKey,
-        businessDate: session.businessDate,
-      },
-      sales: [],
-    });
-  }
+  ]);
 
   const saleIds = sales.map((sale) => sale.id);
 
-  const completedReturns = await db
-    .select({
-      originalSaleId: posSaleReturnsTable.originalSaleId,
-      refundAmountMinor: posSaleReturnsTable.refundAmountMinor,
-    })
-    .from(posSaleReturnsTable)
-    .where(
-      and(
-        inArray(posSaleReturnsTable.originalSaleId, saleIds),
-        eq(posSaleReturnsTable.status, "completed"),
-      ),
-    );
+  const completedReturns =
+    saleIds.length > 0
+      ? await db
+          .select({
+            originalSaleId: posSaleReturnsTable.originalSaleId,
+            refundAmountMinor: posSaleReturnsTable.refundAmountMinor,
+          })
+          .from(posSaleReturnsTable)
+          .where(
+            and(
+              inArray(posSaleReturnsTable.originalSaleId, saleIds),
+              eq(posSaleReturnsTable.status, "completed"),
+            ),
+          )
+      : [];
 
   const returnedMinorBySale = new Map<number, number>();
 
   for (const saleReturn of completedReturns) {
+    if (saleReturn.originalSaleId === null) {
+      continue;
+    }
+
     const current =
       returnedMinorBySale.get(saleReturn.originalSaleId) ?? 0;
 
@@ -1709,11 +1728,17 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     );
   }
 
-  const items = await db
-    .select()
-    .from(posSaleItemsTable)
-    .where(inArray(posSaleItemsTable.saleId, saleIds))
-    .orderBy(asc(posSaleItemsTable.saleId), asc(posSaleItemsTable.lineNumber));
+  const items =
+    saleIds.length > 0
+      ? await db
+          .select()
+          .from(posSaleItemsTable)
+          .where(inArray(posSaleItemsTable.saleId, saleIds))
+          .orderBy(
+            asc(posSaleItemsTable.saleId),
+            asc(posSaleItemsTable.lineNumber),
+          )
+      : [];
 
   const itemsBySale = new Map<number, typeof items>();
 
@@ -1722,6 +1747,40 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
 
     current.push(item);
     itemsBySale.set(item.saleId, current);
+  }
+
+  const mobileReturnIds = mobileReturns.map(
+    (saleReturn) => saleReturn.id,
+  );
+
+  const mobileReturnItems =
+    mobileReturnIds.length > 0
+      ? await db
+          .select()
+          .from(posSaleReturnItemsTable)
+          .where(
+            inArray(
+              posSaleReturnItemsTable.returnId,
+              mobileReturnIds,
+            ),
+          )
+          .orderBy(
+            asc(posSaleReturnItemsTable.returnId),
+            asc(posSaleReturnItemsTable.lineNumber),
+          )
+      : [];
+
+  const mobileItemsByReturn = new Map<
+    number,
+    typeof mobileReturnItems
+  >();
+
+  for (const item of mobileReturnItems) {
+    const current =
+      mobileItemsByReturn.get(item.returnId) ?? [];
+
+    current.push(item);
+    mobileItemsByReturn.set(item.returnId, current);
   }
 
   return json({
@@ -1759,6 +1818,66 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
         },
       };
     }),
+
+    mobileReturns: mobileReturns.map((saleReturn) => ({
+      saleReturn: {
+        id: String(saleReturn.id),
+        publicId: saleReturn.publicId,
+
+        cashSessionId: String(saleReturn.cashSessionId),
+
+        registerKey: saleReturn.registerKey,
+        businessDate: saleReturn.businessDate,
+
+        cashierUserId: String(saleReturn.cashierUserId),
+
+        status: saleReturn.status,
+
+        grossAmountMinor: saleReturn.grossAmountMinor,
+        grossAmount: saleReturn.grossAmountMinor / 100,
+
+        refundAmountMinor: saleReturn.refundAmountMinor,
+        refundAmount: saleReturn.refundAmountMinor / 100,
+
+        reason: saleReturn.reason,
+        notes: saleReturn.notes,
+
+        createdAt: saleReturn.createdAt.toISOString(),
+      },
+
+      items: (mobileItemsByReturn.get(saleReturn.id) ?? []).map(
+        (item) => ({
+          id: String(item.id),
+
+          productId:
+            item.productId === null
+              ? null
+              : String(item.productId),
+
+          barcode: item.barcode,
+          productCode: item.productCode,
+
+          productNameAr: item.productNameAr,
+
+          color: item.color,
+          size: item.size,
+
+          quantity: item.quantity,
+
+          refundUnitPriceMinor: item.soldUnitPriceMinor,
+          refundUnitPrice: item.soldUnitPriceMinor / 100,
+
+          refundAmountMinor: item.refundAmountMinor,
+          refundAmount: item.refundAmountMinor / 100,
+
+          generalStockBefore: item.generalStockBefore,
+          generalStockAfter: item.generalStockAfter,
+
+          variantStockBefore: item.variantStockBefore,
+          variantStockAfter: item.variantStockAfter,
+        }),
+      ),
+    })),
   });
 }
 

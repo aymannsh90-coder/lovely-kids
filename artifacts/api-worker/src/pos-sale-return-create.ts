@@ -518,6 +518,12 @@ export async function handleCreatePosSaleReturn(
       let priorInvoiceDiscountMinor = 0;
 
       for (const returnedItem of priorReturnItems) {
+        // مردود الهاتف الاحتياطي غير مربوط بسطر فاتورة أصلية.
+        // لا يدخل في حساب المردودات العادية للفواتير.
+        if (returnedItem.originalSaleItemId === null) {
+          continue;
+        }
+
         const currentQuantity =
           returnedByOriginalItem.get(returnedItem.originalSaleItemId) ?? 0;
 
