@@ -76,11 +76,13 @@ function paymentMethodLabel(value: string) {
   switch (value) {
     case "bank_transfer":
       return "تحويل بنكي";
-    case "cash":
+    case "cod":
     case "cash_on_delivery":
+      return "الدفع عند الاستلام";
+    case "cash":
       return "نقدي";
     default:
-      return value || "نقدي";
+      return value || "غير محدد";
   }
 }
 
@@ -208,19 +210,14 @@ export async function printOrderThermalReceipt(
 
   const itemRows = order.items
     .map((item, index) => {
-      const variant =
-        [
-          item.color ? `لون ${item.color}` : "",
-          item.size ? `مقاس ${item.size}` : "",
-        ]
-          .filter(Boolean)
-          .join(" / ") || item.productCode || "—";
+      const mainProductCode =
+        item.productCode?.trim() || "—";
 
       return `
         <tr>
           <td>${index + 1}</td>
           <td>${escapeHtml(shortProductName(item.name))}</td>
-          <td>${escapeHtml(variant)}</td>
+          <td dir="ltr">${escapeHtml(mainProductCode)}</td>
           <td>${Number(item.quantity || 0)}</td>
           <td dir="ltr">${money(
             Number(item.price || 0) * Number(item.quantity || 0),
@@ -481,7 +478,7 @@ export async function printOrderThermalReceipt(
         }
         ${
           order.shippingZone
-            ? `<span>طريقة الاستلام: ${escapeHtml(order.shippingZone)}</span>`
+            ? `<span>المنطقة: ${escapeHtml(order.shippingZone)}</span>`
             : ""
         }
         <span>طريقة الدفع: ${escapeHtml(
@@ -499,7 +496,7 @@ export async function printOrderThermalReceipt(
           <tr>
             <th>#</th>
             <th>الصنف</th>
-            <th>التفاصيل</th>
+            <th>الكود</th>
             <th>الكمية</th>
             <th>السعر</th>
           </tr>

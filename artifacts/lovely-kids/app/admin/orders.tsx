@@ -1085,7 +1085,37 @@ export default function AdminOrdersScreen() {
     setThermalPrintingId(order.id);
 
     try {
-      await printOrderThermalReceipt(order);
+      const productsResponse = await fetch(`${API_BASE}/api/products`);
+
+      if (!productsResponse.ok) {
+        throw new Error("تعذر تحميل أكواد المنتجات للطباعة");
+      }
+
+      const productsPayload = await productsResponse.json();
+
+      const productList = Array.isArray(productsPayload)
+        ? productsPayload
+        : Array.isArray(productsPayload?.products)
+          ? productsPayload.products
+          : [];
+
+      const productCodeById = new Map<string, string | null>(
+        productList.map((product: any) => [
+          String(product.id),
+          typeof product.productCode === "string"
+            ? product.productCode
+            : null,
+        ]),
+      );
+
+      await printOrderThermalReceipt({
+        ...order,
+        items: order.items.map((orderItem) => ({
+          ...orderItem,
+          productCode:
+            productCodeById.get(String(orderItem.id)) ?? null,
+        })),
+      });
     } catch (error) {
       const message =
         error instanceof Error
