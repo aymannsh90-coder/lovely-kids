@@ -34,6 +34,7 @@ import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
 import { createOrderPrintHtml } from "@/utils/orderPrint";
+import { printOrderThermalReceipt } from "@/utils/orderThermalReceipt";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 
 interface OrderItem {
@@ -245,6 +246,8 @@ export default function AdminOrdersScreen() {
   const [pickupConvertingId, setPickupConvertingId] = useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
   const [printingId, setPrintingId] = useState<number | null>(null);
+  const [thermalPrintingId, setThermalPrintingId] =
+    useState<number | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [qrScanned, setQrScanned] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
@@ -1076,6 +1079,25 @@ export default function AdminOrdersScreen() {
     resolver?.(confirmed);
   };
 
+  const handlePrintThermalReceipt = async (order: Order) => {
+    if (thermalPrintingId !== null) return;
+
+    setThermalPrintingId(order.id);
+
+    try {
+      await printOrderThermalReceipt(order);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "تعذر طباعة الإيصال الحراري";
+
+      showError(message);
+    } finally {
+      setThermalPrintingId(null);
+    }
+  };
+
   const handlePrintOrder = async (order: Order) => {
     if (printingId !== null) return;
 
@@ -1827,6 +1849,43 @@ export default function AdminOrdersScreen() {
                           ) : null}
                         </View>
                       </View>
+
+                      {Platform.OS === "web" ? (
+                        <Pressable
+                          disabled={thermalPrintingId !== null}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            void handlePrintThermalReceipt(item);
+                          }}
+                          style={[
+                            styles.printBtn,
+                            {
+                              backgroundColor:
+                                thermalPrintingId === item.id
+                                  ? colors.mutedForeground
+                                  : "#111827",
+                              opacity:
+                                thermalPrintingId !== null &&
+                                thermalPrintingId !== item.id
+                                  ? 0.55
+                                  : 1,
+                            },
+                          ]}
+                        >
+                          {thermalPrintingId === item.id ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <Ionicons
+                              name="receipt-outline"
+                              size={19}
+                              color="#fff"
+                            />
+                          )}
+                          <Text style={styles.printBtnText}>
+                            طباعة إيصال حراري
+                          </Text>
+                        </Pressable>
+                      ) : null}
 
                       <Pressable
                         disabled={printingId !== null}
