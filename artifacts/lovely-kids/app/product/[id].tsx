@@ -638,10 +638,10 @@ export default function ProductDetailScreen() {
                 isDesktopWeb ? styles.desktopPrice : null,
               ]}
             >
-              {product.price} ₪
+              {product.price} شيكل
             </Text>
             {product.originalPrice && !isOutOfStock && (
-              <Text style={[styles.originalPrice, { color: colors.mutedForeground }]}>{product.originalPrice} ₪</Text>
+              <Text style={[styles.originalPrice, { color: colors.mutedForeground }]}>{product.originalPrice} شيكل</Text>
             )}
           </View>
 
@@ -679,7 +679,7 @@ export default function ProductDetailScreen() {
                     ]}
                   >
                     <View style={[styles.colorSwatchInner, { backgroundColor: cv.hex }]} />
-                    <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 11 }}>{cv.color}</Text>
+                    <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 10 }}>{cv.color}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -710,7 +710,7 @@ export default function ProductDetailScreen() {
                         },
                       ]}
                     >
-                      <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 12 }}>
+                      <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 11 }}>
                         {s.size}
                       </Text>
                       {sizeOut && (
@@ -744,7 +744,7 @@ export default function ProductDetailScreen() {
                       },
                     ]}
                   >
-                    <Text style={{ color: selectedSize === size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 12 }}>
+                    <Text style={{ color: selectedSize === size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 11 }}>
                       {size}
                     </Text>
                   </Pressable>
@@ -1135,19 +1135,19 @@ const styles = StyleSheet.create({
   discountBadge: { position: "absolute", bottom: 16, left: 16, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   discountText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, gap: 8, width: "100%", maxWidth: 760, alignSelf: "center" },
-  name: { fontSize: 18, fontWeight: "800", textAlign: "right", lineHeight: 25 },
+  name: { fontSize: 16, fontWeight: "800", textAlign: "right", lineHeight: 21 },
   desktopName: {
     fontSize: 24,
     lineHeight: 34,
     marginBottom: 4,
   },
-  priceRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
-  price: { fontSize: 22, fontWeight: "800" },
+  priceRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  price: { fontSize: 19, fontWeight: "800" },
   desktopPrice: {
     fontSize: 30,
   },
-  originalPrice: { fontSize: 14, textDecorationLine: "line-through" },
-  sectionTitle: { fontSize: 14, fontWeight: "700", textAlign: "right" },
+  originalPrice: { fontSize: 12, textDecorationLine: "line-through" },
+  sectionTitle: { fontSize: 12, fontWeight: "700", textAlign: "right" },
   description: { fontSize: 13, textAlign: "right", lineHeight: 20 },
   detailCard: {
     borderWidth: 1,
@@ -1163,8 +1163,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 2,
   },
-  sizesRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
-  sizeChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
+  sizesRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 6 },
+  sizeChip: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 9, borderWidth: 1 },
   sizeChipWithMark: { position: "relative", overflow: "hidden" },
   sizeOutOfStockOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
