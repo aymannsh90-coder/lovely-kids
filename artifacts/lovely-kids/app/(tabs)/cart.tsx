@@ -212,6 +212,8 @@ export default function CartScreen() {
 
     let currentTotal = totalPrice + shippingCost;
     const currentItems = [...items];
+    let createdOrderId: number | null = null;
+    let createdTrackingToken: string | null = null;
 
     try {
         const token = await getAuthToken();
@@ -255,9 +257,15 @@ export default function CartScreen() {
           id: number;
           shippingCost?: number;
           totalPrice?: number;
+          trackingToken?: string;
         };
 
         setOrderId(order.id);
+        createdOrderId = order.id;
+        createdTrackingToken =
+          typeof order.trackingToken === "string"
+            ? order.trackingToken
+            : null;
 
         if (
           typeof order.shippingCost === "number" &&
@@ -316,6 +324,12 @@ export default function CartScreen() {
       .join("\n\n");
 
     const payLabel = paymentMethod === "bank_transfer" ? "💳 تحويل بنكي" : "💵 الدفع عند الاستلام";
+
+    const trackingUrl =
+      createdOrderId && createdTrackingToken
+        ? `https://lovelykids.net/track-order?id=${createdOrderId}&token=${encodeURIComponent(createdTrackingToken)}`
+        : null;
+
     const message = encodeURIComponent(
       `🛍️ *طلب جديد من Lovely Kids*\n\n` +
       `👤 الاسم: ${name}\n` +
@@ -329,7 +343,10 @@ export default function CartScreen() {
       `${itemsList}\n` +
       `──────────────\n` +
       `🚚 التوصيل (${selectedZone.label}): ${shippingCost}₪\n` +
-      `💰 *الإجمالي شامل التوصيل: ${currentTotal}₪*`
+      `💰 *الإجمالي شامل التوصيل: ${currentTotal}₪*` +
+      (trackingUrl
+        ? `\n\n🔗 *متابعة حالة الطلب:*\n${trackingUrl}`
+        : "")
     );
 
     setSavedTotal(currentTotal);

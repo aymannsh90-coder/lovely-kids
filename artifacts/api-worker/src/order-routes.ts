@@ -3,6 +3,7 @@ import {
   ordersTable,
 } from "@workspace/db/schema";
 import { sql, and, desc, eq, isNull, or } from "drizzle-orm";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import {
@@ -32,6 +33,29 @@ const json = (data: unknown, status = 200) =>
       "Access-Control-Allow-Origin": "*",
     },
   });
+
+function createOrderTrackingToken(
+  orderId: number,
+  customerPhone: string,
+  env: Env,
+): string | null {
+  const secret = env.ORDER_TRACKING_SECRET?.trim();
+  if (!secret) return null;
+
+  return createHmac("sha256", secret)
+    .update(`${orderId}:${customerPhone}`)
+    .digest("hex");
+}
+
+function trackingTokensMatch(token: string, expected: string): boolean {
+  const tokenBytes = new TextEncoder().encode(token);
+  const expectedBytes = new TextEncoder().encode(expected);
+
+  return (
+    tokenBytes.length === expectedBytes.length &&
+    timingSafeEqual(tokenBytes, expectedBytes)
+  );
+}
 
 const ORDER_STATUSES = new Set(["new", "confirmed", "delivering", "done", "cancelled"]);
 const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
@@ -117,7 +141,18 @@ async function handleCreateOrder(
       );
     }
 
-    return json(newOrder, 201);
+    const trackingToken = createOrderTrackingToken(
+      newOrder.id,
+      newOrder.customerPhone,
+      env,
+    );
+
+    return json(
+      trackingToken
+        ? { ...newOrder, trackingToken }
+        : newOrder,
+      201,
+    );
   } catch (error) {
     if (error instanceof OrderValidationError) {
       return json(
@@ -200,6 +235,48 @@ async function handleLookupOrder(
   return json(rows[0]);
 }
 
+async function handleTrackOrder(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const token =
+    new URL(request.url).searchParams.get("token")?.trim() ?? "";
+
+  if (!Number.isInteger(id) || id <= 0 || token.length === 0) {
+    return json({ error: "رابط المتابعة غير صالح" }, 400);
+  }
+
+  const rows = await db
+    .select()
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  const order = rows[0];
+
+  if (!order) {
+    return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  const expected = createOrderTrackingToken(
+    order.id,
+    order.customerPhone,
+    env,
+  );
+
+  if (!expected) {
+    return json({ error: "خدمة متابعة الطلب غير مفعلة" }, 503);
+  }
+
+  if (!trackingTokensMatch(token, expected)) {
+    return json({ error: "رابط المتابعة غير صالح" }, 403);
+  }
+
+  return json(order);
+}
+
 async function handleGetMyOrders(
   request: Request,
   db: Db,
@@ -275,6 +352,22 @@ export async function handleOrderRequest(
     path === "/api/orders/lookup"
   ) {
     return handleLookupOrder(request, db);
+  }
+
+  const trackingMatch = path.match(
+    /^\/api\/orders\/(\d+)\/track$/,
+  );
+
+  if (
+    request.method === "GET" &&
+    trackingMatch
+  ) {
+    return handleTrackOrder(
+      request,
+      db,
+      env,
+      Number(trackingMatch[1]),
+    );
   }
 
   if (
