@@ -1239,6 +1239,54 @@ export default function AddProductScreen() {
     }
   };
 
+  const handleColorImageUrlChange = (idx: number, value: string) => {
+    const nextUrl = value.trim();
+    const previousUrl = colorVariants[idx]?.image;
+
+    if ((previousUrl ?? "") === nextUrl) return;
+
+    const usedByAnotherColor = previousUrl
+      ? colorVariants.some((c, i) => i !== idx && c.image === previousUrl)
+      : false;
+
+    setColorVariants((prev) =>
+      prev.map((c, i) =>
+        i !== idx ? c : { ...c, image: nextUrl || undefined }
+      )
+    );
+
+    setImages((prev) => {
+      let updated = [...prev];
+      const previousIndex = previousUrl
+        ? updated.indexOf(previousUrl)
+        : -1;
+
+      if (previousIndex >= 0 && !usedByAnotherColor) {
+        if (nextUrl) {
+          updated[previousIndex] = nextUrl;
+        } else {
+          updated.splice(previousIndex, 1);
+        }
+      } else if (
+        nextUrl &&
+        !updated.includes(nextUrl) &&
+        updated.length < 8
+      ) {
+        updated.push(nextUrl);
+      }
+
+      updated = [...new Set(updated.filter(Boolean))];
+
+      if (image === previousUrl && !usedByAnotherColor) {
+        setImage(nextUrl || updated[0] || "");
+      } else if (!image && nextUrl) {
+        setImage(nextUrl);
+      }
+
+      return updated;
+    });
+  };
+
   const uploadImage = async (): Promise<string | null> => {
     if (uploading || isCompressing) return null;
 
@@ -2532,6 +2580,41 @@ export default function AddProductScreen() {
                       </Pressable>
                     )}
                   </View>
+
+                  <View style={[styles.urlRow, { borderColor: colors.border }]}>
+                    <Ionicons
+                      name="link-outline"
+                      size={14}
+                      color={colors.mutedForeground}
+                    />
+                    <Text
+                      style={[
+                        styles.urlLabel,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      أو أدخل رابط صورة هذا اللون يدوياً
+                    </Text>
+                  </View>
+
+                  <TextInput
+                    value={cv.image ?? ""}
+                    onChangeText={(v) =>
+                      handleColorImageUrlChange(idx, v)
+                    }
+                    placeholder="https://..."
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                      },
+                    ]}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                  />
 
                   <View style={[styles.sizeInputRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
                     <Pressable onPress={() => addSizeToColor(idx)} style={[styles.addSizeBtn, { backgroundColor: colors.primary }]}>
