@@ -686,19 +686,43 @@ export default function ProductDetailScreen() {
             </>
           )}
 
-          {hasColorVariants && activeColorVariant && activeColorVariant.sizes.length > 0 && (
+          {hasColorVariants && (
             <>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                 المقاس {needsSize ? "(مطلوب)" : ""}
               </Text>
               <View style={styles.sizesRow}>
-                {activeColorVariant.sizes.map((s) => {
-                  const sizeOut = isSizeOutOfStock(s);
+                {(activeColorVariant
+                  ? activeColorVariant.sizes
+                  : Array.from(
+                      new Map(
+                        product.colorVariants!
+                          .flatMap((variant) => variant.sizes ?? [])
+                          .map((size) => [size.size, size]),
+                      ).values(),
+                    )
+                ).map((s) => {
+                  const sizeOut = activeColorVariant ? isSizeOutOfStock(s) : false;
                   const disabled = isOutOfStock || sizeOut;
+
                   return (
                     <Pressable
                       key={s.size}
-                      onPress={() => !disabled && setSelectedSize(s.size)}
+                      onPress={() => {
+                        if (isOutOfStock) return;
+
+                        if (!activeColorVariant) {
+                          Haptics.notificationAsync(
+                            Haptics.NotificationFeedbackType.Warning,
+                          ).catch(() => {});
+                          setSelectionAlert("اختر اللون المطلوب أولاً.");
+                          return;
+                        }
+
+                        if (!sizeOut) {
+                          setSelectedSize(s.size);
+                        }
+                      }}
                       disabled={disabled}
                       style={[
                         styles.sizeChip,
