@@ -410,7 +410,7 @@ export default function SalesInvoicePage() {
     const sizes = getSizes(line.product, color);
 
     const size =
-      line.product.mappedSize ?? (sizes.length === 1 ? sizes[0] : null);
+      sizes.length === 1 ? sizes[0] : null;
 
     updateLine(line.id, {
       color,
@@ -774,8 +774,8 @@ export default function SalesInvoicePage() {
           return {
             ...line,
             product,
-            color: product.mappedColor ?? line.color,
-            size: product.mappedSize ?? line.size,
+            color: line.color ?? product.mappedColor,
+            size: line.size ?? product.mappedSize,
           };
         }),
       );
@@ -1863,7 +1863,6 @@ export default function SalesInvoicePage() {
                         {colors.length > 0 ? (
                           <select
                             value={line.color ?? ""}
-                            disabled={!!line.product.mappedColor}
                             onChange={(event) =>
                               changeColor(line, event.target.value)
                             }
@@ -1885,7 +1884,6 @@ export default function SalesInvoicePage() {
                         {sizes.length > 0 ? (
                           <select
                             value={line.size ?? ""}
-                            disabled={!!line.product.mappedSize}
                             onChange={(event) =>
                               updateLine(line.id, {
                                 size: event.target.value || null,
