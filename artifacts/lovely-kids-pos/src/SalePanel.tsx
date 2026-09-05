@@ -903,7 +903,6 @@ export default function SalePanel({
                             onChange={(event) =>
                               changeColor(line, event.target.value)
                             }
-                            disabled={!!line.product.mappedColor}
                           >
                             <option value="">اختر اللون</option>
 
@@ -927,7 +926,6 @@ export default function SalePanel({
                             onChange={(event) =>
                               changeSize(line, event.target.value)
                             }
-                            disabled={!!line.product.mappedSize}
                           >
                             <option value="">اختر المقاس</option>
 
