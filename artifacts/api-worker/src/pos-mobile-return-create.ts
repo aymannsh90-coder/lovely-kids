@@ -541,6 +541,21 @@ export async function handleCreateMobileEmergencyReturn(
     const requestedItems =
       parseItems(payload.items);
 
+    const reason =
+      typeof payload.reason === "string" &&
+      payload.reason.trim().length > 0 &&
+      payload.reason.trim().length <= 200
+        ? payload.reason.trim()
+        : "مردود مبيعات من الهاتف";
+
+    const notes =
+      payload.notes === undefined
+        ? "مردود احتياطي من شاشة الهاتف بدون ربط بفاتورة أصلية"
+        : typeof payload.notes === "string" &&
+            payload.notes.trim().length <= 1000
+          ? payload.notes.trim() || null
+          : null;
+
     const existing =
       await getExistingReturn(
         db,
@@ -1050,11 +1065,9 @@ export async function handleCreateMobileEmergencyReturn(
                 refundAmountMinor:
                   grossAmountMinor,
 
-                reason:
-                  "مردود مبيعات من الهاتف",
+                reason,
 
-                notes:
-                  "مردود احتياطي من شاشة الهاتف بدون ربط بفاتورة أصلية",
+                notes,
               })
               .returning();
 
