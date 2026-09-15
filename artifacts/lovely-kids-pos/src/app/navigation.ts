@@ -131,6 +131,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "planned",
   },
   {
+    key: "quick-stock-check",
+    group: "inventory",
+    path: "/inventory/stock-check",
+    title: "فحص سريع للمخزون",
+    description: "امسح باركود الصنف لمعرفة كمية المقاس وإجمالي الموديل.",
+    icon: "🔎",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "stock",
     group: "inventory",
     path: "/inventory/stock",
