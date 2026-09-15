@@ -959,10 +959,12 @@ export async function handleCreateMobileEmergencyReturn(
               generalStockAfter === null &&
               variantStockAfter === null
             ) {
-              throw new MobileReturnError(
-                `لا يوجد مخزون قابل للتتبع للمنتج ${product.nameAr}`,
-                409,
-              );
+              // No-invoice returns are allowed even when this product has no
+              // previous tracked sale/stock. Treat the current stock as zero
+              // and add the returned quantity so the item becomes sellable.
+              generalStockBefore = 0;
+              generalStockAfter = requested.quantity;
+              updates.stock = generalStockAfter;
             }
 
             await tx
