@@ -541,6 +541,21 @@ export async function handleCreateMobileEmergencyReturn(
     const requestedItems =
       parseItems(payload.items);
 
+    const reason =
+      typeof payload.reason === "string" &&
+      payload.reason.trim().length > 0 &&
+      payload.reason.trim().length <= 200
+        ? payload.reason.trim()
+        : "مردود مبيعات من الهاتف";
+
+    const notes =
+      payload.notes === undefined
+        ? "مردود احتياطي من شاشة الهاتف بدون ربط بفاتورة أصلية"
+        : typeof payload.notes === "string" &&
+            payload.notes.trim().length <= 1000
+          ? payload.notes.trim() || null
+          : null;
+
     const existing =
       await getExistingReturn(
         db,
@@ -944,10 +959,12 @@ export async function handleCreateMobileEmergencyReturn(
               generalStockAfter === null &&
               variantStockAfter === null
             ) {
-              throw new MobileReturnError(
-                `لا يوجد مخزون قابل للتتبع للمنتج ${product.nameAr}`,
-                409,
-              );
+              // No-invoice returns are allowed even when this product has no
+              // previous tracked sale/stock. Treat the current stock as zero
+              // and add the returned quantity so the item becomes sellable.
+              generalStockBefore = 0;
+              generalStockAfter = requested.quantity;
+              updates.stock = generalStockAfter;
             }
 
             await tx
@@ -1050,11 +1067,9 @@ export async function handleCreateMobileEmergencyReturn(
                 refundAmountMinor:
                   grossAmountMinor,
 
-                reason:
-                  "مردود مبيعات من الهاتف",
+                reason,
 
-                notes:
-                  "مردود احتياطي من شاشة الهاتف بدون ربط بفاتورة أصلية",
+                notes,
               })
               .returning();
 

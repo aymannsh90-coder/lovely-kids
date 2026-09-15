@@ -90,22 +90,9 @@ export async function handleMetaCatalogRequest(
   const settings =
     (settingsRows[0]?.data as Record<string, unknown> | undefined) ?? {};
 
-  const activeSeason = settings.activeSeason;
-
-  // Safety first: never send products from the wrong season.
-  if (activeSeason !== "summer" && activeSeason !== "winter") {
-    return new Response(
-      "Meta catalog feed paused: active season is not configured.",
-      {
-        status: 503,
-        headers: {
-          "Content-Type": "text/plain; charset=utf-8",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-store",
-        },
-      },
-    );
-  }
+  // Meta Catalog intentionally includes both summer and winter products
+  // during the seasonal transition period.
+  // The app's activeSeason setting is not used to filter this feed.
 
   const products = await db
     .select()
@@ -116,13 +103,14 @@ export async function handleMetaCatalogRequest(
     // Hidden or trashed products must never reach Meta/Facebook Catalog.
     if (product.isHidden || product.deletedAt) return false;
 
-    const isInActiveSeason = product.season === activeSeason;
     const hasNoSeason = !product.season;
+    const isSummerOrWinter =
+      product.season === "summer" || product.season === "winter";
     const isInOffers = !!product.showInOffers;
 
-    // Advertise products from the active season,
-    // products without a season, or products included in Offers.
-    if (!isInActiveSeason && !hasNoSeason && !isInOffers) return false;
+    // During the seasonal transition, advertise both summer and winter
+    // products, plus products without a season or included in Offers.
+    if (!isSummerOrWinter && !hasNoSeason && !isInOffers) return false;
 
     // Never advertise a product that is fully out of stock.
     if (!isProductAvailable(product)) return false;

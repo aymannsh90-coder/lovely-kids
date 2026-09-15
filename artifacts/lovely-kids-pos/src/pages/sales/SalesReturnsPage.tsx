@@ -9,9 +9,13 @@ import {
 import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
+  createPosMobileReturn,
   createPosSaleReturn,
   getCurrentCashSession,
   getPosSaleReturnPreview,
+  lookupPosProductByBarcode,
+  type PosMobileReturnResult,
+  type PosProductLookup,
   type PosSaleReturnPreviewResult,
   type PosSaleReturnResult,
 } from "../../lib/api";
@@ -31,6 +35,31 @@ function formatMoney(valueMinor: number) {
     currency: "ILS",
     minimumFractionDigits: 2,
   }).format(valueMinor / 100);
+}
+
+function parseMoneyToMinor(value: string) {
+  const normalized = value.trim().replace(",", ".");
+
+  if (!normalized) {
+    return null;
+  }
+
+  const amount = Number(normalized);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    return null;
+  }
+
+  const minor = Math.round(amount * 100);
+
+  if (
+    !Number.isSafeInteger(minor) ||
+    Math.abs(minor / 100 - amount) > 0.000001
+  ) {
+    return null;
+  }
+
+  return minor;
 }
 
 function createIdempotencyKey() {
@@ -77,6 +106,15 @@ export default function SalesReturnsPage() {
   const [completedReturn, setCompletedReturn] =
     useState<PosSaleReturnResult | null>(null);
 
+  const [barcodeReturnProduct, setBarcodeReturnProduct] =
+    useState<PosProductLookup | null>(null);
+
+  const [barcodeReturnQuantity, setBarcodeReturnQuantity] = useState(1);
+  const [barcodeReturnPrice, setBarcodeReturnPrice] = useState("");
+
+  const [completedBarcodeReturn, setCompletedBarcodeReturn] =
+    useState<PosMobileReturnResult | null>(null);
+
   const [idempotencyKey, setIdempotencyKey] = useState(createIdempotencyKey);
 
   const selectedItems = useMemo(() => {
@@ -107,6 +145,14 @@ export default function SalesReturnsPage() {
     [selectedItems],
   );
 
+  const barcodeReturnUnitMinor = useMemo(
+    () => parseMoneyToMinor(barcodeReturnPrice),
+    [barcodeReturnPrice],
+  );
+
+  const barcodeReturnTotalMinor =
+    (barcodeReturnUnitMinor ?? 0) * barcodeReturnQuantity;
+
   if (!session) {
     return null;
   }
@@ -122,6 +168,10 @@ export default function SalesReturnsPage() {
     setNotes("");
     setError("");
     setCompletedReturn(null);
+    setBarcodeReturnProduct(null);
+    setBarcodeReturnQuantity(1);
+    setBarcodeReturnPrice("");
+    setCompletedBarcodeReturn(null);
     setIdempotencyKey(createIdempotencyKey());
 
     window.setTimeout(() => {
@@ -160,6 +210,8 @@ export default function SalesReturnsPage() {
     setError("");
     setPreview(null);
     setCompletedReturn(null);
+    setBarcodeReturnProduct(null);
+    setCompletedBarcodeReturn(null);
     setReason("");
     setNotes("");
 
@@ -176,6 +228,44 @@ export default function SalesReturnsPage() {
 
       initializeQuantities(result, barcode);
 
+      setIdempotencyKey(createIdempotencyKey());
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
+  async function loadBarcodeReturnProduct(rawBarcode: string) {
+    const barcode = rawBarcode.trim();
+
+    if (!barcode) {
+      setError("امسح باركود الصنف");
+      return;
+    }
+
+    setSearchBusy(true);
+    setError("");
+    setPreview(null);
+    setCompletedReturn(null);
+    setCompletedBarcodeReturn(null);
+    setBarcodeReturnProduct(null);
+    setReason("");
+    setNotes("");
+
+    try {
+      const product = await lookupPosProductByBarcode(token, barcode);
+
+      setInvoiceInput("");
+      setBarcodeInput(barcode);
+      setBarcodeReturnProduct(product);
+      setBarcodeReturnQuantity(1);
+      setBarcodeReturnPrice(product.websiteUnitPrice.toFixed(2));
       setIdempotencyKey(createIdempotencyKey());
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
@@ -236,7 +326,7 @@ export default function SalesReturnsPage() {
           scannedValue,
         );
       } else {
-        invoiceInputRef.current?.focus();
+        void loadBarcodeReturnProduct(scannedValue);
       }
     }
   }
@@ -244,7 +334,20 @@ export default function SalesReturnsPage() {
   async function loadPreview(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
 
-    await loadPreviewByPublicId(invoiceInput, barcodeInput);
+    const publicId = invoiceInput.trim();
+    const barcode = barcodeInput.trim();
+
+    if (publicId) {
+      await loadPreviewByPublicId(publicId, barcode);
+      return;
+    }
+
+    if (barcode) {
+      await loadBarcodeReturnProduct(barcode);
+      return;
+    }
+
+    setError("امسح رقم الفاتورة أو باركود الصنف");
   }
 
   function navigateReturnInvoice(targetPublicId: string | null | undefined) {
@@ -383,6 +486,90 @@ export default function SalesReturnsPage() {
     }
   }
 
+  async function handleSubmitBarcodeReturn(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!barcodeReturnProduct) {
+      setError("يجب اختيار الصنف أولًا");
+      return;
+    }
+
+    if (barcodeReturnQuantity < 1 || barcodeReturnQuantity > 99) {
+      setError("كمية المرتجع غير صالحة");
+      return;
+    }
+
+    if (barcodeReturnUnitMinor === null) {
+      setError("سعر المردود غير صالح");
+      return;
+    }
+
+    if (reason.trim().length < 2) {
+      setError("اختر سبب المرتجع");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        "تأكيد تنفيذ مردود بدون فاتورة؟",
+        "",
+        `الصنف: ${barcodeReturnProduct.nameAr}`,
+        `الكمية: ${barcodeReturnQuantity}`,
+        `سعر القطعة: ${formatMoney(barcodeReturnUnitMinor)}`,
+        `إجمالي المردود: ${formatMoney(barcodeReturnTotalMinor)}`,
+        "",
+        "سيتم إرجاع الكمية للمخزون وخصم مبلغ الاسترداد من الصندوق.",
+      ].join("\n"),
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSubmitBusy(true);
+    setError("");
+
+    try {
+      const result = await createPosMobileReturn(token, {
+        registerKey,
+        idempotencyKey,
+        reason,
+        notes: notes.trim(),
+        items: [
+          {
+            barcode: barcodeInput.trim(),
+            color: barcodeReturnProduct.mappedColor,
+            size: barcodeReturnProduct.mappedSize,
+            quantity: barcodeReturnQuantity,
+            refundUnitPrice: (barcodeReturnUnitMinor / 100).toFixed(2),
+          },
+        ],
+      });
+
+      setCompletedBarcodeReturn(result);
+      setBarcodeReturnProduct(null);
+
+      const currentSession = await getCurrentCashSession(
+        token,
+        registerKey,
+      );
+
+      setSession(currentSession.session);
+      setIdempotencyKey(createIdempotencyKey());
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setSubmitBusy(false);
+    }
+  }
+
   return (
     <section className="sales-return-page" id="pos-sales-returns">
       <header className="sales-return-heading">
@@ -393,7 +580,7 @@ export default function SalesReturnsPage() {
             <h2>مردودات المبيعات</h2>
 
             <p>
-              مرتجع مرتبط بالفاتورة الأصلية مع إعادة المخزون وتحديث الصندوق.
+              مرتجع بالفاتورة أو مباشرة بباركود الصنف مع إعادة المخزون وتحديث الصندوق.
             </p>
           </div>
         </div>
@@ -407,15 +594,18 @@ export default function SalesReturnsPage() {
       <article className="sales-return-search-panel">
         <div className="sales-return-section-title">
           <div>
-            <h3>البحث عن الفاتورة</h3>
+            <h3>البحث عن فاتورة أو صنف</h3>
 
             <p>
-              امسح رمز QR أو أدخل رقم الفاتورة، ويمكن تحديد باركود صنف لمرتجع
-              سريع.
+              امسح رقم أو QR الفاتورة، أو اترك الفاتورة فارغة وامسح باركود
+              الصنف لتنفيذ مردود بدون فاتورة.
             </p>
           </div>
 
-          {(preview || completedReturn) && (
+          {(preview ||
+            barcodeReturnProduct ||
+            completedReturn ||
+            completedBarcodeReturn) && (
             <button
               className="secondary-button"
               type="button"
@@ -447,7 +637,7 @@ export default function SalesReturnsPage() {
           <label className="sales-return-field">
             <span>
               باركود الصنف
-              <small> اختياري</small>
+              <small> يمكن استخدامه بدون فاتورة</small>
             </span>
 
             <input
@@ -466,7 +656,11 @@ export default function SalesReturnsPage() {
             type="submit"
             disabled={searchBusy || submitBusy}
           >
-            {searchBusy ? "جاري البحث…" : "عرض الفاتورة"}
+            {searchBusy
+              ? "جاري البحث…"
+              : invoiceInput.trim()
+                ? "عرض الفاتورة"
+                : "عرض الصنف"}
           </button>
         </form>
       </article>
@@ -492,6 +686,284 @@ export default function SalesReturnsPage() {
             )}
           </div>
         </article>
+      )}
+
+      {completedBarcodeReturn && (
+        <article className="sales-return-success">
+          <div className="sales-return-success-icon">✓</div>
+
+          <div>
+            <span>تم تنفيذ المردود بدون فاتورة بنجاح</span>
+
+            <strong dir="ltr">
+              {completedBarcodeReturn.saleReturn.publicId}
+            </strong>
+
+            <p>
+              مبلغ الاسترداد:{" "}
+              <b>
+                {formatMoney(
+                  completedBarcodeReturn.saleReturn.refundAmountMinor,
+                )}
+              </b>
+            </p>
+
+            {completedBarcodeReturn.alreadyCreated && (
+              <small>
+                تم استرجاع نتيجة العملية السابقة دون تكرار المرتجع.
+              </small>
+            )}
+          </div>
+        </article>
+      )}
+
+      {barcodeReturnProduct && (
+        <form onSubmit={handleSubmitBarcodeReturn}>
+          <article className="sales-return-invoice">
+            <div className="sales-return-section-title">
+              <div>
+                <h3>مردود بدون فاتورة</h3>
+                <p>
+                  تم العثور على الصنف بواسطة الباركود. راجع الكمية والسعر قبل
+                  تنفيذ المردود.
+                </p>
+              </div>
+
+              <span className="return-status available">
+                بدون فاتورة
+              </span>
+            </div>
+
+            <div className="sales-return-summary-grid">
+              <div>
+                <span>الصنف</span>
+                <strong>{barcodeReturnProduct.nameAr}</strong>
+              </div>
+
+              <div>
+                <span>كود المنتج</span>
+                <strong dir="ltr">
+                  {barcodeReturnProduct.productCode ?? "—"}
+                </strong>
+              </div>
+
+              <div>
+                <span>الباركود</span>
+                <strong dir="ltr">{barcodeInput}</strong>
+              </div>
+
+              <div>
+                <span>اللون</span>
+                <strong>{barcodeReturnProduct.mappedColor ?? "—"}</strong>
+              </div>
+
+              <div>
+                <span>المقاس</span>
+                <strong>{barcodeReturnProduct.mappedSize ?? "—"}</strong>
+              </div>
+
+              <div>
+                <span>السعر الحالي</span>
+                <strong>
+                  {formatMoney(barcodeReturnProduct.websiteUnitPriceMinor)}
+                </strong>
+              </div>
+            </div>
+          </article>
+
+          <article className="sales-return-items-panel">
+            <div className="sales-return-section-title">
+              <div>
+                <h3>بيانات الصنف المرتجع</h3>
+                <p>
+                  عدّل الكمية وسعر الاسترداد حسب السعر الذي سيتم إرجاعه للزبون.
+                </p>
+              </div>
+            </div>
+
+            <div className="sales-return-table-wrap">
+              <table className="sales-return-table">
+                <thead>
+                  <tr>
+                    <th>الصنف</th>
+                    <th>اللون والمقاس</th>
+                    <th>الكمية</th>
+                    <th>سعر المردود</th>
+                    <th>الإجمالي</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <tr>
+                    <td>
+                      <div className="sales-return-product">
+                        {barcodeReturnProduct.image && (
+                          <img
+                            src={barcodeReturnProduct.image}
+                            alt=""
+                          />
+                        )}
+
+                        <div>
+                          <strong>{barcodeReturnProduct.nameAr}</strong>
+                          <small dir="ltr">{barcodeInput}</small>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {barcodeReturnProduct.mappedColor ?? "—"}
+                      </strong>
+                      <small>
+                        {barcodeReturnProduct.mappedSize ?? "—"}
+                      </small>
+                    </td>
+
+                    <td>
+                      <input
+                        className="sales-return-quantity-input"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={99}
+                        step={1}
+                        value={barcodeReturnQuantity}
+                        disabled={submitBusy}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+
+                          setBarcodeReturnQuantity(
+                            Number.isFinite(value)
+                              ? Math.max(
+                                  1,
+                                  Math.min(99, Math.trunc(value)),
+                                )
+                              : 1,
+                          );
+
+                          setCompletedBarcodeReturn(null);
+                          setIdempotencyKey(createIdempotencyKey());
+                        }}
+                      />
+                    </td>
+
+                    <td>
+                      <input
+                        className="sales-return-quantity-input"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.01"
+                        value={barcodeReturnPrice}
+                        disabled={submitBusy}
+                        onChange={(event) => {
+                          setBarcodeReturnPrice(event.target.value);
+                          setCompletedBarcodeReturn(null);
+                          setIdempotencyKey(createIdempotencyKey());
+                        }}
+                      />
+                    </td>
+
+                    <td>
+                      <strong>
+                        {formatMoney(barcodeReturnTotalMinor)}
+                      </strong>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article className="sales-return-completion-panel">
+            <div className="sales-return-form-grid">
+              <label className="sales-return-field">
+                <span>سبب المرتجع</span>
+
+                <select
+                  value={reason}
+                  disabled={submitBusy}
+                  onChange={(event) => {
+                    setReason(event.target.value);
+                    setCompletedBarcodeReturn(null);
+                    setIdempotencyKey(createIdempotencyKey());
+                  }}
+                >
+                  <option value="">اختر السبب</option>
+                  <option value="تبديل المقاس أو اللون">
+                    تبديل المقاس أو اللون
+                  </option>
+                  <option value="المقاس غير مناسب">
+                    المقاس غير مناسب
+                  </option>
+                  <option value="المنتج غير مناسب">
+                    المنتج غير مناسب
+                  </option>
+                  <option value="وجود عيب في المنتج">
+                    وجود عيب في المنتج
+                  </option>
+                  <option value="سبب آخر">سبب آخر</option>
+                </select>
+              </label>
+
+              <label className="sales-return-field sales-return-notes">
+                <span>
+                  ملاحظات
+                  <small> اختيارية</small>
+                </span>
+
+                <textarea
+                  rows={3}
+                  maxLength={1000}
+                  value={notes}
+                  disabled={submitBusy}
+                  onChange={(event) => {
+                    setNotes(event.target.value);
+                    setCompletedBarcodeReturn(null);
+                    setIdempotencyKey(createIdempotencyKey());
+                  }}
+                  placeholder="تفاصيل إضافية عن المرتجع"
+                />
+              </label>
+            </div>
+
+            <div className="sales-return-final-row">
+              <div className="sales-return-estimate">
+                <div>
+                  <span>عدد القطع</span>
+                  <strong>{barcodeReturnQuantity}</strong>
+                </div>
+
+                <div>
+                  <span>مبلغ الاسترداد</span>
+                  <strong>
+                    {formatMoney(barcodeReturnTotalMinor)}
+                  </strong>
+                </div>
+
+                <p>
+                  هذا المردود غير مرتبط بفاتورة أصلية، وسيعاد الصنف إلى
+                  المخزون بالسعر المحدد أعلاه.
+                </p>
+              </div>
+
+              <button
+                className="primary-button sales-return-submit"
+                type="submit"
+                disabled={
+                  submitBusy ||
+                  barcodeReturnUnitMinor === null ||
+                  reason.trim().length < 2
+                }
+              >
+                {submitBusy
+                  ? "جاري تنفيذ المرتجع…"
+                  : "تنفيذ مردود بدون فاتورة"}
+              </button>
+            </div>
+          </article>
+        </form>
       )}
 
       {preview && (

@@ -856,6 +856,8 @@ export function voidPosPurchase(
 export interface CreatePosMobileReturnInput {
   registerKey: string;
   idempotencyKey: string;
+  reason?: string;
+  notes?: string;
 
   items: Array<{
     barcode: string;
