@@ -6,6 +6,7 @@ import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
+import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
@@ -126,6 +127,11 @@ export default function AppRouter() {
               ]}
             />
           }
+        />
+
+        <Route
+          path="inventory/stock-check"
+          element={<QuickStockCheckPage />}
         />
 
         <Route
