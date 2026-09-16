@@ -12,6 +12,8 @@ import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
   ApiError,
   createPosPurchase,
+  getCurrentCashSession,
+  getLatestPosPurchase,
   getPosPurchaseByPublicId,
   voidPosPurchase,
   getPosSuppliers,
@@ -144,7 +146,12 @@ function printPurchaseA4() {
 }
 
 export default function PurchaseInvoicePage() {
-  const { token, clearAuthentication } = usePosRuntime();
+  const {
+    token,
+    session,
+    setSession,
+    clearAuthentication,
+  } = usePosRuntime();
 
   const searchInput = useRef<HTMLInputElement>(null);
   const requestKey = useRef<string | null>(null);
@@ -586,6 +593,15 @@ export default function PurchaseInvoicePage() {
     return null;
   }
 
+  async function refreshCashSession() {
+    const current = await getCurrentCashSession(
+      token,
+      session?.registerKey ?? "main",
+    );
+
+    setSession(current.session);
+  }
+
   async function handleSaveInvoice(
     printAfterSave = false,
   ) {
@@ -655,6 +671,8 @@ export default function PurchaseInvoicePage() {
 
       requestKey.current = null;
       setSavedPurchase(result);
+
+      await refreshCashSession();
 
       if (printAfterSave) {
         window.setTimeout(() => {
@@ -770,6 +788,41 @@ export default function PurchaseInvoicePage() {
     }
   }
 
+  async function loadLatestPurchase() {
+    setInvoiceBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result = await getLatestPosPurchase(
+        token,
+        warehouseKey,
+      );
+
+      applyStoredPurchase(result);
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      if (
+        caught instanceof ApiError &&
+        caught.status === 404
+      ) {
+        setError("لا توجد فواتير مشتريات محفوظة.");
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
   function handleOpenPurchaseInvoice() {
     const value = window.prompt(
       "أدخل رقم فاتورة المشتريات",
@@ -837,6 +890,19 @@ export default function PurchaseInvoicePage() {
       });
 
       setSavedPurchase(result);
+
+      try {
+        const refreshed = await getPosPurchaseByPublicId(
+          token,
+          result.purchase.publicId,
+        );
+
+        setSavedPurchase(refreshed);
+      } catch {
+        // الفاتورة أُلغيت بنجاح؛ فشل تحديث التنقل لا يلغي العملية.
+      }
+
+      await refreshCashSession();
 
       setMessage(
         `تم حذف الفاتورة ${result.purchase.publicId} وعكس كمياتها من المخزون.`,
@@ -918,11 +984,19 @@ export default function PurchaseInvoicePage() {
           type="button"
           disabled={
             invoiceBusy ||
-            !savedPurchase?.navigation?.previousPublicId
+            Boolean(
+              savedPurchase &&
+                !savedPurchase.navigation?.previousPublicId,
+            )
           }
           onClick={() => {
+            if (!savedPurchase) {
+              void loadLatestPurchase();
+              return;
+            }
+
             const target =
-              savedPurchase?.navigation?.previousPublicId;
+              savedPurchase.navigation?.previousPublicId;
 
             if (target) {
               void loadStoredPurchase(target);

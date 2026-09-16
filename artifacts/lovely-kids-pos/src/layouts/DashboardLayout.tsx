@@ -284,6 +284,17 @@ export default function DashboardLayout() {
               </div>
 
               <div className="session-banner-value">
+                <span>رصيد الصندوق الحالي</span>
+
+                <strong>
+                  {formatMoney(
+                    session.expectedBalance ?? session.openingBalance,
+                    session.currencyCode,
+                  )}
+                </strong>
+              </div>
+
+              <div className="session-banner-value">
                 <span>رقم الجلسة</span>
 
                 <strong dir="ltr">#{session.id}</strong>

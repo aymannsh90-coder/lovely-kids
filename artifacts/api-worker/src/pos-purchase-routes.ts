@@ -564,6 +564,75 @@ async function getPurchaseNavigation(
   };
 }
 
+async function handleLatestPurchase(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+  const warehouseKey =
+    (url.searchParams.get("warehouseKey") ?? "main").trim();
+
+  if (
+    !warehouseKey ||
+    warehouseKey.length > 80 ||
+    !/^[A-Za-z0-9_-]+$/.test(warehouseKey)
+  ) {
+    return json({ error: "المستودع غير صالح" }, 400);
+  }
+
+  const purchaseRows = await db
+    .select()
+    .from(posPurchasesTable)
+    .where(eq(posPurchasesTable.warehouseKey, warehouseKey))
+    .orderBy(desc(posPurchasesTable.id))
+    .limit(1);
+
+  const purchase = purchaseRows[0];
+
+  if (!purchase) {
+    return json({ error: "لا توجد فواتير مشتريات محفوظة" }, 404);
+  }
+
+  const [items, supplierRows, navigation] = await Promise.all([
+    db
+      .select()
+      .from(posPurchaseItemsTable)
+      .where(eq(posPurchaseItemsTable.purchaseId, purchase.id))
+      .orderBy(asc(posPurchaseItemsTable.lineNumber)),
+
+    db
+      .select()
+      .from(suppliersTable)
+      .where(eq(suppliersTable.id, purchase.supplierId))
+      .limit(1),
+
+    getPurchaseNavigation(db, purchase),
+  ]);
+
+  const supplier = supplierRows[0];
+
+  if (!supplier) {
+    return json({ error: "بيانات مورد الفاتورة غير موجودة" }, 500);
+  }
+
+  return json(
+    toPurchaseResponse(
+      purchase,
+      items,
+      supplier,
+      false,
+      navigation,
+    ),
+  );
+}
+
 async function handlePurchaseByPublicId(
   request: Request,
   db: Db,
@@ -2018,12 +2087,18 @@ async function handleCreatePurchase(
       };
     });
 
+    const navigation = await getPurchaseNavigation(
+      db,
+      result.purchase,
+    );
+
     return json(
       toPurchaseResponse(
         result.purchase,
         result.items,
         result.supplier,
         result.alreadyCreated,
+        navigation,
       ),
       result.alreadyCreated ? 200 : 201,
     );
@@ -2087,6 +2162,13 @@ export async function handlePosPurchaseRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/purchases/latest"
+  ) {
+    return handleLatestPurchase(request, db, env);
+  }
 
   if (
     request.method === "GET" &&

@@ -140,6 +140,17 @@ export default function CashSessionPage() {
         </div>
 
         <div>
+          <span>رصيد الصندوق الحالي</span>
+
+          <strong>
+            {formatMoney(
+              session.expectedBalance ?? session.openingBalance,
+              session.currencyCode,
+            )}
+          </strong>
+        </div>
+
+        <div>
           <span>رقم الجلسة</span>
 
           <strong dir="ltr">#{session.id}</strong>

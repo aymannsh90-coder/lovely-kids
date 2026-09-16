@@ -813,6 +813,17 @@ export function getPosPurchaseByPublicId(
   );
 }
 
+export function getLatestPosPurchase(
+  token: string,
+  warehouseKey = "main",
+) {
+  return apiRequest<PosPurchaseResult>(
+    `/api/pos/purchases/latest?warehouseKey=${encodeURIComponent(warehouseKey)}`,
+    {},
+    token,
+  );
+}
+
 export function createPosPurchase(
   token: string,
   input: {
