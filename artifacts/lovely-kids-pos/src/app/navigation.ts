@@ -201,6 +201,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "delivery-company-accounting",
+    group: "finance",
+    path: "/finance/delivery-company",
+    title: "حساب شركة التوصيل",
+    description: "متابعة مستحقات شركة التوصيل والتسويات المجمعة.",
+    icon: "🚚",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "reports",
     group: "reports",
     path: "/reports",
