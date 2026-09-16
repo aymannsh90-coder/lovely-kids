@@ -6,6 +6,7 @@ import {
   createDeliveryCompanySettlement,
   getDeliveryCompanies,
   getDeliveryCompanySettlementSummary,
+  reverseDeliveryCompanySettlement,
   type PosDeliveryCompany,
   type PosDeliverySettlementSummary,
 } from "../../lib/api";
@@ -50,6 +51,8 @@ export default function DeliveryCompanyAccountingPage() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reversingId, setReversingId] =
+    useState<number | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -242,6 +245,92 @@ export default function DeliveryCompanyAccountingPage() {
       setError(errorMessage(caught));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function reverseSettlement(
+    settlement: PosDeliverySettlementSummary["settlements"][number],
+  ) {
+    if (!companyId || reversingId !== null) {
+      return;
+    }
+
+    const reason = window.prompt(
+      [
+        `عكس التسوية ${settlement.publicId}`,
+        `المبلغ: ${formatMoney(settlement.totalMinor)}`,
+        "",
+        "أدخل سبب العكس:",
+      ].join("\n"),
+      "",
+    );
+
+    if (reason === null) {
+      return;
+    }
+
+    const cleanReason = reason.trim();
+
+    if (!cleanReason) {
+      setError("سبب عكس التسوية مطلوب.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        "تأكيد عكس تسوية شركة التوصيل",
+        "",
+        `رقم التسوية: ${settlement.publicId}`,
+        `المبلغ: ${formatMoney(settlement.totalMinor)}`,
+        `الطلبات: ${settlement.orders
+          .map((item) => `#${item.orderId}`)
+          .join("، ")}`,
+        "",
+        "سيتم إنشاء قيد عكسي ولن يتم حذف القيد الأصلي.",
+        "وستعود الطلبات إلى قائمة غير المسوّاة.",
+        "",
+        "هل تريد المتابعة؟",
+      ].join("\n"),
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setReversingId(settlement.id);
+    setError("");
+    setMessage("");
+
+    try {
+      const result =
+        await reverseDeliveryCompanySettlement(
+          token,
+          companyId,
+          settlement.id,
+          cleanReason,
+        );
+
+      setMessage(
+        `تم عكس التسوية ${settlement.publicId} بقيمة ${formatMoney(
+          result.totalMinor,
+        )} وإعادة ${result.orderIds.length} طلب إلى غير المسوّى.`,
+      );
+
+      setSelectedIds([]);
+
+      await loadSummary(companyId);
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setReversingId(null);
     }
   }
 
@@ -507,6 +596,8 @@ export default function DeliveryCompanyAccountingPage() {
                       <th>عدد الطلبات</th>
                       <th>المبلغ</th>
                       <th>الطلبات</th>
+                      <th>الحالة</th>
+                      <th>إجراء</th>
                     </tr>
                   </thead>
 
@@ -548,6 +639,38 @@ export default function DeliveryCompanyAccountingPage() {
                                   `#${item.orderId}`,
                               )
                               .join("، ")}
+                          </td>
+
+                          <td>
+                            {settlement.status ===
+                            "posted"
+                              ? "فعّالة"
+                              : "معكوسة"}
+                          </td>
+
+                          <td>
+                            {settlement.status ===
+                            "posted" ? (
+                              <button
+                                type="button"
+                                disabled={
+                                  reversingId !==
+                                  null
+                                }
+                                onClick={() =>
+                                  void reverseSettlement(
+                                    settlement,
+                                  )
+                                }
+                              >
+                                {reversingId ===
+                                settlement.id
+                                  ? "جارٍ العكس..."
+                                  : "عكس التسوية"}
+                              </button>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                         </tr>
                       ),

@@ -10,6 +10,7 @@ import {
 } from "@workspace/db/schema";
 import {
   and,
+  asc,
   desc,
   eq,
   inArray,
@@ -1216,6 +1217,563 @@ async function handleCreateSettlement(
   }
 }
 
+
+async function handleReverseSettlement(
+  request: Request,
+  db: Db,
+  env: Env,
+  companyId: number,
+  settlementId: number,
+) {
+  const auth = await requireAdmin(
+    request,
+    db,
+    env,
+  );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body = await request
+    .json()
+    .catch(() => null) as
+    | Record<string, unknown>
+    | null;
+
+  const reason =
+    typeof body?.reason === "string"
+      ? body.reason.trim().slice(0, 1000)
+      : "";
+
+  if (!reason) {
+    return json(
+      { error: "أدخل سبب عكس التسوية" },
+      400,
+    );
+  }
+
+  try {
+    const result = await db.transaction(
+      async (tx) => {
+        const settlementRows = await tx
+          .select()
+          .from(
+            deliveryCompanySettlementsTable,
+          )
+          .where(
+            and(
+              eq(
+                deliveryCompanySettlementsTable.id,
+                settlementId,
+              ),
+              eq(
+                deliveryCompanySettlementsTable.deliveryCompanyId,
+                companyId,
+              ),
+            ),
+          )
+          .for("update");
+
+        const settlement =
+          settlementRows[0];
+
+        if (!settlement) {
+          throw new DeliverySettlementError(
+            "التسوية غير موجودة",
+            404,
+          );
+        }
+
+        if (settlement.status !== "posted") {
+          throw new DeliverySettlementError(
+            "هذه التسوية معكوسة مسبقًا",
+            409,
+          );
+        }
+
+        if (
+          !settlement.financeTransactionId
+        ) {
+          throw new DeliverySettlementError(
+            "التسوية لا تحتوي حركة مالية مرتبطة",
+            409,
+          );
+        }
+
+        const companyRows = await tx
+          .select()
+          .from(deliveryCompaniesTable)
+          .where(
+            eq(
+              deliveryCompaniesTable.id,
+              companyId,
+            ),
+          )
+          .limit(1);
+
+        const company =
+          companyRows[0];
+
+        if (!company) {
+          throw new DeliverySettlementError(
+            "شركة التوصيل غير موجودة",
+            404,
+          );
+        }
+
+        const originalFinanceRows =
+          await tx
+            .select()
+            .from(
+              financeTransactionsTable,
+            )
+            .where(
+              eq(
+                financeTransactionsTable.id,
+                settlement.financeTransactionId,
+              ),
+            )
+            .for("update");
+
+        const originalFinance =
+          originalFinanceRows[0];
+
+        if (!originalFinance) {
+          throw new DeliverySettlementError(
+            "الحركة المالية الأصلية غير موجودة",
+            409,
+          );
+        }
+
+        if (
+          originalFinance.status !==
+          "posted"
+        ) {
+          throw new DeliverySettlementError(
+            "الحركة المالية الأصلية معكوسة مسبقًا",
+            409,
+          );
+        }
+
+        if (
+          originalFinance.sourceType !==
+            "delivery_company_settlement" ||
+          originalFinance.sourceId !==
+            String(settlement.id) ||
+          originalFinance.sourceEvent !==
+            "posted"
+        ) {
+          throw new DeliverySettlementError(
+            "الحركة المالية لا تطابق التسوية",
+            409,
+          );
+        }
+
+        const originalLines =
+          await tx
+            .select()
+            .from(
+              financeTransactionLinesTable,
+            )
+            .where(
+              eq(
+                financeTransactionLinesTable.transactionId,
+                originalFinance.id,
+              ),
+            )
+            .orderBy(
+              asc(
+                financeTransactionLinesTable.lineNumber,
+              ),
+            )
+            .for("update");
+
+        if (
+          originalLines.length === 0
+        ) {
+          throw new DeliverySettlementError(
+            "الحركة المالية الأصلية لا تحتوي بنودًا",
+            409,
+          );
+        }
+
+        const itemRows = await tx
+          .select()
+          .from(
+            deliveryCompanySettlementItemsTable,
+          )
+          .where(
+            and(
+              eq(
+                deliveryCompanySettlementItemsTable.settlementId,
+                settlement.id,
+              ),
+              eq(
+                deliveryCompanySettlementItemsTable.status,
+                "posted",
+              ),
+            ),
+          )
+          .for("update");
+
+        if (itemRows.length === 0) {
+          throw new DeliverySettlementError(
+            "لا توجد طلبات فعالة داخل هذه التسوية",
+            409,
+          );
+        }
+
+        let cashSession:
+          | typeof cashSessionsTable.$inferSelect
+          | null = null;
+
+        let expectedCashAfter:
+          | number
+          | null = null;
+
+        if (
+          settlement.receiptMethod ===
+          "cash"
+        ) {
+          if (!settlement.cashSessionId) {
+            throw new DeliverySettlementError(
+              "لا يمكن عكس التسوية النقدية لعدم وجود جلسة صندوق مرتبطة",
+              409,
+            );
+          }
+
+          const cashRows = await tx
+            .select()
+            .from(cashSessionsTable)
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  settlement.cashSessionId,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .for("update");
+
+          cashSession =
+            cashRows[0] ?? null;
+
+          if (!cashSession) {
+            throw new DeliverySettlementError(
+              "لا يمكن عكس تسوية نقدية بعد إغلاق جلسة الصندوق التي سُجلت عليها",
+              409,
+            );
+          }
+
+          const expectedBefore =
+            cashSession.expectedBalanceMinor ??
+            cashSession.openingBalanceMinor;
+
+          expectedCashAfter =
+            expectedBefore -
+            settlement.totalMinor;
+
+          if (
+            !Number.isSafeInteger(
+              expectedCashAfter,
+            )
+          ) {
+            throw new DeliverySettlementError(
+              "رصيد الصندوق بعد عكس التسوية غير صالح",
+              409,
+            );
+          }
+        }
+
+        const reversalRows = await tx
+          .insert(
+            financeTransactionsTable,
+          )
+          .values({
+            publicId:
+              `FIN-${settlement.businessDate.replaceAll("-", "")}-` +
+              randomUUID()
+                .slice(0, 8)
+                .toUpperCase(),
+
+            idempotencyKey:
+              `delivery-settlement:${settlement.id}:reversed`,
+
+            businessDate:
+              settlement.businessDate,
+
+            transactionType:
+              "reversal",
+
+            sourceType:
+              "delivery_company_settlement",
+
+            sourceId:
+              String(settlement.id),
+
+            sourceEvent:
+              "reversed",
+
+            cashSessionId:
+              cashSession?.id ??
+              originalFinance.cashSessionId ??
+              null,
+
+            status: "posted",
+
+            notes:
+              `عكس تسوية ${settlement.publicId} - ${company.name}: ${reason}`,
+
+            createdByUserId:
+              auth.user.id,
+          })
+          .returning();
+
+        const reversal =
+          reversalRows[0];
+
+        if (!reversal) {
+          throw new Error(
+            "DELIVERY_SETTLEMENT_REVERSAL_INSERT_FAILED",
+          );
+        }
+
+        await tx
+          .insert(
+            financeTransactionLinesTable,
+          )
+          .values(
+            originalLines.map(
+              (line, index) => ({
+                transactionId:
+                  reversal.id,
+                lineNumber:
+                  index + 1,
+                accountId:
+                  line.accountId,
+                debitMinor:
+                  line.creditMinor,
+                creditMinor:
+                  line.debitMinor,
+                memo:
+                  `عكس: ${
+                    line.memo ??
+                    settlement.publicId
+                  }`,
+              }),
+            ),
+          );
+
+        const originalFinanceUpdate =
+          await tx
+            .update(
+              financeTransactionsTable,
+            )
+            .set({
+              status: "reversed",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  financeTransactionsTable.id,
+                  originalFinance.id,
+                ),
+                eq(
+                  financeTransactionsTable.status,
+                  "posted",
+                ),
+              ),
+            )
+            .returning({
+              id:
+                financeTransactionsTable.id,
+            });
+
+        if (
+          !originalFinanceUpdate[0]
+        ) {
+          throw new DeliverySettlementError(
+            "تم تغيير الحركة المالية قبل إتمام العكس",
+            409,
+          );
+        }
+
+        const reversedItemRows =
+          await tx
+            .update(
+              deliveryCompanySettlementItemsTable,
+            )
+            .set({
+              status: "reversed",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  deliveryCompanySettlementItemsTable.settlementId,
+                  settlement.id,
+                ),
+                eq(
+                  deliveryCompanySettlementItemsTable.status,
+                  "posted",
+                ),
+              ),
+            )
+            .returning({
+              orderId:
+                deliveryCompanySettlementItemsTable.orderId,
+            });
+
+        if (
+          reversedItemRows.length !==
+          itemRows.length
+        ) {
+          throw new DeliverySettlementError(
+            "تم تغيير بنود التسوية قبل إتمام العكس",
+            409,
+          );
+        }
+
+        const reversedSettlementRows =
+          await tx
+            .update(
+              deliveryCompanySettlementsTable,
+            )
+            .set({
+              status: "reversed",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  deliveryCompanySettlementsTable.id,
+                  settlement.id,
+                ),
+                eq(
+                  deliveryCompanySettlementsTable.status,
+                  "posted",
+                ),
+              ),
+            )
+            .returning();
+
+        if (
+          !reversedSettlementRows[0]
+        ) {
+          throw new DeliverySettlementError(
+            "تم تغيير التسوية قبل إتمام العكس",
+            409,
+          );
+        }
+
+        if (
+          cashSession &&
+          expectedCashAfter !== null
+        ) {
+          const cashRows = await tx
+            .update(
+              cashSessionsTable,
+            )
+            .set({
+              expectedBalanceMinor:
+                expectedCashAfter,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  cashSession.id,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .returning({
+              id:
+                cashSessionsTable.id,
+            });
+
+          if (!cashRows[0]) {
+            throw new DeliverySettlementError(
+              "تم إغلاق الصندوق قبل إتمام عكس التسوية",
+              409,
+            );
+          }
+        }
+
+        return {
+          settlement:
+            reversedSettlementRows[0],
+
+          reversalTransaction:
+            reversal,
+
+          orderIds:
+            reversedItemRows.map(
+              (item) => item.orderId,
+            ),
+
+          totalMinor:
+            settlement.totalMinor,
+
+          total:
+            settlement.totalMinor /
+            100,
+        };
+      },
+    );
+
+    return json(result);
+  } catch (error) {
+    if (
+      error instanceof
+      DeliverySettlementError
+    ) {
+      return json(
+        { error: error.message },
+        error.status,
+      );
+    }
+
+    const pgError = error as {
+      code?: string;
+      constraint?: string;
+    };
+
+    if (pgError.code === "23505") {
+      return json(
+        {
+          error:
+            "تم عكس هذه التسوية مسبقًا أو توجد عملية عكس قيد التنفيذ",
+        },
+        409,
+      );
+    }
+
+    console.error(
+      "DELIVERY_SETTLEMENT_REVERSE_FAILED",
+      error,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر عكس تسوية شركة التوصيل",
+      },
+      500,
+    );
+  }
+}
+
 export async function handleDeliverySettlementRequest(
   request: Request,
   db: Db,
@@ -1237,6 +1795,23 @@ export async function handleDeliverySettlementRequest(
       db,
       env,
       Number(summaryMatch[1]),
+    );
+  }
+
+  const reverseMatch = path.match(
+    /^\/api\/delivery-companies\/(\d+)\/settlements\/(\d+)\/reverse$/,
+  );
+
+  if (
+    request.method === "POST" &&
+    reverseMatch
+  ) {
+    return handleReverseSettlement(
+      request,
+      db,
+      env,
+      Number(reverseMatch[1]),
+      Number(reverseMatch[2]),
     );
   }
 

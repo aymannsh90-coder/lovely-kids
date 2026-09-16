@@ -1067,3 +1067,33 @@ export function createDeliveryCompanySettlement(
     token,
   );
 }
+
+
+export function reverseDeliveryCompanySettlement(
+  token: string,
+  companyId: number,
+  settlementId: number,
+  reason: string,
+) {
+  return apiRequest<{
+    settlement: {
+      id: number;
+      publicId: string;
+      status: "reversed";
+    };
+    reversalTransaction: {
+      id: number;
+      publicId: string;
+    };
+    orderIds: number[];
+    totalMinor: number;
+    total: number;
+  }>(
+    `/api/delivery-companies/${companyId}/settlements/${settlementId}/reverse`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    },
+    token,
+  );
+}
