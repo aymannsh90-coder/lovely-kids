@@ -38,6 +38,12 @@ const ADMIN_CARDS = [
     route: "/admin/orders" as const,
   },
   {
+    label: "شركات التوصيل",
+    subtitle: "إضافة وتعديل شركات التوصيل",
+    icon: "car-outline" as const,
+    route: "/admin/delivery-companies" as never,
+  },
+  {
     label: "المستخدمون",
     subtitle: "الحسابات والمستخدمون",
     icon: "people-outline" as const,

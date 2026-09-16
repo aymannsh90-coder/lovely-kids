@@ -491,6 +491,15 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         totalPrice,
         shippingZone: shipping.label,
         shippingCost,
+        fulfillmentMethod:
+          shipping.label === STORE_PICKUP_LABEL
+            ? "pickup"
+            : null,
+        deliveryCompanyId: null,
+        deliveryCompanyCost:
+          shipping.label === STORE_PICKUP_LABEL
+            ? 0
+            : null,
         status: "new",
         paymentMethod,
         paymentStatus:

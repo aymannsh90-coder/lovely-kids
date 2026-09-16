@@ -27,7 +27,7 @@ export const ordersTable = pgTable("orders", {
       onDelete: "set null",
     }),
 
-  // Real courier fee for this order, frozen at order creation time.
+  // Real courier fee for this order, frozen when the order is dispatched.
   // Same unit as totalPrice/shippingCost (whole ILS, NOT minor units).
   // Example: West Bank = 20 ILS even when customer shippingCost = 0.
   deliveryCompanyCost: integer("delivery_company_cost"),
