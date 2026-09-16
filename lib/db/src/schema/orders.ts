@@ -2,6 +2,7 @@ import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { deliveryCompaniesTable } from "./delivery-companies";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -12,7 +13,25 @@ export const ordersTable = pgTable("orders", {
   items: jsonb("items").notNull(),
   totalPrice: integer("total_price").notNull(),
   shippingZone: text("shipping_zone"),
+
+  // Amount actually charged to the customer for delivery.
+  // May be zero during a free-delivery promotion.
   shippingCost: integer("shipping_cost"),
+
+  // delivery = courier company
+  // pickup   = customer receives the order from the shop
+  fulfillmentMethod: text("fulfillment_method"),
+
+  deliveryCompanyId: integer("delivery_company_id")
+    .references(() => deliveryCompaniesTable.id, {
+      onDelete: "set null",
+    }),
+
+  // Real courier fee for this order, frozen at order creation time.
+  // Same unit as totalPrice/shippingCost (whole ILS, NOT minor units).
+  // Example: West Bank = 20 ILS even when customer shippingCost = 0.
+  deliveryCompanyCost: integer("delivery_company_cost"),
+
   status: text("status").notNull().default("new"),
   notes: text("notes"),
   paymentMethod: text("payment_method").notNull().default("cod"),
@@ -28,6 +47,9 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   userId: true,
   printedAt: true,
   printCount: true,
+  fulfillmentMethod: true,
+  deliveryCompanyId: true,
+  deliveryCompanyCost: true,
   createdAt: true,
 }).extend({
   items: z.array(
