@@ -1,5 +1,11 @@
-import { suppliersTable } from "@workspace/db/schema";
-import { asc } from "drizzle-orm";
+import {
+  financeAccountsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
+  posPurchasesTable,
+  suppliersTable,
+} from "@workspace/db/schema";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import {
@@ -136,8 +142,23 @@ function normalizeCode(value: unknown): string {
   return code;
 }
 
+interface SupplierFinanceSummary {
+  totalPurchasesMinor: number;
+  paidMinor: number;
+  dueMinor: number;
+  supplierCreditMinor: number;
+}
+
+const EMPTY_SUPPLIER_FINANCE: SupplierFinanceSummary = {
+  totalPurchasesMinor: 0,
+  paidMinor: 0,
+  dueMinor: 0,
+  supplierCreditMinor: 0,
+};
+
 function toSupplier(
   supplier: typeof suppliersTable.$inferSelect,
+  finance: SupplierFinanceSummary = EMPTY_SUPPLIER_FINANCE,
 ) {
   return {
     id: String(supplier.id),
@@ -151,9 +172,188 @@ function toSupplier(
     notes: supplier.notes,
     status: supplier.status,
     createdByUserId: String(supplier.createdByUserId),
+
+    totalPurchasesMinor: finance.totalPurchasesMinor,
+    totalPurchases: finance.totalPurchasesMinor / 100,
+
+    paidMinor: finance.paidMinor,
+    paid: finance.paidMinor / 100,
+
+    dueMinor: finance.dueMinor,
+    due: finance.dueMinor / 100,
+
+    supplierCreditMinor: finance.supplierCreditMinor,
+    supplierCredit: finance.supplierCreditMinor / 100,
+
     createdAt: supplier.createdAt.toISOString(),
     updatedAt: supplier.updatedAt.toISOString(),
   };
+}
+
+async function getSupplierFinanceSummaries(
+  db: Db,
+): Promise<Map<number, SupplierFinanceSummary>> {
+  const purchaseRows = await db
+    .select({
+      id: posPurchasesTable.id,
+      supplierId: posPurchasesTable.supplierId,
+      totalMinor: posPurchasesTable.totalMinor,
+      dueMinor: posPurchasesTable.dueMinor,
+    })
+    .from(posPurchasesTable)
+    .where(eq(posPurchasesTable.status, "completed"));
+
+  const coveredFinanceRows = await db
+    .select({
+      sourceId: financeTransactionsTable.sourceId,
+    })
+    .from(financeTransactionsTable)
+    .where(
+      and(
+        eq(financeTransactionsTable.sourceType, "pos_purchase"),
+        eq(financeTransactionsTable.sourceEvent, "completed"),
+      ),
+    );
+
+  const financeCoveredPurchaseIds = new Set(
+    coveredFinanceRows.map((row) => row.sourceId),
+  );
+
+  const accountRows = await db
+    .select({
+      id: financeAccountsTable.id,
+      linkedEntityId: financeAccountsTable.linkedEntityId,
+    })
+    .from(financeAccountsTable)
+    .where(
+      eq(financeAccountsTable.linkedEntityType, "supplier"),
+    );
+
+  const supplierIdByAccountId = new Map<number, number>();
+
+  for (const account of accountRows) {
+    if (account.linkedEntityId !== null) {
+      supplierIdByAccountId.set(
+        account.id,
+        account.linkedEntityId,
+      );
+    }
+  }
+
+  const financeBalanceBySupplier = new Map<number, number>();
+
+  const accountIds = [...supplierIdByAccountId.keys()];
+
+  if (accountIds.length > 0) {
+    const lineRows = await db
+      .select({
+        accountId: financeTransactionLinesTable.accountId,
+        debitMinor: financeTransactionLinesTable.debitMinor,
+        creditMinor: financeTransactionLinesTable.creditMinor,
+      })
+      .from(financeTransactionLinesTable)
+      .where(
+        inArray(
+          financeTransactionLinesTable.accountId,
+          accountIds,
+        ),
+      );
+
+    for (const line of lineRows) {
+      const supplierId =
+        supplierIdByAccountId.get(line.accountId);
+
+      if (supplierId === undefined) {
+        continue;
+      }
+
+      const current =
+        financeBalanceBySupplier.get(supplierId) ?? 0;
+
+      financeBalanceBySupplier.set(
+        supplierId,
+        current + line.creditMinor - line.debitMinor,
+      );
+    }
+  }
+
+  const totalsBySupplier = new Map<
+    number,
+    {
+      totalPurchasesMinor: number;
+      legacyDueMinor: number;
+    }
+  >();
+
+  for (const purchase of purchaseRows) {
+    const current = totalsBySupplier.get(
+      purchase.supplierId,
+    ) ?? {
+      totalPurchasesMinor: 0,
+      legacyDueMinor: 0,
+    };
+
+    current.totalPurchasesMinor += purchase.totalMinor;
+
+    // Purchases created before the finance ledger existed do
+    // not have a finance transaction. Preserve their due amount
+    // here so old supplier balances are not lost.
+    if (
+      !financeCoveredPurchaseIds.has(
+        String(purchase.id),
+      )
+    ) {
+      current.legacyDueMinor += purchase.dueMinor;
+    }
+
+    totalsBySupplier.set(
+      purchase.supplierId,
+      current,
+    );
+  }
+
+  const supplierIds = new Set<number>([
+    ...totalsBySupplier.keys(),
+    ...financeBalanceBySupplier.keys(),
+  ]);
+
+  const result =
+    new Map<number, SupplierFinanceSummary>();
+
+  for (const supplierId of supplierIds) {
+    const purchaseTotals =
+      totalsBySupplier.get(supplierId) ?? {
+        totalPurchasesMinor: 0,
+        legacyDueMinor: 0,
+      };
+
+    const ledgerBalance =
+      financeBalanceBySupplier.get(supplierId) ?? 0;
+
+    const rawBalance =
+      purchaseTotals.legacyDueMinor + ledgerBalance;
+
+    const dueMinor = Math.max(0, rawBalance);
+    const supplierCreditMinor = Math.max(
+      0,
+      -rawBalance,
+    );
+
+    const paidMinor = Math.max(
+      0,
+      purchaseTotals.totalPurchasesMinor - rawBalance,
+    );
+
+    result.set(supplierId, {
+      totalPurchasesMinor:
+        purchaseTotals.totalPurchasesMinor,
+      paidMinor,
+      dueMinor,
+      supplierCreditMinor,
+    });
+  }
+
+  return result;
 }
 
 async function handleListSuppliers(
@@ -186,6 +386,9 @@ async function handleListSuppliers(
     .orderBy(asc(suppliersTable.name))
     .limit(500);
 
+  const financeBySupplier =
+    await getSupplierFinanceSummaries(db);
+
   const results = rows.filter((supplier) => {
     if (status && supplier.status !== status) {
       return false;
@@ -212,7 +415,13 @@ async function handleListSuppliers(
   });
 
   return json({
-    results: results.map(toSupplier),
+    results: results.map((supplier) =>
+      toSupplier(
+        supplier,
+        financeBySupplier.get(supplier.id) ??
+          EMPTY_SUPPLIER_FINANCE,
+      ),
+    ),
   });
 }
 

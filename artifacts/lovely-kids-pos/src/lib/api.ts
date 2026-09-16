@@ -662,6 +662,19 @@ export interface PosSupplier {
   address: string | null;
   notes: string | null;
   status: "active" | "inactive";
+
+  totalPurchasesMinor: number;
+  totalPurchases: number;
+
+  paidMinor: number;
+  paid: number;
+
+  dueMinor: number;
+  due: number;
+
+  supplierCreditMinor: number;
+  supplierCredit: number;
+
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
