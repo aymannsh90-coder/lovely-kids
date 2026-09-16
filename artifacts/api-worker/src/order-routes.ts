@@ -1,4 +1,6 @@
 import {
+  appSettingsTable,
+  deliveryCompaniesTable,
   insertOrderSchema,
   ordersTable,
 } from "@workspace/db/schema";
@@ -9,6 +11,8 @@ import type { Env, openDb } from "./db";
 import {
   createTrustedOrder,
   OrderValidationError,
+  resolveShippingZone,
+  STORE_PICKUP_LABEL,
 } from "./order-service";
 import {
   cancelOrderAndRestoreStock,
@@ -20,6 +24,10 @@ import {
   sendOrderStatusNotification,
   sendNewOrderNotification,
 } from "./notification-routes";
+import {
+  completeOrderWithFinance,
+  OrderFinanceError,
+} from "./order-finance";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 
 type Db = Awaited<
@@ -63,8 +71,124 @@ const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
   confirmed: ["new", "confirmed", "delivering", "cancelled"],
   delivering: ["new", "confirmed", "delivering", "done", "cancelled"],
   done: ["done"],
-  cancelled: ["confirmed", "delivering", "done"],
+  cancelled: ["confirmed", "delivering"],
 };
+
+type AutomaticFulfillmentUpdate = {
+  fulfillmentMethod: "delivery" | "pickup";
+  deliveryCompanyId: number | null;
+  deliveryCompanyCost: number | null;
+};
+
+async function getAutomaticFulfillmentUpdate(
+  db: Db,
+  order: {
+    shippingZone: string | null;
+    fulfillmentMethod: string | null;
+    deliveryCompanyId: number | null;
+    deliveryCompanyCost: number | null;
+  },
+  targetStatus: string,
+): Promise<
+  | { ok: true; update: AutomaticFulfillmentUpdate | null }
+  | { ok: false; error: string }
+> {
+  if (order.shippingZone === STORE_PICKUP_LABEL) {
+    return {
+      ok: true,
+      update: {
+        fulfillmentMethod: "pickup",
+        deliveryCompanyId: null,
+        deliveryCompanyCost: 0,
+      },
+    };
+  }
+
+  if (!order.shippingZone) {
+    return {
+      ok: false,
+      error: "منطقة التوصيل غير محددة في الطلب",
+    };
+  }
+
+  // عند التسليم نحافظ على Snapshot الشركة الذي تم تثبيته
+  // عند إخراج الطلب للتوصيل.
+  if (
+    targetStatus === "done" &&
+    order.fulfillmentMethod === "delivery" &&
+    order.deliveryCompanyId !== null &&
+    order.deliveryCompanyCost !== null
+  ) {
+    return {
+      ok: true,
+      update: null,
+    };
+  }
+
+  const settingsRows = await db
+    .select({ data: appSettingsTable.data })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.id, 1))
+    .limit(1);
+
+  let shipping;
+
+  try {
+    shipping = resolveShippingZone(
+      settingsRows[0]?.data,
+      order.shippingZone,
+    );
+  } catch {
+    return {
+      ok: false,
+      error: "منطقة التوصيل في الطلب غير صالحة",
+    };
+  }
+
+  const activeCompanies = await db
+    .select({
+      id: deliveryCompaniesTable.id,
+      name: deliveryCompaniesTable.name,
+    })
+    .from(deliveryCompaniesTable)
+    .where(eq(deliveryCompaniesTable.status, "active"))
+    .limit(2);
+
+  if (activeCompanies.length === 0) {
+    return {
+      ok: false,
+      error: "يجب تعريف شركة توصيل فعّالة قبل إخراج الطلب للتوصيل",
+    };
+  }
+
+  if (activeCompanies.length > 1) {
+    return {
+      ok: false,
+      error: "يوجد أكثر من شركة توصيل فعّالة. اترك شركة واحدة فعّالة فقط",
+    };
+  }
+
+  const company = activeCompanies[0];
+
+  if (!company) {
+    return {
+      ok: false,
+      error: "تعذر تحديد شركة التوصيل",
+    };
+  }
+
+  return {
+    ok: true,
+    update: {
+      fulfillmentMethod: "delivery",
+      deliveryCompanyId: company.id,
+
+      // التكلفة الفعلية لشركة التوصيل.
+      // نستخدم السعر الأساسي للمنطقة وليس سعر العرض للزبون.
+      deliveryCompanyCost: shipping.cost,
+    },
+  };
+}
 
 
 const orderOwnerWhere = (userId: number, phone?: string | null) =>
@@ -716,6 +840,9 @@ async function handleConvertOrderToStorePickup(
     .set({
       shippingZone: "استلام من المحل",
       shippingCost: 0,
+      fulfillmentMethod: "pickup",
+      deliveryCompanyId: null,
+      deliveryCompanyCost: 0,
       totalPrice: newTotal,
       customerAddress: "استلام من المحل",
     })
@@ -758,7 +885,15 @@ async function handleUpdateOrderStatus(
   }
 
   const current = await db
-    .select({ id: ordersTable.id, status: ordersTable.status, customerPhone: ordersTable.customerPhone })
+    .select({
+      id: ordersTable.id,
+      status: ordersTable.status,
+      customerPhone: ordersTable.customerPhone,
+      shippingZone: ordersTable.shippingZone,
+      fulfillmentMethod: ordersTable.fulfillmentMethod,
+      deliveryCompanyId: ordersTable.deliveryCompanyId,
+      deliveryCompanyCost: ordersTable.deliveryCompanyCost,
+    })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
     .limit(1);
@@ -773,17 +908,104 @@ async function handleUpdateOrderStatus(
     return json({ error: "لا يمكن نقل الطلب إلى هذه الحالة" }, 409);
   }
 
+  let fulfillmentUpdate: AutomaticFulfillmentUpdate | null = null;
+
+  if (
+    body.status === "delivering" ||
+    body.status === "done"
+  ) {
+    const fulfillment =
+      await getAutomaticFulfillmentUpdate(
+        db,
+        current[0],
+        body.status,
+      );
+
+    if (!fulfillment.ok) {
+      return json(
+        { error: fulfillment.error },
+        409,
+      );
+    }
+
+    fulfillmentUpdate = fulfillment.update;
+  }
+
+  if (
+    body.status === "done" &&
+    current[0].status !== "done"
+  ) {
+    try {
+      const updatedOrder =
+        await completeOrderWithFinance(
+          db,
+          id,
+          user.id,
+          fulfillmentUpdate,
+        );
+
+      if (current[0].customerPhone) {
+        try {
+          await sendOrderStatusNotification(
+            db,
+            env,
+            id,
+            current[0].customerPhone,
+            "done",
+          );
+        } catch (error) {
+          console.error(
+            "Order status notification failed:",
+            error,
+          );
+        }
+      }
+
+      return json(updatedOrder);
+    } catch (error) {
+      if (error instanceof OrderFinanceError) {
+        return json(
+          { error: error.message },
+          error.status,
+        );
+      }
+
+      console.error(
+        "Complete order finance failed:",
+        error,
+      );
+
+      return json(
+        {
+          error:
+            "تعذر تسجيل تسليم الطلب محاسبيًا",
+        },
+        500,
+      );
+    }
+  }
+
   if (
     current[0].status === "cancelled" &&
     body.status !== "cancelled"
   ) {
     try {
-      const updatedOrder =
+      const restoredOrder =
         await restoreCancelledOrderAndDeductStock(
           db,
           id,
           body.status,
         );
+
+      const updatedOrder = fulfillmentUpdate
+        ? (
+            await db
+              .update(ordersTable)
+              .set(fulfillmentUpdate)
+              .where(eq(ordersTable.id, id))
+              .returning()
+          )[0] ?? restoredOrder
+        : restoredOrder;
 
       if (current[0].customerPhone) {
         try {
@@ -848,7 +1070,10 @@ async function handleUpdateOrderStatus(
 
   const updated = await db
     .update(ordersTable)
-    .set({ status: body.status })
+    .set({
+      status: body.status,
+      ...(fulfillmentUpdate ?? {}),
+    })
     .where(eq(ordersTable.id, id))
     .returning();
 

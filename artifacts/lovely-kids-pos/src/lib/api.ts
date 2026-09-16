@@ -962,3 +962,138 @@ export function createPosMobileReturn(
     token,
   );
 }
+
+
+export interface PosDeliveryCompany {
+  id: number;
+  code: string;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  status: "active" | "inactive";
+  createdByUserId: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosDeliveryUnsettledOrder {
+  id: number;
+  customerName: string;
+  customerPhone: string;
+  shippingZone: string | null;
+  totalPrice: number;
+  shippingCost: number | null;
+  deliveryCompanyCost: number | null;
+  createdAt: string;
+  amountMinor: number;
+  amount: number;
+}
+
+export interface PosDeliverySettlementSummary {
+  company: {
+    id: number;
+    code: string;
+    name: string;
+    status: "active" | "inactive";
+  };
+  outstandingMinor: number;
+  outstanding: number;
+  unsettledOrders: PosDeliveryUnsettledOrder[];
+  settlements: Array<{
+    id: number;
+    publicId: string;
+    businessDate: string;
+    receiptMethod: "cash" | "bank";
+    totalMinor: number;
+    total: number;
+    status: "posted" | "reversed";
+    notes: string | null;
+    createdAt: string;
+    orders: Array<{
+      orderId: number;
+      amountMinor: number;
+      amount: number;
+      status: "posted" | "reversed";
+    }>;
+  }>;
+}
+
+export function getDeliveryCompanies(token: string) {
+  return apiRequest<PosDeliveryCompany[]>(
+    "/api/delivery-companies",
+    {},
+    token,
+  );
+}
+
+export function getDeliveryCompanySettlementSummary(
+  token: string,
+  companyId: number,
+) {
+  return apiRequest<PosDeliverySettlementSummary>(
+    `/api/delivery-companies/${companyId}/settlement-summary`,
+    {},
+    token,
+  );
+}
+
+export function createDeliveryCompanySettlement(
+  token: string,
+  companyId: number,
+  input: {
+    orderIds: number[];
+    receiptMethod: "cash" | "bank";
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    settlement: {
+      id: number;
+      publicId: string;
+    };
+    financeTransaction: {
+      id: number;
+      publicId: string;
+    };
+    orderIds: number[];
+    totalMinor: number;
+    total: number;
+  }>(
+    `/api/delivery-companies/${companyId}/settlements`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+
+export function reverseDeliveryCompanySettlement(
+  token: string,
+  companyId: number,
+  settlementId: number,
+  reason: string,
+) {
+  return apiRequest<{
+    settlement: {
+      id: number;
+      publicId: string;
+      status: "reversed";
+    };
+    reversalTransaction: {
+      id: number;
+      publicId: string;
+    };
+    orderIds: number[];
+    totalMinor: number;
+    total: number;
+  }>(
+    `/api/delivery-companies/${companyId}/settlements/${settlementId}/reverse`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    },
+    token,
+  );
+}

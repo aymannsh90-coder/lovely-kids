@@ -6,6 +6,7 @@ import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
+import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
@@ -210,6 +211,11 @@ export default function AppRouter() {
         />
 
         <Route path="cash-session" element={<CashSessionPage />} />
+
+        <Route
+          path="finance/delivery-company"
+          element={<DeliveryCompanyAccountingPage />}
+        />
 
         <Route
           path="reports"
