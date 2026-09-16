@@ -1384,23 +1384,18 @@ async function handleCreatePurchase(
             const selectedSize = variantSizes[sizeIndex];
 
             variantStockBefore =
-              selectedSize.stock ?? null;
+              selectedSize.stock ?? 0;
+
+            variantStockAfter =
+              variantStockBefore + receivedQuantity;
 
             if (
-              selectedSize.stock !== null &&
-              selectedSize.stock !== undefined
+              !Number.isSafeInteger(variantStockAfter) ||
+              variantStockAfter > MAX_MINOR
             ) {
-              variantStockAfter =
-                selectedSize.stock + receivedQuantity;
-
-              if (
-                !Number.isSafeInteger(variantStockAfter) ||
-                variantStockAfter > MAX_MINOR
-              ) {
-                throw new PurchaseError(
-                  `مخزون ${product.nameAr} يتجاوز الحد المسموح`,
-                );
-              }
+              throw new PurchaseError(
+                `مخزون ${product.nameAr} يتجاوز الحد المسموح`,
+              );
             }
 
             const nextSizes = variantSizes.map(
@@ -1455,16 +1450,14 @@ async function handleCreatePurchase(
         }
 
         const generalStockBefore =
-          product.stock ?? null;
+          product.stock ??
+          (colorVariants.length === 0 ? 0 : null);
 
         let generalStockAfter: number | null = null;
 
-        if (
-          product.stock !== null &&
-          product.stock !== undefined
-        ) {
+        if (generalStockBefore !== null) {
           generalStockAfter =
-            product.stock + receivedQuantity;
+            generalStockBefore + receivedQuantity;
 
           if (
             !Number.isSafeInteger(generalStockAfter) ||
