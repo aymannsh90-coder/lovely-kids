@@ -21,6 +21,7 @@ import { handlePosSaleRequest } from "./pos-sale-routes";
 import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
 import { handleSupplierRequest } from "./supplier-routes";
 import { handleDeliveryCompanyRequest } from "./delivery-company-routes";
+import { handleDeliverySettlementRequest } from "./delivery-settlement-routes";
 import { handlePosPurchaseRequest } from "./pos-purchase-routes";
 import {
   isPurchaseApiEnabled,
@@ -391,6 +392,17 @@ export default {
 
       if (deliveryCompanyResponse) {
         return deliveryCompanyResponse;
+      }
+
+      const deliverySettlementResponse =
+        await handleDeliverySettlementRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (deliverySettlementResponse) {
+        return deliverySettlementResponse;
       }
 
       const posPurchaseResponse =
