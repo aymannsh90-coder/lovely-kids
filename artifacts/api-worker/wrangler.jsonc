@@ -32,5 +32,9 @@
         "enabled": true
       }
     }
+  },
+  "vars": {
+    "POS_PURCHASE_API_ENABLED": "true",
+    "POS_PURCHASE_WRITES_ENABLED": "true"
   }
 }

@@ -1,4 +1,8 @@
 import {
+  cashSessionsTable,
+  financeAccountsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   posPurchaseItemsTable,
   posPurchasesTable,
   productBarcodesTable,
@@ -22,6 +26,18 @@ type PosUser = NonNullable<
 >;
 
 const MAX_MINOR = 2_000_000_000;
+
+function normalizeRegisterKey(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  return /^[a-z0-9_-]{1,50}$/.test(normalized)
+    ? normalized
+    : null;
+}
 
 const headers = {
   "Content-Type": "application/json",
@@ -548,6 +564,75 @@ async function getPurchaseNavigation(
   };
 }
 
+async function handleLatestPurchase(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+  const warehouseKey =
+    (url.searchParams.get("warehouseKey") ?? "main").trim();
+
+  if (
+    !warehouseKey ||
+    warehouseKey.length > 80 ||
+    !/^[A-Za-z0-9_-]+$/.test(warehouseKey)
+  ) {
+    return json({ error: "المستودع غير صالح" }, 400);
+  }
+
+  const purchaseRows = await db
+    .select()
+    .from(posPurchasesTable)
+    .where(eq(posPurchasesTable.warehouseKey, warehouseKey))
+    .orderBy(desc(posPurchasesTable.id))
+    .limit(1);
+
+  const purchase = purchaseRows[0];
+
+  if (!purchase) {
+    return json({ error: "لا توجد فواتير مشتريات محفوظة" }, 404);
+  }
+
+  const [items, supplierRows, navigation] = await Promise.all([
+    db
+      .select()
+      .from(posPurchaseItemsTable)
+      .where(eq(posPurchaseItemsTable.purchaseId, purchase.id))
+      .orderBy(asc(posPurchaseItemsTable.lineNumber)),
+
+    db
+      .select()
+      .from(suppliersTable)
+      .where(eq(suppliersTable.id, purchase.supplierId))
+      .limit(1),
+
+    getPurchaseNavigation(db, purchase),
+  ]);
+
+  const supplier = supplierRows[0];
+
+  if (!supplier) {
+    return json({ error: "بيانات مورد الفاتورة غير موجودة" }, 500);
+  }
+
+  return json(
+    toPurchaseResponse(
+      purchase,
+      items,
+      supplier,
+      false,
+      navigation,
+    ),
+  );
+}
+
 async function handlePurchaseByPublicId(
   request: Request,
   db: Db,
@@ -856,6 +941,195 @@ async function handleVoidPurchase(
         }
       }
 
+      const originalFinanceRows = await tx
+        .select()
+        .from(financeTransactionsTable)
+        .where(
+          and(
+            eq(financeTransactionsTable.sourceType, "pos_purchase"),
+            eq(financeTransactionsTable.sourceId, String(purchase.id)),
+            eq(financeTransactionsTable.sourceEvent, "completed"),
+            eq(financeTransactionsTable.status, "posted"),
+          ),
+        )
+        .limit(1)
+        .for("update");
+
+      const originalFinance = originalFinanceRows[0] ?? null;
+
+      if (originalFinance) {
+        const originalFinanceLines = await tx
+          .select()
+          .from(financeTransactionLinesTable)
+          .where(
+            eq(
+              financeTransactionLinesTable.transactionId,
+              originalFinance.id,
+            ),
+          )
+          .orderBy(
+            asc(financeTransactionLinesTable.lineNumber),
+          );
+
+        if (originalFinanceLines.length === 0) {
+          throw new PurchaseError(
+            "الحركة المالية الأصلية للفاتورة غير مكتملة",
+            409,
+          );
+        }
+
+        let reversalCashSession:
+          | typeof cashSessionsTable.$inferSelect
+          | null = null;
+
+        let reversalExpectedCashAfter: number | null = null;
+
+        if (purchase.paidMinor > 0) {
+          if (originalFinance.cashSessionId === null) {
+            throw new PurchaseError(
+              "لا يمكن عكس الدفعة النقدية لعدم وجود جلسة صندوق مرتبطة",
+              409,
+            );
+          }
+
+          const reversalSessionRows = await tx
+            .select()
+            .from(cashSessionsTable)
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  originalFinance.cashSessionId,
+                ),
+                eq(cashSessionsTable.status, "open"),
+              ),
+            )
+            .for("update");
+
+          reversalCashSession =
+            reversalSessionRows[0] ?? null;
+
+          if (!reversalCashSession) {
+            throw new PurchaseError(
+              "لا يمكن حذف فاتورة مشتريات نقدية بعد إغلاق جلسة الصندوق التي سُجلت عليها",
+              409,
+            );
+          }
+
+          const expectedBefore =
+            reversalCashSession.expectedBalanceMinor ??
+            reversalCashSession.openingBalanceMinor;
+
+          reversalExpectedCashAfter =
+            expectedBefore + purchase.paidMinor;
+
+          if (
+            !Number.isSafeInteger(reversalExpectedCashAfter) ||
+            reversalExpectedCashAfter > MAX_MINOR
+          ) {
+            throw new PurchaseError(
+              "رصيد الصندوق بعد عكس الفاتورة غير صالح",
+              409,
+            );
+          }
+        }
+
+        const reversalRows = await tx
+          .insert(financeTransactionsTable)
+          .values({
+            publicId:
+              `FIN-${purchase.businessDate.replaceAll("-", "")}-` +
+              randomUUID().slice(0, 8).toUpperCase(),
+            idempotencyKey: `purchase:${purchase.id}:voided`,
+            businessDate: purchase.businessDate,
+            transactionType: "reversal",
+            sourceType: "pos_purchase",
+            sourceId: String(purchase.id),
+            sourceEvent: "voided",
+            cashSessionId:
+              reversalCashSession?.id ??
+              originalFinance.cashSessionId ??
+              null,
+            status: "posted",
+            notes: `عكس فاتورة المشتريات ${purchase.publicId}: ${reason}`,
+            createdByUserId: auth.user.id,
+          })
+          .returning();
+
+        const reversal = reversalRows[0];
+
+        if (!reversal) {
+          throw new Error("PURCHASE_REVERSAL_INSERT_FAILED");
+        }
+
+        await tx
+          .insert(financeTransactionLinesTable)
+          .values(
+            originalFinanceLines.map((line, index) => ({
+              transactionId: reversal.id,
+              lineNumber: index + 1,
+              accountId: line.accountId,
+              debitMinor: line.creditMinor,
+              creditMinor: line.debitMinor,
+              memo: `عكس: ${line.memo ?? purchase.publicId}`,
+            })),
+          );
+
+        const reversedOriginalRows = await tx
+          .update(financeTransactionsTable)
+          .set({
+            status: "reversed",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(financeTransactionsTable.id, originalFinance.id),
+              eq(financeTransactionsTable.status, "posted"),
+            ),
+          )
+          .returning({
+            id: financeTransactionsTable.id,
+          });
+
+        if (!reversedOriginalRows[0]) {
+          throw new PurchaseError(
+            "تم تغيير الحركة المالية قبل إلغاء الفاتورة",
+            409,
+          );
+        }
+
+        if (
+          reversalCashSession &&
+          reversalExpectedCashAfter !== null
+        ) {
+          const restoredSessionRows = await tx
+            .update(cashSessionsTable)
+            .set({
+              expectedBalanceMinor: reversalExpectedCashAfter,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  reversalCashSession.id,
+                ),
+                eq(cashSessionsTable.status, "open"),
+              ),
+            )
+            .returning({
+              id: cashSessionsTable.id,
+            });
+
+          if (!restoredSessionRows[0]) {
+            throw new PurchaseError(
+              "تم إغلاق الصندوق قبل عكس فاتورة المشتريات",
+              409,
+            );
+          }
+        }
+      }
+
       const updatedPurchaseRows = await tx
         .update(posPurchasesTable)
         .set({
@@ -963,6 +1237,14 @@ async function handleCreatePurchase(
     const currencyCode = normalizeCurrencyCode(
       payload.currencyCode,
     );
+
+    const registerKey = normalizeRegisterKey(
+      payload.registerKey ?? "main",
+    );
+
+    if (!registerKey) {
+      throw new PurchaseError("معرف صندوق غير صالح");
+    }
 
     const paymentMethod =
       typeof payload.paymentMethod === "string"
@@ -1177,6 +1459,57 @@ async function handleCreatePurchase(
         }
       }
 
+      let cashSession:
+        | typeof cashSessionsTable.$inferSelect
+        | null = null;
+
+      let expectedCashAfter: number | null = null;
+
+      if (paidMinor > 0) {
+        const sessionRows = await tx
+          .select()
+          .from(cashSessionsTable)
+          .where(
+            and(
+              eq(cashSessionsTable.registerKey, registerKey),
+              eq(cashSessionsTable.status, "open"),
+            ),
+          )
+          .for("update");
+
+        cashSession = sessionRows[0] ?? null;
+
+        if (!cashSession) {
+          throw new PurchaseError(
+            "يجب فتح يوم الصندوق قبل حفظ فاتورة مشتريات مدفوعة",
+            409,
+          );
+        }
+
+        const expectedBefore =
+          cashSession.expectedBalanceMinor ??
+          cashSession.openingBalanceMinor;
+
+        if (paidMinor > expectedBefore) {
+          throw new PurchaseError(
+            "رصيد الصندوق لا يكفي لتسجيل الدفعة للمورد",
+            409,
+          );
+        }
+
+        expectedCashAfter = expectedBefore - paidMinor;
+
+        if (
+          !Number.isSafeInteger(expectedCashAfter) ||
+          expectedCashAfter < 0
+        ) {
+          throw new PurchaseError(
+            "رصيد الصندوق بعد الدفع غير صالح",
+            409,
+          );
+        }
+      }
+
       const resolvedItems: Array<
         ParsedPurchaseItem & {
           productId: number;
@@ -1384,23 +1717,18 @@ async function handleCreatePurchase(
             const selectedSize = variantSizes[sizeIndex];
 
             variantStockBefore =
-              selectedSize.stock ?? null;
+              selectedSize.stock ?? 0;
+
+            variantStockAfter =
+              variantStockBefore + receivedQuantity;
 
             if (
-              selectedSize.stock !== null &&
-              selectedSize.stock !== undefined
+              !Number.isSafeInteger(variantStockAfter) ||
+              variantStockAfter > MAX_MINOR
             ) {
-              variantStockAfter =
-                selectedSize.stock + receivedQuantity;
-
-              if (
-                !Number.isSafeInteger(variantStockAfter) ||
-                variantStockAfter > MAX_MINOR
-              ) {
-                throw new PurchaseError(
-                  `مخزون ${product.nameAr} يتجاوز الحد المسموح`,
-                );
-              }
+              throw new PurchaseError(
+                `مخزون ${product.nameAr} يتجاوز الحد المسموح`,
+              );
             }
 
             const nextSizes = variantSizes.map(
@@ -1455,16 +1783,14 @@ async function handleCreatePurchase(
         }
 
         const generalStockBefore =
-          product.stock ?? null;
+          product.stock ??
+          (colorVariants.length === 0 ? 0 : null);
 
         let generalStockAfter: number | null = null;
 
-        if (
-          product.stock !== null &&
-          product.stock !== undefined
-        ) {
+        if (generalStockBefore !== null) {
           generalStockAfter =
-            product.stock + receivedQuantity;
+            generalStockBefore + receivedQuantity;
 
           if (
             !Number.isSafeInteger(generalStockAfter) ||
@@ -1562,6 +1888,197 @@ async function handleCreatePurchase(
         .values(linesWithPurchase)
         .returning();
 
+      if (totalMinor > 0) {
+        const ensureAccount = async (input: {
+          code: string;
+          name: string;
+          accountType: "asset" | "liability" | "income" | "expense" | "equity";
+          linkedEntityType?: string;
+          linkedEntityId?: number;
+        }) => {
+          const existingRows = await tx
+            .select()
+            .from(financeAccountsTable)
+            .where(eq(financeAccountsTable.code, input.code))
+            .limit(1);
+
+          if (existingRows[0]) {
+            return existingRows[0];
+          }
+
+          const insertedRows = await tx
+            .insert(financeAccountsTable)
+            .values({
+              code: input.code,
+              name: input.name,
+              accountType: input.accountType,
+              linkedEntityType: input.linkedEntityType ?? null,
+              linkedEntityId: input.linkedEntityId ?? null,
+              currencyCode,
+              status: "active",
+            })
+            .onConflictDoNothing()
+            .returning();
+
+          if (insertedRows[0]) {
+            return insertedRows[0];
+          }
+
+          const retryRows = await tx
+            .select()
+            .from(financeAccountsTable)
+            .where(eq(financeAccountsTable.code, input.code))
+            .limit(1);
+
+          if (!retryRows[0]) {
+            throw new Error("FINANCE_ACCOUNT_CREATE_FAILED");
+          }
+
+          return retryRows[0];
+        };
+
+        const purchaseAccount = await ensureAccount({
+          code: "PURCHASE_INVENTORY",
+          name: "المشتريات / المخزون",
+          accountType: "asset",
+        });
+
+        const cashAccount =
+          paidMinor > 0
+            ? await ensureAccount({
+                code: `CASH_${registerKey.toUpperCase()}`,
+                name:
+                  registerKey === "main"
+                    ? "الصندوق الرئيسي"
+                    : `الصندوق ${registerKey}`,
+                accountType: "asset",
+              })
+            : null;
+
+        const supplierAccount =
+          dueMinor > 0
+            ? await ensureAccount({
+                code: `SUPPLIER_${supplier.id}`,
+                name: `المورد: ${supplier.name}`,
+                accountType: "liability",
+                linkedEntityType: "supplier",
+                linkedEntityId: supplier.id,
+              })
+            : null;
+
+        const financeRows = await tx
+          .insert(financeTransactionsTable)
+          .values({
+            publicId:
+              `FIN-${businessDate.replaceAll("-", "")}-` +
+              randomUUID().slice(0, 8).toUpperCase(),
+            idempotencyKey: `purchase:${purchase.id}:completed`,
+            businessDate,
+            transactionType: "purchase",
+            sourceType: "pos_purchase",
+            sourceId: String(purchase.id),
+            sourceEvent: "completed",
+            cashSessionId: cashSession?.id ?? null,
+            status: "posted",
+            notes:
+              supplierInvoiceNumber
+                ? `فاتورة مورد ${supplierInvoiceNumber}`
+                : `فاتورة مشتريات ${purchase.publicId}`,
+            createdByUserId: auth.user.id,
+          })
+          .returning();
+
+        const financeTransaction = financeRows[0];
+
+        if (!financeTransaction) {
+          throw new Error("PURCHASE_FINANCE_INSERT_FAILED");
+        }
+
+        const financeLines: Array<
+          typeof financeTransactionLinesTable.$inferInsert
+        > = [
+          {
+            transactionId: financeTransaction.id,
+            lineNumber: 1,
+            accountId: purchaseAccount.id,
+            debitMinor: totalMinor,
+            creditMinor: 0,
+            memo: `فاتورة مشتريات ${purchase.publicId}`,
+          },
+        ];
+
+        let financeLineNumber = 2;
+
+        if (paidMinor > 0 && cashAccount) {
+          financeLines.push({
+            transactionId: financeTransaction.id,
+            lineNumber: financeLineNumber++,
+            accountId: cashAccount.id,
+            debitMinor: 0,
+            creditMinor: paidMinor,
+            memo: "دفعة نقدية للمورد",
+          });
+        }
+
+        if (dueMinor > 0 && supplierAccount) {
+          financeLines.push({
+            transactionId: financeTransaction.id,
+            lineNumber: financeLineNumber++,
+            accountId: supplierAccount.id,
+            debitMinor: 0,
+            creditMinor: dueMinor,
+            memo: `ذمة المورد ${supplier.name}`,
+          });
+        }
+
+        const debitTotal = financeLines.reduce(
+          (sum, line) => sum + (line.debitMinor ?? 0),
+          0,
+        );
+
+        const creditTotal = financeLines.reduce(
+          (sum, line) => sum + (line.creditMinor ?? 0),
+          0,
+        );
+
+        if (debitTotal !== creditTotal) {
+          throw new Error("PURCHASE_FINANCE_NOT_BALANCED");
+        }
+
+        await tx
+          .insert(financeTransactionLinesTable)
+          .values(financeLines);
+      }
+
+      if (
+        paidMinor > 0 &&
+        cashSession &&
+        expectedCashAfter !== null
+      ) {
+        const updatedSessionRows = await tx
+          .update(cashSessionsTable)
+          .set({
+            expectedBalanceMinor: expectedCashAfter,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(cashSessionsTable.id, cashSession.id),
+              eq(cashSessionsTable.status, "open"),
+            ),
+          )
+          .returning({
+            id: cashSessionsTable.id,
+          });
+
+        if (!updatedSessionRows[0]) {
+          throw new PurchaseError(
+            "تم إغلاق الصندوق قبل إتمام فاتورة المشتريات",
+            409,
+          );
+        }
+      }
+
       return {
         purchase,
         items: insertedItems,
@@ -1570,12 +2087,18 @@ async function handleCreatePurchase(
       };
     });
 
+    const navigation = await getPurchaseNavigation(
+      db,
+      result.purchase,
+    );
+
     return json(
       toPurchaseResponse(
         result.purchase,
         result.items,
         result.supplier,
         result.alreadyCreated,
+        navigation,
       ),
       result.alreadyCreated ? 200 : 201,
     );
@@ -1639,6 +2162,13 @@ export async function handlePosPurchaseRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/purchases/latest"
+  ) {
+    return handleLatestPurchase(request, db, env);
+  }
 
   if (
     request.method === "GET" &&

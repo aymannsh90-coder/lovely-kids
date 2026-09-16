@@ -76,6 +76,37 @@ export default function SuppliersPage() {
 
   const inactiveCount = suppliers.length - activeCount;
 
+  const financeSummary = useMemo(
+    () =>
+      suppliers.reduce(
+        (summary, supplier) => ({
+          totalPurchasesMinor:
+            summary.totalPurchasesMinor +
+            supplier.totalPurchasesMinor,
+          paidMinor:
+            summary.paidMinor + supplier.paidMinor,
+          dueMinor:
+            summary.dueMinor + supplier.dueMinor,
+        }),
+        {
+          totalPurchasesMinor: 0,
+          paidMinor: 0,
+          dueMinor: 0,
+        },
+      ),
+    [suppliers],
+  );
+
+  const formatMoney = (minor: number) => {
+    const amount = minor / 100;
+
+    return `${amount.toLocaleString("ar", {
+      minimumFractionDigits:
+        Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: 2,
+    })} ₪`;
+  };
+
   useEffect(() => {
     if (SUPPLIER_API_ENABLED) {
       void loadSuppliers("", "all");
@@ -256,6 +287,29 @@ export default function SuppliersPage() {
         <article>
           <span>موردون غير فعالين</span>
           <strong>{inactiveCount}</strong>
+        </article>
+
+        <article>
+          <span>إجمالي المشتريات</span>
+          <strong>
+            {formatMoney(
+              financeSummary.totalPurchasesMinor,
+            )}
+          </strong>
+        </article>
+
+        <article>
+          <span>إجمالي المدفوع</span>
+          <strong>
+            {formatMoney(financeSummary.paidMinor)}
+          </strong>
+        </article>
+
+        <article>
+          <span>إجمالي المستحق للموردين</span>
+          <strong>
+            {formatMoney(financeSummary.dueMinor)}
+          </strong>
         </article>
       </section>
 
@@ -469,6 +523,9 @@ export default function SuppliersPage() {
                 <th>اسم المورد</th>
                 <th>جهة الاتصال</th>
                 <th>الهاتف / الجوال</th>
+                <th>إجمالي المشتريات</th>
+                <th>المدفوع</th>
+                <th>المستحق</th>
                 <th>الحالة</th>
                 <th>العنوان</th>
               </tr>
@@ -477,7 +534,7 @@ export default function SuppliersPage() {
             <tbody>
               {suppliers.length === 0 ? (
                 <tr className="accounting-empty-row">
-                  <td colSpan={7}>
+                  <td colSpan={10}>
                     {SUPPLIER_API_ENABLED
                       ? loading
                         ? "جاري تحميل الموردين…"
@@ -504,6 +561,33 @@ export default function SuppliersPage() {
                       {[supplier.phone, supplier.mobile]
                         .filter(Boolean)
                         .join(" / ") || "—"}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {formatMoney(
+                          supplier.totalPurchasesMinor,
+                        )}
+                      </strong>
+                    </td>
+
+                    <td>
+                      {formatMoney(supplier.paidMinor)}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {formatMoney(supplier.dueMinor)}
+                      </strong>
+
+                      {supplier.supplierCreditMinor > 0 && (
+                        <div>
+                          رصيد دائن لنا:{" "}
+                          {formatMoney(
+                            supplier.supplierCreditMinor,
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td>

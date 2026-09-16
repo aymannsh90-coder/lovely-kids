@@ -662,6 +662,19 @@ export interface PosSupplier {
   address: string | null;
   notes: string | null;
   status: "active" | "inactive";
+
+  totalPurchasesMinor: number;
+  totalPurchases: number;
+
+  paidMinor: number;
+  paid: number;
+
+  dueMinor: number;
+  due: number;
+
+  supplierCreditMinor: number;
+  supplierCredit: number;
+
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -795,6 +808,17 @@ export function getPosPurchaseByPublicId(
 ) {
   return apiRequest<PosPurchaseResult>(
     `/api/pos/purchases/by-public-id?publicId=${encodeURIComponent(publicId)}`,
+    {},
+    token,
+  );
+}
+
+export function getLatestPosPurchase(
+  token: string,
+  warehouseKey = "main",
+) {
+  return apiRequest<PosPurchaseResult>(
+    `/api/pos/purchases/latest?warehouseKey=${encodeURIComponent(warehouseKey)}`,
     {},
     token,
   );
