@@ -47,6 +47,18 @@ function getCategoryImage(label: string) {
     return require("../assets/images/category-cards/baby-overalls.png");
   }
 
+  if (
+    text.includes("مناشف") ||
+    text.includes("برنص") ||
+    text.includes("برانص")
+  ) {
+    return require("../assets/images/category-cards/bath-towels-robes.png");
+  }
+
+  if (text.includes("شنط") && text.includes("بيبي")) {
+    return require("../assets/images/category-cards/baby-bags.png");
+  }
+
   if (text.includes("حرامات") || text.includes("بطانيات")) {
     return require("../assets/images/category-cards/blankets.png");
   }
