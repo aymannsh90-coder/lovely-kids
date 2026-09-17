@@ -50,6 +50,8 @@ const PRODUCT_CATEGORY_IMAGES = {
   tracksuits: require("../assets/images/category-cards/tracksuits.png"),
   babyBoxSets: require("../assets/images/category-cards/baby-box-sets.png"),
   babyOveralls: require("../assets/images/category-cards/baby-overalls.png"),
+  bathTowelsRobes: require("../assets/images/category-cards/bath-towels-robes.png"),
+  babyBags: require("../assets/images/category-cards/baby-bags.png"),
 };
 
 function normalizeCategoryLabel(label: string) {
@@ -75,6 +77,16 @@ function getCategoryImage(label: string): any {
     value.includes("بيبي")
   )
     return PRODUCT_CATEGORY_IMAGES.babyOveralls;
+
+  if (
+    value.includes("مناشف") ||
+    value.includes("برنص") ||
+    value.includes("برانص")
+  )
+    return PRODUCT_CATEGORY_IMAGES.bathTowelsRobes;
+
+  if (value.includes("شنط") && value.includes("بيبي"))
+    return PRODUCT_CATEGORY_IMAGES.babyBags;
 
   if (value.includes("ترينجات") || value.includes("ترنجات"))
     return PRODUCT_CATEGORY_IMAGES.tracksuits;

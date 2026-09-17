@@ -137,6 +137,8 @@ const HOME_CATEGORY_IMAGES = {
   tracksuits: require("../../assets/images/category-cards/tracksuits.png"),
   babyBoxSets: require("../../assets/images/category-cards/baby-box-sets.png"),
   babyOveralls: require("../../assets/images/category-cards/baby-overalls.png"),
+  bathTowelsRobes: require("../../assets/images/category-cards/bath-towels-robes.png"),
+  babyBags: require("../../assets/images/category-cards/baby-bags.png"),
 };
 
 function normalizeHomeCategoryLabel(label: string) {
@@ -164,6 +166,18 @@ function getHomeCategoryImage(label: string): any {
     value.includes("بيبي")
   ) {
     return HOME_CATEGORY_IMAGES.babyOveralls;
+  }
+
+  if (
+    value.includes("مناشف") ||
+    value.includes("برنص") ||
+    value.includes("برانص")
+  ) {
+    return HOME_CATEGORY_IMAGES.bathTowelsRobes;
+  }
+
+  if (value.includes("شنط") && value.includes("بيبي")) {
+    return HOME_CATEGORY_IMAGES.babyBags;
   }
 
   if (value.includes("ترينجات") || value.includes("ترنجات")) {
