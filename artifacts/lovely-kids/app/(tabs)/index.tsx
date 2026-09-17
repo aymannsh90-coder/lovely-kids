@@ -795,20 +795,18 @@ export default function HomeScreen() {
           onPress={() => router.push("/offers")}
           style={[
             {
-              marginHorizontal: 16,
+              marginHorizontal: 0,
               marginTop: 8,
               marginBottom: 10,
-              height: 150,
-              borderRadius: 20,
+              aspectRatio: 1792 / 1024,
+              borderRadius: 16,
               overflow: "hidden",
               backgroundColor: "#FFF8FB",
-              borderWidth: 3,
-              borderColor: "#F43F7A",
-              shadowColor: "#F43F7A",
-              shadowOpacity: 0.13,
-              shadowRadius: 7,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 3,
+              shadowColor: "#000",
+              shadowOpacity: 0.06,
+              shadowRadius: 5,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 1,
             },
             desktopBannerStyle,
           ]}
@@ -822,78 +820,165 @@ export default function HomeScreen() {
             }}
           />
 
+          {/* OFFERS_BANNER_MOTION */}
           <View
             pointerEvents="none"
             style={{
               position: "absolute",
-              top: -1,
+              top: 0,
               left: 0,
               right: 0,
-              alignItems: "center",
-              zIndex: 10,
+              bottom: 0,
+              overflow: "hidden",
             }}
           >
-            <View
+            {/* لمعة تمر فوق البانر */}
+            <Animated.View
               style={{
-                backgroundColor: "#FFF8FB",
-                paddingHorizontal: 5,
-                marginTop: -9,
+                position: "absolute",
+                top: -45,
+                bottom: -45,
+                width: 95,
+                backgroundColor: "rgba(255,255,255,0.48)",
+                opacity: offersCtaPulse.interpolate({
+                  inputRange: [0, 0.12, 0.88, 1],
+                  outputRange: [0, 0.82, 0.82, 0],
+                }),
+                transform: [
+                  {
+                    translateX: offersCtaPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-120, 700],
+                    }),
+                  },
+                  { rotate: "18deg" },
+                ],
+              }}
+            />
+
+            {/* OFFERS_ANIMATED_HAND */}
+            <Animated.View
+              style={{
+                position: "absolute",
+                left: "39%",
+                top: "54%",
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                borderWidth: 3,
+                borderColor: "#FFFFFF",
+                opacity: offersCtaPulse.interpolate({
+                  inputRange: [0, 0.35, 0.55, 0.72, 1],
+                  outputRange: [0, 0.15, 0.9, 0.15, 0],
+                }),
+                transform: [
+                  {
+                    scale: offersCtaPulse.interpolate({
+                      inputRange: [0, 0.5, 0.65, 1],
+                      outputRange: [0.55, 0.7, 1.35, 1.55],
+                    }),
+                  },
+                ],
+              }}
+            />
+
+            <Animated.View
+              style={{
+                position: "absolute",
+                left: "38%",
+                top: "48%",
+                opacity: offersCtaPulse.interpolate({
+                  inputRange: [0, 0.15, 0.85, 1],
+                  outputRange: [0, 1, 1, 0],
+                }),
+                transform: [
+                  {
+                    translateY: offersCtaPulse.interpolate({
+                      inputRange: [0, 0.45, 0.62, 1],
+                      outputRange: [-18, -4, 5, -18],
+                    }),
+                  },
+                  {
+                    translateX: offersCtaPulse.interpolate({
+                      inputRange: [0, 0.45, 0.62, 1],
+                      outputRange: [12, 3, 0, 12],
+                    }),
+                  },
+                  {
+                    scale: offersCtaPulse.interpolate({
+                      inputRange: [0, 0.5, 0.62, 0.75, 1],
+                      outputRange: [0.9, 1.05, 0.82, 1.05, 0.9],
+                    }),
+                  },
+                  {
+                    rotate: offersCtaPulse.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: ["-10deg", "0deg", "-10deg"],
+                    }),
+                  },
+                ],
               }}
             >
-              <Text style={{ fontSize: 21 }}>
-                {String.fromCodePoint(0x1F380)}
+              <Text
+                style={{
+                  fontSize: 38,
+                  textShadowColor: "rgba(0,0,0,0.20)",
+                  textShadowOffset: { width: 0, height: 2 },
+                  textShadowRadius: 3,
+                }}
+              >
+                👆🏻
               </Text>
-            </View>
+            </Animated.View>
+
+            {/* بريق أعلى اليمين */}
+            <Animated.View
+              style={{
+                position: "absolute",
+                top: 14,
+                right: 22,
+                opacity: offersCtaPulse.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0.25, 1, 0.25],
+                }),
+                transform: [
+                  {
+                    scale: offersCtaPulse.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [0.75, 1.25, 0.75],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Ionicons name="star" size={19} color="#FFFFFF" />
+            </Animated.View>
+
+            {/* بريق أسفل اليسار */}
+            <Animated.View
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: 28,
+                opacity: offersCtaPulse.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [1, 0.3, 1],
+                }),
+                transform: [
+                  {
+                    translateY: offersCtaPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-3, 5],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Ionicons name="sparkles" size={18} color="#FFF3A6" />
+            </Animated.View>
           </View>
 
-          <Animated.View
-            style={[{
-              position: "absolute",
-              bottom: 3,
-              left: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "rgba(255,255,255,0.96)",
-              borderRadius: 16,
-              paddingHorizontal: 7,
-              paddingVertical: 3,
-              borderWidth: 1,
-              borderColor: "rgba(233,30,140,0.35)",
-              shadowColor: "#E91E8C",
-              shadowOffset: { width: 0, height: 0 },
-              elevation: 4,
-            },
-            {
-              shadowOpacity: offersCtaPulse.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.08, 0.55],
-              }),
-              shadowRadius: offersCtaPulse.interpolate({
-                inputRange: [0, 1],
-                outputRange: [3, 15],
-              }),
-              borderColor: offersCtaPulse.interpolate({
-                inputRange: [0, 1],
-                outputRange: [
-                  "rgba(233,30,140,0.25)",
-                  "rgba(233,30,140,0.90)",
-                ],
-              }),
-            },
-          ]}
-          >
-            <Ionicons name="arrow-back" size={12} color="#E91E8C" />
-            <Text
-              style={{
-                color: "#E91E8C",
-                fontSize: 9,
-                fontWeight: "700",
-                marginLeft: 4,
-              }}
-            >
-              اضغط للدخول لقسم العروض
-            </Text>
-          </Animated.View>
+
         </Pressable>
       ) : null}
 
