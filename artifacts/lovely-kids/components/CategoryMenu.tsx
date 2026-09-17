@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Platform,
   Animated,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -24,6 +25,82 @@ const BRAND_BG = "#F0FAFE";
 const BRAND_NAVY = "#172554";
 
 export const DESKTOP_CATEGORY_SIDEBAR_WIDTH = 270;
+
+function getCategoryImage(label: string) {
+  const text = label
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا");
+
+  if (
+    text.includes("اطقم") &&
+    text.includes("بيبي") &&
+    text.includes("علب")
+  ) {
+    return require("../assets/images/category-cards/baby-box-sets.png");
+  }
+
+  if (
+    (text.includes("افرهولات") || text.includes("افرولات")) &&
+    text.includes("بيبي")
+  ) {
+    return require("../assets/images/category-cards/baby-overalls.png");
+  }
+
+  if (text.includes("حرامات") || text.includes("بطانيات")) {
+    return require("../assets/images/category-cards/blankets.png");
+  }
+
+  if (text.includes("ترينجات") || text.includes("ترنجات")) {
+    return require("../assets/images/category-cards/tracksuits.png");
+  }
+
+  if (text.includes("مستلزمات") && text.includes("بيبي")) {
+    return require("../assets/images/category-cards/baby-essentials.png");
+  }
+
+  if (text.includes("اطقم") && text.includes("ولادي")) {
+    return require("../assets/images/category-cards/boys-sets.png");
+  }
+
+  if (text.includes("اطقم") && text.includes("بناتي")) {
+    return require("../assets/images/category-cards/girls-sets.png");
+  }
+
+  if (text.includes("اطقم") && text.includes("بيبي")) {
+    return require("../assets/images/category-cards/baby-sets.png");
+  }
+
+  if (
+    text.includes("بلاطين") ||
+    text.includes("بناطيل") ||
+    text.includes("بنطلون")
+  ) {
+    return require("../assets/images/category-cards/pants.png");
+  }
+
+  if (
+    text.includes("بلايز") ||
+    text.includes("بلوز") ||
+    text.includes("بلوزة")
+  ) {
+    return require("../assets/images/category-cards/tops.png");
+  }
+
+  if (text.includes("شورت")) {
+    return require("../assets/images/category-cards/shorts.png");
+  }
+
+  if (text.includes("فستان") || text.includes("فساتين")) {
+    return require("../assets/images/category-cards/dresses.png");
+  }
+
+  if (text.includes("قمصان") || text.includes("قميص")) {
+    return require("../assets/images/category-cards/shirts.png");
+  }
+
+  return null;
+}
 
 function getCategoryEmoji(id: string, label: string): string | null {
   const text = label.trim().toLowerCase();
@@ -238,6 +315,7 @@ export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
               {categories.map((categoryItem) => {
                 const isSelected =
                   isWeb && categoryItem.id === activeCategory;
+          const categoryImage = getCategoryImage(categoryItem.label);
 
                 if (!isWeb) {
                   return (
@@ -325,17 +403,14 @@ export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
                           size={19}
                           color={isSelected ? BRAND_PINK : "#25A9D6"}
                         />
+                      ) : categoryImage ? (
+                        <Image
+                          source={categoryImage}
+                          resizeMode="cover"
+                          style={styles.webCategoryImage}
+                        />
                       ) : (
-                        <Text
-                          style={[
-                            styles.categoryEmoji,
-                            categoryItem.label.includes("طقم") ||
-                            categoryItem.label.includes("أطقم") ||
-                            categoryItem.label.includes("اطقم")
-                              ? styles.categoryEmojiWide
-                              : null,
-                          ]}
-                        >
+                        <Text style={styles.categoryEmoji}>
                           {getCategoryEmoji(
                             categoryItem.id,
                             categoryItem.label,
@@ -447,6 +522,7 @@ export function DesktopCategorySidebar({ offersOnly = false }: { offersOnly?: bo
         {categories.map((categoryItem) => {
           const isSelected =
             categoryItem.id === activeCategory;
+          const categoryImage = getCategoryImage(categoryItem.label);
 
           return (
             <Pressable
@@ -494,16 +570,15 @@ export function DesktopCategorySidebar({ offersOnly = false }: { offersOnly?: bo
                         : "#25A9D6"
                     }
                   />
+                ) : categoryImage ? (
+                  <Image
+                    source={categoryImage}
+                    resizeMode="cover"
+                    style={styles.webCategoryImage}
+                  />
                 ) : (
                   <Text
-                    style={[
-                      styles.categoryEmoji,
-                      categoryItem.label.includes("طقم") ||
-                      categoryItem.label.includes("أطقم") ||
-                      categoryItem.label.includes("اطقم")
-                        ? styles.categoryEmojiWide
-                        : null,
-                    ]}
+                    style={styles.categoryEmoji}
                   >
                     {getCategoryEmoji(
                       categoryItem.id,
@@ -712,6 +787,11 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
+  },
+  webCategoryImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   categoryEmoji: {
     fontSize: 18,
