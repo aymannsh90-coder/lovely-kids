@@ -8,7 +8,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -42,6 +42,7 @@ const queryClient = new QueryClient();
 const FONT_LOAD_TIMEOUT_MS = 5000;
 // Maximum time (ms) the welcome splash can stay on screen no matter what.
 const SPLASH_HARD_TIMEOUT_MS = 3500;
+const WEB_WELCOME_SESSION_KEY = "lovely_kids_welcome_seen";
 
 function RootLayoutNav() {
   const { user, getAuthToken } = useAuth();
@@ -89,7 +90,28 @@ export default function RootLayout() {
   });
   // Safety: if fonts take too long, proceed anyway so the app never gets stuck.
   const [fontTimedOut, setFontTimedOut] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(() => {
+    if (Platform.OS !== "web") return true;
+    if (typeof window === "undefined") return true;
+
+    try {
+      return window.sessionStorage.getItem(WEB_WELCOME_SESSION_KEY) !== "1";
+    } catch {
+      return true;
+    }
+  });
+
+  const dismissWelcome = useCallback(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem(WEB_WELCOME_SESSION_KEY, "1");
+      } catch {
+        // sessionStorage may be unavailable in restricted/private browser modes.
+      }
+    }
+
+    setShowWelcome(false);
+  }, []);
 
   useEffect(() => {
     console.log("[Startup] App startup begin");
@@ -112,15 +134,15 @@ export default function RootLayout() {
   // Hard safety: splash must never stay on screen longer than SPLASH_HARD_TIMEOUT_MS
   // regardless of what happens inside WelcomeSplash or its contexts.
   useEffect(() => {
-    if (!fontsReady) return;
+    if (!fontsReady || !showWelcome) return;
 
     const t = setTimeout(() => {
       console.log("[Startup] Splash hard timeout — forcing dismiss");
-      setShowWelcome(false);
+      dismissWelcome();
     }, SPLASH_HARD_TIMEOUT_MS);
 
     return () => clearTimeout(t);
-  }, [fontsReady]);
+  }, [dismissWelcome, fontsReady, showWelcome]);
 
   if (!fontsReady) {
     return <View style={{ flex: 1, backgroundColor: Platform.OS === "web" ? "#FFFFFF" : "#E91E8C" }} />;
@@ -143,12 +165,7 @@ export default function RootLayout() {
                               <RootLayoutNav />
                               {!showWelcome && <StickyCartBar />}
                               {showWelcome && (
-                                <WelcomeSplash
-                                  onFinish={() => {
-                                    console.log("[Startup] Splash finished");
-                                    setShowWelcome(false);
-                                  }}
-                                />
+                                <WelcomeSplash onFinish={dismissWelcome} />
                               )}
                             </KeyboardProvider>
                           ) : (
@@ -156,12 +173,7 @@ export default function RootLayout() {
                               <RootLayoutNav />
                               {!showWelcome && <StickyCartBar />}
                               {showWelcome && (
-                                <WelcomeSplash
-                                  onFinish={() => {
-                                    console.log("[Startup] Web splash finished");
-                                    setShowWelcome(false);
-                                  }}
-                                />
+                                <WelcomeSplash onFinish={dismissWelcome} />
                               )}
                               {!showWelcome && (
                                 <>
