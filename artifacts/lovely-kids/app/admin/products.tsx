@@ -63,7 +63,7 @@ export default function AdminProductsScreen() {
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
   const [stockFilter, setStockFilter] = useState<
-    "all" | "out" | "offers" | "hidden" | "trash" | "qr_missing"
+    "all" | "out" | "offers" | "pinned" | "hidden" | "trash" | "qr_missing"
   >("all");
   const [search, setSearch] = useState("");
 
@@ -412,6 +412,10 @@ export default function AdminProductsScreen() {
     (product) => !!product.showInOffers,
   ).length;
 
+  const pinnedCount = visibleProducts.filter(
+    (product) => product.isPinned === true,
+  ).length;
+
   const missingQrCount = visibleProducts.filter(
     (product) => !productHasGeneratedQr(product),
   ).length;
@@ -454,6 +458,7 @@ export default function AdminProductsScreen() {
       ) return false;
       if (stockFilter === "out" && !isProductOutOfStock(product)) return false;
       if (stockFilter === "offers" && product.showInOffers !== true) return false;
+      if (stockFilter === "pinned" && product.isPinned !== true) return false;
     }
 
     const query = search.trim().toLowerCase();
@@ -598,6 +603,12 @@ export default function AdminProductsScreen() {
             label: `العروض (${offersCount})`,
             icon: "flame-outline" as const,
             activeColor: "#f97316",
+          },
+          {
+            key: "pinned" as const,
+            label: `المثبتة (${pinnedCount})`,
+            icon: "pin-outline" as const,
+            activeColor: "#f59e0b",
           },
           {
             key: "out" as const,
