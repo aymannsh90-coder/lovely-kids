@@ -44,7 +44,8 @@ export default function AddProductScreen() {
   const barcodeBeep = useAudioPlayer(require("../../assets/sounds/barcode-beep.wav"));
   const insets = useSafeAreaInsets();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const { productId } = useLocalSearchParams<{ productId?: string }>();
+  const { productId, copyFrom } =
+    useLocalSearchParams<{ productId?: string; copyFrom?: string }>();
   const { products, addProduct, updateProduct } = useProducts();
   const { settings } = useAppSettings();
   const { getAuthToken } = useAuth();
@@ -65,7 +66,13 @@ export default function AddProductScreen() {
   ];
 
   const editProduct = productId ? products.find((p) => p.id === productId) : null;
+  const copyProduct =
+    !productId && copyFrom
+      ? products.find((p) => p.id === copyFrom)
+      : null;
+
   const isEdit = !!editProduct;
+  const isCopy = !!copyProduct;
 
   const [nameAr, setNameAr] = useState(editProduct?.nameAr ?? "");
   const [name, setName] = useState(editProduct?.name ?? "");
@@ -163,8 +170,88 @@ export default function AddProductScreen() {
     startX: 0,
     startY: 0,
   });
+  const copiedFromRef = useRef<string | null>(null);
+
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
+
+  useEffect(() => {
+    if (
+      !copyProduct ||
+      !copyFrom ||
+      productId ||
+      copiedFromRef.current === copyProduct.id
+    ) {
+      return;
+    }
+
+    copiedFromRef.current = copyProduct.id;
+
+    setNameAr(copyProduct.nameAr ?? "");
+    setName(copyProduct.name ?? "");
+    setPrice(copyProduct.price?.toString() ?? "");
+    setOriginalPrice(copyProduct.originalPrice?.toString() ?? "");
+    setDescription(copyProduct.description ?? "");
+    setCategory(copyProduct.category ?? "clothes");
+    setAgeGroup(copyProduct.ageGroup ?? "newborn");
+    setGender(copyProduct.gender ?? null);
+    setSeason(copyProduct.season ?? null);
+    setIsPinned(copyProduct.isPinned ?? false);
+    setShowInOffers(copyProduct.showInOffers ?? false);
+
+    setFacebookUrl(copyProduct.facebookUrl ?? "");
+    setInstagramUrl(copyProduct.instagramUrl ?? "");
+    setTiktokUrl(copyProduct.tiktokUrl ?? "");
+
+    // لا ننسخ الصور أو الأكواد أو الباركود أو QR
+    setImage("");
+    setImages([]);
+    setProductCode("");
+    setBarcode("");
+    setAdditionalBarcodes([]);
+    setAdditionalBarcodesExpanded(false);
+
+    // لا ننسخ المخزون
+    setStock("");
+
+    // ننسخ المقاسات
+    setSizes([...(copyProduct.sizes ?? [])]);
+
+    // ننسخ الألوان والمقاسات داخل كل لون، بدون صورة اللون وبدون الكميات
+    setColorVariants(
+      (copyProduct.colorVariants ?? []).map((variant) => ({
+        color: variant.color,
+        hex: variant.hex,
+        sizes: variant.sizes.map((entry) => ({
+          size: entry.size,
+        })),
+      })),
+    );
+
+    setIsNew(copyProduct.isNew ?? false);
+
+    const remainingDays =
+      copyProduct.isNew && copyProduct.newUntil
+        ? Math.max(
+            1,
+            Math.ceil(
+              (new Date(copyProduct.newUntil).getTime() - Date.now()) /
+                86400000,
+            ),
+          )
+        : 7;
+
+    setNewDays(String(remainingDays));
+    setNewDaysMode(
+      remainingDays === 7
+        ? "7"
+        : remainingDays === 14
+          ? "14"
+          : "custom",
+    );
+    setNewDurationChanged(false);
+    setErrors([]);
+  }, [copyFrom, copyProduct, productId]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -1704,7 +1791,9 @@ export default function AddProductScreen() {
         <Pressable onPress={() => router.back()}>
           <Ionicons name="arrow-forward" size={24} color="#fff" />
         </Pressable>
-        <Text style={styles.title}>{isEdit ? "تعديل المنتج" : "إضافة منتج جديد"}</Text>
+        <Text style={styles.title}>
+          {isEdit ? "تعديل المنتج" : isCopy ? "نسخ منتج" : "إضافة منتج جديد"}
+        </Text>
         <View style={{ width: 24 }} />
       </View>
 
