@@ -118,6 +118,7 @@ export default function AddProductScreen() {
   const [newColorHex, setNewColorHex] = useState("#EF4444");
   const [colorSizeInputs, setColorSizeInputs] = useState<Record<number, string>>({});
   const [colorSizeQtyInputs, setColorSizeQtyInputs] = useState<Record<number, string>>({});
+  const [colorSizeNameDrafts, setColorSizeNameDrafts] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1248,6 +1249,69 @@ export default function AddProductScreen() {
     setColorVariants((prev) =>
       prev.map((c, i) => (i !== idx ? c : { ...c, sizes: c.sizes.filter((s) => s.size !== size) }))
     );
+  };
+
+  const commitColorSizeName = (colorIdx: number, sizeIdx: number) => {
+    const key = `${colorIdx}:${sizeIdx}`;
+    const variant = colorVariants[colorIdx];
+    const currentSize = variant?.sizes[sizeIdx];
+
+    if (!variant || !currentSize) return;
+
+    const oldSize = currentSize.size;
+    const nextSize = (colorSizeNameDrafts[key] ?? oldSize)
+      .trim()
+      .toUpperCase();
+
+    setColorSizeNameDrafts((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+    if (!nextSize) {
+      setErrors(["اسم المقاس لا يمكن أن يكون فارغًا"]);
+      return;
+    }
+
+    const duplicate = variant.sizes.some(
+      (entry, index) =>
+        index !== sizeIdx &&
+        entry.size.trim().toUpperCase() === nextSize,
+    );
+
+    if (duplicate) {
+      setErrors([`المقاس ${nextSize} موجود مسبقًا لهذا اللون`]);
+      return;
+    }
+
+    if (nextSize === oldSize) return;
+
+    setColorVariants((prev) =>
+      prev.map((color, index) =>
+        index !== colorIdx
+          ? color
+          : {
+              ...color,
+              sizes: color.sizes.map((entry, index) =>
+                index === sizeIdx
+                  ? { ...entry, size: nextSize }
+                  : entry,
+              ),
+            },
+      ),
+    );
+
+    // Keep QR / additional barcode mapping connected to the renamed size.
+    setAdditionalBarcodes((prev) =>
+      prev.map((item) =>
+        item.color === variant.color && item.size === oldSize
+          ? { ...item, size: nextSize }
+          : item,
+      ),
+    );
+
+    setErrors([]);
   };
 
   const updateSizeStock = (idx: number, size: string, value: string) => {
@@ -2734,11 +2798,11 @@ export default function AddProductScreen() {
 
                   {cv.sizes.length > 0 && (
                     <View style={styles.colorSizesList}>
-                      {cv.sizes.map((s) => {
+                      {cv.sizes.map((s, sizeIdx) => {
                         const out = isSizeOutOfStock(s);
                         return (
                           <View
-                            key={s.size}
+                            key={`${idx}-${sizeIdx}`}
                             style={[
                               styles.colorSizeRow,
                               { backgroundColor: out ? "#fee2e2" : colors.primary + "12", borderColor: out ? "#ef4444" : colors.primary + "40" },
@@ -2757,9 +2821,49 @@ export default function AddProductScreen() {
                               textAlign="center"
                             />
                             <Text style={[styles.hint, { color: colors.mutedForeground, marginBottom: 0 }]}>قطعة</Text>
-                            <Text style={[styles.sizeChipText, { color: out ? "#ef4444" : colors.primary, marginRight: "auto" }]}>
-                              {s.size}
-                            </Text>
+                            <TextInput
+                              value={
+                                colorSizeNameDrafts[`${idx}:${sizeIdx}`] ??
+                                s.size
+                              }
+                              onFocus={() =>
+                                setColorSizeNameDrafts((prev) => ({
+                                  ...prev,
+                                  [`${idx}:${sizeIdx}`]: s.size,
+                                }))
+                              }
+                              onChangeText={(value) =>
+                                setColorSizeNameDrafts((prev) => ({
+                                  ...prev,
+                                  [`${idx}:${sizeIdx}`]: value,
+                                }))
+                              }
+                              onBlur={() =>
+                                commitColorSizeName(idx, sizeIdx)
+                              }
+                              onSubmitEditing={() =>
+                                commitColorSizeName(idx, sizeIdx)
+                              }
+                              placeholder="المقاس"
+                              placeholderTextColor={colors.mutedForeground}
+                              autoCapitalize="characters"
+                              returnKeyType="done"
+                              selectTextOnFocus
+                              style={{
+                                minWidth: 78,
+                                maxWidth: 140,
+                                paddingHorizontal: 9,
+                                paddingVertical: 5,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderRadius: 8,
+                                color: out ? "#ef4444" : colors.primary,
+                                backgroundColor: colors.card,
+                                textAlign: "center",
+                                fontWeight: "700",
+                                marginRight: "auto",
+                              }}
+                            />
                           </View>
                         );
                       })}
