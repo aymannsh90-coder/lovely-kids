@@ -286,6 +286,13 @@ export default function AdminProductsScreen() {
     await setProductHidden(product.id, !product.isHidden);
   };
 
+  const handleUnpin = async (product: Product) => {
+    await updateProduct({
+      ...product,
+      isPinned: false,
+    });
+  };
+
   const handleRestore = async (product: Product) => {
     await restoreProduct(product.id);
   };
@@ -857,6 +864,23 @@ export default function AdminProductsScreen() {
                   </>
                 ) : (
                   <>
+                    {stockFilter === "pinned" && item.isPinned ? (
+                      <Pressable
+                        accessibilityLabel="إلغاء تثبيت المنتج"
+                        onPress={() => void handleUnpin(item)}
+                        style={[
+                          styles.actionBtn,
+                          { backgroundColor: "#fef3c7" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="pin-outline"
+                          size={18}
+                          color="#d97706"
+                        />
+                      </Pressable>
+                    ) : null}
+
                     <Pressable
                       onPress={() => void handleToggleHidden(item)}
                       style={[
