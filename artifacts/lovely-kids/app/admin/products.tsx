@@ -864,6 +864,18 @@ export default function AdminProductsScreen() {
                       />
                     </Pressable>
                     <Pressable
+                      accessibilityLabel="نسخ المنتج"
+                      onPress={() =>
+                        router.push({
+                          pathname: "/admin/add-product",
+                          params: { copyFrom: item.id },
+                        })
+                      }
+                      style={[styles.actionBtn, { backgroundColor: "#e0f2fe" }]}
+                    >
+                      <Ionicons name="copy-outline" size={18} color="#0284c7" />
+                    </Pressable>
+                    <Pressable
                       onPress={() =>
                         router.push({
                           pathname: "/admin/add-product",
