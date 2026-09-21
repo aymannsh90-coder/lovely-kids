@@ -8,6 +8,8 @@ export interface Env {
   RESEND_API_KEY?: string;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  IMAGE_STORAGE_PROVIDER?: "supabase" | "r2";
+  R2_BUCKET?: R2Bucket;
   POS_PURCHASE_API_ENABLED?: string;
   POS_PURCHASE_WRITES_ENABLED?: string;
   VAPID_PUBLIC_KEY?: string;

@@ -1,30 +1,21 @@
 import type { Env } from "./db";
 
 const MEDIA_BASE_URL = "https://media.lovelykids.net/media/";
+const R2_MEDIA_PREFIX = "r2/";
 const STORAGE_HOST = "kgpxaifetrkclxfqpuxl.supabase.co";
 const STORAGE_PATH = "/storage/v1/object/public/product-images/";
 
-export function getMediaFilename(value: string | undefined | null): string | null {
-  if (!value) return null;
+export type MediaObjectProvider = "supabase" | "r2";
+
+export type MediaObjectRef = {
+  provider: MediaObjectProvider;
+  filename: string;
+};
+
+function decodeSafeFilename(encoded: string): string | null {
+  if (!encoded || encoded.includes("/")) return null;
 
   try {
-    const url = new URL(value);
-    let encoded: string | null = null;
-
-    if (
-      url.hostname === "media.lovelykids.net" &&
-      url.pathname.startsWith("/media/")
-    ) {
-      encoded = url.pathname.slice("/media/".length);
-    } else if (
-      url.hostname === STORAGE_HOST &&
-      url.pathname.startsWith(STORAGE_PATH)
-    ) {
-      encoded = url.pathname.slice(STORAGE_PATH.length);
-    }
-
-    if (!encoded || encoded.includes("/")) return null;
-
     const filename = decodeURIComponent(encoded);
 
     if (
@@ -42,12 +33,76 @@ export function getMediaFilename(value: string | undefined | null): string | nul
   }
 }
 
-export function toPublicMediaUrl(value: string): string {
-  const filename = getMediaFilename(value);
+export function getMediaObjectRef(
+  value: string | undefined | null,
+): MediaObjectRef | null {
+  if (!value) return null;
 
-  return filename
-    ? `${MEDIA_BASE_URL}${encodeURIComponent(filename)}`
-    : value;
+  try {
+    const url = new URL(value);
+
+    if (
+      url.hostname === "media.lovelykids.net" &&
+      url.pathname.startsWith("/media/")
+    ) {
+      const mediaPath = url.pathname.slice("/media/".length);
+
+      if (mediaPath.startsWith(R2_MEDIA_PREFIX)) {
+        const filename = decodeSafeFilename(
+          mediaPath.slice(R2_MEDIA_PREFIX.length),
+        );
+
+        return filename
+          ? { provider: "r2", filename }
+          : null;
+      }
+
+      const filename = decodeSafeFilename(mediaPath);
+
+      return filename
+        ? { provider: "supabase", filename }
+        : null;
+    }
+
+    if (
+      url.hostname === STORAGE_HOST &&
+      url.pathname.startsWith(STORAGE_PATH)
+    ) {
+      const filename = decodeSafeFilename(
+        url.pathname.slice(STORAGE_PATH.length),
+      );
+
+      return filename
+        ? { provider: "supabase", filename }
+        : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function getMediaFilename(
+  value: string | undefined | null,
+): string | null {
+  return getMediaObjectRef(value)?.filename ?? null;
+}
+
+export function toPublicMediaUrl(value: string): string {
+  const ref = getMediaObjectRef(value);
+
+  if (!ref) return value;
+
+  const prefix =
+    ref.provider === "r2"
+      ? R2_MEDIA_PREFIX
+      : "";
+
+  return (
+    `${MEDIA_BASE_URL}${prefix}` +
+    encodeURIComponent(ref.filename)
+  );
 }
 
 export function toStorageMediaUrl(
@@ -56,14 +111,23 @@ export function toStorageMediaUrl(
 ): string {
   if (!value.startsWith(MEDIA_BASE_URL)) return value;
 
-  const filename = getMediaFilename(value);
-  const supabaseUrl = env.SUPABASE_URL?.replace(/\/+$/, "");
+  const ref = getMediaObjectRef(value);
+  if (!ref) return value;
 
-  if (!filename || !supabaseUrl) return value;
+  // R2-backed media keeps its public media URL in the database.
+  // This preserves the storage provider explicitly and makes rollback safe.
+  if (ref.provider === "r2") {
+    return toPublicMediaUrl(value);
+  }
+
+  const supabaseUrl =
+    env.SUPABASE_URL?.replace(/\/+$/, "");
+
+  if (!supabaseUrl) return value;
 
   return (
     `${supabaseUrl}${STORAGE_PATH}` +
-    encodeURIComponent(filename)
+    encodeURIComponent(ref.filename)
   );
 }
 
@@ -76,7 +140,9 @@ function rewriteDeep(
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => rewriteDeep(item, rewrite));
+    return value.map((item) =>
+      rewriteDeep(item, rewrite)
+    );
   }
 
   if (
@@ -86,11 +152,17 @@ function rewriteDeep(
   ) {
     const proto = Object.getPrototypeOf(value);
 
-    if (proto === Object.prototype || proto === null) {
+    if (
+      proto === Object.prototype ||
+      proto === null
+    ) {
       return Object.fromEntries(
-        Object.entries(value as Record<string, unknown>).map(
-          ([key, item]) => [key, rewriteDeep(item, rewrite)],
-        ),
+        Object.entries(
+          value as Record<string, unknown>,
+        ).map(([key, item]) => [
+          key,
+          rewriteDeep(item, rewrite),
+        ]),
       );
     }
   }
@@ -98,8 +170,13 @@ function rewriteDeep(
   return value;
 }
 
-export function rewriteMediaUrlsForPublic<T>(value: T): T {
-  return rewriteDeep(value, toPublicMediaUrl) as T;
+export function rewriteMediaUrlsForPublic<T>(
+  value: T,
+): T {
+  return rewriteDeep(
+    value,
+    toPublicMediaUrl,
+  ) as T;
 }
 
 export function rewriteMediaUrlsForStorage<T>(
