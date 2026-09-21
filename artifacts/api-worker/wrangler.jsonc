@@ -16,6 +16,12 @@
       "id": "165581b7907f47b6884b71e02abab3c7"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "R2_BUCKET",
+      "bucket_name": "lovely-kids-media-r2"
+    }
+  ],
   "cache": {
     "enabled": false
   },
@@ -34,6 +40,7 @@
     }
   },
   "vars": {
+    "IMAGE_STORAGE_PROVIDER": "supabase",
     "POS_PURCHASE_API_ENABLED": "true",
     "POS_PURCHASE_WRITES_ENABLED": "true"
   }

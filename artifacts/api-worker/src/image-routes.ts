@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
-import { rewriteMediaUrlsForPublic } from "./media-url";
-import { getMediaFilename, toPublicMediaUrl } from "./media-url";
+import {
+  getMediaObjectRef,
+  rewriteMediaUrlsForPublic,
+  toPublicMediaUrl,
+} from "./media-url";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -34,7 +37,12 @@ export function getProductImageObjectPath(
   url: string | undefined,
   _env: Env,
 ): string | null {
-  return getMediaFilename(url);
+  const ref = getMediaObjectRef(url);
+  if (!ref) return null;
+
+  return ref.provider === "r2"
+    ? `r2/${ref.filename}`
+    : ref.filename;
 }
 
 
@@ -187,18 +195,89 @@ async function uploadToSupabase(
   );
 }
 
+async function uploadToR2(
+  env: Env,
+  filename: string,
+  buffer: Buffer,
+  mimeType: AllowedMimeType,
+): Promise<string> {
+  if (!env.R2_BUCKET) {
+    throw new Error("R2 bucket binding is missing");
+  }
+
+  await env.R2_BUCKET.put(
+    filename,
+    Uint8Array.from(buffer),
+    {
+      httpMetadata: {
+        contentType: mimeType,
+        cacheControl:
+          "public, max-age=31536000, immutable",
+      },
+    },
+  );
+
+  return (
+    "https://media.lovelykids.net/media/r2/" +
+    encodeURIComponent(filename)
+  );
+}
+
+function getImageStorageProvider(
+  env: Env,
+): "supabase" | "r2" {
+  return env.IMAGE_STORAGE_PROVIDER === "r2"
+    ? "r2"
+    : "supabase";
+}
+
 export async function deleteProductImageObjects(
   env: Env,
   objectPaths: string[],
 ): Promise<void> {
-  const paths = [...new Set(objectPaths)].filter(Boolean);
+  const paths =
+    [...new Set(objectPaths)].filter(Boolean);
+
   if (paths.length === 0) return;
 
-  const supabaseUrl = env.SUPABASE_URL?.replace(/\/+$/, "");
-  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  const r2Paths = paths
+    .filter((path) => path.startsWith("r2/"))
+    .map((path) => path.slice("r2/".length))
+    .filter(
+      (filename) =>
+        !!filename &&
+        !filename.includes("/") &&
+        !filename.includes("\\") &&
+        !filename.includes(".."),
+    );
+
+  const supabasePaths = paths.filter(
+    (path) => !path.startsWith("r2/"),
+  );
+
+  if (r2Paths.length > 0) {
+    if (!env.R2_BUCKET) {
+      throw new Error("R2 bucket binding is missing");
+    }
+
+    await Promise.all(
+      r2Paths.map((filename) =>
+        env.R2_BUCKET!.delete(filename)
+      ),
+    );
+  }
+
+  if (supabasePaths.length === 0) return;
+
+  const supabaseUrl =
+    env.SUPABASE_URL?.replace(/\/+$/, "");
+  const serviceKey =
+    env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceKey) {
-    throw new Error("Supabase Storage secrets are missing");
+    throw new Error(
+      "Supabase Storage secrets are missing",
+    );
   }
 
   const response = await fetch(
@@ -210,12 +289,15 @@ export async function deleteProductImageObjects(
         Authorization: `Bearer ${serviceKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ prefixes: paths }),
+      body: JSON.stringify({
+        prefixes: supabasePaths,
+      }),
     },
   );
 
   if (!response.ok) {
-    const details = await response.text().catch(() => "");
+    const details =
+      await response.text().catch(() => "");
 
     console.error(
       "Supabase Storage delete failed",
@@ -223,7 +305,9 @@ export async function deleteProductImageObjects(
       details,
     );
 
-    throw new Error("Supabase Storage delete failed");
+    throw new Error(
+      "Supabase Storage delete failed",
+    );
   }
 }
 
@@ -317,16 +401,31 @@ async function handleImageUpload(
     const filename =
       `${randomUUID()}.${ext}`;
 
-    const url = await uploadToSupabase(
-      env,
-      filename,
-      buffer,
-      normalizedMimeType,
-    );
+    const provider =
+      getImageStorageProvider(env);
+
+    const url =
+      provider === "r2"
+        ? await uploadToR2(
+            env,
+            filename,
+            buffer,
+            normalizedMimeType,
+          )
+        : await uploadToSupabase(
+            env,
+            filename,
+            buffer,
+            normalizedMimeType,
+          );
 
     return json({
       url,
-      objectPath: filename,
+      objectPath:
+        provider === "r2"
+          ? `r2/${filename}`
+          : filename,
+      provider,
     });
   } catch (error) {
     console.error("Image upload failed", error);
