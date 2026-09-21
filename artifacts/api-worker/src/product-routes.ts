@@ -180,6 +180,105 @@ function toProduct(
   };
 }
 
+
+function collectProductImageUrls(
+  product: Pick<
+    typeof productsTable.$inferSelect,
+    "image" | "images" | "colorVariants"
+  >,
+): Set<string> {
+  const urls = new Set<string>();
+
+  if (product.image) {
+    urls.add(product.image);
+  }
+
+  for (const url of (product.images as string[]) ?? []) {
+    if (url) urls.add(url);
+  }
+
+  for (
+    const variant of
+      (product.colorVariants as ColorVariant[]) ?? []
+  ) {
+    if (variant.image) urls.add(variant.image);
+  }
+
+  return urls;
+}
+
+async function cleanupRemovedProductImages(
+  db: Db,
+  env: Env,
+  previousProduct: Pick<
+    typeof productsTable.$inferSelect,
+    "image" | "images" | "colorVariants"
+  >,
+  updatedProduct: Pick<
+    typeof productsTable.$inferSelect,
+    "image" | "images" | "colorVariants"
+  >,
+): Promise<void> {
+  const previousUrls =
+    collectProductImageUrls(previousProduct);
+
+  const updatedUrls =
+    collectProductImageUrls(updatedProduct);
+
+  const removedUrls = [...previousUrls].filter(
+    (url) => !updatedUrls.has(url),
+  );
+
+  if (removedUrls.length === 0) return;
+
+  // Read current products AFTER the update.
+  // This protects images that are still used by this product
+  // or by any other product.
+  const products = await db
+    .select({
+      image: productsTable.image,
+      images: productsTable.images,
+      colorVariants: productsTable.colorVariants,
+    })
+    .from(productsTable);
+
+  const usedImageUrls = new Set<string>();
+
+  for (const product of products) {
+    for (const url of collectProductImageUrls(product)) {
+      usedImageUrls.add(url);
+    }
+  }
+
+  // Keep historical order images available as well.
+  const existingOrders = await db
+    .select({ items: ordersTable.items })
+    .from(ordersTable);
+
+  for (const order of existingOrders) {
+    const items =
+      (order.items as Array<{ image?: string }>) ?? [];
+
+    for (const item of items) {
+      if (item.image) {
+        usedImageUrls.add(item.image);
+      }
+    }
+  }
+
+  const objectPaths = removedUrls
+    .filter((url) => !usedImageUrls.has(url))
+    .map((url) => getProductImageObjectPath(url, env))
+    .filter((path): path is string => !!path);
+
+  if (objectPaths.length === 0) return;
+
+  await deleteProductImageObjects(
+    env,
+    objectPaths,
+  );
+}
+
 async function handleCreateProduct(
   request: Request,
   db: Db,
@@ -409,6 +508,25 @@ async function handleUpdateProduct(
 
     return updated;
   });
+
+  try {
+    await cleanupRemovedProductImages(
+      db,
+      env,
+      currentProduct,
+      product,
+    );
+  } catch (error) {
+    // Product update must remain successful even if storage cleanup
+    // temporarily fails. The orphan can be cleaned later.
+    console.error(
+      "UPDATE_PRODUCT_STORAGE_CLEANUP_FAILED",
+      {
+        productId: id,
+        error,
+      },
+    );
+  }
 
   return json(
     toProduct(product, additionalBarcodes),
