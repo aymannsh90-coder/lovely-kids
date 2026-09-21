@@ -99,7 +99,8 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 export async function saveTokenToServer(
   token: string,
   phone?: string | null,
-  getAuthToken?: (() => Promise<string | null>) | null
+  getAuthToken?: (() => Promise<string | null>) | null,
+  orderId?: number | null
 ): Promise<{ ok: boolean; error?: string }> {
   const endpoint = `${API_BASE}/api/push-tokens`;
   console.log("[Push] Registering token →", endpoint);
@@ -113,7 +114,11 @@ export async function saveTokenToServer(
     const res = await fetch(endpoint, {
       method: "POST",
       headers,
-      body: JSON.stringify({ token, phone: phone ?? undefined }),
+      body: JSON.stringify({
+        token,
+        phone: phone ?? undefined,
+        orderId: orderId ?? undefined,
+      }),
     });
 
     const responseText = await res.text();
@@ -145,6 +150,18 @@ export function usePushNotifications(
     const run = async () => {
       attempt++;
       try {
+        // لا نطلب صلاحية الإشعارات تلقائياً عند فتح التطبيق.
+        // طلب الصلاحية يجب أن يأتي بعد إجراء واضح من المستخدم،
+        // مثل الضغط على "فعّل متابعة الطلب".
+        const existingPermission = await Notifications.getPermissionsAsync();
+
+        if (existingPermission.status !== "granted") {
+          console.log(
+            "[Push] Permission not granted — waiting for explicit user action",
+          );
+          return;
+        }
+
         const token = await registerForPushNotificationsAsync();
         if (!token || stopped) return;
 

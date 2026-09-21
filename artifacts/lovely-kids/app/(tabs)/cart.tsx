@@ -551,10 +551,11 @@ export default function CartScreen() {
           )}
         </View>
 
-        {!user && orderId ? (
+        {orderId ? (
           <GuestOrderNotificationPrompt
             phone={phone}
             orderId={orderId}
+            getAuthToken={getAuthToken}
           />
         ) : null}
 
@@ -634,10 +635,11 @@ export default function CartScreen() {
             تم إرسال تفاصيل طلبك عبر WhatsApp للمتجر
           </Text>
         </View>
-        {!user && orderId ? (
+        {orderId ? (
           <GuestOrderNotificationPrompt
             phone={phone}
             orderId={orderId}
+            getAuthToken={getAuthToken}
           />
         ) : null}
         <Pressable
