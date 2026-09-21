@@ -80,6 +80,12 @@ const ADMIN_CARDS = [
     route: "/admin/home-sections" as const,
   },
   {
+    label: "تخزين الصور",
+    subtitle: "اختيار R2 أو Supabase للصور الجديدة",
+    icon: "cloud-upload-outline" as const,
+    route: "/admin/image-storage" as never,
+  },
+  {
     label: "إعدادات التطبيق",
     subtitle: "جميع الإعدادات",
     icon: "settings-outline" as const,

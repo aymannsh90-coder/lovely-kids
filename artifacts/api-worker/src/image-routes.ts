@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { appSettingsTable } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import {
@@ -223,9 +225,32 @@ async function uploadToR2(
   );
 }
 
-function getImageStorageProvider(
+async function getImageStorageProvider(
+  db: Db,
   env: Env,
-): "supabase" | "r2" {
+): Promise<"supabase" | "r2"> {
+  try {
+    const rows = await db
+      .select({ data: appSettingsTable.data })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.id, 1))
+      .limit(1);
+
+    const settings =
+      (rows[0]?.data as Record<string, unknown> | undefined) ?? {};
+
+    const configured = settings.imageStorageProvider;
+
+    if (configured === "r2" || configured === "supabase") {
+      return configured;
+    }
+  } catch (error) {
+    console.warn(
+      "Failed to read image storage provider from settings; using environment fallback",
+      error,
+    );
+  }
+
   return env.IMAGE_STORAGE_PROVIDER === "r2"
     ? "r2"
     : "supabase";
@@ -402,7 +427,7 @@ async function handleImageUpload(
       `${randomUUID()}.${ext}`;
 
     const provider =
-      getImageStorageProvider(env);
+      await getImageStorageProvider(db, env);
 
     const url =
       provider === "r2"

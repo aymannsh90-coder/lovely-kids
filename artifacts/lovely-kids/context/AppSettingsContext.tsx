@@ -118,6 +118,7 @@ export interface AppSettings {
   promoPopupLink: string;
   promoPopupStartDate: string;
   promoPopupEndDate: string;
+  imageStorageProvider: "supabase" | "r2";
   productShareBaseUrl: string;
 }
 
@@ -209,6 +210,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   promoPopupLink: "",
   promoPopupStartDate: "",
   promoPopupEndDate: "",
+  imageStorageProvider: "supabase",
   productShareBaseUrl: "https://lovelykids.net",
 };
 
