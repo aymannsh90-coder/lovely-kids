@@ -51,3 +51,4 @@ Thumbs.db
 
 # Local database backups
 backups/
+/artifacts/media-worker/.wrangler/
