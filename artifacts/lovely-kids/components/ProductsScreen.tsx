@@ -556,7 +556,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
 
       {/* Categories */}
       {/* Visual category image strip */}
-      {!isSpecialView ? (
+      {!isOffersView ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -653,7 +653,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
 
       )}
 
-      {/* Seasons */}
+      {/* Seasons — hidden only on New Arrivals */}
+      {!isNewArrivalsView ? (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -713,6 +714,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
           </Pressable>
         ))}
       </ScrollView>
+      ) : null}
 
       {/* Count */}
       <Text
