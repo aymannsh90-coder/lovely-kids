@@ -60,7 +60,11 @@ function getCategoryImage(label: string) {
   }
 
   if (
-    (text.includes("قبعة") || text.includes("قبه") || text.includes("مراييل")) &&
+    (text.includes("قبعة") ||
+    text.includes("قبة") ||
+    text.includes("قبه") ||
+    text.includes("مرايل") ||
+    text.includes("مراييل")) &&
     text.includes("بيبي")
   ) {
     return require("../assets/images/category-cards/baby-caps-bibs.png");
