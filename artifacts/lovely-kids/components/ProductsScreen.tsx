@@ -91,7 +91,11 @@ function getCategoryImage(label: string): any {
     return PRODUCT_CATEGORY_IMAGES.babyBags;
 
   if (
-    (value.includes("قبعة") || value.includes("قبه") || value.includes("مراييل")) &&
+    (value.includes("قبعة") ||
+    value.includes("قبة") ||
+    value.includes("قبه") ||
+    value.includes("مرايل") ||
+    value.includes("مراييل")) &&
     value.includes("بيبي")
   )
     return PRODUCT_CATEGORY_IMAGES.babyCapsBibs;
