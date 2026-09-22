@@ -138,6 +138,44 @@ export async function saveTokenToServer(
   }
 }
 
+export async function isPushNotificationsEnabled(): Promise<boolean> {
+  const permission = await Notifications.getPermissionsAsync();
+  return permission.status === "granted";
+}
+
+export async function enablePushNotifications(
+  phone?: string | null,
+  getAuthToken?: (() => Promise<string | null>) | null,
+  orderId?: number | null,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const token = await registerForPushNotificationsAsync();
+
+    if (!token) {
+      return {
+        ok: false,
+        error:
+          "لم يتم السماح بالإشعارات. يمكنك تفعيلها من إعدادات الجهاز.",
+      };
+    }
+
+    return saveTokenToServer(
+      token,
+      phone,
+      getAuthToken,
+      orderId,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "تعذر تفعيل الإشعارات",
+    };
+  }
+}
+
 export function usePushNotifications(
   phone?: string | null,
   getAuthToken?: (() => Promise<string | null>) | null

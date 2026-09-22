@@ -178,6 +178,25 @@ export async function enableWebPushNotifications(
   );
 }
 
+export async function isPushNotificationsEnabled(): Promise<boolean> {
+  return (
+    isWebPushSupported() &&
+    Notification.permission === "granted"
+  );
+}
+
+export async function enablePushNotifications(
+  phone?: string | null,
+  getAuthToken?: GetAuthToken,
+  orderId?: number | null,
+): Promise<{ ok: boolean; error?: string }> {
+  return enableWebPushNotifications(
+    phone,
+    getAuthToken,
+    orderId,
+  );
+}
+
 export function usePushNotifications(
   phone?: string | null,
   getAuthToken?: GetAuthToken,

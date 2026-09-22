@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   Image,
@@ -30,9 +31,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { AGE_GROUP_IDS, DEFAULT_AGE_GROUP_LABELS, AGE_GROUP_ICONS, type Product } from "@/data/products";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
-import { enableWebPushNotifications } from "@/hooks/usePushNotifications";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
+import { useNotificationOptIn } from "@/context/NotificationOptInContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -44,6 +45,7 @@ type InstallPromptEvent = Event & {
 type GenderTab = "boys" | "girls" | null;
 
 const { width } = Dimensions.get("window");
+const HOME_NOTIFICATION_PROMPT_DELAY_MS = 8000;
 
 function getDiverseRandomProducts(products: Product[], limit: number): Product[] {
   const shuffle = <T,>(items: T[]): T[] => {
@@ -329,7 +331,13 @@ export default function HomeScreen() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [webPushEnabled, setWebPushEnabled] = useState(false);
+  const {
+    enabled: pushEnabled,
+    ready: pushReady,
+    canPromptOnVisit,
+    enableNow: enablePushNow,
+    requestGeneralPrompt,
+  } = useNotificationOptIn();
 
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
   const newArrivalsScrollRef = useRef<ScrollView>(null);
@@ -376,6 +384,31 @@ export default function HomeScreen() {
     });
   };
 
+  useFocusEffect(
+    React.useCallback(() => {
+      if (
+        !pushReady ||
+        pushEnabled ||
+        !canPromptOnVisit
+      ) {
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        void requestGeneralPrompt("visit");
+      }, HOME_NOTIFICATION_PROMPT_DELAY_MS);
+
+      return () => {
+        clearTimeout(timer);
+      };
+    }, [
+      pushReady,
+      pushEnabled,
+      canPromptOnVisit,
+      requestGeneralPrompt,
+    ]),
+  );
+
   useEffect(() => {
     Animated.timing(ageArrowAnim, {
       toValue: 0.52,
@@ -407,25 +440,35 @@ export default function HomeScreen() {
     return () => { window.removeEventListener("beforeinstallprompt", onPrompt); window.removeEventListener("appinstalled", onInstalled); };
   }, []);
 
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    setWebPushEnabled(
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted",
-    );
-  }, []);
-
-  const handleEnableWebPush = async () => {
-    const result = await enableWebPushNotifications(
-      user?.phone,
-      getAuthToken,
-    );
+  const handleEnablePush = async () => {
+    const result = await enablePushNow();
 
     if (result.ok) {
-      setWebPushEnabled(true);
-      window.alert("تم تفعيل الإشعارات بنجاح ✅");
+      if (Platform.OS === "web") {
+        window.alert(
+          "تم تفعيل الإشعارات بنجاح ✅",
+        );
+      } else {
+        Alert.alert(
+          "تم التفعيل ✅",
+          "سنخبرك بالجديد والعروض وتحديثات طلباتك.",
+        );
+      }
+
+      return;
+    }
+
+    const message =
+      result.error ??
+      "تعذر تفعيل الإشعارات";
+
+    if (Platform.OS === "web") {
+      window.alert(message);
     } else {
-      window.alert(result.error ?? "تعذر تفعيل الإشعارات");
+      Alert.alert(
+        "تعذر تفعيل الإشعارات",
+        message,
+      );
     }
   };
 
@@ -1010,9 +1053,9 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
 
-      {Platform.OS === "web" && !webPushEnabled ? (
+      {pushReady && !pushEnabled ? (
         <Pressable
-          onPress={() => void handleEnableWebPush()}
+          onPress={() => void handleEnablePush()}
           style={[
             styles.installBtn,
             { backgroundColor: colors.primary },
@@ -1020,7 +1063,9 @@ export default function HomeScreen() {
           ]}
         >
           <Ionicons name="notifications-outline" size={20} color="#fff" />
-          <Text style={styles.installBtnText}>تفعيل الإشعارات</Text>
+          <Text style={styles.installBtnText}>
+            فعّل الإشعارات وخليك أول من يعرف
+          </Text>
         </Pressable>
       ) : null}
 

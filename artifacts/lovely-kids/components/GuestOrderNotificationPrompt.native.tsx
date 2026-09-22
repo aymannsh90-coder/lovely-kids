@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Notifications from "expo-notifications";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,10 +9,8 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import {
-  registerForPushNotificationsAsync,
-  saveTokenToServer,
-} from "@/hooks/usePushNotifications";
+import { useNotificationOptIn } from "@/context/NotificationOptInContext";
+import { isPushNotificationsEnabled } from "@/hooks/usePushNotifications";
 
 type Props = {
   phone: string;
@@ -27,6 +24,7 @@ export default function GuestOrderNotificationPrompt({
   getAuthToken,
 }: Props) {
   const colors = useColors();
+  const { enableNow } = useNotificationOptIn();
   const [enabling, setEnabling] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [error, setError] = useState("");
@@ -38,20 +36,9 @@ export default function GuestOrderNotificationPrompt({
     setError("");
 
     try {
-      const token = await registerForPushNotificationsAsync();
-
-      if (!token) {
-        setError(
-          "لم يتم السماح بالإشعارات. يمكنك تفعيلها من إعدادات الجهاز.",
-        );
-        return;
-      }
-
-      const result = await saveTokenToServer(
-        token,
-        phone.trim(),
-        getAuthToken,
+      const result = await enableNow(
         orderId,
+        phone.trim(),
       );
 
       if (!result.ok) {
@@ -79,9 +66,10 @@ export default function GuestOrderNotificationPrompt({
 
     const linkExistingPermission = async () => {
       try {
-        const permission = await Notifications.getPermissionsAsync();
+        const granted =
+          await isPushNotificationsEnabled();
 
-        if (!mounted || permission.status !== "granted") {
+        if (!mounted || !granted) {
           return;
         }
 

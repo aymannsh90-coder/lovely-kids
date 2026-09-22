@@ -14,6 +14,7 @@ import {
 
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useCart } from "@/context/CartContext";
+import { useNotificationOptIn } from "@/context/NotificationOptInContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
@@ -37,6 +38,8 @@ export function ProductCard({ product, style, imageHeight }: Props) {
   const colors = useColors();
   const { settings } = useAppSettings();
   const { addItem, items } = useCart();
+  const { requestGeneralPrompt } =
+    useNotificationOptIn();
   const { toggleItem, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(product.id);
 
@@ -81,6 +84,10 @@ export function ProductCard({ product, style, imageHeight }: Props) {
         value: product.price,
         currency: "ILS",
       });
+
+      setTimeout(() => {
+        void requestGeneralPrompt("cart");
+      }, 800);
     };
 
     if (

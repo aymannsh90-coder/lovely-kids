@@ -9,7 +9,8 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { enableWebPushNotifications } from "@/hooks/usePushNotifications";
+import { useNotificationOptIn } from "@/context/NotificationOptInContext";
+import { isPushNotificationsEnabled } from "@/hooks/usePushNotifications";
 
 type Props = {
   phone: string;
@@ -23,6 +24,7 @@ export default function GuestOrderNotificationPrompt({
   getAuthToken,
 }: Props) {
   const colors = useColors();
+  const { enableNow } = useNotificationOptIn();
   const [enabling, setEnabling] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [error, setError] = useState("");
@@ -32,10 +34,9 @@ export default function GuestOrderNotificationPrompt({
     setError("");
 
     try {
-      const result = await enableWebPushNotifications(
-        phone.trim(),
-        getAuthToken,
+      const result = await enableNow(
         orderId,
+        phone.trim(),
       );
 
       if (!result.ok) {
@@ -53,12 +54,13 @@ export default function GuestOrderNotificationPrompt({
   };
 
   useEffect(() => {
-    if (
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted"
-    ) {
-      void enable();
-    }
+    void isPushNotificationsEnabled().then(
+      (granted) => {
+        if (granted) {
+          void enable();
+        }
+      },
+    );
     // ربط الاشتراك الموجود بالطلب الحالي يتم مرة واحدة عند ظهور شاشة النجاح.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
