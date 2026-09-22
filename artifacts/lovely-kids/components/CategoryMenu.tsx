@@ -59,6 +59,21 @@ function getCategoryImage(label: string) {
     return require("../assets/images/category-cards/baby-bags.png");
   }
 
+  if (
+    (text.includes("قبعة") || text.includes("قبه") || text.includes("مراييل")) &&
+    text.includes("بيبي")
+  ) {
+    return require("../assets/images/category-cards/baby-caps-bibs.png");
+  }
+
+  if (
+    text.includes("ستر") ||
+    text.includes("سترة") ||
+    text.includes("سترات")
+  ) {
+    return require("../assets/images/category-cards/kids-winter-jackets.png");
+  }
+
   if (text.includes("حرامات") || text.includes("بطانيات")) {
     return require("../assets/images/category-cards/blankets.png");
   }

@@ -141,6 +141,8 @@ const HOME_CATEGORY_IMAGES = {
   babyOveralls: require("../../assets/images/category-cards/baby-overalls.png"),
   bathTowelsRobes: require("../../assets/images/category-cards/bath-towels-robes.png"),
   babyBags: require("../../assets/images/category-cards/baby-bags.png"),
+  babyCapsBibs: require("../../assets/images/category-cards/baby-caps-bibs.png"),
+  kidsWinterJackets: require("../../assets/images/category-cards/kids-winter-jackets.png"),
 };
 
 function normalizeHomeCategoryLabel(label: string) {
@@ -180,6 +182,21 @@ function getHomeCategoryImage(label: string): any {
 
   if (value.includes("شنط") && value.includes("بيبي")) {
     return HOME_CATEGORY_IMAGES.babyBags;
+  }
+
+  if (
+    (value.includes("قبعة") || value.includes("قبه") || value.includes("مراييل")) &&
+    value.includes("بيبي")
+  ) {
+    return HOME_CATEGORY_IMAGES.babyCapsBibs;
+  }
+
+  if (
+    value.includes("ستر") ||
+    value.includes("سترة") ||
+    value.includes("سترات")
+  ) {
+    return HOME_CATEGORY_IMAGES.kidsWinterJackets;
   }
 
   if (value.includes("ترينجات") || value.includes("ترنجات")) {
