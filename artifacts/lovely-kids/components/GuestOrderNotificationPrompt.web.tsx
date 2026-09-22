@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,18 +9,22 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { enableWebPushNotifications } from "@/hooks/usePushNotifications";
+import { useNotificationOptIn } from "@/context/NotificationOptInContext";
+import { isPushNotificationsEnabled } from "@/hooks/usePushNotifications";
 
 type Props = {
   phone: string;
   orderId: number;
+  getAuthToken?: (() => Promise<string | null>) | null;
 };
 
 export default function GuestOrderNotificationPrompt({
   phone,
   orderId,
+  getAuthToken,
 }: Props) {
   const colors = useColors();
+  const { enableNow } = useNotificationOptIn();
   const [enabling, setEnabling] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [error, setError] = useState("");
@@ -30,10 +34,9 @@ export default function GuestOrderNotificationPrompt({
     setError("");
 
     try {
-      const result = await enableWebPushNotifications(
-        phone.trim(),
-        undefined,
+      const result = await enableNow(
         orderId,
+        phone.trim(),
       );
 
       if (!result.ok) {
@@ -49,6 +52,18 @@ export default function GuestOrderNotificationPrompt({
       setEnabling(false);
     }
   };
+
+  useEffect(() => {
+    void isPushNotificationsEnabled().then(
+      (granted) => {
+        if (granted) {
+          void enable();
+        }
+      },
+    );
+    // ربط الاشتراك الموجود بالطلب الحالي يتم مرة واحدة عند ظهور شاشة النجاح.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View
@@ -81,8 +96,8 @@ export default function GuestOrderNotificationPrompt({
             ]}
           >
             {enabled
-              ? "تم تفعيل إشعارات طلبك ✅"
-              : "فعّل إشعارات الطلب"}
+              ? "متابعة الطلب مفعّلة ✅"
+              : "تابع طلبك أول بأول"}
           </Text>
 
           <Text
@@ -92,8 +107,8 @@ export default function GuestOrderNotificationPrompt({
             ]}
           >
             {enabled
-              ? "سيصلك إشعار عند تحديث حالة الطلب"
-              : "ليصلك إشعار عند تأكيد الطلب أو خروجه للتوصيل أو تسليمه"}
+              ? "سنخبرك فور حدوث أي تحديث على حالة طلبك"
+              : "فعّل الإشعارات لنخبرك عند تأكيد الطلب، خروجه للتوصيل وتسليمه"}
           </Text>
         </View>
       </View>
@@ -123,7 +138,7 @@ export default function GuestOrderNotificationPrompt({
           <Text style={styles.buttonText}>
             {enabling
               ? "جاري التفعيل..."
-              : "تفعيل الإشعارات"}
+              : "فعّل متابعة الطلب"}
           </Text>
         </Pressable>
       )}

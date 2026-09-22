@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
+import { useNotificationOptIn } from "@/context/NotificationOptInContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
@@ -232,6 +233,10 @@ export default function ProductDetailScreen() {
     ? desktopGalleryWidth
     : SCREEN_WIDTH;
   const { addItem, items } = useCart();
+  const {
+    requestGeneralPrompt,
+    setGeneralPromptBlocked,
+  } = useNotificationOptIn();
   const { toggleItem, isWishlisted } = useWishlist();
   const { settings } = useAppSettings();
   const { products, loading } = useVisibleProducts();
@@ -262,6 +267,25 @@ export default function ProductDetailScreen() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [cartModal, setCartModal] = useState(false);
   const [selectionAlert, setSelectionAlert] = useState<string | null>(null);
+
+  const closeCartModal = (
+    offerNotificationPrompt = true,
+  ) => {
+    setCartModal(false);
+    setGeneralPromptBlocked(false);
+
+    if (offerNotificationPrompt) {
+      setTimeout(() => {
+        void requestGeneralPrompt("cart");
+      }, 450);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      setGeneralPromptBlocked(false);
+    };
+  }, [setGeneralPromptBlocked]);
   const flatRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -404,6 +428,7 @@ export default function ProductDetailScreen() {
         currency: "ILS",
       });
 
+      setGeneralPromptBlocked(true);
       setCartModal(true);
     };
 
@@ -1058,9 +1083,12 @@ export default function ProductDetailScreen() {
         transparent
         visible={cartModal}
         animationType="fade"
-        onRequestClose={() => setCartModal(false)}
+        onRequestClose={() => closeCartModal()}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setCartModal(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => closeCartModal()}
+        >
           <Pressable
             style={[
               styles.modalCard,
@@ -1085,7 +1113,10 @@ export default function ProductDetailScreen() {
 
             <Pressable
               style={[styles.modalPrimaryBtn, { backgroundColor: colors.primary }]}
-              onPress={() => { setCartModal(false); router.push("/cart"); }}
+              onPress={() => {
+                closeCartModal(false);
+                router.push("/cart");
+              }}
             >
               <Ionicons name="bag-check-outline" size={18} color="#fff" />
               <Text style={styles.modalPrimaryBtnText}>إتمام الشراء</Text>
@@ -1093,7 +1124,7 @@ export default function ProductDetailScreen() {
 
             <Pressable
               style={[styles.modalSecondaryBtn, { borderColor: colors.border }]}
-              onPress={() => setCartModal(false)}
+              onPress={() => closeCartModal()}
             >
               <Text style={[styles.modalSecondaryBtnText, { color: colors.foreground }]}>متابعة التسوق</Text>
             </Pressable>

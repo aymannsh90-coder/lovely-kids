@@ -25,6 +25,7 @@ import { AppSettingsProvider } from "@/context/AppSettingsContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { NewOrdersProvider } from "@/context/NewOrdersContext";
+import { NotificationOptInProvider } from "@/context/NotificationOptInContext";
 import { ProductsProvider } from "@/context/ProductsContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -50,7 +51,11 @@ function RootLayoutNav() {
   useVisitorAnalytics();
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <NotificationOptInProvider
+      phone={user?.phone}
+      getAuthToken={getAuthToken}
+    >
+      <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="product/[id]" />
       <Stack.Screen name="cart" />
@@ -75,7 +80,8 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/users" />
       <Stack.Screen name="admin/notifications" />
       <Stack.Screen name="admin/push-debug" />
-    </Stack>
+      </Stack>
+    </NotificationOptInProvider>
   );
 }
 
