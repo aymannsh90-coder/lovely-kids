@@ -241,6 +241,10 @@ export default function AdminOrdersScreen() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [proofModal, setProofModal] = useState<string | null>(null);
+  const [whatsappTarget, setWhatsappTarget] = useState<{
+    phone: string;
+    orderId: number;
+  } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [pickupConfirmOrder, setPickupConfirmOrder] = useState<Order | null>(null);
   const [pickupConvertingId, setPickupConvertingId] = useState<number | null>(null);
@@ -883,8 +887,38 @@ export default function AdminOrdersScreen() {
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
   const whatsappCustomer = (phone: string, orderId: number) => {
-    const msg = encodeURIComponent(`مرحباً! بخصوص طلبك رقم #${orderId} من Lovely Kids 🛍️`);
-    Linking.openURL(`https://wa.me/970${phone.replace(/^0/, "")}?text=${msg}`);
+    setWhatsappTarget({ phone, orderId });
+  };
+
+  const openWhatsappForCountry = (countryCode: "970" | "972") => {
+    if (!whatsappTarget) return;
+
+    const normalizedPhone = whatsappTarget.phone
+      .replace(/[٠-٩]/g, (digit) =>
+        String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))
+      )
+      .replace(/[۰-۹]/g, (digit) =>
+        String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))
+      );
+
+    const localNumber = normalizedPhone
+      .replace(/\D/g, "")
+      .replace(/^00/, "")
+      .replace(/^970/, "")
+      .replace(/^972/, "")
+      .replace(/^0/, "");
+
+    const msg = encodeURIComponent(
+      `مرحباً! بخصوص طلبك رقم #${whatsappTarget.orderId} من Lovely Kids 🛍️`
+    );
+
+    setWhatsappTarget(null);
+
+    Linking.openURL(
+      `https://wa.me/${countryCode}${localNumber}?text=${msg}`
+    ).catch(() => {
+      showError("تعذر فتح واتساب");
+    });
   };
 
   const openOrderById = useCallback((id: number) => {
@@ -3261,6 +3295,125 @@ export default function AdminOrdersScreen() {
       </Modal>
 
       {/* Proof Image Modal */}
+      <Modal
+        visible={!!whatsappTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWhatsappTarget(null)}
+      >
+        <Pressable
+          onPress={() => setWhatsappTarget(null)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              backgroundColor: "#fff",
+              borderRadius: 18,
+              padding: 20,
+              gap: 14,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "800",
+                textAlign: "center",
+                color: "#111827",
+              }}
+            >
+              اختيار رمز الدولة
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 15,
+                textAlign: "center",
+                color: "#64748b",
+              }}
+            >
+              رقم الزبون: {whatsappTarget?.phone}
+            </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 12,
+              }}
+            >
+              <Pressable
+                onPress={() => openWhatsappForCountry("970")}
+                style={{
+                  flex: 1,
+                  backgroundColor: "#25D366",
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "800",
+                    fontSize: 17,
+                  }}
+                >
+                  +970
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => openWhatsappForCountry("972")}
+                style={{
+                  flex: 1,
+                  backgroundColor: "#25D366",
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "800",
+                    fontSize: 17,
+                  }}
+                >
+                  +972
+                </Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={() => setWhatsappTarget(null)}
+              style={{
+                borderRadius: 12,
+                paddingVertical: 12,
+                alignItems: "center",
+                backgroundColor: "#f1f5f9",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#475569",
+                  fontWeight: "700",
+                }}
+              >
+                إلغاء
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={!!proofModal} transparent animationType="fade" onRequestClose={() => setProofModal(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setProofModal(null)}>
           <ScrollView
