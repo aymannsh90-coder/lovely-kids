@@ -704,6 +704,138 @@ async function handleBarcodeLookup(request: Request, db: Db, env: Env) {
   );
 }
 
+
+async function handleInventoryProductCard(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+  const rawProductId =
+    url.searchParams.get("productId") ?? "";
+
+  const productId = Number(rawProductId);
+
+  if (
+    !Number.isSafeInteger(productId) ||
+    productId <= 0
+  ) {
+    return json(
+      {
+        error: "رقم الصنف غير صالح",
+      },
+      400,
+    );
+  }
+
+  const productRows = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.id, productId))
+    .limit(1);
+
+  const product = productRows[0];
+
+  if (!product) {
+    return json(
+      {
+        error: "لم يتم العثور على المنتج",
+      },
+      404,
+    );
+  }
+
+  const movements = await db
+    .select({
+      id: inventoryMovementsTable.id,
+
+      productId:
+        inventoryMovementsTable.productId,
+
+      barcode:
+        inventoryMovementsTable.barcode,
+
+      productCode:
+        inventoryMovementsTable.productCode,
+
+      productNameAr:
+        inventoryMovementsTable.productNameAr,
+
+      color:
+        inventoryMovementsTable.color,
+
+      size:
+        inventoryMovementsTable.size,
+
+      movementType:
+        inventoryMovementsTable.movementType,
+
+      quantityDelta:
+        inventoryMovementsTable.quantityDelta,
+
+      generalStockBefore:
+        inventoryMovementsTable.generalStockBefore,
+
+      generalStockAfter:
+        inventoryMovementsTable.generalStockAfter,
+
+      variantStockBefore:
+        inventoryMovementsTable.variantStockBefore,
+
+      variantStockAfter:
+        inventoryMovementsTable.variantStockAfter,
+
+      sourceType:
+        inventoryMovementsTable.sourceType,
+
+      sourceId:
+        inventoryMovementsTable.sourceId,
+
+      sourceItemId:
+        inventoryMovementsTable.sourceItemId,
+
+      sourcePublicId:
+        inventoryMovementsTable.sourcePublicId,
+
+      eventKey:
+        inventoryMovementsTable.eventKey,
+
+      occurredAt:
+        inventoryMovementsTable.occurredAt,
+    })
+    .from(inventoryMovementsTable)
+    .where(
+      eq(
+        inventoryMovementsTable.productId,
+        productId,
+      ),
+    )
+    .orderBy(
+      desc(
+        inventoryMovementsTable.occurredAt,
+      ),
+      desc(
+        inventoryMovementsTable.id,
+      ),
+    );
+
+  return json({
+    product: toPosProductLookup(
+      product,
+      product.barcode ?? null,
+      null,
+      null,
+    ),
+    movements,
+  });
+}
+
 async function handleCreateSale(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
 
@@ -2070,6 +2202,18 @@ export async function handlePosSaleRequest(
   if (request.method === "GET" && path === "/api/pos/products/by-barcode") {
     return handleBarcodeLookup(request, db, env);
   }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/inventory/product-card"
+  ) {
+    return handleInventoryProductCard(
+      request,
+      db,
+      env,
+    );
+  }
+
 
   if (request.method === "GET" && path === "/api/pos/sales/today") {
     return handleTodaySales(request, db, env);

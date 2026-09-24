@@ -319,6 +319,72 @@ export function lookupPosProductByBarcode(token: string, barcode: string) {
   );
 }
 
+
+export type InventoryMovementType =
+  | "purchase"
+  | "purchase_void"
+  | "pos_sale"
+  | "pos_sale_void"
+  | "pos_sale_edit"
+  | "pos_sale_return"
+  | "pos_sale_return_void"
+  | "online_order"
+  | "online_order_cancel"
+  | "online_order_restore"
+  | "online_order_edit"
+  | "adjustment";
+
+export interface PosInventoryMovement {
+  id: number;
+  productId: number | null;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+
+  color: string | null;
+  size: string | null;
+
+  movementType: InventoryMovementType;
+  quantityDelta: number;
+
+  generalStockBefore: number | null;
+  generalStockAfter: number | null;
+
+  variantStockBefore: number | null;
+  variantStockAfter: number | null;
+
+  sourceType:
+    | "pos_purchase"
+    | "pos_sale"
+    | "pos_sale_return"
+    | "online_order"
+    | "manual";
+
+  sourceId: number | null;
+  sourceItemId: number | null;
+  sourcePublicId: string | null;
+
+  eventKey: string;
+  occurredAt: string;
+}
+
+export interface PosProductCardResult {
+  product: PosProductLookup;
+  movements: PosInventoryMovement[];
+}
+
+export function getPosProductCard(
+  token: string,
+  productId: string,
+) {
+  return apiRequest<PosProductCardResult>(
+    `/api/pos/inventory/product-card?productId=${encodeURIComponent(productId)}`,
+    {},
+    token,
+  );
+}
+
 export function createPosSale(
   token: string,
   input: {
