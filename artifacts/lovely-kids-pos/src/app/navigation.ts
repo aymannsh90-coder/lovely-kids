@@ -141,6 +141,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "product-card",
+    group: "inventory",
+    path: "/inventory/product-card",
+    title: "بطاقة الصنف",
+    description: "حركة الصنف كاملة أو حسب اللون والنمرة.",
+    icon: "📒",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "stock",
     group: "inventory",
     path: "/inventory/stock",
