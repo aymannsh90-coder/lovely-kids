@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   cashSessionsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
@@ -1220,6 +1221,45 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         )
         .returning();
 
+      // stock-card:pos-sale:completed
+      const saleMovementItems = insertedItems.filter(
+        (item) => item.productId !== null,
+      );
+
+      if (saleMovementItems.length > 0) {
+        await tx
+          .insert(inventoryMovementsTable)
+          .values(
+            saleMovementItems.map((item) => ({
+              productId: item.productId!,
+              barcode: item.barcode,
+              productCode: item.productCode,
+              productNameAr: item.productNameAr,
+              color: item.color,
+              size: item.size,
+
+              movementType: "pos_sale",
+              quantityDelta: -item.quantity,
+
+              generalStockBefore: item.generalStockBefore,
+              generalStockAfter: item.generalStockAfter,
+
+              variantStockBefore: item.variantStockBefore,
+              variantStockAfter: item.variantStockAfter,
+
+              sourceType: "pos_sale",
+              sourceId: sale.id,
+              sourceItemId: item.id,
+              sourcePublicId: sale.publicId,
+
+              eventKey:
+                `pos-sale:${sale.id}:item:${item.id}:completed`,
+
+              occurredAt: sale.createdAt,
+            })),
+          );
+      }
+
       const updatedSessionRows = await tx
         .update(cashSessionsTable)
         .set({
@@ -1398,6 +1438,8 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         throw new PosSaleError("رصيد الصندوق لا يكفي لإلغاء الفاتورة", 409);
       }
 
+      const stockCardVoidOccurredAt = new Date();
+
       const orderedItems = [...saleItems].sort((left, right) => {
         const leftId = left.productId ?? Number.MAX_SAFE_INTEGER;
         const rightId = right.productId ?? Number.MAX_SAFE_INTEGER;
@@ -1433,7 +1475,14 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           colorVariants?: ColorVariant[];
         } = {};
 
+        let stockCardGeneralBefore: number | null = null;
+        let stockCardGeneralAfter: number | null = null;
+        let stockCardVariantBefore: number | null = null;
+        let stockCardVariantAfter: number | null = null;
+
         if (product.stock !== null && product.stock !== undefined) {
+          stockCardGeneralBefore = product.stock;
+
           const nextStock = product.stock + item.quantity;
 
           if (!Number.isSafeInteger(nextStock) || nextStock < 0) {
@@ -1443,6 +1492,7 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
             );
           }
 
+          stockCardGeneralAfter = nextStock;
           updates.stock = nextStock;
         }
 
@@ -1496,6 +1546,8 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
               selectedSize.stock !== null &&
               selectedSize.stock !== undefined
             ) {
+              stockCardVariantBefore = selectedSize.stock;
+
               const nextVariantStock = selectedSize.stock + item.quantity;
 
               if (
@@ -1507,6 +1559,8 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
                   409,
                 );
               }
+
+              stockCardVariantAfter = nextVariantStock;
 
               const nextSizes = sizes.map((entry, index) =>
                 index === sizeIndex
@@ -1546,6 +1600,37 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
             .set(updates)
             .where(eq(productsTable.id, product.id));
         }
+
+        // stock-card:pos-sale:voided
+        await tx
+          .insert(inventoryMovementsTable)
+          .values({
+            productId: product.id,
+            barcode: item.barcode,
+            productCode: item.productCode,
+            productNameAr: item.productNameAr,
+            color: item.color,
+            size: item.size,
+
+            movementType: "pos_sale_void",
+            quantityDelta: item.quantity,
+
+            generalStockBefore: stockCardGeneralBefore,
+            generalStockAfter: stockCardGeneralAfter,
+
+            variantStockBefore: stockCardVariantBefore,
+            variantStockAfter: stockCardVariantAfter,
+
+            sourceType: "pos_sale",
+            sourceId: sale.id,
+            sourceItemId: item.id,
+            sourcePublicId: sale.publicId,
+
+            eventKey:
+              `pos-sale:${sale.id}:item:${item.id}:voided`,
+
+            occurredAt: stockCardVoidOccurredAt,
+          });
       }
 
       const expectedAfter = expectedBefore - sale.totalMinor;

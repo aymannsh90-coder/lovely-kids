@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   cashSessionsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
@@ -1098,6 +1099,58 @@ export async function handleCreateMobileEmergencyReturn(
                 ),
               )
               .returning();
+
+          // stock-card:mobile-pos-return:completed
+          if (insertedItems.length > 0) {
+            await tx
+              .insert(inventoryMovementsTable)
+              .values(
+                insertedItems
+                  .filter(
+                    (item) =>
+                      item.productId !== null,
+                  )
+                  .map((item) => ({
+                    productId: item.productId!,
+                    barcode: item.barcode,
+                    productCode: item.productCode,
+                    productNameAr:
+                      item.productNameAr,
+                    color: item.color,
+                    size: item.size,
+
+                    movementType:
+                      "pos_sale_return",
+                    quantityDelta:
+                      item.quantity,
+
+                    generalStockBefore:
+                      item.generalStockBefore,
+                    generalStockAfter:
+                      item.generalStockAfter,
+
+                    variantStockBefore:
+                      item.variantStockBefore,
+                    variantStockAfter:
+                      item.variantStockAfter,
+
+                    sourceType:
+                      "pos_sale_return",
+                    sourceId:
+                      saleReturn.id,
+                    sourceItemId:
+                      item.id,
+                    sourcePublicId:
+                      saleReturn.publicId,
+
+                    eventKey:
+                      `mobile-pos-return:${saleReturn.id}:item:${item.id}:completed`,
+
+                    occurredAt:
+                      saleReturn.createdAt,
+                  })),
+              );
+          }
 
           const updatedSessionRows =
             await tx

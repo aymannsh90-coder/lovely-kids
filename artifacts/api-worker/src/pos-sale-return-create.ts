@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   cashSessionsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
@@ -1030,6 +1031,45 @@ export async function handleCreatePosSaleReturn(
             })),
         )
         .returning();
+
+      // stock-card:pos-sale-return:completed
+      const returnMovementItems = insertedItems.filter(
+        (item) => item.productId !== null,
+      );
+
+      if (returnMovementItems.length > 0) {
+        await tx
+          .insert(inventoryMovementsTable)
+          .values(
+            returnMovementItems.map((item) => ({
+              productId: item.productId!,
+              barcode: item.barcode,
+              productCode: item.productCode,
+              productNameAr: item.productNameAr,
+              color: item.color,
+              size: item.size,
+
+              movementType: "pos_sale_return",
+              quantityDelta: item.quantity,
+
+              generalStockBefore: item.generalStockBefore,
+              generalStockAfter: item.generalStockAfter,
+
+              variantStockBefore: item.variantStockBefore,
+              variantStockAfter: item.variantStockAfter,
+
+              sourceType: "pos_sale_return",
+              sourceId: saleReturn.id,
+              sourceItemId: item.id,
+              sourcePublicId: saleReturn.publicId,
+
+              eventKey:
+                `pos-sale-return:${saleReturn.id}:item:${item.id}:completed`,
+
+              occurredAt: saleReturn.createdAt,
+            })),
+          );
+      }
 
       const updatedSessionRows = await tx
         .update(cashSessionsTable)

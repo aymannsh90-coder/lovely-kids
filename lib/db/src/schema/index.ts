@@ -25,3 +25,4 @@ export * from "./visitor-daily-visits";
 export * from "./delivery-companies";
 export * from "./finance";
 export * from "./delivery-company-settlements";
+export * from "./inventory-movements";

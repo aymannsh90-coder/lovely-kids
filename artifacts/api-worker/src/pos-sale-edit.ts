@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   cashSessionsTable,
   posSaleItemsTable,
   posSaleRevisionsTable,
@@ -291,6 +292,45 @@ function cloneColorVariants(value: unknown): ColorVariant[] {
         }))
       : [],
   }));
+}
+
+// stock-card:pos-sale-edit:helpers
+function stockCardItemKey(
+  productId: number,
+  color?: string | null,
+  size?: string | null,
+) {
+  return JSON.stringify([
+    productId,
+    color ?? "",
+    size ?? "",
+  ]);
+}
+
+function stockCardVariantStock(
+  variants: ColorVariant[],
+  color?: string | null,
+  size?: string | null,
+): number | null {
+  if (!color || !size) {
+    return null;
+  }
+
+  const variant = variants.find(
+    (entry) => entry.color === color,
+  );
+
+  if (!variant) {
+    return null;
+  }
+
+  const selectedSize = variant.sizes.find(
+    (entry) => entry.size === size,
+  );
+
+  return typeof selectedSize?.stock === "number"
+    ? selectedSize.stock
+    : null;
 }
 
 function makeSnapshot(
@@ -1064,6 +1104,23 @@ export async function handleUpdatePosSale(
         });
       }
 
+      // stock-card:pos-sale-edit:initial-state
+      const stockCardInitialStates = new Map<
+        number,
+        {
+          stock: number | null;
+          colorVariants: ColorVariant[];
+        }
+      >();
+
+      for (const [productId, state] of productStates) {
+        stockCardInitialStates.set(productId, {
+          stock: state.stock,
+          colorVariants:
+            cloneColorVariants(state.colorVariants),
+        });
+      }
+
       for (const oldItem of oldItems) {
         const state =
           oldItem.productId === null
@@ -1114,6 +1171,229 @@ export async function handleUpdatePosSale(
         ) {
           throw new PosSaleEditError("إجمالي الفاتورة يتجاوز الحد المسموح");
         }
+      }
+
+      // stock-card:pos-sale-edit:movement-drafts
+      const oldQuantities = new Map<
+        string,
+        {
+          productId: number;
+          barcode: string | null;
+          productCode: string | null;
+          productNameAr: string;
+          color: string | null;
+          size: string | null;
+          quantity: number;
+        }
+      >();
+
+      for (const oldItem of oldItems) {
+        if (oldItem.productId === null) {
+          continue;
+        }
+
+        const key = stockCardItemKey(
+          oldItem.productId,
+          oldItem.color,
+          oldItem.size,
+        );
+
+        const existing = oldQuantities.get(key);
+
+        if (existing) {
+          existing.quantity += oldItem.quantity;
+        } else {
+          oldQuantities.set(key, {
+            productId: oldItem.productId,
+            barcode: oldItem.barcode,
+            productCode: oldItem.productCode,
+            productNameAr: oldItem.productNameAr,
+            color: oldItem.color,
+            size: oldItem.size,
+            quantity: oldItem.quantity,
+          });
+        }
+      }
+
+      const newQuantities = new Map<
+        string,
+        {
+          productId: number;
+          barcode: string | null;
+          color: string | null;
+          size: string | null;
+          quantity: number;
+        }
+      >();
+
+      for (const newItem of orderedNewItems) {
+        const color =
+          newItem.mappedColor ??
+          newItem.color ??
+          null;
+
+        const size =
+          newItem.mappedSize ??
+          newItem.size ??
+          null;
+
+        const key = stockCardItemKey(
+          newItem.productId,
+          color,
+          size,
+        );
+
+        const existing = newQuantities.get(key);
+
+        if (existing) {
+          existing.quantity += newItem.quantity;
+
+          if (!existing.barcode && newItem.barcode) {
+            existing.barcode = newItem.barcode;
+          }
+        } else {
+          newQuantities.set(key, {
+            productId: newItem.productId,
+            barcode: newItem.barcode,
+            color,
+            size,
+            quantity: newItem.quantity,
+          });
+        }
+      }
+
+      const stockCardKeys = [
+        ...new Set([
+          ...oldQuantities.keys(),
+          ...newQuantities.keys(),
+        ]),
+      ].sort();
+
+      const generalCursors =
+        new Map<number, number | null>();
+
+      for (
+        const [productId, initial]
+        of stockCardInitialStates
+      ) {
+        generalCursors.set(
+          productId,
+          initial.stock,
+        );
+      }
+
+      const stockCardMovementDrafts: Array<{
+        productId: number;
+        barcode: string | null;
+        productCode: string | null;
+        productNameAr: string;
+        color: string | null;
+        size: string | null;
+        quantityDelta: number;
+        generalStockBefore: number | null;
+        generalStockAfter: number | null;
+        variantStockBefore: number | null;
+        variantStockAfter: number | null;
+      }> = [];
+
+      for (const key of stockCardKeys) {
+        const oldEntry = oldQuantities.get(key);
+        const newEntry = newQuantities.get(key);
+
+        const entry = newEntry ?? oldEntry;
+
+        if (!entry) {
+          continue;
+        }
+
+        const oldQuantity =
+          oldEntry?.quantity ?? 0;
+
+        const newQuantity =
+          newEntry?.quantity ?? 0;
+
+        // بيع أكثر = سالب
+        // حذف كمية من الفاتورة = موجب
+        const quantityDelta =
+          oldQuantity - newQuantity;
+
+        if (quantityDelta === 0) {
+          continue;
+        }
+
+        const state =
+          productStates.get(entry.productId);
+
+        const initial =
+          stockCardInitialStates.get(
+            entry.productId,
+          );
+
+        if (!state || !initial) {
+          throw new PosSaleEditError(
+            "تعذر تسجيل حركة تعديل الفاتورة",
+            409,
+          );
+        }
+
+        const generalStockBefore =
+          generalCursors.get(
+            entry.productId,
+          ) ?? null;
+
+        const generalStockAfter =
+          generalStockBefore === null
+            ? null
+            : generalStockBefore +
+              quantityDelta;
+
+        generalCursors.set(
+          entry.productId,
+          generalStockAfter,
+        );
+
+        const variantStockBefore =
+          stockCardVariantStock(
+            initial.colorVariants,
+            entry.color,
+            entry.size,
+          );
+
+        const variantStockAfter =
+          variantStockBefore === null
+            ? null
+            : variantStockBefore +
+              quantityDelta;
+
+        stockCardMovementDrafts.push({
+          productId: entry.productId,
+
+          barcode:
+            newEntry?.barcode ??
+            oldEntry?.barcode ??
+            state.row.barcode ??
+            null,
+
+          productCode:
+            oldEntry?.productCode ??
+            state.row.productCode ??
+            null,
+
+          productNameAr:
+            oldEntry?.productNameAr ??
+            state.row.nameAr,
+
+          color: entry.color ?? null,
+          size: entry.size ?? null,
+
+          quantityDelta,
+
+          generalStockBefore,
+          generalStockAfter,
+
+          variantStockBefore,
+          variantStockAfter,
+        });
       }
 
       const itemsNetMinor = subtotalMinor - itemDiscountMinor;
@@ -1254,6 +1534,40 @@ export async function handleUpdatePosSale(
       );
 
       const afterSnapshot = makeSnapshot(updatedSale, sortedInsertedItems);
+
+      // stock-card:pos-sale-edit:save
+      if (stockCardMovementDrafts.length > 0) {
+        await tx
+          .insert(inventoryMovementsTable)
+          .values(
+            stockCardMovementDrafts.map(
+              (movement, index) => ({
+                ...movement,
+
+                movementType:
+                  "pos_sale_edit",
+
+                sourceType:
+                  "pos_sale",
+
+                sourceId:
+                  sale.id,
+
+                sourceItemId:
+                  null,
+
+                sourcePublicId:
+                  sale.publicId,
+
+                eventKey:
+                  `pos-sale:${sale.id}:edit:${revisionNumber}:${index + 1}`,
+
+                occurredAt:
+                  updatedSale.updatedAt,
+              }),
+            ),
+          );
+      }
 
       await tx.insert(posSaleRevisionsTable).values({
         saleId: sale.id,
