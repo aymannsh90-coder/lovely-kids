@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   appSettingsTable,
   ordersTable,
   productsTable,
@@ -57,7 +58,11 @@ export async function cancelOrderAndRestoreStock(
       ? (order.items as StoredOrderItem[])
       : [];
 
-    for (const item of items) {
+    const stockCardOccurredAt = new Date();
+    const stockCardOperationId =
+      crypto.randomUUID();
+
+    for (const [itemIndex, item] of items.entries()) {
       const productId = Number(item.id);
       const quantity = Number(item.quantity);
 
@@ -68,6 +73,9 @@ export async function cancelOrderAndRestoreStock(
       const productRows = await tx
         .select({
           id: productsTable.id,
+          nameAr: productsTable.nameAr,
+          productCode: productsTable.productCode,
+          barcode: productsTable.barcode,
           stock: productsTable.stock,
           colorVariants: productsTable.colorVariants,
         })
@@ -86,8 +94,17 @@ export async function cancelOrderAndRestoreStock(
         colorVariants?: ColorVariant[];
       } = {};
 
+      let generalStockBefore: number | null = null;
+      let generalStockAfter: number | null = null;
+      let variantStockBefore: number | null = null;
+      let variantStockAfter: number | null = null;
+
       if (product.stock !== null && product.stock !== undefined) {
-        updates.stock = product.stock + quantity;
+        generalStockBefore = product.stock;
+        generalStockAfter =
+          product.stock + quantity;
+
+        updates.stock = generalStockAfter;
       }
 
       const colorVariants =
@@ -111,12 +128,17 @@ export async function cancelOrderAndRestoreStock(
               currentSize.stock !== null &&
               currentSize.stock !== undefined
             ) {
+              variantStockBefore =
+                currentSize.stock;
+              variantStockAfter =
+                currentSize.stock + quantity;
+
               const nextSizes = variant.sizes.map(
                 (size, index) =>
                   index === sizeIndex
                     ? {
                         ...size,
-                        stock: currentSize.stock! + quantity,
+                        stock: variantStockAfter!,
                         outOfStock: false,
                       }
                     : size,
@@ -138,6 +160,46 @@ export async function cancelOrderAndRestoreStock(
           .update(productsTable)
           .set(updates)
           .where(eq(productsTable.id, productId));
+
+        // stock-card:online-order:cancelled
+        await tx
+          .insert(inventoryMovementsTable)
+          .values({
+            productId,
+            barcode: product.barcode ?? null,
+            productCode:
+              product.productCode ?? null,
+            productNameAr: product.nameAr,
+            color:
+              typeof item.color === "string"
+                ? item.color
+                : null,
+            size:
+              typeof item.size === "string"
+                ? item.size
+                : null,
+
+            movementType:
+              "online_order_cancel",
+            quantityDelta: quantity,
+
+            generalStockBefore,
+            generalStockAfter,
+            variantStockBefore,
+            variantStockAfter,
+
+            sourceType: "online_order",
+            sourceId: orderId,
+            sourceItemId: null,
+            sourcePublicId:
+              String(orderId),
+
+            eventKey:
+              `online-order:${orderId}:cancel:${stockCardOperationId}:${itemIndex + 1}`,
+
+            occurredAt:
+              stockCardOccurredAt,
+          });
       }
     }
 
@@ -257,6 +319,47 @@ function cloneColorVariants(value: unknown): ColorVariant[] {
       ? variant.sizes.map((size) => ({ ...size }))
       : [],
   }));
+}
+
+// stock-card:online-order:helpers
+function getTrackedVariantStock(
+  variants: ColorVariant[],
+  color?: string | null,
+  size?: string | null,
+): number | null {
+  if (!color || !size) {
+    return null;
+  }
+
+  const variant = variants.find(
+    (entry) => entry.color === color,
+  );
+
+  if (!variant) {
+    return null;
+  }
+
+  const selectedSize = variant.sizes.find(
+    (entry) => entry.size === size,
+  );
+
+  return typeof selectedSize?.stock === "number"
+    ? selectedSize.stock
+    : null;
+}
+
+interface StockCardOrderMovementDraft {
+  productId: number;
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  color: string | null;
+  size: string | null;
+  quantityDelta: number;
+  generalStockBefore: number | null;
+  generalStockAfter: number | null;
+  variantStockBefore: number | null;
+  variantStockAfter: number | null;
 }
 
 function parseEditOrderItems(value: unknown): EditOrderItemInput[] {
@@ -601,6 +704,32 @@ export async function editOrderItemsAndAdjustStock(
       });
     }
 
+    const stockCardInitialStates =
+      new Map<
+        number,
+        {
+          stock: number | null;
+          colorVariants: ColorVariant[];
+        }
+      >();
+
+    for (const [productId, state] of states) {
+      stockCardInitialStates.set(
+        productId,
+        {
+          stock: state.stock,
+          colorVariants:
+            cloneColorVariants(
+              state.colorVariants,
+            ),
+        },
+      );
+    }
+
+    const stockCardOccurredAt = new Date();
+    const stockCardOperationId =
+      crypto.randomUUID();
+
     const oldUnitPrices = new Map<string, number>();
 
     for (const oldItem of oldItems) {
@@ -676,6 +805,232 @@ export async function editOrderItemsAndAdjustStock(
       if (!Number.isSafeInteger(productsTotal) || productsTotal < 0) {
         throw new OrderEditError("إجمالي الطلب غير صالح");
       }
+    }
+
+    const oldQuantities = new Map<
+      string,
+      {
+        productId: number;
+        color: string | null;
+        size: string | null;
+        quantity: number;
+      }
+    >();
+
+    for (const oldItem of oldItems) {
+      const productId = Number(oldItem.id);
+      const color =
+        typeof oldItem.color === "string" &&
+        oldItem.color.trim()
+          ? oldItem.color.trim()
+          : null;
+      const size =
+        typeof oldItem.size === "string" &&
+        oldItem.size.trim()
+          ? oldItem.size.trim()
+          : null;
+
+      const key = editableOrderItemKey(
+        productId,
+        color ?? undefined,
+        size ?? undefined,
+      );
+
+      const current = oldQuantities.get(key);
+
+      if (current) {
+        current.quantity +=
+          Number(oldItem.quantity);
+      } else {
+        oldQuantities.set(key, {
+          productId,
+          color,
+          size,
+          quantity:
+            Number(oldItem.quantity),
+        });
+      }
+    }
+
+    const newQuantities = new Map<
+      string,
+      {
+        productId: number;
+        color: string | null;
+        size: string | null;
+        quantity: number;
+      }
+    >();
+
+    for (const newItem of trustedItems) {
+      const productId =
+        Number(newItem.id);
+
+      const color =
+        newItem.color ?? null;
+      const size =
+        newItem.size ?? null;
+
+      const key = editableOrderItemKey(
+        productId,
+        color ?? undefined,
+        size ?? undefined,
+      );
+
+      const current =
+        newQuantities.get(key);
+
+      if (current) {
+        current.quantity +=
+          newItem.quantity;
+      } else {
+        newQuantities.set(key, {
+          productId,
+          color,
+          size,
+          quantity:
+            newItem.quantity,
+        });
+      }
+    }
+
+    const stockCardKeys = [
+      ...new Set([
+        ...oldQuantities.keys(),
+        ...newQuantities.keys(),
+      ]),
+    ].sort();
+
+    const stockCardGeneralCursors =
+      new Map<number, number | null>();
+
+    for (
+      const [productId, initial]
+      of stockCardInitialStates
+    ) {
+      stockCardGeneralCursors.set(
+        productId,
+        initial.stock,
+      );
+    }
+
+    const stockCardMovementDrafts:
+      StockCardOrderMovementDraft[] = [];
+
+    for (const key of stockCardKeys) {
+      const oldEntry =
+        oldQuantities.get(key);
+
+      const newEntry =
+        newQuantities.get(key);
+
+      const entry =
+        newEntry ?? oldEntry;
+
+      if (!entry) {
+        continue;
+      }
+
+      const oldQuantity =
+        oldEntry?.quantity ?? 0;
+
+      const newQuantity =
+        newEntry?.quantity ?? 0;
+
+      const quantityDelta =
+        oldQuantity - newQuantity;
+
+      if (quantityDelta === 0) {
+        continue;
+      }
+
+      const state =
+        states.get(entry.productId);
+
+      const initial =
+        stockCardInitialStates.get(
+          entry.productId,
+        );
+
+      if (!state || !initial) {
+        throw new OrderEditError(
+          "تعذر تسجيل حركة تعديل الطلب",
+          409,
+        );
+      }
+
+      const generalStockBefore =
+        stockCardGeneralCursors.get(
+          entry.productId,
+        ) ?? null;
+
+      const generalStockAfter =
+        generalStockBefore === null
+          ? null
+          : generalStockBefore +
+            quantityDelta;
+
+      stockCardGeneralCursors.set(
+        entry.productId,
+        generalStockAfter,
+      );
+
+      const variantStockBefore =
+        getTrackedVariantStock(
+          initial.colorVariants,
+          entry.color,
+          entry.size,
+        );
+
+      const variantStockAfter =
+        variantStockBefore === null
+          ? null
+          : variantStockBefore +
+            quantityDelta;
+
+      stockCardMovementDrafts.push({
+        productId:
+          entry.productId,
+        barcode:
+          state.row.barcode ?? null,
+        productCode:
+          state.row.productCode ?? null,
+        productNameAr:
+          state.row.nameAr,
+        color: entry.color,
+        size: entry.size,
+        quantityDelta,
+        generalStockBefore,
+        generalStockAfter,
+        variantStockBefore,
+        variantStockAfter,
+      });
+    }
+
+    // stock-card:online-order:edited
+    if (stockCardMovementDrafts.length > 0) {
+      await tx
+        .insert(inventoryMovementsTable)
+        .values(
+          stockCardMovementDrafts.map(
+            (movement, index) => ({
+              ...movement,
+              movementType:
+                "online_order_edit",
+              sourceType:
+                "online_order",
+              sourceId:
+                order.id,
+              sourceItemId: null,
+              sourcePublicId:
+                String(order.id),
+              eventKey:
+                `online-order:${order.id}:edit:${stockCardOperationId}:${index + 1}`,
+              occurredAt:
+                stockCardOccurredAt,
+            }),
+          ),
+        );
     }
 
     // ثالثاً: نحفظ المخزون الجديد
@@ -912,6 +1267,13 @@ export async function restoreCancelledOrderAndDeductStock(
 
     const states = new Map<number, EditableProductState>();
 
+    const stockCardMovementDrafts:
+      StockCardOrderMovementDraft[] = [];
+
+    const stockCardOccurredAt = new Date();
+    const stockCardOperationId =
+      crypto.randomUUID();
+
     for (const product of products) {
       states.set(product.id, {
         row: product,
@@ -945,26 +1307,72 @@ export async function restoreCancelledOrderAndDeductStock(
         );
       }
 
+      const color =
+        typeof storedItem.color === "string" &&
+        storedItem.color.trim()
+          ? storedItem.color.trim()
+          : undefined;
+
+      const size =
+        typeof storedItem.size === "string" &&
+        storedItem.size.trim()
+          ? storedItem.size.trim()
+          : undefined;
+
+      const generalStockBefore =
+        state.stock;
+
+      const variantStockBefore =
+        getTrackedVariantStock(
+          state.colorVariants,
+          color,
+          size,
+        );
+
       applyEditedOrderItemStock(
         state,
         {
           id: productId,
           quantity,
-          color:
-            typeof storedItem.color === "string" &&
-            storedItem.color.trim()
-              ? storedItem.color.trim()
-              : undefined,
-          size:
-            typeof storedItem.size === "string" &&
-            storedItem.size.trim()
-              ? storedItem.size.trim()
-              : undefined,
+          color,
+          size,
         },
         typeof storedItem.price === "number"
           ? storedItem.price
           : undefined,
       );
+
+      const generalStockAfter =
+        state.stock;
+
+      const variantStockAfter =
+        getTrackedVariantStock(
+          state.colorVariants,
+          color,
+          size,
+        );
+
+      if (
+        generalStockBefore !== generalStockAfter ||
+        variantStockBefore !== variantStockAfter
+      ) {
+        stockCardMovementDrafts.push({
+          productId,
+          barcode:
+            state.row.barcode ?? null,
+          productCode:
+            state.row.productCode ?? null,
+          productNameAr:
+            state.row.nameAr,
+          color: color ?? null,
+          size: size ?? null,
+          quantityDelta: -quantity,
+          generalStockBefore,
+          generalStockAfter,
+          variantStockBefore,
+          variantStockAfter,
+        });
+      }
     }
 
     for (const state of [...states.values()].sort(
@@ -979,6 +1387,31 @@ export async function restoreCancelledOrderAndDeductStock(
           colorVariants: state.colorVariants,
         })
         .where(eq(productsTable.id, state.row.id));
+    }
+
+    // stock-card:online-order:restored
+    if (stockCardMovementDrafts.length > 0) {
+      await tx
+        .insert(inventoryMovementsTable)
+        .values(
+          stockCardMovementDrafts.map(
+            (movement, index) => ({
+              ...movement,
+              movementType:
+                "online_order_restore",
+              sourceType:
+                "online_order",
+              sourceId: orderId,
+              sourceItemId: null,
+              sourcePublicId:
+                String(orderId),
+              eventKey:
+                `online-order:${orderId}:restore:${stockCardOperationId}:${index + 1}`,
+              occurredAt:
+                stockCardOccurredAt,
+            }),
+          ),
+        );
     }
 
     const updatedRows = await tx

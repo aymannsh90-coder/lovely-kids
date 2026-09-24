@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   cashSessionsTable,
   financeAccountsTable,
   financeTransactionLinesTable,
@@ -785,6 +786,8 @@ async function handleVoidPurchase(
         throw new PurchaseError("لا يمكن حذف هذه الفاتورة", 409);
       }
 
+      const stockCardVoidOccurredAt = new Date();
+
       const orderedItems = [...purchaseItems].sort((left, right) => {
         const leftId = left.productId ?? Number.MAX_SAFE_INTEGER;
         const rightId = right.productId ?? Number.MAX_SAFE_INTEGER;
@@ -823,6 +826,11 @@ async function handleVoidPurchase(
           colorVariants?: ColorVariant[];
         } = {};
 
+        let stockCardGeneralBefore: number | null = null;
+        let stockCardGeneralAfter: number | null = null;
+        let stockCardVariantBefore: number | null = null;
+        let stockCardVariantAfter: number | null = null;
+
         if (
           item.generalStockBefore !== null &&
           item.generalStockAfter !== null
@@ -834,6 +842,8 @@ async function handleVoidPurchase(
             );
           }
 
+          stockCardGeneralBefore = product.stock;
+
           const nextStock = product.stock - receivedQuantity;
 
           if (!Number.isSafeInteger(nextStock) || nextStock < 0) {
@@ -843,6 +853,7 @@ async function handleVoidPurchase(
             );
           }
 
+          stockCardGeneralAfter = nextStock;
           updates.stock = nextStock;
         }
 
@@ -899,6 +910,8 @@ async function handleVoidPurchase(
             );
           }
 
+          stockCardVariantBefore = selectedSize.stock;
+
           const nextVariantStock =
             selectedSize.stock - receivedQuantity;
 
@@ -911,6 +924,8 @@ async function handleVoidPurchase(
               409,
             );
           }
+
+          stockCardVariantAfter = nextVariantStock;
 
           const nextSizes = sizes.map((entry, index) =>
             index === sizeIndex
@@ -939,6 +954,37 @@ async function handleVoidPurchase(
             .set(updates)
             .where(eq(productsTable.id, product.id));
         }
+
+        // stock-card:pos-purchase:voided
+        await tx
+          .insert(inventoryMovementsTable)
+          .values({
+            productId: product.id,
+            barcode: item.barcode,
+            productCode: item.productCode,
+            productNameAr: item.productNameAr,
+            color: item.color,
+            size: item.size,
+
+            movementType: "purchase_void",
+            quantityDelta: -receivedQuantity,
+
+            generalStockBefore: stockCardGeneralBefore,
+            generalStockAfter: stockCardGeneralAfter,
+
+            variantStockBefore: stockCardVariantBefore,
+            variantStockAfter: stockCardVariantAfter,
+
+            sourceType: "pos_purchase",
+            sourceId: purchase.id,
+            sourceItemId: item.id,
+            sourcePublicId: purchase.publicId,
+
+            eventKey:
+              `pos-purchase:${purchase.id}:item:${item.id}:voided`,
+
+            occurredAt: stockCardVoidOccurredAt,
+          });
       }
 
       const originalFinanceRows = await tx
@@ -1887,6 +1933,46 @@ async function handleCreatePurchase(
         .insert(posPurchaseItemsTable)
         .values(linesWithPurchase)
         .returning();
+
+      // stock-card:pos-purchase:completed
+      const purchaseMovementItems = insertedItems.filter(
+        (item) => item.productId !== null,
+      );
+
+      if (purchaseMovementItems.length > 0) {
+        await tx
+          .insert(inventoryMovementsTable)
+          .values(
+            purchaseMovementItems.map((item) => ({
+              productId: item.productId!,
+              barcode: item.barcode,
+              productCode: item.productCode,
+              productNameAr: item.productNameAr,
+              color: item.color,
+              size: item.size,
+
+              movementType: "purchase",
+              quantityDelta:
+                item.quantity + item.freeQuantity,
+
+              generalStockBefore: item.generalStockBefore,
+              generalStockAfter: item.generalStockAfter,
+
+              variantStockBefore: item.variantStockBefore,
+              variantStockAfter: item.variantStockAfter,
+
+              sourceType: "pos_purchase",
+              sourceId: purchase.id,
+              sourceItemId: item.id,
+              sourcePublicId: purchase.publicId,
+
+              eventKey:
+                `pos-purchase:${purchase.id}:item:${item.id}:completed`,
+
+              occurredAt: purchase.createdAt,
+            })),
+          );
+      }
 
       if (totalMinor > 0) {
         const ensureAccount = async (input: {

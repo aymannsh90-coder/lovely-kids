@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   appSettingsTable,
   ordersTable,
   productsTable,
@@ -284,6 +285,21 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
     }
 
     const trustedItems: TrustedStoredItem[] = [];
+
+    const stockCardMovementDrafts: Array<{
+      productId: number;
+      barcode: string | null;
+      productCode: string | null;
+      productNameAr: string;
+      color: string | null;
+      size: string | null;
+      quantity: number;
+      generalStockBefore: number | null;
+      generalStockAfter: number | null;
+      variantStockBefore: number | null;
+      variantStockAfter: number | null;
+    }> = [];
+
     let productsTotal = 0;
 
     for (const item of groupedItems) {
@@ -291,6 +307,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         .select({
           id: productsTable.id,
           nameAr: productsTable.nameAr,
+          productCode: productsTable.productCode,
+          barcode: productsTable.barcode,
           price: productsTable.price,
           image: productsTable.image,
           sizes: productsTable.sizes,
@@ -319,6 +337,9 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
 
       let selectedImage = product.image;
       let nextColorVariants: ColorVariant[] | undefined;
+
+      let variantStockBefore: number | null = null;
+      let variantStockAfter: number | null = null;
 
       if (colorVariants.length > 0) {
         if (!item.color) {
@@ -378,8 +399,14 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
             selectedSize.stock !== null &&
             selectedSize.stock !== undefined
           ) {
+            variantStockBefore =
+              selectedSize.stock;
+
             const newSizeStock =
               selectedSize.stock - item.quantity;
+
+            variantStockAfter =
+              newSizeStock;
 
             const nextSizes = variantSizes.map((size, index) =>
               index === sizeIndex
@@ -425,6 +452,9 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
 
       let nextStock: number | undefined;
 
+      let generalStockBefore: number | null = null;
+      let generalStockAfter: number | null = null;
+
       if (
         product.stock !== null &&
         product.stock !== undefined
@@ -435,7 +465,10 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
           );
         }
 
+        generalStockBefore = product.stock;
+
         nextStock = product.stock - item.quantity;
+        generalStockAfter = nextStock;
       }
 
       const updates: {
@@ -467,6 +500,26 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         size: item.size,
         color: item.color,
       });
+
+      if (
+        generalStockAfter !== null ||
+        variantStockAfter !== null
+      ) {
+        stockCardMovementDrafts.push({
+          productId: product.id,
+          barcode: product.barcode ?? null,
+          productCode:
+            product.productCode ?? null,
+          productNameAr: product.nameAr,
+          color: item.color ?? null,
+          size: item.size ?? null,
+          quantity: item.quantity,
+          generalStockBefore,
+          generalStockAfter,
+          variantStockBefore,
+          variantStockAfter,
+        });
+      }
 
       productsTotal += product.price * item.quantity;
     }
@@ -510,6 +563,57 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       })
       .returning();
 
-    return orderRows[0];
+    const order = orderRows[0];
+
+    if (!order) {
+      throw new Error("ORDER_INSERT_FAILED");
+    }
+
+    // stock-card:online-order:created
+    if (stockCardMovementDrafts.length > 0) {
+      await tx
+        .insert(inventoryMovementsTable)
+        .values(
+          stockCardMovementDrafts.map(
+            (movement, index) => ({
+              productId: movement.productId,
+              barcode: movement.barcode,
+              productCode:
+                movement.productCode,
+              productNameAr:
+                movement.productNameAr,
+              color: movement.color,
+              size: movement.size,
+
+              movementType: "online_order",
+              quantityDelta:
+                -movement.quantity,
+
+              generalStockBefore:
+                movement.generalStockBefore,
+              generalStockAfter:
+                movement.generalStockAfter,
+
+              variantStockBefore:
+                movement.variantStockBefore,
+              variantStockAfter:
+                movement.variantStockAfter,
+
+              sourceType: "online_order",
+              sourceId: order.id,
+              sourceItemId: null,
+              sourcePublicId:
+                String(order.id),
+
+              eventKey:
+                `online-order:${order.id}:created:${index + 1}`,
+
+              occurredAt: order.createdAt,
+            }),
+          ),
+        );
+    }
+
+    return order;
   });
 }
