@@ -1,9 +1,5 @@
-import {
-  appSettingsTable,
-  productsTable,
-  type ColorVariant,
-} from "@workspace/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { productsTable, type ColorVariant } from "@workspace/db/schema";
+import { desc } from "drizzle-orm";
 import type { openDb } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -81,36 +77,24 @@ export async function handleMetaCatalogRequest(
     return null;
   }
 
-  const settingsRows = await db
-    .select()
-    .from(appSettingsTable)
-    .where(eq(appSettingsTable.id, 1))
-    .limit(1);
-
-  const settings =
-    (settingsRows[0]?.data as Record<string, unknown> | undefined) ?? {};
-
-  // Meta Catalog intentionally includes both summer and winter products
-  // during the seasonal transition period.
-  // The app's activeSeason setting is not used to filter this feed.
-
   const products = await db
     .select()
     .from(productsTable)
     .orderBy(desc(productsTable.createdAt));
 
+  const now = Date.now();
+
   const eligibleProducts = products.filter((product) => {
     // Hidden or trashed products must never reach Meta/Facebook Catalog.
     if (product.isHidden || product.deletedAt) return false;
 
-    const hasNoSeason = !product.season;
-    const isSummerOrWinter =
-      product.season === "summer" || product.season === "winter";
-    const isInOffers = !!product.showInOffers;
+    const isCurrentlyNew =
+      !!product.isNew &&
+      !!product.newUntil &&
+      product.newUntil.getTime() > now;
 
-    // During the seasonal transition, advertise both summer and winter
-    // products, plus products without a season or included in Offers.
-    if (!isSummerOrWinter && !hasNoSeason && !isInOffers) return false;
+    // Only products currently active in New Arrivals reach Meta Catalog.
+    if (!isCurrentlyNew) return false;
 
     // Never advertise a product that is fully out of stock.
     if (!isProductAvailable(product)) return false;
