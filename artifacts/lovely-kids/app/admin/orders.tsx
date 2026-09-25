@@ -36,6 +36,10 @@ import { API_BASE } from "@/constants/api";
 import { createOrderPrintHtml } from "@/utils/orderPrint";
 import { printOrderThermalReceipt } from "@/utils/orderThermalReceipt";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "@/utils/scannerKeyboard";
 
 interface OrderItem {
   id: string;
@@ -268,6 +272,12 @@ export default function AdminOrdersScreen() {
   const [editCustomerAddress, setEditCustomerAddress] = useState("");
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
+
+  const editScannerKeyboard =
+    useRef(createScannerKeyboardBuffer());
+
+  const editScannerSearchFocused =
+    useRef(false);
 
   const printConfirmResolverRef =
     useRef<((confirmed: boolean) => void) | null>(null);
@@ -807,6 +817,49 @@ export default function AdminOrdersScreen() {
       setEditSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    const windowRef = (globalThis as any).window;
+
+    if (!windowRef?.addEventListener) return;
+
+    const handleEditProductScannerKeyDown = (event: any) => {
+      if (!editScannerSearchFocused.current) {
+        return;
+      }
+
+      const scannedValue = captureScannerKeyboardEvent(
+        editScannerKeyboard.current,
+        event,
+      );
+
+      if (event.key === "Enter" && scannedValue) {
+        event.preventDefault?.();
+
+        setEditSearch(scannedValue);
+        setEditPickedProduct(null);
+        setEditPickedColor(null);
+        setEditPickedSize(null);
+        setEditOrderError(null);
+      }
+    };
+
+    windowRef.addEventListener(
+      "keydown",
+      handleEditProductScannerKeyDown,
+      true,
+    );
+
+    return () => {
+      windowRef.removeEventListener(
+        "keydown",
+        handleEditProductScannerKeyDown,
+        true,
+      );
+    };
+  }, []);
 
   const normalizedEditSearch = editSearch.trim().toLowerCase();
 
@@ -2719,6 +2772,16 @@ export default function AdminOrdersScreen() {
                     setEditPickedColor(null);
                     setEditPickedSize(null);
                     setEditOrderError(null);
+                  }}
+                  onFocus={() => {
+                    editScannerSearchFocused.current = true;
+                    editScannerKeyboard.current =
+                      createScannerKeyboardBuffer();
+                  }}
+                  onBlur={() => {
+                    editScannerSearchFocused.current = false;
+                    editScannerKeyboard.current =
+                      createScannerKeyboardBuffer();
                   }}
                   placeholder="ابحث باسم المنتج أو الكود أو الباركود"
                   placeholderTextColor={colors.mutedForeground}
