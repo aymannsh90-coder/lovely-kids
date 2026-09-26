@@ -927,6 +927,26 @@ export default function AdminOrdersScreen() {
 
   const normalizedEditSearch = editSearch.trim().toLowerCase();
 
+  useEffect(() => {
+    if (!normalizedEditSearch) return;
+
+    for (const product of editProducts) {
+      const barcodeMatch = (product.additionalBarcodes ?? []).find(
+        (item) =>
+          item.barcode.trim().toLowerCase() === normalizedEditSearch,
+      );
+
+      if (!barcodeMatch) continue;
+
+      setEditPickedProduct(product);
+      setEditPickedColor(barcodeMatch.color ?? null);
+      setEditPickedSize(barcodeMatch.size ?? null);
+      setEditOrderError(null);
+
+      break;
+    }
+  }, [normalizedEditSearch, editProducts]);
+
   const filteredEditProducts = normalizedEditSearch
     ? editProducts
         .filter((product) => {
