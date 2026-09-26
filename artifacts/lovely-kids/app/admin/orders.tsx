@@ -35,6 +35,7 @@ import { useColors } from "@/hooks/useColors";
 import { API_BASE } from "@/constants/api";
 import { createOrderPrintHtml } from "@/utils/orderPrint";
 import { printOrderThermalReceipt } from "@/utils/orderThermalReceipt";
+import { buildCustomerWhatsappUrl } from "@/utils/whatsappPhone";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
 import {
   captureScannerKeyboardEvent,
@@ -946,30 +947,15 @@ export default function AdminOrdersScreen() {
   const openWhatsappForCountry = (countryCode: "970" | "972") => {
     if (!whatsappTarget) return;
 
-    const normalizedPhone = whatsappTarget.phone
-      .replace(/[٠-٩]/g, (digit) =>
-        String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))
-      )
-      .replace(/[۰-۹]/g, (digit) =>
-        String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))
-      );
-
-    const localNumber = normalizedPhone
-      .replace(/\D/g, "")
-      .replace(/^00/, "")
-      .replace(/^970/, "")
-      .replace(/^972/, "")
-      .replace(/^0/, "");
-
-    const msg = encodeURIComponent(
-      `مرحباً! بخصوص طلبك رقم #${whatsappTarget.orderId} من Lovely Kids 🛍️`
+    const whatsappUrl = buildCustomerWhatsappUrl(
+      whatsappTarget.phone,
+      countryCode,
+      whatsappTarget.orderId,
     );
 
     setWhatsappTarget(null);
 
-    Linking.openURL(
-      `https://wa.me/${countryCode}${localNumber}?text=${msg}`
-    ).catch(() => {
+    Linking.openURL(whatsappUrl).catch(() => {
       showError("تعذر فتح واتساب");
     });
   };
