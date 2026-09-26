@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Print from "expo-print";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -187,6 +187,11 @@ const STATUS_OPTIONS = [
   { key: "cancelled", label: "ملغي", color: "#ef4444", icon: "close-circle-outline" as const },
 ];
 
+const ORDER_FILTER_OPTIONS = [
+  { key: "all", label: "الكل", color: "#64748B", icon: "apps-outline" as const },
+  ...STATUS_OPTIONS,
+];
+
 const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
   new: ["confirmed", "cancelled"],
   confirmed: ["new", "delivering", "cancelled"],
@@ -238,6 +243,17 @@ function timeAgo(dateStr: string) {
   return `منذ ${Math.floor(diff / 86400)} يوم`;
 }
 
+function normalizeOrderLookup(value: string) {
+  const arabicDigits = "٠١٢٣٤٥٦٧٨٩";
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[٠-٩]/g, (d) => String(arabicDigits.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String(persianDigits.indexOf(d)));
+}
+
 export default function AdminOrdersScreen() {
   const colors = useColors();
   const { settings } = useAppSettings();
@@ -267,6 +283,7 @@ export default function AdminOrdersScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [qrScanned, setQrScanned] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [printConfirmVisible, setPrintConfirmVisible] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editItems, setEditItems] = useState<EditableOrderItem[]>([]);
@@ -1042,6 +1059,51 @@ export default function AdminOrdersScreen() {
     });
   };
 
+  const orderStatusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: orders.length };
+
+    for (const option of STATUS_OPTIONS) {
+      counts[option.key] = 0;
+    }
+
+    for (const order of orders) {
+      if (typeof counts[order.status] === "number") {
+        counts[order.status] += 1;
+      }
+    }
+
+    return counts;
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    const search = normalizeOrderLookup(orderSearch);
+    const needle = search.replace(/^#/, "");
+    const compactNeedle = needle.replace(/\s+/g, "");
+
+    return orders.filter((order) => {
+      if (
+        orderStatusFilter !== "all" &&
+        order.status !== orderStatusFilter
+      ) {
+        return false;
+      }
+
+      if (!needle) return true;
+
+      const values = [
+        String(order.id),
+        order.customerName ?? "",
+        order.customerPhone ?? "",
+      ].map(normalizeOrderLookup);
+
+      return values.some(
+        (value) =>
+          value.includes(needle) ||
+          value.replace(/\s+/g, "").includes(compactNeedle),
+      );
+    });
+  }, [orders, orderSearch, orderStatusFilter]);
+
   const openOrderById = useCallback((id: number) => {
     const index = orders.findIndex((order) => order.id === id);
 
@@ -1050,6 +1112,8 @@ export default function AdminOrdersScreen() {
       return false;
     }
 
+    setOrderStatusFilter("all");
+    setOrderSearch("");
     setExpanded(id);
 
     setTimeout(() => {
@@ -1616,6 +1680,76 @@ export default function AdminOrdersScreen() {
         </Pressable>
       </View>
 
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.orderFilters}
+        contentContainerStyle={styles.orderFiltersContent}
+      >
+        {ORDER_FILTER_OPTIONS.map((option) => {
+          const selected = orderStatusFilter === option.key;
+          const count = orderStatusCounts[option.key] ?? 0;
+
+          return (
+            <Pressable
+              key={option.key}
+              onPress={() => {
+                setOrderStatusFilter(option.key);
+                setExpanded(null);
+              }}
+              style={[
+                styles.orderFilterButton,
+                {
+                  borderColor: option.color,
+                  backgroundColor: selected
+                    ? option.color
+                    : option.color + "12",
+                },
+              ]}
+            >
+              <Ionicons
+                name={option.icon}
+                size={16}
+                color={selected ? "#fff" : option.color}
+              />
+
+              <Text
+                style={[
+                  styles.orderFilterText,
+                  {
+                    color: selected ? "#fff" : option.color,
+                  },
+                ]}
+              >
+                {option.label}
+              </Text>
+
+              <View
+                style={[
+                  styles.orderFilterCount,
+                  {
+                    backgroundColor: selected
+                      ? "rgba(255,255,255,0.22)"
+                      : option.color + "18",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.orderFilterCountText,
+                    {
+                      color: selected ? "#fff" : option.color,
+                    },
+                  ]}
+                >
+                  {count}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       <View
         style={[
           styles.orderSearchBar,
@@ -1643,8 +1777,12 @@ export default function AdminOrdersScreen() {
         <TextInput
           value={orderSearch}
           onChangeText={handleOrderSearchChange}
-          onSubmitEditing={() => openOrderFromSearch(orderSearch)}
-          placeholder="ابحث برقم الطلب أو امسح QR"
+          onSubmitEditing={() => {
+            if (parseOrderSearch(orderSearch) !== null) {
+              openOrderFromSearch(orderSearch);
+            }
+          }}
+          placeholder="ابحث برقم الطلب، اسم الزبون، رقم الهاتف أو امسح QR"
           placeholderTextColor={colors.mutedForeground}
           style={[
             styles.orderSearchInput,
@@ -1660,7 +1798,11 @@ export default function AdminOrdersScreen() {
         />
 
         <Pressable
-          onPress={() => openOrderFromSearch(orderSearch)}
+          onPress={() => {
+            if (parseOrderSearch(orderSearch) !== null) {
+              openOrderFromSearch(orderSearch);
+            }
+          }}
           style={[
             styles.orderSearchButton,
             { borderColor: colors.border },
@@ -1683,7 +1825,7 @@ export default function AdminOrdersScreen() {
       ) : (
         <FlatList
           ref={listRef}
-          data={orders}
+          data={filteredOrders}
           onScrollToIndexFailed={({ index }) => {
             setTimeout(() => {
               listRef.current?.scrollToIndex({
@@ -1701,8 +1843,17 @@ export default function AdminOrdersScreen() {
           ListEmptyComponent={
             <View style={styles.center}>
               <Ionicons name="bag-outline" size={56} color={colors.mutedForeground} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>لا توجد طلبات بعد</Text>
-              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>ستظهر الطلبات هنا فور استلامها</Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                {orderStatusFilter !== "all" || orderSearch.trim()
+                  ? "لا توجد طلبات مطابقة"
+                  : "لا توجد طلبات بعد"}
+              </Text>
+
+              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                {orderStatusFilter !== "all" || orderSearch.trim()
+                  ? "جرّب تغيير الفلتر أو عبارة البحث"
+                  : "ستظهر الطلبات هنا فور استلامها"}
+              </Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -3581,6 +3732,40 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 14 },
   emptyText: { fontSize: 18, fontWeight: "700" },
   emptySub: { fontSize: 13, textAlign: "center" },
+  orderFilters: {
+    marginTop: 10,
+    flexGrow: 0,
+  },
+  orderFiltersContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+    flexDirection: "row-reverse",
+  },
+  orderFilterButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  orderFilterText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  orderFilterCount: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderFilterCountText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
   orderSearchBar: {
     flexDirection: "row",
     alignItems: "center",
