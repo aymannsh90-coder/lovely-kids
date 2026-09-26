@@ -64,6 +64,12 @@ interface AdminOrderEditVariant {
   sizes?: AdminOrderEditSize[];
 }
 
+interface AdminOrderEditBarcode {
+  barcode: string;
+  color?: string | null;
+  size?: string | null;
+}
+
 interface AdminOrderEditProduct {
   id: string;
   name?: string;
@@ -72,6 +78,7 @@ interface AdminOrderEditProduct {
   image?: string;
   productCode?: string | null;
   barcode?: string | null;
+  additionalBarcodes?: AdminOrderEditBarcode[];
   stock?: number | null;
   sizes?: string[];
   colorVariants?: AdminOrderEditVariant[];
@@ -554,11 +561,63 @@ export default function AdminOrdersScreen() {
         );
       }
 
-      setEditProducts(
-        Array.isArray(body)
-          ? body.filter((product) => !product.deletedAt)
-          : [],
-      );
+      let products = Array.isArray(body)
+        ? body.filter((product) => !product.deletedAt)
+        : [];
+
+      try {
+        const barcodeRes = await fetch(
+          `${API_BASE}/api/products/barcodes`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (!barcodeRes.ok) {
+          throw new Error("تعذر تحميل الباركودات الإضافية");
+        }
+
+        const barcodeRows: Array<{
+          productId: string;
+          barcode: string;
+          color: string | null;
+          size: string | null;
+        }> = await barcodeRes.json();
+
+        const barcodesByProduct =
+          new Map<string, AdminOrderEditBarcode[]>();
+
+        for (const row of barcodeRows) {
+          const items =
+            barcodesByProduct.get(row.productId) ?? [];
+
+          items.push({
+            barcode: row.barcode,
+            color: row.color,
+            size: row.size,
+          });
+
+          barcodesByProduct.set(
+            row.productId,
+            items,
+          );
+        }
+
+        products = products.map((product) => ({
+          ...product,
+          additionalBarcodes:
+            barcodesByProduct.get(product.id) ?? [],
+        }));
+      } catch (error) {
+        console.warn(
+          "Order editor: failed to load additional barcodes",
+          error,
+        );
+      }
+
+      setEditProducts(products);
     } catch (error) {
       setEditOrderError(
         error instanceof Error
@@ -876,6 +935,9 @@ export default function AdminOrdersScreen() {
             product.name ?? "",
             product.productCode ?? "",
             product.barcode ?? "",
+            ...(product.additionalBarcodes ?? []).map(
+              (item) => item.barcode,
+            ),
           ]
             .join(" ")
             .toLowerCase();
