@@ -3734,10 +3734,17 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 13, textAlign: "center" },
   orderFilters: {
     marginTop: 10,
+    height: 52,
+    minHeight: 52,
+    maxHeight: 52,
     flexGrow: 0,
+    flexShrink: 0,
   },
   orderFiltersContent: {
     paddingHorizontal: 12,
+    paddingVertical: 5,
+    minHeight: 52,
+    alignItems: "center",
     gap: 8,
     flexDirection: "row-reverse",
   },
