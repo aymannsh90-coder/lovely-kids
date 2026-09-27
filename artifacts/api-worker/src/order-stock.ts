@@ -1,11 +1,22 @@
 import {
   appSettingsTable,
+  orderItemCostsTable,
   ordersTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import type { openDb } from "./db";
+import {
+  addProductCostAtCurrentAverage,
+  consumeProductCost,
+  restoreExactProductCost,
+} from "./inventory-cost-engine";
+import {
+  allocateOrderCostAcrossLines,
+  combineOrderCostQualities,
+  type OrderCostLine,
+} from "./order-cost-helpers";
 import {
   resolveShippingCost,
   resolveShippingZone,
@@ -25,6 +36,7 @@ export async function cancelOrderAndRestoreStock(
   db: Db,
   orderId: number,
   allowedStatuses: readonly string[] = ["new"],
+  actorUserId?: number | null,
 ) {
   return db.transaction(async (tx) => {
     const rows = await tx
@@ -57,7 +69,36 @@ export async function cancelOrderAndRestoreStock(
       ? (order.items as StoredOrderItem[])
       : [];
 
-    for (const item of items) {
+    const existingCostRows =
+      await tx
+        .select()
+        .from(orderItemCostsTable)
+        .where(
+          eq(
+            orderItemCostsTable.orderId,
+            orderId,
+          ),
+        )
+        .orderBy(
+          asc(orderItemCostsTable.lineNumber),
+        );
+
+    const costByLineNumber =
+      new Map(
+        existingCostRows.map((cost) => [
+          cost.lineNumber,
+          cost,
+        ]),
+      );
+
+    // A cancelled order can later be reactivated and
+    // cancelled again. Use a movement instance token so
+    // every real lifecycle movement remains unique.
+    const cancelMovementRef =
+      globalThis.crypto.randomUUID();
+
+    for (const [itemIndex, item] of items.entries()) {
+      const lineNumber = itemIndex + 1;
       const productId = Number(item.id);
       const quantity = Number(item.quantity);
 
@@ -138,6 +179,108 @@ export async function cancelOrderAndRestoreStock(
           .update(productsTable)
           .set(updates)
           .where(eq(productsTable.id, productId));
+      }
+
+      const originalCost =
+        costByLineNumber.get(lineNumber);
+
+      if (originalCost) {
+        if (
+          originalCost.productId !== productId ||
+          originalCost.quantity !== quantity
+        ) {
+          throw new OrderEditError(
+            "بيانات تكلفة الطلب غير متطابقة",
+            409,
+          );
+        }
+
+        const restoredCost =
+          await restoreExactProductCost(
+            tx,
+            {
+              productId,
+              quantity,
+              costTotalMinor:
+                originalCost.costTotalMinor,
+              costQuality:
+                originalCost.costQuality as
+                  | "confirmed"
+                  | "estimated"
+                  | "mixed",
+
+              eventType:
+                "online_order_cancel",
+
+              sourceType:
+                "online_order_cancel",
+
+              sourceRef:
+                String(orderId),
+
+              sourceItemRef:
+                `${cancelMovementRef}:${lineNumber}`,
+
+              note:
+                `Online order cancel ${orderId}`,
+
+              createdByUserId:
+                actorUserId ?? null,
+            },
+          );
+
+        // A snapshot proves this order was cost-tracked.
+        // Missing state here indicates accounting corruption,
+        // so don't silently make physical/accounting stock diverge.
+        if (!restoredCost.tracked) {
+          throw new OrderEditError(
+            "تعذر إعادة تكلفة مخزون الطلب",
+            409,
+          );
+        }
+      } else {
+        // Legacy/pre-cutover order:
+        // restore physical stock and estimate its value using
+        // the current/reference product average.
+        const restoredLegacyCost =
+          await addProductCostAtCurrentAverage(
+            tx,
+            {
+              productId,
+              quantity,
+
+              eventType:
+                "online_order_cancel",
+
+              sourceType:
+                "online_order_cancel",
+
+              sourceRef:
+                String(orderId),
+
+              sourceItemRef:
+                `${cancelMovementRef}:${lineNumber}`,
+
+              note:
+                `Legacy online order cancel ${orderId}`,
+
+              createdByUserId:
+                actorUserId ?? null,
+            },
+          );
+
+        if (!restoredLegacyCost.tracked) {
+          console.warn(
+            "ONLINE_ORDER_CANCEL_LEGACY_COST_UNTRACKED",
+            {
+              orderId,
+              lineNumber,
+              productId,
+              reason:
+                restoredLegacyCost.reason,
+            },
+          );
+        }
       }
     }
 
@@ -529,6 +672,7 @@ export async function editOrderItemsAndAdjustStock(
   orderId: number,
   rawItems: unknown,
   rawDetails?: EditOrderDetailsInput,
+  actorUserId?: number | null,
 ) {
   const requestedItems = parseEditOrderItems(rawItems);
 
@@ -555,6 +699,56 @@ export async function editOrderItemsAndAdjustStock(
     const oldItems = Array.isArray(order.items)
       ? (order.items as StoredOrderItem[])
       : [];
+
+    const oldCostRows =
+      await tx
+        .select()
+        .from(orderItemCostsTable)
+        .where(
+          eq(
+            orderItemCostsTable.orderId,
+            orderId,
+          ),
+        )
+        .orderBy(
+          asc(orderItemCostsTable.lineNumber),
+        );
+
+    const oldCostByLineNumber =
+      new Map(
+        oldCostRows.map((cost) => [
+          cost.lineNumber,
+          cost,
+        ]),
+      );
+
+    for (
+      const [index, oldItem]
+      of oldItems.entries()
+    ) {
+      const lineNumber = index + 1;
+      const cost =
+        oldCostByLineNumber.get(
+          lineNumber,
+        );
+
+      if (!cost) continue;
+
+      const productId =
+        Number(oldItem.id);
+      const quantity =
+        Number(oldItem.quantity);
+
+      if (
+        cost.productId !== productId ||
+        cost.quantity !== quantity
+      ) {
+        throw new OrderEditError(
+          "بيانات تكلفة الطلب القديم غير متطابقة",
+          409,
+        );
+      }
+    }
 
     const oldProductIds = oldItems.map((item) => {
       const id = Number(item.id);
@@ -797,6 +991,553 @@ export async function editOrderItemsAndAdjustStock(
       throw new OrderEditError("إجمالي الطلب غير صالح");
     }
 
+    // =================================================
+    // Differential inventory-cost accounting
+    //
+    // Cost belongs to PRODUCT/MODEL only.
+    // Color/size changes alone never change product cost.
+    // =================================================
+
+    const editMovementRef =
+      globalThis.crypto.randomUUID();
+
+    const oldCostLines: OrderCostLine[] =
+      oldItems.map(
+        (item, index) => {
+          const productId =
+            Number(item.id);
+          const quantity =
+            Number(item.quantity);
+
+          if (
+            !Number.isSafeInteger(productId) ||
+            productId <= 0 ||
+            !Number.isSafeInteger(quantity) ||
+            quantity <= 0
+          ) {
+            throw new OrderEditError(
+              "بيانات أحد منتجات الطلب القديم غير صالحة",
+              409,
+            );
+          }
+
+          return {
+            lineNumber:
+              index + 1,
+            productId,
+            quantity,
+            color:
+              typeof item.color === "string"
+                ? item.color
+                : null,
+            size:
+              typeof item.size === "string"
+                ? item.size
+                : null,
+          };
+        },
+      );
+
+    const newCostLines: OrderCostLine[] =
+      trustedItems.map(
+        (item, index) => ({
+          lineNumber:
+            index + 1,
+          productId:
+            Number(item.id),
+          quantity:
+            item.quantity,
+          color:
+            item.color ?? null,
+          size:
+            item.size ?? null,
+        }),
+      );
+
+    const oldLinesByProduct =
+      new Map<number, OrderCostLine[]>();
+
+    const newLinesByProduct =
+      new Map<number, OrderCostLine[]>();
+
+    for (const line of oldCostLines) {
+      const group =
+        oldLinesByProduct.get(
+          line.productId,
+        ) ?? [];
+
+      group.push(line);
+
+      oldLinesByProduct.set(
+        line.productId,
+        group,
+      );
+    }
+
+    for (const line of newCostLines) {
+      const group =
+        newLinesByProduct.get(
+          line.productId,
+        ) ?? [];
+
+      group.push(line);
+
+      newLinesByProduct.set(
+        line.productId,
+        group,
+      );
+    }
+
+    const costProductIds = [
+      ...new Set([
+        ...oldLinesByProduct.keys(),
+        ...newLinesByProduct.keys(),
+      ]),
+    ].sort(
+      (left, right) =>
+        left - right,
+    );
+
+    const nextOrderCostRows: Array<
+      typeof orderItemCostsTable.$inferInsert
+    > = [];
+
+    for (
+      const productId
+      of costProductIds
+    ) {
+      const oldLines =
+        oldLinesByProduct.get(
+          productId,
+        ) ?? [];
+
+      const newLines =
+        newLinesByProduct.get(
+          productId,
+        ) ?? [];
+
+      const oldQuantity =
+        oldLines.reduce(
+          (total, line) =>
+            total + line.quantity,
+          0,
+        );
+
+      const newQuantity =
+        newLines.reduce(
+          (total, line) =>
+            total + line.quantity,
+          0,
+        );
+
+      const oldCostsForProduct =
+        oldLines.map((line) =>
+          oldCostByLineNumber.get(
+            line.lineNumber,
+          ),
+        );
+
+      const fullyTrackedOldProduct =
+        oldQuantity > 0 &&
+        oldCostsForProduct.length > 0 &&
+        oldCostsForProduct.every(
+          (cost) => cost !== undefined,
+        );
+
+      // ===============================================
+      // A) Product newly added to the order
+      // ===============================================
+      if (oldQuantity === 0) {
+        if (newQuantity === 0) {
+          continue;
+        }
+
+        const consumed =
+          await consumeProductCost(
+            tx,
+            {
+              productId,
+              quantity:
+                newQuantity,
+
+              eventType:
+                "online_order",
+
+              sourceType:
+                "online_order_edit",
+
+              sourceRef:
+                String(orderId),
+
+              sourceItemRef:
+                `${editMovementRef}:${productId}`,
+
+              note:
+                `Online order edit add ${orderId}`,
+
+              createdByUserId:
+                actorUserId ?? null,
+            },
+          );
+
+        if (!consumed.tracked) {
+          console.warn(
+            "ONLINE_ORDER_EDIT_NEW_PRODUCT_COST_UNTRACKED",
+            {
+              orderId,
+              productId,
+              reason:
+                consumed.reason,
+            },
+          );
+
+          continue;
+        }
+
+        nextOrderCostRows.push(
+          ...allocateOrderCostAcrossLines(
+            orderId,
+            newLines,
+            consumed.costTotalMinor,
+            consumed.costQuality,
+          ),
+        );
+
+        continue;
+      }
+
+      // ===============================================
+      // B) Legacy/pre-cutover product
+      //
+      // Do not invent historical cost for the preserved
+      // portion. Only keep accounting quantity in sync.
+      // ===============================================
+      if (!fullyTrackedOldProduct) {
+        if (
+          newQuantity >
+          oldQuantity
+        ) {
+          const addedQuantity =
+            newQuantity -
+            oldQuantity;
+
+          const consumed =
+            await consumeProductCost(
+              tx,
+              {
+                productId,
+                quantity:
+                  addedQuantity,
+
+                eventType:
+                  "online_order",
+
+                sourceType:
+                  "online_order_edit",
+
+                sourceRef:
+                  String(orderId),
+
+                sourceItemRef:
+                  `${editMovementRef}:${productId}`,
+
+                note:
+                  `Legacy online order edit increase ${orderId}`,
+
+                createdByUserId:
+                  actorUserId ?? null,
+              },
+            );
+
+          if (!consumed.tracked) {
+            console.warn(
+              "ONLINE_ORDER_EDIT_LEGACY_INCREASE_COST_UNTRACKED",
+              {
+                orderId,
+                productId,
+                reason:
+                  consumed.reason,
+              },
+            );
+          }
+        } else if (
+          newQuantity <
+          oldQuantity
+        ) {
+          const restoredQuantity =
+            oldQuantity -
+            newQuantity;
+
+          const restored =
+            await addProductCostAtCurrentAverage(
+              tx,
+              {
+                productId,
+                quantity:
+                  restoredQuantity,
+
+                eventType:
+                  "online_order_edit_reverse",
+
+                sourceType:
+                  "online_order_edit",
+
+                sourceRef:
+                  String(orderId),
+
+                sourceItemRef:
+                  `${editMovementRef}:${productId}`,
+
+                note:
+                  `Legacy online order edit reverse ${orderId}`,
+
+                createdByUserId:
+                  actorUserId ?? null,
+              },
+            );
+
+          if (!restored.tracked) {
+            console.warn(
+              "ONLINE_ORDER_EDIT_LEGACY_REVERSE_COST_UNTRACKED",
+              {
+                orderId,
+                productId,
+                reason:
+                  restored.reason,
+              },
+            );
+          }
+        }
+
+        continue;
+      }
+
+      // ===============================================
+      // C) Fully tracked product
+      // ===============================================
+
+      const trackedOldCosts =
+        oldCostsForProduct as Array<
+          typeof orderItemCostsTable.$inferSelect
+        >;
+
+      const oldCostTotalMinor =
+        trackedOldCosts.reduce(
+          (total, cost) =>
+            total +
+            cost.costTotalMinor,
+          0,
+        );
+
+      if (
+        !Number.isSafeInteger(
+          oldCostTotalMinor,
+        ) ||
+        oldCostTotalMinor < 0
+      ) {
+        throw new OrderEditError(
+          "تعذر احتساب تكلفة الطلب",
+          409,
+        );
+      }
+
+      const oldCostQuality =
+        combineOrderCostQualities(
+          trackedOldCosts.map(
+            (cost) =>
+              cost.costQuality as
+                | "confirmed"
+                | "estimated"
+                | "mixed",
+          ),
+        );
+
+      let nextCostTotalMinor =
+        oldCostTotalMinor;
+
+      let nextCostQuality =
+        oldCostQuality;
+
+      if (
+        newQuantity <
+        oldQuantity
+      ) {
+        const removedQuantity =
+          oldQuantity -
+          newQuantity;
+
+        const removedCostMinor =
+          removedQuantity ===
+          oldQuantity
+            ? oldCostTotalMinor
+            : (
+                BigInt(
+                  oldCostTotalMinor,
+                ) *
+                  BigInt(
+                    removedQuantity,
+                  ) +
+                BigInt(
+                  oldQuantity,
+                ) /
+                  2n
+              ) /
+              BigInt(
+                oldQuantity,
+              );
+
+        const removedCostNumber =
+          typeof removedCostMinor === "bigint"
+            ? Number(
+                removedCostMinor,
+              )
+            : removedCostMinor;
+
+        if (
+          !Number.isSafeInteger(
+            removedCostNumber,
+          ) ||
+          removedCostNumber < 0
+        ) {
+          throw new OrderEditError(
+            "تعذر احتساب تكلفة الكمية المحذوفة",
+            409,
+          );
+        }
+
+        const restored =
+          await restoreExactProductCost(
+            tx,
+            {
+              productId,
+              quantity:
+                removedQuantity,
+
+              costTotalMinor:
+                removedCostNumber,
+
+              costQuality:
+                oldCostQuality,
+
+              eventType:
+                "online_order_edit_reverse",
+
+              sourceType:
+                "online_order_edit",
+
+              sourceRef:
+                String(orderId),
+
+              sourceItemRef:
+                `${editMovementRef}:${productId}`,
+
+              note:
+                `Online order edit reverse ${orderId}`,
+
+              createdByUserId:
+                actorUserId ?? null,
+            },
+          );
+
+        if (!restored.tracked) {
+          throw new OrderEditError(
+            "تعذر إعادة تكلفة مخزون الطلب",
+            409,
+          );
+        }
+
+        nextCostTotalMinor =
+          oldCostTotalMinor -
+          removedCostNumber;
+      } else if (
+        newQuantity >
+        oldQuantity
+      ) {
+        const addedQuantity =
+          newQuantity -
+          oldQuantity;
+
+        const consumed =
+          await consumeProductCost(
+            tx,
+            {
+              productId,
+              quantity:
+                addedQuantity,
+
+              eventType:
+                "online_order",
+
+              sourceType:
+                "online_order_edit",
+
+              sourceRef:
+                String(orderId),
+
+              sourceItemRef:
+                `${editMovementRef}:${productId}`,
+
+              note:
+                `Online order edit increase ${orderId}`,
+
+              createdByUserId:
+                actorUserId ?? null,
+            },
+          );
+
+        if (!consumed.tracked) {
+          throw new OrderEditError(
+            "تعذر احتساب تكلفة الكمية المضافة",
+            409,
+          );
+        }
+
+        nextCostTotalMinor =
+          oldCostTotalMinor +
+          consumed.costTotalMinor;
+
+        nextCostQuality =
+          combineOrderCostQualities([
+            oldCostQuality,
+            consumed.costQuality,
+          ]);
+      }
+
+      // Same product + same quantity:
+      // preserve the historical cost exactly.
+      if (newQuantity > 0) {
+        nextOrderCostRows.push(
+          ...allocateOrderCostAcrossLines(
+            orderId,
+            newLines,
+            nextCostTotalMinor,
+            nextCostQuality,
+          ),
+        );
+      }
+    }
+
+    // Replace only current order cost snapshots.
+    // Historical movement evidence remains in product_cost_ledger.
+    await tx
+      .delete(orderItemCostsTable)
+      .where(
+        eq(
+          orderItemCostsTable.orderId,
+          orderId,
+        ),
+      );
+
+    if (
+      nextOrderCostRows.length > 0
+    ) {
+      await tx
+        .insert(orderItemCostsTable)
+        .values(
+          nextOrderCostRows,
+        );
+    }
+
     const updatedRows = await tx
       .update(ordersTable)
       .set({
@@ -830,6 +1571,7 @@ export async function restoreCancelledOrderAndDeductStock(
   db: Db,
   orderId: number,
   targetStatus: string,
+  actorUserId?: number | null,
 ) {
   const allowedTargets = new Set([
     "confirmed",
@@ -979,6 +1721,172 @@ export async function restoreCancelledOrderAndDeductStock(
           colorVariants: state.colorVariants,
         })
         .where(eq(productsTable.id, state.row.id));
+    }
+
+    // Reactivation is a NEW stock-out moment.
+    // Therefore the order receives fresh moving-average
+    // cost snapshots instead of reviving stale old costs.
+    const reactivationCostLines: OrderCostLine[] =
+      storedItems.map(
+        (item, index) => {
+          const productId =
+            Number(item.id);
+          const quantity =
+            Number(item.quantity);
+
+          if (
+            !Number.isSafeInteger(productId) ||
+            productId <= 0 ||
+            !Number.isSafeInteger(quantity) ||
+            quantity <= 0
+          ) {
+            throw new OrderEditError(
+              "بيانات أحد منتجات الطلب غير صالحة",
+              409,
+            );
+          }
+
+          return {
+            lineNumber:
+              index + 1,
+            productId,
+            quantity,
+            color:
+              typeof item.color === "string"
+                ? item.color
+                : null,
+            size:
+              typeof item.size === "string"
+                ? item.size
+                : null,
+          };
+        },
+      );
+
+    const reactivationLinesByProduct =
+      new Map<
+        number,
+        OrderCostLine[]
+      >();
+
+    for (
+      const line
+      of reactivationCostLines
+    ) {
+      const group =
+        reactivationLinesByProduct.get(
+          line.productId,
+        ) ?? [];
+
+      group.push(line);
+
+      reactivationLinesByProduct.set(
+        line.productId,
+        group,
+      );
+    }
+
+    const newOrderCostRows: Array<
+      typeof orderItemCostsTable.$inferInsert
+    > = [];
+
+    const reactivationMovementRef =
+      globalThis.crypto.randomUUID();
+
+    for (
+      const productId
+      of [...reactivationLinesByProduct.keys()]
+        .sort((left, right) => left - right)
+    ) {
+      const lines =
+        reactivationLinesByProduct.get(
+          productId,
+        ) ?? [];
+
+      const quantity =
+        lines.reduce(
+          (total, line) =>
+            total + line.quantity,
+          0,
+        );
+
+      if (
+        !Number.isSafeInteger(quantity) ||
+        quantity <= 0
+      ) {
+        throw new OrderEditError(
+          "كمية أحد منتجات الطلب غير صالحة",
+          409,
+        );
+      }
+
+      const consumedCost =
+        await consumeProductCost(
+          tx,
+          {
+            productId,
+            quantity,
+
+            eventType:
+              "online_order",
+
+            sourceType:
+              "online_order_reactivation",
+
+            sourceRef:
+              String(orderId),
+
+            sourceItemRef:
+              `${reactivationMovementRef}:${productId}`,
+
+            note:
+              `Online order reactivation ${orderId}`,
+
+            createdByUserId:
+              actorUserId ?? null,
+          },
+        );
+
+      if (!consumedCost.tracked) {
+        console.warn(
+          "ONLINE_ORDER_REACTIVATION_COST_UNTRACKED",
+          {
+            orderId,
+            productId,
+            reason:
+              consumedCost.reason,
+          },
+        );
+
+        continue;
+      }
+
+      newOrderCostRows.push(
+        ...allocateOrderCostAcrossLines(
+          orderId,
+          lines,
+          consumedCost.costTotalMinor,
+          consumedCost.costQuality,
+        ),
+      );
+    }
+
+    // Remove snapshots from the previous lifecycle.
+    // The cancellation itself remains permanently recorded
+    // in product_cost_ledger.
+    await tx
+      .delete(orderItemCostsTable)
+      .where(
+        eq(
+          orderItemCostsTable.orderId,
+          orderId,
+        ),
+      );
+
+    if (newOrderCostRows.length > 0) {
+      await tx
+        .insert(orderItemCostsTable)
+        .values(newOrderCostRows);
     }
 
     const updatedRows = await tx

@@ -1,11 +1,19 @@
 import {
   appSettingsTable,
+  orderItemCostsTable,
   ordersTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import type { openDb } from "./db";
+import {
+  consumeProductCost,
+} from "./inventory-cost-engine";
+import {
+  allocateOrderCostAcrossLines,
+  type OrderCostLine,
+} from "./order-cost-helpers";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -510,6 +518,144 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       })
       .returning();
 
-    return orderRows[0];
+    const order = orderRows[0];
+
+    if (!order) {
+      throw new Error(
+        "ONLINE_ORDER_INSERT_FAILED",
+      );
+    }
+
+    // Cost accounting is PRODUCT/MODEL level only.
+    // Color/size are only used to map the cost back
+    // to the stored order lines.
+    const costLines: OrderCostLine[] =
+      trustedItems.map(
+        (item, index) => ({
+          lineNumber:
+            index + 1,
+          productId:
+            Number(item.id),
+          quantity:
+            item.quantity,
+          color:
+            item.color ?? null,
+          size:
+            item.size ?? null,
+        }),
+      );
+
+    const costLinesByProduct =
+      new Map<
+        number,
+        OrderCostLine[]
+      >();
+
+    for (const line of costLines) {
+      const group =
+        costLinesByProduct.get(
+          line.productId,
+        ) ?? [];
+
+      group.push(line);
+
+      costLinesByProduct.set(
+        line.productId,
+        group,
+      );
+    }
+
+    const costRows: Array<
+      typeof orderItemCostsTable.$inferInsert
+    > = [];
+
+    for (
+      const productId
+      of [...costLinesByProduct.keys()]
+        .sort((left, right) => left - right)
+    ) {
+      const lines =
+        costLinesByProduct.get(
+          productId,
+        ) ?? [];
+
+      const quantity =
+        lines.reduce(
+          (total, line) =>
+            total + line.quantity,
+          0,
+        );
+
+      if (
+        !Number.isSafeInteger(quantity) ||
+        quantity <= 0
+      ) {
+        throw new Error(
+          "ONLINE_ORDER_COST_QUANTITY_INVALID",
+        );
+      }
+
+      const costResult =
+        await consumeProductCost(
+          tx,
+          {
+            productId,
+            quantity,
+
+            eventType:
+              "online_order",
+
+            sourceType:
+              "online_order",
+
+            sourceRef:
+              String(order.id),
+
+            sourceItemRef:
+              String(productId),
+
+            note:
+              `Online order ${order.id}`,
+
+            createdByUserId:
+              input.userId ?? null,
+          },
+        );
+
+      // Never block a real customer order merely because
+      // this product was not initialized for cost accounting
+      // or an older stock mismatch exists.
+      if (!costResult.tracked) {
+        console.warn(
+          "ONLINE_ORDER_COST_UNTRACKED",
+          {
+            orderId:
+              order.id,
+            productId,
+            reason:
+              costResult.reason,
+          },
+        );
+
+        continue;
+      }
+
+      costRows.push(
+        ...allocateOrderCostAcrossLines(
+          order.id,
+          lines,
+          costResult.costTotalMinor,
+          costResult.costQuality,
+        ),
+      );
+    }
+
+    if (costRows.length > 0) {
+      await tx
+        .insert(orderItemCostsTable)
+        .values(costRows);
+    }
+
+    return order;
   });
 }
