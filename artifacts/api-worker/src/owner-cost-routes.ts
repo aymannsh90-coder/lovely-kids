@@ -164,7 +164,8 @@ function parseUnitCostMinor(
 
   if (
     !Number.isSafeInteger(numeric) ||
-    numeric < 0
+    numeric < 0 ||
+    numeric > 2_147_483_647
   ) {
     return null;
   }
@@ -216,6 +217,8 @@ async function handleProducts(
         productCostStateTable.quantityOnHand,
       inventoryValueMinor:
         productCostStateTable.inventoryValueMinor,
+      referenceUnitCostMinor:
+        productCostStateTable.referenceUnitCostMinor,
       costQuality:
         productCostStateTable.costQuality,
       initializedAt:
@@ -261,6 +264,11 @@ async function handleProducts(
           ? (row.inventoryValueMinor ?? 0)
           : null;
 
+      const referenceUnitCostMinor =
+        initialized
+          ? (row.referenceUnitCostMinor ?? 0)
+          : null;
+
       const averageCostMinor =
         initialized &&
         accountingQuantity !== null &&
@@ -288,6 +296,7 @@ async function handleProducts(
 
         accountingQuantity,
         inventoryValueMinor,
+        referenceUnitCostMinor,
         averageCostMinor,
         costQuality:
           initialized
@@ -507,6 +516,8 @@ async function handleOpeningCost(
               quantityOnHand:
                 currentQuantity,
               inventoryValueMinor,
+              referenceUnitCostMinor:
+                unitCostMinor,
               costQuality,
             })
             .onConflictDoNothing({
@@ -520,6 +531,8 @@ async function handleOpeningCost(
                 productCostStateTable.quantityOnHand,
               inventoryValueMinor:
                 productCostStateTable.inventoryValueMinor,
+              referenceUnitCostMinor:
+                productCostStateTable.referenceUnitCostMinor,
               costQuality:
                 productCostStateTable.costQuality,
               initializedAt:
@@ -591,6 +604,9 @@ async function handleOpeningCost(
               currentQuantity,
 
             unitCostMinor,
+
+            referenceUnitCostMinor:
+              state.referenceUnitCostMinor,
 
             inventoryValueMinor,
 

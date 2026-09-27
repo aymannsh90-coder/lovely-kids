@@ -13,6 +13,7 @@ import {
 
 import { ordersTable } from "./orders";
 import { posSaleReturnItemsTable } from "./pos-sale-returns";
+import { posSaleRevisionsTable } from "./pos-sale-revisions";
 import { posSaleItemsTable } from "./pos-sales";
 import { productsTable } from "./products";
 import { usersTable } from "./users";
@@ -29,6 +30,10 @@ export const productCostStateTable = pgTable(
     quantityOnHand: integer("quantity_on_hand").notNull().default(0),
 
     inventoryValueMinor: integer("inventory_value_minor")
+      .notNull()
+      .default(0),
+
+    referenceUnitCostMinor: integer("reference_unit_cost_minor")
       .notNull()
       .default(0),
 
@@ -55,6 +60,11 @@ export const productCostStateTable = pgTable(
     check(
       "product_cost_state_value_valid",
       sql`${table.inventoryValueMinor} >= 0`,
+    ),
+
+    check(
+      "product_cost_state_reference_cost_valid",
+      sql`${table.referenceUnitCostMinor} >= 0`,
     ),
 
     check(
@@ -375,6 +385,94 @@ export const posSaleReturnItemCostsTable = pgTable(
   ],
 ).enableRLS();
 
+export const posSaleRevisionItemCostsTable = pgTable(
+  "pos_sale_revision_item_costs",
+  {
+    id: serial("id").primaryKey(),
+
+    revisionId: integer("revision_id")
+      .notNull()
+      .references(() => posSaleRevisionsTable.id, {
+        onDelete: "cascade",
+      }),
+
+    snapshotSide: text("snapshot_side").notNull(),
+
+    // Historical identifier only.
+    // Intentionally no FK because old sale items are deleted on edit.
+    saleItemId: integer("sale_item_id").notNull(),
+
+    lineNumber: integer("line_number").notNull(),
+
+    productId: integer("product_id")
+      .notNull()
+      .references(() => productsTable.id, {
+        onDelete: "restrict",
+      }),
+
+    quantity: integer("quantity").notNull(),
+
+    unitCostMinor: integer("unit_cost_minor").notNull(),
+
+    costTotalMinor: integer("cost_total_minor").notNull(),
+
+    costQuality: text("cost_quality").notNull(),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "pos_sale_revision_item_costs_side_valid",
+      sql`${table.snapshotSide} in ('before', 'after')`,
+    ),
+
+    check(
+      "pos_sale_revision_item_costs_sale_item_valid",
+      sql`${table.saleItemId} > 0`,
+    ),
+
+    check(
+      "pos_sale_revision_item_costs_line_valid",
+      sql`${table.lineNumber} > 0`,
+    ),
+
+    check(
+      "pos_sale_revision_item_costs_quantity_valid",
+      sql`${table.quantity} > 0`,
+    ),
+
+    check(
+      "pos_sale_revision_item_costs_values_valid",
+      sql`
+        ${table.unitCostMinor} >= 0
+        and ${table.costTotalMinor} >= 0
+      `,
+    ),
+
+    check(
+      "pos_sale_revision_item_costs_quality_valid",
+      sql`${table.costQuality} in ('confirmed', 'estimated', 'mixed')`,
+    ),
+
+    uniqueIndex(
+      "pos_sale_revision_item_costs_revision_side_line_idx",
+    ).on(
+      table.revisionId,
+      table.snapshotSide,
+      table.lineNumber,
+    ),
+
+    index("pos_sale_revision_item_costs_product_idx").on(
+      table.productId,
+    ),
+  ],
+).enableRLS();
+
+
 export const orderItemCostsTable = pgTable(
   "order_item_costs",
   {
@@ -464,6 +562,9 @@ export type PosSaleItemCost =
 
 export type PosSaleReturnItemCost =
   typeof posSaleReturnItemCostsTable.$inferSelect;
+
+export type PosSaleRevisionItemCost =
+  typeof posSaleRevisionItemCostsTable.$inferSelect;
 
 export type OrderItemCost =
   typeof orderItemCostsTable.$inferSelect;

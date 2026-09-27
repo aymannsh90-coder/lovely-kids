@@ -1,5 +1,6 @@
 import {
   cashSessionsTable,
+  posSaleReturnItemCostsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   productBarcodesTable,
@@ -11,6 +12,9 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  addProductCostAtCurrentAverage,
+} from "./inventory-cost-engine";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type PosUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
@@ -1098,6 +1102,110 @@ export async function handleCreateMobileEmergencyReturn(
                 ),
               )
               .returning();
+
+          const costOrderedItems =
+            [...insertedItems].sort(
+              (left, right) =>
+                (left.productId ?? Number.MAX_SAFE_INTEGER) -
+                  (right.productId ?? Number.MAX_SAFE_INTEGER) ||
+                left.lineNumber - right.lineNumber,
+            );
+
+          for (const item of costOrderedItems) {
+            if (item.productId === null) {
+              throw new Error(
+                "MOBILE_POS_RETURN_COST_PRODUCT_ID_MISSING",
+              );
+            }
+
+            if (
+              item.originalSaleItemId !== null
+            ) {
+              throw new Error(
+                "MOBILE_POS_RETURN_UNEXPECTED_ORIGINAL_SALE_ITEM",
+              );
+            }
+
+            const costResult =
+              await addProductCostAtCurrentAverage(
+                tx,
+                {
+                  productId:
+                    item.productId,
+
+                  quantity:
+                    item.quantity,
+
+                  eventType:
+                    "pos_mobile_return",
+
+                  sourceType:
+                    "pos_mobile_return",
+
+                  sourceRef:
+                    String(saleReturn.id),
+
+                  sourceItemRef:
+                    String(item.id),
+
+                  businessDate:
+                    saleReturn.businessDate,
+
+                  note:
+                    `POS mobile return ${saleReturn.publicId}`,
+
+                  createdByUserId:
+                    auth.user.id,
+                },
+              );
+
+            if (!costResult.tracked) {
+              console.warn(
+                "MOBILE_POS_RETURN_COST_UNTRACKED",
+                {
+                  returnId:
+                    saleReturn.id,
+
+                  returnItemId:
+                    item.id,
+
+                  productId:
+                    item.productId,
+
+                  reason:
+                    costResult.reason,
+                },
+              );
+
+              continue;
+            }
+
+            await tx
+              .insert(
+                posSaleReturnItemCostsTable,
+              )
+              .values({
+                returnItemId:
+                  item.id,
+
+                originalSaleItemId:
+                  null,
+
+                productId:
+                  item.productId,
+
+                quantity:
+                  item.quantity,
+
+                costTotalMinor:
+                  costResult.costTotalMinor,
+
+                // This specific incoming movement is estimated
+                // because no original sale/cost snapshot exists.
+                costQuality:
+                  "estimated",
+              });
+          }
 
           const updatedSessionRows =
             await tx
