@@ -23,6 +23,11 @@ CREATE TABLE public.product_cost_state (
   -- inventory_value_minor / quantity_on_hand
   inventory_value_minor integer NOT NULL DEFAULT 0,
 
+  -- Last known/reference unit cost for the whole product/model.
+  -- This is intentionally product-level, never color/size-level.
+  -- It remains available even when quantity_on_hand = 0.
+  reference_unit_cost_minor integer NOT NULL DEFAULT 0,
+
   -- confirmed = entirely supported by confirmed cost data
   -- estimated = based on an estimated/opening historical cost
   -- mixed = remaining stock contains both confirmed + estimated basis
@@ -36,6 +41,9 @@ CREATE TABLE public.product_cost_state (
 
   CONSTRAINT product_cost_state_value_valid
     CHECK (inventory_value_minor >= 0),
+
+  CONSTRAINT product_cost_state_reference_cost_valid
+    CHECK (reference_unit_cost_minor >= 0),
 
   CONSTRAINT product_cost_state_empty_value_valid
     CHECK (
@@ -281,6 +289,73 @@ CREATE INDEX pos_sale_return_item_costs_product_idx
   ON public.pos_sale_return_item_costs (product_id);
 
 
+-- Private Owner-only audit of POS sale costs across invoice edits.
+--
+-- sale_item_id is intentionally NOT a foreign key:
+-- old POS sale items are deleted during an edit, but their historical
+-- cost audit must remain preserved here.
+CREATE TABLE public.pos_sale_revision_item_costs (
+  id serial PRIMARY KEY,
+
+  revision_id integer NOT NULL
+    REFERENCES public.pos_sale_revisions(id)
+    ON DELETE CASCADE,
+
+  snapshot_side text NOT NULL,
+
+  sale_item_id integer NOT NULL,
+  line_number integer NOT NULL,
+
+  product_id integer NOT NULL
+    REFERENCES public.products(id)
+    ON DELETE RESTRICT,
+
+  quantity integer NOT NULL,
+
+  unit_cost_minor integer NOT NULL,
+  cost_total_minor integer NOT NULL,
+
+  cost_quality text NOT NULL,
+
+  created_at timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT pos_sale_revision_item_costs_side_valid
+    CHECK (
+      snapshot_side IN ('before', 'after')
+    ),
+
+  CONSTRAINT pos_sale_revision_item_costs_sale_item_valid
+    CHECK (sale_item_id > 0),
+
+  CONSTRAINT pos_sale_revision_item_costs_line_valid
+    CHECK (line_number > 0),
+
+  CONSTRAINT pos_sale_revision_item_costs_quantity_valid
+    CHECK (quantity > 0),
+
+  CONSTRAINT pos_sale_revision_item_costs_values_valid
+    CHECK (
+      unit_cost_minor >= 0
+      AND cost_total_minor >= 0
+    ),
+
+  CONSTRAINT pos_sale_revision_item_costs_quality_valid
+    CHECK (
+      cost_quality IN ('confirmed', 'estimated', 'mixed')
+    )
+);
+
+CREATE UNIQUE INDEX pos_sale_revision_item_costs_revision_side_line_idx
+  ON public.pos_sale_revision_item_costs (
+    revision_id,
+    snapshot_side,
+    line_number
+  );
+
+CREATE INDEX pos_sale_revision_item_costs_product_idx
+  ON public.pos_sale_revision_item_costs (product_id);
+
+
 -- Orders currently store their lines inside orders.items JSON.
 -- Keep cost snapshots outside that JSON so Admin/order APIs
 -- never expose cost information.
@@ -345,6 +420,7 @@ ALTER TABLE public.product_cost_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_historical_costs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pos_sale_item_costs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pos_sale_return_item_costs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pos_sale_revision_item_costs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_item_costs ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON TABLE
@@ -353,6 +429,7 @@ REVOKE ALL ON TABLE
   public.product_historical_costs,
   public.pos_sale_item_costs,
   public.pos_sale_return_item_costs,
+  public.pos_sale_revision_item_costs,
   public.order_item_costs
 FROM anon, authenticated;
 
@@ -362,18 +439,21 @@ GRANT ALL ON TABLE
   public.product_historical_costs,
   public.pos_sale_item_costs,
   public.pos_sale_return_item_costs,
+  public.pos_sale_revision_item_costs,
   public.order_item_costs
 TO service_role;
 
 REVOKE ALL ON SEQUENCE
   public.product_cost_ledger_id_seq,
   public.product_historical_costs_id_seq,
+  public.pos_sale_revision_item_costs_id_seq,
   public.order_item_costs_id_seq
 FROM anon, authenticated;
 
 GRANT USAGE, SELECT ON SEQUENCE
   public.product_cost_ledger_id_seq,
   public.product_historical_costs_id_seq,
+  public.pos_sale_revision_item_costs_id_seq,
   public.order_item_costs_id_seq
 TO service_role;
 

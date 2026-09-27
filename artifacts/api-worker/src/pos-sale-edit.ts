@@ -1,7 +1,9 @@
 import {
   inventoryMovementsTable,
   cashSessionsTable,
+  posSaleItemCostsTable,
   posSaleItemsTable,
+  posSaleRevisionItemCostsTable,
   posSaleRevisionsTable,
   posSaleReturnsTable,
   posSalesTable,
@@ -14,6 +16,14 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  addProductCostAtCurrentAverage,
+  allocateProportionalCostMinor,
+  consumeProductCost,
+  deriveUnitCostMinor,
+  restoreExactProductCost,
+  type CostQuality,
+} from "./inventory-cost-engine";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -343,6 +353,102 @@ function makeSnapshot(
       items,
     }),
   ) as PosSaleRevisionSnapshot;
+}
+
+
+function combineCostQualities(
+  qualities: CostQuality[],
+): CostQuality {
+  if (qualities.length < 1) {
+    throw new Error("POS_SALE_EDIT_COST_QUALITY_EMPTY");
+  }
+
+  if (qualities.includes("mixed")) {
+    return "mixed";
+  }
+
+  const first = qualities[0]!;
+
+  return qualities.every(
+    (quality) => quality === first,
+  )
+    ? first
+    : "mixed";
+}
+
+function allocateCostAcrossSaleItems(
+  items: Array<typeof posSaleItemsTable.$inferSelect>,
+  costTotalMinor: number,
+  costQuality: CostQuality,
+): Array<typeof posSaleItemCostsTable.$inferInsert> {
+  const sortedItems = [...items].sort(
+    (left, right) =>
+      left.lineNumber - right.lineNumber,
+  );
+
+  const quantityTotal = sortedItems.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
+
+  if (
+    !Number.isSafeInteger(quantityTotal) ||
+    quantityTotal <= 0
+  ) {
+    throw new Error(
+      "POS_SALE_EDIT_COST_ALLOCATION_QUANTITY_INVALID",
+    );
+  }
+
+  let runningQuantity = 0;
+  let previouslyAllocatedCostMinor = 0;
+
+  return sortedItems.map((item) => {
+    if (item.productId === null) {
+      throw new Error(
+        "POS_SALE_EDIT_COST_PRODUCT_MISSING",
+      );
+    }
+
+    runningQuantity += item.quantity;
+
+    const targetAllocatedCostMinor =
+      runningQuantity === quantityTotal
+        ? costTotalMinor
+        : allocateProportionalCostMinor(
+            costTotalMinor,
+            runningQuantity,
+            quantityTotal,
+          );
+
+    const lineCostTotalMinor =
+      targetAllocatedCostMinor -
+      previouslyAllocatedCostMinor;
+
+    if (
+      !Number.isSafeInteger(lineCostTotalMinor) ||
+      lineCostTotalMinor < 0
+    ) {
+      throw new Error(
+        "POS_SALE_EDIT_COST_ALLOCATION_INVALID",
+      );
+    }
+
+    previouslyAllocatedCostMinor =
+      targetAllocatedCostMinor;
+
+    return {
+      saleItemId: item.id,
+      productId: item.productId,
+      quantity: item.quantity,
+      unitCostMinor: deriveUnitCostMinor(
+        lineCostTotalMinor,
+        item.quantity,
+      ),
+      costTotalMinor: lineCostTotalMinor,
+      costQuality,
+    };
+  });
 }
 
 function toSaleResponse(
@@ -969,6 +1075,55 @@ export async function handleUpdatePosSale(
 
       const beforeSnapshot = makeSnapshot(sale, oldItems);
 
+      const oldSaleItemIds =
+        oldItems.map((item) => item.id);
+
+      const oldCostRows =
+        oldSaleItemIds.length > 0
+          ? await tx
+              .select()
+              .from(posSaleItemCostsTable)
+              .where(
+                inArray(
+                  posSaleItemCostsTable.saleItemId,
+                  oldSaleItemIds,
+                ),
+              )
+          : [];
+
+      const oldItemById =
+        new Map(
+          oldItems.map((item) => [
+            item.id,
+            item,
+          ]),
+        );
+
+      const oldCostByItemId =
+        new Map(
+          oldCostRows.map((cost) => [
+            cost.saleItemId,
+            cost,
+          ]),
+        );
+
+      for (const cost of oldCostRows) {
+        const oldItem =
+          oldItemById.get(cost.saleItemId);
+
+        if (
+          !oldItem ||
+          oldItem.productId === null ||
+          oldItem.productId !== cost.productId ||
+          oldItem.quantity !== cost.quantity
+        ) {
+          throw new PosSaleEditError(
+            "بيانات الفاتورة المحاسبية غير متطابقة",
+            409,
+          );
+        }
+      }
+
       const resolvedItems: ResolvedEditItem[] = [];
 
       for (const item of items) {
@@ -1569,15 +1724,623 @@ export async function handleUpdatePosSale(
           );
       }
 
-      await tx.insert(posSaleRevisionsTable).values({
-        saleId: sale.id,
-        idempotencyKey,
-        revisionNumber,
-        editedByUserId: auth.id,
-        reason,
-        beforeSnapshot,
-        afterSnapshot,
-      });
+      const insertedRevisionRows =
+        await tx
+          .insert(posSaleRevisionsTable)
+          .values({
+            saleId: sale.id,
+            idempotencyKey,
+            revisionNumber,
+            editedByUserId: auth.id,
+            reason,
+            beforeSnapshot,
+            afterSnapshot,
+          })
+          .returning({
+            id: posSaleRevisionsTable.id,
+          });
+
+      const revision =
+        insertedRevisionRows[0];
+
+      if (!revision) {
+        throw new Error(
+          "POS_SALE_EDIT_REVISION_INSERT_FAILED",
+        );
+      }
+
+      // ---------------------------------------------------
+      // Cost calculation is PRODUCT/MODEL level only.
+      // Color and size never form a separate cost dimension.
+      // ---------------------------------------------------
+
+      const oldItemsByProduct =
+        new Map<
+          number,
+          Array<typeof posSaleItemsTable.$inferSelect>
+        >();
+
+      for (const item of oldItems) {
+        if (item.productId === null) {
+          throw new PosSaleEditError(
+            `المنتج ${item.productNameAr} لم يعد موجودًا`,
+            409,
+          );
+        }
+
+        const group =
+          oldItemsByProduct.get(item.productId) ?? [];
+
+        group.push(item);
+        oldItemsByProduct.set(
+          item.productId,
+          group,
+        );
+      }
+
+      const newItemsByProduct =
+        new Map<
+          number,
+          Array<typeof posSaleItemsTable.$inferSelect>
+        >();
+
+      for (const item of sortedInsertedItems) {
+        if (item.productId === null) {
+          throw new PosSaleEditError(
+            "أحد المنتجات لم يعد موجودًا",
+            409,
+          );
+        }
+
+        const group =
+          newItemsByProduct.get(item.productId) ?? [];
+
+        group.push(item);
+        newItemsByProduct.set(
+          item.productId,
+          group,
+        );
+      }
+
+      const costProductIds = [
+        ...new Set([
+          ...oldItemsByProduct.keys(),
+          ...newItemsByProduct.keys(),
+        ]),
+      ].sort((left, right) => left - right);
+
+      const newSaleCostRows: Array<
+        typeof posSaleItemCostsTable.$inferInsert
+      > = [];
+
+      for (const productId of costProductIds) {
+        const oldProductItems =
+          oldItemsByProduct.get(productId) ?? [];
+
+        const newProductItems =
+          newItemsByProduct.get(productId) ?? [];
+
+        const oldQuantity =
+          oldProductItems.reduce(
+            (total, item) =>
+              total + item.quantity,
+            0,
+          );
+
+        const newQuantity =
+          newProductItems.reduce(
+            (total, item) =>
+              total + item.quantity,
+            0,
+          );
+
+        if (
+          !Number.isSafeInteger(oldQuantity) ||
+          !Number.isSafeInteger(newQuantity) ||
+          oldQuantity < 0 ||
+          newQuantity < 0
+        ) {
+          throw new PosSaleEditError(
+            "كمية أحد المنتجات غير صالحة",
+            409,
+          );
+        }
+
+        const maybeOldCosts =
+          oldProductItems.map((item) =>
+            oldCostByItemId.get(item.id),
+          );
+
+        // A product is considered fully tracked only when
+        // EVERY old sale line has a complete cost snapshot.
+        //
+        // Partial/legacy coverage is deliberately treated as
+        // legacy so we never pretend we know historical cost.
+        const fullyTrackedOldProduct =
+          oldQuantity > 0 &&
+          maybeOldCosts.length > 0 &&
+          maybeOldCosts.every(
+            (cost) => cost !== undefined,
+          );
+
+        // =================================================
+        // A) New product added by this revision
+        // =================================================
+        if (oldQuantity === 0) {
+          if (newQuantity === 0) {
+            continue;
+          }
+
+          const consumed =
+            await consumeProductCost(
+              tx,
+              {
+                productId,
+                quantity: newQuantity,
+
+                eventType:
+                  "pos_sale",
+
+                sourceType:
+                  "pos_sale_edit",
+
+                sourceRef:
+                  String(revision.id),
+
+                sourceItemRef:
+                  String(productId),
+
+                businessDate:
+                  sale.businessDate,
+
+                note:
+                  `POS sale edit add ${sale.publicId}`,
+
+                createdByUserId:
+                  auth.id,
+              },
+            );
+
+          if (!consumed.tracked) {
+            console.warn(
+              "POS_SALE_EDIT_NEW_PRODUCT_COST_UNTRACKED",
+              {
+                saleId: sale.id,
+                revisionId: revision.id,
+                productId,
+                reason: consumed.reason,
+              },
+            );
+
+            continue;
+          }
+
+          newSaleCostRows.push(
+            ...allocateCostAcrossSaleItems(
+              newProductItems,
+              consumed.costTotalMinor,
+              consumed.costQuality,
+            ),
+          );
+
+          continue;
+        }
+
+        // =================================================
+        // B) Legacy/partially-tracked old product
+        //
+        // Preserve honesty:
+        // - adjust only the NET inventory quantity
+        // - do NOT manufacture a full historical sale snapshot
+        // =================================================
+        if (!fullyTrackedOldProduct) {
+          if (newQuantity > oldQuantity) {
+            const addedQuantity =
+              newQuantity - oldQuantity;
+
+            const consumed =
+              await consumeProductCost(
+                tx,
+                {
+                  productId,
+                  quantity:
+                    addedQuantity,
+
+                  eventType:
+                    "pos_sale",
+
+                  sourceType:
+                    "pos_sale_edit",
+
+                  sourceRef:
+                    String(revision.id),
+
+                  sourceItemRef:
+                    String(productId),
+
+                  businessDate:
+                    sale.businessDate,
+
+                  note:
+                    `Legacy POS sale edit increase ${sale.publicId}`,
+
+                  createdByUserId:
+                    auth.id,
+                },
+              );
+
+            if (!consumed.tracked) {
+              console.warn(
+                "POS_SALE_EDIT_LEGACY_INCREASE_COST_UNTRACKED",
+                {
+                  saleId: sale.id,
+                  revisionId:
+                    revision.id,
+                  productId,
+                  reason:
+                    consumed.reason,
+                },
+              );
+            }
+          } else if (
+            newQuantity < oldQuantity
+          ) {
+            const restoredQuantity =
+              oldQuantity - newQuantity;
+
+            const restored =
+              await addProductCostAtCurrentAverage(
+                tx,
+                {
+                  productId,
+                  quantity:
+                    restoredQuantity,
+
+                  eventType:
+                    "pos_sale_edit_reverse",
+
+                  sourceType:
+                    "pos_sale_edit",
+
+                  sourceRef:
+                    String(revision.id),
+
+                  sourceItemRef:
+                    String(productId),
+
+                  businessDate:
+                    sale.businessDate,
+
+                  note:
+                    `Legacy POS sale edit reverse ${sale.publicId}`,
+
+                  createdByUserId:
+                    auth.id,
+                },
+              );
+
+            if (!restored.tracked) {
+              console.warn(
+                "POS_SALE_EDIT_LEGACY_REVERSE_COST_UNTRACKED",
+                {
+                  saleId: sale.id,
+                  revisionId:
+                    revision.id,
+                  productId,
+                  reason:
+                    restored.reason,
+                },
+              );
+            }
+          }
+
+          continue;
+        }
+
+        // =================================================
+        // C) Fully tracked old product
+        // =================================================
+
+        const trackedOldCosts =
+          maybeOldCosts as Array<
+            typeof posSaleItemCostsTable.$inferSelect
+          >;
+
+        const oldCostTotalMinor =
+          trackedOldCosts.reduce(
+            (total, cost) =>
+              total +
+              cost.costTotalMinor,
+            0,
+          );
+
+        if (
+          !Number.isSafeInteger(
+            oldCostTotalMinor,
+          ) ||
+          oldCostTotalMinor < 0
+        ) {
+          throw new PosSaleEditError(
+            "تعذر احتساب بيانات الفاتورة",
+            409,
+          );
+        }
+
+        const oldCostQuality =
+          combineCostQualities(
+            trackedOldCosts.map(
+              (cost) =>
+                cost.costQuality as CostQuality,
+            ),
+          );
+
+        let nextCostTotalMinor =
+          oldCostTotalMinor;
+
+        let nextCostQuality =
+          oldCostQuality;
+
+        if (newQuantity < oldQuantity) {
+          const removedQuantity =
+            oldQuantity - newQuantity;
+
+          const removedCostMinor =
+            removedQuantity === oldQuantity
+              ? oldCostTotalMinor
+              : allocateProportionalCostMinor(
+                  oldCostTotalMinor,
+                  removedQuantity,
+                  oldQuantity,
+                );
+
+          const restored =
+            await restoreExactProductCost(
+              tx,
+              {
+                productId,
+
+                quantity:
+                  removedQuantity,
+
+                costTotalMinor:
+                  removedCostMinor,
+
+                costQuality:
+                  oldCostQuality,
+
+                eventType:
+                  "pos_sale_edit_reverse",
+
+                sourceType:
+                  "pos_sale_edit",
+
+                sourceRef:
+                  String(revision.id),
+
+                sourceItemRef:
+                  String(productId),
+
+                businessDate:
+                  sale.businessDate,
+
+                note:
+                  `POS sale edit reverse ${sale.publicId}`,
+
+                createdByUserId:
+                  auth.id,
+              },
+            );
+
+          if (!restored.tracked) {
+            throw new PosSaleEditError(
+              "تعذر إتمام تعديل المخزون",
+              409,
+            );
+          }
+
+          nextCostTotalMinor =
+            oldCostTotalMinor -
+            removedCostMinor;
+        } else if (
+          newQuantity > oldQuantity
+        ) {
+          const addedQuantity =
+            newQuantity - oldQuantity;
+
+          const consumed =
+            await consumeProductCost(
+              tx,
+              {
+                productId,
+
+                quantity:
+                  addedQuantity,
+
+                eventType:
+                  "pos_sale",
+
+                sourceType:
+                  "pos_sale_edit",
+
+                sourceRef:
+                  String(revision.id),
+
+                sourceItemRef:
+                  String(productId),
+
+                businessDate:
+                  sale.businessDate,
+
+                note:
+                  `POS sale edit increase ${sale.publicId}`,
+
+                createdByUserId:
+                  auth.id,
+              },
+            );
+
+          if (!consumed.tracked) {
+            throw new PosSaleEditError(
+              "تعذر إتمام تعديل المخزون",
+              409,
+            );
+          }
+
+          nextCostTotalMinor =
+            oldCostTotalMinor +
+            consumed.costTotalMinor;
+
+          nextCostQuality =
+            combineCostQualities([
+              oldCostQuality,
+              consumed.costQuality,
+            ]);
+        }
+
+        // Same product + same quantity:
+        // nextCostTotalMinor stays EXACTLY the historical total.
+        //
+        // Therefore:
+        // - customer/name edit: no cost change
+        // - discount edit: no cost change
+        // - color/size change: no cost change
+
+        if (newQuantity > 0) {
+          newSaleCostRows.push(
+            ...allocateCostAcrossSaleItems(
+              newProductItems,
+              nextCostTotalMinor,
+              nextCostQuality,
+            ),
+          );
+        }
+      }
+
+      // Old sale-item cost rows were cascade-deleted together
+      // with the old POS sale items. Recreate only the new,
+      // valid tracked snapshots.
+      if (newSaleCostRows.length > 0) {
+        await tx
+          .insert(posSaleItemCostsTable)
+          .values(newSaleCostRows);
+      }
+
+      // ---------------------------------------------------
+      // Private Owner-only revision cost audit
+      // ---------------------------------------------------
+
+      const beforeAuditRows: Array<
+        typeof posSaleRevisionItemCostsTable.$inferInsert
+      > = [];
+
+      for (const cost of oldCostRows) {
+        const oldItem =
+          oldItemById.get(cost.saleItemId);
+
+        if (!oldItem) {
+          throw new Error(
+            "POS_SALE_EDIT_OLD_COST_ITEM_MISSING",
+          );
+        }
+
+        beforeAuditRows.push({
+          revisionId:
+            revision.id,
+
+          snapshotSide:
+            "before",
+
+          saleItemId:
+            oldItem.id,
+
+          lineNumber:
+            oldItem.lineNumber,
+
+          productId:
+            cost.productId,
+
+          quantity:
+            cost.quantity,
+
+          unitCostMinor:
+            cost.unitCostMinor,
+
+          costTotalMinor:
+            cost.costTotalMinor,
+
+          costQuality:
+            cost.costQuality,
+        });
+      }
+
+      const newItemById =
+        new Map(
+          sortedInsertedItems.map((item) => [
+            item.id,
+            item,
+          ]),
+        );
+
+      const afterAuditRows: Array<
+        typeof posSaleRevisionItemCostsTable.$inferInsert
+      > = [];
+
+      for (const cost of newSaleCostRows) {
+        const newItem =
+          newItemById.get(cost.saleItemId);
+
+        if (!newItem) {
+          throw new Error(
+            "POS_SALE_EDIT_NEW_COST_ITEM_MISSING",
+          );
+        }
+
+        afterAuditRows.push({
+          revisionId:
+            revision.id,
+
+          snapshotSide:
+            "after",
+
+          saleItemId:
+            newItem.id,
+
+          lineNumber:
+            newItem.lineNumber,
+
+          productId:
+            cost.productId,
+
+          quantity:
+            cost.quantity,
+
+          unitCostMinor:
+            cost.unitCostMinor,
+
+          costTotalMinor:
+            cost.costTotalMinor,
+
+          costQuality:
+            cost.costQuality,
+        });
+      }
+
+      const revisionCostAuditRows = [
+        ...beforeAuditRows,
+        ...afterAuditRows,
+      ];
+
+      if (
+        revisionCostAuditRows.length > 0
+      ) {
+        await tx
+          .insert(
+            posSaleRevisionItemCostsTable,
+          )
+          .values(
+            revisionCostAuditRows,
+          );
+      }
 
       return {
         sale: updatedSale,
