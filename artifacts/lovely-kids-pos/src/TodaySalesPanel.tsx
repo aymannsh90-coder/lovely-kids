@@ -10,6 +10,7 @@ import {
   type PosSaleItemResult,
   type PosSaleResult,
   type PosMobileReturnResult,
+  type PosSaleReturnResult,
 } from "./lib/api";
 
 interface TodaySalesPanelProps {
@@ -108,6 +109,15 @@ export default function TodaySalesPanel({
 
   const [sales, setSales] = useState<TodaySaleResult[]>([]);
 
+  const [saleReturns, setSaleReturns] =
+    useState<
+      Array<
+        PosSaleReturnResult & {
+          originalSalePublicId: string | null;
+        }
+      >
+    >([]);
+
   const [mobileReturns, setMobileReturns] =
     useState<PosMobileReturnResult[]>([]);
 
@@ -123,13 +133,9 @@ export default function TodaySalesPanel({
 
   const [selectedSale, setSelectedSale] = useState<PosSaleResult | null>(null);
 
-  const activeSales = useMemo(
-    () =>
-      sales.filter(
-        (result) => !result.returnSummary?.fullyReturned,
-      ),
-    [sales],
-  );
+  // Keep every completed sale visible.
+  // Normal returns are displayed as separate negative rows.
+  const activeSales = sales;
 
   const rows = useMemo<ReportRow[]>(
     () =>
@@ -140,6 +146,19 @@ export default function TodaySalesPanel({
         })),
       ),
     [activeSales],
+  );
+
+  const saleReturnRows = useMemo(
+    () =>
+      saleReturns.flatMap((result) =>
+        result.items.map((item) => ({
+          saleReturn: result.saleReturn,
+          originalSalePublicId:
+            result.originalSalePublicId,
+          item,
+        })),
+      ),
+    [saleReturns],
   );
 
   const mobileReturnRows = useMemo(
@@ -180,10 +199,9 @@ export default function TodaySalesPanel({
 
   const returnedMinor = useMemo(
     () =>
-      activeSales.reduce(
+      saleReturns.reduce(
         (total, result) =>
-          total +
-          (result.returnSummary?.refundAmountMinor ?? 0),
+          total + result.saleReturn.refundAmountMinor,
         0,
       ) +
       mobileReturns.reduce(
@@ -191,26 +209,18 @@ export default function TodaySalesPanel({
           total + result.saleReturn.refundAmountMinor,
         0,
       ),
-    [activeSales, mobileReturns],
+    [saleReturns, mobileReturns],
   );
 
   const netTotalMinor = useMemo(
     () =>
       activeSales.reduce(
         (total, result) =>
-          total +
-          (
-            result.returnSummary?.netAmountMinor ??
-            result.sale.totalMinor
-          ),
+          total + result.sale.totalMinor,
         0,
       ) -
-      mobileReturns.reduce(
-        (total, result) =>
-          total + result.saleReturn.refundAmountMinor,
-        0,
-      ),
-    [activeSales, mobileReturns],
+      returnedMinor,
+    [activeSales, returnedMinor],
   );
 
   async function loadTodaySales() {
@@ -221,6 +231,7 @@ export default function TodaySalesPanel({
       const result = await getTodayPosSales(token, session.registerKey);
 
       setSales(result.sales as TodaySaleResult[]);
+      setSaleReturns(result.saleReturns ?? []);
       setMobileReturns(result.mobileReturns ?? []);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -275,6 +286,18 @@ export default function TodaySalesPanel({
     );
   }
 
+  function openSaleReturn(
+    originalSalePublicId: string | null,
+  ) {
+    if (!originalSalePublicId) {
+      return;
+    }
+
+    navigate(
+      `/sales/returns?publicId=${encodeURIComponent(originalSalePublicId)}&from=today`,
+    );
+  }
+
   return (
     <>
       <section className="today-sales-panel" id="pos-today-sales">
@@ -301,7 +324,14 @@ export default function TodaySalesPanel({
             <button
               className="primary-button"
               type="button"
-              disabled={loading || (rows.length === 0 && mobileReturnRows.length === 0)}
+              disabled={
+                loading ||
+                (
+                  rows.length === 0 &&
+                  saleReturnRows.length === 0 &&
+                  mobileReturnRows.length === 0
+                )
+              }
               onClick={printDailyReport}
             >
               طباعة تقرير A4
@@ -343,13 +373,21 @@ export default function TodaySalesPanel({
 
         {loadError && <div className="alert error-alert">{loadError}</div>}
 
-        {!loading && !loadError && rows.length === 0 && mobileReturnRows.length === 0 && (
+        {!loading &&
+        !loadError &&
+        rows.length === 0 &&
+        saleReturnRows.length === 0 &&
+        mobileReturnRows.length === 0 && (
           <div className="empty-cart">
             لا توجد مبيعات مسجلة في جلسة اليوم حتى الآن.
           </div>
         )}
 
-        {(rows.length > 0 || mobileReturnRows.length > 0) && (
+        {(
+        rows.length > 0 ||
+        saleReturnRows.length > 0 ||
+        mobileReturnRows.length > 0
+      ) && (
           <div className="today-sales-table-wrap">
             <table className="today-sales-table">
               <thead>
@@ -404,12 +442,68 @@ export default function TodaySalesPanel({
                   </tr>
                 ))}
 
+                {saleReturnRows.map((row, index) => (
+                  <tr
+                    key={`sale-return-${row.saleReturn.id}-${row.item.id}`}
+                    className="today-mobile-return-row today-sale-clickable-row"
+                    role={row.originalSalePublicId ? "button" : undefined}
+                    tabIndex={row.originalSalePublicId ? 0 : undefined}
+                    title={
+                      row.originalSalePublicId
+                        ? "فتح مردود الفاتورة"
+                        : undefined
+                    }
+                    onClick={() =>
+                      openSaleReturn(row.originalSalePublicId)
+                    }
+                    onKeyDown={(event) => {
+                      if (
+                        !row.originalSalePublicId ||
+                        (event.key !== "Enter" && event.key !== " ")
+                      ) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      openSaleReturn(row.originalSalePublicId);
+                    }}
+                  >
+                    <td>{rows.length + index + 1}</td>
+
+                    <td>
+                      <strong>↩️ {row.item.productNameAr}</strong>
+                      <small dir="ltr">{row.saleReturn.publicId}</small>
+                    </td>
+
+                    <td dir="ltr">{row.item.productCode ?? "—"}</td>
+
+                    <td dir="ltr">{row.item.barcode ?? "—"}</td>
+
+                    <td>-{row.item.quantity}</td>
+
+                    <td>
+                      -{formatMinor(row.item.soldUnitPriceMinor)}
+                    </td>
+
+                    <td>مردود فاتورة</td>
+
+                    <td>
+                      {row.saleReturn.reason || "مردود مبيعات"}
+                    </td>
+                  </tr>
+                ))}
+
                 {mobileReturnRows.map((row, index) => (
                   <tr
                     key={`mobile-return-${row.saleReturn.id}-${row.item.id}`}
                     className="today-mobile-return-row"
                   >
-                    <td>{rows.length + index + 1}</td>
+                    <td>
+                      {rows.length +
+                        saleReturnRows.length +
+                        index +
+                        1}
+                    </td>
 
                     <td>
                       <strong>↩️ {row.item.productNameAr}</strong>
@@ -577,7 +671,7 @@ export default function TodaySalesPanel({
 
           <span>الخصومات: {formatMinor(discountMinor)}</span>
 
-          <span>المردودات الجزئية: {formatMinor(returnedMinor)}</span>
+          <span>المردودات: {formatMinor(returnedMinor)}</span>
 
           <strong>الصافي: {formatMinor(netTotalMinor)}</strong>
         </div>
@@ -627,12 +721,52 @@ export default function TodaySalesPanel({
               </tr>
             ))}
 
+            {saleReturnRows.map((row, index) => (
+              <tr
+                key={`print-sale-return-${row.saleReturn.id}-${row.item.id}`}
+                className="today-mobile-return-row"
+              >
+                <td>{rows.length + index + 1}</td>
+
+                <td>↩️ {row.item.productNameAr}</td>
+
+                <td dir="ltr">{row.item.productCode ?? "—"}</td>
+
+                <td className="daily-report-barcode">
+                  {row.item.barcode ? (
+                    <svg
+                      ref={(element) =>
+                        renderBarcode(element, row.item.barcode, true)
+                      }
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </td>
+
+                <td>-{row.item.quantity}</td>
+
+                <td>-{row.item.soldUnitPrice.toFixed(2)} ₪</td>
+
+                <td>مردود فاتورة</td>
+
+                <td>
+                  {row.saleReturn.reason || "مردود مبيعات"}
+                </td>
+              </tr>
+            ))}
+
             {mobileReturnRows.map((row, index) => (
               <tr
                 key={`print-mobile-return-${row.saleReturn.id}-${row.item.id}`}
                 className="today-mobile-return-row"
               >
-                <td>{rows.length + index + 1}</td>
+                <td>
+                  {rows.length +
+                    saleReturnRows.length +
+                    index +
+                    1}
+                </td>
 
                 <td>↩️ {row.item.productNameAr}</td>
 

@@ -7,6 +7,7 @@ import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
+import ProductCardPage from "../pages/inventory/ProductCardPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
@@ -133,6 +134,11 @@ export default function AppRouter() {
         <Route
           path="inventory/stock-check"
           element={<QuickStockCheckPage />}
+        />
+
+        <Route
+          path="inventory/product-card"
+          element={<ProductCardPage />}
         />
 
         <Route

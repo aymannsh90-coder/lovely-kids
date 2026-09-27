@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   insertProductSchema,
   ordersTable,
   productBarcodesTable,
@@ -6,7 +7,7 @@ import {
   type ColorVariant,
   productsTable,
 } from "@workspace/db/schema";
-import { desc, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import { deleteProductImageObjects, getProductImageObjectPath } from "./image-routes";
@@ -368,6 +369,115 @@ async function handleCreateProduct(
       );
     }
 
+    // stock-card:product-created-opening
+    const openingMovements: Array<
+      typeof inventoryMovementsTable.$inferInsert
+    > = [];
+
+    if (
+      typeof created.stock === "number" &&
+      created.stock > 0
+    ) {
+      openingMovements.push({
+        productId: created.id,
+        barcode: created.barcode ?? null,
+        productCode: created.productCode ?? null,
+        productNameAr: created.nameAr,
+
+        color: null,
+        size: null,
+
+        movementType: "adjustment",
+        quantityDelta: created.stock,
+
+        generalStockBefore: 0,
+        generalStockAfter: created.stock,
+
+        variantStockBefore: null,
+        variantStockAfter: null,
+
+        sourceType: "manual",
+        sourceId: created.id,
+        sourceItemId: null,
+        sourcePublicId: String(created.id),
+
+        eventKey:
+          `product:${created.id}:created-opening:general`,
+
+        occurredAt: created.createdAt,
+      });
+    }
+
+    const createdVariants =
+      (created.colorVariants as
+        | ColorVariant[]
+        | null) ?? [];
+
+    let openingVariantIndex = 0;
+
+    for (const variant of createdVariants) {
+      for (const sizeEntry of variant.sizes ?? []) {
+        if (
+          typeof sizeEntry.stock !== "number" ||
+          sizeEntry.stock <= 0
+        ) {
+          continue;
+        }
+
+        openingVariantIndex += 1;
+
+        const mappedBarcode =
+          additionalBarcodes.find(
+            (entry) =>
+              entry.color === variant.color &&
+              entry.size === sizeEntry.size,
+          )?.barcode ??
+          created.barcode ??
+          null;
+
+        openingMovements.push({
+          productId: created.id,
+          barcode: mappedBarcode,
+          productCode:
+            created.productCode ?? null,
+          productNameAr:
+            created.nameAr,
+
+          color: variant.color,
+          size: sizeEntry.size,
+
+          movementType: "adjustment",
+          quantityDelta:
+            sizeEntry.stock,
+
+          generalStockBefore: null,
+          generalStockAfter: null,
+
+          variantStockBefore: 0,
+          variantStockAfter:
+            sizeEntry.stock,
+
+          sourceType: "manual",
+          sourceId: created.id,
+          sourceItemId: null,
+          sourcePublicId:
+            String(created.id),
+
+          eventKey:
+            `product:${created.id}:created-opening:variant:${openingVariantIndex}`,
+
+          occurredAt:
+            created.createdAt,
+        });
+      }
+    }
+
+    if (openingMovements.length > 0) {
+      await tx
+        .insert(inventoryMovementsTable)
+        .values(openingMovements);
+    }
+
     return created;
   });
 
@@ -487,6 +597,210 @@ async function handleUpdateProduct(
       }
 
       updated = rows[0];
+
+      // stock-card:product-update-adjustment
+      const adjustmentMovements: Array<
+        typeof inventoryMovementsTable.$inferInsert
+      > = [];
+
+      const oldGeneralStock =
+        currentProduct.stock ?? 0;
+
+      const newGeneralStock =
+        updated.stock ?? 0;
+
+      const generalDelta =
+        newGeneralStock - oldGeneralStock;
+
+      const adjustmentOccurredAt =
+        new Date();
+
+      const adjustmentOperationId =
+        crypto.randomUUID();
+
+      if (generalDelta !== 0) {
+        adjustmentMovements.push({
+          productId: updated.id,
+
+          barcode:
+            updated.barcode ?? null,
+
+          productCode:
+            updated.productCode ?? null,
+
+          productNameAr:
+            updated.nameAr,
+
+          color: null,
+          size: null,
+
+          movementType:
+            "adjustment",
+
+          quantityDelta:
+            generalDelta,
+
+          generalStockBefore:
+            oldGeneralStock,
+
+          generalStockAfter:
+            newGeneralStock,
+
+          variantStockBefore: null,
+          variantStockAfter: null,
+
+          sourceType: "manual",
+          sourceId: updated.id,
+          sourceItemId: null,
+          sourcePublicId:
+            String(updated.id),
+
+          eventKey:
+            `product:${updated.id}:update:${adjustmentOperationId}:general`,
+
+          occurredAt:
+            adjustmentOccurredAt,
+        });
+      }
+
+      const oldVariants =
+        (currentProduct.colorVariants as
+          | ColorVariant[]
+          | null) ?? [];
+
+      const newVariants =
+        (updated.colorVariants as
+          | ColorVariant[]
+          | null) ?? [];
+
+      const variantKeys = new Set<string>();
+
+      for (const variant of oldVariants) {
+        for (const sizeEntry of variant.sizes ?? []) {
+          variantKeys.add(
+            JSON.stringify([
+              variant.color,
+              sizeEntry.size,
+            ]),
+          );
+        }
+      }
+
+      for (const variant of newVariants) {
+        for (const sizeEntry of variant.sizes ?? []) {
+          variantKeys.add(
+            JSON.stringify([
+              variant.color,
+              sizeEntry.size,
+            ]),
+          );
+        }
+      }
+
+      let adjustmentIndex = 0;
+
+      for (const key of [...variantKeys].sort()) {
+        const [color, size] =
+          JSON.parse(key) as [string, string];
+
+        const oldVariant =
+          oldVariants.find(
+            (entry) =>
+              entry.color === color,
+          );
+
+        const newVariant =
+          newVariants.find(
+            (entry) =>
+              entry.color === color,
+          );
+
+        const oldStock =
+          oldVariant?.sizes?.find(
+            (entry) =>
+              entry.size === size,
+          )?.stock ?? 0;
+
+        const newStock =
+          newVariant?.sizes?.find(
+            (entry) =>
+              entry.size === size,
+          )?.stock ?? 0;
+
+        const delta =
+          newStock - oldStock;
+
+        if (delta === 0) {
+          continue;
+        }
+
+        adjustmentIndex += 1;
+
+        const variantBarcode =
+          additionalBarcodes.find(
+            (entry) =>
+              entry.color === color &&
+              entry.size === size,
+          )?.barcode ??
+          updated.barcode ??
+          null;
+
+        adjustmentMovements.push({
+          productId:
+            updated.id,
+
+          barcode:
+            variantBarcode,
+
+          productCode:
+            updated.productCode ??
+            null,
+
+          productNameAr:
+            updated.nameAr,
+
+          color,
+          size,
+
+          movementType:
+            "adjustment",
+
+          quantityDelta:
+            delta,
+
+          generalStockBefore: null,
+          generalStockAfter: null,
+
+          variantStockBefore:
+            oldStock,
+
+          variantStockAfter:
+            newStock,
+
+          sourceType:
+            "manual",
+
+          sourceId:
+            updated.id,
+
+          sourceItemId: null,
+
+          sourcePublicId:
+            String(updated.id),
+
+          eventKey:
+            `product:${updated.id}:update:${adjustmentOperationId}:variant:${adjustmentIndex}`,
+
+          occurredAt:
+            adjustmentOccurredAt,
+        });
+      }
+
+      if (adjustmentMovements.length > 0) {
+        await tx
+          .insert(inventoryMovementsTable)
+          .values(adjustmentMovements);
+      }
     }
 
     if (rawAdditionalBarcodes !== undefined) {
@@ -563,39 +877,117 @@ async function handleStock(
     );
   }
 
-  const current = await db
-    .select({ stock: productsTable.stock })
-    .from(productsTable)
-    .where(eq(productsTable.id, id))
-    .limit(1);
-
-  if (!current[0]) {
-    return json(
-      { error: "المنتج غير موجود" },
-      404,
-    );
-  }
-
   const amount = Math.round(body.amount);
-  const oldStock = current[0].stock ?? 0;
 
-  let newStock: number;
+  const product = await db.transaction(
+    async (tx) => {
+      const currentRows = await tx
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.id, id))
+        .for("update");
 
-  if (body.action === "set") {
-    newStock = Math.max(0, amount);
-  } else if (body.action === "add") {
-    newStock = oldStock + amount;
-  } else {
-    newStock = Math.max(0, oldStock - amount);
-  }
+      const current = currentRows[0];
 
-  const rows = await db
-    .update(productsTable)
-    .set({ stock: newStock })
-    .where(eq(productsTable.id, id))
-    .returning();
+      if (!current) {
+        return null;
+      }
 
-  const product = rows[0];
+      const oldStock =
+        current.stock ?? 0;
+
+      let newStock: number;
+
+      if (body.action === "set") {
+        newStock =
+          Math.max(0, amount);
+      } else if (body.action === "add") {
+        newStock =
+          oldStock + amount;
+      } else {
+        newStock =
+          Math.max(
+            0,
+            oldStock - amount,
+          );
+      }
+
+      const rows = await tx
+        .update(productsTable)
+        .set({
+          stock: newStock,
+        })
+        .where(eq(productsTable.id, id))
+        .returning();
+
+      const updated = rows[0];
+
+      if (!updated) {
+        return null;
+      }
+
+      const delta =
+        newStock - oldStock;
+
+      // stock-card:manual-general-stock
+      if (delta !== 0) {
+        const occurredAt =
+          new Date();
+
+        await tx
+          .insert(inventoryMovementsTable)
+          .values({
+            productId:
+              updated.id,
+
+            barcode:
+              updated.barcode ?? null,
+
+            productCode:
+              updated.productCode ?? null,
+
+            productNameAr:
+              updated.nameAr,
+
+            color: null,
+            size: null,
+
+            movementType:
+              "adjustment",
+
+            quantityDelta:
+              delta,
+
+            generalStockBefore:
+              oldStock,
+
+            generalStockAfter:
+              newStock,
+
+            variantStockBefore: null,
+            variantStockAfter: null,
+
+            sourceType:
+              "manual",
+
+            sourceId:
+              updated.id,
+
+            sourceItemId: null,
+
+            sourcePublicId:
+              String(updated.id),
+
+            eventKey:
+              `product:${updated.id}:manual-general:${crypto.randomUUID()}`,
+
+            occurredAt,
+          });
+      }
+
+      return updated;
+    },
+  );
 
   if (!product) {
     return json(
@@ -607,7 +999,12 @@ async function handleStock(
   const additionalBarcodes =
     await getAdditionalBarcodes(db, id);
 
-  return json(toProduct(product, additionalBarcodes));
+  return json(
+    toProduct(
+      product,
+      additionalBarcodes,
+    ),
+  );
 }
 
 export async function handleProductRequest(
@@ -846,89 +1243,257 @@ async function handleVariantStock(
     );
   }
 
-  const current = await db
-    .select({
-      colorVariants: productsTable.colorVariants,
-    })
-    .from(productsTable)
-    .where(eq(productsTable.id, id))
-    .limit(1);
-
-  if (!current[0]) {
-    return json(
-      { error: "المنتج غير موجود" },
-      404,
-    );
-  }
-
-  const variants =
-    (current[0].colorVariants as
-      | ColorVariant[]
-      | null) ?? [];
-
   const color = body.color;
   const size = body.size;
   const action = body.action;
-  const amount = Math.round(body.amount);
+  const amount =
+    Math.round(body.amount);
 
-  let found = false;
+  const result = await db.transaction(
+    async (tx) => {
+      const currentRows = await tx
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.id, id))
+        .for("update");
 
-  const updatedVariants = variants.map((variant) => {
-    if (variant.color !== color) return variant;
+      const current = currentRows[0];
 
-    return {
-      ...variant,
-      sizes: variant.sizes.map((entry) => {
-        if (entry.size !== size) return entry;
-
-        found = true;
-        const oldStock = entry.stock ?? 0;
-
-        let newStock: number;
-
-        if (action === "set") {
-          newStock = Math.max(0, amount);
-        } else if (action === "add") {
-          newStock = oldStock + amount;
-        } else {
-          newStock = Math.max(0, oldStock - amount);
-        }
-
+      if (!current) {
         return {
-          ...entry,
-          stock: newStock,
-          outOfStock: newStock <= 0,
-        };
-      }),
-    };
-  });
+          kind: "not_found",
+        } as const;
+      }
 
-  if (!found) {
+      const variants =
+        (current.colorVariants as
+          | ColorVariant[]
+          | null) ?? [];
+
+      let found = false;
+      let oldStock = 0;
+      let newStock = 0;
+
+      const updatedVariants =
+        variants.map((variant) => {
+          if (
+            variant.color !== color
+          ) {
+            return variant;
+          }
+
+          return {
+            ...variant,
+            sizes:
+              variant.sizes.map(
+                (entry) => {
+                  if (
+                    entry.size !== size
+                  ) {
+                    return entry;
+                  }
+
+                  found = true;
+
+                  oldStock =
+                    entry.stock ?? 0;
+
+                  if (action === "set") {
+                    newStock =
+                      Math.max(
+                        0,
+                        amount,
+                      );
+                  } else if (
+                    action === "add"
+                  ) {
+                    newStock =
+                      oldStock +
+                      amount;
+                  } else {
+                    newStock =
+                      Math.max(
+                        0,
+                        oldStock -
+                          amount,
+                      );
+                  }
+
+                  return {
+                    ...entry,
+                    stock:
+                      newStock,
+                    outOfStock:
+                      newStock <= 0,
+                  };
+                },
+              ),
+          };
+        });
+
+      if (!found) {
+        return {
+          kind: "variant_not_found",
+        } as const;
+      }
+
+      const rows = await tx
+        .update(productsTable)
+        .set({
+          colorVariants:
+            updatedVariants,
+        })
+        .where(
+          eq(
+            productsTable.id,
+            id,
+          ),
+        )
+        .returning();
+
+      const updated = rows[0];
+
+      if (!updated) {
+        return {
+          kind: "not_found",
+        } as const;
+      }
+
+      const delta =
+        newStock - oldStock;
+
+      // stock-card:manual-variant-stock
+      if (delta !== 0) {
+        const occurredAt =
+          new Date();
+
+        const barcodeRows =
+          await tx
+            .select({
+              barcode:
+                productBarcodesTable.barcode,
+            })
+            .from(
+              productBarcodesTable,
+            )
+            .where(
+              and(
+                eq(
+                  productBarcodesTable.productId,
+                  id,
+                ),
+                eq(
+                  productBarcodesTable.color,
+                  color,
+                ),
+                eq(
+                  productBarcodesTable.size,
+                  size,
+                ),
+              ),
+            )
+            .limit(1);
+
+        await tx
+          .insert(inventoryMovementsTable)
+          .values({
+            productId:
+              updated.id,
+
+            barcode:
+              barcodeRows[0]?.barcode ??
+              updated.barcode ??
+              null,
+
+            productCode:
+              updated.productCode ??
+              null,
+
+            productNameAr:
+              updated.nameAr,
+
+            color,
+            size,
+
+            movementType:
+              "adjustment",
+
+            quantityDelta:
+              delta,
+
+            generalStockBefore:
+              null,
+
+            generalStockAfter:
+              null,
+
+            variantStockBefore:
+              oldStock,
+
+            variantStockAfter:
+              newStock,
+
+            sourceType:
+              "manual",
+
+            sourceId:
+              updated.id,
+
+            sourceItemId:
+              null,
+
+            sourcePublicId:
+              String(updated.id),
+
+            eventKey:
+              `product:${updated.id}:manual-variant:${crypto.randomUUID()}`,
+
+            occurredAt,
+          });
+      }
+
+      return {
+        kind: "updated",
+        product: updated,
+      } as const;
+    },
+  );
+
+  if (
+    result.kind ===
+    "not_found"
+  ) {
     return json(
-      { error: "المقاس أو اللون غير موجود" },
+      { error: "المنتج غير موجود" },
       404,
     );
   }
 
-  const rows = await db
-    .update(productsTable)
-    .set({ colorVariants: updatedVariants })
-    .where(eq(productsTable.id, id))
-    .returning();
-
-  const product = rows[0];
-
-  if (!product) {
+  if (
+    result.kind ===
+    "variant_not_found"
+  ) {
     return json(
-      { error: "المنتج غير موجود" },
+      {
+        error:
+          "المقاس أو اللون غير موجود",
+      },
       404,
     );
   }
 
   const additionalBarcodes =
-    await getAdditionalBarcodes(db, id);
+    await getAdditionalBarcodes(
+      db,
+      id,
+    );
 
-  return json(toProduct(product, additionalBarcodes));
+  return json(
+    toProduct(
+      result.product,
+      additionalBarcodes,
+    ),
+  );
 }
 
 async function deleteProductPermanently(

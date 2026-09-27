@@ -1,4 +1,5 @@
 import {
+  inventoryMovementsTable,
   cashSessionsTable,
   posSaleItemCostsTable,
   posSaleItemsTable,
@@ -708,6 +709,138 @@ async function handleBarcodeLookup(request: Request, db: Db, env: Env) {
   );
 }
 
+
+async function handleInventoryProductCard(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requirePosUser(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url = new URL(request.url);
+  const rawProductId =
+    url.searchParams.get("productId") ?? "";
+
+  const productId = Number(rawProductId);
+
+  if (
+    !Number.isSafeInteger(productId) ||
+    productId <= 0
+  ) {
+    return json(
+      {
+        error: "رقم الصنف غير صالح",
+      },
+      400,
+    );
+  }
+
+  const productRows = await db
+    .select()
+    .from(productsTable)
+    .where(eq(productsTable.id, productId))
+    .limit(1);
+
+  const product = productRows[0];
+
+  if (!product) {
+    return json(
+      {
+        error: "لم يتم العثور على المنتج",
+      },
+      404,
+    );
+  }
+
+  const movements = await db
+    .select({
+      id: inventoryMovementsTable.id,
+
+      productId:
+        inventoryMovementsTable.productId,
+
+      barcode:
+        inventoryMovementsTable.barcode,
+
+      productCode:
+        inventoryMovementsTable.productCode,
+
+      productNameAr:
+        inventoryMovementsTable.productNameAr,
+
+      color:
+        inventoryMovementsTable.color,
+
+      size:
+        inventoryMovementsTable.size,
+
+      movementType:
+        inventoryMovementsTable.movementType,
+
+      quantityDelta:
+        inventoryMovementsTable.quantityDelta,
+
+      generalStockBefore:
+        inventoryMovementsTable.generalStockBefore,
+
+      generalStockAfter:
+        inventoryMovementsTable.generalStockAfter,
+
+      variantStockBefore:
+        inventoryMovementsTable.variantStockBefore,
+
+      variantStockAfter:
+        inventoryMovementsTable.variantStockAfter,
+
+      sourceType:
+        inventoryMovementsTable.sourceType,
+
+      sourceId:
+        inventoryMovementsTable.sourceId,
+
+      sourceItemId:
+        inventoryMovementsTable.sourceItemId,
+
+      sourcePublicId:
+        inventoryMovementsTable.sourcePublicId,
+
+      eventKey:
+        inventoryMovementsTable.eventKey,
+
+      occurredAt:
+        inventoryMovementsTable.occurredAt,
+    })
+    .from(inventoryMovementsTable)
+    .where(
+      eq(
+        inventoryMovementsTable.productId,
+        productId,
+      ),
+    )
+    .orderBy(
+      desc(
+        inventoryMovementsTable.occurredAt,
+      ),
+      desc(
+        inventoryMovementsTable.id,
+      ),
+    );
+
+  return json({
+    product: toPosProductLookup(
+      product,
+      product.barcode ?? null,
+      null,
+      null,
+    ),
+    movements,
+  });
+}
+
 async function handleCreateSale(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
 
@@ -1319,6 +1452,45 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           });
       }
 
+// stock-card:pos-sale:completed
+      const saleMovementItems = insertedItems.filter(
+        (item) => item.productId !== null,
+      );
+
+      if (saleMovementItems.length > 0) {
+        await tx
+          .insert(inventoryMovementsTable)
+          .values(
+            saleMovementItems.map((item) => ({
+              productId: item.productId!,
+              barcode: item.barcode,
+              productCode: item.productCode,
+              productNameAr: item.productNameAr,
+              color: item.color,
+              size: item.size,
+
+              movementType: "pos_sale",
+              quantityDelta: -item.quantity,
+
+              generalStockBefore: item.generalStockBefore,
+              generalStockAfter: item.generalStockAfter,
+
+              variantStockBefore: item.variantStockBefore,
+              variantStockAfter: item.variantStockAfter,
+
+              sourceType: "pos_sale",
+              sourceId: sale.id,
+              sourceItemId: item.id,
+              sourcePublicId: sale.publicId,
+
+              eventKey:
+                `pos-sale:${sale.id}:item:${item.id}:completed`,
+
+              occurredAt: sale.createdAt,
+            })),
+          );
+      }
+
       const updatedSessionRows = await tx
         .update(cashSessionsTable)
         .set({
@@ -1521,6 +1693,8 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           ]),
         );
 
+const stockCardVoidOccurredAt = new Date();
+
       const orderedItems = [...saleItems].sort((left, right) => {
         const leftId = left.productId ?? Number.MAX_SAFE_INTEGER;
         const rightId = right.productId ?? Number.MAX_SAFE_INTEGER;
@@ -1556,7 +1730,14 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           colorVariants?: ColorVariant[];
         } = {};
 
+        let stockCardGeneralBefore: number | null = null;
+        let stockCardGeneralAfter: number | null = null;
+        let stockCardVariantBefore: number | null = null;
+        let stockCardVariantAfter: number | null = null;
+
         if (product.stock !== null && product.stock !== undefined) {
+          stockCardGeneralBefore = product.stock;
+
           const nextStock = product.stock + item.quantity;
 
           if (!Number.isSafeInteger(nextStock) || nextStock < 0) {
@@ -1566,6 +1747,7 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
             );
           }
 
+          stockCardGeneralAfter = nextStock;
           updates.stock = nextStock;
         }
 
@@ -1619,6 +1801,8 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
               selectedSize.stock !== null &&
               selectedSize.stock !== undefined
             ) {
+              stockCardVariantBefore = selectedSize.stock;
+
               const nextVariantStock = selectedSize.stock + item.quantity;
 
               if (
@@ -1630,6 +1814,8 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
                   409,
                 );
               }
+
+              stockCardVariantAfter = nextVariantStock;
 
               const nextSizes = sizes.map((entry, index) =>
                 index === sizeIndex
@@ -1730,6 +1916,37 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
             );
           }
         }
+
+// stock-card:pos-sale:voided
+        await tx
+          .insert(inventoryMovementsTable)
+          .values({
+            productId: product.id,
+            barcode: item.barcode,
+            productCode: item.productCode,
+            productNameAr: item.productNameAr,
+            color: item.color,
+            size: item.size,
+
+            movementType: "pos_sale_void",
+            quantityDelta: item.quantity,
+
+            generalStockBefore: stockCardGeneralBefore,
+            generalStockAfter: stockCardGeneralAfter,
+
+            variantStockBefore: stockCardVariantBefore,
+            variantStockAfter: stockCardVariantAfter,
+
+            sourceType: "pos_sale",
+            sourceId: sale.id,
+            sourceItemId: item.id,
+            sourcePublicId: sale.publicId,
+
+            eventKey:
+              `pos-sale:${sale.id}:item:${item.id}:voided`,
+
+            occurredAt: stockCardVoidOccurredAt,
+          });
       }
 
       const expectedAfter = expectedBefore - sale.totalMinor;
@@ -1842,6 +2059,7 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     return json({
       session: null,
       sales: [],
+      saleReturns: [],
       mobileReturns: [],
     });
   }
@@ -1883,11 +2101,8 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
   const completedReturns =
     saleIds.length > 0
       ? await db
-          .select({
-            originalSaleId: posSaleReturnsTable.originalSaleId,
-            refundAmountMinor: posSaleReturnsTable.refundAmountMinor,
-          })
-          .from(posSaleReturnsTable)
+          .select()
+            .from(posSaleReturnsTable)
           .where(
             and(
               inArray(posSaleReturnsTable.originalSaleId, saleIds),
@@ -1967,6 +2182,45 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     mobileItemsByReturn.set(item.returnId, current);
   }
 
+  const normalReturnIds = completedReturns.map(
+    (saleReturn) => saleReturn.id,
+  );
+
+  const normalReturnItems =
+    normalReturnIds.length > 0
+      ? await db
+          .select()
+          .from(posSaleReturnItemsTable)
+          .where(
+            inArray(
+              posSaleReturnItemsTable.returnId,
+              normalReturnIds,
+            ),
+          )
+          .orderBy(
+            asc(posSaleReturnItemsTable.returnId),
+            asc(posSaleReturnItemsTable.lineNumber),
+          )
+      : [];
+
+  const normalItemsByReturn = new Map<
+    number,
+    typeof normalReturnItems
+  >();
+
+  for (const item of normalReturnItems) {
+    const current =
+      normalItemsByReturn.get(item.returnId) ?? [];
+
+    current.push(item);
+    normalItemsByReturn.set(item.returnId, current);
+  }
+
+  const salePublicIdById = new Map(
+    sales.map((sale) => [sale.id, sale.publicId]),
+  );
+
+
   return json({
     session: {
       id: String(session.id),
@@ -2002,6 +2256,65 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
         },
       };
     }),
+
+    saleReturns: completedReturns.map((saleReturn) => ({
+      originalSalePublicId:
+        saleReturn.originalSaleId === null
+          ? null
+          : salePublicIdById.get(
+              saleReturn.originalSaleId,
+            ) ?? null,
+
+      saleReturn: {
+        id: String(saleReturn.id),
+        publicId: saleReturn.publicId,
+        cashSessionId: String(saleReturn.cashSessionId),
+        registerKey: saleReturn.registerKey,
+        businessDate: saleReturn.businessDate,
+        cashierUserId: String(saleReturn.cashierUserId),
+        status: saleReturn.status,
+
+        grossAmountMinor: saleReturn.grossAmountMinor,
+        grossAmount: saleReturn.grossAmountMinor / 100,
+
+        refundAmountMinor: saleReturn.refundAmountMinor,
+        refundAmount: saleReturn.refundAmountMinor / 100,
+
+        reason: saleReturn.reason,
+        notes: saleReturn.notes,
+        createdAt: saleReturn.createdAt.toISOString(),
+      },
+
+      items: (normalItemsByReturn.get(saleReturn.id) ?? []).map(
+        (item) => ({
+          id: String(item.id),
+
+          productId:
+            item.productId === null
+              ? null
+              : String(item.productId),
+
+          barcode: item.barcode,
+          productCode: item.productCode,
+          productNameAr: item.productNameAr,
+          color: item.color,
+          size: item.size,
+          quantity: item.quantity,
+
+          soldUnitPriceMinor: item.soldUnitPriceMinor,
+          soldUnitPrice: item.soldUnitPriceMinor / 100,
+
+          refundAmountMinor: item.refundAmountMinor,
+          refundAmount: item.refundAmountMinor / 100,
+
+          generalStockBefore: item.generalStockBefore,
+          generalStockAfter: item.generalStockAfter,
+
+          variantStockBefore: item.variantStockBefore,
+          variantStockAfter: item.variantStockAfter,
+        }),
+      ),
+    })),
 
     mobileReturns: mobileReturns.map((saleReturn) => ({
       saleReturn: {
@@ -2169,6 +2482,18 @@ export async function handlePosSaleRequest(
   if (request.method === "GET" && path === "/api/pos/products/by-barcode") {
     return handleBarcodeLookup(request, db, env);
   }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/inventory/product-card"
+  ) {
+    return handleInventoryProductCard(
+      request,
+      db,
+      env,
+    );
+  }
+
 
   if (request.method === "GET" && path === "/api/pos/sales/today") {
     return handleTodaySales(request, db, env);
