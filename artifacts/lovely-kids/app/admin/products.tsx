@@ -26,11 +26,88 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useProducts } from "@/context/ProductsContext";
+import {
+  useProducts,
+  type StockCostInput,
+} from "@/context/ProductsContext";
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE } from "@/constants/api";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, isSizeOutOfStock } from "@/data/products";
 
+
+type OwnerCostInfo = {
+  productId: string;
+  currentQuantity: number | null;
+  initialized: boolean;
+  accountingQuantity: number | null;
+  inventoryValueMinor: number | null;
+  referenceUnitCostMinor: number | null;
+  averageCostMinor: number | null;
+  costQuality:
+    | "confirmed"
+    | "estimated"
+    | "mixed"
+    | null;
+  stockMatchesAccounting: boolean;
+};
+
+const getEffectiveQuantityForCost = (
+  product: Product,
+): number | null => {
+  const sizeStocks =
+    (product.colorVariants ?? []).flatMap(
+      (variant) =>
+        (variant.sizes ?? []).map(
+          (entry) => entry.stock,
+        ),
+    );
+
+  let variantQuantity: number | null =
+    null;
+
+  if (sizeStocks.length > 0) {
+    const numericStocks =
+      sizeStocks.filter(
+        (value): value is number =>
+          typeof value === "number" &&
+          Number.isFinite(value),
+      );
+
+    if (
+      numericStocks.length ===
+      sizeStocks.length
+    ) {
+      variantQuantity =
+        numericStocks.reduce(
+          (sum, value) =>
+            sum +
+            Math.max(0, value),
+          0,
+        );
+    }
+  }
+
+  const generalQuantity =
+    typeof product.stock === "number" &&
+    Number.isFinite(product.stock)
+      ? Math.max(0, product.stock)
+      : null;
+
+  if (
+    generalQuantity !== null &&
+    variantQuantity !== null
+  ) {
+    return Math.min(
+      generalQuantity,
+      variantQuantity,
+    );
+  }
+
+  return generalQuantity ??
+    variantQuantity;
+};
 
 export default function AdminProductsScreen() {
   const colors = useColors();
@@ -48,6 +125,8 @@ export default function AdminProductsScreen() {
     adjustVariantStock,
   } = useProducts();
   const { settings } = useAppSettings();
+  const { user, getAuthToken } = useAuth();
+
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
 
@@ -58,6 +137,21 @@ export default function AdminProductsScreen() {
   const [stockProduct, setStockProduct] = useState<Product | null>(null);
   const [stockInput, setStockInput] = useState("");
   const [stockSaving, setStockSaving] = useState(false);
+
+  const [ownerCostInfo, setOwnerCostInfo] =
+    useState<OwnerCostInfo | null>(null);
+
+  const [ownerCostLoading, setOwnerCostLoading] =
+    useState(false);
+
+  const [openingCostInput, setOpeningCostInput] =
+    useState("");
+
+  const [stockCostMode, setStockCostMode] =
+    useState<"same" | "new" | null>(null);
+
+  const [newBatchCostInput, setNewBatchCostInput] =
+    useState("");
 
   // Per-color/size variant stock adjustment
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
@@ -328,59 +422,518 @@ export default function AdminProductsScreen() {
     );
   };
 
-  const openStockModal = (product: Product) => {
+  const refreshOwnerCostInfo =
+    async (productId: string) => {
+      if (!user?.isOwner) {
+        setOwnerCostInfo(null);
+        return null;
+      }
+
+      setOwnerCostLoading(true);
+
+      try {
+        const token =
+          await getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            "يجب تسجيل الدخول",
+          );
+        }
+
+        const res = await fetch(
+          `${API_BASE}/api/owner/costs/products`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (!res.ok) {
+          throw new Error(
+            "تعذر تحميل بيانات التكلفة",
+          );
+        }
+
+        const data =
+          (await res.json()) as {
+            products?: OwnerCostInfo[];
+          };
+
+        const info =
+          data.products?.find(
+            (item) =>
+              item.productId ===
+              productId,
+          ) ?? null;
+
+        setOwnerCostInfo(info);
+
+        return info;
+      } finally {
+        setOwnerCostLoading(false);
+      }
+    };
+
+  const openStockModal = (
+    product: Product,
+  ) => {
     setStockProduct(product);
     setStockInput("");
     setStockSaving(false);
+    setOpeningCostInput("");
+    setStockCostMode(null);
+    setNewBatchCostInput("");
+    setOwnerCostInfo(null);
+
+    if (user?.isOwner) {
+      void refreshOwnerCostInfo(
+        product.id,
+      ).catch((error) => {
+        Alert.alert(
+          "التكلفة",
+          error instanceof Error
+            ? error.message
+            : "تعذر تحميل بيانات التكلفة",
+        );
+      });
+    }
   };
 
   const closeStockModal = () => {
     setStockProduct(null);
     setStockInput("");
+    setOpeningCostInput("");
+    setStockCostMode(null);
+    setNewBatchCostInput("");
+    setOwnerCostInfo(null);
   };
+
+  const ownerCostInputForIncrease =
+    (): StockCostInput | undefined => {
+      if (!user?.isOwner) {
+        return undefined;
+      }
+
+      if (
+        !ownerCostInfo?.initialized
+      ) {
+        throw new Error(
+          "أدخل التكلفة الافتتاحية للصنف أولاً",
+        );
+      }
+
+      if (
+        !ownerCostInfo
+          .stockMatchesAccounting
+      ) {
+        throw new Error(
+          "كمية التكلفة لا تطابق المخزون الحالي. يجب معالجة المزامنة أولاً.",
+        );
+      }
+
+      if (!stockCostMode) {
+        throw new Error(
+          "حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت",
+        );
+      }
+
+      if (
+        stockCostMode === "same"
+      ) {
+        return { mode: "same" };
+      }
+
+      const shekels =
+        Number(
+          newBatchCostInput
+            .trim()
+            .replace(",", "."),
+        );
+
+      if (
+        !Number.isFinite(shekels) ||
+        shekels < 0
+      ) {
+        throw new Error(
+          "أدخل تكلفة صحيحة للقطعة الجديدة",
+        );
+      }
+
+      return {
+        mode: "new",
+        unitCostMinor:
+          Math.round(
+            shekels * 100,
+          ),
+      };
+    };
+
+  const handleOpeningCost =
+    async () => {
+      if (
+        !stockProduct ||
+        !user?.isOwner
+      ) {
+        return;
+      }
+
+      const shekels =
+        Number(
+          openingCostInput
+            .trim()
+            .replace(",", "."),
+        );
+
+      if (
+        !Number.isFinite(shekels) ||
+        shekels < 0
+      ) {
+        Alert.alert(
+          "التكلفة",
+          "أدخل تكلفة صحيحة للقطعة",
+        );
+        return;
+      }
+
+      setStockSaving(true);
+
+      try {
+        const token =
+          await getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            "يجب تسجيل الدخول",
+          );
+        }
+
+        const res = await fetch(
+          `${API_BASE}/api/owner/costs/opening`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              productId:
+                stockProduct.id,
+              unitCostMinor:
+                Math.round(
+                  shekels * 100,
+                ),
+              costQuality:
+                "confirmed",
+            }),
+          },
+        );
+
+        if (!res.ok) {
+          let message =
+            "تعذر تسجيل التكلفة الافتتاحية";
+
+          try {
+            const data =
+              (await res.json()) as {
+                error?: string;
+              };
+
+            if (data.error) {
+              message = data.error;
+            }
+          } catch {}
+
+          throw new Error(message);
+        }
+
+        setOpeningCostInput("");
+
+        await refreshOwnerCostInfo(
+          stockProduct.id,
+        );
+
+        Alert.alert(
+          "تم",
+          "تم تسجيل التكلفة الافتتاحية للصنف",
+        );
+      } catch (error) {
+        Alert.alert(
+          "التكلفة",
+          error instanceof Error
+            ? error.message
+            : "تعذر تسجيل التكلفة",
+        );
+      } finally {
+        setStockSaving(false);
+      }
+    };
 
   const handleQuickAdd = async (amount: number) => {
     if (!stockProduct) return;
     setStockSaving(true);
+
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const updated = await adjustStock(stockProduct.id, "add", amount);
+      Haptics.impactAsync(
+        Haptics.ImpactFeedbackStyle.Medium,
+      );
+
+      const predictedProduct = {
+        ...stockProduct,
+        stock:
+          (stockProduct.stock ?? 0) +
+          amount,
+      };
+
+      const beforeQuantity =
+        getEffectiveQuantityForCost(
+          stockProduct,
+        );
+
+      const afterQuantity =
+        getEffectiveQuantityForCost(
+          predictedProduct,
+        );
+
+      const costInput =
+        beforeQuantity !== null &&
+        afterQuantity !== null &&
+        afterQuantity > beforeQuantity
+          ? ownerCostInputForIncrease()
+          : undefined;
+
+      const updated =
+        await adjustStock(
+          stockProduct.id,
+          "add",
+          amount,
+          costInput,
+        );
+
       setStockProduct(updated);
-    } catch {
-      // ignore
+
+      if (user?.isOwner) {
+        await refreshOwnerCostInfo(
+          stockProduct.id,
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        "المخزون",
+        error instanceof Error
+          ? error.message
+          : "فشل تعديل الكمية",
+      );
     } finally {
       setStockSaving(false);
     }
   };
 
   const handleSetStock = async () => {
-    if (!stockProduct || !stockInput.trim()) return;
-    const val = Number(stockInput.trim());
-    if (isNaN(val) || val < 0) return;
+    if (
+      !stockProduct ||
+      !stockInput.trim()
+    ) {
+      return;
+    }
+
+    const rawValue =
+      Number(stockInput.trim());
+
+    if (
+      !Number.isFinite(rawValue) ||
+      rawValue < 0
+    ) {
+      return;
+    }
+
+    const value =
+      Math.round(rawValue);
+
     setStockSaving(true);
+
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const updated = await adjustStock(stockProduct.id, "set", val);
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+
+      const predictedProduct = {
+        ...stockProduct,
+        stock: value,
+      };
+
+      const beforeQuantity =
+        getEffectiveQuantityForCost(
+          stockProduct,
+        );
+
+      const afterQuantity =
+        getEffectiveQuantityForCost(
+          predictedProduct,
+        );
+
+      const costInput =
+        beforeQuantity !== null &&
+        afterQuantity !== null &&
+        afterQuantity > beforeQuantity
+          ? ownerCostInputForIncrease()
+          : undefined;
+
+      const updated =
+        await adjustStock(
+          stockProduct.id,
+          "set",
+          value,
+          costInput,
+        );
+
       setStockProduct(updated);
       setStockInput("");
-    } catch {
-      // ignore
+
+      if (user?.isOwner) {
+        await refreshOwnerCostInfo(
+          stockProduct.id,
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        "المخزون",
+        error instanceof Error
+          ? error.message
+          : "فشل تعديل الكمية",
+      );
     } finally {
       setStockSaving(false);
     }
   };
 
-  const handleVariantAdjust = async (color: string, size: string, action: "set" | "add" | "subtract", amount: number) => {
+  const handleVariantAdjust = async (
+    color: string,
+    size: string,
+    action: "set" | "add" | "subtract",
+    amount: number,
+  ) => {
     if (!stockProduct) return;
-    const key = variantKey(color, size);
+
+    const key =
+      variantKey(color, size);
+
+    const normalizedAmount =
+      Math.round(amount);
+
     setVariantSaving(key);
+
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const updated = await adjustVariantStock(stockProduct.id, color, size, action, amount);
+      Haptics.impactAsync(
+        Haptics.ImpactFeedbackStyle.Medium,
+      );
+
+      const currentVariantStock =
+        stockProduct.colorVariants
+          ?.find(
+            (variant) =>
+              variant.color === color,
+          )
+          ?.sizes.find(
+            (entry) =>
+              entry.size === size,
+          )
+          ?.stock ?? 0;
+
+      const newVariantStock =
+        action === "set"
+          ? Math.max(
+              0,
+              normalizedAmount,
+            )
+          : action === "add"
+            ? currentVariantStock +
+              normalizedAmount
+            : Math.max(
+                0,
+                currentVariantStock -
+                  normalizedAmount,
+              );
+
+      const predictedProduct = {
+        ...stockProduct,
+        colorVariants:
+          stockProduct.colorVariants?.map(
+            (variant) =>
+              variant.color !== color
+                ? variant
+                : {
+                    ...variant,
+                    sizes:
+                      variant.sizes.map(
+                        (entry) =>
+                          entry.size !==
+                          size
+                            ? entry
+                            : {
+                                ...entry,
+                                stock:
+                                  newVariantStock,
+                              },
+                      ),
+                  },
+          ) ?? [],
+      };
+
+      const beforeQuantity =
+        getEffectiveQuantityForCost(
+          stockProduct,
+        );
+
+      const afterQuantity =
+        getEffectiveQuantityForCost(
+          predictedProduct,
+        );
+
+      const costInput =
+        beforeQuantity !== null &&
+        afterQuantity !== null &&
+        afterQuantity > beforeQuantity
+          ? ownerCostInputForIncrease()
+          : undefined;
+
+      const updated =
+        await adjustVariantStock(
+          stockProduct.id,
+          color,
+          size,
+          action,
+          normalizedAmount,
+          costInput,
+        );
+
       setStockProduct(updated);
-      if (action === "set") setVariantStockInputs((prev) => ({ ...prev, [key]: "" }));
-    } catch {
-      // ignore
+
+      if (action === "set") {
+        setVariantStockInputs(
+          (prev) => ({
+            ...prev,
+            [key]: "",
+          }),
+        );
+      }
+
+      if (user?.isOwner) {
+        await refreshOwnerCostInfo(
+          stockProduct.id,
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        "المخزون",
+        error instanceof Error
+          ? error.message
+          : "فشل تعديل كمية المقاس",
+      );
     } finally {
       setVariantSaving(null);
     }
@@ -1164,6 +1717,282 @@ export default function AdminProductsScreen() {
                   </Text>
                 </View>
 
+                {user?.isOwner && (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor:
+                        colors.primary + "45",
+                      borderRadius: 16,
+                      padding: 14,
+                      gap: 10,
+                      backgroundColor:
+                        colors.primary + "08",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          colors.foreground,
+                        fontSize: 15,
+                        fontWeight: "900",
+                        textAlign: "right",
+                      }}
+                    >
+                      تكلفة المخزون — للمالك فقط
+                    </Text>
+
+                    {ownerCostLoading ? (
+                      <Text
+                        style={{
+                          color:
+                            colors.mutedForeground,
+                          textAlign: "right",
+                        }}
+                      >
+                        جارٍ تحميل بيانات التكلفة...
+                      </Text>
+                    ) : ownerCostInfo?.initialized ? (
+                      <>
+                        <Text
+                          style={{
+                            color:
+                              colors.foreground,
+                            textAlign: "right",
+                            fontWeight: "700",
+                          }}
+                        >
+                          متوسط التكلفة الحالي:{" "}
+                          {(
+                            (ownerCostInfo.averageCostMinor ??
+                              ownerCostInfo.referenceUnitCostMinor ??
+                              0) /
+                            100
+                          ).toFixed(2)}{" "}
+                          ₪
+                        </Text>
+
+                        <Text
+                          style={{
+                            color:
+                              ownerCostInfo.stockMatchesAccounting
+                                ? colors.mutedForeground
+                                : "#dc2626",
+                            textAlign: "right",
+                            fontSize: 12,
+                            fontWeight:
+                              ownerCostInfo.stockMatchesAccounting
+                                ? "600"
+                                : "800",
+                          }}
+                        >
+                          {ownerCostInfo.stockMatchesAccounting
+                            ? `الكمية المحاسبية: ${ownerCostInfo.accountingQuantity ?? 0}`
+                            : "تنبيه: الكمية المحاسبية لا تطابق المخزون الحالي"}
+                        </Text>
+
+                        <Text
+                          style={{
+                            color:
+                              colors.foreground,
+                            textAlign: "right",
+                            fontWeight: "800",
+                            marginTop: 4,
+                          }}
+                        >
+                          عند إضافة كمية جديدة:
+                        </Text>
+
+                        <View
+                          style={{
+                            flexDirection:
+                              Platform.OS === "web"
+                                ? "row-reverse"
+                                : "row",
+                            gap: 8,
+                          }}
+                        >
+                          <Pressable
+                            onPress={() => {
+                              setStockCostMode(
+                                "same",
+                              );
+                              setNewBatchCostInput(
+                                "",
+                              );
+                            }}
+                            style={{
+                              flex: 1,
+                              borderWidth: 1,
+                              borderColor:
+                                stockCostMode ===
+                                "same"
+                                  ? colors.primary
+                                  : colors.border,
+                              backgroundColor:
+                                stockCostMode ===
+                                "same"
+                                  ? colors.primary +
+                                    "18"
+                                  : colors.card,
+                              borderRadius: 10,
+                              padding: 10,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  colors.foreground,
+                                textAlign:
+                                  "center",
+                                fontWeight:
+                                  "800",
+                              }}
+                            >
+                              نفس التكلفة
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() =>
+                              setStockCostMode(
+                                "new",
+                              )
+                            }
+                            style={{
+                              flex: 1,
+                              borderWidth: 1,
+                              borderColor:
+                                stockCostMode ===
+                                "new"
+                                  ? colors.primary
+                                  : colors.border,
+                              backgroundColor:
+                                stockCostMode ===
+                                "new"
+                                  ? colors.primary +
+                                    "18"
+                                  : colors.card,
+                              borderRadius: 10,
+                              padding: 10,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  colors.foreground,
+                                textAlign:
+                                  "center",
+                                fontWeight:
+                                  "800",
+                              }}
+                            >
+                              تغيرت التكلفة
+                            </Text>
+                          </Pressable>
+                        </View>
+
+                        {stockCostMode ===
+                          "new" && (
+                          <TextInput
+                            value={
+                              newBatchCostInput
+                            }
+                            onChangeText={
+                              setNewBatchCostInput
+                            }
+                            placeholder="تكلفة القطعة الجديدة بالشيكل"
+                            placeholderTextColor={
+                              colors.mutedForeground
+                            }
+                            keyboardType="decimal-pad"
+                            style={{
+                              borderWidth: 1,
+                              borderColor:
+                                colors.border,
+                              borderRadius: 10,
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              color:
+                                colors.foreground,
+                              backgroundColor:
+                                colors.background,
+                              textAlign: "right",
+                            }}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Text
+                          style={{
+                            color:
+                              colors.foreground,
+                            textAlign: "right",
+                            lineHeight: 20,
+                          }}
+                        >
+                          لم يتم تسجيل تكلفة افتتاحية لهذا الصنف بعد.
+                        </Text>
+
+                        <TextInput
+                          value={
+                            openingCostInput
+                          }
+                          onChangeText={
+                            setOpeningCostInput
+                          }
+                          placeholder="تكلفة القطعة الحالية بالشيكل"
+                          placeholderTextColor={
+                            colors.mutedForeground
+                          }
+                          keyboardType="decimal-pad"
+                          style={{
+                            borderWidth: 1,
+                            borderColor:
+                              colors.border,
+                            borderRadius: 10,
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            color:
+                              colors.foreground,
+                            backgroundColor:
+                              colors.background,
+                            textAlign: "right",
+                          }}
+                        />
+
+                        <Pressable
+                          onPress={
+                            handleOpeningCost
+                          }
+                          disabled={
+                            stockSaving ||
+                            !openingCostInput.trim()
+                          }
+                          style={{
+                            backgroundColor:
+                              colors.primary,
+                            borderRadius: 10,
+                            padding: 11,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#fff",
+                              fontWeight: "900",
+                              textAlign:
+                                "center",
+                            }}
+                          >
+                            تسجيل التكلفة الافتتاحية
+                          </Text>
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
+                )}
+
                 {/* Quick Add Buttons */}
                 <Text style={[styles.sectionLabel, { color: colors.foreground }]}>إضافة سريعة ⚡</Text>
                 <View style={styles.quickBtns}>
@@ -1210,12 +2039,55 @@ export default function AdminProductsScreen() {
                 <Pressable
                   onPress={async () => {
                     if (!stockProduct) return;
+
                     setStockSaving(true);
+
                     try {
-                        await updateProduct({ ...stockProduct, stock: null });
-                        setStockProduct({ ...stockProduct, stock: null });
-                    } catch { }
-                    setStockSaving(false);
+                      const predictedProduct = {
+                        ...stockProduct,
+                        stock: null,
+                      };
+
+                      const beforeQuantity =
+                        getEffectiveQuantityForCost(
+                          stockProduct,
+                        );
+
+                      const afterQuantity =
+                        getEffectiveQuantityForCost(
+                          predictedProduct,
+                        );
+
+                      const costInput =
+                        beforeQuantity !== null &&
+                        afterQuantity !== null &&
+                        afterQuantity > beforeQuantity
+                          ? ownerCostInputForIncrease()
+                          : undefined;
+
+                      const updated =
+                        await updateProduct(
+                          predictedProduct,
+                          costInput,
+                        );
+
+                      setStockProduct(updated);
+
+                      if (user?.isOwner) {
+                        await refreshOwnerCostInfo(
+                          stockProduct.id,
+                        );
+                      }
+                    } catch (error) {
+                      Alert.alert(
+                        "المخزون",
+                        error instanceof Error
+                          ? error.message
+                          : "فشل تعديل الكمية",
+                      );
+                    } finally {
+                      setStockSaving(false);
+                    }
                   }}
                   style={[styles.unlimitedBtn, { borderColor: colors.border }]}
                 >

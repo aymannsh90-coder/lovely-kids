@@ -1,7 +1,9 @@
 import {
   inventoryMovementsTable,
   cashSessionsTable,
+  posSaleItemCostsTable,
   posSaleItemsTable,
+  posSaleReturnItemCostsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
@@ -13,6 +15,12 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  addProductCostAtCurrentAverage,
+  allocateProportionalCostMinor,
+  restoreExactProductCost,
+  type CostQuality,
+} from "./inventory-cost-engine";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -485,6 +493,30 @@ export async function handleCreatePosSaleReturn(
       if (originalItems.length !== requestedIds.length) {
         throw new PosSaleReturnError("أحد الأصناف لا ينتمي إلى الفاتورة");
       }
+
+      const originalSaleItemIds =
+        originalItems.map((item) => item.id);
+
+      const originalCostRows =
+        originalSaleItemIds.length > 0
+          ? await tx
+              .select()
+              .from(posSaleItemCostsTable)
+              .where(
+                inArray(
+                  posSaleItemCostsTable.saleItemId,
+                  originalSaleItemIds,
+                ),
+              )
+          : [];
+
+      const originalCostBySaleItemId =
+        new Map(
+          originalCostRows.map((cost) => [
+            cost.saleItemId,
+            cost,
+          ]),
+        );
 
       const completedReturns = await tx
         .select({
@@ -1069,6 +1101,294 @@ export async function handleCreatePosSaleReturn(
               occurredAt: saleReturn.createdAt,
             })),
           );
+      }
+
+      const originalItemById =
+        new Map(
+          originalItems.map((item) => [
+            item.id,
+            item,
+          ]),
+        );
+
+      const costOrderedReturnItems =
+        [...insertedItems].sort(
+          (left, right) =>
+            (left.productId ?? Number.MAX_SAFE_INTEGER) -
+              (right.productId ?? Number.MAX_SAFE_INTEGER) ||
+            left.lineNumber - right.lineNumber,
+        );
+
+      for (const returnItem of costOrderedReturnItems) {
+        if (
+          returnItem.originalSaleItemId === null ||
+          returnItem.productId === null
+        ) {
+          throw new Error(
+            "POS_RETURN_COST_LINK_MISSING",
+          );
+        }
+
+        const originalItem =
+          originalItemById.get(
+            returnItem.originalSaleItemId,
+          );
+
+        if (!originalItem) {
+          throw new Error(
+            "POS_RETURN_ORIGINAL_ITEM_MISSING",
+          );
+        }
+
+        const originalCost =
+          originalCostBySaleItemId.get(
+            originalItem.id,
+          );
+
+        // Legacy sale without a historical cost snapshot.
+        //
+        // If this product is now initialized for cost accounting,
+        // keep accounting quantity synchronized with physical stock
+        // by restoring at the current/reference product cost.
+        //
+        // This is explicitly ESTIMATED because it is not the
+        // original historical sale cost.
+        if (!originalCost) {
+          const estimatedCost =
+            await addProductCostAtCurrentAverage(
+              tx,
+              {
+                productId:
+                  returnItem.productId,
+
+                quantity:
+                  returnItem.quantity,
+
+                eventType:
+                  "pos_return",
+
+                sourceType:
+                  "pos_return",
+
+                sourceRef:
+                  String(saleReturn.id),
+
+                sourceItemRef:
+                  String(returnItem.id),
+
+                businessDate:
+                  saleReturn.businessDate,
+
+                note:
+                  `Legacy POS return estimated cost ${saleReturn.publicId}`,
+
+                createdByUserId:
+                  auth.user.id,
+              },
+            );
+
+          if (!estimatedCost.tracked) {
+            console.warn(
+              "POS_RETURN_COST_UNTRACKED",
+              {
+                saleId:
+                  sale.id,
+
+                returnId:
+                  saleReturn.id,
+
+                returnItemId:
+                  returnItem.id,
+
+                originalSaleItemId:
+                  originalItem.id,
+
+                productId:
+                  returnItem.productId,
+
+                reason:
+                  estimatedCost.reason,
+              },
+            );
+
+            continue;
+          }
+
+          await tx
+            .insert(
+              posSaleReturnItemCostsTable,
+            )
+            .values({
+              returnItemId:
+                returnItem.id,
+
+              originalSaleItemId:
+                originalItem.id,
+
+              productId:
+                returnItem.productId,
+
+              quantity:
+                returnItem.quantity,
+
+              costTotalMinor:
+                estimatedCost.costTotalMinor,
+
+              costQuality:
+                "estimated",
+            });
+
+          continue;
+        }
+
+        if (
+          originalCost.productId !==
+            returnItem.productId ||
+          originalCost.quantity !==
+            originalItem.quantity
+        ) {
+          throw new Error(
+            `POS_RETURN_ORIGINAL_COST_MISMATCH:${originalItem.id}`,
+          );
+        }
+
+        const previouslyReturned =
+          returnedByOriginalItem.get(
+            originalItem.id,
+          ) ?? 0;
+
+        const returnedAfter =
+          previouslyReturned +
+          returnItem.quantity;
+
+        if (
+          !Number.isSafeInteger(
+            returnedAfter,
+          ) ||
+          returnedAfter <= 0 ||
+          returnedAfter >
+            originalItem.quantity
+        ) {
+          throw new Error(
+            `POS_RETURN_COST_QUANTITY_INVALID:${originalItem.id}`,
+          );
+        }
+
+        const cumulativeCostAfter =
+          allocateProportionalCostMinor(
+            originalCost.costTotalMinor,
+            returnedAfter,
+            originalCost.quantity,
+          );
+
+        const cumulativeCostBefore =
+          previouslyReturned > 0
+            ? allocateProportionalCostMinor(
+                originalCost.costTotalMinor,
+                previouslyReturned,
+                originalCost.quantity,
+              )
+            : 0;
+
+        const returnCostTotalMinor =
+          cumulativeCostAfter -
+          cumulativeCostBefore;
+
+        if (
+          !Number.isSafeInteger(
+            returnCostTotalMinor,
+          ) ||
+          returnCostTotalMinor < 0
+        ) {
+          throw new Error(
+            `POS_RETURN_COST_ALLOCATION_INVALID:${originalItem.id}`,
+          );
+        }
+
+        let costQuality: CostQuality;
+
+        if (
+          originalCost.costQuality ===
+            "confirmed" ||
+          originalCost.costQuality ===
+            "estimated" ||
+          originalCost.costQuality ===
+            "mixed"
+        ) {
+          costQuality =
+            originalCost.costQuality;
+        } else {
+          throw new Error(
+            "POS_RETURN_INVALID_COST_QUALITY",
+          );
+        }
+
+        const restoredCost =
+          await restoreExactProductCost(
+            tx,
+            {
+              productId:
+                returnItem.productId,
+
+              quantity:
+                returnItem.quantity,
+
+              costTotalMinor:
+                returnCostTotalMinor,
+
+              costQuality,
+
+              eventType:
+                "pos_return",
+
+              sourceType:
+                "pos_return",
+
+              sourceRef:
+                String(saleReturn.id),
+
+              sourceItemRef:
+                String(returnItem.id),
+
+              businessDate:
+                saleReturn.businessDate,
+
+              note:
+                `POS return ${saleReturn.publicId}`,
+
+              createdByUserId:
+                auth.user.id,
+            },
+          );
+
+        if (!restoredCost.tracked) {
+          throw new Error(
+            `POS_RETURN_COST_STATE_MISSING:${returnItem.id}:${restoredCost.reason}`,
+          );
+        }
+
+        await tx
+          .insert(
+            posSaleReturnItemCostsTable,
+          )
+          .values({
+            returnItemId:
+              returnItem.id,
+
+            originalSaleItemId:
+              originalItem.id,
+
+            productId:
+              returnItem.productId,
+
+            quantity:
+              returnItem.quantity,
+
+            costTotalMinor:
+              returnCostTotalMinor,
+
+            costQuality,
+          });
       }
 
       const updatedSessionRows = await tx

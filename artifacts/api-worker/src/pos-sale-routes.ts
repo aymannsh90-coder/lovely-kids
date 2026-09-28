@@ -1,11 +1,13 @@
 import {
   inventoryMovementsTable,
   cashSessionsTable,
+  posSaleItemCostsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
   productBarcodesTable,
+  productCostStateTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
@@ -15,6 +17,10 @@ import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import { handleUpdatePosSale } from "./pos-sale-edit";
 import { rewriteMediaUrlsForPublic } from "./media-url";
+import {
+  consumeProductCost,
+  restoreExactProductCost,
+} from "./inventory-cost-engine";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -1392,6 +1398,100 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           );
       }
 
+      const costOrderedItems =
+        [...insertedItems].sort(
+          (left, right) =>
+            (left.productId ?? Number.MAX_SAFE_INTEGER) -
+              (right.productId ?? Number.MAX_SAFE_INTEGER) ||
+            left.lineNumber - right.lineNumber,
+        );
+
+      for (const item of costOrderedItems) {
+        if (item.productId === null) {
+          throw new Error(
+            "POS_SALE_COST_PRODUCT_ID_MISSING",
+          );
+        }
+
+        const costResult =
+          await consumeProductCost(
+            tx,
+            {
+              productId:
+                item.productId,
+
+              quantity:
+                item.quantity,
+
+              eventType:
+                "pos_sale",
+
+              sourceType:
+                "pos_sale",
+
+              sourceRef:
+                String(sale.id),
+
+              sourceItemRef:
+                String(item.id),
+
+              businessDate:
+                sale.businessDate,
+
+              note:
+                `POS sale ${sale.publicId}`,
+
+              createdByUserId:
+                auth.user.id,
+            },
+          );
+
+        if (!costResult.tracked) {
+          console.warn(
+            "POS_SALE_COST_UNTRACKED",
+            {
+              saleId:
+                sale.id,
+
+              saleItemId:
+                item.id,
+
+              productId:
+                item.productId,
+
+              reason:
+                costResult.reason,
+            },
+          );
+
+          continue;
+        }
+
+        await tx
+          .insert(
+            posSaleItemCostsTable,
+          )
+          .values({
+            saleItemId:
+              item.id,
+
+            productId:
+              item.productId,
+
+            quantity:
+              item.quantity,
+
+            unitCostMinor:
+              costResult.unitCostMinor,
+
+            costTotalMinor:
+              costResult.costTotalMinor,
+
+            costQuality:
+              costResult.costQuality,
+          });
+      }
+
       const updatedSessionRows = await tx
         .update(cashSessionsTable)
         .set({
@@ -1571,6 +1671,30 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
       }
 
       const stockCardVoidOccurredAt = new Date();
+
+      const saleItemIds =
+        saleItems.map((item) => item.id);
+
+      const saleCostRows =
+        saleItemIds.length > 0
+          ? await tx
+              .select()
+              .from(posSaleItemCostsTable)
+              .where(
+                inArray(
+                  posSaleItemCostsTable.saleItemId,
+                  saleItemIds,
+                ),
+              )
+          : [];
+
+      const costBySaleItemId =
+        new Map(
+          saleCostRows.map((cost) => [
+            cost.saleItemId,
+            cost,
+          ]),
+        );
 
       const orderedItems = [...saleItems].sort((left, right) => {
         const leftId = left.productId ?? Number.MAX_SAFE_INTEGER;
@@ -1763,6 +1887,95 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
 
             occurredAt: stockCardVoidOccurredAt,
           });
+
+        const originalCost =
+          costBySaleItemId.get(item.id);
+
+        // Old/untracked sales may legitimately have no cost snapshot.
+        //
+        // If cost accounting has since been initialized for this product,
+        // do not restore physical stock without restoring accounting stock.
+        // We also refuse to invent a historical sale cost.
+        if (!originalCost) {
+          const costStateRows =
+            await tx
+              .select({
+                productId:
+                  productCostStateTable.productId,
+              })
+              .from(
+                productCostStateTable,
+              )
+              .where(
+                eq(
+                  productCostStateTable.productId,
+                  product.id,
+                ),
+              )
+              .for("update")
+              .limit(1);
+
+          if (costStateRows[0]) {
+            throw new PosSaleError(
+              `لا يمكن إلغاء الفاتورة القديمة للصنف ${item.productNameAr} بعد بدء محاسبة التكلفة لعدم وجود تكلفة تاريخية محفوظة`,
+              409,
+            );
+          }
+        } else {
+          const restoredCost =
+            await restoreExactProductCost(
+              tx,
+              {
+                productId:
+                  product.id,
+
+                quantity:
+                  item.quantity,
+
+                costTotalMinor:
+                  originalCost.costTotalMinor,
+
+                costQuality:
+                  originalCost.costQuality === "confirmed" ||
+                  originalCost.costQuality === "estimated" ||
+                  originalCost.costQuality === "mixed"
+                    ? originalCost.costQuality
+                    : (() => {
+                        throw new Error(
+                          "POS_SALE_VOID_INVALID_COST_QUALITY",
+                        );
+                      })(),
+
+                eventType:
+                  "pos_sale_void",
+
+                sourceType:
+                  "pos_sale",
+
+                sourceRef:
+                  String(sale.id),
+
+                sourceItemRef:
+                  String(item.id),
+
+                businessDate:
+                  sale.businessDate,
+
+                note:
+                  `POS sale void ${sale.publicId}`,
+
+                createdByUserId:
+                  auth.user.id,
+              },
+            );
+
+          if (!restoredCost.tracked) {
+            throw new PosSaleError(
+              `تعذر إعادة تكلفة الصنف ${item.productNameAr}: ${restoredCost.reason}`,
+              409,
+            );
+          }
+        }
       }
 
       const expectedAfter = expectedBefore - sale.totalMinor;

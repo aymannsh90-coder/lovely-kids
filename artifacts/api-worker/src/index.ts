@@ -16,6 +16,8 @@ import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
 import { handleVisitorAnalyticsRequest } from "./visitor-analytics-routes";
+import { handleOwnerCostRequest } from "./owner-cost-routes";
+import { handleOwnerReportRequest } from "./gross-profit-report-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
 import { handlePosSaleRequest } from "./pos-sale-routes";
 import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
@@ -512,6 +514,28 @@ export default {
 
       if (usersResponse) {
         return usersResponse;
+      }
+
+      const ownerCostResponse =
+        await handleOwnerCostRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (ownerCostResponse) {
+        return ownerCostResponse;
+      }
+
+      const ownerReportResponse =
+        await handleOwnerReportRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (ownerReportResponse) {
+        return ownerReportResponse;
       }
 
       const visitorAnalyticsResponse =

@@ -14,6 +14,7 @@ import {
   ApiError,
   createPosMobileReturn,
   createPosSaleReturn,
+  voidPosSaleReturn,
   getCurrentCashSession,
   getPosSaleReturnPreview,
   lookupPosProductByBarcode,
@@ -605,6 +606,114 @@ export default function SalesReturnsPage() {
     }
   }
 
+  async function handleVoidReturn(
+    returnPublicId: string,
+    refundAmountMinor: number,
+    originalSalePublicId: string | null,
+  ) {
+    const enteredReason = window.prompt(
+      "أدخل سبب إلغاء المرتجع:",
+    );
+
+    if (enteredReason === null) {
+      return;
+    }
+
+    const voidReason = enteredReason.trim();
+
+    if (voidReason.length < 2) {
+      setError("يجب إدخال سبب إلغاء المرتجع");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        "تأكيد إلغاء المرتجع؟",
+        "",
+        `رقم المرتجع: ${returnPublicId}`,
+        `قيمة المرتجع: ${formatMoney(refundAmountMinor)}`,
+        "",
+        "سيتم خصم الكمية التي أعادها المرتجع من المخزون وإعادة مبلغ المرتجع إلى رصيد الصندوق.",
+      ].join("\n"),
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSubmitBusy(true);
+    setError("");
+
+    try {
+      const result = await voidPosSaleReturn(
+        token,
+        {
+          publicId: returnPublicId,
+          reason: voidReason,
+        },
+      );
+
+      const currentSession =
+        await getCurrentCashSession(
+          token,
+          registerKey,
+        );
+
+      setSession(
+        currentSession.session,
+      );
+
+      if (originalSalePublicId) {
+        const updatedPreview =
+          await getPosSaleReturnPreview(
+            token,
+            originalSalePublicId,
+          );
+
+        setPreview(updatedPreview);
+        initializeQuantities(
+          updatedPreview,
+          "",
+        );
+      }
+
+      if (
+        completedReturn?.saleReturn.publicId ===
+        returnPublicId
+      ) {
+        setCompletedReturn(null);
+      }
+
+      if (
+        completedBarcodeReturn?.saleReturn.publicId ===
+        returnPublicId
+      ) {
+        setCompletedBarcodeReturn(null);
+      }
+
+      window.alert(
+        result.alreadyVoided
+          ? "هذا المرتجع ملغى مسبقًا."
+          : "تم إلغاء المرتجع بنجاح.",
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorMessage(caught),
+      );
+    } finally {
+      setSubmitBusy(false);
+    }
+  }
+
+
   return (
     <section className="sales-return-page" id="pos-sales-returns">
       <header className="sales-return-heading">
@@ -719,6 +828,21 @@ export default function SalesReturnsPage() {
             {completedReturn.alreadyCreated && (
               <small>تم استرجاع نتيجة العملية السابقة دون تكرار المرتجع.</small>
             )}
+
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={submitBusy}
+              onClick={() =>
+                void handleVoidReturn(
+                  completedReturn.saleReturn.publicId,
+                  completedReturn.saleReturn.refundAmountMinor,
+                  preview?.sale.publicId ?? null,
+                )
+              }
+            >
+              {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
+            </button>
           </div>
         </article>
       )}
@@ -748,6 +872,21 @@ export default function SalesReturnsPage() {
                 تم استرجاع نتيجة العملية السابقة دون تكرار المرتجع.
               </small>
             )}
+
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={submitBusy}
+              onClick={() =>
+                void handleVoidReturn(
+                  completedBarcodeReturn.saleReturn.publicId,
+                  completedBarcodeReturn.saleReturn.refundAmountMinor,
+                  null,
+                )
+              }
+            >
+              {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
+            </button>
           </div>
         </article>
       )}

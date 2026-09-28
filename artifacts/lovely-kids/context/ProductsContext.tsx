@@ -14,6 +14,27 @@ import { Product } from "@/data/products";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 
+export type StockCostInput =
+  | { mode: "same" }
+  | {
+      mode: "new";
+      unitCostMinor: number;
+    };
+
+function costInputBody(
+  costInput?: StockCostInput,
+) {
+  if (!costInput) return {};
+
+  return costInput.mode === "same"
+    ? { costMode: "same" as const }
+    : {
+        costMode: "new" as const,
+        unitCostMinor:
+          costInput.unitCostMinor,
+      };
+}
+
 const PUBLIC_PRODUCTS_CACHE_KEY = "lovely_kids_public_products_v1";
 const PUBLIC_PRODUCTS_CACHE_TS_KEY = "lovely_kids_public_products_ts_v1";
 const PUBLIC_PRODUCTS_STALE_MS = 5 * 60 * 1000;
@@ -21,28 +42,42 @@ const PUBLIC_PRODUCTS_STALE_MS = 5 * 60 * 1000;
 interface ProductsContextType {
   products: Product[];
   loading: boolean;
-  addProduct: (product: Omit<Product, "id">) => Promise<void>;
-  updateProduct: (product: Product) => Promise<void>;
+  addProduct: (
+    product: Omit<Product, "id">,
+    openingCost?: {
+      unitCostMinor: number;
+    },
+  ) => Promise<Product>;
+  updateProduct: (
+    product: Product,
+    costInput?: StockCostInput,
+  ) => Promise<Product>;
   deleteProduct: (id: string) => Promise<void>;
   setProductHidden: (id: string, hidden: boolean) => Promise<Product>;
   restoreProduct: (id: string) => Promise<Product>;
   permanentlyDeleteProduct: (id: string) => Promise<void>;
   refreshProducts: () => Promise<void>;
-  adjustStock: (id: string, action: "set" | "add" | "subtract", amount: number) => Promise<Product>;
+  adjustStock: (
+    id: string,
+    action: "set" | "add" | "subtract",
+    amount: number,
+    costInput?: StockCostInput,
+  ) => Promise<Product>;
   adjustVariantStock: (
     id: string,
     color: string,
     size: string,
     action: "set" | "add" | "subtract",
-    amount: number
+    amount: number,
+    costInput?: StockCostInput,
   ) => Promise<Product>;
 }
 
 const ProductsContext = createContext<ProductsContextType>({
   products: [],
   loading: true,
-  addProduct: async () => {},
-  updateProduct: async () => {},
+  addProduct: async () => ({} as Product),
+  updateProduct: async () => ({} as Product),
   deleteProduct: async () => {},
   setProductHidden: async () => ({} as Product),
   restoreProduct: async () => ({} as Product),
@@ -247,12 +282,26 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [refreshProducts, user?.isAdmin]);
 
-  const addProduct = useCallback(async (product: Omit<Product, "id">) => {
+  const addProduct = useCallback(async (
+    product: Omit<Product, "id">,
+    openingCost?: {
+      unitCostMinor: number;
+    },
+  ) => {
     const headers = await getAdminHeaders();
+
     const res = await fetch(`${API_BASE}/api/products`, {
       method: "POST",
       headers,
-      body: JSON.stringify(toInsertBody(product)),
+      body: JSON.stringify({
+        ...toInsertBody(product),
+        ...(openingCost
+          ? {
+              openingUnitCostMinor:
+                openingCost.unitCostMinor,
+            }
+          : {}),
+      }),
     });
     if (!res.ok) {
       let message = "فشل إضافة المنتج";
@@ -264,15 +313,26 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     }
     const created: Product = await res.json();
     setProducts((prev) => [created, ...prev]);
+    return created;
   }, [getAdminHeaders]);
 
-  const updateProduct = useCallback(async (product: Product) => {
+  const updateProduct = useCallback(async (
+    product: Product,
+    costInput?: StockCostInput,
+  ) => {
     const headers = await getAdminHeaders();
-    const res = await fetch(`${API_BASE}/api/products/${product.id}`, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify(toInsertBody(product)),
-    });
+
+    const res = await fetch(
+      `${API_BASE}/api/products/${product.id}`,
+      {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          ...toInsertBody(product),
+          ...costInputBody(costInput),
+        }),
+      },
+    );
     if (!res.ok) {
       let message = "فشل تعديل المنتج";
       try {
@@ -283,6 +343,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     }
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === product.id ? updated : p)));
+    return updated;
   }, [getAdminHeaders]);
 
   const deleteProduct = useCallback(async (id: string) => {
@@ -331,14 +392,43 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     setProducts((prev) => prev.filter((p) => p.id !== id));
   }, [getAdminHeaders]);
 
-  const adjustStock = useCallback(async (id: string, action: "set" | "add" | "subtract", amount: number): Promise<Product> => {
+  const adjustStock = useCallback(async (
+    id: string,
+    action: "set" | "add" | "subtract",
+    amount: number,
+    costInput?: StockCostInput,
+  ): Promise<Product> => {
     const headers = await getAdminHeaders();
-    const res = await fetch(`${API_BASE}/api/products/${id}/stock`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({ action, amount }),
-    });
-    if (!res.ok) throw new Error("فشل تعديل الكمية");
+
+    const res = await fetch(
+      `${API_BASE}/api/products/${id}/stock`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          action,
+          amount,
+          ...costInputBody(costInput),
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      let message = "فشل تعديل الكمية";
+
+      try {
+        const data =
+          (await res.json()) as {
+            error?: string;
+          };
+
+        if (data.error) {
+          message = data.error;
+        }
+      } catch {}
+
+      throw new Error(message);
+    }
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
     return updated;
@@ -349,15 +439,43 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     color: string,
     size: string,
     action: "set" | "add" | "subtract",
-    amount: number
+    amount: number,
+    costInput?: StockCostInput,
   ): Promise<Product> => {
     const headers = await getAdminHeaders();
-    const res = await fetch(`${API_BASE}/api/products/${id}/variant-stock`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({ color, size, action, amount }),
-    });
-    if (!res.ok) throw new Error("فشل تعديل كمية المقاس");
+
+    const res = await fetch(
+      `${API_BASE}/api/products/${id}/variant-stock`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          color,
+          size,
+          action,
+          amount,
+          ...costInputBody(costInput),
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      let message =
+        "فشل تعديل كمية المقاس";
+
+      try {
+        const data =
+          (await res.json()) as {
+            error?: string;
+          };
+
+        if (data.error) {
+          message = data.error;
+        }
+      } catch {}
+
+      throw new Error(message);
+    }
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
     return updated;

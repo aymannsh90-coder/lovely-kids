@@ -723,6 +723,43 @@ export function createPosSaleReturn(
   );
 }
 
+export interface PosSaleReturnVoidResult {
+  alreadyVoided: boolean;
+
+  saleReturn: {
+    id: string;
+    publicId: string;
+    status: string;
+
+    refundAmountMinor: number;
+    refundAmount: number;
+
+    voidedAt: string | null;
+    voidedByUserId: string | null;
+    voidReason: string | null;
+  };
+}
+
+export function voidPosSaleReturn(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<PosSaleReturnVoidResult>(
+    "/api/pos/sales/returns/void",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        publicId: input.publicId.trim().toUpperCase(),
+        reason: input.reason.trim(),
+      }),
+    },
+    token,
+  );
+}
+
 export interface PosSupplier {
   id: string;
   code: string;
@@ -735,17 +772,17 @@ export interface PosSupplier {
   notes: string | null;
   status: "active" | "inactive";
 
-  totalPurchasesMinor: number;
-  totalPurchases: number;
+  totalPurchasesMinor?: number;
+  totalPurchases?: number;
 
-  paidMinor: number;
-  paid: number;
+  paidMinor?: number;
+  paid?: number;
 
-  dueMinor: number;
-  due: number;
+  dueMinor?: number;
+  due?: number;
 
-  supplierCreditMinor: number;
-  supplierCredit: number;
+  supplierCreditMinor?: number;
+  supplierCredit?: number;
 
   createdByUserId: string | null;
   createdAt: string;
@@ -1166,6 +1203,97 @@ export function reverseDeliveryCompanySettlement(
       method: "POST",
       body: JSON.stringify({ reason }),
     },
+    token,
+  );
+}
+
+
+export interface GrossProfitChannelSummary {
+  documents: number;
+  returnDocuments: number;
+
+  salesMinor: number;
+  returnsMinor: number;
+  netSalesMinor: number;
+
+  cogsKnownMinor: number;
+
+  grossProfitMinor:
+    | number
+    | null;
+
+  grossMarginPercent:
+    | number
+    | null;
+
+  shippingChargedMinor: number;
+  deliveryCompanyCostMinor: number;
+  deliveryImpactMinor: number;
+
+  profitAfterDeliveryMinor:
+    | number
+    | null;
+
+  saleQuantity: number;
+  trackedSaleQuantity: number;
+
+  returnQuantity: number;
+  trackedReturnQuantity: number;
+
+  costCoveragePercent: number;
+  costCoverageComplete: boolean;
+
+  costQuality:
+    | "confirmed"
+    | "mixed"
+    | "incomplete"
+    | "not_applicable";
+}
+
+export interface GrossProfitReport {
+  range: {
+    from: string;
+    to: string;
+  };
+
+  generatedAt: string;
+
+  channels: {
+    total:
+      GrossProfitChannelSummary;
+
+    pos:
+      GrossProfitChannelSummary;
+
+    online:
+      GrossProfitChannelSummary;
+  };
+
+  warnings: string[];
+
+  methodology: {
+    posDateBasis: string;
+    onlineDateBasis: string;
+    profitDefinition: string;
+    deliveryDefinition: string;
+    expensesIncluded: boolean;
+  };
+}
+
+export function getGrossProfitReport(
+  token: string,
+  from: string,
+  to: string,
+) {
+  const params =
+    new URLSearchParams({
+      from,
+      to,
+    });
+
+  return apiRequest<GrossProfitReport>(
+    `/api/owner/reports/gross-profit?${params.toString()}`,
+    {},
     token,
   );
 }

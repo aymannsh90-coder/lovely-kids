@@ -159,6 +159,7 @@ const EMPTY_SUPPLIER_FINANCE: SupplierFinanceSummary = {
 function toSupplier(
   supplier: typeof suppliersTable.$inferSelect,
   finance: SupplierFinanceSummary = EMPTY_SUPPLIER_FINANCE,
+  includeFinance = false,
 ) {
   return {
     id: String(supplier.id),
@@ -173,17 +174,21 @@ function toSupplier(
     status: supplier.status,
     createdByUserId: String(supplier.createdByUserId),
 
-    totalPurchasesMinor: finance.totalPurchasesMinor,
-    totalPurchases: finance.totalPurchasesMinor / 100,
+    ...(includeFinance
+      ? {
+          totalPurchasesMinor: finance.totalPurchasesMinor,
+          totalPurchases: finance.totalPurchasesMinor / 100,
 
-    paidMinor: finance.paidMinor,
-    paid: finance.paidMinor / 100,
+          paidMinor: finance.paidMinor,
+          paid: finance.paidMinor / 100,
 
-    dueMinor: finance.dueMinor,
-    due: finance.dueMinor / 100,
+          dueMinor: finance.dueMinor,
+          due: finance.dueMinor / 100,
 
-    supplierCreditMinor: finance.supplierCreditMinor,
-    supplierCredit: finance.supplierCreditMinor / 100,
+          supplierCreditMinor: finance.supplierCreditMinor,
+          supplierCredit: finance.supplierCreditMinor / 100,
+        }
+      : {}),
 
     createdAt: supplier.createdAt.toISOString(),
     updatedAt: supplier.updatedAt.toISOString(),
@@ -387,7 +392,9 @@ async function handleListSuppliers(
     .limit(500);
 
   const financeBySupplier =
-    await getSupplierFinanceSummaries(db);
+    auth.user.isOwner
+      ? await getSupplierFinanceSummaries(db)
+      : new Map<number, SupplierFinanceSummary>();
 
   const results = rows.filter((supplier) => {
     if (status && supplier.status !== status) {
@@ -420,6 +427,7 @@ async function handleListSuppliers(
         supplier,
         financeBySupplier.get(supplier.id) ??
           EMPTY_SUPPLIER_FINANCE,
+        auth.user.isOwner,
       ),
     ),
   });
@@ -485,7 +493,11 @@ async function handleCreateSupplier(
 
     return json(
       {
-        supplier: toSupplier(supplier),
+        supplier: toSupplier(
+          supplier,
+          EMPTY_SUPPLIER_FINANCE,
+          auth.user.isOwner,
+        ),
       },
       201,
     );

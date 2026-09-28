@@ -682,6 +682,7 @@ async function handleEditOrderItems(
         shippingZone: body.shippingZone,
         notes: body.notes,
       },
+      user.id,
     );
 
     return json(updated);
@@ -764,6 +765,7 @@ async function handleCancelOrder(
     db,
     id,
     ["new"],
+    user.id,
   );
 
   if (result.kind === "not_found") {
@@ -995,6 +997,7 @@ async function handleUpdateOrderStatus(
           db,
           id,
           body.status,
+          user.id,
         );
 
       const updatedOrder = fulfillmentUpdate
@@ -1046,7 +1049,12 @@ async function handleUpdateOrderStatus(
   }
 
   if (body.status === "cancelled") {
-    const result = await cancelOrderAndRestoreStock(db, id, ["new", "confirmed", "delivering"]);
+    const result = await cancelOrderAndRestoreStock(
+      db,
+      id,
+      ["new", "confirmed", "delivering"],
+      user.id,
+    );
 
     if (result.kind === "not_found") {
       return json({ error: "الطلب غير موجود" }, 404);

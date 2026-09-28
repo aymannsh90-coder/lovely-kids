@@ -10,6 +10,7 @@ import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import { handleCreatePosSaleReturn } from "./pos-sale-return-create";
 import { handleCreateMobileEmergencyReturn } from "./pos-mobile-return-create";
+import { handleVoidPosSaleReturn } from "./pos-sale-return-void";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -377,6 +378,13 @@ export async function handlePosSaleReturnRequest(
       db,
       env,
     );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/sales/returns/void"
+  ) {
+    return handleVoidPosSaleReturn(request, db, env);
   }
 
   if (request.method === "POST" && path === "/api/pos/sales/returns") {

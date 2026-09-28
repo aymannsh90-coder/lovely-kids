@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import RequireOpenSession from "../guards/RequireOpenSession";
+import RequireOwner from "../guards/RequireOwner";
 import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
@@ -19,6 +20,7 @@ import NewSalePage from "../pages/sales/NewSalePage";
 import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
 import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
 import TodaySalesPage from "../pages/sales/TodaySalesPage";
+import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
 
 export default function AppRouter() {
   return (
@@ -94,13 +96,18 @@ export default function AppRouter() {
 
         <Route
           path="purchases/new"
-          element={<PurchaseInvoicePage />}
+          element={
+            <RequireOwner>
+              <PurchaseInvoicePage />
+            </RequireOwner>
+          }
         />
 
         <Route
           path="purchases/returns"
           element={
-            <ComingSoonPage
+            <RequireOwner>
+              <ComingSoonPage
               icon="📦"
               title="مردودات المشتريات"
               description="إرجاع أصناف إلى المورد وربطها بفاتورة الشراء."
@@ -110,7 +117,8 @@ export default function AppRouter() {
                 "خصم الكمية من المخزون.",
                 "تحديث حساب المورد.",
               ]}
-            />
+              />
+            </RequireOwner>
           }
         />
 
@@ -125,7 +133,7 @@ export default function AppRouter() {
                 "إضافة وتعديل الأصناف.",
                 "باركود أساسي وباركودات متعددة.",
                 "ألوان ومقاسات ومخزون دقيق.",
-                "أسعار البيع والتكلفة.",
+                "إدارة أسعار البيع.",
               ]}
             />
           }
@@ -226,17 +234,9 @@ export default function AppRouter() {
         <Route
           path="reports"
           element={
-            <ComingSoonPage
-              icon="📊"
-              title="التقارير"
-              description="مركز موحد لجميع تقارير النظام."
-              points={[
-                "تقارير المبيعات والمردودات.",
-                "تقارير المشتريات والموردين.",
-                "تقارير المخزون والأصناف.",
-                "تقارير الصندوق والمصروفات والشيكات.",
-              ]}
-            />
+            <RequireOwner>
+              <GrossProfitReportPage />
+            </RequireOwner>
           }
         />
       </Route>

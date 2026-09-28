@@ -85,7 +85,7 @@ export const posNavigation: PosNavigationItem[] = [
     group: "purchases",
     path: "/purchases/new",
     title: "فاتورة مشتريات",
-    description: "استلام الأصناف وزيادة المخزون من الموردين.",
+    description: "تسجيل فواتير الموردين والحسابات دون تعديل المخزون.",
     icon: "🛒",
     requiresOpenSession: false,
     status: "ready",
@@ -224,11 +224,11 @@ export const posNavigation: PosNavigationItem[] = [
     key: "reports",
     group: "reports",
     path: "/reports",
-    title: "التقارير",
-    description: "تقارير المبيعات والمشتريات والمخزون والحسابات.",
+    title: "مجمل الربح",
+    description: "المبيعات والتكلفة ومجمل الربح حسب الفترة.",
     icon: "📊",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
 ];
 

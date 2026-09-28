@@ -83,7 +83,7 @@ interface ParsedPurchaseItem {
   lineTotalMinor: number;
 }
 
-async function requirePosUser(
+async function requirePurchaseOwner(
   request: Request,
   db: Db,
   env: Env,
@@ -97,11 +97,11 @@ async function requirePosUser(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isOwner) {
     return {
       ok: false,
       response: json(
-        { error: "غير مصرح بإدارة المشتريات" },
+        { error: "هذه البيانات متاحة للمالك فقط" },
         403,
       ),
     };
@@ -570,7 +570,7 @@ async function handleLatestPurchase(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;
@@ -639,7 +639,7 @@ async function handlePurchaseByPublicId(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;
@@ -708,7 +708,7 @@ async function handleVoidPurchase(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;
@@ -796,6 +796,20 @@ async function handleVoidPurchase(
       });
 
       for (const item of orderedItems) {
+        const legacyStockAffecting =
+          item.generalStockBefore !== null ||
+          item.generalStockAfter !== null ||
+          item.variantStockBefore !== null ||
+          item.variantStockAfter !== null;
+
+        // New purchase invoices are accounting-only and therefore
+        // must not touch product stock or the inventory movement ledger
+        // when voided. The code below remains only for legacy invoices
+        // that actually changed stock before this behavior was introduced.
+        if (!legacyStockAffecting) {
+          continue;
+        }
+
         if (item.productId === null) {
           throw new PurchaseError(
             `المنتج ${item.productNameAr} لم يعد موجودًا`,
@@ -1236,7 +1250,7 @@ async function handleCreatePurchase(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;
@@ -1668,7 +1682,7 @@ async function handleCreatePurchase(
           .select()
           .from(productsTable)
           .where(eq(productsTable.id, item.productId))
-          .for("update");
+          .limit(1);
 
         const product = productRows[0];
 
@@ -1699,12 +1713,14 @@ async function handleCreatePurchase(
           );
         }
 
-        const color = item.mappedColor ?? item.color;
-        const size = item.mappedSize ?? item.size;
+        const color =
+          item.mappedColor ?? item.color;
 
-        const receivedQuantity =
-          item.quantity + item.freeQuantity;
+        const size =
+          item.mappedSize ?? item.size;
 
+        // Keep product option validation even though purchase invoices
+        // no longer mutate physical inventory.
         const colorVariants =
           (product.colorVariants as
             | ColorVariant[]
@@ -1713,13 +1729,6 @@ async function handleCreatePurchase(
         const generalSizes =
           (product.sizes as string[] | null) ?? [];
 
-        let nextColorVariants:
-          | ColorVariant[]
-          | undefined;
-
-        let variantStockBefore: number | null = null;
-        let variantStockAfter: number | null = null;
-
         if (colorVariants.length > 0) {
           if (!color) {
             throw new PurchaseError(
@@ -1727,21 +1736,21 @@ async function handleCreatePurchase(
             );
           }
 
-          const variantIndex = colorVariants.findIndex(
-            (variant) => variant.color === color,
-          );
+          const variant =
+            colorVariants.find(
+              (entry) => entry.color === color,
+            );
 
-          if (variantIndex < 0) {
+          if (!variant) {
             throw new PurchaseError(
               `لون ${product.nameAr} غير موجود`,
             );
           }
 
-          const variant = colorVariants[variantIndex];
-
-          const variantSizes = Array.isArray(variant.sizes)
-            ? variant.sizes
-            : [];
+          const variantSizes =
+            Array.isArray(variant.sizes)
+              ? variant.sizes
+              : [];
 
           if (variantSizes.length > 0) {
             if (!size) {
@@ -1750,56 +1759,15 @@ async function handleCreatePurchase(
               );
             }
 
-            const sizeIndex = variantSizes.findIndex(
-              (entry) => entry.size === size,
-            );
-
-            if (sizeIndex < 0) {
+            if (
+              !variantSizes.some(
+                (entry) => entry.size === size,
+              )
+            ) {
               throw new PurchaseError(
                 `مقاس ${product.nameAr} غير موجود`,
               );
             }
-
-            const selectedSize = variantSizes[sizeIndex];
-
-            variantStockBefore =
-              selectedSize.stock ?? 0;
-
-            variantStockAfter =
-              variantStockBefore + receivedQuantity;
-
-            if (
-              !Number.isSafeInteger(variantStockAfter) ||
-              variantStockAfter > MAX_MINOR
-            ) {
-              throw new PurchaseError(
-                `مخزون ${product.nameAr} يتجاوز الحد المسموح`,
-              );
-            }
-
-            const nextSizes = variantSizes.map(
-              (entry, index) =>
-                index === sizeIndex
-                  ? {
-                      ...entry,
-                      stock:
-                        variantStockAfter ??
-                        entry.stock ??
-                        null,
-                      outOfStock: false,
-                    }
-                  : entry,
-            );
-
-            nextColorVariants = colorVariants.map(
-              (entry, index) =>
-                index === variantIndex
-                  ? {
-                      ...entry,
-                      sizes: nextSizes,
-                    }
-                  : entry,
-            );
           } else if (size) {
             throw new PurchaseError(
               `المقاس غير صالح للمنتج ${product.nameAr}`,
@@ -1821,53 +1789,19 @@ async function handleCreatePurchase(
             );
           }
 
-          if (generalSizes.length === 0 && size) {
+          if (
+            generalSizes.length === 0 &&
+            size
+          ) {
             throw new PurchaseError(
               `المقاس غير صالح للمنتج ${product.nameAr}`,
             );
           }
         }
 
-        const generalStockBefore =
-          product.stock ??
-          (colorVariants.length === 0 ? 0 : null);
-
-        let generalStockAfter: number | null = null;
-
-        if (generalStockBefore !== null) {
-          generalStockAfter =
-            generalStockBefore + receivedQuantity;
-
-          if (
-            !Number.isSafeInteger(generalStockAfter) ||
-            generalStockAfter > MAX_MINOR
-          ) {
-            throw new PurchaseError(
-              `مخزون ${product.nameAr} يتجاوز الحد المسموح`,
-            );
-          }
-        }
-
-        const updates: {
-          stock?: number;
-          colorVariants?: ColorVariant[];
-        } = {};
-
-        if (generalStockAfter !== null) {
-          updates.stock = generalStockAfter;
-        }
-
-        if (nextColorVariants !== undefined) {
-          updates.colorVariants = nextColorVariants;
-        }
-
-        if (Object.keys(updates).length > 0) {
-          await tx
-            .update(productsTable)
-            .set(updates)
-            .where(eq(productsTable.id, product.id));
-        }
-
+        // Purchase invoices are accounting-only.
+        // Physical inventory is managed manually from the store
+        // product inventory and must NEVER be changed here.
         purchaseLines.push({
           purchaseId: 0,
           lineNumber: item.lineNumber,
@@ -1883,10 +1817,13 @@ async function handleCreatePurchase(
           unitCostMinor: item.unitCostMinor,
           lineDiscountMinor: item.lineDiscountMinor,
           lineTotalMinor: item.lineTotalMinor,
-          generalStockBefore,
-          generalStockAfter,
-          variantStockBefore,
-          variantStockAfter,
+
+          // Kept nullable for backward compatibility with older
+          // purchase invoices that used to mutate physical stock.
+          generalStockBefore: null,
+          generalStockAfter: null,
+          variantStockBefore: null,
+          variantStockAfter: null,
         });
       }
 
@@ -1934,45 +1871,8 @@ async function handleCreatePurchase(
         .values(linesWithPurchase)
         .returning();
 
-      // stock-card:pos-purchase:completed
-      const purchaseMovementItems = insertedItems.filter(
-        (item) => item.productId !== null,
-      );
-
-      if (purchaseMovementItems.length > 0) {
-        await tx
-          .insert(inventoryMovementsTable)
-          .values(
-            purchaseMovementItems.map((item) => ({
-              productId: item.productId!,
-              barcode: item.barcode,
-              productCode: item.productCode,
-              productNameAr: item.productNameAr,
-              color: item.color,
-              size: item.size,
-
-              movementType: "purchase",
-              quantityDelta:
-                item.quantity + item.freeQuantity,
-
-              generalStockBefore: item.generalStockBefore,
-              generalStockAfter: item.generalStockAfter,
-
-              variantStockBefore: item.variantStockBefore,
-              variantStockAfter: item.variantStockAfter,
-
-              sourceType: "pos_purchase",
-              sourceId: purchase.id,
-              sourceItemId: item.id,
-              sourcePublicId: purchase.publicId,
-
-              eventKey:
-                `pos-purchase:${purchase.id}:item:${item.id}:completed`,
-
-              occurredAt: purchase.createdAt,
-            })),
-          );
-      }
+      // Purchase invoice is accounting-only.
+      // Do not create an inventory movement here.
 
       if (totalMinor > 0) {
         const ensureAccount = async (input: {

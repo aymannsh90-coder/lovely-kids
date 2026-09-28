@@ -625,7 +625,7 @@ export default function PurchaseInvoicePage() {
         `قيمة الفاتورة: ${formatMinor(totalMinor)}`,
         `إجمالي المستلم: ${paidQuantity + freeQuantity}`,
         "",
-        "سيتم زيادة المخزون وتسجيل الفاتورة.",
+        "سيتم تسجيل الفاتورة محاسبيًا على حساب المورد دون تعديل مخزون المتجر.",
         "هل تريد المتابعة؟",
       ].join("\n"),
     );
@@ -683,7 +683,7 @@ export default function PurchaseInvoicePage() {
       setMessage(
         result.alreadyCreated
           ? `تم تحميل الفاتورة ${result.purchase.publicId} دون تكرارها.`
-          : `تم حفظ الفاتورة ${result.purchase.publicId} وزيادة المخزون.`,
+          : `تم حفظ الفاتورة ${result.purchase.publicId} محاسبيًا دون تعديل مخزون المتجر.`,
       );
     } catch (caught) {
       if (
@@ -868,7 +868,8 @@ export default function PurchaseInvoicePage() {
         `سيتم حذف الفاتورة: ${current.purchase.publicId}`,
         `المورد: ${current.purchase.supplier.name}`,
         "",
-        "سيتم خصم الكميات التي أضافتها من المخزون.",
+        "سيتم عكس الأثر المحاسبي للفاتورة.",
+        "الفواتير القديمة التي سبق أن أثرت على المخزون سيتم عكس أثرها القديم تلقائيًا.",
         "ستبقى الفاتورة محفوظة في السجل بحالة محذوفة.",
         "",
         "هل تريد المتابعة؟",
@@ -905,7 +906,7 @@ export default function PurchaseInvoicePage() {
       await refreshCashSession();
 
       setMessage(
-        `تم حذف الفاتورة ${result.purchase.publicId} وعكس كمياتها من المخزون.`,
+        `تم حذف الفاتورة ${result.purchase.publicId} وعكس أثرها المحاسبي.`,
       );
     } catch (caught) {
       if (
@@ -946,8 +947,8 @@ export default function PurchaseInvoicePage() {
           <span>المشتريات والموردون</span>
           <h1>فاتورة مشتريات</h1>
           <p>
-            تسجيل البضاعة المستلمة وزيادة المخزون حسب
-            اللون والمقاس.
+            تسجيل فاتورة المورد والحسابات المالية دون
+            تعديل مخزون المتجر.
           </p>
         </div>
 
@@ -1324,7 +1325,7 @@ export default function PurchaseInvoicePage() {
 
                     <aside>
                       <span>
-                        المخزون:{" "}
+                        مخزون المتجر للعرض فقط:{" "}
                         {product.stock ?? "غير محدد"}
                       </span>
                     </aside>

@@ -1,6 +1,8 @@
 import {
   inventoryMovementsTable,
   insertProductSchema,
+  productCostLedgerTable,
+  productCostStateTable,
   ordersTable,
   productBarcodesTable,
   productBarcodeInputSchema,
@@ -13,6 +15,8 @@ import type { Env, openDb } from "./db";
 import { deleteProductImageObjects, getProductImageObjectPath } from "./image-routes";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import { rewriteMediaUrlsForStorage } from "./media-url";
+import { syncManualProductCostQuantity } from "./inventory-cost-engine";
+import { getProductQuantity } from "./product-quantity";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -115,7 +119,95 @@ async function getAdditionalBarcodes(
   }));
 }
 
-async function requireAdmin(
+type ManualStockCostInput = {
+  costMode?: "same" | "new";
+  unitCostMinor?: number;
+};
+
+function validateManualStockCostInput(
+  input: ManualStockCostInput | null,
+  isOwner: boolean,
+): Response | null {
+  const hasCostMode =
+    input?.costMode !== undefined;
+
+  const hasUnitCost =
+    input?.unitCostMinor !== undefined;
+
+  if (
+    !isOwner &&
+    (hasCostMode || hasUnitCost)
+  ) {
+    return json(
+      {
+        error:
+          "تعديل تكلفة المخزون متاح للمالك فقط",
+      },
+      403,
+    );
+  }
+
+  if (
+    input?.costMode !== undefined &&
+    input.costMode !== "same" &&
+    input.costMode !== "new"
+  ) {
+    return json(
+      { error: "costMode غير صالح" },
+      400,
+    );
+  }
+
+  if (
+    hasUnitCost &&
+    (
+      !Number.isSafeInteger(
+        input?.unitCostMinor,
+      ) ||
+      (input?.unitCostMinor ?? -1) < 0 ||
+      (input?.unitCostMinor ?? 0) >
+        2_147_483_647
+    )
+  ) {
+    return json(
+      {
+        error:
+          "تكلفة القطعة غير صالحة",
+      },
+      400,
+    );
+  }
+
+  if (
+    input?.costMode === "new" &&
+    !hasUnitCost
+  ) {
+    return json(
+      {
+        error:
+          "تكلفة الدفعة الجديدة مطلوبة",
+      },
+      400,
+    );
+  }
+
+  if (
+    input?.costMode !== "new" &&
+    hasUnitCost
+  ) {
+    return json(
+      {
+        error:
+          "لا ترسل تكلفة جديدة إلا عند اختيار تغيرت التكلفة",
+      },
+      400,
+    );
+  }
+
+  return null;
+}
+
+async function requireAdminActor(
   request: Request,
   db: Db,
   env: Env,
@@ -127,16 +219,48 @@ async function requireAdmin(
   );
 
   if (!user) {
-    return json({ error: "يجب تسجيل الدخول" }, 401);
+    return {
+      ok: false as const,
+      response: json(
+        { error: "يجب تسجيل الدخول" },
+        401,
+      ),
+    };
   }
 
   if (!user.isAdmin) {
-    return json({ error: "غير مصرح" }, 403);
+    return {
+      ok: false as const,
+      response: json(
+        { error: "غير مصرح" },
+        403,
+      ),
+    };
   }
 
-
-  return null;
+  return {
+    ok: true as const,
+    user,
+  };
 }
+
+async function requireAdmin(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireAdminActor(
+      request,
+      db,
+      env,
+    );
+
+  return auth.ok
+    ? null
+    : auth.response;
+}
+
 
 function toProduct(
   row: typeof productsTable.$inferSelect,
@@ -285,16 +409,81 @@ async function handleCreateProduct(
   db: Db,
   env: Env,
 ) {
-  const authError = await requireAdmin(
-    request,
-    db,
-    env,
-  );
+  const auth =
+    await requireAdminActor(
+      request,
+      db,
+      env,
+    );
 
-  if (authError) return authError;
+  if (!auth.ok) {
+    return auth.response;
+  }
 
-  const body = await request.json().catch(() => null);
-  const parsed = createProductRequestSchema.safeParse(body);
+  const actor = auth.user;
+
+  const body =
+    await request
+      .json()
+      .catch(() => null);
+
+  const rawOpeningUnitCostMinor =
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+          .openingUnitCostMinor
+      : undefined;
+
+  if (
+    rawOpeningUnitCostMinor !== undefined &&
+    !actor.isOwner
+  ) {
+    return json(
+      { error: "إدخال تكلفة الصنف متاح للمالك فقط" },
+      403,
+    );
+  }
+
+  let openingUnitCostMinor: number | null = null;
+
+  if (rawOpeningUnitCostMinor !== undefined) {
+    if (
+      !Number.isSafeInteger(rawOpeningUnitCostMinor) ||
+      Number(rawOpeningUnitCostMinor) < 0 ||
+      Number(rawOpeningUnitCostMinor) > 2_147_483_647
+    ) {
+      return json(
+        { error: "التكلفة الافتتاحية للصنف غير صالحة" },
+        400,
+      );
+    }
+
+    openingUnitCostMinor =
+      Number(rawOpeningUnitCostMinor);
+  }
+
+  const productBody =
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+      ? { ...(body as Record<string, unknown>) }
+      : body;
+
+  if (
+    productBody &&
+    typeof productBody === "object" &&
+    !Array.isArray(productBody)
+  ) {
+    delete (
+      productBody as Record<string, unknown>
+    ).openingUnitCostMinor;
+  }
+
+  const parsed =
+    createProductRequestSchema.safeParse(
+      productBody,
+    );
 
   if (!parsed.success) {
     return json(
@@ -316,6 +505,57 @@ async function handleCreateProduct(
 
   const storageProductData =
     rewriteMediaUrlsForStorage(productData, env);
+
+  const openingQuantity =
+    getProductQuantity({
+      stock:
+        typeof storageProductData.stock === "number"
+          ? storageProductData.stock
+          : null,
+      colorVariants:
+        storageProductData.colorVariants ?? [],
+    });
+
+  if (
+    actor.isOwner &&
+    openingQuantity !== null &&
+    openingQuantity > 0 &&
+    openingUnitCostMinor === null
+  ) {
+    return json(
+      { error: "أدخل التكلفة الافتتاحية للصنف قبل الحفظ" },
+      409,
+    );
+  }
+
+  if (
+    openingUnitCostMinor !== null &&
+    (openingQuantity === null || openingQuantity <= 0)
+  ) {
+    return json(
+      { error: "لا يمكن تسجيل تكلفة افتتاحية بدون كمية مخزون" },
+      400,
+    );
+  }
+
+  const openingInventoryValueMinor =
+    openingUnitCostMinor !== null &&
+    openingQuantity !== null
+      ? openingUnitCostMinor * openingQuantity
+      : null;
+
+  if (
+    openingInventoryValueMinor !== null &&
+    (
+      !Number.isSafeInteger(openingInventoryValueMinor) ||
+      openingInventoryValueMinor > 2_147_483_647
+    )
+  ) {
+    return json(
+      { error: "قيمة المخزون الافتتاحية أكبر من الحد المسموح" },
+      400,
+    );
+  }
 
   const allBarcodes = [
     productData.barcode?.trim() || null,
@@ -478,6 +718,41 @@ async function handleCreateProduct(
         .values(openingMovements);
     }
 
+    if (
+      actor.isOwner &&
+      openingQuantity !== null &&
+      openingQuantity > 0 &&
+      openingUnitCostMinor !== null &&
+      openingInventoryValueMinor !== null
+    ) {
+      await tx
+        .insert(productCostStateTable)
+        .values({
+          productId: created.id,
+          quantityOnHand: openingQuantity,
+          inventoryValueMinor: openingInventoryValueMinor,
+          referenceUnitCostMinor: openingUnitCostMinor,
+          costQuality: "confirmed",
+        });
+
+      await tx
+        .insert(productCostLedgerTable)
+        .values({
+          productId: created.id,
+          eventType: "opening",
+          sourceType: "manual_opening",
+          sourceRef: String(created.id),
+          sourceItemRef: "initial",
+          quantityDelta: openingQuantity,
+          inventoryValueDeltaMinor: openingInventoryValueMinor,
+          quantityAfter: openingQuantity,
+          inventoryValueAfterMinor: openingInventoryValueMinor,
+          costQuality: "confirmed",
+          note: "Opening inventory cost at product creation",
+          createdByUserId: actor.id,
+        });
+    }
+
     return created;
   });
 
@@ -493,16 +768,44 @@ async function handleUpdateProduct(
   env: Env,
   id: number,
 ) {
-  const authError = await requireAdmin(
-    request,
-    db,
-    env,
-  );
+  const auth =
+    await requireAdminActor(
+      request,
+      db,
+      env,
+    );
 
-  if (authError) return authError;
+  if (!auth.ok) {
+    return auth.response;
+  }
 
-  const body = await request.json().catch(() => null);
-  const parsed = updateProductRequestSchema.safeParse(body);
+  const actor =
+    auth.user;
+
+  const body =
+    await request.json().catch(() => null);
+
+  const costInput =
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+      ? (body as ManualStockCostInput)
+      : null;
+
+  const costInputError =
+    validateManualStockCostInput(
+      costInput,
+      actor.isOwner,
+    );
+
+  if (costInputError) {
+    return costInputError;
+  }
+
+  const parsed =
+    updateProductRequestSchema.safeParse(
+      body,
+    );
 
   if (!parsed.success) {
     return json(
@@ -577,12 +880,139 @@ async function handleUpdateProduct(
     );
   }
 
-  const product = await db.transaction(async (tx) => {
-    let updated = currentProduct;
+  const updateResult =
+    await db.transaction(
+      async (tx) => {
+        const lockedRows =
+          await tx
+            .select()
+            .from(productsTable)
+            .where(
+              eq(
+                productsTable.id,
+                id,
+              ),
+            )
+            .limit(1)
+            .for("update");
 
-    if (Object.keys(productData).length > 0) {
-      const rows = await tx
-        .update(productsTable)
+        const lockedCurrent =
+          lockedRows[0];
+
+        if (!lockedCurrent) {
+          return {
+            kind: "not_found",
+          } as const;
+        }
+
+        let updated =
+          lockedCurrent;
+
+        if (
+          Object.keys(productData)
+            .length > 0
+        ) {
+          const effectiveQuantityBefore =
+            getProductQuantity(
+              lockedCurrent,
+            );
+
+          const predictedProduct = {
+            ...lockedCurrent,
+            ...storageProductData,
+
+            ...(storageProductData.barcode !==
+            undefined
+              ? {
+                  barcode:
+                    storageProductData.barcode
+                      ?.trim() ||
+                    null,
+                }
+              : {}),
+          };
+
+          const effectiveQuantityAfter =
+            getProductQuantity(
+              predictedProduct,
+            );
+
+          const costSync =
+            await syncManualProductCostQuantity(
+              tx,
+              {
+                productId:
+                  lockedCurrent.id,
+
+                quantityBefore:
+                  effectiveQuantityBefore,
+
+                quantityAfter:
+                  effectiveQuantityAfter,
+
+                explicitUnitCostMinor:
+                  actor.isOwner &&
+                  costInput?.costMode ===
+                    "new"
+                    ? costInput.unitCostMinor
+                    : null,
+
+                sameCostConfirmed:
+                  actor.isOwner &&
+                  costInput?.costMode ===
+                    "same",
+
+                requireExplicitIncreaseCost:
+                  actor.isOwner,
+
+                sourceType:
+                  "manual_stock",
+
+                sourceRef:
+                  String(
+                    lockedCurrent.id,
+                  ),
+
+                sourceItemRef:
+                  "product-edit",
+
+                note:
+                  "Manual full product stock adjustment",
+
+                createdByUserId:
+                  actor.id,
+              },
+            );
+
+          if (
+            costSync &&
+            !costSync.tracked
+          ) {
+            if (
+              costSync.reason ===
+                "uninitialized" &&
+              !(
+                actor.isOwner &&
+                costInput?.costMode !==
+                  undefined
+              )
+            ) {
+              // Cost tracking is not initialized yet.
+              // Normal product editing may continue untracked.
+            } else {
+              return {
+                kind: "cost_error",
+                reason:
+                  costSync.reason ===
+                    "uninitialized"
+                    ? "opening_cost_required"
+                    : costSync.reason,
+              } as const;
+            }
+          }
+
+          const rows = await tx
+            .update(productsTable)
         .set({
           ...storageProductData,
           ...(storageProductData.barcode !== undefined
@@ -604,7 +1034,7 @@ async function handleUpdateProduct(
       > = [];
 
       const oldGeneralStock =
-        currentProduct.stock ?? 0;
+        lockedCurrent.stock ?? 0;
 
       const newGeneralStock =
         updated.stock ?? 0;
@@ -664,7 +1094,7 @@ async function handleUpdateProduct(
       }
 
       const oldVariants =
-        (currentProduct.colorVariants as
+        (lockedCurrent.colorVariants as
           | ColorVariant[]
           | null) ?? [];
 
@@ -820,14 +1250,64 @@ async function handleUpdateProduct(
       }
     }
 
-    return updated;
-  });
+        return {
+          kind: "updated",
+          product: updated,
+          previousProduct:
+            lockedCurrent,
+        } as const;
+      },
+    );
+
+  if (
+    updateResult.kind ===
+    "not_found"
+  ) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  if (
+    updateResult.kind ===
+    "cost_error"
+  ) {
+    const message =
+      updateResult.reason ===
+        "opening_cost_required"
+        ? "يجب إدخال التكلفة الافتتاحية للصنف أولاً"
+        : updateResult.reason ===
+            "owner_cost_confirmation_required"
+          ? "زادت كمية المخزون. حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت."
+          : updateResult.reason ===
+              "unknown_effective_quantity"
+            ? "تعذر حساب الكمية الفعلية للصنف. يجب ضبط المخزون قبل مزامنة التكلفة."
+            : updateResult.reason ===
+                "cost_input_not_applicable"
+              ? "اختيار تكلفة الكمية الجديدة مسموح فقط عند زيادة المخزون."
+              : updateResult.reason ===
+                  "accounting_quantity_mismatch"
+                ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
+                : "تعذر مزامنة تكلفة المخزون";
+
+    return json(
+      { error: message },
+      409,
+    );
+  }
+
+  const product =
+    updateResult.product;
+
+  const previousProduct =
+    updateResult.previousProduct;
 
   try {
     await cleanupRemovedProductImages(
       db,
       env,
-      currentProduct,
+      previousProduct,
       product,
     );
   } catch (error) {
@@ -853,18 +1333,40 @@ async function handleStock(
   env: Env,
   id: number,
 ) {
-  const authError = await requireAdmin(
-    request,
-    db,
-    env,
-  );
+  const auth =
+    await requireAdminActor(
+      request,
+      db,
+      env,
+    );
 
-  if (authError) return authError;
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const actor =
+    auth.user;
 
   const body = await request.json().catch(() => null) as {
     action?: "set" | "add" | "subtract";
     amount?: number;
   } | null;
+
+  const costInput =
+    body as
+      | (typeof body &
+          ManualStockCostInput)
+      | null;
+
+  const costInputError =
+    validateManualStockCostInput(
+      costInput,
+      actor.isOwner,
+    );
+
+  if (costInputError) {
+    return costInputError;
+  }
 
   if (
     !body?.action ||
@@ -879,7 +1381,7 @@ async function handleStock(
 
   const amount = Math.round(body.amount);
 
-  const product = await db.transaction(
+  const result = await db.transaction(
     async (tx) => {
       const currentRows = await tx
         .select()
@@ -890,8 +1392,15 @@ async function handleStock(
       const current = currentRows[0];
 
       if (!current) {
-        return null;
+        return {
+          kind: "not_found",
+        } as const;
       }
+
+      const effectiveQuantityBefore =
+        getProductQuantity(
+          current,
+        );
 
       const oldStock =
         current.stock ?? 0;
@@ -912,6 +1421,82 @@ async function handleStock(
           );
       }
 
+      const effectiveQuantityAfter =
+        getProductQuantity({
+          ...current,
+          stock: newStock,
+        });
+
+      const costSync =
+        await syncManualProductCostQuantity(
+          tx,
+          {
+            productId:
+              current.id,
+
+            quantityBefore:
+              effectiveQuantityBefore,
+
+            quantityAfter:
+              effectiveQuantityAfter,
+
+            explicitUnitCostMinor:
+              actor.isOwner &&
+              costInput?.costMode === "new"
+                ? costInput.unitCostMinor
+                : null,
+
+            sameCostConfirmed:
+              actor.isOwner &&
+              costInput?.costMode === "same",
+
+            requireExplicitIncreaseCost:
+              actor.isOwner,
+
+            sourceType:
+              "manual_stock",
+
+            sourceRef:
+              String(current.id),
+
+            sourceItemRef:
+              "general",
+
+            note:
+              "Manual general stock adjustment",
+
+            createdByUserId:
+              actor.id,
+          },
+        );
+
+      if (
+        costSync &&
+        !costSync.tracked
+      ) {
+        if (
+          costSync.reason ===
+            "uninitialized" &&
+          !(
+            actor.isOwner &&
+            costInput?.costMode !==
+              undefined
+          )
+        ) {
+          // Cost tracking has not been initialized.
+          // Ordinary stock adjustment may continue.
+        } else {
+          return {
+            kind: "cost_error",
+            reason:
+              costSync.reason ===
+                "uninitialized"
+                ? "opening_cost_required"
+                : costSync.reason,
+          } as const;
+        }
+      }
+
       const rows = await tx
         .update(productsTable)
         .set({
@@ -923,7 +1508,9 @@ async function handleStock(
       const updated = rows[0];
 
       if (!updated) {
-        return null;
+        throw new Error(
+          "MANUAL_GENERAL_STOCK_UPDATE_FAILED",
+        );
       }
 
       const delta =
@@ -985,16 +1572,53 @@ async function handleStock(
           });
       }
 
-      return updated;
+      return {
+        kind: "updated",
+        product: updated,
+      } as const;
     },
   );
 
-  if (!product) {
+  if (
+    result.kind ===
+    "not_found"
+  ) {
     return json(
       { error: "المنتج غير موجود" },
       404,
     );
   }
+
+  if (
+    result.kind ===
+    "cost_error"
+  ) {
+    const message =
+      result.reason ===
+        "opening_cost_required"
+        ? "يجب إدخال التكلفة الافتتاحية للصنف أولاً"
+        : result.reason ===
+            "owner_cost_confirmation_required"
+          ? "زادت كمية المخزون. حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت."
+          : result.reason ===
+              "unknown_effective_quantity"
+            ? "تعذر حساب الكمية الفعلية للصنف. يجب ضبط المخزون قبل مزامنة التكلفة."
+            : result.reason ===
+                "cost_input_not_applicable"
+              ? "اختيار تكلفة الكمية الجديدة مسموح فقط عند زيادة المخزون."
+              : result.reason ===
+                  "accounting_quantity_mismatch"
+                ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
+                : "تعذر مزامنة تكلفة المخزون";
+
+    return json(
+      { error: message },
+      409,
+    );
+  }
+
+  const product =
+    result.product;
 
   const additionalBarcodes =
     await getAdditionalBarcodes(db, id);
@@ -1212,13 +1836,19 @@ async function handleVariantStock(
   env: Env,
   id: number,
 ) {
-  const authError = await requireAdmin(
-    request,
-    db,
-    env,
-  );
+  const auth =
+    await requireAdminActor(
+      request,
+      db,
+      env,
+    );
 
-  if (authError) return authError;
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const actor =
+    auth.user;
 
   const body = await request.json().catch(() => null) as {
     color?: string;
@@ -1226,6 +1856,22 @@ async function handleVariantStock(
     action?: "set" | "add" | "subtract";
     amount?: number;
   } | null;
+
+  const costInput =
+    body as
+      | (typeof body &
+          ManualStockCostInput)
+      | null;
+
+  const costInputError =
+    validateManualStockCostInput(
+      costInput,
+      actor.isOwner,
+    );
+
+  if (costInputError) {
+    return costInputError;
+  }
 
   if (
     !body?.color ||
@@ -1264,6 +1910,11 @@ async function handleVariantStock(
           kind: "not_found",
         } as const;
       }
+
+      const effectiveQuantityBefore =
+        getProductQuantity(
+          current,
+        );
 
       const variants =
         (current.colorVariants as
@@ -1337,6 +1988,83 @@ async function handleVariantStock(
         } as const;
       }
 
+      const effectiveQuantityAfter =
+        getProductQuantity({
+          ...current,
+          colorVariants:
+            updatedVariants,
+        });
+
+      const costSync =
+        await syncManualProductCostQuantity(
+          tx,
+          {
+            productId:
+              current.id,
+
+            quantityBefore:
+              effectiveQuantityBefore,
+
+            quantityAfter:
+              effectiveQuantityAfter,
+
+            explicitUnitCostMinor:
+              actor.isOwner &&
+              costInput?.costMode === "new"
+                ? costInput.unitCostMinor
+                : null,
+
+            sameCostConfirmed:
+              actor.isOwner &&
+              costInput?.costMode === "same",
+
+            requireExplicitIncreaseCost:
+              actor.isOwner,
+
+            sourceType:
+              "manual_stock",
+
+            sourceRef:
+              String(current.id),
+
+            sourceItemRef:
+              `${color}:${size}`,
+
+            note:
+              "Manual variant stock adjustment",
+
+            createdByUserId:
+              actor.id,
+          },
+        );
+
+      if (
+        costSync &&
+        !costSync.tracked
+      ) {
+        if (
+          costSync.reason ===
+            "uninitialized" &&
+          !(
+            actor.isOwner &&
+            costInput?.costMode !==
+              undefined
+          )
+        ) {
+          // Uninitialized products remain untracked
+          // until the owner enters opening cost.
+        } else {
+          return {
+            kind: "cost_error",
+            reason:
+              costSync.reason ===
+                "uninitialized"
+                ? "opening_cost_required"
+                : costSync.reason,
+          } as const;
+        }
+      }
+
       const rows = await tx
         .update(productsTable)
         .set({
@@ -1354,9 +2082,9 @@ async function handleVariantStock(
       const updated = rows[0];
 
       if (!updated) {
-        return {
-          kind: "not_found",
-        } as const;
+        throw new Error(
+          "MANUAL_VARIANT_STOCK_UPDATE_FAILED",
+        );
       }
 
       const delta =
@@ -1458,6 +2186,34 @@ async function handleVariantStock(
       } as const;
     },
   );
+
+  if (
+    result.kind ===
+    "cost_error"
+  ) {
+    const message =
+      result.reason ===
+        "opening_cost_required"
+        ? "يجب إدخال التكلفة الافتتاحية للصنف أولاً"
+        : result.reason ===
+            "owner_cost_confirmation_required"
+          ? "زادت كمية المخزون. حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت."
+          : result.reason ===
+              "unknown_effective_quantity"
+            ? "تعذر حساب الكمية الفعلية للصنف. يجب ضبط المخزون قبل مزامنة التكلفة."
+            : result.reason ===
+                "cost_input_not_applicable"
+              ? "اختيار تكلفة الكمية الجديدة مسموح فقط عند زيادة المخزون."
+              : result.reason ===
+                  "accounting_quantity_mismatch"
+                ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
+                : "تعذر مزامنة تكلفة المخزون";
+
+    return json(
+      { error: message },
+      409,
+    );
+  }
 
   if (
     result.kind ===
