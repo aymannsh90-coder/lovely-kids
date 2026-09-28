@@ -742,6 +742,151 @@ export async function consumeExactProductCost(
 }
 
 /**
+ * Add inventory at an exact known acquisition cost.
+ *
+ * Primary use:
+ * - completed purchase invoices
+ *
+ * Unlike restoreExactProductCost(), this MAY initialize cost
+ * accounting when no state exists yet. The caller must only use
+ * that initialization path when it has already verified that the
+ * product had no pre-existing untracked physical stock.
+ *
+ * Purchase quantity includes paid + free units, while
+ * costTotalMinor is the exact net acquisition value.
+ */
+export async function addExactProductCost(
+  tx: Tx,
+  input: {
+    productId: number;
+    quantity: number;
+    costTotalMinor: number;
+    costQuality: CostQuality;
+  } & LedgerMetadata,
+): Promise<CostMutationResult> {
+  assertPositiveInteger(
+    input.quantity,
+    "quantity",
+  );
+
+  assertNonNegativeDbInteger(
+    input.costTotalMinor,
+    "costTotalMinor",
+  );
+
+  const state =
+    await lockCostState(
+      tx,
+      input.productId,
+    );
+
+  if (state) {
+    return restoreExactProductCost(
+      tx,
+      input,
+    );
+  }
+
+  const referenceUnitCostMinor =
+    deriveUnitCostMinor(
+      input.costTotalMinor,
+      input.quantity,
+    );
+
+  const insertedRows =
+    await tx
+      .insert(
+        productCostStateTable,
+      )
+      .values({
+        productId:
+          input.productId,
+
+        quantityOnHand:
+          input.quantity,
+
+        inventoryValueMinor:
+          input.costTotalMinor,
+
+        referenceUnitCostMinor,
+
+        costQuality:
+          input.costQuality,
+      })
+      .onConflictDoNothing({
+        target:
+          productCostStateTable.productId,
+      })
+      .returning({
+        productId:
+          productCostStateTable.productId,
+      });
+
+  // Defensive concurrency fallback. If another transaction created
+  // the state first, merge this acquisition into that state instead
+  // of losing the movement.
+  if (!insertedRows[0]) {
+    return restoreExactProductCost(
+      tx,
+      input,
+    );
+  }
+
+  await writeLedger(
+    tx,
+    {
+      productId:
+        input.productId,
+
+      quantityDelta:
+        input.quantity,
+
+      inventoryValueDeltaMinor:
+        input.costTotalMinor,
+
+      quantityAfter:
+        input.quantity,
+
+      inventoryValueAfterMinor:
+        input.costTotalMinor,
+
+      costQuality:
+        input.costQuality,
+    },
+    input,
+  );
+
+  return {
+    tracked: true,
+
+    productId:
+      input.productId,
+
+    quantity:
+      input.quantity,
+
+    unitCostMinor:
+      referenceUnitCostMinor,
+
+    costTotalMinor:
+      input.costTotalMinor,
+
+    costQuality:
+      input.costQuality,
+
+    quantityBefore: 0,
+    quantityAfter:
+      input.quantity,
+
+    inventoryValueBeforeMinor: 0,
+    inventoryValueAfterMinor:
+      input.costTotalMinor,
+
+    referenceUnitCostMinor,
+  };
+}
+
+/**
  * Restore an exact known cost back into inventory.
  *
  * Examples:
