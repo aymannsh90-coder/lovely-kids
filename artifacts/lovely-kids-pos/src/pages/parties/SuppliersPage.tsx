@@ -51,7 +51,7 @@ function errorMessage(error: unknown) {
 }
 
 export default function SuppliersPage() {
-  const { token, clearAuthentication } = usePosRuntime();
+  const { token, user, clearAuthentication } = usePosRuntime();
 
   const [suppliers, setSuppliers] = useState<PosSupplier[]>([]);
   const [query, setQuery] = useState("");
@@ -82,11 +82,11 @@ export default function SuppliersPage() {
         (summary, supplier) => ({
           totalPurchasesMinor:
             summary.totalPurchasesMinor +
-            supplier.totalPurchasesMinor,
+            (supplier.totalPurchasesMinor ?? 0),
           paidMinor:
-            summary.paidMinor + supplier.paidMinor,
+            summary.paidMinor + (supplier.paidMinor ?? 0),
           dueMinor:
-            summary.dueMinor + supplier.dueMinor,
+            summary.dueMinor + (supplier.dueMinor ?? 0),
         }),
         {
           totalPurchasesMinor: 0,
@@ -289,28 +289,32 @@ export default function SuppliersPage() {
           <strong>{inactiveCount}</strong>
         </article>
 
-        <article>
-          <span>إجمالي المشتريات</span>
-          <strong>
-            {formatMoney(
-              financeSummary.totalPurchasesMinor,
-            )}
-          </strong>
-        </article>
+        {user?.isOwner && (
+          <>
+            <article>
+              <span>إجمالي المشتريات</span>
+              <strong>
+                {formatMoney(
+                  financeSummary.totalPurchasesMinor,
+                )}
+              </strong>
+            </article>
 
-        <article>
-          <span>إجمالي المدفوع</span>
-          <strong>
-            {formatMoney(financeSummary.paidMinor)}
-          </strong>
-        </article>
+            <article>
+              <span>إجمالي المدفوع</span>
+              <strong>
+                {formatMoney(financeSummary.paidMinor)}
+              </strong>
+            </article>
 
-        <article>
-          <span>إجمالي المستحق للموردين</span>
-          <strong>
-            {formatMoney(financeSummary.dueMinor)}
-          </strong>
-        </article>
+            <article>
+              <span>إجمالي المستحق للموردين</span>
+              <strong>
+                {formatMoney(financeSummary.dueMinor)}
+              </strong>
+            </article>
+          </>
+        )}
       </section>
 
       <form
@@ -523,9 +527,13 @@ export default function SuppliersPage() {
                 <th>اسم المورد</th>
                 <th>جهة الاتصال</th>
                 <th>الهاتف / الجوال</th>
-                <th>إجمالي المشتريات</th>
-                <th>المدفوع</th>
-                <th>المستحق</th>
+                {user?.isOwner && (
+                  <>
+                    <th>إجمالي المشتريات</th>
+                    <th>المدفوع</th>
+                    <th>المستحق</th>
+                  </>
+                )}
                 <th>الحالة</th>
                 <th>العنوان</th>
               </tr>
@@ -534,7 +542,7 @@ export default function SuppliersPage() {
             <tbody>
               {suppliers.length === 0 ? (
                 <tr className="accounting-empty-row">
-                  <td colSpan={10}>
+                  <td colSpan={user?.isOwner ? 10 : 7}>
                     {SUPPLIER_API_ENABLED
                       ? loading
                         ? "جاري تحميل الموردين…"
@@ -563,32 +571,40 @@ export default function SuppliersPage() {
                         .join(" / ") || "—"}
                     </td>
 
-                    <td>
-                      <strong>
-                        {formatMoney(
-                          supplier.totalPurchasesMinor,
-                        )}
-                      </strong>
-                    </td>
+                    {user?.isOwner && (
+                      <>
+                        <td>
+                          <strong>
+                            {formatMoney(
+                              supplier.totalPurchasesMinor ?? 0,
+                            )}
+                          </strong>
+                        </td>
 
-                    <td>
-                      {formatMoney(supplier.paidMinor)}
-                    </td>
-
-                    <td>
-                      <strong>
-                        {formatMoney(supplier.dueMinor)}
-                      </strong>
-
-                      {supplier.supplierCreditMinor > 0 && (
-                        <div>
-                          رصيد دائن لنا:{" "}
+                        <td>
                           {formatMoney(
-                            supplier.supplierCreditMinor,
+                            supplier.paidMinor ?? 0,
                           )}
-                        </div>
-                      )}
-                    </td>
+                        </td>
+
+                        <td>
+                          <strong>
+                            {formatMoney(
+                              supplier.dueMinor ?? 0,
+                            )}
+                          </strong>
+
+                          {(supplier.supplierCreditMinor ?? 0) > 0 && (
+                            <div>
+                              رصيد دائن لنا:{" "}
+                              {formatMoney(
+                                supplier.supplierCreditMinor ?? 0,
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </>
+                    )}
 
                     <td>
                       <span

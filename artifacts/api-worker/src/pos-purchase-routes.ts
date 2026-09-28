@@ -83,7 +83,7 @@ interface ParsedPurchaseItem {
   lineTotalMinor: number;
 }
 
-async function requirePosUser(
+async function requirePurchaseOwner(
   request: Request,
   db: Db,
   env: Env,
@@ -97,11 +97,11 @@ async function requirePosUser(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isOwner) {
     return {
       ok: false,
       response: json(
-        { error: "غير مصرح بإدارة المشتريات" },
+        { error: "هذه البيانات متاحة للمالك فقط" },
         403,
       ),
     };
@@ -570,7 +570,7 @@ async function handleLatestPurchase(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;
@@ -639,7 +639,7 @@ async function handlePurchaseByPublicId(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;
@@ -708,7 +708,7 @@ async function handleVoidPurchase(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;
@@ -1236,7 +1236,7 @@ async function handleCreatePurchase(
   db: Db,
   env: Env,
 ) {
-  const auth = await requirePosUser(request, db, env);
+  const auth = await requirePurchaseOwner(request, db, env);
 
   if (!auth.ok) {
     return auth.response;

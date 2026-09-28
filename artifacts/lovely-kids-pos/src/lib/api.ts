@@ -772,17 +772,17 @@ export interface PosSupplier {
   notes: string | null;
   status: "active" | "inactive";
 
-  totalPurchasesMinor: number;
-  totalPurchases: number;
+  totalPurchasesMinor?: number;
+  totalPurchases?: number;
 
-  paidMinor: number;
-  paid: number;
+  paidMinor?: number;
+  paid?: number;
 
-  dueMinor: number;
-  due: number;
+  dueMinor?: number;
+  due?: number;
 
-  supplierCreditMinor: number;
-  supplierCredit: number;
+  supplierCreditMinor?: number;
+  supplierCredit?: number;
 
   createdByUserId: string | null;
   createdAt: string;

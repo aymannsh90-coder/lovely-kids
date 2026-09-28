@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import RequireOpenSession from "../guards/RequireOpenSession";
+import RequireOwner from "../guards/RequireOwner";
 import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
@@ -94,13 +95,18 @@ export default function AppRouter() {
 
         <Route
           path="purchases/new"
-          element={<PurchaseInvoicePage />}
+          element={
+            <RequireOwner>
+              <PurchaseInvoicePage />
+            </RequireOwner>
+          }
         />
 
         <Route
           path="purchases/returns"
           element={
-            <ComingSoonPage
+            <RequireOwner>
+              <ComingSoonPage
               icon="📦"
               title="مردودات المشتريات"
               description="إرجاع أصناف إلى المورد وربطها بفاتورة الشراء."
@@ -110,7 +116,8 @@ export default function AppRouter() {
                 "خصم الكمية من المخزون.",
                 "تحديث حساب المورد.",
               ]}
-            />
+              />
+            </RequireOwner>
           }
         />
 
@@ -125,7 +132,7 @@ export default function AppRouter() {
                 "إضافة وتعديل الأصناف.",
                 "باركود أساسي وباركودات متعددة.",
                 "ألوان ومقاسات ومخزون دقيق.",
-                "أسعار البيع والتكلفة.",
+                "إدارة أسعار البيع.",
               ]}
             />
           }

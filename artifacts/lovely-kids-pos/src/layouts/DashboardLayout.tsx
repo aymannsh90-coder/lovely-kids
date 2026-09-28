@@ -90,8 +90,12 @@ export default function DashboardLayout() {
 
   const activeItems = useMemo(
     () =>
-      posNavigation.filter((item) => activeSection.groups.includes(item.group)),
-    [activeSection],
+      posNavigation.filter(
+        (item) =>
+          activeSection.groups.includes(item.group) &&
+          (item.group !== "purchases" || user?.isOwner === true),
+      ),
+    [activeSection, user?.isOwner],
   );
 
   const pageTitle = isDashboard
@@ -174,8 +178,11 @@ export default function DashboardLayout() {
                   setActiveSectionKey(section.key);
 
                   if (isAdminPanel) {
-                    const firstItem = posNavigation.find((item) =>
-                      section.groups.includes(item.group),
+                    const firstItem = posNavigation.find(
+                      (item) =>
+                        section.groups.includes(item.group) &&
+                        (item.group !== "purchases" ||
+                          user?.isOwner === true),
                     );
 
                     if (firstItem) {
