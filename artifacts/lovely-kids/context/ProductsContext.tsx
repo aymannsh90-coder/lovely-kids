@@ -42,7 +42,12 @@ const PUBLIC_PRODUCTS_STALE_MS = 5 * 60 * 1000;
 interface ProductsContextType {
   products: Product[];
   loading: boolean;
-  addProduct: (product: Omit<Product, "id">) => Promise<Product>;
+  addProduct: (
+    product: Omit<Product, "id">,
+    openingCost?: {
+      unitCostMinor: number;
+    },
+  ) => Promise<Product>;
   updateProduct: (
     product: Product,
     costInput?: StockCostInput,
@@ -277,12 +282,26 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [refreshProducts, user?.isAdmin]);
 
-  const addProduct = useCallback(async (product: Omit<Product, "id">) => {
+  const addProduct = useCallback(async (
+    product: Omit<Product, "id">,
+    openingCost?: {
+      unitCostMinor: number;
+    },
+  ) => {
     const headers = await getAdminHeaders();
+
     const res = await fetch(`${API_BASE}/api/products`, {
       method: "POST",
       headers,
-      body: JSON.stringify(toInsertBody(product)),
+      body: JSON.stringify({
+        ...toInsertBody(product),
+        ...(openingCost
+          ? {
+              openingUnitCostMinor:
+                openingCost.unitCostMinor,
+            }
+          : {}),
+      }),
     });
     if (!res.ok) {
       let message = "فشل إضافة المنتج";

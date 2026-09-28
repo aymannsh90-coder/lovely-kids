@@ -53,6 +53,62 @@ type OwnerCostInfo = {
   stockMatchesAccounting: boolean;
 };
 
+const getEffectiveQuantityForCost = (
+  product: Product,
+): number | null => {
+  const sizeStocks =
+    (product.colorVariants ?? []).flatMap(
+      (variant) =>
+        (variant.sizes ?? []).map(
+          (entry) => entry.stock,
+        ),
+    );
+
+  let variantQuantity: number | null =
+    null;
+
+  if (sizeStocks.length > 0) {
+    const numericStocks =
+      sizeStocks.filter(
+        (value): value is number =>
+          typeof value === "number" &&
+          Number.isFinite(value),
+      );
+
+    if (
+      numericStocks.length ===
+      sizeStocks.length
+    ) {
+      variantQuantity =
+        numericStocks.reduce(
+          (sum, value) =>
+            sum +
+            Math.max(0, value),
+          0,
+        );
+    }
+  }
+
+  const generalQuantity =
+    typeof product.stock === "number" &&
+    Number.isFinite(product.stock)
+      ? Math.max(0, product.stock)
+      : null;
+
+  if (
+    generalQuantity !== null &&
+    variantQuantity !== null
+  ) {
+    return Math.min(
+      generalQuantity,
+      variantQuantity,
+    );
+  }
+
+  return generalQuantity ??
+    variantQuantity;
+};
+
 export default function AdminProductsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -620,10 +676,35 @@ export default function AdminProductsScreen() {
   const handleQuickAdd = async (amount: number) => {
     if (!stockProduct) return;
     setStockSaving(true);
+
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(
+        Haptics.ImpactFeedbackStyle.Medium,
+      );
+
+      const predictedProduct = {
+        ...stockProduct,
+        stock:
+          (stockProduct.stock ?? 0) +
+          amount,
+      };
+
+      const beforeQuantity =
+        getEffectiveQuantityForCost(
+          stockProduct,
+        );
+
+      const afterQuantity =
+        getEffectiveQuantityForCost(
+          predictedProduct,
+        );
+
       const costInput =
-        ownerCostInputForIncrease();
+        beforeQuantity !== null &&
+        afterQuantity !== null &&
+        afterQuantity > beforeQuantity
+          ? ownerCostInputForIncrease()
+          : undefined;
 
       const updated =
         await adjustStock(
@@ -653,18 +734,52 @@ export default function AdminProductsScreen() {
   };
 
   const handleSetStock = async () => {
-    if (!stockProduct || !stockInput.trim()) return;
-    const val = Number(stockInput.trim());
-    if (isNaN(val) || val < 0) return;
+    if (
+      !stockProduct ||
+      !stockInput.trim()
+    ) {
+      return;
+    }
+
+    const rawValue =
+      Number(stockInput.trim());
+
+    if (
+      !Number.isFinite(rawValue) ||
+      rawValue < 0
+    ) {
+      return;
+    }
+
+    const value =
+      Math.round(rawValue);
+
     setStockSaving(true);
+
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const isIncrease =
-        val >
-        (stockProduct.stock ?? 0);
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+
+      const predictedProduct = {
+        ...stockProduct,
+        stock: value,
+      };
+
+      const beforeQuantity =
+        getEffectiveQuantityForCost(
+          stockProduct,
+        );
+
+      const afterQuantity =
+        getEffectiveQuantityForCost(
+          predictedProduct,
+        );
 
       const costInput =
-        isIncrease
+        beforeQuantity !== null &&
+        afterQuantity !== null &&
+        afterQuantity > beforeQuantity
           ? ownerCostInputForIncrease()
           : undefined;
 
@@ -672,7 +787,7 @@ export default function AdminProductsScreen() {
         await adjustStock(
           stockProduct.id,
           "set",
-          val,
+          value,
           costInput,
         );
 
@@ -696,12 +811,27 @@ export default function AdminProductsScreen() {
     }
   };
 
-  const handleVariantAdjust = async (color: string, size: string, action: "set" | "add" | "subtract", amount: number) => {
+  const handleVariantAdjust = async (
+    color: string,
+    size: string,
+    action: "set" | "add" | "subtract",
+    amount: number,
+  ) => {
     if (!stockProduct) return;
-    const key = variantKey(color, size);
+
+    const key =
+      variantKey(color, size);
+
+    const normalizedAmount =
+      Math.round(amount);
+
     setVariantSaving(key);
+
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(
+        Haptics.ImpactFeedbackStyle.Medium,
+      );
+
       const currentVariantStock =
         stockProduct.colorVariants
           ?.find(
@@ -714,16 +844,60 @@ export default function AdminProductsScreen() {
           )
           ?.stock ?? 0;
 
-      const isIncrease =
-        action === "add" ||
-        (
-          action === "set" &&
-          amount >
-            currentVariantStock
+      const newVariantStock =
+        action === "set"
+          ? Math.max(
+              0,
+              normalizedAmount,
+            )
+          : action === "add"
+            ? currentVariantStock +
+              normalizedAmount
+            : Math.max(
+                0,
+                currentVariantStock -
+                  normalizedAmount,
+              );
+
+      const predictedProduct = {
+        ...stockProduct,
+        colorVariants:
+          stockProduct.colorVariants?.map(
+            (variant) =>
+              variant.color !== color
+                ? variant
+                : {
+                    ...variant,
+                    sizes:
+                      variant.sizes.map(
+                        (entry) =>
+                          entry.size !==
+                          size
+                            ? entry
+                            : {
+                                ...entry,
+                                stock:
+                                  newVariantStock,
+                              },
+                      ),
+                  },
+          ) ?? [],
+      };
+
+      const beforeQuantity =
+        getEffectiveQuantityForCost(
+          stockProduct,
+        );
+
+      const afterQuantity =
+        getEffectiveQuantityForCost(
+          predictedProduct,
         );
 
       const costInput =
-        isIncrease
+        beforeQuantity !== null &&
+        afterQuantity !== null &&
+        afterQuantity > beforeQuantity
           ? ownerCostInputForIncrease()
           : undefined;
 
@@ -733,7 +907,7 @@ export default function AdminProductsScreen() {
           color,
           size,
           action,
-          amount,
+          normalizedAmount,
           costInput,
         );
 
@@ -1865,12 +2039,55 @@ export default function AdminProductsScreen() {
                 <Pressable
                   onPress={async () => {
                     if (!stockProduct) return;
+
                     setStockSaving(true);
+
                     try {
-                        await updateProduct({ ...stockProduct, stock: null });
-                        setStockProduct({ ...stockProduct, stock: null });
-                    } catch { }
-                    setStockSaving(false);
+                      const predictedProduct = {
+                        ...stockProduct,
+                        stock: null,
+                      };
+
+                      const beforeQuantity =
+                        getEffectiveQuantityForCost(
+                          stockProduct,
+                        );
+
+                      const afterQuantity =
+                        getEffectiveQuantityForCost(
+                          predictedProduct,
+                        );
+
+                      const costInput =
+                        beforeQuantity !== null &&
+                        afterQuantity !== null &&
+                        afterQuantity > beforeQuantity
+                          ? ownerCostInputForIncrease()
+                          : undefined;
+
+                      const updated =
+                        await updateProduct(
+                          predictedProduct,
+                          costInput,
+                        );
+
+                      setStockProduct(updated);
+
+                      if (user?.isOwner) {
+                        await refreshOwnerCostInfo(
+                          stockProduct.id,
+                        );
+                      }
+                    } catch (error) {
+                      Alert.alert(
+                        "المخزون",
+                        error instanceof Error
+                          ? error.message
+                          : "فشل تعديل الكمية",
+                      );
+                    } finally {
+                      setStockSaving(false);
+                    }
                   }}
                   style={[styles.unlimitedBtn, { borderColor: colors.border }]}
                 >

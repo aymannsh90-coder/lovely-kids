@@ -60,7 +60,11 @@ export type UntrackedCostResult = {
     | "insufficient_accounting_quantity"
     | "insufficient_accounting_value"
     | "exact_cost_mismatch"
-    | "accounting_quantity_mismatch";
+    | "accounting_quantity_mismatch"
+    | "opening_cost_required"
+    | "owner_cost_confirmation_required"
+    | "unknown_effective_quantity"
+    | "cost_input_not_applicable";
 };
 
 export type TrackedCostResult = {
@@ -1220,30 +1224,27 @@ export async function syncManualProductCostQuantity(
   tx: Tx,
   input: {
     productId: number;
-    quantityBefore: number;
-    quantityAfter: number;
+    quantityBefore: number | null;
+    quantityAfter: number | null;
 
     explicitUnitCostMinor?: number | null;
 
     sameCostConfirmed?: boolean;
+    requireExplicitIncreaseCost?: boolean;
   } & Omit<LedgerMetadata, "eventType">,
 ): Promise<CostMutationResult | null> {
-  assertNonNegativeDbInteger(
-    input.quantityBefore,
-    "quantityBefore",
-  );
+  if (input.quantityBefore !== null) {
+    assertNonNegativeDbInteger(
+      input.quantityBefore,
+      "quantityBefore",
+    );
+  }
 
-  assertNonNegativeDbInteger(
-    input.quantityAfter,
-    "quantityAfter",
-  );
-
-  const delta =
-    input.quantityAfter -
-    input.quantityBefore;
-
-  if (delta === 0) {
-    return null;
+  if (input.quantityAfter !== null) {
+    assertNonNegativeDbInteger(
+      input.quantityAfter,
+      "quantityAfter",
+    );
   }
 
   const currentState =
@@ -1252,10 +1253,60 @@ export async function syncManualProductCostQuantity(
       input.productId,
     );
 
+  if (
+    input.quantityBefore === null ||
+    input.quantityAfter === null
+  ) {
+    return {
+      tracked: false,
+      reason: currentState
+        ? "unknown_effective_quantity"
+        : "uninitialized",
+    };
+  }
+
+  const delta =
+    input.quantityAfter -
+    input.quantityBefore;
+
+  const hasCostInput =
+    input.sameCostConfirmed === true ||
+    (
+      input.explicitUnitCostMinor !== undefined &&
+      input.explicitUnitCostMinor !== null
+    );
+
+  if (delta <= 0 && hasCostInput) {
+    return {
+      tracked: false,
+      reason: "cost_input_not_applicable",
+    };
+  }
+
+  if (delta === 0) {
+    return null;
+  }
+
   if (!currentState) {
     return {
       tracked: false,
-      reason: "uninitialized",
+      reason:
+        delta > 0 &&
+        input.requireExplicitIncreaseCost
+          ? "opening_cost_required"
+          : "uninitialized",
+    };
+  }
+
+  if (
+    delta > 0 &&
+    input.requireExplicitIncreaseCost &&
+    !hasCostInput
+  ) {
+    return {
+      tracked: false,
+      reason:
+        "owner_cost_confirmation_required",
     };
   }
 

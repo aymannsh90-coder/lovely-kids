@@ -120,10 +120,7 @@ export default function AddProductScreen() {
   const [editNewBatchCostInput, setEditNewBatchCostInput] =
     useState("");
 
-  const [
-    createdProductPendingOpening,
-    setCreatedProductPendingOpening,
-  ] = useState<Product | null>(null);
+
 
   const [sizes, setSizes] = useState<string[]>(editProduct?.sizes ?? []);
   const [sizeInput, setSizeInput] = useState("");
@@ -2009,19 +2006,11 @@ export default function AddProductScreen() {
           costInput,
         );
       } else {
-        let created =
-          createdProductPendingOpening;
-
-        if (!created) {
-          created =
-            await addProduct(
-              productData,
-            );
-
-          setCreatedProductPendingOpening(
-            created,
-          );
-        }
+        let openingCost:
+          | {
+              unitCostMinor: number;
+            }
+          | undefined;
 
         if (
           user?.isOwner &&
@@ -2031,69 +2020,20 @@ export default function AddProductScreen() {
           const unitCostMinor =
             openingCostMinor();
 
-          if (
-            unitCostMinor === null
-          ) {
+          if (unitCostMinor === null) {
             throw new Error(
               "أدخل التكلفة الافتتاحية للصنف قبل الحفظ",
             );
           }
 
-          const token =
-            await getAuthToken();
-
-          if (!token) {
-            throw new Error(
-              "يجب تسجيل الدخول",
-            );
-          }
-
-          const costRes =
-            await fetch(
-              `${API_BASE}/api/owner/costs/opening`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-                body:
-                  JSON.stringify({
-                    productId:
-                      created.id,
-                    unitCostMinor,
-                    costQuality:
-                      "confirmed",
-                  }),
-              },
-            );
-
-          if (!costRes.ok) {
-            let message =
-              "تم إنشاء المنتج لكن تعذر تسجيل تكلفته الافتتاحية. اضغط حفظ مرة أخرى لإعادة محاولة التكلفة دون إنشاء منتج جديد.";
-
-            try {
-              const data =
-                (await costRes.json()) as {
-                  error?: string;
-                };
-
-              if (data.error) {
-                message =
-                  `${data.error}. المنتج محفوظ بالفعل؛ أعد الضغط على حفظ بعد التصحيح.`;
-              }
-            } catch {}
-
-            throw new Error(
-              message,
-            );
-          }
+          openingCost = {
+            unitCostMinor,
+          };
         }
 
-        setCreatedProductPendingOpening(
-          null,
+        await addProduct(
+          productData,
+          openingCost,
         );
       }
 

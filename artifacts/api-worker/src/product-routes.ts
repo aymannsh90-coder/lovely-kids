@@ -1,6 +1,8 @@
 import {
   inventoryMovementsTable,
   insertProductSchema,
+  productCostLedgerTable,
+  productCostStateTable,
   ordersTable,
   productBarcodesTable,
   productBarcodeInputSchema,
@@ -407,16 +409,81 @@ async function handleCreateProduct(
   db: Db,
   env: Env,
 ) {
-  const authError = await requireAdmin(
-    request,
-    db,
-    env,
-  );
+  const auth =
+    await requireAdminActor(
+      request,
+      db,
+      env,
+    );
 
-  if (authError) return authError;
+  if (!auth.ok) {
+    return auth.response;
+  }
 
-  const body = await request.json().catch(() => null);
-  const parsed = createProductRequestSchema.safeParse(body);
+  const actor = auth.user;
+
+  const body =
+    await request
+      .json()
+      .catch(() => null);
+
+  const rawOpeningUnitCostMinor =
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+          .openingUnitCostMinor
+      : undefined;
+
+  if (
+    rawOpeningUnitCostMinor !== undefined &&
+    !actor.isOwner
+  ) {
+    return json(
+      { error: "إدخال تكلفة الصنف متاح للمالك فقط" },
+      403,
+    );
+  }
+
+  let openingUnitCostMinor: number | null = null;
+
+  if (rawOpeningUnitCostMinor !== undefined) {
+    if (
+      !Number.isSafeInteger(rawOpeningUnitCostMinor) ||
+      Number(rawOpeningUnitCostMinor) < 0 ||
+      Number(rawOpeningUnitCostMinor) > 2_147_483_647
+    ) {
+      return json(
+        { error: "التكلفة الافتتاحية للصنف غير صالحة" },
+        400,
+      );
+    }
+
+    openingUnitCostMinor =
+      Number(rawOpeningUnitCostMinor);
+  }
+
+  const productBody =
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+      ? { ...(body as Record<string, unknown>) }
+      : body;
+
+  if (
+    productBody &&
+    typeof productBody === "object" &&
+    !Array.isArray(productBody)
+  ) {
+    delete (
+      productBody as Record<string, unknown>
+    ).openingUnitCostMinor;
+  }
+
+  const parsed =
+    createProductRequestSchema.safeParse(
+      productBody,
+    );
 
   if (!parsed.success) {
     return json(
@@ -438,6 +505,57 @@ async function handleCreateProduct(
 
   const storageProductData =
     rewriteMediaUrlsForStorage(productData, env);
+
+  const openingQuantity =
+    getProductQuantity({
+      stock:
+        typeof storageProductData.stock === "number"
+          ? storageProductData.stock
+          : null,
+      colorVariants:
+        storageProductData.colorVariants ?? [],
+    });
+
+  if (
+    actor.isOwner &&
+    openingQuantity !== null &&
+    openingQuantity > 0 &&
+    openingUnitCostMinor === null
+  ) {
+    return json(
+      { error: "أدخل التكلفة الافتتاحية للصنف قبل الحفظ" },
+      409,
+    );
+  }
+
+  if (
+    openingUnitCostMinor !== null &&
+    (openingQuantity === null || openingQuantity <= 0)
+  ) {
+    return json(
+      { error: "لا يمكن تسجيل تكلفة افتتاحية بدون كمية مخزون" },
+      400,
+    );
+  }
+
+  const openingInventoryValueMinor =
+    openingUnitCostMinor !== null &&
+    openingQuantity !== null
+      ? openingUnitCostMinor * openingQuantity
+      : null;
+
+  if (
+    openingInventoryValueMinor !== null &&
+    (
+      !Number.isSafeInteger(openingInventoryValueMinor) ||
+      openingInventoryValueMinor > 2_147_483_647
+    )
+  ) {
+    return json(
+      { error: "قيمة المخزون الافتتاحية أكبر من الحد المسموح" },
+      400,
+    );
+  }
 
   const allBarcodes = [
     productData.barcode?.trim() || null,
@@ -598,6 +716,41 @@ async function handleCreateProduct(
       await tx
         .insert(inventoryMovementsTable)
         .values(openingMovements);
+    }
+
+    if (
+      actor.isOwner &&
+      openingQuantity !== null &&
+      openingQuantity > 0 &&
+      openingUnitCostMinor !== null &&
+      openingInventoryValueMinor !== null
+    ) {
+      await tx
+        .insert(productCostStateTable)
+        .values({
+          productId: created.id,
+          quantityOnHand: openingQuantity,
+          inventoryValueMinor: openingInventoryValueMinor,
+          referenceUnitCostMinor: openingUnitCostMinor,
+          costQuality: "confirmed",
+        });
+
+      await tx
+        .insert(productCostLedgerTable)
+        .values({
+          productId: created.id,
+          eventType: "opening",
+          sourceType: "manual_opening",
+          sourceRef: String(created.id),
+          sourceItemRef: "initial",
+          quantityDelta: openingQuantity,
+          inventoryValueDeltaMinor: openingInventoryValueMinor,
+          quantityAfter: openingQuantity,
+          inventoryValueAfterMinor: openingInventoryValueMinor,
+          costQuality: "confirmed",
+          note: "Opening inventory cost at product creation",
+          createdByUserId: actor.id,
+        });
     }
 
     return created;
@@ -762,7 +915,7 @@ async function handleUpdateProduct(
           const effectiveQuantityBefore =
             getProductQuantity(
               lockedCurrent,
-            ) ?? 0;
+            );
 
           const predictedProduct = {
             ...lockedCurrent,
@@ -782,7 +935,7 @@ async function handleUpdateProduct(
           const effectiveQuantityAfter =
             getProductQuantity(
               predictedProduct,
-            ) ?? 0;
+            );
 
           const costSync =
             await syncManualProductCostQuantity(
@@ -808,6 +961,9 @@ async function handleUpdateProduct(
                   actor.isOwner &&
                   costInput?.costMode ===
                     "same",
+
+                requireExplicitIncreaseCost:
+                  actor.isOwner,
 
                 sourceType:
                   "manual_stock",
@@ -1122,9 +1278,18 @@ async function handleUpdateProduct(
         "opening_cost_required"
         ? "يجب إدخال التكلفة الافتتاحية للصنف أولاً"
         : updateResult.reason ===
-            "accounting_quantity_mismatch"
-          ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
-          : "تعذر مزامنة تكلفة المخزون";
+            "owner_cost_confirmation_required"
+          ? "زادت كمية المخزون. حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت."
+          : updateResult.reason ===
+              "unknown_effective_quantity"
+            ? "تعذر حساب الكمية الفعلية للصنف. يجب ضبط المخزون قبل مزامنة التكلفة."
+            : updateResult.reason ===
+                "cost_input_not_applicable"
+              ? "اختيار تكلفة الكمية الجديدة مسموح فقط عند زيادة المخزون."
+              : updateResult.reason ===
+                  "accounting_quantity_mismatch"
+                ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
+                : "تعذر مزامنة تكلفة المخزون";
 
     return json(
       { error: message },
@@ -1235,7 +1400,7 @@ async function handleStock(
       const effectiveQuantityBefore =
         getProductQuantity(
           current,
-        ) ?? 0;
+        );
 
       const oldStock =
         current.stock ?? 0;
@@ -1260,7 +1425,7 @@ async function handleStock(
         getProductQuantity({
           ...current,
           stock: newStock,
-        }) ?? 0;
+        });
 
       const costSync =
         await syncManualProductCostQuantity(
@@ -1284,6 +1449,9 @@ async function handleStock(
             sameCostConfirmed:
               actor.isOwner &&
               costInput?.costMode === "same",
+
+            requireExplicitIncreaseCost:
+              actor.isOwner,
 
             sourceType:
               "manual_stock",
@@ -1430,9 +1598,18 @@ async function handleStock(
         "opening_cost_required"
         ? "يجب إدخال التكلفة الافتتاحية للصنف أولاً"
         : result.reason ===
-            "accounting_quantity_mismatch"
-          ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
-          : "تعذر مزامنة تكلفة المخزون";
+            "owner_cost_confirmation_required"
+          ? "زادت كمية المخزون. حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت."
+          : result.reason ===
+              "unknown_effective_quantity"
+            ? "تعذر حساب الكمية الفعلية للصنف. يجب ضبط المخزون قبل مزامنة التكلفة."
+            : result.reason ===
+                "cost_input_not_applicable"
+              ? "اختيار تكلفة الكمية الجديدة مسموح فقط عند زيادة المخزون."
+              : result.reason ===
+                  "accounting_quantity_mismatch"
+                ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
+                : "تعذر مزامنة تكلفة المخزون";
 
     return json(
       { error: message },
@@ -1737,7 +1914,7 @@ async function handleVariantStock(
       const effectiveQuantityBefore =
         getProductQuantity(
           current,
-        ) ?? 0;
+        );
 
       const variants =
         (current.colorVariants as
@@ -1816,7 +1993,7 @@ async function handleVariantStock(
           ...current,
           colorVariants:
             updatedVariants,
-        }) ?? 0;
+        });
 
       const costSync =
         await syncManualProductCostQuantity(
@@ -1840,6 +2017,9 @@ async function handleVariantStock(
             sameCostConfirmed:
               actor.isOwner &&
               costInput?.costMode === "same",
+
+            requireExplicitIncreaseCost:
+              actor.isOwner,
 
             sourceType:
               "manual_stock",
@@ -2016,9 +2196,18 @@ async function handleVariantStock(
         "opening_cost_required"
         ? "يجب إدخال التكلفة الافتتاحية للصنف أولاً"
         : result.reason ===
-            "accounting_quantity_mismatch"
-          ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
-          : "تعذر مزامنة تكلفة المخزون";
+            "owner_cost_confirmation_required"
+          ? "زادت كمية المخزون. حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت."
+          : result.reason ===
+              "unknown_effective_quantity"
+            ? "تعذر حساب الكمية الفعلية للصنف. يجب ضبط المخزون قبل مزامنة التكلفة."
+            : result.reason ===
+                "cost_input_not_applicable"
+              ? "اختيار تكلفة الكمية الجديدة مسموح فقط عند زيادة المخزون."
+              : result.reason ===
+                  "accounting_quantity_mismatch"
+                ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
+                : "تعذر مزامنة تكلفة المخزون";
 
     return json(
       { error: message },
