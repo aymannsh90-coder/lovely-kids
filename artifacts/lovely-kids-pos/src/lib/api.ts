@@ -426,6 +426,12 @@ export interface PosTodaySalesResult {
 
   sales: PosSaleResult[];
 
+  saleReturns: Array<
+    PosSaleReturnResult & {
+      originalSalePublicId: string | null;
+    }
+  >;
+
   mobileReturns: PosMobileReturnResult[];
 }
 

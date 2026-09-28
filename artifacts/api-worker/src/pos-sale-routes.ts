@@ -1875,6 +1875,7 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     return json({
       session: null,
       sales: [],
+      saleReturns: [],
       mobileReturns: [],
     });
   }
@@ -1916,11 +1917,8 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
   const completedReturns =
     saleIds.length > 0
       ? await db
-          .select({
-            originalSaleId: posSaleReturnsTable.originalSaleId,
-            refundAmountMinor: posSaleReturnsTable.refundAmountMinor,
-          })
-          .from(posSaleReturnsTable)
+          .select()
+            .from(posSaleReturnsTable)
           .where(
             and(
               inArray(posSaleReturnsTable.originalSaleId, saleIds),
@@ -2000,6 +1998,45 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     mobileItemsByReturn.set(item.returnId, current);
   }
 
+  const normalReturnIds = completedReturns.map(
+    (saleReturn) => saleReturn.id,
+  );
+
+  const normalReturnItems =
+    normalReturnIds.length > 0
+      ? await db
+          .select()
+          .from(posSaleReturnItemsTable)
+          .where(
+            inArray(
+              posSaleReturnItemsTable.returnId,
+              normalReturnIds,
+            ),
+          )
+          .orderBy(
+            asc(posSaleReturnItemsTable.returnId),
+            asc(posSaleReturnItemsTable.lineNumber),
+          )
+      : [];
+
+  const normalItemsByReturn = new Map<
+    number,
+    typeof normalReturnItems
+  >();
+
+  for (const item of normalReturnItems) {
+    const current =
+      normalItemsByReturn.get(item.returnId) ?? [];
+
+    current.push(item);
+    normalItemsByReturn.set(item.returnId, current);
+  }
+
+  const salePublicIdById = new Map(
+    sales.map((sale) => [sale.id, sale.publicId]),
+  );
+
+
   return json({
     session: {
       id: String(session.id),
@@ -2035,6 +2072,65 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
         },
       };
     }),
+
+    saleReturns: completedReturns.map((saleReturn) => ({
+      originalSalePublicId:
+        saleReturn.originalSaleId === null
+          ? null
+          : salePublicIdById.get(
+              saleReturn.originalSaleId,
+            ) ?? null,
+
+      saleReturn: {
+        id: String(saleReturn.id),
+        publicId: saleReturn.publicId,
+        cashSessionId: String(saleReturn.cashSessionId),
+        registerKey: saleReturn.registerKey,
+        businessDate: saleReturn.businessDate,
+        cashierUserId: String(saleReturn.cashierUserId),
+        status: saleReturn.status,
+
+        grossAmountMinor: saleReturn.grossAmountMinor,
+        grossAmount: saleReturn.grossAmountMinor / 100,
+
+        refundAmountMinor: saleReturn.refundAmountMinor,
+        refundAmount: saleReturn.refundAmountMinor / 100,
+
+        reason: saleReturn.reason,
+        notes: saleReturn.notes,
+        createdAt: saleReturn.createdAt.toISOString(),
+      },
+
+      items: (normalItemsByReturn.get(saleReturn.id) ?? []).map(
+        (item) => ({
+          id: String(item.id),
+
+          productId:
+            item.productId === null
+              ? null
+              : String(item.productId),
+
+          barcode: item.barcode,
+          productCode: item.productCode,
+          productNameAr: item.productNameAr,
+          color: item.color,
+          size: item.size,
+          quantity: item.quantity,
+
+          soldUnitPriceMinor: item.soldUnitPriceMinor,
+          soldUnitPrice: item.soldUnitPriceMinor / 100,
+
+          refundAmountMinor: item.refundAmountMinor,
+          refundAmount: item.refundAmountMinor / 100,
+
+          generalStockBefore: item.generalStockBefore,
+          generalStockAfter: item.generalStockAfter,
+
+          variantStockBefore: item.variantStockBefore,
+          variantStockAfter: item.variantStockAfter,
+        }),
+      ),
+    })),
 
     mobileReturns: mobileReturns.map((saleReturn) => ({
       saleReturn: {

@@ -1,10 +1,13 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+
+import { useSearchParams } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
 import {
@@ -73,6 +76,13 @@ function createIdempotencyKey() {
 
 export default function SalesReturnsPage() {
   const { token, session, setSession, clearAuthentication } = usePosRuntime();
+
+  const [searchParams] = useSearchParams();
+
+  const requestedPublicId =
+    searchParams.get("publicId")?.trim() ?? "";
+
+  const autoLoadedPublicIdRef = useRef("");
 
   const invoiceInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,6 +162,31 @@ export default function SalesReturnsPage() {
 
   const barcodeReturnTotalMinor =
     (barcodeReturnUnitMinor ?? 0) * barcodeReturnQuantity;
+
+  useEffect(() => {
+    if (!session || !requestedPublicId) {
+      return;
+    }
+
+    const publicId = requestedPublicId.toUpperCase();
+
+    const loadKey =
+      `${session.registerKey}:${publicId}`;
+
+    if (autoLoadedPublicIdRef.current === loadKey) {
+      return;
+    }
+
+    autoLoadedPublicIdRef.current = loadKey;
+
+    setInvoiceInput(publicId);
+
+    void loadPreviewByPublicId(publicId, "");
+  }, [
+    requestedPublicId,
+    session?.registerKey,
+    token,
+  ]);
 
   if (!session) {
     return null;
