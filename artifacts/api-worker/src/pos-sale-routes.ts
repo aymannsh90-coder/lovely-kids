@@ -1900,10 +1900,6 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
           eq(posSaleReturnsTable.cashSessionId, session.id),
           eq(posSaleReturnsTable.status, "completed"),
           isNull(posSaleReturnsTable.originalSaleId),
-          eq(
-            posSaleReturnsTable.reason,
-            "مردود مبيعات من الهاتف",
-          ),
         ),
       )
       .orderBy(
