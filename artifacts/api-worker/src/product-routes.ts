@@ -615,16 +615,44 @@ async function handleUpdateProduct(
   env: Env,
   id: number,
 ) {
-  const authError = await requireAdmin(
-    request,
-    db,
-    env,
-  );
+  const auth =
+    await requireAdminActor(
+      request,
+      db,
+      env,
+    );
 
-  if (authError) return authError;
+  if (!auth.ok) {
+    return auth.response;
+  }
 
-  const body = await request.json().catch(() => null);
-  const parsed = updateProductRequestSchema.safeParse(body);
+  const actor =
+    auth.user;
+
+  const body =
+    await request.json().catch(() => null);
+
+  const costInput =
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+      ? (body as ManualStockCostInput)
+      : null;
+
+  const costInputError =
+    validateManualStockCostInput(
+      costInput,
+      actor.isOwner,
+    );
+
+  if (costInputError) {
+    return costInputError;
+  }
+
+  const parsed =
+    updateProductRequestSchema.safeParse(
+      body,
+    );
 
   if (!parsed.success) {
     return json(
@@ -699,12 +727,136 @@ async function handleUpdateProduct(
     );
   }
 
-  const product = await db.transaction(async (tx) => {
-    let updated = currentProduct;
+  const updateResult =
+    await db.transaction(
+      async (tx) => {
+        const lockedRows =
+          await tx
+            .select()
+            .from(productsTable)
+            .where(
+              eq(
+                productsTable.id,
+                id,
+              ),
+            )
+            .limit(1)
+            .for("update");
 
-    if (Object.keys(productData).length > 0) {
-      const rows = await tx
-        .update(productsTable)
+        const lockedCurrent =
+          lockedRows[0];
+
+        if (!lockedCurrent) {
+          return {
+            kind: "not_found",
+          } as const;
+        }
+
+        let updated =
+          lockedCurrent;
+
+        if (
+          Object.keys(productData)
+            .length > 0
+        ) {
+          const effectiveQuantityBefore =
+            getProductQuantity(
+              lockedCurrent,
+            ) ?? 0;
+
+          const predictedProduct = {
+            ...lockedCurrent,
+            ...storageProductData,
+
+            ...(storageProductData.barcode !==
+            undefined
+              ? {
+                  barcode:
+                    storageProductData.barcode
+                      ?.trim() ||
+                    null,
+                }
+              : {}),
+          };
+
+          const effectiveQuantityAfter =
+            getProductQuantity(
+              predictedProduct,
+            ) ?? 0;
+
+          const costSync =
+            await syncManualProductCostQuantity(
+              tx,
+              {
+                productId:
+                  lockedCurrent.id,
+
+                quantityBefore:
+                  effectiveQuantityBefore,
+
+                quantityAfter:
+                  effectiveQuantityAfter,
+
+                explicitUnitCostMinor:
+                  actor.isOwner &&
+                  costInput?.costMode ===
+                    "new"
+                    ? costInput.unitCostMinor
+                    : null,
+
+                sameCostConfirmed:
+                  actor.isOwner &&
+                  costInput?.costMode ===
+                    "same",
+
+                sourceType:
+                  "manual_stock",
+
+                sourceRef:
+                  String(
+                    lockedCurrent.id,
+                  ),
+
+                sourceItemRef:
+                  "product-edit",
+
+                note:
+                  "Manual full product stock adjustment",
+
+                createdByUserId:
+                  actor.id,
+              },
+            );
+
+          if (
+            costSync &&
+            !costSync.tracked
+          ) {
+            if (
+              costSync.reason ===
+                "uninitialized" &&
+              !(
+                actor.isOwner &&
+                costInput?.costMode !==
+                  undefined
+              )
+            ) {
+              // Cost tracking is not initialized yet.
+              // Normal product editing may continue untracked.
+            } else {
+              return {
+                kind: "cost_error",
+                reason:
+                  costSync.reason ===
+                    "uninitialized"
+                    ? "opening_cost_required"
+                    : costSync.reason,
+              } as const;
+            }
+          }
+
+          const rows = await tx
+            .update(productsTable)
         .set({
           ...storageProductData,
           ...(storageProductData.barcode !== undefined
@@ -726,7 +878,7 @@ async function handleUpdateProduct(
       > = [];
 
       const oldGeneralStock =
-        currentProduct.stock ?? 0;
+        lockedCurrent.stock ?? 0;
 
       const newGeneralStock =
         updated.stock ?? 0;
@@ -786,7 +938,7 @@ async function handleUpdateProduct(
       }
 
       const oldVariants =
-        (currentProduct.colorVariants as
+        (lockedCurrent.colorVariants as
           | ColorVariant[]
           | null) ?? [];
 
@@ -942,14 +1094,55 @@ async function handleUpdateProduct(
       }
     }
 
-    return updated;
-  });
+        return {
+          kind: "updated",
+          product: updated,
+          previousProduct:
+            lockedCurrent,
+        } as const;
+      },
+    );
+
+  if (
+    updateResult.kind ===
+    "not_found"
+  ) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  if (
+    updateResult.kind ===
+    "cost_error"
+  ) {
+    const message =
+      updateResult.reason ===
+        "opening_cost_required"
+        ? "يجب إدخال التكلفة الافتتاحية للصنف أولاً"
+        : updateResult.reason ===
+            "accounting_quantity_mismatch"
+          ? "كمية التكلفة المحاسبية لا تطابق المخزون الحالي. يجب تصحيح المزامنة قبل تعديل الكمية."
+          : "تعذر مزامنة تكلفة المخزون";
+
+    return json(
+      { error: message },
+      409,
+    );
+  }
+
+  const product =
+    updateResult.product;
+
+  const previousProduct =
+    updateResult.previousProduct;
 
   try {
     await cleanupRemovedProductImages(
       db,
       env,
-      currentProduct,
+      previousProduct,
       product,
     );
   } catch (error) {
