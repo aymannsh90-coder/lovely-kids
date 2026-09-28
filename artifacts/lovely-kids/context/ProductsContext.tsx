@@ -21,8 +21,8 @@ const PUBLIC_PRODUCTS_STALE_MS = 5 * 60 * 1000;
 interface ProductsContextType {
   products: Product[];
   loading: boolean;
-  addProduct: (product: Omit<Product, "id">) => Promise<void>;
-  updateProduct: (product: Product) => Promise<void>;
+  addProduct: (product: Omit<Product, "id">) => Promise<Product>;
+  updateProduct: (product: Product) => Promise<Product>;
   deleteProduct: (id: string) => Promise<void>;
   setProductHidden: (id: string, hidden: boolean) => Promise<Product>;
   restoreProduct: (id: string) => Promise<Product>;
@@ -41,8 +41,8 @@ interface ProductsContextType {
 const ProductsContext = createContext<ProductsContextType>({
   products: [],
   loading: true,
-  addProduct: async () => {},
-  updateProduct: async () => {},
+  addProduct: async () => ({} as Product),
+  updateProduct: async () => ({} as Product),
   deleteProduct: async () => {},
   setProductHidden: async () => ({} as Product),
   restoreProduct: async () => ({} as Product),
@@ -264,6 +264,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     }
     const created: Product = await res.json();
     setProducts((prev) => [created, ...prev]);
+    return created;
   }, [getAdminHeaders]);
 
   const updateProduct = useCallback(async (product: Product) => {
@@ -283,6 +284,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     }
     const updated: Product = await res.json();
     setProducts((prev) => prev.map((p) => (p.id === product.id ? updated : p)));
+    return updated;
   }, [getAdminHeaders]);
 
   const deleteProduct = useCallback(async (id: string) => {

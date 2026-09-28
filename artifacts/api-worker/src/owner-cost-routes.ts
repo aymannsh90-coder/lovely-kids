@@ -12,14 +12,9 @@ import {
 
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
+import { getProductQuantity } from "./product-quantity";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
-
-type ColorVariant = {
-  sizes?: Array<{
-    stock?: number | null;
-  }>;
-};
 
 const json = (data: unknown, status = 200) =>
   Response.json(data, {
@@ -54,82 +49,6 @@ async function requireOwner(
     ok: true as const,
     owner,
   };
-}
-
-/**
- * Cost is ALWAYS model/product-level.
- *
- * Variant sizes are used only to determine the current physical
- * quantity of the product. They never have their own cost.
- *
- * This intentionally mirrors the existing inventory dashboard rule:
- *
- * - general stock + fully tracked size stock:
- *     use MIN(general, variants)
- * - only general:
- *     use general
- * - only fully tracked variants:
- *     use variants
- * - neither:
- *     quantity is unknown
- */
-function getProductQuantity(input: {
-  stock: number | null;
-  colorVariants: unknown;
-}): number | null {
-  const variants = Array.isArray(input.colorVariants)
-    ? (input.colorVariants as ColorVariant[])
-    : [];
-
-  const variantSizes = variants.flatMap(
-    (variant) =>
-      Array.isArray(variant.sizes)
-        ? variant.sizes
-        : [],
-  );
-
-  const allVariantStocksTracked =
-    variantSizes.length > 0 &&
-    variantSizes.every(
-      (size) =>
-        typeof size.stock === "number" &&
-        Number.isFinite(size.stock),
-    );
-
-  const variantStock =
-    allVariantStocksTracked
-      ? variantSizes.reduce(
-          (sum, size) =>
-            sum + Math.max(0, size.stock ?? 0),
-          0,
-        )
-      : null;
-
-  const generalStock =
-    typeof input.stock === "number" &&
-    Number.isFinite(input.stock)
-      ? Math.max(0, input.stock)
-      : null;
-
-  if (
-    generalStock !== null &&
-    variantStock !== null
-  ) {
-    return Math.min(
-      generalStock,
-      variantStock,
-    );
-  }
-
-  if (generalStock !== null) {
-    return generalStock;
-  }
-
-  if (variantStock !== null) {
-    return variantStock;
-  }
-
-  return null;
 }
 
 function parseProductId(

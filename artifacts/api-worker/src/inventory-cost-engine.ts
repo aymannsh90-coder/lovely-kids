@@ -908,6 +908,7 @@ export async function addProductCostAtCurrentAverage(
   input: {
     productId: number;
     quantity: number;
+    addedCostQuality?: CostQuality;
   } & LedgerMetadata,
 ): Promise<CostMutationResult> {
   assertPositiveInteger(
@@ -968,7 +969,8 @@ export async function addProductCostAtCurrentAverage(
     mergeCostQuality(
       state.quantityOnHand,
       state.costQuality,
-      "estimated",
+      input.addedCostQuality ??
+        "estimated",
     );
 
   const referenceUnitCostMinor =
@@ -1049,4 +1051,311 @@ export async function addProductCostAtCurrentAverage(
 
     referenceUnitCostMinor,
   };
+}
+
+/**
+ * Add a new physical stock batch using an explicit unit cost.
+ *
+ * Used when the owner confirms that a newly added quantity has
+ * a different acquisition cost.
+ *
+ * The new reference cost becomes the weighted moving average.
+ */
+export async function addProductCostAtExplicitUnitCost(
+  tx: Tx,
+  input: {
+    productId: number;
+    quantity: number;
+    unitCostMinor: number;
+    costQuality: CostQuality;
+  } & LedgerMetadata,
+): Promise<CostMutationResult> {
+  assertPositiveInteger(
+    input.quantity,
+    "quantity",
+  );
+
+  assertNonNegativeDbInteger(
+    input.unitCostMinor,
+    "unitCostMinor",
+  );
+
+  const state =
+    await lockCostState(
+      tx,
+      input.productId,
+    );
+
+  if (!state) {
+    return {
+      tracked: false,
+      reason: "uninitialized",
+    };
+  }
+
+  const addedCostBigInt =
+    BigInt(input.unitCostMinor) *
+    BigInt(input.quantity);
+
+  const costTotalMinor =
+    toSafeNumber(
+      addedCostBigInt,
+      "costTotalMinor",
+    );
+
+  const quantityAfter =
+    state.quantityOnHand +
+    input.quantity;
+
+  const inventoryValueAfterMinor =
+    state.inventoryValueMinor +
+    costTotalMinor;
+
+  assertNonNegativeDbInteger(
+    quantityAfter,
+    "quantityAfter",
+  );
+
+  assertNonNegativeDbInteger(
+    inventoryValueAfterMinor,
+    "inventoryValueAfterMinor",
+  );
+
+  const costQuality =
+    mergeCostQuality(
+      state.quantityOnHand,
+      state.costQuality,
+      input.costQuality,
+    );
+
+  const referenceUnitCostMinor =
+    deriveUnitCostMinor(
+      inventoryValueAfterMinor,
+      quantityAfter,
+    );
+
+  await tx
+    .update(productCostStateTable)
+    .set({
+      quantityOnHand:
+        quantityAfter,
+
+      inventoryValueMinor:
+        inventoryValueAfterMinor,
+
+      referenceUnitCostMinor,
+
+      costQuality,
+
+      updatedAt:
+        new Date(),
+    })
+    .where(
+      eq(
+        productCostStateTable.productId,
+        input.productId,
+      ),
+    );
+
+  await writeLedger(
+    tx,
+    {
+      productId:
+        input.productId,
+
+      quantityDelta:
+        input.quantity,
+
+      inventoryValueDeltaMinor:
+        costTotalMinor,
+
+      quantityAfter,
+
+      inventoryValueAfterMinor,
+
+      costQuality,
+    },
+    input,
+  );
+
+  return {
+    tracked: true,
+
+    productId:
+      input.productId,
+
+    quantity:
+      input.quantity,
+
+    unitCostMinor:
+      input.unitCostMinor,
+
+    costTotalMinor,
+
+    costQuality,
+
+    quantityBefore:
+      state.quantityOnHand,
+
+    quantityAfter,
+
+    inventoryValueBeforeMinor:
+      state.inventoryValueMinor,
+
+    inventoryValueAfterMinor,
+
+    referenceUnitCostMinor,
+  };
+}
+
+/**
+ * Synchronize cost accounting with one effective manual
+ * physical-quantity change for a product/model.
+ *
+ * quantityBefore / quantityAfter are effective PRODUCT quantities,
+ * not raw general-stock or variant deltas.
+ */
+export async function syncManualProductCostQuantity(
+  tx: Tx,
+  input: {
+    productId: number;
+    quantityBefore: number;
+    quantityAfter: number;
+
+    explicitUnitCostMinor?: number | null;
+
+    sameCostConfirmed?: boolean;
+  } & Omit<LedgerMetadata, "eventType">,
+): Promise<CostMutationResult | null> {
+  assertNonNegativeDbInteger(
+    input.quantityBefore,
+    "quantityBefore",
+  );
+
+  assertNonNegativeDbInteger(
+    input.quantityAfter,
+    "quantityAfter",
+  );
+
+  const delta =
+    input.quantityAfter -
+    input.quantityBefore;
+
+  if (delta === 0) {
+    return null;
+  }
+
+  if (delta > 0) {
+    if (
+      input.explicitUnitCostMinor !== undefined &&
+      input.explicitUnitCostMinor !== null
+    ) {
+      return addProductCostAtExplicitUnitCost(
+        tx,
+        {
+          productId:
+            input.productId,
+
+          quantity:
+            delta,
+
+          unitCostMinor:
+            input.explicitUnitCostMinor,
+
+          costQuality:
+            "confirmed",
+
+          eventType:
+            "adjustment_in",
+
+          sourceType:
+            input.sourceType,
+
+          sourceRef:
+            input.sourceRef,
+
+          sourceItemRef:
+            input.sourceItemRef,
+
+          businessDate:
+            input.businessDate,
+
+          note:
+            input.note,
+
+          createdByUserId:
+            input.createdByUserId,
+        },
+      );
+    }
+
+    return addProductCostAtCurrentAverage(
+      tx,
+      {
+        productId:
+          input.productId,
+
+        quantity:
+          delta,
+
+        addedCostQuality:
+          input.sameCostConfirmed
+            ? "confirmed"
+            : "estimated",
+
+        eventType:
+          "adjustment_in",
+
+        sourceType:
+          input.sourceType,
+
+        sourceRef:
+          input.sourceRef,
+
+        sourceItemRef:
+          input.sourceItemRef,
+
+        businessDate:
+          input.businessDate,
+
+        note:
+          input.note,
+
+        createdByUserId:
+          input.createdByUserId,
+      },
+    );
+  }
+
+  return consumeProductCost(
+    tx,
+    {
+      productId:
+        input.productId,
+
+      quantity:
+        Math.abs(delta),
+
+      eventType:
+        "adjustment_out",
+
+      sourceType:
+        input.sourceType,
+
+      sourceRef:
+        input.sourceRef,
+
+      sourceItemRef:
+        input.sourceItemRef,
+
+      businessDate:
+        input.businessDate,
+
+      note:
+        input.note,
+
+      createdByUserId:
+        input.createdByUserId,
+    },
+  );
 }
