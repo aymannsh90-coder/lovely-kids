@@ -59,7 +59,8 @@ export type UntrackedCostResult = {
     | "uninitialized"
     | "insufficient_accounting_quantity"
     | "insufficient_accounting_value"
-    | "exact_cost_mismatch";
+    | "exact_cost_mismatch"
+    | "accounting_quantity_mismatch";
 };
 
 export type TrackedCostResult = {
@@ -1243,6 +1244,30 @@ export async function syncManualProductCostQuantity(
 
   if (delta === 0) {
     return null;
+  }
+
+  const currentState =
+    await lockCostState(
+      tx,
+      input.productId,
+    );
+
+  if (!currentState) {
+    return {
+      tracked: false,
+      reason: "uninitialized",
+    };
+  }
+
+  if (
+    currentState.quantityOnHand !==
+    input.quantityBefore
+  ) {
+    return {
+      tracked: false,
+      reason:
+        "accounting_quantity_mismatch",
+    };
   }
 
   if (delta > 0) {
