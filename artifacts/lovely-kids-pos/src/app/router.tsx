@@ -20,6 +20,7 @@ import NewSalePage from "../pages/sales/NewSalePage";
 import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
 import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
 import TodaySalesPage from "../pages/sales/TodaySalesPage";
+import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
 
 export default function AppRouter() {
   return (
@@ -233,17 +234,9 @@ export default function AppRouter() {
         <Route
           path="reports"
           element={
-            <ComingSoonPage
-              icon="📊"
-              title="التقارير"
-              description="مركز موحد لجميع تقارير النظام."
-              points={[
-                "تقارير المبيعات والمردودات.",
-                "تقارير المشتريات والموردين.",
-                "تقارير المخزون والأصناف.",
-                "تقارير الصندوق والمصروفات والشيكات.",
-              ]}
-            />
+            <RequireOwner>
+              <GrossProfitReportPage />
+            </RequireOwner>
           }
         />
       </Route>

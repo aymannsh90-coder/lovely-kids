@@ -224,11 +224,11 @@ export const posNavigation: PosNavigationItem[] = [
     key: "reports",
     group: "reports",
     path: "/reports",
-    title: "التقارير",
-    description: "تقارير المبيعات والمشتريات والمخزون والحسابات.",
+    title: "مجمل الربح",
+    description: "المبيعات والتكلفة ومجمل الربح حسب الفترة.",
     icon: "📊",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
 ];
 

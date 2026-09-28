@@ -1206,3 +1206,94 @@ export function reverseDeliveryCompanySettlement(
     token,
   );
 }
+
+
+export interface GrossProfitChannelSummary {
+  documents: number;
+  returnDocuments: number;
+
+  salesMinor: number;
+  returnsMinor: number;
+  netSalesMinor: number;
+
+  cogsKnownMinor: number;
+
+  grossProfitMinor:
+    | number
+    | null;
+
+  grossMarginPercent:
+    | number
+    | null;
+
+  shippingChargedMinor: number;
+  deliveryCompanyCostMinor: number;
+  deliveryImpactMinor: number;
+
+  profitAfterDeliveryMinor:
+    | number
+    | null;
+
+  saleQuantity: number;
+  trackedSaleQuantity: number;
+
+  returnQuantity: number;
+  trackedReturnQuantity: number;
+
+  costCoveragePercent: number;
+  costCoverageComplete: boolean;
+
+  costQuality:
+    | "confirmed"
+    | "mixed"
+    | "incomplete"
+    | "not_applicable";
+}
+
+export interface GrossProfitReport {
+  range: {
+    from: string;
+    to: string;
+  };
+
+  generatedAt: string;
+
+  channels: {
+    total:
+      GrossProfitChannelSummary;
+
+    pos:
+      GrossProfitChannelSummary;
+
+    online:
+      GrossProfitChannelSummary;
+  };
+
+  warnings: string[];
+
+  methodology: {
+    posDateBasis: string;
+    onlineDateBasis: string;
+    profitDefinition: string;
+    deliveryDefinition: string;
+    expensesIncluded: boolean;
+  };
+}
+
+export function getGrossProfitReport(
+  token: string,
+  from: string,
+  to: string,
+) {
+  const params =
+    new URLSearchParams({
+      from,
+      to,
+    });
+
+  return apiRequest<GrossProfitReport>(
+    `/api/owner/reports/gross-profit?${params.toString()}`,
+    {},
+    token,
+  );
+}

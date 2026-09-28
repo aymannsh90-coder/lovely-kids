@@ -93,7 +93,8 @@ export default function DashboardLayout() {
       posNavigation.filter(
         (item) =>
           activeSection.groups.includes(item.group) &&
-          (item.group !== "purchases" || user?.isOwner === true),
+          (item.group !== "purchases" || user?.isOwner === true) &&
+          (item.group !== "reports" || user?.isOwner === true),
       ),
     [activeSection, user?.isOwner],
   );
