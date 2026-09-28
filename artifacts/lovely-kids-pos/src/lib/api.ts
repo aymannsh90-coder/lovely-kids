@@ -723,6 +723,43 @@ export function createPosSaleReturn(
   );
 }
 
+export interface PosSaleReturnVoidResult {
+  alreadyVoided: boolean;
+
+  saleReturn: {
+    id: string;
+    publicId: string;
+    status: string;
+
+    refundAmountMinor: number;
+    refundAmount: number;
+
+    voidedAt: string | null;
+    voidedByUserId: string | null;
+    voidReason: string | null;
+  };
+}
+
+export function voidPosSaleReturn(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<PosSaleReturnVoidResult>(
+    "/api/pos/sales/returns/void",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        publicId: input.publicId.trim().toUpperCase(),
+        reason: input.reason.trim(),
+      }),
+    },
+    token,
+  );
+}
+
 export interface PosSupplier {
   id: string;
   code: string;

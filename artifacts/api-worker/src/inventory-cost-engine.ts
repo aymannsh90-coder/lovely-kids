@@ -57,7 +57,9 @@ export type UntrackedCostResult = {
   tracked: false;
   reason:
     | "uninitialized"
-    | "insufficient_accounting_quantity";
+    | "insufficient_accounting_quantity"
+    | "insufficient_accounting_value"
+    | "exact_cost_mismatch";
 };
 
 export type TrackedCostResult = {
@@ -545,6 +547,197 @@ export async function consumeProductCost(
 
     referenceUnitCostMinor:
       state.referenceUnitCostMinor,
+  };
+}
+
+/**
+ * Remove an exact known historical cost from inventory.
+ *
+ * This is intentionally different from consumeProductCost():
+ * consumeProductCost uses the CURRENT moving average, while this
+ * function reverses a previously stored historical cost snapshot.
+ *
+ * Primary use:
+ * - voiding a POS sale return
+ *
+ * The caller supplies the exact historical costTotalMinor.
+ */
+export async function consumeExactProductCost(
+  tx: Tx,
+  input: {
+    productId: number;
+    quantity: number;
+    costTotalMinor: number;
+  } & LedgerMetadata,
+): Promise<CostMutationResult> {
+  assertPositiveInteger(
+    input.quantity,
+    "quantity",
+  );
+
+  assertNonNegativeDbInteger(
+    input.costTotalMinor,
+    "costTotalMinor",
+  );
+
+  const state =
+    await lockCostState(
+      tx,
+      input.productId,
+    );
+
+  if (!state) {
+    return {
+      tracked: false,
+      reason: "uninitialized",
+    };
+  }
+
+  if (
+    input.quantity >
+    state.quantityOnHand
+  ) {
+    return {
+      tracked: false,
+      reason:
+        "insufficient_accounting_quantity",
+    };
+  }
+
+  if (
+    input.costTotalMinor >
+    state.inventoryValueMinor
+  ) {
+    return {
+      tracked: false,
+      reason:
+        "insufficient_accounting_value",
+    };
+  }
+
+  const quantityAfter =
+    state.quantityOnHand -
+    input.quantity;
+
+  const inventoryValueAfterMinor =
+    state.inventoryValueMinor -
+    input.costTotalMinor;
+
+  assertNonNegativeDbInteger(
+    quantityAfter,
+    "quantityAfter",
+  );
+
+  assertNonNegativeDbInteger(
+    inventoryValueAfterMinor,
+    "inventoryValueAfterMinor",
+  );
+
+  // Zero physical/accounting quantity cannot retain inventory value.
+  // Refuse the mutation rather than silently altering a historical
+  // snapshot or inventing a balancing cost.
+  if (
+    quantityAfter === 0 &&
+    inventoryValueAfterMinor !== 0
+  ) {
+    return {
+      tracked: false,
+      reason:
+        "exact_cost_mismatch",
+    };
+  }
+
+  const referenceUnitCostMinor =
+    quantityAfter > 0
+      ? deriveUnitCostMinor(
+          inventoryValueAfterMinor,
+          quantityAfter,
+        )
+      : state.referenceUnitCostMinor;
+
+  // We cannot reliably "unmerge" confirmed/estimated/mixed quality
+  // after later inventory movements, so preserve the current state's
+  // aggregate quality.
+  const costQuality =
+    state.costQuality;
+
+  await tx
+    .update(
+      productCostStateTable,
+    )
+    .set({
+      quantityOnHand:
+        quantityAfter,
+
+      inventoryValueMinor:
+        inventoryValueAfterMinor,
+
+      referenceUnitCostMinor,
+
+      costQuality,
+
+      updatedAt:
+        new Date(),
+    })
+    .where(
+      eq(
+        productCostStateTable.productId,
+        input.productId,
+      ),
+    );
+
+  await writeLedger(
+    tx,
+    {
+      productId:
+        input.productId,
+
+      quantityDelta:
+        -input.quantity,
+
+      inventoryValueDeltaMinor:
+        -input.costTotalMinor,
+
+      quantityAfter,
+
+      inventoryValueAfterMinor,
+
+      costQuality,
+    },
+    input,
+  );
+
+  return {
+    tracked: true,
+
+    productId:
+      input.productId,
+
+    quantity:
+      input.quantity,
+
+    unitCostMinor:
+      deriveUnitCostMinor(
+        input.costTotalMinor,
+        input.quantity,
+      ),
+
+    costTotalMinor:
+      input.costTotalMinor,
+
+    costQuality,
+
+    quantityBefore:
+      state.quantityOnHand,
+
+    quantityAfter,
+
+    inventoryValueBeforeMinor:
+      state.inventoryValueMinor,
+
+    inventoryValueAfterMinor,
+
+    referenceUnitCostMinor,
   };
 }
 
