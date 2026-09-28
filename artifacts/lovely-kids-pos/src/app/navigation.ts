@@ -85,7 +85,7 @@ export const posNavigation: PosNavigationItem[] = [
     group: "purchases",
     path: "/purchases/new",
     title: "فاتورة مشتريات",
-    description: "استلام الأصناف وزيادة المخزون من الموردين.",
+    description: "تسجيل فواتير الموردين والحسابات دون تعديل المخزون.",
     icon: "🛒",
     requiresOpenSession: false,
     status: "ready",
