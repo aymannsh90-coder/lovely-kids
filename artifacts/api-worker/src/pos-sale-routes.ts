@@ -7,6 +7,7 @@ import {
   posSaleReturnsTable,
   posSalesTable,
   productBarcodesTable,
+  productCostStateTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
@@ -1891,9 +1892,36 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           costBySaleItemId.get(item.id);
 
         // Old/untracked sales may legitimately have no cost snapshot.
-        // In that case the POS void remains operational and no cost
-        // data is invented.
-        if (originalCost) {
+        //
+        // If cost accounting has since been initialized for this product,
+        // do not restore physical stock without restoring accounting stock.
+        // We also refuse to invent a historical sale cost.
+        if (!originalCost) {
+          const costStateRows =
+            await tx
+              .select({
+                productId:
+                  productCostStateTable.productId,
+              })
+              .from(
+                productCostStateTable,
+              )
+              .where(
+                eq(
+                  productCostStateTable.productId,
+                  product.id,
+                ),
+              )
+              .for("update")
+              .limit(1);
+
+          if (costStateRows[0]) {
+            throw new PosSaleError(
+              `لا يمكن إلغاء الفاتورة القديمة للصنف ${item.productNameAr} بعد بدء محاسبة التكلفة لعدم وجود تكلفة تاريخية محفوظة`,
+              409,
+            );
+          }
+        } else {
           const restoredCost =
             await restoreExactProductCost(
               tx,
@@ -1942,8 +1970,9 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
             );
 
           if (!restoredCost.tracked) {
-            throw new Error(
-              `POS_SALE_VOID_COST_STATE_MISSING:${item.id}:${restoredCost.reason}`,
+            throw new PosSaleError(
+              `تعذر إعادة تكلفة الصنف ${item.productNameAr}: ${restoredCost.reason}`,
+              409,
             );
           }
         }
