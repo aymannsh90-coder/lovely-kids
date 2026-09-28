@@ -48,7 +48,7 @@ export default function AddProductScreen() {
     useLocalSearchParams<{ productId?: string; copyFrom?: string }>();
   const { products, addProduct, updateProduct } = useProducts();
   const { settings } = useAppSettings();
-  const { getAuthToken } = useAuth();
+  const { getAuthToken, user } = useAuth();
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const customCategories = settings.customCategories ?? [];
@@ -111,6 +111,20 @@ export default function AddProductScreen() {
       ? editProduct.stock.toString()
       : ""
   );
+  const [openingCostInput, setOpeningCostInput] =
+    useState("");
+
+  const [editStockCostMode, setEditStockCostMode] =
+    useState<"same" | "new" | null>(null);
+
+  const [editNewBatchCostInput, setEditNewBatchCostInput] =
+    useState("");
+
+  const [
+    createdProductPendingOpening,
+    setCreatedProductPendingOpening,
+  ] = useState<Product | null>(null);
+
   const [sizes, setSizes] = useState<string[]>(editProduct?.sizes ?? []);
   const [sizeInput, setSizeInput] = useState("");
   const [colorVariants, setColorVariants] = useState<ColorVariant[]>(editProduct?.colorVariants ?? []);
@@ -1791,6 +1805,88 @@ export default function AddProductScreen() {
     return errs.length === 0;
   };
 
+  const effectiveQuantity = (
+    generalStock: number | null,
+    variants: ColorVariant[],
+  ) => {
+    const variantSizes =
+      variants.flatMap(
+        (variant) =>
+          variant.sizes ?? [],
+      );
+
+    const allVariantStocksTracked =
+      variantSizes.length > 0 &&
+      variantSizes.every(
+        (entry) =>
+          typeof entry.stock ===
+            "number" &&
+          Number.isFinite(
+            entry.stock,
+          ),
+      );
+
+    const variantStock =
+      allVariantStocksTracked
+        ? variantSizes.reduce(
+            (sum, entry) =>
+              sum +
+              Math.max(
+                0,
+                entry.stock ?? 0,
+              ),
+            0,
+          )
+        : null;
+
+    const normalizedGeneral =
+      typeof generalStock ===
+        "number" &&
+      Number.isFinite(
+        generalStock,
+      )
+        ? Math.max(
+            0,
+            generalStock,
+          )
+        : null;
+
+    if (
+      normalizedGeneral !== null &&
+      variantStock !== null
+    ) {
+      return Math.min(
+        normalizedGeneral,
+        variantStock,
+      );
+    }
+
+    return (
+      normalizedGeneral ??
+      variantStock
+    );
+  };
+
+  const openingCostMinor = () => {
+    const shekels =
+      Number(
+        openingCostInput
+          .trim()
+          .replace(",", "."),
+      );
+
+    if (
+      !Number.isFinite(shekels) ||
+      shekels < 0
+    ) {
+      return null;
+    }
+
+    return Math.round(
+      shekels * 100,
+    );
+  };
+
   const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
@@ -1826,11 +1922,181 @@ export default function AddProductScreen() {
         stock: stock.trim() ? Number(stock) : null,
       };
 
-      if (isEdit && editProduct) {
-        await updateProduct({ ...productData, id: editProduct.id });
+      const nextQuantity =
+        effectiveQuantity(
+          productData.stock ?? null,
+          productData.colorVariants ?? [],
+        );
+
+      if (
+        isEdit &&
+        editProduct
+      ) {
+        const previousQuantity =
+          effectiveQuantity(
+            editProduct.stock ?? null,
+            editProduct.colorVariants ?? [],
+          );
+
+        const increased =
+          nextQuantity !== null &&
+          previousQuantity !== null &&
+          nextQuantity >
+            previousQuantity;
+
+        let costInput:
+          | {
+              mode: "same";
+            }
+          | {
+              mode: "new";
+              unitCostMinor: number;
+            }
+          | undefined;
+
+        if (
+          user?.isOwner &&
+          increased
+        ) {
+          if (!editStockCostMode) {
+            throw new Error(
+              "زادت كمية المخزون. حدد هل تكلفة الكمية الجديدة نفس التكلفة الحالية أم تغيرت.",
+            );
+          }
+
+          if (
+            editStockCostMode ===
+            "same"
+          ) {
+            costInput = {
+              mode: "same",
+            };
+          } else {
+            const shekels =
+              Number(
+                editNewBatchCostInput
+                  .trim()
+                  .replace(",", "."),
+              );
+
+            if (
+              !Number.isFinite(
+                shekels,
+              ) ||
+              shekels < 0
+            ) {
+              throw new Error(
+                "أدخل تكلفة صحيحة للكمية الجديدة",
+              );
+            }
+
+            costInput = {
+              mode: "new",
+              unitCostMinor:
+                Math.round(
+                  shekels * 100,
+                ),
+            };
+          }
+        }
+
+        await updateProduct(
+          {
+            ...productData,
+            id:
+              editProduct.id,
+          },
+          costInput,
+        );
       } else {
-        await addProduct(productData);
+        let created =
+          createdProductPendingOpening;
+
+        if (!created) {
+          created =
+            await addProduct(
+              productData,
+            );
+
+          setCreatedProductPendingOpening(
+            created,
+          );
+        }
+
+        if (
+          user?.isOwner &&
+          nextQuantity !== null &&
+          nextQuantity > 0
+        ) {
+          const unitCostMinor =
+            openingCostMinor();
+
+          if (
+            unitCostMinor === null
+          ) {
+            throw new Error(
+              "أدخل التكلفة الافتتاحية للصنف قبل الحفظ",
+            );
+          }
+
+          const token =
+            await getAuthToken();
+
+          if (!token) {
+            throw new Error(
+              "يجب تسجيل الدخول",
+            );
+          }
+
+          const costRes =
+            await fetch(
+              `${API_BASE}/api/owner/costs/opening`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+                body:
+                  JSON.stringify({
+                    productId:
+                      created.id,
+                    unitCostMinor,
+                    costQuality:
+                      "confirmed",
+                  }),
+              },
+            );
+
+          if (!costRes.ok) {
+            let message =
+              "تم إنشاء المنتج لكن تعذر تسجيل تكلفته الافتتاحية. اضغط حفظ مرة أخرى لإعادة محاولة التكلفة دون إنشاء منتج جديد.";
+
+            try {
+              const data =
+                (await costRes.json()) as {
+                  error?: string;
+                };
+
+              if (data.error) {
+                message =
+                  `${data.error}. المنتج محفوظ بالفعل؛ أعد الضغط على حفظ بعد التصحيح.`;
+              }
+            } catch {}
+
+            throw new Error(
+              message,
+            );
+          }
+        }
+
+        setCreatedProductPendingOpening(
+          null,
+        );
       }
+
       router.back();
     } catch (error) {
       setErrors([
@@ -3107,6 +3373,205 @@ export default function AddProductScreen() {
             </Text>
 
           </Pressable>
+        )}
+
+        {user?.isOwner && (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor:
+                colors.primary + "45",
+              backgroundColor:
+                colors.primary + "08",
+              borderRadius: 16,
+              padding: 14,
+              gap: 10,
+            }}
+          >
+            <Text
+              style={{
+                color:
+                  colors.foreground,
+                fontSize: 15,
+                fontWeight: "900",
+                textAlign: "right",
+              }}
+            >
+              تكلفة المخزون — للمالك فقط
+            </Text>
+
+            {!isEdit ? (
+              <>
+                <Text
+                  style={{
+                    color:
+                      colors.mutedForeground,
+                    fontSize: 13,
+                    lineHeight: 20,
+                    textAlign: "right",
+                  }}
+                >
+                  إذا كان المنتج يحتوي كمية حالية، أدخل تكلفة القطعة الافتتاحية. لن تظهر هذه البيانات للمشرف.
+                </Text>
+
+                <TextInput
+                  value={
+                    openingCostInput
+                  }
+                  onChangeText={
+                    setOpeningCostInput
+                  }
+                  placeholder="التكلفة الافتتاحية للقطعة بالشيكل"
+                  placeholderTextColor={
+                    colors.mutedForeground
+                  }
+                  keyboardType="decimal-pad"
+                  style={{
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 10,
+                    padding: 11,
+                    color:
+                      colors.foreground,
+                    backgroundColor:
+                      colors.background,
+                    textAlign: "right",
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <Text
+                  style={{
+                    color:
+                      colors.mutedForeground,
+                    fontSize: 13,
+                    lineHeight: 20,
+                    textAlign: "right",
+                  }}
+                >
+                  إذا زدت كمية المخزون أثناء تعديل المنتج، اختر تكلفة الكمية الجديدة.
+                </Text>
+
+                <View
+                  style={{
+                    flexDirection:
+                      Platform.OS === "web"
+                        ? "row-reverse"
+                        : "row",
+                    gap: 8,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => {
+                      setEditStockCostMode(
+                        "same",
+                      );
+                      setEditNewBatchCostInput(
+                        "",
+                      );
+                    }}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor:
+                        editStockCostMode ===
+                        "same"
+                          ? colors.primary
+                          : colors.border,
+                      borderRadius: 10,
+                      padding: 10,
+                      backgroundColor:
+                        editStockCostMode ===
+                        "same"
+                          ? colors.primary +
+                            "18"
+                          : colors.card,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          colors.foreground,
+                        fontWeight: "800",
+                        textAlign:
+                          "center",
+                      }}
+                    >
+                      نفس التكلفة الحالية
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() =>
+                      setEditStockCostMode(
+                        "new",
+                      )
+                    }
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor:
+                        editStockCostMode ===
+                        "new"
+                          ? colors.primary
+                          : colors.border,
+                      borderRadius: 10,
+                      padding: 10,
+                      backgroundColor:
+                        editStockCostMode ===
+                        "new"
+                          ? colors.primary +
+                            "18"
+                          : colors.card,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          colors.foreground,
+                        fontWeight: "800",
+                        textAlign:
+                          "center",
+                      }}
+                    >
+                      تغيرت التكلفة
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {editStockCostMode ===
+                  "new" && (
+                  <TextInput
+                    value={
+                      editNewBatchCostInput
+                    }
+                    onChangeText={
+                      setEditNewBatchCostInput
+                    }
+                    placeholder="تكلفة القطعة الجديدة بالشيكل"
+                    placeholderTextColor={
+                      colors.mutedForeground
+                    }
+                    keyboardType="decimal-pad"
+                    style={{
+                      borderWidth: 1,
+                      borderColor:
+                        colors.border,
+                      borderRadius: 10,
+                      padding: 11,
+                      color:
+                        colors.foreground,
+                      backgroundColor:
+                        colors.background,
+                      textAlign: "right",
+                    }}
+                  />
+                )}
+              </>
+            )}
+          </View>
         )}
 
         {/* Save Button */}
