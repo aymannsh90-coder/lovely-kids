@@ -15,7 +15,6 @@ import {
 } from "../../lib/api";
 
 import {
-  formatMoney,
 } from "../../lib/format";
 
 function dateInput(
@@ -101,12 +100,27 @@ function errorMessage(
     : "تعذر تحميل التقرير";
 }
 
+function reportNumber(
+  value: number,
+) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatReportMoney(
+  valueMinor: number,
+) {
+  return `${reportNumber(valueMinor / 100)} ₪`;
+}
+
 function percent(
   value: number | null,
 ) {
   return value === null
     ? "—"
-    : `${value.toFixed(2)}%`;
+    : `${reportNumber(value)}%`;
 }
 
 const cardStyle = {
@@ -224,9 +238,7 @@ function ChannelCard({
           }}
         >
           تغطية التكلفة:{" "}
-          {data.costCoveragePercent.toFixed(
-            2,
-          )}
+          {reportNumber(data.costCoveragePercent)}
           %
         </div>
       </div>
@@ -238,21 +250,21 @@ function ChannelCard({
       >
         <Metric
           label="المبيعات"
-          value={formatMoney(
+          value={formatReportMoney(
             data.salesMinor,
           )}
         />
 
         <Metric
           label="المردودات"
-          value={formatMoney(
+          value={formatReportMoney(
             data.returnsMinor,
           )}
         />
 
         <Metric
           label="صافي المبيعات"
-          value={formatMoney(
+          value={formatReportMoney(
             data.netSalesMinor,
           )}
           strong
@@ -264,7 +276,7 @@ function ChannelCard({
               ? "تكلفة البضاعة المباعة"
               : "التكلفة المسجلة فقط"
           }
-          value={formatMoney(
+          value={formatReportMoney(
             data.cogsKnownMinor,
           )}
         />
@@ -275,7 +287,7 @@ function ChannelCard({
             data.grossProfitMinor ===
             null
               ? "غير مكتمل"
-              : formatMoney(
+              : formatReportMoney(
                   data.grossProfitMinor,
                 )
           }
@@ -307,21 +319,21 @@ function ChannelCard({
           <>
             <Metric
               label="التوصيل المحصل من الزبائن"
-              value={formatMoney(
+              value={formatReportMoney(
                 data.shippingChargedMinor,
               )}
             />
 
             <Metric
               label="تكلفة شركة التوصيل"
-              value={formatMoney(
+              value={formatReportMoney(
                 data.deliveryCompanyCostMinor,
               )}
             />
 
             <Metric
               label="أثر التوصيل"
-              value={formatMoney(
+              value={formatReportMoney(
                 data.deliveryImpactMinor,
               )}
             />
@@ -332,7 +344,7 @@ function ChannelCard({
                 data.profitAfterDeliveryMinor ===
                 null
                   ? "غير مكتمل"
-                  : formatMoney(
+                  : formatReportMoney(
                       data.profitAfterDeliveryMinor,
                     )
               }

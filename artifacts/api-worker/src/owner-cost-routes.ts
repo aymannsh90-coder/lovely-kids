@@ -1,6 +1,15 @@
 import {
+  orderItemCostsTable,
+  ordersTable,
+  posSaleItemCostsTable,
+  posSaleItemsTable,
+  posSaleReturnItemCostsTable,
+  posSaleReturnItemsTable,
+  posSaleReturnsTable,
+  posSalesTable,
   productCostLedgerTable,
   productCostStateTable,
+  productHistoricalCostsTable,
   productsTable,
 } from "@workspace/db/schema";
 import {
@@ -345,6 +354,8 @@ async function handleOpeningCost(
                 productsTable.stock,
               colorVariants:
                 productsTable.colorVariants,
+              createdAt:
+                productsTable.createdAt,
             })
             .from(productsTable)
             .where(
@@ -423,6 +434,318 @@ async function handleOpeningCost(
             error:
               "قيمة المخزون أكبر من الحد المسموح",
           };
+        }
+
+
+        // ----------------------------------------------------------
+        // Historical backfill
+        //
+        // Business rule:
+        // Existing products currently come from a single purchase
+        // batch. The owner-confirmed opening unit cost is therefore
+        // also the historical unit cost for legacy transactions that
+        // do not yet have a frozen cost snapshot.
+        //
+        // We NEVER overwrite an existing snapshot.
+        // ----------------------------------------------------------
+
+        const historicalCostTotal = (
+          quantity: number,
+        ): number | null => {
+          const total =
+            quantity * unitCostMinor;
+
+          if (
+            !Number.isSafeInteger(total) ||
+            total < 0 ||
+            total > 2_147_483_647
+          ) {
+            return null;
+          }
+
+          return total;
+        };
+
+        const historicalSaleItems =
+          await tx
+            .select({
+              saleItemId:
+                posSaleItemsTable.id,
+              quantity:
+                posSaleItemsTable.quantity,
+              existingCostSaleItemId:
+                posSaleItemCostsTable.saleItemId,
+            })
+            .from(posSaleItemsTable)
+            .innerJoin(
+              posSalesTable,
+              eq(
+                posSalesTable.id,
+                posSaleItemsTable.saleId,
+              ),
+            )
+            .leftJoin(
+              posSaleItemCostsTable,
+              eq(
+                posSaleItemCostsTable.saleItemId,
+                posSaleItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  posSaleItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  posSalesTable.status,
+                  "completed",
+                ),
+                isNull(
+                  posSaleItemCostsTable.saleItemId,
+                ),
+              ),
+            );
+
+        const historicalReturnItems =
+          await tx
+            .select({
+              returnItemId:
+                posSaleReturnItemsTable.id,
+              originalSaleItemId:
+                posSaleReturnItemsTable.originalSaleItemId,
+              quantity:
+                posSaleReturnItemsTable.quantity,
+              existingCostReturnItemId:
+                posSaleReturnItemCostsTable.returnItemId,
+            })
+            .from(posSaleReturnItemsTable)
+            .innerJoin(
+              posSaleReturnsTable,
+              eq(
+                posSaleReturnsTable.id,
+                posSaleReturnItemsTable.returnId,
+              ),
+            )
+            .leftJoin(
+              posSaleReturnItemCostsTable,
+              eq(
+                posSaleReturnItemCostsTable.returnItemId,
+                posSaleReturnItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  posSaleReturnItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  posSaleReturnsTable.status,
+                  "completed",
+                ),
+                isNull(
+                  posSaleReturnItemCostsTable.returnItemId,
+                ),
+              ),
+            );
+
+        const saleBackfillInvalid =
+          historicalSaleItems.some(
+            (item) =>
+              historicalCostTotal(
+                item.quantity,
+              ) === null,
+          );
+
+        const returnBackfillInvalid =
+          historicalReturnItems.some(
+            (item) =>
+              historicalCostTotal(
+                item.quantity,
+              ) === null,
+          );
+
+        if (
+          saleBackfillInvalid ||
+          returnBackfillInvalid
+        ) {
+          return {
+            ok: false as const,
+            status: 400,
+            error:
+              "تعذر احتساب التكلفة التاريخية لبعض الحركات القديمة",
+          };
+        }
+
+        const saleBackfillRows =
+          historicalSaleItems.map(
+            (item) => ({
+              saleItemId:
+                item.saleItemId,
+              productId,
+              quantity:
+                item.quantity,
+              unitCostMinor,
+              costTotalMinor:
+                historicalCostTotal(
+                  item.quantity,
+                )!,
+              costQuality,
+            }),
+          );
+
+        const returnBackfillRows =
+          historicalReturnItems.map(
+            (item) => ({
+              returnItemId:
+                item.returnItemId,
+              originalSaleItemId:
+                item.originalSaleItemId,
+              productId,
+              quantity:
+                item.quantity,
+              costTotalMinor:
+                historicalCostTotal(
+                  item.quantity,
+                )!,
+              costQuality,
+            }),
+          );
+
+        const historicalOrders =
+          await tx
+            .select({
+              id:
+                ordersTable.id,
+              items:
+                ordersTable.items,
+            })
+            .from(ordersTable)
+            .where(
+              eq(
+                ordersTable.status,
+                "done",
+              ),
+            );
+
+        const onlineBackfillRows: Array<{
+          orderId: number;
+          lineNumber: number;
+          productId: number;
+          color: string | null;
+          size: string | null;
+          quantity: number;
+          unitCostMinor: number;
+          costTotalMinor: number;
+          costQuality:
+            | "confirmed"
+            | "estimated";
+        }> = [];
+
+        for (
+          const order of historicalOrders
+        ) {
+          if (
+            !Array.isArray(order.items)
+          ) {
+            continue;
+          }
+
+          for (
+            let index = 0;
+            index < order.items.length;
+            index += 1
+          ) {
+            const rawItem =
+              order.items[index];
+
+            if (
+              !rawItem ||
+              typeof rawItem !== "object" ||
+              Array.isArray(rawItem)
+            ) {
+              continue;
+            }
+
+            const item =
+              rawItem as Record<
+                string,
+                unknown
+              >;
+
+            const itemProductId =
+              parseProductId(
+                item.id,
+              );
+
+            if (
+              itemProductId !==
+              productId
+            ) {
+              continue;
+            }
+
+            const quantity =
+              typeof item.quantity ===
+              "number"
+                ? item.quantity
+                : Number(
+                    item.quantity,
+                  );
+
+            if (
+              !Number.isSafeInteger(
+                quantity,
+              ) ||
+              quantity <= 0
+            ) {
+              return {
+                ok: false as const,
+                status: 400,
+                error:
+                  "تعذر احتساب تكلفة أحد أصناف الطلبات القديمة",
+              };
+            }
+
+            const costTotalMinor =
+              historicalCostTotal(
+                quantity,
+              );
+
+            if (
+              costTotalMinor === null
+            ) {
+              return {
+                ok: false as const,
+                status: 400,
+                error:
+                  "قيمة التكلفة التاريخية لأحد الطلبات أكبر من الحد المسموح",
+              };
+            }
+
+            onlineBackfillRows.push({
+              orderId:
+                order.id,
+              lineNumber:
+                index + 1,
+              productId,
+              color:
+                typeof item.color ===
+                "string"
+                  ? item.color
+                  : null,
+              size:
+                typeof item.size ===
+                "string"
+                  ? item.size
+                  : null,
+              quantity,
+              unitCostMinor,
+              costTotalMinor,
+              costQuality,
+            });
+          }
         }
 
         const insertedState =
@@ -509,8 +832,87 @@ async function handleOpeningCost(
               ownerId,
           });
 
+
+        const historicalUntil =
+          new Date();
+
+        await tx
+          .insert(
+            productHistoricalCostsTable,
+          )
+          .values({
+            productId,
+            effectiveFrom:
+              product.createdAt,
+            effectiveTo:
+              historicalUntil,
+            unitCostMinor,
+            costQuality,
+            note:
+              "Owner-confirmed opening cost used for legacy transactions",
+            createdByUserId:
+              ownerId,
+          });
+
+        const backfilledSales =
+          saleBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  posSaleItemCostsTable,
+                )
+                .values(
+                  saleBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  saleItemId:
+                    posSaleItemCostsTable.saleItemId,
+                })
+            : [];
+
+        const backfilledReturns =
+          returnBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  posSaleReturnItemCostsTable,
+                )
+                .values(
+                  returnBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  returnItemId:
+                    posSaleReturnItemCostsTable.returnItemId,
+                })
+            : [];
+
+        const backfilledOnline =
+          onlineBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  orderItemCostsTable,
+                )
+                .values(
+                  onlineBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  id:
+                    orderItemCostsTable.id,
+                })
+            : [];
+
         return {
           ok: true as const,
+
+          historicalBackfill: {
+            posSaleItems:
+              backfilledSales.length,
+            posReturnItems:
+              backfilledReturns.length,
+            onlineOrderItems:
+              backfilledOnline.length,
+          },
 
           product: {
             productId:
