@@ -9,6 +9,9 @@ type MetaPurchaseInput = {
   customerName: string;
   customerPhone: string;
   totalPrice: number;
+  fbp?: string;
+  fbc?: string;
+  eventSourceUrl?: string;
   items: Array<{
     id: string | number;
     quantity: number;
@@ -122,6 +125,14 @@ export async function sendMetaPurchaseEvent(
     userData.client_user_agent = userAgent;
   }
 
+  if (input.fbp) {
+    userData.fbp = input.fbp;
+  }
+
+  if (input.fbc) {
+    userData.fbc = input.fbc;
+  }
+
   const eventId = `order-${input.orderId}`;
 
   const payload = {
@@ -132,6 +143,7 @@ export async function sendMetaPurchaseEvent(
         event_id: eventId,
         action_source: "website",
         event_source_url:
+          input.eventSourceUrl ||
           request.headers.get("Origin") ||
           "https://lovelykids.net",
 

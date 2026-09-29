@@ -42,6 +42,67 @@ type Step = "cart" | "checkout" | "payment" | "success";
 
 const STORE_PICKUP_LABEL = "استلام من المحل";
 
+type MetaBrowserAttribution = {
+  metaFbp?: string;
+  metaFbc?: string;
+  metaEventSourceUrl?: string;
+};
+
+function readMetaWebCookie(name: string): string | undefined {
+  if (Platform.OS !== "web") return undefined;
+
+  const root = globalThis as typeof globalThis & {
+    document?: {
+      cookie?: string;
+    };
+  };
+
+  const cookieText = root.document?.cookie;
+  if (!cookieText) return undefined;
+
+  const prefix = `${name}=`;
+  const entry = cookieText
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+
+  if (!entry) return undefined;
+
+  const value = entry.slice(prefix.length);
+
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function getMetaBrowserAttribution(): MetaBrowserAttribution {
+  if (Platform.OS !== "web") return {};
+
+  const root = globalThis as typeof globalThis & {
+    location?: {
+      href?: string;
+    };
+  };
+
+  const metaFbp = readMetaWebCookie("_fbp");
+  const metaFbc = readMetaWebCookie("_fbc");
+
+  const metaEventSourceUrl =
+    typeof root.location?.href === "string"
+      ? root.location.href
+      : undefined;
+
+  return {
+    ...(metaFbp ? { metaFbp } : {}),
+    ...(metaFbc ? { metaFbc } : {}),
+    ...(metaEventSourceUrl
+      ? { metaEventSourceUrl }
+      : {}),
+  };
+}
+
 function getStoreDate(): string {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
@@ -223,6 +284,8 @@ setLoading(true);
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers.Authorization = `Bearer ${token}`;
 
+        const metaAttribution = getMetaBrowserAttribution();
+
       const res = await fetch(`${API_BASE}/api/orders`, {
         method: "POST",
         headers,
@@ -246,6 +309,7 @@ setLoading(true);
           shippingZone: selectedZone.label,
           shippingCost,
           paymentMethod,
+          ...metaAttribution,
         }),
       });
         if (!res.ok) {
