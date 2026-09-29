@@ -16,6 +16,7 @@ export interface Env {
   VAPID_PRIVATE_KEY?: string;
   VAPID_SUBJECT?: string;
   ORDER_TRACKING_SECRET?: string;
+  META_CAPI_ACCESS_TOKEN?: string;
   HYPERDRIVE: {
     connectionString: string;
   };

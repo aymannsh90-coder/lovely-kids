@@ -199,7 +199,10 @@ export default function CartScreen() {
 
     setShowValidationErrors(false);
     setCheckoutValidationMessage(null);
-    setLoading(true);
+
+    // Improve Meta Event Match Quality using customer-provided checkout data.
+    // This does not fire an additional event; it only enriches subsequent events.
+setLoading(true);
 
     let shippingCost = getShippingCost(
       selectedZone,
@@ -298,6 +301,8 @@ export default function CartScreen() {
           value: currentTotal,
           currency: "ILS",
           order_id: String(order.id),
+        }, {
+          eventId: `order-${order.id}`,
         });
       } catch (error) {
         Alert.alert(
