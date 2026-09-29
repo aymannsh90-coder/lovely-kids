@@ -43,6 +43,91 @@ const json = (data: unknown, status = 200) =>
     },
   });
 
+
+type MetaAttribution = {
+  fbp?: string;
+  fbc?: string;
+  eventSourceUrl?: string;
+};
+
+function normalizeMetaBrowserIdentifier(
+  value: unknown,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+
+  const normalized = value.trim();
+
+  if (
+    normalized.length === 0 ||
+    normalized.length > 1024 ||
+    !/^fb\.\d+\.\d+\.[^\s]+$/.test(normalized)
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function normalizeMetaEventSourceUrl(
+  value: unknown,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+
+  const normalized = value.trim();
+
+  if (
+    normalized.length === 0 ||
+    normalized.length > 2048
+  ) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(normalized);
+
+    if (
+      url.protocol !== "https:" &&
+      url.protocol !== "http:"
+    ) {
+      return undefined;
+    }
+
+    const hostname = url.hostname.toLowerCase();
+
+    const allowed =
+      hostname === "lovelykids.net" ||
+      hostname.endsWith(".lovelykids.net") ||
+      hostname === "lovely-kids.pages.dev" ||
+      hostname.endsWith(".lovely-kids.pages.dev");
+
+    if (!allowed) return undefined;
+
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function getMetaAttribution(body: unknown): MetaAttribution {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return {};
+  }
+
+  const raw = body as Record<string, unknown>;
+
+  return {
+    fbp: normalizeMetaBrowserIdentifier(raw.metaFbp),
+    fbc: normalizeMetaBrowserIdentifier(raw.metaFbc),
+    eventSourceUrl: normalizeMetaEventSourceUrl(
+      raw.metaEventSourceUrl,
+    ),
+  };
+}
+
 function createOrderTrackingToken(
   orderId: number,
   customerPhone: string,
@@ -206,6 +291,7 @@ async function handleCreateOrder(
   env: Env,
 ) {
   const body = await request.json().catch(() => null);
+  const metaAttribution = getMetaAttribution(body);
   const parsed = insertOrderSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -257,6 +343,10 @@ async function handleCreateOrder(
             customerName: newOrder.customerName,
             customerPhone: newOrder.customerPhone,
             totalPrice: newOrder.totalPrice,
+            fbp: metaAttribution.fbp,
+            fbc: metaAttribution.fbc,
+            eventSourceUrl:
+              metaAttribution.eventSourceUrl,
             items: parsed.data.items.map((item) => ({
               id: item.id,
               quantity: item.quantity,
