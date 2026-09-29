@@ -36,7 +36,10 @@ import { confirmRemoveFromCart, showStockLimit } from "@/utils/cartPrompts";
 import { API_BASE } from "@/constants/api";
 import GuestOrderNotificationPrompt from "@/components/GuestOrderNotificationPrompt";
 
-import { trackMetaEvent } from "@/utils/metaPixel";
+import {
+  setMetaAdvancedMatching,
+  trackMetaEvent,
+} from "@/utils/metaPixel";
 
 type Step = "cart" | "checkout" | "payment" | "success";
 
@@ -199,6 +202,14 @@ export default function CartScreen() {
 
     setShowValidationErrors(false);
     setCheckoutValidationMessage(null);
+
+    // Improve Meta Event Match Quality using customer-provided checkout data.
+    // This does not fire an additional event; it only enriches subsequent events.
+    setMetaAdvancedMatching({
+      phone: phone.trim(),
+      fullName: name.trim(),
+    });
+
     setLoading(true);
 
     let shippingCost = getShippingCost(
