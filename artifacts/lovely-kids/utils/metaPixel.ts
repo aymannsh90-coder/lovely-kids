@@ -110,5 +110,5 @@ export function trackMetaEvent(
 
   if (typeof root.fbq !== "function") return;
 
-  root.fbq("track", event, params);
+  root.fbq("trackSingle", META_PIXEL_ID, event, params);
 }
