@@ -144,6 +144,16 @@ export default function AdminProductsScreen() {
   const [ownerCostLoading, setOwnerCostLoading] =
     useState(false);
 
+  const [
+    ownerCostByProductId,
+    setOwnerCostByProductId,
+  ] = useState<Record<string, OwnerCostInfo>>({});
+
+  const [
+    ownerCostListLoaded,
+    setOwnerCostListLoaded,
+  ] = useState(false);
+
   const [openingCostInput, setOpeningCostInput] =
     useState("");
 
@@ -157,7 +167,14 @@ export default function AdminProductsScreen() {
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
   const [stockFilter, setStockFilter] = useState<
-    "all" | "out" | "offers" | "pinned" | "hidden" | "trash" | "qr_missing"
+    | "all"
+    | "out"
+    | "offers"
+    | "pinned"
+    | "hidden"
+    | "trash"
+    | "qr_missing"
+    | "cost_missing"
   >("all");
   const [search, setSearch] = useState("");
 
@@ -422,8 +439,93 @@ export default function AdminProductsScreen() {
     );
   };
 
+  const loadOwnerCostProducts =
+    async (): Promise<OwnerCostInfo[]> => {
+      const token =
+        await getAuthToken();
+
+      if (!token) {
+        throw new Error(
+          "يجب تسجيل الدخول",
+        );
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/owner/costs/products`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error(
+          "تعذر تحميل بيانات التكلفة",
+        );
+      }
+
+      const data =
+        (await res.json()) as {
+          products?: OwnerCostInfo[];
+        };
+
+      return data.products ?? [];
+    };
+
+  const storeOwnerCostProducts = (
+    rows: OwnerCostInfo[],
+  ) => {
+    const index:
+      Record<string, OwnerCostInfo> = {};
+
+    for (const item of rows) {
+      index[item.productId] = item;
+    }
+
+    setOwnerCostByProductId(index);
+    setOwnerCostListLoaded(true);
+
+    return index;
+  };
+
+  const refreshOwnerCostIndex =
+    async () => {
+      if (!user?.isOwner) {
+        setOwnerCostByProductId({});
+        setOwnerCostListLoaded(false);
+        return [];
+      }
+
+      const rows =
+        await loadOwnerCostProducts();
+
+      storeOwnerCostProducts(rows);
+
+      return rows;
+    };
+
+  useEffect(() => {
+    if (!user?.isOwner) {
+      setOwnerCostByProductId({});
+      setOwnerCostListLoaded(false);
+      return;
+    }
+
+    setOwnerCostListLoaded(false);
+
+    void refreshOwnerCostIndex().catch(
+      () => {
+        setOwnerCostListLoaded(false);
+      },
+    );
+  }, [user?.isOwner]);
+
   const refreshOwnerCostInfo =
-    async (productId: string) => {
+    async (
+      productId: string,
+    ) => {
       if (!user?.isOwner) {
         setOwnerCostInfo(null);
         return null;
@@ -432,42 +534,14 @@ export default function AdminProductsScreen() {
       setOwnerCostLoading(true);
 
       try {
-        const token =
-          await getAuthToken();
+        const rows =
+          await loadOwnerCostProducts();
 
-        if (!token) {
-          throw new Error(
-            "يجب تسجيل الدخول",
-          );
-        }
-
-        const res = await fetch(
-          `${API_BASE}/api/owner/costs/products`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          },
-        );
-
-        if (!res.ok) {
-          throw new Error(
-            "تعذر تحميل بيانات التكلفة",
-          );
-        }
-
-        const data =
-          (await res.json()) as {
-            products?: OwnerCostInfo[];
-          };
+        const index =
+          storeOwnerCostProducts(rows);
 
         const info =
-          data.products?.find(
-            (item) =>
-              item.productId ===
-              productId,
-          ) ?? null;
+          index[productId] ?? null;
 
         setOwnerCostInfo(info);
 
@@ -980,6 +1054,18 @@ export default function AdminProductsScreen() {
     (product) => !productHasGeneratedQr(product),
   ).length;
 
+  const missingCostCount =
+    user?.isOwner &&
+    ownerCostListLoaded
+      ? products.filter(
+          (product) =>
+            !product.deletedAt &&
+            ownerCostByProductId[
+              product.id
+            ]?.initialized !== true,
+        ).length
+      : 0;
+
   const outOfStockCount = visibleProducts.filter((product) => {
     if (typeof product.stock === "number") {
       return product.stock <= 0;
@@ -1009,6 +1095,19 @@ export default function AdminProductsScreen() {
 
     if (stockFilter === "trash") {
       if (!isDeleted) return false;
+    } else if (
+      stockFilter === "cost_missing"
+    ) {
+      if (
+        !user?.isOwner ||
+        !ownerCostListLoaded ||
+        isDeleted ||
+        ownerCostByProductId[
+          product.id
+        ]?.initialized === true
+      ) {
+        return false;
+      }
     } else {
       if (isDeleted) return false;
       if (stockFilter === "hidden" && !product.isHidden) return false;
@@ -1182,6 +1281,19 @@ export default function AdminProductsScreen() {
             icon: "qr-code-outline" as const,
             activeColor: "#7c3aed",
           },
+          ...(user?.isOwner
+            ? [
+                {
+                  key: "cost_missing" as const,
+                  label:
+                    ownerCostListLoaded
+                      ? `بدون تكلفة (${missingCostCount})`
+                      : "بدون تكلفة (...)",
+                  icon: "cash-outline" as const,
+                  activeColor: "#dc2626",
+                },
+              ]
+            : []),
           {
             key: "hidden" as const,
             label: hiddenCount ? `المخفي (${hiddenCount})` : "المخفي",
@@ -1255,6 +1367,12 @@ export default function AdminProductsScreen() {
             (barcodeItem) =>
               barcodeItem.barcode.trim().startsWith("LKQR-"),
           );
+
+          const itemCostInitialized =
+            ownerCostByProductId[
+              item.id
+            ]?.initialized === true;
+
           return (
             <View style={[
               styles.productRow,
@@ -1317,6 +1435,67 @@ export default function AdminProductsScreen() {
                         QR
                       </Text>
                     </View>
+                  ) : null}
+
+                  {user?.isOwner &&
+                  ownerCostListLoaded ? (
+                    <Pressable
+                      onPress={() =>
+                        openStockModal(
+                          item,
+                        )
+                      }
+                      style={[
+                        styles.tag,
+                        {
+                          backgroundColor:
+                            itemCostInitialized
+                              ? "#dcfce7"
+                              : "#fef2f2",
+                          borderWidth: 1,
+                          borderColor:
+                            itemCostInitialized
+                              ? "#86efac"
+                              : "#fca5a5",
+                          flexDirection:
+                            "row",
+                          alignItems:
+                            "center",
+                          gap: 4,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          itemCostInitialized
+                            ? "checkmark-circle"
+                            : "alert-circle"
+                        }
+                        size={13}
+                        color={
+                          itemCostInitialized
+                            ? "#16a34a"
+                            : "#dc2626"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.tagText,
+                          {
+                            color:
+                              itemCostInitialized
+                                ? "#15803d"
+                                : "#b91c1c",
+                            fontWeight:
+                              "800",
+                          },
+                        ]}
+                      >
+                        {itemCostInitialized
+                          ? "التكلفة مدخلة"
+                          : "بدون تكلفة"}
+                      </Text>
+                    </Pressable>
                   ) : null}
                 </View>
 
