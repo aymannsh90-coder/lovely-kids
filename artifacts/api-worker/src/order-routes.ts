@@ -29,6 +29,7 @@ import {
   OrderFinanceError,
 } from "./order-finance";
 import { rewriteMediaUrlsForPublic } from "./media-url";
+import { sendMetaPurchaseEvent } from "./meta-capi";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -245,6 +246,37 @@ async function handleCreateOrder(
         })),
       },
     );
+
+    try {
+      const metaResult =
+        await sendMetaPurchaseEvent(
+          env,
+          request,
+          {
+            orderId: newOrder.id,
+            customerName: newOrder.customerName,
+            customerPhone: newOrder.customerPhone,
+            totalPrice: newOrder.totalPrice,
+            items: parsed.data.items.map((item) => ({
+              id: item.id,
+              quantity: item.quantity,
+            })),
+          },
+        );
+
+      console.log("META_CAPI_PURCHASE", {
+        orderId: newOrder.id,
+        ...metaResult,
+      });
+    } catch (metaError) {
+      console.error("META_CAPI_PURCHASE_FAILED", {
+        orderId: newOrder.id,
+        error:
+          metaError instanceof Error
+            ? metaError.message
+            : String(metaError),
+      });
+    }
 
     try {
       const notificationResult =
