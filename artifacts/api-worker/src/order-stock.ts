@@ -426,6 +426,7 @@ interface EditOrderItemInput {
   quantity: number;
   color?: string;
   size?: string;
+  price?: number;
 }
 
 interface EditableProductState {
@@ -541,6 +542,32 @@ function parseEditOrderItems(value: unknown): EditOrderItemInput[] {
       throw new OrderEditError("كمية أحد المنتجات غير صالحة");
     }
 
+    const rawPrice =
+      item.price;
+
+    const price =
+      rawPrice === undefined
+        ? undefined
+        : typeof rawPrice === "number"
+          ? rawPrice
+          : typeof rawPrice === "string" &&
+              rawPrice.trim()
+            ? Number(rawPrice)
+            : Number.NaN;
+
+    if (
+      price !== undefined &&
+      (
+        !Number.isSafeInteger(price) ||
+        price < 0 ||
+        price > 2_147_483_647
+      )
+    ) {
+      throw new OrderEditError(
+        "سعر أحد المنتجات غير صالح",
+      );
+    }
+
     const color =
       typeof item.color === "string" && item.color.trim()
         ? item.color.trim()
@@ -555,13 +582,38 @@ function parseEditOrderItems(value: unknown): EditOrderItemInput[] {
     const existing = grouped.get(key);
 
     if (existing) {
+      if (
+        price !== undefined &&
+        existing.price !== undefined &&
+        existing.price !== price
+      ) {
+        throw new OrderEditError(
+          "لا يمكن دمج نفس المنتج بسعرين مختلفين",
+        );
+      }
+
+      if (
+        existing.price === undefined &&
+        price !== undefined
+      ) {
+        existing.price = price;
+      }
+
       existing.quantity += quantity;
 
       if (existing.quantity > 99) {
-        throw new OrderEditError("كمية أحد المنتجات تتجاوز الحد المسموح");
+        throw new OrderEditError(
+          "كمية أحد المنتجات تتجاوز الحد المسموح",
+        );
       }
     } else {
-      grouped.set(key, { id, quantity, color, size });
+      grouped.set(key, {
+        id,
+        quantity,
+        price,
+        color,
+        size,
+      });
     }
   }
 
@@ -792,9 +844,13 @@ export async function editOrderItemsAndAdjustStock(
       throw new OrderEditError("الطلب غير موجود", 404);
     }
 
-    if (order.status !== "new" && order.status !== "confirmed") {
+    if (
+      order.status !== "new" &&
+      order.status !== "confirmed" &&
+      order.status !== "delivering"
+    ) {
       throw new OrderEditError(
-        "يمكن تعديل الطلبات الجديدة أو المؤكدة فقط",
+        "يمكن تعديل الطلبات الجديدة أو المؤكدة أو قيد التوصيل فقط",
         409,
       );
     }
@@ -984,13 +1040,14 @@ export async function editOrderItemsAndAdjustStock(
       const trustedItem = applyEditedOrderItemStock(
         state,
         item,
-        oldUnitPrices.get(
-          editableOrderItemKey(
-            item.id,
-            item.color,
-            item.size,
+        item.price ??
+          oldUnitPrices.get(
+            editableOrderItemKey(
+              item.id,
+              item.color,
+              item.size,
+            ),
           ),
-        ),
       );
       trustedItems.push(trustedItem);
 
@@ -1904,12 +1961,22 @@ export async function editOrderItemsAndAdjustStock(
         fulfillmentMethod:
           shipping.label === STORE_PICKUP_LABEL
             ? "pickup"
-            : null,
-        deliveryCompanyId: null,
+            : order.status === "delivering"
+              ? (order.fulfillmentMethod ??
+                  "delivery")
+              : null,
+        deliveryCompanyId:
+          shipping.label === STORE_PICKUP_LABEL
+            ? null
+            : order.status === "delivering"
+              ? order.deliveryCompanyId
+              : null,
         deliveryCompanyCost:
           shipping.label === STORE_PICKUP_LABEL
             ? 0
-            : null,
+            : order.status === "delivering"
+              ? order.deliveryCompanyCost
+              : null,
         notes,
         items: trustedItems,
         totalPrice,
