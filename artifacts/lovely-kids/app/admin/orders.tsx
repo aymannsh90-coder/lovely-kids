@@ -647,8 +647,14 @@ export default function AdminOrdersScreen() {
   };
 
   const openOrderEditor = async (order: Order) => {
-    if (order.status !== "new" && order.status !== "confirmed") {
-      showError("يمكن تعديل الطلبات الجديدة أو المؤكدة فقط");
+    if (
+      order.status !== "new" &&
+      order.status !== "confirmed" &&
+      order.status !== "delivering"
+    ) {
+      showError(
+        "يمكن تعديل الطلبات الجديدة أو المؤكدة أو قيد التوصيل فقط",
+      );
       return;
     }
 
@@ -693,6 +699,31 @@ export default function AdminOrdersScreen() {
         };
       }),
     );
+  };
+
+  const changeEditItemPrice = (
+    index: number,
+    price: number,
+  ) => {
+    if (
+      !Number.isSafeInteger(price) ||
+      price < 0
+    ) {
+      return;
+    }
+
+    setEditItems((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              price,
+            }
+          : item,
+      ),
+    );
+
+    setEditOrderError(null);
   };
 
   const removeEditItem = (index: number) => {
@@ -846,6 +877,7 @@ export default function AdminOrdersScreen() {
             items: editItems.map((item) => ({
               id: item.id,
               quantity: item.quantity,
+              price: item.price,
               color: item.color,
               size: item.size,
             })),
@@ -2569,7 +2601,7 @@ export default function AdminOrdersScreen() {
                     { color: colors.mutedForeground },
                   ]}
                 >
-                  عدّل بيانات الزبون، التوصيل والمنتجات
+                  عدّل بيانات الزبون، التوصيل، المنتجات والأسعار
                 </Text>
               </View>
 
@@ -2919,15 +2951,116 @@ export default function AdminOrdersScreen() {
                         ) : null}
                       </View>
 
-                      <Text
+                      <View
                         style={{
-                          color: colors.primary,
-                          fontWeight: "800",
-                          textAlign: "right",
+                          flexDirection:
+                            Platform.OS === "web"
+                              ? "row-reverse"
+                              : "row",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 6,
+                          marginTop: 5,
                         }}
                       >
-                        {orderItem.price}₪ × {orderItem.quantity}
-                      </Text>
+                        <Text
+                          style={{
+                            color: colors.mutedForeground,
+                            fontSize: 12,
+                            fontWeight: "700",
+                          }}
+                        >
+                          سعر القطعة
+                        </Text>
+
+                        <TextInput
+                          value={String(orderItem.price)}
+                          onChangeText={(value) => {
+                            const arabicDigits =
+                              "٠١٢٣٤٥٦٧٨٩";
+                            const persianDigits =
+                              "۰۱۲۳۴۵۶۷۸۹";
+
+                            const normalized =
+                              value
+                                .replace(
+                                  /[٠-٩]/g,
+                                  (digit) =>
+                                    String(
+                                      arabicDigits.indexOf(
+                                        digit,
+                                      ),
+                                    ),
+                                )
+                                .replace(
+                                  /[۰-۹]/g,
+                                  (digit) =>
+                                    String(
+                                      persianDigits.indexOf(
+                                        digit,
+                                      ),
+                                    ),
+                                )
+                                .replace(
+                                  /[^0-9]/g,
+                                  "",
+                                );
+
+                            const nextPrice =
+                              normalized
+                                ? Number(normalized)
+                                : 0;
+
+                            if (
+                              Number.isSafeInteger(
+                                nextPrice,
+                              )
+                            ) {
+                              changeEditItemPrice(
+                                index,
+                                nextPrice,
+                              );
+                            }
+                          }}
+                          keyboardType="number-pad"
+                          selectTextOnFocus
+                          style={{
+                            width: 82,
+                            borderWidth: 1,
+                            borderColor:
+                              colors.primary + "70",
+                            borderRadius: 8,
+                            paddingHorizontal: 8,
+                            paddingVertical: 5,
+                            color: colors.foreground,
+                            backgroundColor: colors.card,
+                            textAlign: "center",
+                            fontWeight: "900",
+                          }}
+                        />
+
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontWeight: "900",
+                          }}
+                        >
+                          ₪
+                        </Text>
+
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontWeight: "800",
+                            fontSize: 12,
+                          }}
+                        >
+                          الإجمالي:{" "}
+                          {orderItem.price *
+                            orderItem.quantity}
+                          ₪
+                        </Text>
+                      </View>
                     </View>
 
                     <View style={styles.editOrderQtyBox}>
