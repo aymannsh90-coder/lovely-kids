@@ -376,6 +376,7 @@ interface EditOrderDetailsInput {
   shippingZone?: unknown;
   notes?: unknown;
   invoiceDiscount?: unknown;
+  paymentMethod?: unknown;
 }
 
 function parseRequiredOrderEditText(
@@ -821,6 +822,15 @@ function applyEditedOrderItemStock(
     color: item.color,
     size: item.size,
   };
+}
+
+function parseOrderEditPaymentMethod(
+  value: unknown,
+): "cod" | "bank_transfer" {
+  if (value !== "cod" && value !== "bank_transfer") {
+    throw new OrderEditError("طريقة الدفع غير صالحة");
+  }
+  return value;
 }
 
 function parseOrderInvoiceDiscount(
