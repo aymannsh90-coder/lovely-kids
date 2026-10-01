@@ -5,6 +5,7 @@ export interface PrintableOrderItem {
   name: string;
   price: number;
   quantity: number;
+  invoiceDiscountMinor?: number;
   image?: string;
   size?: string;
   color?: string;
@@ -96,6 +97,15 @@ export async function createOrderPrintHtml(
     .join("");
 
   const createdAt = new Date(order.createdAt).toLocaleString("ar-EG");
+
+  const invoiceDiscount =
+    order.items.reduce(
+      (sum, item) =>
+        sum + (Number.isSafeInteger(item.invoiceDiscountMinor)
+          ? Number(item.invoiceDiscountMinor)
+          : 0),
+      0,
+    ) / 100;
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -239,6 +249,11 @@ export async function createOrderPrintHtml(
     </table>
 
     <div class="totals">
+      ${
+        invoiceDiscount > 0
+          ? `<div class="row"><strong>الخصم العام:</strong> -${invoiceDiscount} ₪</div>`
+          : ""
+      }
       ${
         order.shippingCost != null
           ? `<div class="row"><strong>التوصيل:</strong> ${order.shippingCost} ₪</div>`
