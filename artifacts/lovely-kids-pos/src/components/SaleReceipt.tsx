@@ -49,7 +49,9 @@ export default function SaleReceipt({
 
         <span>الزبون: {result.sale.customerName || "زبون نقدي"}</span>
 
-        <span>طريقة الدفع: نقدي</span>
+        <span>
+          طريقة الدفع: {result.sale.paymentMethod === "card" ? "فيزا" : "نقدي"}
+        </span>
       </div>
 
       <div className="receipt-divider" />

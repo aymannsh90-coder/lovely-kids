@@ -390,7 +390,7 @@ export function createPosSale(
   input: {
     registerKey: string;
     idempotencyKey: string;
-    paymentMethod: "cash";
+    paymentMethod: "cash" | "card";
     discountAmount: string;
     paidAmount: string;
     customerName?: string;
