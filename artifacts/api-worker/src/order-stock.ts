@@ -1520,6 +1520,24 @@ export async function editOrderItemsAndAdjustStock(
             1000,
           );
 
+    const paymentMethod =
+      details.paymentMethod === undefined
+        ? order.paymentMethod
+        : parseOrderEditPaymentMethod(details.paymentMethod);
+
+    const paymentMethodChanged =
+      paymentMethod !== order.paymentMethod;
+
+    const paymentStatus = paymentMethodChanged
+      ? paymentMethod === "bank_transfer"
+        ? "awaiting_transfer"
+        : "pending"
+      : order.paymentStatus;
+
+    const paymentProof = paymentMethodChanged
+      ? null
+      : order.paymentProof;
+
     const existingDiscountMinor =
       oldItems.reduce(
         (sum, item) => {
@@ -2186,6 +2204,9 @@ export async function editOrderItemsAndAdjustStock(
               ? order.deliveryCompanyCost
               : null,
         notes,
+        paymentMethod,
+        paymentStatus,
+        paymentProof,
         items: trustedItems,
         totalPrice,
       })
