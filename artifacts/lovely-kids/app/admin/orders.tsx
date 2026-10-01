@@ -47,6 +47,7 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  invoiceDiscountMinor?: number;
   image?: string;
   size?: string;
   color?: string;
@@ -208,6 +209,17 @@ function paymentMethodLabel(m: string) {
   return m === "bank_transfer" ? "تحويل بنكي" : "عند الاستلام";
 }
 
+function getOrderInvoiceDiscount(items: OrderItem[]): number {
+  return items.reduce(
+    (sum, item) =>
+      sum +
+      (Number.isSafeInteger(item.invoiceDiscountMinor)
+        ? Number(item.invoiceDiscountMinor)
+        : 0),
+    0,
+  ) / 100;
+}
+
 function paymentStatusInfo(s: string) {
   switch (s) {
     case "proof_submitted": return { label: "وصل مُرفق", color: "#FF9800", icon: "image-outline" as const };
@@ -301,6 +313,9 @@ export default function AdminOrdersScreen() {
   const [editCustomerAddress, setEditCustomerAddress] = useState("");
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
+  const [editPaymentMethod, setEditPaymentMethod] =
+    useState<"cod" | "bank_transfer">("cod");
 
   const editScannerKeyboard =
     useRef(createScannerKeyboardBuffer());
@@ -671,6 +686,14 @@ export default function AdminOrdersScreen() {
       order.shippingZone ?? "",
     );
     setEditNotes(order.notes ?? "");
+    setEditInvoiceDiscount(
+      String(getOrderInvoiceDiscount(order.items)),
+    );
+    setEditPaymentMethod(
+      order.paymentMethod === "bank_transfer"
+        ? "bank_transfer"
+        : "cod",
+    );
     setEditSearch("");
     setEditPickedProduct(null);
     setEditPickedColor(null);
@@ -843,6 +866,24 @@ export default function AdminOrdersScreen() {
       return;
     }
 
+    const invoiceDiscount =
+      editInvoiceDiscount.trim() === ""
+        ? 0
+        : Number(editInvoiceDiscount);
+
+    if (
+      !Number.isSafeInteger(invoiceDiscount) ||
+      invoiceDiscount < 0
+    ) {
+      setEditOrderError("الخصم العام يجب أن يكون رقماً صحيحاً");
+      return;
+    }
+
+    if (invoiceDiscount > editProductsTotal) {
+      setEditOrderError("الخصم العام أكبر من إجمالي المنتجات");
+      return;
+    }
+
     setEditSaving(true);
     setEditOrderError(null);
 
@@ -874,6 +915,8 @@ export default function AdminOrdersScreen() {
                 : editCustomerAddress.trim(),
             shippingZone: editShippingZone,
             notes: editNotes.trim(),
+            invoiceDiscount,
+            paymentMethod: editPaymentMethod,
             items: editItems.map((item) => ({
               id: item.id,
               quantity: item.quantity,
@@ -1067,8 +1110,22 @@ export default function AdminOrdersScreen() {
       )
     : 0;
 
+  const editInvoiceDiscountValue = (() => {
+    const value =
+      editInvoiceDiscount.trim() === ""
+        ? 0
+        : Number(editInvoiceDiscount);
+
+    return Number.isSafeInteger(value) && value >= 0
+      ? value
+      : 0;
+  })();
+
   const editPreviewTotal =
-    editProductsTotal + editShippingCost;
+    Math.max(
+      0,
+      editProductsTotal - editInvoiceDiscountValue,
+    ) + editShippingCost;
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
   const whatsappCustomer = (phone: string, orderId: number) => {
@@ -1895,6 +1952,8 @@ export default function AdminOrdersScreen() {
             const hasBankTransfer = item.paymentMethod === "bank_transfer";
             const hasProof = !!item.paymentProof;
             const paymentConfirmed = item.paymentStatus === "confirmed";
+            const invoiceDiscount =
+              getOrderInvoiceDiscount(item.items);
 
             return (
               <Pressable
@@ -1962,6 +2021,16 @@ export default function AdminOrdersScreen() {
                     <Text style={[styles.payMethodBadge, { color: hasBankTransfer ? "#9B59B6" : "#607D8B" }]}>
                       {hasBankTransfer ? "💳" : "💵"} {paymentMethodLabel(item.paymentMethod)}
                     </Text>
+                    {invoiceDiscount > 0 ? (
+                      <Text
+                        style={[
+                          styles.payMethodBadge,
+                          { color: "#DC2626" },
+                        ]}
+                      >
+                        خصم {invoiceDiscount}₪
+                      </Text>
+                    ) : null}
                   </View>
                   <Text style={[styles.totalAmount, { color: colors.primary }]}>{item.totalPrice}₪</Text>
                 </View>
@@ -2817,6 +2886,83 @@ export default function AdminOrdersScreen() {
                 )}
 
                 <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  طريقة الدفع *
+                </Text>
+
+                <View style={styles.editOrderShippingZones}>
+                  {[
+                    { key: "cod" as const, label: "الدفع عند الاستلام" },
+                    { key: "bank_transfer" as const, label: "تحويل بنكي" },
+                  ].map((option) => {
+                    const selected =
+                      editPaymentMethod === option.key;
+
+                    return (
+                      <Pressable
+                        key={option.key}
+                        onPress={() => {
+                          setEditPaymentMethod(option.key);
+                          setEditOrderError(null);
+                        }}
+                        style={[
+                          styles.editOrderShippingZoneBtn,
+                          {
+                            borderColor: selected
+                              ? colors.primary
+                              : colors.border,
+                            backgroundColor: selected
+                              ? colors.primary
+                              : colors.card,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.editOrderShippingZoneText,
+                            {
+                              color: selected
+                                ? "#fff"
+                                : colors.foreground,
+                            },
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  الخصم العام (₪)
+                </Text>
+
+                <TextInput
+                  value={editInvoiceDiscount}
+                  onChangeText={(value) => {
+                    setEditInvoiceDiscount(
+                      value.replace(/[^0-9]/g, ""),
+                    );
+                    setEditOrderError(null);
+                  }}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[
+                    styles.editOrderFieldInput,
+                    {
+                      color: colors.foreground,
+                      borderColor:
+                        editInvoiceDiscountValue > editProductsTotal
+                          ? "#DC2626"
+                          : colors.border,
+                      backgroundColor: colors.card,
+                    },
+                  ]}
+                  textAlign="right"
+                />
+
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
                   ملاحظات الطلب
                 </Text>
                 <TextInput
@@ -3460,6 +3606,49 @@ export default function AdminOrdersScreen() {
                     }}
                   >
                     {editProductsTotal}₪
+                  </Text>
+                </View>
+
+                <View style={styles.editOrderSummaryRow}>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontWeight: "600",
+                    }}
+                  >
+                    الخصم العام
+                  </Text>
+                  <Text
+                    style={{
+                      color: editInvoiceDiscountValue > 0
+                        ? "#DC2626"
+                        : colors.foreground,
+                      fontWeight: "700",
+                    }}
+                  >
+                    -{editInvoiceDiscountValue}₪
+                  </Text>
+                </View>
+
+                <View style={styles.editOrderSummaryRow}>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontWeight: "600",
+                    }}
+                  >
+                    صافي المنتجات
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {Math.max(
+                      0,
+                      editProductsTotal - editInvoiceDiscountValue,
+                    )}₪
                   </Text>
                 </View>
 

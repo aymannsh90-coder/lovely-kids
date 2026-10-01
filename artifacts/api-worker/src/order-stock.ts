@@ -375,6 +375,8 @@ interface EditOrderDetailsInput {
   customerAddress?: unknown;
   shippingZone?: unknown;
   notes?: unknown;
+  invoiceDiscount?: unknown;
+  paymentMethod?: unknown;
 }
 
 function parseRequiredOrderEditText(
@@ -820,6 +822,136 @@ function applyEditedOrderItemStock(
     color: item.color,
     size: item.size,
   };
+}
+
+function parseOrderEditPaymentMethod(
+  value: unknown,
+): "cod" | "bank_transfer" {
+  if (value !== "cod" && value !== "bank_transfer") {
+    throw new OrderEditError("طريقة الدفع غير صالحة");
+  }
+  return value;
+}
+
+function parseOrderInvoiceDiscount(
+  value: unknown,
+): number {
+  const amount = Number(value);
+
+  if (
+    !Number.isSafeInteger(amount) ||
+    amount < 0
+  ) {
+    throw new OrderEditError(
+      "الخصم العام غير صالح",
+    );
+  }
+
+  return amount;
+}
+
+function allocateOrderInvoiceDiscount(
+  items: Array<{ price: number; quantity: number }>,
+  invoiceDiscount: number,
+): number[] {
+  if (invoiceDiscount === 0) {
+    return items.map(() => 0);
+  }
+
+  const productsTotal = items.reduce(
+    (sum, item) =>
+      sum + item.price * item.quantity,
+    0,
+  );
+
+  if (
+    productsTotal <= 0 ||
+    invoiceDiscount > productsTotal
+  ) {
+    throw new OrderEditError(
+      "الخصم العام أكبر من إجمالي المنتجات",
+    );
+  }
+
+  const discountMinor = invoiceDiscount * 100;
+
+  if (!Number.isSafeInteger(discountMinor)) {
+    throw new OrderEditError(
+      "الخصم العام غير صالح",
+    );
+  }
+
+  const denominator = BigInt(productsTotal);
+
+  const rows = items.map((item, index) => {
+    const gross =
+      item.price * item.quantity;
+    const grossMinor = gross * 100;
+
+    const numerator =
+      BigInt(discountMinor) *
+      BigInt(gross);
+
+    return {
+      index,
+      grossMinor,
+      amount: Number(
+        numerator / denominator,
+      ),
+      remainder:
+        numerator % denominator,
+    };
+  });
+
+  let allocated = rows.reduce(
+    (sum, row) => sum + row.amount,
+    0,
+  );
+
+  let remaining =
+    discountMinor - allocated;
+
+  const ranked = [...rows].sort(
+    (a, b) => {
+      if (a.remainder === b.remainder) {
+        return a.index - b.index;
+      }
+
+      return a.remainder > b.remainder
+        ? -1
+        : 1;
+    },
+  );
+
+  for (
+    let i = 0;
+    remaining > 0 && i < ranked.length;
+    i += 1
+  ) {
+    if (
+      ranked[i].amount <
+      ranked[i].grossMinor
+    ) {
+      ranked[i].amount += 1;
+      remaining -= 1;
+    }
+  }
+
+  allocated = rows.reduce(
+    (sum, row) => sum + row.amount,
+    0,
+  );
+
+  if (allocated !== discountMinor) {
+    throw new OrderEditError(
+      "تعذر توزيع الخصم العام",
+      409,
+    );
+  }
+
+  return rows
+    .sort((a, b) => a.index - b.index)
+    .map((row) => row.amount);
 }
 
 export async function editOrderItemsAndAdjustStock(
@@ -1388,13 +1520,107 @@ export async function editOrderItemsAndAdjustStock(
             1000,
           );
 
+    const paymentMethod =
+      details.paymentMethod === undefined
+        ? order.paymentMethod
+        : parseOrderEditPaymentMethod(details.paymentMethod);
+
+    const paymentMethodChanged =
+      paymentMethod !== order.paymentMethod;
+
+    const paymentStatus = paymentMethodChanged
+      ? paymentMethod === "bank_transfer"
+        ? "awaiting_transfer"
+        : "pending"
+      : order.paymentStatus;
+
+    const paymentProof = paymentMethodChanged
+      ? null
+      : order.paymentProof;
+
+    const existingDiscountMinor =
+      oldItems.reduce(
+        (sum, item) => {
+          const raw = (
+            item as StoredOrderItem & {
+              invoiceDiscountMinor?: unknown;
+            }
+          ).invoiceDiscountMinor;
+
+          if (raw === undefined) {
+            return sum;
+          }
+
+          if (
+            !Number.isSafeInteger(raw) ||
+            Number(raw) < 0
+          ) {
+            throw new OrderEditError(
+              "بيانات الخصم القديم غير صالحة",
+              409,
+            );
+          }
+
+          const next =
+            sum + Number(raw);
+
+          if (!Number.isSafeInteger(next)) {
+            throw new OrderEditError(
+              "إجمالي الخصم القديم غير صالح",
+              409,
+            );
+          }
+
+          return next;
+        },
+        0,
+      );
+
+    if (existingDiscountMinor % 100 !== 0) {
+      throw new OrderEditError(
+        "إجمالي الخصم القديم غير صالح",
+        409,
+      );
+    }
+
+    const invoiceDiscount =
+      details.invoiceDiscount === undefined
+        ? existingDiscountMinor / 100
+        : parseOrderInvoiceDiscount(
+            details.invoiceDiscount,
+          );
+
+    if (invoiceDiscount > productsTotal) {
+      throw new OrderEditError(
+        "الخصم العام أكبر من إجمالي المنتجات",
+      );
+    }
+
+    const invoiceDiscountAllocations =
+      allocateOrderInvoiceDiscount(
+        trustedItems,
+        invoiceDiscount,
+      );
+
+    trustedItems.forEach((item, index) => {
+      (
+        item as EditedStoredOrderItem & {
+          invoiceDiscountMinor?: number;
+        }
+      ).invoiceDiscountMinor =
+        invoiceDiscountAllocations[index];
+    });
+
     const shippingCost = resolveShippingCost(
       settingsData,
       shipping,
       productsTotal,
     );
 
-    const totalPrice = productsTotal + shippingCost;
+    const totalPrice =
+      productsTotal -
+      invoiceDiscount +
+      shippingCost;
 
     if (
       !Number.isSafeInteger(totalPrice) ||
@@ -1978,6 +2204,9 @@ export async function editOrderItemsAndAdjustStock(
               ? order.deliveryCompanyCost
               : null,
         notes,
+        paymentMethod,
+        paymentStatus,
+        paymentProof,
         items: trustedItems,
         totalPrice,
       })

@@ -3,6 +3,7 @@ export interface ThermalOrderItem {
   name: string;
   price: number;
   quantity: number;
+  invoiceDiscountMinor?: number;
   size?: string;
   color?: string;
   productCode?: string | null;

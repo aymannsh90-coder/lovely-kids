@@ -9,6 +9,7 @@ export interface ThermalOrderItem {
   name: string;
   price: number;
   quantity: number;
+  invoiceDiscountMinor?: number;
   size?: string;
   color?: string;
   productCode?: string | null;
@@ -207,6 +208,16 @@ export async function printOrderThermalReceipt(
   );
 
   const shippingCost = Number(order.shippingCost || 0);
+
+  const invoiceDiscount =
+    order.items.reduce(
+      (sum, item) =>
+        sum +
+        (Number.isSafeInteger(item.invoiceDiscountMinor)
+          ? Number(item.invoiceDiscountMinor)
+          : 0),
+      0,
+    ) / 100;
 
   const itemRows = order.items
     .map((item, index) => {
@@ -513,6 +524,17 @@ export async function printOrderThermalReceipt(
           <span>مجموع الأصناف</span>
           <strong>${money(productsSubtotal)}</strong>
         </div>
+
+        ${
+          invoiceDiscount > 0
+            ? `
+              <div>
+                <span>الخصم العام</span>
+                <strong>-${money(invoiceDiscount)}</strong>
+              </div>
+            `
+            : ""
+        }
 
         ${
           shippingCost > 0
