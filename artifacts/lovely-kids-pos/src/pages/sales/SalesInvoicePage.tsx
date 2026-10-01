@@ -841,7 +841,10 @@ export default function SalesInvoicePage() {
 
     const commonInput = {
       registerKey: session.registerKey,
-      paymentMethod: "cash" as const,
+      paymentMethod:
+        loadedSale?.sale.paymentMethod === "card"
+          ? ("card" as const)
+          : ("cash" as const),
       discountAmount: invoiceDiscount.trim(),
       paidAmount: paidAmount.trim(),
       customerName: customerName.trim() || undefined,
