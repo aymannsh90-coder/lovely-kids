@@ -785,6 +785,7 @@ async function handleEditOrderItems(
         customerAddress?: unknown;
         shippingZone?: unknown;
         notes?: unknown;
+        invoiceDiscount?: unknown;
       }
     | null;
 
@@ -803,6 +804,7 @@ async function handleEditOrderItems(
         customerAddress: body.customerAddress,
         shippingZone: body.shippingZone,
         notes: body.notes,
+        invoiceDiscount: body.invoiceDiscount,
       },
       user.id,
     );
