@@ -1952,6 +1952,8 @@ export default function AdminOrdersScreen() {
             const hasBankTransfer = item.paymentMethod === "bank_transfer";
             const hasProof = !!item.paymentProof;
             const paymentConfirmed = item.paymentStatus === "confirmed";
+            const invoiceDiscount =
+              getOrderInvoiceDiscount(item.items);
 
             return (
               <Pressable
@@ -2019,6 +2021,16 @@ export default function AdminOrdersScreen() {
                     <Text style={[styles.payMethodBadge, { color: hasBankTransfer ? "#9B59B6" : "#607D8B" }]}>
                       {hasBankTransfer ? "💳" : "💵"} {paymentMethodLabel(item.paymentMethod)}
                     </Text>
+                    {invoiceDiscount > 0 ? (
+                      <Text
+                        style={[
+                          styles.payMethodBadge,
+                          { color: "#DC2626" },
+                        ]}
+                      >
+                        خصم {invoiceDiscount}₪
+                      </Text>
+                    ) : null}
                   </View>
                   <Text style={[styles.totalAmount, { color: colors.primary }]}>{item.totalPrice}₪</Text>
                 </View>
