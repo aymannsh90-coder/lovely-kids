@@ -866,6 +866,24 @@ export default function AdminOrdersScreen() {
       return;
     }
 
+    const invoiceDiscount =
+      editInvoiceDiscount.trim() === ""
+        ? 0
+        : Number(editInvoiceDiscount);
+
+    if (
+      !Number.isSafeInteger(invoiceDiscount) ||
+      invoiceDiscount < 0
+    ) {
+      setEditOrderError("الخصم العام يجب أن يكون رقماً صحيحاً");
+      return;
+    }
+
+    if (invoiceDiscount > editProductsTotal) {
+      setEditOrderError("الخصم العام أكبر من إجمالي المنتجات");
+      return;
+    }
+
     setEditSaving(true);
     setEditOrderError(null);
 
@@ -897,6 +915,8 @@ export default function AdminOrdersScreen() {
                 : editCustomerAddress.trim(),
             shippingZone: editShippingZone,
             notes: editNotes.trim(),
+            invoiceDiscount,
+            paymentMethod: editPaymentMethod,
             items: editItems.map((item) => ({
               id: item.id,
               quantity: item.quantity,
@@ -1090,8 +1110,22 @@ export default function AdminOrdersScreen() {
       )
     : 0;
 
+  const editInvoiceDiscountValue = (() => {
+    const value =
+      editInvoiceDiscount.trim() === ""
+        ? 0
+        : Number(editInvoiceDiscount);
+
+    return Number.isSafeInteger(value) && value >= 0
+      ? value
+      : 0;
+  })();
+
   const editPreviewTotal =
-    editProductsTotal + editShippingCost;
+    Math.max(
+      0,
+      editProductsTotal - editInvoiceDiscountValue,
+    ) + editShippingCost;
 
   const callCustomer = (phone: string) => Linking.openURL(`tel:${phone}`);
   const whatsappCustomer = (phone: string, orderId: number) => {
