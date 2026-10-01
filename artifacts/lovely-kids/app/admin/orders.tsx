@@ -2874,6 +2874,83 @@ export default function AdminOrdersScreen() {
                 )}
 
                 <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  طريقة الدفع *
+                </Text>
+
+                <View style={styles.editOrderShippingZones}>
+                  {[
+                    { key: "cod" as const, label: "الدفع عند الاستلام" },
+                    { key: "bank_transfer" as const, label: "تحويل بنكي" },
+                  ].map((option) => {
+                    const selected =
+                      editPaymentMethod === option.key;
+
+                    return (
+                      <Pressable
+                        key={option.key}
+                        onPress={() => {
+                          setEditPaymentMethod(option.key);
+                          setEditOrderError(null);
+                        }}
+                        style={[
+                          styles.editOrderShippingZoneBtn,
+                          {
+                            borderColor: selected
+                              ? colors.primary
+                              : colors.border,
+                            backgroundColor: selected
+                              ? colors.primary
+                              : colors.card,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.editOrderShippingZoneText,
+                            {
+                              color: selected
+                                ? "#fff"
+                                : colors.foreground,
+                            },
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                  الخصم العام (₪)
+                </Text>
+
+                <TextInput
+                  value={editInvoiceDiscount}
+                  onChangeText={(value) => {
+                    setEditInvoiceDiscount(
+                      value.replace(/[^0-9]/g, ""),
+                    );
+                    setEditOrderError(null);
+                  }}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[
+                    styles.editOrderFieldInput,
+                    {
+                      color: colors.foreground,
+                      borderColor:
+                        editInvoiceDiscountValue > editProductsTotal
+                          ? "#DC2626"
+                          : colors.border,
+                      backgroundColor: colors.card,
+                    },
+                  ]}
+                  textAlign="right"
+                />
+
+                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
                   ملاحظات الطلب
                 </Text>
                 <TextInput
@@ -3517,6 +3594,49 @@ export default function AdminOrdersScreen() {
                     }}
                   >
                     {editProductsTotal}₪
+                  </Text>
+                </View>
+
+                <View style={styles.editOrderSummaryRow}>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontWeight: "600",
+                    }}
+                  >
+                    الخصم العام
+                  </Text>
+                  <Text
+                    style={{
+                      color: editInvoiceDiscountValue > 0
+                        ? "#DC2626"
+                        : colors.foreground,
+                      fontWeight: "700",
+                    }}
+                  >
+                    -{editInvoiceDiscountValue}₪
+                  </Text>
+                </View>
+
+                <View style={styles.editOrderSummaryRow}>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      fontWeight: "600",
+                    }}
+                  >
+                    صافي المنتجات
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {Math.max(
+                      0,
+                      editProductsTotal - editInvoiceDiscountValue,
+                    )}₪
                   </Text>
                 </View>
 
