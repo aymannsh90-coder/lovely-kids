@@ -1669,7 +1669,10 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
       const expectedBefore =
         session.expectedBalanceMinor ?? session.openingBalanceMinor;
 
-      if (expectedBefore < sale.totalMinor) {
+      if (
+        sale.paymentMethod === "cash" &&
+        expectedBefore < sale.totalMinor
+      ) {
         throw new PosSaleError("رصيد الصندوق لا يكفي لإلغاء الفاتورة", 409);
       }
 
@@ -1981,7 +1984,10 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         }
       }
 
-      const expectedAfter = expectedBefore - sale.totalMinor;
+      const expectedAfter =
+        sale.paymentMethod === "cash"
+          ? expectedBefore - sale.totalMinor
+          : expectedBefore;
 
       const updatedSessionRows = await tx
         .update(cashSessionsTable)
