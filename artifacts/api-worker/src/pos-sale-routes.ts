@@ -870,11 +870,11 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       throw new PosSaleError("مفتاح منع تكرار الفاتورة غير صالح");
     }
 
-    if (
-      payload.paymentMethod !== undefined &&
-      payload.paymentMethod !== "cash"
-    ) {
-      throw new PosSaleError("الدفع النقدي فقط متاح حاليًا");
+    const paymentMethod =
+      payload.paymentMethod === undefined ? "cash" : payload.paymentMethod;
+
+    if (paymentMethod !== "cash" && paymentMethod !== "card") {
+      throw new PosSaleError("طريقة الدفع غير صالحة");
     }
 
     const items = parseSaleItems(payload.items);
@@ -1311,7 +1311,10 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       const expectedBefore =
         session.expectedBalanceMinor ?? session.openingBalanceMinor;
 
-      const expectedAfter = expectedBefore + totalMinor;
+      const expectedAfter =
+        paymentMethod === "cash"
+          ? expectedBefore + totalMinor
+          : expectedBefore;
 
       if (!Number.isSafeInteger(expectedAfter) || expectedAfter > MAX_MINOR) {
         throw new PosSaleError("رصيد الصندوق يتجاوز الحد المسموح");
@@ -1327,7 +1330,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           businessDate: session.businessDate,
           cashierUserId: auth.user.id,
           status: "completed",
-          paymentMethod: "cash",
+          paymentMethod,
           subtotalMinor,
           discountMinor,
           itemDiscountMinor,
