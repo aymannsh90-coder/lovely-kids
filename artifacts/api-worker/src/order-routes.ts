@@ -786,6 +786,7 @@ async function handleEditOrderItems(
         shippingZone?: unknown;
         notes?: unknown;
         invoiceDiscount?: unknown;
+        paymentMethod?: unknown;
       }
     | null;
 
@@ -805,6 +806,7 @@ async function handleEditOrderItems(
         shippingZone: body.shippingZone,
         notes: body.notes,
         invoiceDiscount: body.invoiceDiscount,
+        paymentMethod: body.paymentMethod,
       },
       user.id,
     );
