@@ -47,6 +47,7 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  invoiceDiscountMinor?: number;
   image?: string;
   size?: string;
   color?: string;
@@ -208,6 +209,17 @@ function paymentMethodLabel(m: string) {
   return m === "bank_transfer" ? "تحويل بنكي" : "عند الاستلام";
 }
 
+function getOrderInvoiceDiscount(items: OrderItem[]): number {
+  return items.reduce(
+    (sum, item) =>
+      sum +
+      (Number.isSafeInteger(item.invoiceDiscountMinor)
+        ? Number(item.invoiceDiscountMinor)
+        : 0),
+    0,
+  ) / 100;
+}
+
 function paymentStatusInfo(s: string) {
   switch (s) {
     case "proof_submitted": return { label: "وصل مُرفق", color: "#FF9800", icon: "image-outline" as const };
@@ -301,6 +313,9 @@ export default function AdminOrdersScreen() {
   const [editCustomerAddress, setEditCustomerAddress] = useState("");
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
+  const [editPaymentMethod, setEditPaymentMethod] =
+    useState<"cod" | "bank_transfer">("cod");
 
   const editScannerKeyboard =
     useRef(createScannerKeyboardBuffer());
@@ -671,6 +686,14 @@ export default function AdminOrdersScreen() {
       order.shippingZone ?? "",
     );
     setEditNotes(order.notes ?? "");
+    setEditInvoiceDiscount(
+      String(getOrderInvoiceDiscount(order.items)),
+    );
+    setEditPaymentMethod(
+      order.paymentMethod === "bank_transfer"
+        ? "bank_transfer"
+        : "cod",
+    );
     setEditSearch("");
     setEditPickedProduct(null);
     setEditPickedColor(null);
