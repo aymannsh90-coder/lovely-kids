@@ -141,6 +141,36 @@ export const exchangeReturnItemsTable = pgTable(
       `,
     ),
 
+    check(
+      "exchange_return_items_general_stock_valid",
+      sql`
+        (
+          ${table.generalStockBefore} is null
+          or ${table.generalStockBefore} >= 0
+        )
+        and
+        (
+          ${table.generalStockAfter} is null
+          or ${table.generalStockAfter} >= 0
+        )
+      `,
+    ),
+
+    check(
+      "exchange_return_items_variant_stock_valid",
+      sql`
+        (
+          ${table.variantStockBefore} is null
+          or ${table.variantStockBefore} >= 0
+        )
+        and
+        (
+          ${table.variantStockAfter} is null
+          or ${table.variantStockAfter} >= 0
+        )
+      `,
+    ),
+
     uniqueIndex("exchange_return_items_exchange_line_idx").on(
       table.exchangeId,
       table.lineNumber,
