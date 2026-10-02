@@ -28,3 +28,4 @@ export * from "./delivery-company-settlements";
 export * from "./inventory-movements";
 export * from "./inventory-costs";
 export * from "./exchanges";
+export * from "./exchange-return-items";
