@@ -119,14 +119,14 @@ export const exchangeDocumentsTable = pgTable(
 
     check(
       "exchange_documents_settlement_type_valid",
-      sql`${table.settlementType} in ('cash', 'delivery_company', 'customer')`,
+      sql`${table.settlementType} in ('cash', 'card', 'delivery_company', 'customer')`,
     ),
 
     check(
       "exchange_documents_settlement_party_valid",
       sql`
         (
-          ${table.settlementType} = 'cash'
+          ${table.settlementType} in ('cash', 'card')
           and ${table.settlementPartyId} is null
         )
         or
