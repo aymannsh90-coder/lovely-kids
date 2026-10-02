@@ -30,3 +30,4 @@ export * from "./inventory-costs";
 export * from "./exchanges";
 export * from "./exchange-return-items";
 export * from "./exchange-sale-items";
+export * from "./exchange-item-costs";
