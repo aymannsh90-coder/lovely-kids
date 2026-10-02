@@ -184,6 +184,14 @@ export const exchangeDocumentsTable = pgTable(
     ),
 
     check(
+      "exchange_documents_card_direction_valid",
+      sql`
+        ${table.settlementType} <> 'card'
+        or ${table.settlementAmountMinor} > 0
+      `,
+    ),
+
+    check(
       "exchange_documents_void_state_valid",
       sql`
         (
