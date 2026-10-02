@@ -29,3 +29,4 @@ export * from "./inventory-movements";
 export * from "./inventory-costs";
 export * from "./exchanges";
 export * from "./exchange-return-items";
+export * from "./exchange-sale-items";
