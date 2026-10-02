@@ -149,6 +149,10 @@ export const productCostLedgerTable = pgTable(
           'online_order',
           'online_order_cancel',
           'online_order_edit_reverse',
+          'exchange_return',
+          'exchange_sale',
+          'exchange_return_void',
+          'exchange_sale_void',
           'adjustment_in',
           'adjustment_out',
           'correction'

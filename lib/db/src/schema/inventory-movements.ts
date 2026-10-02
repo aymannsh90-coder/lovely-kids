@@ -71,6 +71,10 @@ export const inventoryMovementsTable = pgTable(
         'online_order_cancel',
         'online_order_restore',
         'online_order_edit',
+        'exchange_return',
+        'exchange_sale',
+        'exchange_return_void',
+        'exchange_sale_void',
         'adjustment'
       )`,
     ),
@@ -82,6 +86,7 @@ export const inventoryMovementsTable = pgTable(
         'pos_sale',
         'pos_sale_return',
         'online_order',
+        'exchange',
         'manual'
       )`,
     ),
