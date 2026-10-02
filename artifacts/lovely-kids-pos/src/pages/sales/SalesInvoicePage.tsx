@@ -634,8 +634,19 @@ export default function SalesInvoicePage() {
       return "يجب فتح يوم الصندوق قبل حفظ الفاتورة";
     }
 
-    if (invoiceType !== "cash" || paymentMethod !== "cash") {
-      return "الدفع النقدي فقط متاح حاليًا";
+    if (invoiceType !== "cash") {
+      return "نوع الفاتورة غير مدعوم حاليًا";
+    }
+
+    if (loadedSale === null && paymentMethod !== "cash") {
+      return "الدفع النقدي فقط متاح حاليًا من شاشة الفاتورة";
+    }
+
+    if (
+      loadedSale !== null &&
+      paymentMethod !== loadedSale.sale.paymentMethod
+    ) {
+      return "لا يمكن تغيير طريقة الدفع أثناء تعديل الفاتورة";
     }
 
     if (lines.length === 0) {
