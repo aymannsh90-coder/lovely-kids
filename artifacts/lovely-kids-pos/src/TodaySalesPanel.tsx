@@ -47,6 +47,10 @@ function formatMinor(value: number) {
   }).format(value / 100);
 }
 
+function paymentMethodLabel(value: string) {
+  return value === "card" ? "فيزا" : "نقدي";
+}
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ar-PS", {
     dateStyle: "short",
@@ -192,6 +196,30 @@ export default function TodaySalesPanel({
       activeSales.reduce(
         (total, result) =>
           total + result.sale.discountMinor,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const cashSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card"
+            ? total
+            : total + result.sale.totalMinor,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const cardSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card"
+            ? total + result.sale.totalMinor
+            : total,
         0,
       ),
     [activeSales],
@@ -361,6 +389,16 @@ export default function TodaySalesPanel({
           </div>
 
           <div>
+            <span>مبيعات نقدي</span>
+            <strong>{formatMinor(cashSalesMinor)}</strong>
+          </div>
+
+          <div>
+            <span>مبيعات فيزا</span>
+            <strong>{formatMinor(cardSalesMinor)}</strong>
+          </div>
+
+          <div>
             <span>المردودات</span>
             <strong>{formatMinor(returnedMinor)}</strong>
           </div>
@@ -436,7 +474,15 @@ export default function TodaySalesPanel({
 
                     <td>{formatMinor(row.item.soldUnitPriceMinor)}</td>
 
-                    <td>{row.sale.customerName || "زبون نقدي"}</td>
+                    <td>
+                      {row.sale.customerName ||
+                        (row.sale.paymentMethod === "card"
+                          ? "زبون فيزا"
+                          : "زبون نقدي")}
+                      <small>
+                        الدفع: {paymentMethodLabel(row.sale.paymentMethod)}
+                      </small>
+                    </td>
 
                     <td>{row.sale.notes || "—"}</td>
                   </tr>
@@ -671,7 +717,11 @@ export default function TodaySalesPanel({
 
           <span>الخصومات: {formatMinor(discountMinor)}</span>
 
-          <span>المردودات: {formatMinor(returnedMinor)}</span>
+          <span>نقدي: {formatMinor(cashSalesMinor)}</span>
+
+          <span>فيزا: {formatMinor(cardSalesMinor)}</span>
+
+          <span>المردودات النقدية: {formatMinor(returnedMinor)}</span>
 
           <strong>الصافي: {formatMinor(netTotalMinor)}</strong>
         </div>
@@ -715,7 +765,14 @@ export default function TodaySalesPanel({
 
                 <td>{row.item.soldUnitPrice.toFixed(2)} ₪</td>
 
-                <td>{row.sale.customerName || "زبون نقدي"}</td>
+                <td>
+                  {row.sale.customerName ||
+                    (row.sale.paymentMethod === "card"
+                      ? "زبون فيزا"
+                      : "زبون نقدي")}
+                  {" — "}
+                  {paymentMethodLabel(row.sale.paymentMethod)}
+                </td>
 
                 <td>{row.sale.notes || "—"}</td>
               </tr>

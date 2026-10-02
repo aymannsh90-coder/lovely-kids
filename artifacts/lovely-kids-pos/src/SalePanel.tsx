@@ -237,6 +237,9 @@ export default function SalePanel({
 
   const [paidAmount, setPaidAmount] = useState("0.00");
 
+  const [paymentMethod, setPaymentMethod] =
+    useState<"cash" | "card">("cash");
+
   const [customerName, setCustomerName] = useState("");
 
   const [customerPhone, setCustomerPhone] = useState("");
@@ -667,7 +670,7 @@ export default function SalePanel({
         registerKey: session.registerKey,
 
         idempotencyKey: requestKey,
-        paymentMethod: "cash",
+        paymentMethod,
 
         discountAmount: discountAmount.trim(),
 
@@ -696,6 +699,7 @@ export default function SalePanel({
       setLastSale(result);
       setCart([]);
       setDiscountAmount("0.00");
+      setPaymentMethod("cash");
       setCustomerName("");
       setCustomerPhone("");
       setNotes("");
@@ -1085,6 +1089,28 @@ export default function SalePanel({
               <strong>{formatMinor(totalMinor)}</strong>
             </div>
 
+            <div>
+              <span>طريقة الدفع</span>
+
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  className={paymentMethod === "cash" ? "primary-button" : "secondary-button"}
+                  onClick={() => setPaymentMethod("cash")}
+                >
+                  💵 نقدي
+                </button>
+
+                <button
+                  type="button"
+                  className={paymentMethod === "card" ? "primary-button" : "secondary-button"}
+                  onClick={() => setPaymentMethod("card")}
+                >
+                  💳 فيزا
+                </button>
+              </div>
+            </div>
+
             <label>
               <span>المبلغ المدفوع</span>
 
@@ -1165,7 +1191,9 @@ export default function SalePanel({
 
             <span>الزبون: {lastSale.sale.customerName || "زبون نقدي"}</span>
 
-            <span>طريقة الدفع: نقدي</span>
+            <span>
+              طريقة الدفع: {lastSale.sale.paymentMethod === "card" ? "فيزا" : "نقدي"}
+            </span>
           </div>
 
           <div className="receipt-divider" />

@@ -634,8 +634,19 @@ export default function SalesInvoicePage() {
       return "يجب فتح يوم الصندوق قبل حفظ الفاتورة";
     }
 
-    if (invoiceType !== "cash" || paymentMethod !== "cash") {
-      return "الدفع النقدي فقط متاح حاليًا";
+    if (invoiceType !== "cash") {
+      return "نوع الفاتورة غير مدعوم حاليًا";
+    }
+
+    if (loadedSale === null && paymentMethod !== "cash") {
+      return "الدفع النقدي فقط متاح حاليًا من شاشة الفاتورة";
+    }
+
+    if (
+      loadedSale !== null &&
+      paymentMethod !== loadedSale.sale.paymentMethod
+    ) {
+      return "لا يمكن تغيير طريقة الدفع أثناء تعديل الفاتورة";
     }
 
     if (lines.length === 0) {
@@ -841,7 +852,10 @@ export default function SalesInvoicePage() {
 
     const commonInput = {
       registerKey: session.registerKey,
-      paymentMethod: "cash" as const,
+      paymentMethod:
+        loadedSale?.sale.paymentMethod === "card"
+          ? ("card" as const)
+          : ("cash" as const),
       discountAmount: invoiceDiscount.trim(),
       paidAmount: paidAmount.trim(),
       customerName: customerName.trim() || undefined,

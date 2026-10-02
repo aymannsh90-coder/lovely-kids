@@ -909,11 +909,17 @@ export async function handleUpdatePosSale(
       throw new PosSaleEditError("يجب إدخال سبب تعديل الفاتورة");
     }
 
+    const requestedPaymentMethod =
+      payload.paymentMethod === undefined
+        ? undefined
+        : payload.paymentMethod;
+
     if (
-      payload.paymentMethod !== undefined &&
-      payload.paymentMethod !== "cash"
+      requestedPaymentMethod !== undefined &&
+      requestedPaymentMethod !== "cash" &&
+      requestedPaymentMethod !== "card"
     ) {
-      throw new PosSaleEditError("الدفع النقدي فقط متاح حاليًا");
+      throw new PosSaleEditError("طريقة الدفع غير صالحة");
     }
 
     const items = parseItems(payload.items);
@@ -1551,6 +1557,16 @@ export async function handleUpdatePosSale(
         });
       }
 
+      if (
+        requestedPaymentMethod !== undefined &&
+        requestedPaymentMethod !== sale.paymentMethod
+      ) {
+        throw new PosSaleEditError(
+          "لا يمكن تغيير طريقة الدفع أثناء تعديل الفاتورة",
+          409,
+        );
+      }
+
       const itemsNetMinor = subtotalMinor - itemDiscountMinor;
 
       if (invoiceDiscountMinor > itemsNetMinor) {
@@ -1572,7 +1588,10 @@ export async function handleUpdatePosSale(
 
       const balanceDifference = totalMinor - sale.totalMinor;
 
-      const expectedAfter = expectedBefore + balanceDifference;
+      const expectedAfter =
+        sale.paymentMethod === "cash"
+          ? expectedBefore + balanceDifference
+          : expectedBefore;
 
       if (
         !Number.isSafeInteger(expectedAfter) ||
@@ -1620,7 +1639,7 @@ export async function handleUpdatePosSale(
       const updatedSaleRows = await tx
         .update(posSalesTable)
         .set({
-          paymentMethod: "cash",
+          paymentMethod: sale.paymentMethod,
           subtotalMinor,
           discountMinor,
           itemDiscountMinor,
