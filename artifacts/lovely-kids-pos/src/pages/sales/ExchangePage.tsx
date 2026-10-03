@@ -11,8 +11,12 @@ import {
   ApiError,
   getPosExchangePreview,
   lookupPosProductByBarcode,
+  quotePosExchange,
   searchPosProducts,
+  type PosExchangeCreateInput,
   type PosExchangePreviewResult,
+  type PosExchangeQuoteResult,
+  type PosExchangeSettlementType,
   type PosProductLookup,
 } from "../../lib/api";
 import {
@@ -315,6 +319,34 @@ export default function ExchangePage() {
   const [newCart, setNewCart] =
     useState<ExchangeNewLine[]>([]);
 
+  const [
+    newInvoiceDiscount,
+    setNewInvoiceDiscount,
+  ] = useState("0.00");
+
+  const [
+    settlementType,
+    setSettlementType,
+  ] = useState<PosExchangeSettlementType>(
+    "cash",
+  );
+
+  const [quote, setQuote] =
+    useState<PosExchangeQuoteResult | null>(
+      null,
+    );
+
+  const [
+    quoteSignature,
+    setQuoteSignature,
+  ] = useState("");
+
+  const [quoteBusy, setQuoteBusy] =
+    useState(false);
+
+  const [quoteError, setQuoteError] =
+    useState("");
+
   const selectedItems = useMemo(() => {
     if (!preview) {
       return [];
@@ -393,8 +425,338 @@ export default function ExchangePage() {
       [newCart],
     );
 
+  const quoteInputSignature =
+    useMemo(
+      () =>
+        JSON.stringify({
+          mode,
+
+          registerKey:
+            session?.registerKey ??
+            null,
+
+          originalSalePublicId:
+            preview?.sale.publicId ??
+            null,
+
+          receiptReturns:
+            selectedItems.map(
+              ({ item, quantity }) => ({
+                id: item.id,
+                quantity,
+              }),
+            ),
+
+          noReceiptReturns:
+            noReceiptCart.map(
+              (line) => ({
+                productId:
+                  line.product.productId,
+                barcode:
+                  line.barcode,
+                color:
+                  line.color,
+                size:
+                  line.size,
+                quantity:
+                  line.quantity,
+                returnUnitPrice:
+                  line.returnUnitPrice,
+              }),
+            ),
+
+          newItems:
+            newCart.map(
+              (line) => ({
+                productId:
+                  line.product.productId,
+                barcode:
+                  line.barcode,
+                color:
+                  line.color,
+                size:
+                  line.size,
+                quantity:
+                  line.quantity,
+                soldUnitPrice:
+                  line.soldUnitPrice,
+              }),
+            ),
+
+          newInvoiceDiscount,
+          settlementType,
+        }),
+      [
+        mode,
+        session?.registerKey,
+        preview?.sale.publicId,
+        selectedItems,
+        noReceiptCart,
+        newCart,
+        newInvoiceDiscount,
+        settlementType,
+      ],
+    );
+
   if (!session) {
     return null;
+  }
+
+  const registerKey =
+    session.registerKey;
+
+  const activeQuote =
+    quote &&
+    quoteSignature ===
+      quoteInputSignature
+      ? quote
+      : null;
+
+  function buildQuoteInput():
+    PosExchangeCreateInput {
+    const discountMinor =
+      moneyToMinor(
+        newInvoiceDiscount,
+      );
+
+    if (discountMinor === null) {
+      throw new Error(
+        "خصم الأصناف الجديدة غير صالح",
+      );
+    }
+
+    if (newCart.length < 1) {
+      throw new Error(
+        "أضف صنفًا جديدًا واحدًا على الأقل",
+      );
+    }
+
+    for (const line of newCart) {
+      if (
+        !newLineSelectionComplete(
+          line,
+        )
+      ) {
+        throw new Error(
+          `أكمل اللون والنمرة للصنف ${line.product.nameAr}`,
+        );
+      }
+
+      if (
+        moneyToMinor(
+          line.soldUnitPrice,
+        ) === null
+      ) {
+        throw new Error(
+          `سعر الصنف الجديد ${line.product.nameAr} غير صالح`,
+        );
+      }
+    }
+
+    const newItems =
+      newCart.map(
+        (line) => ({
+          productId:
+            line.product.productId,
+
+          barcode:
+            line.barcode ||
+            line.product.barcode ||
+            null,
+
+          quantity:
+            line.quantity,
+
+          soldUnitPrice:
+            line.soldUnitPrice,
+
+          lineDiscount: 0,
+
+          color:
+            line.color,
+
+          size:
+            line.size,
+        }),
+      );
+
+    const common = {
+      registerKey,
+
+      idempotencyKey:
+        `quote:${createKey()}`,
+
+      settlementType,
+
+      newItems,
+
+      newInvoiceDiscount:
+        newInvoiceDiscount.trim() ||
+        "0",
+    };
+
+    if (
+      mode === "with_receipt"
+    ) {
+      if (!preview) {
+        throw new Error(
+          "امسح الفاتورة الأصلية أولًا",
+        );
+      }
+
+      if (
+        selectedItems.length < 1
+      ) {
+        throw new Error(
+          "اختر صنفًا مرتجعًا واحدًا على الأقل من الفاتورة",
+        );
+      }
+
+      return {
+        ...common,
+
+        sourceType:
+          "pos_sale",
+
+        originalSalePublicId:
+          preview.sale.publicId,
+
+        returnItems:
+          selectedItems.map(
+            ({ item, quantity }) => ({
+              originalSaleItemId:
+                item.id,
+              quantity,
+            }),
+          ),
+      };
+    }
+
+    if (
+      noReceiptCart.length < 1
+    ) {
+      throw new Error(
+        "أضف صنفًا مرتجعًا واحدًا على الأقل",
+      );
+    }
+
+    for (
+      const line of
+      noReceiptCart
+    ) {
+      if (
+        !noReceiptLineSelectionComplete(
+          line,
+        )
+      ) {
+        throw new Error(
+          `أكمل اللون والنمرة للصنف المرتجع ${line.product.nameAr}`,
+        );
+      }
+
+      if (
+        moneyToMinor(
+          line.returnUnitPrice,
+        ) === null
+      ) {
+        throw new Error(
+          `قيمة المرتجع للصنف ${line.product.nameAr} غير صالحة`,
+        );
+      }
+    }
+
+    return {
+      ...common,
+
+      sourceType:
+        "pos_no_receipt",
+
+      returnItems:
+        noReceiptCart.map(
+          (line) => ({
+            productId:
+              line.product.productId,
+
+            barcode:
+              line.barcode ||
+              line.product.barcode ||
+              null,
+
+            quantity:
+              line.quantity,
+
+            returnUnitPrice:
+              line.returnUnitPrice,
+
+            color:
+              line.color,
+
+            size:
+              line.size,
+          }),
+        ),
+    };
+  }
+
+  async function handleQuoteExchange() {
+    let input:
+      PosExchangeCreateInput;
+
+    try {
+      input =
+        buildQuoteInput();
+    } catch (caught) {
+      setQuoteError(
+        errorMessage(caught),
+      );
+
+      return;
+    }
+
+    setQuoteBusy(true);
+    setQuoteError("");
+
+    const requestedSignature =
+      quoteInputSignature;
+
+    try {
+      const result =
+        await quotePosExchange(
+          token,
+          input,
+        );
+
+      if (
+        !result.validationOnly ||
+        !result.quote
+      ) {
+        throw new Error(
+          "تعذر استلام معاينة التبديل من الخادم",
+        );
+      }
+
+      setQuote(
+        result.quote,
+      );
+
+      setQuoteSignature(
+        requestedSignature,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setQuoteError(
+        errorMessage(caught),
+      );
+    } finally {
+      setQuoteBusy(false);
+    }
   }
 
   function resetReceiptExchange() {
@@ -3011,12 +3373,400 @@ export default function ExchangePage() {
             <h3>ملخص التبديل</h3>
 
             <p>
-              قيمة المرتجع، قيمة الأصناف
-              الجديدة، فرق السعر وطريقة
-              التسوية ستظهر هنا.
+              الحساب النهائي يتم من الخادم
+              نفسه قبل تنفيذ فاتورة التبديل،
+              بما يشمل الخصومات التاريخية
+              وفرق السعر ورصيد الصندوق.
             </p>
           </div>
+
+          <button
+            className="primary-button"
+            type="button"
+            onClick={
+              handleQuoteExchange
+            }
+            disabled={quoteBusy}
+          >
+            {quoteBusy
+              ? "جاري الحساب..."
+              : activeQuote
+                ? "تحديث فرق التبديل"
+                : "احسب فرق التبديل"}
+          </button>
         </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "16px",
+            padding: "16px",
+          }}
+        >
+          <label className="sales-return-field">
+            <span>
+              خصم على الأصناف الجديدة
+            </span>
+
+            <input
+              type="text"
+              inputMode="decimal"
+              dir="ltr"
+              value={
+                newInvoiceDiscount
+              }
+              onChange={(event) => {
+                setNewInvoiceDiscount(
+                  event.target.value,
+                );
+
+                setQuoteError("");
+              }}
+              placeholder="0.00"
+            />
+          </label>
+
+          <div className="sales-return-field">
+            <span>
+              طريقة تسوية فرق التبديل
+            </span>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                flexWrap: "wrap",
+                paddingTop: "10px",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  alignItems: "center",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="exchange-settlement"
+                  checked={
+                    settlementType ===
+                    "cash"
+                  }
+                  onChange={() => {
+                    setSettlementType(
+                      "cash",
+                    );
+
+                    setQuoteError("");
+                  }}
+                />
+
+                نقدي Cash
+              </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  alignItems: "center",
+                  opacity:
+                    activeQuote &&
+                    activeQuote
+                      .settlementAmountMinor <=
+                      0
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                <input
+                  type="radio"
+                  name="exchange-settlement"
+                  checked={
+                    settlementType ===
+                    "card"
+                  }
+                  disabled={
+                    Boolean(
+                      activeQuote &&
+                        activeQuote
+                          .settlementAmountMinor <=
+                          0,
+                    )
+                  }
+                  onChange={() => {
+                    setSettlementType(
+                      "card",
+                    );
+
+                    setQuoteError("");
+                  }}
+                />
+
+                بطاقة Card
+              </label>
+            </div>
+
+            <small>
+              البطاقة مسموحة فقط إذا كان
+              هناك مبلغ إضافي على الزبون.
+            </small>
+          </div>
+        </div>
+
+        {quoteError && (
+          <p
+            className="error-message"
+            role="alert"
+            style={{
+              margin:
+                "0 16px 16px",
+            }}
+          >
+            {quoteError}
+          </p>
+        )}
+
+        {quote &&
+          !activeQuote &&
+          !quoteBusy && (
+            <p
+              style={{
+                margin:
+                  "0 16px 16px",
+                padding: "12px",
+                border:
+                  "1px solid rgba(0,0,0,0.12)",
+                borderRadius: "10px",
+              }}
+            >
+              تم تغيير بيانات التبديل بعد
+              آخر حساب. اضغط
+              {" "}
+              <strong>
+                احسب فرق التبديل
+              </strong>
+              {" "}
+              لتحديث الأرقام.
+            </p>
+          )}
+
+        {activeQuote ? (
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: "12px",
+                padding:
+                  "0 16px 16px",
+              }}
+            >
+              <div>
+                <small>
+                  قيمة المرتجع قبل الخصومات
+                </small>
+                <br />
+                <strong>
+                  {formatMoney(
+                    activeQuote
+                      .returnGrossMinor,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <small>
+                  خصومات المرتجع
+                </small>
+                <br />
+                <strong>
+                  {formatMoney(
+                    activeQuote
+                      .returnDiscountMinor,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <small>
+                  صافي قيمة المرتجع
+                </small>
+                <br />
+                <strong>
+                  {formatMoney(
+                    activeQuote
+                      .returnNetMinor,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <small>
+                  قيمة الأصناف الجديدة
+                </small>
+                <br />
+                <strong>
+                  {formatMoney(
+                    activeQuote
+                      .newGrossMinor,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <small>
+                  خصومات الأصناف الجديدة
+                </small>
+                <br />
+                <strong>
+                  {formatMoney(
+                    activeQuote
+                      .newDiscountMinor,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <small>
+                  صافي الأصناف الجديدة
+                </small>
+                <br />
+                <strong>
+                  {formatMoney(
+                    activeQuote
+                      .newNetMinor,
+                  )}
+                </strong>
+              </div>
+            </div>
+
+            <div
+              style={{
+                margin:
+                  "0 16px 16px",
+                padding: "18px",
+                border:
+                  "2px solid rgba(0,0,0,0.15)",
+                borderRadius: "12px",
+                textAlign: "center",
+              }}
+            >
+              <small>
+                فرق التبديل
+              </small>
+
+              <h2
+                style={{
+                  margin:
+                    "8px 0",
+                }}
+              >
+                {activeQuote
+                  .settlementAmountMinor >
+                0
+                  ? `على الزبون ${formatMoney(
+                      activeQuote
+                        .settlementAmountMinor,
+                    )}`
+                  : activeQuote
+                        .settlementAmountMinor <
+                      0
+                    ? `للزبون ${formatMoney(
+                        Math.abs(
+                          activeQuote
+                            .settlementAmountMinor,
+                        ),
+                      )}`
+                    : "لا يوجد فرق"}
+              </h2>
+
+              <strong>
+                طريقة التسوية:
+                {" "}
+                {activeQuote
+                  .settlementType ===
+                "cash"
+                  ? "نقدي Cash"
+                  : "بطاقة Card"}
+              </strong>
+            </div>
+
+            {activeQuote
+              .settlementType ===
+              "cash" && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "12px",
+                  padding:
+                    "0 16px 16px",
+                }}
+              >
+                <div>
+                  <small>
+                    رصيد الصندوق قبل
+                  </small>
+                  <br />
+                  <strong>
+                    {formatMoney(
+                      activeQuote
+                        .expectedCashBeforeMinor,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    رصيد الصندوق المتوقع بعد
+                  </small>
+                  <br />
+                  <strong>
+                    {formatMoney(
+                      activeQuote
+                        .expectedCashAfterMinor,
+                    )}
+                  </strong>
+                </div>
+              </div>
+            )}
+
+            <p
+              style={{
+                margin:
+                  "0 16px 16px",
+              }}
+            >
+              هذه معاينة فقط — لم يتم إنشاء
+              فاتورة تبديل ولم يتغير المخزون
+              أو رصيد الصندوق.
+            </p>
+          </>
+        ) : (
+          !quoteBusy &&
+          !quoteError &&
+          !quote && (
+            <p
+              style={{
+                margin:
+                  "0 16px 16px",
+              }}
+            >
+              بعد اختيار المرتجع والأصناف
+              الجديدة اضغط
+              {" "}
+              <strong>
+                احسب فرق التبديل
+              </strong>
+              .
+            </p>
+          )
+        )}
       </article>
     </section>
   );
