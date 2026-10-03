@@ -2,10 +2,12 @@ import {
   cashSessionsTable,
   exchangeDocumentsTable,
   exchangeReturnItemsTable,
+  inventoryMovementsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
+  productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -17,6 +19,7 @@ import { openDb, type Env } from "./db";
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
 const MAX_MINOR = 2_000_000_000;
+const MAX_STOCK = 2_000_000_000;
 
 export class PosExchangeError extends Error {
   constructor(
@@ -1246,6 +1249,222 @@ export async function handleCreatePosExchange(
               targetInvoiceDiscountMinor;
           }
 
+          const returnStockPlans = [];
+
+          for (const line of calculatedReturnLines) {
+            const originalItem = line.originalItem;
+
+            if (originalItem.productId === null) {
+              throw new PosExchangeError(
+                `المنتج ${originalItem.productNameAr} لم يعد مرتبطًا بسجل المنتج`,
+                409,
+              );
+            }
+
+            const productRows = await tx
+              .select()
+              .from(productsTable)
+              .where(
+                eq(
+                  productsTable.id,
+                  originalItem.productId,
+                ),
+              )
+              .for("update");
+
+            const product = productRows[0];
+
+            if (!product) {
+              throw new PosExchangeError(
+                `المنتج ${originalItem.productNameAr} لم يعد موجودًا`,
+                409,
+              );
+            }
+
+            let generalStockBefore: number | null = null;
+            let generalStockAfter: number | null = null;
+
+            const trackedGeneralStock =
+              originalItem.generalStockBefore !== null ||
+              originalItem.generalStockAfter !== null;
+
+            if (trackedGeneralStock) {
+              if (
+                product.stock === null ||
+                product.stock === undefined
+              ) {
+                throw new PosExchangeError(
+                  `المخزون العام للمنتج ${originalItem.productNameAr} لم يعد قابلًا للتتبع`,
+                  409,
+                );
+              }
+
+              generalStockBefore = product.stock;
+              generalStockAfter =
+                product.stock + line.quantity;
+
+              if (
+                !Number.isSafeInteger(generalStockAfter) ||
+                generalStockAfter > MAX_STOCK
+              ) {
+                throw new PosExchangeError(
+                  `مخزون ${originalItem.productNameAr} يتجاوز الحد المسموح`,
+                  409,
+                );
+              }
+            }
+
+            let variantStockBefore: number | null = null;
+            let variantStockAfter: number | null = null;
+            let nextColorVariants: ColorVariant[] | null = null;
+
+            const trackedVariantStock =
+              originalItem.variantStockBefore !== null ||
+              originalItem.variantStockAfter !== null;
+
+            if (trackedVariantStock) {
+              if (
+                !originalItem.color ||
+                !originalItem.size
+              ) {
+                throw new PosExchangeError(
+                  `بيانات لون أو مقاس ${originalItem.productNameAr} غير مكتملة`,
+                  409,
+                );
+              }
+
+              const colorVariants =
+                (product.colorVariants as ColorVariant[] | null) ?? [];
+
+              const variantIndex =
+                colorVariants.findIndex(
+                  (variant) =>
+                    variant.color === originalItem.color,
+                );
+
+              if (variantIndex < 0) {
+                throw new PosExchangeError(
+                  `لون ${originalItem.productNameAr} لم يعد موجودًا`,
+                  409,
+                );
+              }
+
+              const variant = colorVariants[variantIndex];
+
+              const variantSizes =
+                Array.isArray(variant.sizes)
+                  ? variant.sizes
+                  : [];
+
+              const sizeIndex =
+                variantSizes.findIndex(
+                  (entry) =>
+                    entry.size === originalItem.size,
+                );
+
+              if (sizeIndex < 0) {
+                throw new PosExchangeError(
+                  `مقاس ${originalItem.productNameAr} لم يعد موجودًا`,
+                  409,
+                );
+              }
+
+              const selectedSize =
+                variantSizes[sizeIndex];
+
+              if (
+                selectedSize.stock === null ||
+                selectedSize.stock === undefined
+              ) {
+                throw new PosExchangeError(
+                  `مخزون لون ومقاس ${originalItem.productNameAr} لم يعد قابلًا للتتبع`,
+                  409,
+                );
+              }
+
+              variantStockBefore =
+                selectedSize.stock;
+
+              variantStockAfter =
+                selectedSize.stock + line.quantity;
+
+              if (
+                !Number.isSafeInteger(variantStockAfter) ||
+                variantStockAfter > MAX_STOCK
+              ) {
+                throw new PosExchangeError(
+                  `مخزون لون ومقاس ${originalItem.productNameAr} يتجاوز الحد المسموح`,
+                  409,
+                );
+              }
+
+              const nextSizes =
+                variantSizes.map(
+                  (entry, index) =>
+                    index === sizeIndex
+                      ? {
+                          ...entry,
+                          stock: variantStockAfter,
+                          outOfStock: false,
+                        }
+                      : entry,
+                );
+
+              nextColorVariants =
+                colorVariants.map(
+                  (entry, index) =>
+                    index === variantIndex
+                      ? {
+                          ...entry,
+                          sizes: nextSizes,
+                        }
+                      : entry,
+                );
+            }
+
+            returnStockPlans.push({
+              lineNumber: line.lineNumber,
+              originalSaleItemId: originalItem.id,
+              productId: product.id,
+
+              barcode: originalItem.barcode,
+              productCode: originalItem.productCode,
+              productNameAr: originalItem.productNameAr,
+              productImage: originalItem.productImage,
+
+              color: originalItem.color,
+              size: originalItem.size,
+
+              quantity: line.quantity,
+
+              soldUnitPriceMinor:
+                originalItem.soldUnitPriceMinor,
+
+              grossAmountMinor:
+                line.grossAmountMinor,
+
+              lineDiscountMinor:
+                line.lineDiscountMinor,
+
+              invoiceDiscountMinor:
+                line.invoiceDiscountMinor,
+
+              allocatedDiscountMinor:
+                line.allocatedDiscountMinor,
+
+              returnNetMinor:
+                line.returnNetMinor,
+
+              generalStockBefore,
+              generalStockAfter,
+
+              variantStockBefore,
+              variantStockAfter,
+
+              nextColorVariants,
+            });
+          }
+
           return {
             exchange: {
               id: 0,
@@ -1263,44 +1482,11 @@ export async function handleCreatePosExchange(
                 session.businessDate,
             },
             returnItems:
-              calculatedReturnLines.map(
-                (line) => ({
-                  lineNumber:
-                    line.lineNumber,
-
-                  originalSaleItemId:
-                    line.originalItem.id,
-
-                  productId:
-                    line.originalItem.productId,
-
-                  productNameAr:
-                    line.originalItem.productNameAr,
-
-                  color:
-                    line.originalItem.color,
-
-                  size:
-                    line.originalItem.size,
-
-                  quantity:
-                    line.quantity,
-
-                  grossAmountMinor:
-                    line.grossAmountMinor,
-
-                  lineDiscountMinor:
-                    line.lineDiscountMinor,
-
-                  invoiceDiscountMinor:
-                    line.invoiceDiscountMinor,
-
-                  allocatedDiscountMinor:
-                    line.allocatedDiscountMinor,
-
-                  returnNetMinor:
-                    line.returnNetMinor,
-                }),
+              returnStockPlans.map(
+                ({
+                  nextColorVariants: _nextColorVariants,
+                  ...line
+                }) => line,
               ),
             alreadyCreated: false,
           };
