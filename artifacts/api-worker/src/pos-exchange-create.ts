@@ -1249,40 +1249,116 @@ export async function handleCreatePosExchange(
               targetInvoiceDiscountMinor;
           }
 
-          const returnStockPlans = [];
-
           for (const line of calculatedReturnLines) {
-            const originalItem = line.originalItem;
-
-            if (originalItem.productId === null) {
+            if (line.originalItem.productId === null) {
               throw new PosExchangeError(
-                `المنتج ${originalItem.productNameAr} لم يعد مرتبطًا بسجل المنتج`,
+                `المنتج ${line.originalItem.productNameAr} لم يعد مرتبطًا بسجل المنتج`,
                 409,
               );
             }
+          }
 
-            const productRows = await tx
+          const returnProductIds = Array.from(
+            new Set(
+              calculatedReturnLines.map(
+                (line) =>
+                  line.originalItem.productId as number,
+              ),
+            ),
+          ).sort((a, b) => a - b);
+
+          const lockedReturnProducts =
+            await tx
               .select()
               .from(productsTable)
               .where(
-                eq(
+                inArray(
                   productsTable.id,
-                  originalItem.productId,
+                  returnProductIds,
                 ),
+              )
+              .orderBy(
+                asc(productsTable.id),
               )
               .for("update");
 
-            const product = productRows[0];
+          if (
+            lockedReturnProducts.length !==
+            returnProductIds.length
+          ) {
+            throw new PosExchangeError(
+              "أحد المنتجات المرتجعة لم يعد موجودًا",
+              409,
+            );
+          }
 
-            if (!product) {
+          const productStockStates =
+            new Map<
+              number,
+              {
+                product:
+                  typeof productsTable.$inferSelect;
+                generalStock:
+                  number | null;
+                colorVariants:
+                  ColorVariant[];
+              }
+            >();
+
+          for (
+            const product of
+            lockedReturnProducts
+          ) {
+            productStockStates.set(
+              product.id,
+              {
+                product,
+
+                generalStock:
+                  product.stock ?? null,
+
+                colorVariants:
+                  (
+                    product.colorVariants as
+                      | ColorVariant[]
+                      | null
+                  ) ?? [],
+              },
+            );
+          }
+
+          const returnStockPlans = [];
+
+          for (
+            const line of
+            calculatedReturnLines
+          ) {
+            const originalItem =
+              line.originalItem;
+
+            const productId =
+              originalItem.productId as number;
+
+            const stockState =
+              productStockStates.get(
+                productId,
+              );
+
+            if (!stockState) {
               throw new PosExchangeError(
-                `المنتج ${originalItem.productNameAr} لم يعد موجودًا`,
+                `تعذر قفل مخزون ${originalItem.productNameAr}`,
                 409,
               );
             }
 
-            let generalStockBefore: number | null = null;
-            let generalStockAfter: number | null = null;
+            const product =
+              stockState.product;
+
+            let generalStockBefore:
+              number | null = null;
+
+            let generalStockAfter:
+              number | null = null;
 
             const trackedGeneralStock =
               originalItem.generalStockBefore !== null ||
@@ -1290,8 +1366,7 @@ export async function handleCreatePosExchange(
 
             if (trackedGeneralStock) {
               if (
-                product.stock === null ||
-                product.stock === undefined
+                stockState.generalStock === null
               ) {
                 throw new PosExchangeError(
                   `المخزون العام للمنتج ${originalItem.productNameAr} لم يعد قابلًا للتتبع`,
@@ -1299,24 +1374,38 @@ export async function handleCreatePosExchange(
                 );
               }
 
-              generalStockBefore = product.stock;
+              generalStockBefore =
+                stockState.generalStock;
+
               generalStockAfter =
-                product.stock + line.quantity;
+                generalStockBefore +
+                line.quantity;
 
               if (
-                !Number.isSafeInteger(generalStockAfter) ||
-                generalStockAfter > MAX_STOCK
+                !Number.isSafeInteger(
+                  generalStockAfter,
+                ) ||
+                generalStockAfter >
+                  MAX_STOCK
               ) {
                 throw new PosExchangeError(
                   `مخزون ${originalItem.productNameAr} يتجاوز الحد المسموح`,
                   409,
                 );
               }
+
+              stockState.generalStock =
+                generalStockAfter;
             }
 
-            let variantStockBefore: number | null = null;
-            let variantStockAfter: number | null = null;
-            let nextColorVariants: ColorVariant[] | null = null;
+            let variantStockBefore:
+              number | null = null;
+
+            let variantStockAfter:
+              number | null = null;
+
+            let nextColorVariants:
+              ColorVariant[] | null = null;
 
             const trackedVariantStock =
               originalItem.variantStockBefore !== null ||
@@ -1334,12 +1423,13 @@ export async function handleCreatePosExchange(
               }
 
               const colorVariants =
-                (product.colorVariants as ColorVariant[] | null) ?? [];
+                stockState.colorVariants;
 
               const variantIndex =
                 colorVariants.findIndex(
                   (variant) =>
-                    variant.color === originalItem.color,
+                    variant.color ===
+                    originalItem.color,
                 );
 
               if (variantIndex < 0) {
@@ -1349,17 +1439,21 @@ export async function handleCreatePosExchange(
                 );
               }
 
-              const variant = colorVariants[variantIndex];
+              const variant =
+                colorVariants[variantIndex];
 
               const variantSizes =
-                Array.isArray(variant.sizes)
+                Array.isArray(
+                  variant.sizes,
+                )
                   ? variant.sizes
                   : [];
 
               const sizeIndex =
                 variantSizes.findIndex(
                   (entry) =>
-                    entry.size === originalItem.size,
+                    entry.size ===
+                    originalItem.size,
                 );
 
               if (sizeIndex < 0) {
@@ -1374,7 +1468,8 @@ export async function handleCreatePosExchange(
 
               if (
                 selectedSize.stock === null ||
-                selectedSize.stock === undefined
+                selectedSize.stock ===
+                  undefined
               ) {
                 throw new PosExchangeError(
                   `مخزون لون ومقاس ${originalItem.productNameAr} لم يعد قابلًا للتتبع`,
@@ -1386,11 +1481,15 @@ export async function handleCreatePosExchange(
                 selectedSize.stock;
 
               variantStockAfter =
-                selectedSize.stock + line.quantity;
+                variantStockBefore +
+                line.quantity;
 
               if (
-                !Number.isSafeInteger(variantStockAfter) ||
-                variantStockAfter > MAX_STOCK
+                !Number.isSafeInteger(
+                  variantStockAfter,
+                ) ||
+                variantStockAfter >
+                  MAX_STOCK
               ) {
                 throw new PosExchangeError(
                   `مخزون لون ومقاس ${originalItem.productNameAr} يتجاوز الحد المسموح`,
@@ -1404,8 +1503,10 @@ export async function handleCreatePosExchange(
                     index === sizeIndex
                       ? {
                           ...entry,
-                          stock: variantStockAfter,
-                          outOfStock: false,
+                          stock:
+                            variantStockAfter,
+                          outOfStock:
+                            false,
                         }
                       : entry,
                 );
@@ -1416,26 +1517,46 @@ export async function handleCreatePosExchange(
                     index === variantIndex
                       ? {
                           ...entry,
-                          sizes: nextSizes,
+                          sizes:
+                            nextSizes,
                         }
                       : entry,
                 );
+
+              stockState.colorVariants =
+                nextColorVariants;
             }
 
             returnStockPlans.push({
-              lineNumber: line.lineNumber,
-              originalSaleItemId: originalItem.id,
-              productId: product.id,
+              lineNumber:
+                line.lineNumber,
 
-              barcode: originalItem.barcode,
-              productCode: originalItem.productCode,
-              productNameAr: originalItem.productNameAr,
-              productImage: originalItem.productImage,
+              originalSaleItemId:
+                originalItem.id,
 
-              color: originalItem.color,
-              size: originalItem.size,
+              productId:
+                product.id,
 
-              quantity: line.quantity,
+              barcode:
+                originalItem.barcode,
+
+              productCode:
+                originalItem.productCode,
+
+              productNameAr:
+                originalItem.productNameAr,
+
+              productImage:
+                originalItem.productImage,
+
+              color:
+                originalItem.color,
+
+              size:
+                originalItem.size,
+
+              quantity:
+                line.quantity,
 
               soldUnitPriceMinor:
                 originalItem.soldUnitPriceMinor,
