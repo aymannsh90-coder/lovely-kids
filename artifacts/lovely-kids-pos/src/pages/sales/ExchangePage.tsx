@@ -34,6 +34,16 @@ interface ExchangeNewLine {
   soldUnitPrice: string;
 }
 
+interface ExchangeNoReceiptReturnLine {
+  id: string;
+  barcode: string;
+  product: PosProductLookup;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  returnUnitPrice: string;
+}
+
 function createKey() {
   if (
     typeof crypto !== "undefined" &&
@@ -88,37 +98,58 @@ function getSizes(
   return product.sizes;
 }
 
-function newLineSelectionComplete(
-  line: ExchangeNewLine,
+function variantSelectionComplete(
+  product: PosProductLookup,
+  color: string | null,
+  size: string | null,
 ) {
   if (
-    line.product.colorVariants.length >
-    0
+    product.colorVariants.length > 0
   ) {
-    if (!line.color) {
+    if (!color) {
       return false;
     }
 
     const sizes =
       getSizes(
-        line.product,
-        line.color,
+        product,
+        color,
       );
 
     if (
       sizes.length > 0 &&
-      !line.size
+      !size
     ) {
       return false;
     }
   } else if (
-    line.product.sizes.length > 0 &&
-    !line.size
+    product.sizes.length > 0 &&
+    !size
   ) {
     return false;
   }
 
   return true;
+}
+
+function newLineSelectionComplete(
+  line: ExchangeNewLine,
+) {
+  return variantSelectionComplete(
+    line.product,
+    line.color,
+    line.size,
+  );
+}
+
+function noReceiptLineSelectionComplete(
+  line: ExchangeNoReceiptReturnLine,
+) {
+  return variantSelectionComplete(
+    line.product,
+    line.color,
+    line.size,
+  );
 }
 
 function errorMessage(error: unknown) {
@@ -153,6 +184,16 @@ export default function ExchangePage() {
     createScannerKeyboardBuffer(),
   );
 
+  const noReceiptInputRef =
+    useRef<HTMLInputElement>(null);
+
+  const noReceiptScannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
+  const noReceiptScannerSubmitValue =
+    useRef<string | null>(null);
+
   const newItemInputRef =
     useRef<HTMLInputElement>(null);
 
@@ -185,6 +226,53 @@ export default function ExchangePage() {
 
   const [error, setError] =
     useState("");
+
+  const [
+    noReceiptInput,
+    setNoReceiptInput,
+  ] = useState("");
+
+  const [
+    noReceiptSearchResults,
+    setNoReceiptSearchResults,
+  ] = useState<PosProductLookup[]>([]);
+
+  const [
+    noReceiptSearchOpen,
+    setNoReceiptSearchOpen,
+  ] = useState(false);
+
+  const [
+    noReceiptSearchBusy,
+    setNoReceiptSearchBusy,
+  ] = useState(false);
+
+  const [
+    noReceiptLookupBusy,
+    setNoReceiptLookupBusy,
+  ] = useState(false);
+
+  const [
+    activeNoReceiptSearchIndex,
+    setActiveNoReceiptSearchIndex,
+  ] = useState(0);
+
+  const [
+    noReceiptMessage,
+    setNoReceiptMessage,
+  ] = useState("");
+
+  const [
+    noReceiptError,
+    setNoReceiptError,
+  ] = useState("");
+
+  const [
+    noReceiptCart,
+    setNoReceiptCart,
+  ] = useState<
+    ExchangeNoReceiptReturnLine[]
+  >([]);
 
   const [newItemInput, setNewItemInput] =
     useState("");
@@ -265,6 +353,26 @@ export default function ExchangePage() {
     [selectedItems],
   );
 
+  const noReceiptReturnMinor =
+    useMemo(
+      () =>
+        noReceiptCart.reduce(
+          (total, line) => {
+            const price =
+              moneyToMinor(
+                line.returnUnitPrice,
+              ) ?? 0;
+
+            return (
+              total +
+              price * line.quantity
+            );
+          },
+          0,
+        ),
+      [noReceiptCart],
+    );
+
   const newItemsGrossMinor =
     useMemo(
       () =>
@@ -305,7 +413,32 @@ export default function ExchangePage() {
     nextMode: ExchangeMode,
   ) {
     setMode(nextMode);
-    resetReceiptExchange();
+
+    setInvoiceInput("");
+    setBarcodeInput("");
+    setPreview(null);
+    setQuantities({});
+    setError("");
+
+    setNoReceiptInput("");
+    setNoReceiptSearchResults([]);
+    setNoReceiptSearchOpen(false);
+    setNoReceiptSearchBusy(false);
+    setNoReceiptLookupBusy(false);
+    setActiveNoReceiptSearchIndex(0);
+    setNoReceiptMessage("");
+    setNoReceiptError("");
+    setNoReceiptCart([]);
+
+    window.setTimeout(() => {
+      if (
+        nextMode === "with_receipt"
+      ) {
+        invoiceInputRef.current?.focus();
+      } else {
+        noReceiptInputRef.current?.focus();
+      }
+    }, 0);
   }
 
   function initializeQuantities(
@@ -527,6 +660,417 @@ export default function ExchangePage() {
         ),
       ),
     );
+  }
+
+  function focusNoReceiptInput() {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        noReceiptInputRef.current?.focus({
+          preventScroll: true,
+        });
+
+        noReceiptInputRef.current?.select();
+      }, 0);
+    });
+  }
+
+  function clearNoReceiptSearch() {
+    setNoReceiptSearchResults([]);
+    setNoReceiptSearchOpen(false);
+    setNoReceiptSearchBusy(false);
+    setActiveNoReceiptSearchIndex(0);
+  }
+
+  function addNoReceiptProduct(
+    product: PosProductLookup,
+  ) {
+    const colors =
+      getColors(product);
+
+    const color =
+      product.mappedColor ??
+      (
+        colors.length === 1
+          ? colors[0]
+          : null
+      );
+
+    const sizes =
+      getSizes(
+        product,
+        color,
+      );
+
+    const size =
+      product.mappedSize ??
+      (
+        sizes.length === 1
+          ? sizes[0]
+          : null
+      );
+
+    const candidate:
+      ExchangeNoReceiptReturnLine = {
+        id: createKey(),
+        barcode:
+          product.barcode ?? "",
+        product,
+        color,
+        size,
+        quantity: 1,
+
+        // السعر الحالي في المتجر هو
+        // القيمة الافتراضية للمرتجع.
+        returnUnitPrice:
+          product.websiteUnitPrice
+            .toFixed(2),
+      };
+
+    setNoReceiptCart(
+      (current) => {
+        if (
+          noReceiptLineSelectionComplete(
+            candidate,
+          )
+        ) {
+          const duplicate =
+            current.find(
+              (line) =>
+                line.product
+                  .productId ===
+                  product.productId &&
+                line.barcode ===
+                  candidate.barcode &&
+                line.color ===
+                  color &&
+                line.size ===
+                  size,
+            );
+
+          if (duplicate) {
+            return current.map(
+              (line) =>
+                line.id ===
+                duplicate.id
+                  ? {
+                      ...line,
+                      quantity:
+                        line.quantity +
+                        1,
+                    }
+                  : line,
+            );
+          }
+        }
+
+        return [
+          ...current,
+          candidate,
+        ];
+      },
+    );
+
+    setNoReceiptInput("");
+    setNoReceiptError("");
+    setNoReceiptMessage(
+      `تمت إضافة ${product.nameAr} للمرتجع`,
+    );
+
+    clearNoReceiptSearch();
+    focusNoReceiptInput();
+  }
+
+  function handleNoReceiptScannerKeyDown(
+    event:
+      KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (
+      event.nativeEvent.isComposing
+    ) {
+      return;
+    }
+
+    // قراءة السكانر تعتمد على event.code
+    // لذلك لغة لوحة المفاتيح لا تغيّر
+    // الباركود المقروء.
+    const scannedValue =
+      captureScannerKeyboardEvent(
+        noReceiptScannerKeyboard.current,
+        event,
+      );
+
+    if (
+      event.key === "Enter" &&
+      scannedValue
+    ) {
+      event.preventDefault();
+
+      noReceiptScannerSubmitValue.current =
+        scannedValue;
+
+      setNoReceiptInput(
+        scannedValue,
+      );
+
+      clearNoReceiptSearch();
+
+      event.currentTarget.form
+        ?.requestSubmit();
+
+      return;
+    }
+
+    if (
+      event.key === "ArrowDown" &&
+      noReceiptSearchResults.length >
+        0
+    ) {
+      event.preventDefault();
+
+      setActiveNoReceiptSearchIndex(
+        (current) =>
+          (
+            current + 1
+          ) %
+          noReceiptSearchResults.length,
+      );
+
+      return;
+    }
+
+    if (
+      event.key === "ArrowUp" &&
+      noReceiptSearchResults.length >
+        0
+    ) {
+      event.preventDefault();
+
+      setActiveNoReceiptSearchIndex(
+        (current) =>
+          (
+            current -
+            1 +
+            noReceiptSearchResults.length
+          ) %
+          noReceiptSearchResults.length,
+      );
+
+      return;
+    }
+
+    if (
+      event.key === "Escape"
+    ) {
+      event.preventDefault();
+      clearNoReceiptSearch();
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      noReceiptSearchOpen &&
+      noReceiptSearchResults[
+        activeNoReceiptSearchIndex
+      ]
+    ) {
+      event.preventDefault();
+
+      addNoReceiptProduct(
+        noReceiptSearchResults[
+          activeNoReceiptSearchIndex
+        ],
+      );
+    }
+  }
+
+  async function handleNoReceiptSearch(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    const scannerValue =
+      noReceiptScannerSubmitValue.current;
+
+    noReceiptScannerSubmitValue.current =
+      null;
+
+    const value =
+      (
+        scannerValue ??
+        noReceiptInput
+      ).trim();
+
+    if (!value) {
+      setNoReceiptError(
+        "أدخل باركود أو كود أو اسم الصنف المرتجع",
+      );
+
+      focusNoReceiptInput();
+      return;
+    }
+
+    if (
+      noReceiptSearchOpen &&
+      noReceiptSearchResults[
+        activeNoReceiptSearchIndex
+      ]
+    ) {
+      addNoReceiptProduct(
+        noReceiptSearchResults[
+          activeNoReceiptSearchIndex
+        ],
+      );
+
+      return;
+    }
+
+    setNoReceiptLookupBusy(true);
+    setNoReceiptError("");
+    setNoReceiptMessage("");
+    clearNoReceiptSearch();
+
+    try {
+      const product =
+        await lookupPosProductByBarcode(
+          token,
+          value,
+        );
+
+      addNoReceiptProduct(
+        product,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      if (
+        caught instanceof ApiError &&
+        caught.status === 404
+      ) {
+        setNoReceiptSearchBusy(true);
+
+        try {
+          const result =
+            await searchPosProducts(
+              token,
+              value,
+            );
+
+          setNoReceiptSearchResults(
+            result.results,
+          );
+
+          setActiveNoReceiptSearchIndex(
+            0,
+          );
+
+          setNoReceiptSearchOpen(
+            result.results.length > 0,
+          );
+
+          if (
+            result.results.length === 0
+          ) {
+            setNoReceiptError(
+              "لم يتم العثور على أصناف مطابقة",
+            );
+          } else {
+            setNoReceiptMessage(
+              `تم العثور على ${result.results.length} صنف، اختر الصنف المرتجع`,
+            );
+          }
+        } catch (searchError) {
+          if (
+            searchError instanceof
+              ApiError &&
+            searchError.status === 401
+          ) {
+            clearAuthentication();
+            return;
+          }
+
+          setNoReceiptError(
+            errorMessage(
+              searchError,
+            ),
+          );
+        } finally {
+          setNoReceiptSearchBusy(false);
+        }
+      } else {
+        setNoReceiptError(
+          errorMessage(caught),
+        );
+      }
+    } finally {
+      setNoReceiptLookupBusy(false);
+      focusNoReceiptInput();
+    }
+  }
+
+  function updateNoReceiptLine(
+    id: string,
+    patch:
+      Partial<ExchangeNoReceiptReturnLine>,
+  ) {
+    setNoReceiptCart(
+      (current) =>
+        current.map(
+          (line) =>
+            line.id === id
+              ? {
+                  ...line,
+                  ...patch,
+                }
+              : line,
+        ),
+    );
+  }
+
+  function changeNoReceiptColor(
+    line:
+      ExchangeNoReceiptReturnLine,
+    colorValue: string,
+  ) {
+    const color =
+      colorValue || null;
+
+    const sizes =
+      getSizes(
+        line.product,
+        color,
+      );
+
+    updateNoReceiptLine(
+      line.id,
+      {
+        color,
+        size:
+          sizes.length === 1
+            ? sizes[0]
+            : null,
+      },
+    );
+  }
+
+  function removeNoReceiptLine(
+    id: string,
+  ) {
+    setNoReceiptCart(
+      (current) =>
+        current.filter(
+          (line) =>
+            line.id !== id,
+        ),
+    );
+
+    focusNoReceiptInput();
   }
 
   function focusNewItemInput() {
@@ -1510,13 +2054,480 @@ export default function ExchangePage() {
               </h3>
 
               <p>
-                بالخطوة التالية سنضيف مسح
-                باركود الصنف، والسعر الحالي
-                كقيمة افتراضية مع إمكانية
-                تعديل القيمة يدويًا.
+                امسح باركود الصنف القديم.
+                السعر الحالي يظهر تلقائيًا
+                كقيمة المرتجع ويمكن تعديله
+                يدويًا.
               </p>
             </div>
+
+            {noReceiptCart.length > 0 && (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setNoReceiptCart([]);
+                  setNoReceiptMessage("");
+                  setNoReceiptError("");
+                  focusNoReceiptInput();
+                }}
+              >
+                تفريغ الأصناف المرجعة
+              </button>
+            )}
           </div>
+
+          <form
+            className="sales-return-search-form"
+            onSubmit={handleNoReceiptSearch}
+          >
+            <label className="sales-return-field">
+              <span>
+                باركود / كود / اسم الصنف
+              </span>
+
+              <input
+                ref={noReceiptInputRef}
+                dir="ltr"
+                autoComplete="off"
+                value={noReceiptInput}
+                onChange={(event) => {
+                  setNoReceiptInput(
+                    event.target.value,
+                  );
+
+                  if (
+                    noReceiptSearchOpen
+                  ) {
+                    clearNoReceiptSearch();
+                  }
+                }}
+                onKeyDown={
+                  handleNoReceiptScannerKeyDown
+                }
+                placeholder="امسح باركود الصنف القديم"
+                disabled={
+                  noReceiptLookupBusy ||
+                  noReceiptSearchBusy
+                }
+              />
+            </label>
+
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={
+                noReceiptLookupBusy ||
+                noReceiptSearchBusy
+              }
+            >
+              {noReceiptLookupBusy ||
+              noReceiptSearchBusy
+                ? "جاري البحث..."
+                : "إضافة المرتجع"}
+            </button>
+          </form>
+
+          {noReceiptError && (
+            <p
+              className="error-message"
+              role="alert"
+            >
+              {noReceiptError}
+            </p>
+          )}
+
+          {noReceiptMessage && (
+            <p
+              style={{
+                padding:
+                  "0 16px 12px",
+              }}
+            >
+              {noReceiptMessage}
+            </p>
+          )}
+
+          {noReceiptSearchOpen &&
+            noReceiptSearchResults.length >
+              0 && (
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+                padding:
+                  "0 16px 16px",
+              }}
+            >
+              {noReceiptSearchResults.map(
+                (product, index) => (
+                  <button
+                    key={`${product.productId}-${index}`}
+                    type="button"
+                    className={
+                      index ===
+                      activeNoReceiptSearchIndex
+                        ? "primary-button"
+                        : "secondary-button"
+                    }
+                    onClick={() =>
+                      addNoReceiptProduct(
+                        product,
+                      )
+                    }
+                  >
+                    {product.nameAr}
+                    {" — "}
+                    {product.productCode ??
+                      product.barcode ??
+                      ""}
+                  </button>
+                ),
+              )}
+            </div>
+          )}
+
+          {noReceiptCart.length > 0 && (
+            <>
+              <div className="sales-return-table-wrap">
+                <table className="sales-return-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>الصنف</th>
+                      <th>
+                        الكود والباركود
+                      </th>
+                      <th>اللون</th>
+                      <th>النمرة</th>
+                      <th>الكمية</th>
+                      <th>
+                        السعر الحالي
+                      </th>
+                      <th>
+                        قيمة المرتجع المعتمدة
+                      </th>
+                      <th>الإجمالي</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {noReceiptCart.map(
+                      (line, index) => {
+                        const colors =
+                          getColors(
+                            line.product,
+                          );
+
+                        const sizes =
+                          getSizes(
+                            line.product,
+                            line.color,
+                          );
+
+                        const returnPriceMinor =
+                          moneyToMinor(
+                            line.returnUnitPrice,
+                          ) ?? 0;
+
+                        return (
+                          <tr key={line.id}>
+                            <td>
+                              {index + 1}
+                            </td>
+
+                            <td>
+                              <div className="sales-return-product">
+                                {line.product
+                                  .image && (
+                                  <img
+                                    src={
+                                      line
+                                        .product
+                                        .image
+                                    }
+                                    alt=""
+                                  />
+                                )}
+
+                                <div>
+                                  <strong>
+                                    {
+                                      line
+                                        .product
+                                        .nameAr
+                                    }
+                                  </strong>
+
+                                  {!noReceiptLineSelectionComplete(
+                                    line,
+                                  ) && (
+                                    <small>
+                                      أكمل اللون
+                                      والنمرة
+                                    </small>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            <td>
+                              <strong dir="ltr">
+                                {line.product
+                                  .productCode ??
+                                  "—"}
+                              </strong>
+
+                              <small dir="ltr">
+                                {line.barcode ||
+                                  line.product
+                                    .barcode ||
+                                  "—"}
+                              </small>
+                            </td>
+
+                            <td>
+                              {colors.length >
+                              0 ? (
+                                <select
+                                  value={
+                                    line.color ??
+                                    ""
+                                  }
+                                  onChange={(
+                                    event,
+                                  ) =>
+                                    changeNoReceiptColor(
+                                      line,
+                                      event
+                                        .target
+                                        .value,
+                                    )
+                                  }
+                                >
+                                  <option value="">
+                                    اختر اللون
+                                  </option>
+
+                                  {colors.map(
+                                    (color) => (
+                                      <option
+                                        key={
+                                          color
+                                        }
+                                        value={
+                                          color
+                                        }
+                                      >
+                                        {color}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+
+                            <td>
+                              {sizes.length >
+                              0 ? (
+                                <select
+                                  value={
+                                    line.size ??
+                                    ""
+                                  }
+                                  disabled={
+                                    line
+                                      .product
+                                      .colorVariants
+                                      .length >
+                                      0 &&
+                                    !line.color
+                                  }
+                                  onChange={(
+                                    event,
+                                  ) =>
+                                    updateNoReceiptLine(
+                                      line.id,
+                                      {
+                                        size:
+                                          event
+                                            .target
+                                            .value ||
+                                          null,
+                                      },
+                                    )
+                                  }
+                                >
+                                  <option value="">
+                                    اختر النمرة
+                                  </option>
+
+                                  {sizes.map(
+                                    (size) => (
+                                      <option
+                                        key={
+                                          size
+                                        }
+                                        value={
+                                          size
+                                        }
+                                      >
+                                        {size}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+
+                            <td>
+                              <input
+                                className="sales-return-quantity-input"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={99}
+                                step={1}
+                                value={
+                                  line.quantity
+                                }
+                                onChange={(
+                                  event,
+                                ) =>
+                                  updateNoReceiptLine(
+                                    line.id,
+                                    {
+                                      quantity:
+                                        Math.max(
+                                          1,
+                                          Math.min(
+                                            99,
+                                            Math.trunc(
+                                              Number(
+                                                event
+                                                  .target
+                                                  .value,
+                                              ) ||
+                                                1,
+                                            ),
+                                          ),
+                                        ),
+                                    },
+                                  )
+                                }
+                              />
+                            </td>
+
+                            <td>
+                              <strong>
+                                {formatMoney(
+                                  line.product
+                                    .websiteUnitPriceMinor,
+                                )}
+                              </strong>
+                            </td>
+
+                            <td>
+                              <input
+                                className="sales-return-quantity-input"
+                                type="text"
+                                inputMode="decimal"
+                                dir="ltr"
+                                value={
+                                  line.returnUnitPrice
+                                }
+                                onChange={(
+                                  event,
+                                ) =>
+                                  updateNoReceiptLine(
+                                    line.id,
+                                    {
+                                      returnUnitPrice:
+                                        event
+                                          .target
+                                          .value,
+                                    },
+                                  )
+                                }
+                              />
+                            </td>
+
+                            <td>
+                              <strong>
+                                {formatMoney(
+                                  returnPriceMinor *
+                                    line.quantity,
+                                )}
+                              </strong>
+                            </td>
+
+                            <td>
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={() =>
+                                  removeNoReceiptLine(
+                                    line.id,
+                                  )
+                                }
+                              >
+                                حذف
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      },
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  gap: "16px",
+                  padding: "16px",
+                }}
+              >
+                <div>
+                  <small>
+                    عدد القطع المرجعة
+                  </small>
+                  <br />
+                  <strong>
+                    {noReceiptCart.reduce(
+                      (
+                        total,
+                        line,
+                      ) =>
+                        total +
+                        line.quantity,
+                      0,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    قيمة المرتجع المعتمدة
+                  </small>
+                  <br />
+                  <strong>
+                    {formatMoney(
+                      noReceiptReturnMinor,
+                    )}
+                  </strong>
+                </div>
+              </div>
+            </>
+          )}
         </article>
       )}
 
