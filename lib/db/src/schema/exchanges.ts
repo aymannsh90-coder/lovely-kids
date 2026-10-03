@@ -105,6 +105,12 @@ export const exchangeDocumentsTable = pgTable(
         )
         or
         (
+          ${table.sourceType} = 'pos_no_receipt'
+          and ${table.originalPosSaleId} is null
+          and ${table.originalOrderId} is null
+        )
+        or
+        (
           ${table.sourceType} = 'online_order'
           and ${table.originalPosSaleId} is null
           and ${table.originalOrderId} is not null

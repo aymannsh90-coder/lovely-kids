@@ -48,6 +48,8 @@ export const exchangeReturnItemsTable = pgTable(
 
     quantity: integer("quantity").notNull(),
 
+    catalogUnitPriceMinor: integer("catalog_unit_price_minor"),
+
     soldUnitPriceMinor: integer("sold_unit_price_minor").notNull(),
     grossAmountMinor: integer("gross_amount_minor").notNull(),
 
@@ -97,6 +99,20 @@ export const exchangeReturnItemsTable = pgTable(
           and ${table.originalOrderLineNumber} is not null
           and ${table.originalOrderLineNumber} > 0
         )
+        or
+        (
+          ${table.originalPosSaleItemId} is null
+          and ${table.originalOrderLineNumber} is null
+          and ${table.productId} is not null
+        )
+      `,
+    ),
+
+    check(
+      "exchange_return_items_catalog_price_valid",
+      sql`
+        ${table.catalogUnitPriceMinor} is null
+        or ${table.catalogUnitPriceMinor} >= 0
       `,
     ),
 
