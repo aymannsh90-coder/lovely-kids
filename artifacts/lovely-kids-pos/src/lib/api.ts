@@ -1432,6 +1432,8 @@ interface PosExchangeCreateBaseInput {
 
   newInvoiceDiscount?: string | number;
 
+  validationOnly?: boolean;
+
   reason?: string;
   notes?: string;
 }
@@ -1519,10 +1521,88 @@ export interface PosExchangeSaleItemResult {
   createdAt: string;
 }
 
+export interface PosExchangeQuoteReturnItemResult {
+  lineNumber: number;
+
+  originalSaleItemId: number | null;
+  productId: number | null;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  productImage: string | null;
+
+  color: string | null;
+  size: string | null;
+
+  quantity: number;
+
+  catalogUnitPriceMinor: number | null;
+  soldUnitPriceMinor: number;
+
+  grossAmountMinor: number;
+  lineDiscountMinor: number;
+  invoiceDiscountMinor: number;
+  allocatedDiscountMinor: number;
+  returnNetMinor: number;
+}
+
+export interface PosExchangeQuoteSaleItemResult {
+  lineNumber: number;
+  productId: number;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  productImage: string | null;
+
+  color: string | null;
+  size: string | null;
+
+  quantity: number;
+
+  websiteUnitPriceMinor: number;
+  soldUnitPriceMinor: number;
+
+  grossAmountMinor: number;
+  lineDiscountMinor: number;
+  invoiceDiscountMinor: number;
+  allocatedDiscountMinor: number;
+  lineNetMinor: number;
+}
+
+export interface PosExchangeQuoteResult {
+  sourceType: PosExchangeSourceType;
+  originalSalePublicId: string | null;
+
+  settlementType:
+    PosExchangeSettlementType;
+
+  returnGrossMinor: number;
+  returnDiscountMinor: number;
+  returnNetMinor: number;
+
+  newGrossMinor: number;
+  newDiscountMinor: number;
+  newNetMinor: number;
+
+  differenceMinor: number;
+
+  deliveryChargeMinor: number;
+  deliveryCompanyCostMinor: number;
+
+  settlementAmountMinor: number;
+
+  expectedCashBeforeMinor: number;
+  expectedCashAfterMinor: number;
+}
+
 export interface PosExchangeCreateResult {
   ok: boolean;
   validationOnly: boolean;
   alreadyCreated: boolean;
+
+  quote: PosExchangeQuoteResult | null;
 
   exchange: {
     id: number;
@@ -1553,10 +1633,17 @@ export interface PosExchangeCreateResult {
     expectedCashAfterMinor?: number;
 
     createdAt: string;
-  };
+  } | null;
 
-  returnItems: PosExchangeReturnItemResult[];
-  saleItems: PosExchangeSaleItemResult[];
+  returnItems: Array<
+    | PosExchangeReturnItemResult
+    | PosExchangeQuoteReturnItemResult
+  >;
+
+  saleItems: Array<
+    | PosExchangeSaleItemResult
+    | PosExchangeQuoteSaleItemResult
+  >;
 }
 
 export function getPosExchangePreview(
@@ -1583,6 +1670,19 @@ export function getPosExchangePreview(
     `/api/pos/exchanges/preview?${params.toString()}`,
     {},
     token,
+  );
+}
+
+export function quotePosExchange(
+  token: string,
+  input: PosExchangeCreateInput,
+) {
+  return createPosExchange(
+    token,
+    {
+      ...input,
+      validationOnly: true,
+    },
   );
 }
 
