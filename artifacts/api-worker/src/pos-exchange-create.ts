@@ -2134,6 +2134,168 @@ export async function handleCreatePosExchange(
             );
           }
 
+          const returnGrossMinor =
+            calculatedReturnLines.reduce(
+              (total, line) =>
+                total +
+                line.grossAmountMinor,
+              0,
+            );
+
+          const returnLineDiscountMinor =
+            calculatedReturnLines.reduce(
+              (total, line) =>
+                total +
+                line.lineDiscountMinor,
+              0,
+            );
+
+          const returnInvoiceDiscountMinor =
+            calculatedReturnLines.reduce(
+              (total, line) =>
+                total +
+                line.invoiceDiscountMinor,
+              0,
+            );
+
+          const returnDiscountMinor =
+            returnLineDiscountMinor +
+            returnInvoiceDiscountMinor;
+
+          const returnNetMinor =
+            calculatedReturnLines.reduce(
+              (total, line) =>
+                total +
+                line.returnNetMinor,
+              0,
+            );
+
+          if (
+            !Number.isSafeInteger(
+              returnGrossMinor,
+            ) ||
+            !Number.isSafeInteger(
+              returnLineDiscountMinor,
+            ) ||
+            !Number.isSafeInteger(
+              returnInvoiceDiscountMinor,
+            ) ||
+            !Number.isSafeInteger(
+              returnDiscountMinor,
+            ) ||
+            !Number.isSafeInteger(
+              returnNetMinor,
+            ) ||
+            returnGrossMinor < 0 ||
+            returnGrossMinor > MAX_MINOR ||
+            returnDiscountMinor < 0 ||
+            returnDiscountMinor > MAX_MINOR ||
+            returnNetMinor < 0 ||
+            returnNetMinor > MAX_MINOR ||
+            returnNetMinor !==
+              returnGrossMinor -
+                returnDiscountMinor
+          ) {
+            throw new PosExchangeError(
+              "إجمالي الأصناف المرتجعة غير صالح",
+              409,
+            );
+          }
+
+          const differenceMinor =
+            newNetMinor -
+            returnNetMinor;
+
+          const deliveryChargeMinor = 0;
+          const deliveryCompanyCostMinor = 0;
+
+          const settlementAmountMinor =
+            differenceMinor +
+            deliveryChargeMinor;
+
+          if (
+            !Number.isSafeInteger(
+              differenceMinor,
+            ) ||
+            Math.abs(
+              differenceMinor,
+            ) > MAX_MINOR ||
+            !Number.isSafeInteger(
+              settlementAmountMinor,
+            ) ||
+            Math.abs(
+              settlementAmountMinor,
+            ) > MAX_MINOR
+          ) {
+            throw new PosExchangeError(
+              "فرق فاتورة التبديل يتجاوز الحد المسموح",
+            );
+          }
+
+          if (
+            payload.settlementType ===
+              "card" &&
+            settlementAmountMinor <= 0
+          ) {
+            throw new PosExchangeError(
+              "الدفع بالبطاقة متاح فقط عندما يكون هناك مبلغ إضافي على الزبون",
+              409,
+            );
+          }
+
+          const expectedCashBeforeMinor =
+            session.expectedBalanceMinor ??
+            session.openingBalanceMinor;
+
+          if (
+            !Number.isSafeInteger(
+              expectedCashBeforeMinor,
+            ) ||
+            expectedCashBeforeMinor >
+              MAX_MINOR
+          ) {
+            throw new PosExchangeError(
+              "رصيد الصندوق الحالي غير صالح",
+              409,
+            );
+          }
+
+          let expectedCashAfterMinor =
+            expectedCashBeforeMinor;
+
+          if (
+            payload.settlementType ===
+            "cash"
+          ) {
+            if (
+              settlementAmountMinor < 0 &&
+              expectedCashBeforeMinor <
+                -settlementAmountMinor
+            ) {
+              throw new PosExchangeError(
+                "رصيد الصندوق لا يكفي لتنفيذ مبلغ التبديل المرجع للزبون",
+                409,
+              );
+            }
+
+            expectedCashAfterMinor =
+              expectedCashBeforeMinor +
+              settlementAmountMinor;
+
+            if (
+              !Number.isSafeInteger(
+                expectedCashAfterMinor,
+              ) ||
+              expectedCashAfterMinor >
+                MAX_MINOR
+            ) {
+              throw new PosExchangeError(
+                "رصيد الصندوق بعد التبديل غير صالح",
+                409,
+              );
+            }
+          }
+
           return {
             exchange: {
               id: 0,
@@ -2149,6 +2311,28 @@ export async function handleCreatePosExchange(
                 payload.registerKey,
               businessDate:
                 session.businessDate,
+
+              settlementType:
+                payload.settlementType,
+
+              returnGrossMinor,
+              returnDiscountMinor,
+              returnNetMinor,
+
+              newGrossMinor:
+                newSubtotalMinor,
+              newDiscountMinor,
+              newNetMinor,
+
+              differenceMinor,
+
+              deliveryChargeMinor,
+              deliveryCompanyCostMinor,
+
+              settlementAmountMinor,
+
+              expectedCashBeforeMinor,
+              expectedCashAfterMinor,
             },
             returnItems:
               returnStockPlans.map(
