@@ -7,6 +7,7 @@ import {
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
+  productBarcodesTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
@@ -1258,6 +1259,112 @@ export async function handleCreatePosExchange(
             }
           }
 
+          const resolvedNewItems: Array<
+            ParsedExchangeSaleItem & {
+              productId: number;
+              mappedColor: string | null;
+              mappedSize: string | null;
+            }
+          > = [];
+
+          for (const item of payload.newItems) {
+            if (item.barcode) {
+              const mappingRows = await tx
+                .select()
+                .from(productBarcodesTable)
+                .where(
+                  eq(
+                    productBarcodesTable.barcode,
+                    item.barcode,
+                  ),
+                )
+                .limit(1);
+
+              const mapping = mappingRows[0];
+
+              if (mapping) {
+                if (
+                  item.productId !== null &&
+                  item.productId !== mapping.productId
+                ) {
+                  throw new PosExchangeError(
+                    "الباركود لا يطابق المنتج المحدد",
+                    409,
+                  );
+                }
+
+                resolvedNewItems.push({
+                  ...item,
+                  productId: mapping.productId,
+                  mappedColor: mapping.color ?? null,
+                  mappedSize: mapping.size ?? null,
+                });
+
+                continue;
+              }
+
+              const primaryRows = await tx
+                .select({
+                  id: productsTable.id,
+                })
+                .from(productsTable)
+                .where(
+                  eq(
+                    productsTable.barcode,
+                    item.barcode,
+                  ),
+                )
+                .limit(1);
+
+              const primary = primaryRows[0];
+
+              if (!primary) {
+                throw new PosExchangeError(
+                  `الباركود ${item.barcode} غير موجود`,
+                  404,
+                );
+              }
+
+              if (
+                item.productId !== null &&
+                item.productId !== primary.id
+              ) {
+                throw new PosExchangeError(
+                  "الباركود لا يطابق المنتج المحدد",
+                  409,
+                );
+              }
+
+              resolvedNewItems.push({
+                ...item,
+                productId: primary.id,
+                mappedColor: null,
+                mappedSize: null,
+              });
+
+              continue;
+            }
+
+            if (item.productId === null) {
+              throw new PosExchangeError(
+                "تعذر تحديد أحد المنتجات الجديدة",
+              );
+            }
+
+            resolvedNewItems.push({
+              ...item,
+              productId: item.productId,
+              mappedColor: null,
+              mappedSize: null,
+            });
+          }
+
+          resolvedNewItems.sort(
+            (left, right) =>
+              left.productId - right.productId ||
+              left.lineNumber - right.lineNumber,
+          );
+
           const returnProductIds = Array.from(
             new Set(
               calculatedReturnLines.map(
@@ -1267,14 +1374,29 @@ export async function handleCreatePosExchange(
             ),
           ).sort((a, b) => a - b);
 
-          const lockedReturnProducts =
+          const newProductIds = Array.from(
+            new Set(
+              resolvedNewItems.map(
+                (item) => item.productId,
+              ),
+            ),
+          );
+
+          const allExchangeProductIds = Array.from(
+            new Set([
+              ...returnProductIds,
+              ...newProductIds,
+            ]),
+          ).sort((a, b) => a - b);
+
+          const lockedExchangeProducts =
             await tx
               .select()
               .from(productsTable)
               .where(
                 inArray(
                   productsTable.id,
-                  returnProductIds,
+                  allExchangeProductIds,
                 ),
               )
               .orderBy(
@@ -1283,11 +1405,11 @@ export async function handleCreatePosExchange(
               .for("update");
 
           if (
-            lockedReturnProducts.length !==
-            returnProductIds.length
+            lockedExchangeProducts.length !==
+            allExchangeProductIds.length
           ) {
             throw new PosExchangeError(
-              "أحد المنتجات المرتجعة لم يعد موجودًا",
+              "أحد منتجات التبديل لم يعد موجودًا",
               409,
             );
           }
@@ -1307,7 +1429,7 @@ export async function handleCreatePosExchange(
 
           for (
             const product of
-            lockedReturnProducts
+            lockedExchangeProducts
           ) {
             productStockStates.set(
               product.id,
