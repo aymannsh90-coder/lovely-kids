@@ -61,6 +61,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "exchange-sale",
+    group: "sales",
+    path: "/sales/exchange",
+    title: "فاتورة تبديل",
+    description: "تبديل أصناف مع فاتورة أو بدون فاتورة.",
+    icon: "🔄",
+    requiresOpenSession: true,
+    status: "ready",
+  },
+  {
     key: "new-sale",
     group: "sales",
     path: "/sales/new",

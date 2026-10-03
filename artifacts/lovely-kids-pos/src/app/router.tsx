@@ -19,6 +19,7 @@ import MobilePriceCheckPage from "../pages/sales/MobilePriceCheckPage";
 import NewSalePage from "../pages/sales/NewSalePage";
 import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
 import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
+import ExchangePage from "../pages/sales/ExchangePage";
 import TodaySalesPage from "../pages/sales/TodaySalesPage";
 import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
 
@@ -61,6 +62,15 @@ export default function AppRouter() {
           element={
             <RequireOpenSession>
               <NewSalePage />
+            </RequireOpenSession>
+          }
+        />
+
+        <Route
+          path="sales/exchange"
+          element={
+            <RequireOpenSession>
+              <ExchangePage />
             </RequireOpenSession>
           }
         />
