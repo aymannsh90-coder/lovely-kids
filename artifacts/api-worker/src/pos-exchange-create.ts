@@ -123,6 +123,7 @@ export interface ParsedPosExchangePayload {
   noReceiptReturnItems: ParsedNoReceiptReturnItem[];
   newItems: ParsedExchangeSaleItem[];
   newInvoiceDiscountMinor: number;
+  validationOnly: boolean;
   reason: string | null;
   notes: string | null;
 }
@@ -779,6 +780,8 @@ export function parsePosExchangePayload(
         payload.newItems,
       ),
     newInvoiceDiscountMinor,
+    validationOnly:
+      payload.validationOnly === true,
     reason:
       parseOptionalText(
         payload.reason,
@@ -901,7 +904,10 @@ export async function handleCreatePosExchange(
           const existing =
             existingRows[0];
 
-          if (existing) {
+          if (
+            existing &&
+            !payload.validationOnly
+          ) {
             if (
               existing.registerKey !==
               payload.registerKey
@@ -949,6 +955,8 @@ export async function handleCreatePosExchange(
                 );
 
             return {
+              validationOnly: false,
+              quote: null,
               exchange: existing,
               returnItems:
                 existingItems,
@@ -3056,6 +3064,161 @@ export async function handleCreatePosExchange(
           }
 
           // -------------------------------------------------
+          // Validation-only quote.
+          // All business rules above have been evaluated using
+          // the same calculation path as a real exchange.
+          // Return before any persistent exchange/inventory/cash write.
+          // -------------------------------------------------
+
+          if (payload.validationOnly) {
+            return {
+              validationOnly: true,
+              alreadyCreated: false,
+              exchange: null,
+
+              quote: {
+                sourceType:
+                  payload.sourceType,
+
+                originalSalePublicId:
+                  payload.originalSalePublicId,
+
+                settlementType:
+                  payload.settlementType,
+
+                returnGrossMinor,
+                returnDiscountMinor,
+                returnNetMinor,
+
+                newGrossMinor:
+                  newSubtotalMinor,
+
+                newDiscountMinor,
+                newNetMinor,
+
+                differenceMinor,
+
+                deliveryChargeMinor,
+                deliveryCompanyCostMinor,
+
+                settlementAmountMinor,
+
+                expectedCashBeforeMinor,
+                expectedCashAfterMinor,
+              },
+
+              returnItems:
+                calculatedReturnLines.map(
+                  (line) => ({
+                    lineNumber:
+                      line.lineNumber,
+
+                    originalSaleItemId:
+                      line.originalItem.id,
+
+                    productId:
+                      line.originalItem.productId,
+
+                    barcode:
+                      line.originalItem.barcode,
+
+                    productCode:
+                      line.originalItem.productCode,
+
+                    productNameAr:
+                      line.originalItem.productNameAr,
+
+                    productImage:
+                      line.originalItem.productImage,
+
+                    color:
+                      line.originalItem.color,
+
+                    size:
+                      line.originalItem.size,
+
+                    quantity:
+                      line.quantity,
+
+                    catalogUnitPriceMinor:
+                      line.catalogUnitPriceMinor,
+
+                    soldUnitPriceMinor:
+                      line.originalItem.soldUnitPriceMinor,
+
+                    grossAmountMinor:
+                      line.grossAmountMinor,
+
+                    lineDiscountMinor:
+                      line.lineDiscountMinor,
+
+                    invoiceDiscountMinor:
+                      line.invoiceDiscountMinor,
+
+                    allocatedDiscountMinor:
+                      line.allocatedDiscountMinor,
+
+                    returnNetMinor:
+                      line.returnNetMinor,
+                  }),
+                ),
+
+              saleItems:
+                newSalePlans.map(
+                  (line) => ({
+                    lineNumber:
+                      line.lineNumber,
+
+                    productId:
+                      line.productId,
+
+                    barcode:
+                      line.barcode,
+
+                    productCode:
+                      line.productCode,
+
+                    productNameAr:
+                      line.productNameAr,
+
+                    productImage:
+                      line.productImage,
+
+                    color:
+                      line.color,
+
+                    size:
+                      line.size,
+
+                    quantity:
+                      line.quantity,
+
+                    websiteUnitPriceMinor:
+                      line.websiteUnitPriceMinor,
+
+                    soldUnitPriceMinor:
+                      line.soldUnitPriceMinor,
+
+                    grossAmountMinor:
+                      line.grossAmountMinor,
+
+                    lineDiscountMinor:
+                      line.lineDiscountMinor,
+
+                    invoiceDiscountMinor:
+                      line.invoiceDiscountMinor,
+
+                    allocatedDiscountMinor:
+                      line.allocatedDiscountMinor,
+
+                    lineNetMinor:
+                      line.lineNetMinor,
+                  }),
+                ),
+            };
+          }
+
+          // -------------------------------------------------
           // Create exchange document.
           // -------------------------------------------------
 
@@ -4199,6 +4362,9 @@ export async function handleCreatePosExchange(
           }
 
           return {
+            validationOnly: false,
+            quote: null,
+
             exchange: {
               ...exchange,
 
@@ -4220,9 +4386,12 @@ export async function handleCreatePosExchange(
     return json(
       {
         ok: true,
-        validationOnly: false,
+        validationOnly:
+          result.validationOnly,
         alreadyCreated:
           result.alreadyCreated,
+        quote:
+          result.quote,
         exchange:
           result.exchange,
         returnItems:
