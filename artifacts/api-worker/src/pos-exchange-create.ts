@@ -36,6 +36,56 @@ export interface ParsedExchangeReturnItem {
   quantity: number;
 }
 
+export interface ParsedNoReceiptReturnItem {
+  lineNumber: number;
+  productId: number | null;
+  barcode: string | null;
+  quantity: number;
+  returnUnitPriceMinor: number | null;
+  color: string | null;
+  size: string | null;
+}
+
+export type PosExchangeSourceType =
+  | "pos_sale"
+  | "pos_no_receipt";
+
+interface ResolvedNoReceiptReturnItem
+  extends ParsedNoReceiptReturnItem {
+  productId: number;
+  mappedColor: string | null;
+  mappedSize: string | null;
+}
+
+interface PlannedExchangeReturnLine {
+  lineNumber: number;
+  originalItem: {
+    id: number | null;
+    productId: number | null;
+    barcode: string | null;
+    productCode: string | null;
+    productNameAr: string;
+    productImage: string | null;
+    color: string | null;
+    size: string | null;
+    quantity: number;
+    soldUnitPriceMinor: number;
+    lineDiscountMinor: number;
+    generalStockBefore: number | null;
+    generalStockAfter: number | null;
+    variantStockBefore: number | null;
+    variantStockAfter: number | null;
+  };
+  catalogUnitPriceMinor: number | null;
+  quantity: number;
+  grossAmountMinor: number;
+  lineDiscountMinor: number;
+  netBeforeInvoiceMinor: number;
+  invoiceDiscountMinor: number;
+  allocatedDiscountMinor: number;
+  returnNetMinor: number;
+}
+
 export interface ParsedExchangeSaleItem {
   lineNumber: number;
   productId: number | null;
@@ -54,9 +104,11 @@ export type ExchangeSettlementType =
 export interface ParsedPosExchangePayload {
   registerKey: string;
   idempotencyKey: string;
-  originalSalePublicId: string;
+  sourceType: PosExchangeSourceType;
+  originalSalePublicId: string | null;
   settlementType: ExchangeSettlementType;
   returnItems: ParsedExchangeReturnItem[];
+  noReceiptReturnItems: ParsedNoReceiptReturnItem[];
   newItems: ParsedExchangeSaleItem[];
   newInvoiceDiscountMinor: number;
   reason: string | null;
@@ -280,6 +332,142 @@ function parseReturnItems(
   });
 }
 
+function parseNoReceiptReturnItems(
+  value: unknown,
+): ParsedNoReceiptReturnItem[] {
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > 100
+  ) {
+    throw new PosExchangeError(
+      "يجب إضافة صنف مرتجع واحد على الأقل",
+    );
+  }
+
+  return value.map((raw, index) => {
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      Array.isArray(raw)
+    ) {
+      throw new PosExchangeError(
+        "بيانات أحد الأصناف المرتجعة غير صالحة",
+      );
+    }
+
+    const item =
+      raw as Record<string, unknown>;
+
+    const rawProductId =
+      item.productId;
+
+    const productId =
+      typeof rawProductId === "number"
+        ? rawProductId
+        : typeof rawProductId === "string" &&
+            rawProductId.trim()
+          ? Number(rawProductId)
+          : null;
+
+    if (
+      productId !== null &&
+      (
+        !Number.isSafeInteger(productId) ||
+        productId < 1
+      )
+    ) {
+      throw new PosExchangeError(
+        "رقم أحد المنتجات المرتجعة غير صالح",
+      );
+    }
+
+    const hasBarcodeInput =
+      item.barcode !== undefined &&
+      item.barcode !== null &&
+      item.barcode !== "";
+
+    const barcode =
+      hasBarcodeInput
+        ? normalizeBarcode(item.barcode)
+        : null;
+
+    if (
+      hasBarcodeInput &&
+      !barcode
+    ) {
+      throw new PosExchangeError(
+        "باركود أحد الأصناف المرتجعة غير صالح",
+      );
+    }
+
+    if (
+      productId === null &&
+      !barcode
+    ) {
+      throw new PosExchangeError(
+        "يجب تحديد المنتج المرتجع أو باركوده",
+      );
+    }
+
+    const quantity =
+      typeof item.quantity === "number"
+        ? item.quantity
+        : typeof item.quantity === "string" &&
+            item.quantity.trim()
+          ? Number(item.quantity)
+          : Number.NaN;
+
+    if (
+      !Number.isSafeInteger(quantity) ||
+      quantity < 1 ||
+      quantity > 99
+    ) {
+      throw new PosExchangeError(
+        "كمية أحد الأصناف المرتجعة غير صالحة",
+      );
+    }
+
+    const returnUnitPriceMinor =
+      item.returnUnitPrice === undefined ||
+      item.returnUnitPrice === null ||
+      item.returnUnitPrice === ""
+        ? null
+        : parseMoneyToMinor(
+            item.returnUnitPrice,
+          );
+
+    if (
+      item.returnUnitPrice !== undefined &&
+      item.returnUnitPrice !== null &&
+      item.returnUnitPrice !== "" &&
+      returnUnitPriceMinor === null
+    ) {
+      throw new PosExchangeError(
+        "قيمة أحد الأصناف المرتجعة غير صالحة",
+      );
+    }
+
+    return {
+      lineNumber: index + 1,
+      productId,
+      barcode,
+      quantity,
+      returnUnitPriceMinor,
+      color: parseOptionalText(
+        item.color,
+        100,
+        "اللون",
+      ),
+      size: parseOptionalText(
+        item.size,
+        100,
+        "المقاس",
+      ),
+    };
+  });
+}
+
 function parseNewItems(
   value: unknown,
 ): ParsedExchangeSaleItem[] {
@@ -472,14 +660,54 @@ export function parsePosExchangePayload(
     );
   }
 
-  const originalSalePublicId =
-    normalizePublicId(
-      payload.originalSalePublicId,
-    );
+  const requestedSourceType =
+    payload.sourceType;
 
-  if (!originalSalePublicId) {
+  const sourceType:
+    PosExchangeSourceType =
+    requestedSourceType === undefined
+      ? (
+          payload.originalSalePublicId
+            ? "pos_sale"
+            : "pos_no_receipt"
+        )
+      : requestedSourceType ===
+          "pos_sale" ||
+        requestedSourceType ===
+          "pos_no_receipt"
+        ? requestedSourceType
+        : (() => {
+            throw new PosExchangeError(
+              "نوع مصدر فاتورة التبديل غير صالح",
+            );
+          })();
+
+  const originalSalePublicId =
+    sourceType === "pos_sale"
+      ? normalizePublicId(
+          payload.originalSalePublicId,
+        )
+      : null;
+
+  if (
+    sourceType === "pos_sale" &&
+    !originalSalePublicId
+  ) {
     throw new PosExchangeError(
       "رقم الفاتورة الأصلية غير صالح",
+    );
+  }
+
+  if (
+    sourceType === "pos_no_receipt" &&
+    payload.originalSalePublicId !==
+      undefined &&
+    payload.originalSalePublicId !==
+      null &&
+    payload.originalSalePublicId !== ""
+  ) {
+    throw new PosExchangeError(
+      "التبديل بدون فاتورة لا يقبل رقم فاتورة أصلية",
     );
   }
 
@@ -512,15 +740,28 @@ export function parsePosExchangePayload(
     );
   }
 
+  const returnItems =
+    sourceType === "pos_sale"
+      ? parseReturnItems(
+          payload.returnItems,
+        )
+      : [];
+
+  const noReceiptReturnItems =
+    sourceType === "pos_no_receipt"
+      ? parseNoReceiptReturnItems(
+          payload.returnItems,
+        )
+      : [];
+
   return {
     registerKey,
     idempotencyKey,
+    sourceType,
     originalSalePublicId,
     settlementType,
-    returnItems:
-      parseReturnItems(
-        payload.returnItems,
-      ),
+    returnItems,
+    noReceiptReturnItems,
     newItems:
       parseNewItems(
         payload.newItems,
@@ -685,38 +926,49 @@ export async function handleCreatePosExchange(
             };
           }
 
-          const saleRows =
-            await tx
-              .select()
-              .from(
-                posSalesTable,
-              )
-              .where(
-                eq(
-                  posSalesTable.publicId,
-                  payload.originalSalePublicId,
-                ),
-              )
-              .limit(1);
-
-          const sale =
-            saleRows[0];
-
-          if (!sale) {
-            throw new PosExchangeError(
-              "الفاتورة الأصلية غير موجودة",
-              404,
-            );
-          }
+          let sale:
+            typeof posSalesTable.$inferSelect |
+            null = null;
 
           if (
-            sale.status !==
-            "completed"
+            payload.sourceType === "pos_sale"
           ) {
-            throw new PosExchangeError(
-              "لا يمكن التبديل من فاتورة غير مكتملة",
-              409,
-            );
+            const originalSalePublicId =
+              payload.originalSalePublicId;
+
+            if (!originalSalePublicId) {
+              throw new PosExchangeError(
+                "رقم الفاتورة الأصلية غير صالح",
+              );
+            }
+
+            const saleRows =
+              await tx
+                .select()
+                .from(posSalesTable)
+                .where(
+                  eq(
+                    posSalesTable.publicId,
+                    originalSalePublicId,
+                  ),
+                )
+                .limit(1);
+
+            sale = saleRows[0] ?? null;
+
+            if (!sale) {
+              throw new PosExchangeError(
+                "الفاتورة الأصلية غير موجودة",
+                404,
+              );
+            }
+
+            if (sale.status !== "completed") {
+              throw new PosExchangeError(
+                "لا يمكن التبديل من فاتورة غير مكتملة",
+                409,
+              );
+            }
           }
 
           const sessionRows =
@@ -749,514 +1001,648 @@ export async function handleCreatePosExchange(
             );
           }
 
-          const requestedIds =
-            payload.returnItems.map(
-              (item) =>
-                item.originalSaleItemId,
-            );
+          let calculatedReturnLines:
+            PlannedExchangeReturnLine[] = [];
 
-          const originalItems =
-            await tx
-              .select()
-              .from(
-                posSaleItemsTable,
-              )
-              .where(
-                and(
-                  eq(
-                    posSaleItemsTable.saleId,
-                    sale.id,
-                  ),
-                  inArray(
-                    posSaleItemsTable.id,
-                    requestedIds,
-                  ),
-                ),
-              )
-              .orderBy(
-                asc(
-                  posSaleItemsTable.lineNumber,
-                ),
-              );
+          const resolvedNoReceiptReturnItems:
+            ResolvedNoReceiptReturnItem[] = [];
 
           if (
-            originalItems.length !==
-            requestedIds.length
+            payload.sourceType === "pos_sale"
           ) {
-            throw new PosExchangeError(
-              "أحد الأصناف المرتجعة لا ينتمي إلى الفاتورة الأصلية",
-              409,
-            );
-          }
+            const originalSale = sale;
 
-          const completedReturns =
-            await tx
-              .select({
-                id: posSaleReturnsTable.id,
-              })
-              .from(posSaleReturnsTable)
-              .where(
-                and(
-                  eq(
-                    posSaleReturnsTable.originalSaleId,
-                    sale.id,
-                  ),
-                  eq(
-                    posSaleReturnsTable.status,
-                    "completed",
-                  ),
-                ),
+            if (!originalSale) {
+              throw new PosExchangeError(
+                "تعذر تحميل الفاتورة الأصلية",
+                409,
               );
-
-          const completedReturnIds =
-            completedReturns.map(
-              (row) => row.id,
-            );
-
-          let priorReturnItems:
-            Array<
-              typeof posSaleReturnItemsTable.$inferSelect
-            > = [];
-
-          if (
-            completedReturnIds.length > 0
-          ) {
-            priorReturnItems =
-              await tx
-                .select()
-                .from(
-                  posSaleReturnItemsTable,
-                )
-                .where(
-                  inArray(
-                    posSaleReturnItemsTable.returnId,
-                    completedReturnIds,
-                  ),
-                );
-          }
-
-          const completedExchanges =
-            await tx
-              .select({
-                id:
-                  exchangeDocumentsTable.id,
-              })
-              .from(
-                exchangeDocumentsTable,
-              )
-              .where(
-                and(
-                  eq(
-                    exchangeDocumentsTable.sourceType,
-                    "pos_sale",
-                  ),
-                  eq(
-                    exchangeDocumentsTable.originalPosSaleId,
-                    sale.id,
-                  ),
-                  eq(
-                    exchangeDocumentsTable.status,
-                    "completed",
-                  ),
-                ),
-              );
-
-          const completedExchangeIds =
-            completedExchanges.map(
-              (row) => row.id,
-            );
-
-          let priorExchangeItems:
-            Array<
-              typeof exchangeReturnItemsTable.$inferSelect
-            > = [];
-
-          if (
-            completedExchangeIds.length > 0
-          ) {
-            priorExchangeItems =
-              await tx
-                .select()
-                .from(
-                  exchangeReturnItemsTable,
-                )
-                .where(
-                  inArray(
-                    exchangeReturnItemsTable.exchangeId,
-                    completedExchangeIds,
-                  ),
-                );
-          }
-
-          const consumedByOriginalItem =
-            new Map<number, number>();
-
-          const consumedLineDiscountByOriginalItem =
-            new Map<number, number>();
-
-          let priorGrossMinor = 0;
-          let priorLineDiscountMinor = 0;
-          let priorInvoiceDiscountMinor = 0;
-
-          for (
-            const item of
-            priorReturnItems
-          ) {
-            if (
-              item.originalSaleItemId ===
-              null
-            ) {
-              continue;
             }
 
-            const id =
-              item.originalSaleItemId;
-
-            consumedByOriginalItem.set(
-              id,
-              (
-                consumedByOriginalItem.get(
-                  id,
-                ) ?? 0
-              ) + item.quantity,
-            );
-
-            consumedLineDiscountByOriginalItem.set(
-              id,
-              (
-                consumedLineDiscountByOriginalItem.get(
-                  id,
-                ) ?? 0
-              ) +
-                item.lineDiscountMinor,
-            );
-
-            priorGrossMinor +=
-              item.grossAmountMinor;
-
-            priorLineDiscountMinor +=
-              item.lineDiscountMinor;
-
-            priorInvoiceDiscountMinor +=
-              item.invoiceDiscountMinor;
-          }
-
-          for (
-            const item of
-            priorExchangeItems
-          ) {
-            if (
-              item.originalPosSaleItemId ===
-              null
-            ) {
-              continue;
-            }
-
-            const id =
-              item.originalPosSaleItemId;
-
-            consumedByOriginalItem.set(
-              id,
-              (
-                consumedByOriginalItem.get(
-                  id,
-                ) ?? 0
-              ) + item.quantity,
-            );
-
-            consumedLineDiscountByOriginalItem.set(
-              id,
-              (
-                consumedLineDiscountByOriginalItem.get(
-                  id,
-                ) ?? 0
-              ) +
-                item.lineDiscountMinor,
-            );
-
-            priorGrossMinor +=
-              item.grossAmountMinor;
-
-            priorLineDiscountMinor +=
-              item.lineDiscountMinor;
-
-            priorInvoiceDiscountMinor +=
-              item.invoiceDiscountMinor;
-          }
-
-          const invoiceBaseMinor =
-            sale.subtotalMinor -
-            sale.itemDiscountMinor;
-
-          if (
-            !Number.isSafeInteger(
-              priorGrossMinor,
-            ) ||
-            !Number.isSafeInteger(
-              priorLineDiscountMinor,
-            ) ||
-            !Number.isSafeInteger(
-              priorInvoiceDiscountMinor,
-            ) ||
-            !Number.isSafeInteger(
-              invoiceBaseMinor,
-            ) ||
-            invoiceBaseMinor < 0 ||
-            priorGrossMinor >
-              sale.subtotalMinor ||
-            priorLineDiscountMinor >
-              sale.itemDiscountMinor ||
-            priorInvoiceDiscountMinor >
-              sale.invoiceDiscountMinor ||
-            priorGrossMinor -
-                priorLineDiscountMinor >
-              invoiceBaseMinor ||
-            priorLineDiscountMinor +
-                priorInvoiceDiscountMinor >
-              sale.discountMinor
-          ) {
-            throw new PosExchangeError(
-              "بيانات المرتجعات أو التبديلات السابقة غير متطابقة",
-              409,
-            );
-          }
-
-          const requestedById =
-            new Map(
+            const requestedIds =
               payload.returnItems.map(
-                (item) => [
+                (item) =>
                   item.originalSaleItemId,
-                  item.quantity,
-                ],
-              ),
-            );
+              );
 
-          const calculatedReturnLines =
-            originalItems.map(
-              (originalItem, index) => {
-                const quantity =
-                  requestedById.get(
-                    originalItem.id,
-                  ) ?? 0;
+            const originalItems =
+              await tx
+                .select()
+                .from(
+                  posSaleItemsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      posSaleItemsTable.saleId,
+                      originalSale.id,
+                    ),
+                    inArray(
+                      posSaleItemsTable.id,
+                      requestedIds,
+                    ),
+                  ),
+                )
+                .orderBy(
+                  asc(
+                    posSaleItemsTable.lineNumber,
+                  ),
+                );
 
-                const previouslyConsumed =
+            if (
+              originalItems.length !==
+              requestedIds.length
+            ) {
+              throw new PosExchangeError(
+                "أحد الأصناف المرتجعة لا ينتمي إلى الفاتورة الأصلية",
+                409,
+              );
+            }
+
+            const completedReturns =
+              await tx
+                .select({
+                  id: posSaleReturnsTable.id,
+                })
+                .from(posSaleReturnsTable)
+                .where(
+                  and(
+                    eq(
+                      posSaleReturnsTable.originalSaleId,
+                      originalSale.id,
+                    ),
+                    eq(
+                      posSaleReturnsTable.status,
+                      "completed",
+                    ),
+                  ),
+                );
+
+            const completedReturnIds =
+              completedReturns.map(
+                (row) => row.id,
+              );
+
+            let priorReturnItems:
+              Array<
+                typeof posSaleReturnItemsTable.$inferSelect
+              > = [];
+
+            if (
+              completedReturnIds.length > 0
+            ) {
+              priorReturnItems =
+                await tx
+                  .select()
+                  .from(
+                    posSaleReturnItemsTable,
+                  )
+                  .where(
+                    inArray(
+                      posSaleReturnItemsTable.returnId,
+                      completedReturnIds,
+                    ),
+                  );
+            }
+
+            const completedExchanges =
+              await tx
+                .select({
+                  id:
+                    exchangeDocumentsTable.id,
+                })
+                .from(
+                  exchangeDocumentsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      exchangeDocumentsTable.sourceType,
+                      "pos_sale",
+                    ),
+                    eq(
+                      exchangeDocumentsTable.originalPosSaleId,
+                      originalSale.id,
+                    ),
+                    eq(
+                      exchangeDocumentsTable.status,
+                      "completed",
+                    ),
+                  ),
+                );
+
+            const completedExchangeIds =
+              completedExchanges.map(
+                (row) => row.id,
+              );
+
+            let priorExchangeItems:
+              Array<
+                typeof exchangeReturnItemsTable.$inferSelect
+              > = [];
+
+            if (
+              completedExchangeIds.length > 0
+            ) {
+              priorExchangeItems =
+                await tx
+                  .select()
+                  .from(
+                    exchangeReturnItemsTable,
+                  )
+                  .where(
+                    inArray(
+                      exchangeReturnItemsTable.exchangeId,
+                      completedExchangeIds,
+                    ),
+                  );
+            }
+
+            const consumedByOriginalItem =
+              new Map<number, number>();
+
+            const consumedLineDiscountByOriginalItem =
+              new Map<number, number>();
+
+            let priorGrossMinor = 0;
+            let priorLineDiscountMinor = 0;
+            let priorInvoiceDiscountMinor = 0;
+
+            for (
+              const item of
+              priorReturnItems
+            ) {
+              if (
+                item.originalSaleItemId ===
+                null
+              ) {
+                continue;
+              }
+
+              const id =
+                item.originalSaleItemId;
+
+              consumedByOriginalItem.set(
+                id,
+                (
                   consumedByOriginalItem.get(
-                    originalItem.id,
-                  ) ?? 0;
+                    id,
+                  ) ?? 0
+                ) + item.quantity,
+              );
 
-                const previouslyConsumedLineDiscount =
+              consumedLineDiscountByOriginalItem.set(
+                id,
+                (
                   consumedLineDiscountByOriginalItem.get(
-                    originalItem.id,
-                  ) ?? 0;
+                    id,
+                  ) ?? 0
+                ) +
+                  item.lineDiscountMinor,
+              );
 
-                const returnableQuantity =
-                  originalItem.quantity -
-                  previouslyConsumed;
+              priorGrossMinor +=
+                item.grossAmountMinor;
 
-                if (
-                  returnableQuantity < 0 ||
-                  quantity >
-                    returnableQuantity
-                ) {
-                  throw new PosExchangeError(
-                    `الكمية المطلوبة من ${originalItem.productNameAr} أكبر من الكمية المتبقية للتبديل`,
-                    409,
-                  );
-                }
+              priorLineDiscountMinor +=
+                item.lineDiscountMinor;
 
-                if (quantity < 1) {
-                  throw new PosExchangeError(
-                    `كمية ${originalItem.productNameAr} غير صالحة`,
-                  );
-                }
+              priorInvoiceDiscountMinor +=
+                item.invoiceDiscountMinor;
+            }
 
-                const grossAmountMinor =
-                  originalItem.soldUnitPriceMinor *
-                  quantity;
+            for (
+              const item of
+              priorExchangeItems
+            ) {
+              if (
+                item.originalPosSaleItemId ===
+                null
+              ) {
+                continue;
+              }
 
-                if (
-                  !Number.isSafeInteger(
+              const id =
+                item.originalPosSaleItemId;
+
+              consumedByOriginalItem.set(
+                id,
+                (
+                  consumedByOriginalItem.get(
+                    id,
+                  ) ?? 0
+                ) + item.quantity,
+              );
+
+              consumedLineDiscountByOriginalItem.set(
+                id,
+                (
+                  consumedLineDiscountByOriginalItem.get(
+                    id,
+                  ) ?? 0
+                ) +
+                  item.lineDiscountMinor,
+              );
+
+              priorGrossMinor +=
+                item.grossAmountMinor;
+
+              priorLineDiscountMinor +=
+                item.lineDiscountMinor;
+
+              priorInvoiceDiscountMinor +=
+                item.invoiceDiscountMinor;
+            }
+
+            const invoiceBaseMinor =
+              originalSale.subtotalMinor -
+              originalSale.itemDiscountMinor;
+
+            if (
+              !Number.isSafeInteger(
+                priorGrossMinor,
+              ) ||
+              !Number.isSafeInteger(
+                priorLineDiscountMinor,
+              ) ||
+              !Number.isSafeInteger(
+                priorInvoiceDiscountMinor,
+              ) ||
+              !Number.isSafeInteger(
+                invoiceBaseMinor,
+              ) ||
+              invoiceBaseMinor < 0 ||
+              priorGrossMinor >
+                originalSale.subtotalMinor ||
+              priorLineDiscountMinor >
+                originalSale.itemDiscountMinor ||
+              priorInvoiceDiscountMinor >
+                originalSale.invoiceDiscountMinor ||
+              priorGrossMinor -
+                  priorLineDiscountMinor >
+                invoiceBaseMinor ||
+              priorLineDiscountMinor +
+                  priorInvoiceDiscountMinor >
+                originalSale.discountMinor
+            ) {
+              throw new PosExchangeError(
+                "بيانات المرتجعات أو التبديلات السابقة غير متطابقة",
+                409,
+              );
+            }
+
+            const requestedById =
+              new Map(
+                payload.returnItems.map(
+                  (item) => [
+                    item.originalSaleItemId,
+                    item.quantity,
+                  ],
+                ),
+              );
+
+            const historicalReturnLines =
+              originalItems.map(
+                (originalItem, index) => {
+                  const quantity =
+                    requestedById.get(
+                      originalItem.id,
+                    ) ?? 0;
+
+                  const previouslyConsumed =
+                    consumedByOriginalItem.get(
+                      originalItem.id,
+                    ) ?? 0;
+
+                  const previouslyConsumedLineDiscount =
+                    consumedLineDiscountByOriginalItem.get(
+                      originalItem.id,
+                    ) ?? 0;
+
+                  const returnableQuantity =
+                    originalItem.quantity -
+                    previouslyConsumed;
+
+                  if (
+                    returnableQuantity < 0 ||
+                    quantity >
+                      returnableQuantity
+                  ) {
+                    throw new PosExchangeError(
+                      `الكمية المطلوبة من ${originalItem.productNameAr} أكبر من الكمية المتبقية للتبديل`,
+                      409,
+                    );
+                  }
+
+                  if (quantity < 1) {
+                    throw new PosExchangeError(
+                      `كمية ${originalItem.productNameAr} غير صالحة`,
+                    );
+                  }
+
+                  const grossAmountMinor =
+                    originalItem.soldUnitPriceMinor *
+                    quantity;
+
+                  if (
+                    !Number.isSafeInteger(
+                      grossAmountMinor,
+                    ) ||
+                    grossAmountMinor < 0 ||
+                    grossAmountMinor >
+                      MAX_MINOR
+                  ) {
+                    throw new PosExchangeError(
+                      "قيمة أحد الأصناف المرتجعة تتجاوز الحد المسموح",
+                    );
+                  }
+
+                  const consumedAfter =
+                    previouslyConsumed +
+                    quantity;
+
+                  const targetLineDiscountMinor =
+                    consumedAfter ===
+                    originalItem.quantity
+                      ? originalItem.lineDiscountMinor
+                      : Number(
+                          (
+                            BigInt(
+                              originalItem.lineDiscountMinor,
+                            ) *
+                            BigInt(
+                              consumedAfter,
+                            )
+                          ) /
+                            BigInt(
+                              originalItem.quantity,
+                            ),
+                        );
+
+                  const lineDiscountMinor =
+                    targetLineDiscountMinor -
+                    previouslyConsumedLineDiscount;
+
+                  if (
+                    !Number.isSafeInteger(
+                      targetLineDiscountMinor,
+                    ) ||
+                    !Number.isSafeInteger(
+                      lineDiscountMinor,
+                    ) ||
+                    targetLineDiscountMinor <
+                      previouslyConsumedLineDiscount ||
+                    targetLineDiscountMinor >
+                      originalItem.lineDiscountMinor ||
+                    lineDiscountMinor < 0 ||
+                    lineDiscountMinor >
+                      grossAmountMinor
+                  ) {
+                    throw new PosExchangeError(
+                      `تعذر احتساب خصم ${originalItem.productNameAr}`,
+                      409,
+                    );
+                  }
+
+                  return {
+                    lineNumber:
+                      index + 1,
+
+                    originalItem,
+                    quantity,
+
                     grossAmountMinor,
-                  ) ||
-                  grossAmountMinor < 0 ||
-                  grossAmountMinor >
-                    MAX_MINOR
-                ) {
-                  throw new PosExchangeError(
-                    "قيمة أحد الأصناف المرتجعة تتجاوز الحد المسموح",
-                  );
-                }
 
-                const consumedAfter =
-                  previouslyConsumed +
-                  quantity;
+                    lineDiscountMinor,
 
-                const targetLineDiscountMinor =
-                  consumedAfter ===
-                  originalItem.quantity
-                    ? originalItem.lineDiscountMinor
+                    netBeforeInvoiceMinor:
+                      grossAmountMinor -
+                      lineDiscountMinor,
+
+                    invoiceDiscountMinor:
+                      0,
+
+                    allocatedDiscountMinor:
+                      0,
+
+                    returnNetMinor:
+                      0,
+                  };
+                },
+              );
+
+            let runningNetBeforeInvoiceMinor =
+              priorGrossMinor -
+              priorLineDiscountMinor;
+
+            let runningInvoiceDiscountMinor =
+              priorInvoiceDiscountMinor;
+
+            for (
+              const line of
+              historicalReturnLines
+            ) {
+              const nextNetBeforeInvoiceMinor =
+                runningNetBeforeInvoiceMinor +
+                line.netBeforeInvoiceMinor;
+
+              if (
+                !Number.isSafeInteger(
+                  nextNetBeforeInvoiceMinor,
+                ) ||
+                nextNetBeforeInvoiceMinor >
+                  invoiceBaseMinor
+              ) {
+                throw new PosExchangeError(
+                  "صافي الأصناف المرتجعة أكبر من صافي الفاتورة الأصلية",
+                  409,
+                );
+              }
+
+              let targetInvoiceDiscountMinor =
+                0;
+
+              if (
+                invoiceBaseMinor > 0
+              ) {
+                targetInvoiceDiscountMinor =
+                  nextNetBeforeInvoiceMinor ===
+                  invoiceBaseMinor
+                    ? originalSale.invoiceDiscountMinor
                     : Number(
                         (
                           BigInt(
-                            originalItem.lineDiscountMinor,
+                            originalSale.invoiceDiscountMinor,
                           ) *
                           BigInt(
-                            consumedAfter,
+                            nextNetBeforeInvoiceMinor,
                           )
                         ) /
                           BigInt(
-                            originalItem.quantity,
+                            invoiceBaseMinor,
                           ),
                       );
+              }
 
-                const lineDiscountMinor =
-                  targetLineDiscountMinor -
-                  previouslyConsumedLineDiscount;
+              const invoiceDiscountMinor =
+                targetInvoiceDiscountMinor -
+                runningInvoiceDiscountMinor;
+
+              if (
+                !Number.isSafeInteger(
+                  invoiceDiscountMinor,
+                ) ||
+                invoiceDiscountMinor < 0 ||
+                invoiceDiscountMinor >
+                  line.netBeforeInvoiceMinor
+              ) {
+                throw new PosExchangeError(
+                  "تعذر توزيع خصم الفاتورة الأصلية على التبديل",
+                  409,
+                );
+              }
+
+              line.invoiceDiscountMinor =
+                invoiceDiscountMinor;
+
+              line.allocatedDiscountMinor =
+                line.lineDiscountMinor +
+                line.invoiceDiscountMinor;
+
+              line.returnNetMinor =
+                line.grossAmountMinor -
+                line.allocatedDiscountMinor;
+
+              runningNetBeforeInvoiceMinor =
+                nextNetBeforeInvoiceMinor;
+
+              runningInvoiceDiscountMinor =
+                targetInvoiceDiscountMinor;
+            }
+
+            for (const line of historicalReturnLines) {
+              if (line.originalItem.productId === null) {
+                throw new PosExchangeError(
+                  `المنتج ${line.originalItem.productNameAr} لم يعد مرتبطًا بسجل المنتج`,
+                  409,
+                );
+              }
+            }
+
+
+            calculatedReturnLines =
+              historicalReturnLines.map(
+                (line) => ({
+                  ...line,
+                  catalogUnitPriceMinor: null,
+                }),
+              );
+          } else {
+            for (
+              const item of
+              payload.noReceiptReturnItems
+            ) {
+              if (item.barcode) {
+                const mappings =
+                  await tx
+                    .select()
+                    .from(productBarcodesTable)
+                    .where(
+                      eq(
+                        productBarcodesTable.barcode,
+                        item.barcode,
+                      ),
+                    )
+                    .limit(1);
+
+                const mapping = mappings[0];
+
+                if (mapping) {
+                  if (
+                    item.productId !== null &&
+                    item.productId !==
+                      mapping.productId
+                  ) {
+                    throw new PosExchangeError(
+                      "الباركود لا يطابق المنتج المرتجع المحدد",
+                      409,
+                    );
+                  }
+
+                  resolvedNoReceiptReturnItems.push({
+                    ...item,
+                    productId: mapping.productId,
+                    mappedColor:
+                      mapping.color ?? null,
+                    mappedSize:
+                      mapping.size ?? null,
+                  });
+                  continue;
+                }
+
+                const primaryRows =
+                  await tx
+                    .select({
+                      id: productsTable.id,
+                    })
+                    .from(productsTable)
+                    .where(
+                      eq(
+                        productsTable.barcode,
+                        item.barcode,
+                      ),
+                    )
+                    .limit(1);
+
+                const primary = primaryRows[0];
+
+                if (!primary) {
+                  throw new PosExchangeError(
+                    `الباركود ${item.barcode} غير موجود`,
+                    404,
+                  );
+                }
 
                 if (
-                  !Number.isSafeInteger(
-                    targetLineDiscountMinor,
-                  ) ||
-                  !Number.isSafeInteger(
-                    lineDiscountMinor,
-                  ) ||
-                  targetLineDiscountMinor <
-                    previouslyConsumedLineDiscount ||
-                  targetLineDiscountMinor >
-                    originalItem.lineDiscountMinor ||
-                  lineDiscountMinor < 0 ||
-                  lineDiscountMinor >
-                    grossAmountMinor
+                  item.productId !== null &&
+                  item.productId !== primary.id
                 ) {
                   throw new PosExchangeError(
-                    `تعذر احتساب خصم ${originalItem.productNameAr}`,
+                    "الباركود لا يطابق المنتج المرتجع المحدد",
                     409,
                   );
                 }
 
-                return {
-                  lineNumber:
-                    index + 1,
+                resolvedNoReceiptReturnItems.push({
+                  ...item,
+                  productId: primary.id,
+                  mappedColor: null,
+                  mappedSize: null,
+                });
+                continue;
+              }
 
-                  originalItem,
-                  quantity,
+              if (item.productId === null) {
+                throw new PosExchangeError(
+                  "تعذر تحديد أحد المنتجات المرتجعة",
+                );
+              }
 
-                  grossAmountMinor,
+              resolvedNoReceiptReturnItems.push({
+                ...item,
+                productId: item.productId,
+                mappedColor: null,
+                mappedSize: null,
+              });
+            }
 
-                  lineDiscountMinor,
-
-                  netBeforeInvoiceMinor:
-                    grossAmountMinor -
-                    lineDiscountMinor,
-
-                  invoiceDiscountMinor:
-                    0,
-
-                  allocatedDiscountMinor:
-                    0,
-
-                  returnNetMinor:
-                    0,
-                };
-              },
+            resolvedNoReceiptReturnItems.sort(
+              (left, right) =>
+                left.productId -
+                  right.productId ||
+                left.lineNumber -
+                  right.lineNumber,
             );
-
-          let runningNetBeforeInvoiceMinor =
-            priorGrossMinor -
-            priorLineDiscountMinor;
-
-          let runningInvoiceDiscountMinor =
-            priorInvoiceDiscountMinor;
-
-          for (
-            const line of
-            calculatedReturnLines
-          ) {
-            const nextNetBeforeInvoiceMinor =
-              runningNetBeforeInvoiceMinor +
-              line.netBeforeInvoiceMinor;
-
-            if (
-              !Number.isSafeInteger(
-                nextNetBeforeInvoiceMinor,
-              ) ||
-              nextNetBeforeInvoiceMinor >
-                invoiceBaseMinor
-            ) {
-              throw new PosExchangeError(
-                "صافي الأصناف المرتجعة أكبر من صافي الفاتورة الأصلية",
-                409,
-              );
-            }
-
-            let targetInvoiceDiscountMinor =
-              0;
-
-            if (
-              invoiceBaseMinor > 0
-            ) {
-              targetInvoiceDiscountMinor =
-                nextNetBeforeInvoiceMinor ===
-                invoiceBaseMinor
-                  ? sale.invoiceDiscountMinor
-                  : Number(
-                      (
-                        BigInt(
-                          sale.invoiceDiscountMinor,
-                        ) *
-                        BigInt(
-                          nextNetBeforeInvoiceMinor,
-                        )
-                      ) /
-                        BigInt(
-                          invoiceBaseMinor,
-                        ),
-                    );
-            }
-
-            const invoiceDiscountMinor =
-              targetInvoiceDiscountMinor -
-              runningInvoiceDiscountMinor;
-
-            if (
-              !Number.isSafeInteger(
-                invoiceDiscountMinor,
-              ) ||
-              invoiceDiscountMinor < 0 ||
-              invoiceDiscountMinor >
-                line.netBeforeInvoiceMinor
-            ) {
-              throw new PosExchangeError(
-                "تعذر توزيع خصم الفاتورة الأصلية على التبديل",
-                409,
-              );
-            }
-
-            line.invoiceDiscountMinor =
-              invoiceDiscountMinor;
-
-            line.allocatedDiscountMinor =
-              line.lineDiscountMinor +
-              line.invoiceDiscountMinor;
-
-            line.returnNetMinor =
-              line.grossAmountMinor -
-              line.allocatedDiscountMinor;
-
-            runningNetBeforeInvoiceMinor =
-              nextNetBeforeInvoiceMinor;
-
-            runningInvoiceDiscountMinor =
-              targetInvoiceDiscountMinor;
-          }
-
-          for (const line of calculatedReturnLines) {
-            if (line.originalItem.productId === null) {
-              throw new PosExchangeError(
-                `المنتج ${line.originalItem.productNameAr} لم يعد مرتبطًا بسجل المنتج`,
-                409,
-              );
-            }
           }
 
           const resolvedNewItems: Array<
@@ -1365,14 +1751,20 @@ export async function handleCreatePosExchange(
               left.lineNumber - right.lineNumber,
           );
 
-          const returnProductIds = Array.from(
-            new Set(
-              calculatedReturnLines.map(
-                (line) =>
-                  line.originalItem.productId as number,
+          const returnProductIds =
+            Array.from(
+              new Set(
+                payload.sourceType === "pos_sale"
+                  ? calculatedReturnLines.map(
+                      (line) =>
+                        line.originalItem
+                          .productId as number,
+                    )
+                  : resolvedNoReceiptReturnItems.map(
+                      (item) => item.productId,
+                    ),
               ),
-            ),
-          ).sort((a, b) => a - b);
+            ).sort((x, y) => x - y);
 
           const newProductIds = Array.from(
             new Set(
@@ -1446,6 +1838,218 @@ export async function handleCreatePosExchange(
                       | null
                   ) ?? [],
               },
+            );
+          }
+
+          if (
+            payload.sourceType ===
+            "pos_no_receipt"
+          ) {
+            for (
+              const item of
+              resolvedNoReceiptReturnItems
+            ) {
+              const stockState =
+                productStockStates.get(
+                  item.productId,
+                );
+
+              if (!stockState) {
+                throw new PosExchangeError(
+                  "تعذر قفل مخزون أحد المنتجات المرتجعة",
+                  409,
+                );
+              }
+
+              const product =
+                stockState.product;
+
+              if (
+                !Number.isSafeInteger(
+                  product.price,
+                ) ||
+                product.price < 0 ||
+                product.price > MAX_MINOR
+              ) {
+                throw new PosExchangeError(
+                  `سعر المنتج ${product.nameAr} غير صالح`,
+                );
+              }
+
+              if (
+                item.mappedColor &&
+                item.color &&
+                item.mappedColor !== item.color
+              ) {
+                throw new PosExchangeError(
+                  `لون باركود ${item.barcode} غير مطابق`,
+                  409,
+                );
+              }
+
+              if (
+                item.mappedSize &&
+                item.size &&
+                item.mappedSize !== item.size
+              ) {
+                throw new PosExchangeError(
+                  `مقاس باركود ${item.barcode} غير مطابق`,
+                  409,
+                );
+              }
+
+              const color =
+                item.mappedColor ?? item.color;
+
+              const size =
+                item.mappedSize ?? item.size;
+
+              const colorVariants =
+                stockState.colorVariants;
+
+              const generalSizes =
+                (
+                  product.sizes as
+                    | string[]
+                    | null
+                ) ?? [];
+
+              let variantStock:
+                number | null = null;
+
+              if (colorVariants.length > 0) {
+                if (!color) {
+                  throw new PosExchangeError(
+                    `يجب تحديد لون ${product.nameAr}`,
+                  );
+                }
+
+                const variant =
+                  colorVariants.find(
+                    (entry) =>
+                      entry.color === color,
+                  );
+
+                if (!variant) {
+                  throw new PosExchangeError(
+                    `لون ${product.nameAr} غير موجود`,
+                    409,
+                  );
+                }
+
+                const variantSizes =
+                  Array.isArray(variant.sizes)
+                    ? variant.sizes
+                    : [];
+
+                if (variantSizes.length > 0) {
+                  if (!size) {
+                    throw new PosExchangeError(
+                      `يجب تحديد مقاس ${product.nameAr}`,
+                    );
+                  }
+
+                  const selectedSize =
+                    variantSizes.find(
+                      (entry) =>
+                        entry.size === size,
+                    );
+
+                  if (!selectedSize) {
+                    throw new PosExchangeError(
+                      `مقاس ${product.nameAr} غير موجود`,
+                      409,
+                    );
+                  }
+
+                  variantStock =
+                    selectedSize.stock ?? null;
+                }
+              } else if (
+                generalSizes.length > 0
+              ) {
+                if (
+                  !size ||
+                  !generalSizes.includes(size)
+                ) {
+                  throw new PosExchangeError(
+                    `مقاس ${product.nameAr} غير موجود`,
+                    409,
+                  );
+                }
+              }
+
+              const catalogUnitPriceMinor =
+                product.price;
+
+              const soldUnitPriceMinor =
+                item.returnUnitPriceMinor ??
+                catalogUnitPriceMinor;
+
+              const grossAmountMinor =
+                soldUnitPriceMinor *
+                item.quantity;
+
+              if (
+                !Number.isSafeInteger(
+                  grossAmountMinor,
+                ) ||
+                grossAmountMinor < 0 ||
+                grossAmountMinor > MAX_MINOR
+              ) {
+                throw new PosExchangeError(
+                  `قيمة مرتجع ${product.nameAr} تتجاوز الحد المسموح`,
+                );
+              }
+
+              calculatedReturnLines.push({
+                lineNumber: item.lineNumber,
+
+                originalItem: {
+                  id: null,
+                  productId: product.id,
+                  barcode:
+                    item.barcode ??
+                    product.barcode ??
+                    null,
+                  productCode: null,
+                  productNameAr:
+                    product.nameAr,
+                  productImage: null,
+                  color,
+                  size,
+                  quantity: item.quantity,
+                  soldUnitPriceMinor,
+                  lineDiscountMinor: 0,
+
+                  generalStockBefore:
+                    product.stock ?? null,
+                  generalStockAfter:
+                    product.stock ?? null,
+
+                  variantStockBefore:
+                    variantStock,
+                  variantStockAfter:
+                    variantStock,
+                },
+
+                catalogUnitPriceMinor,
+                quantity: item.quantity,
+                grossAmountMinor,
+                lineDiscountMinor: 0,
+                netBeforeInvoiceMinor:
+                  grossAmountMinor,
+                invoiceDiscountMinor: 0,
+                allocatedDiscountMinor: 0,
+                returnNetMinor:
+                  grossAmountMinor,
+              });
+            }
+
+            calculatedReturnLines.sort(
+              (left, right) =>
+                left.lineNumber -
+                right.lineNumber,
             );
           }
 
@@ -1679,6 +2283,9 @@ export async function handleCreatePosExchange(
 
               quantity:
                 line.quantity,
+
+              catalogUnitPriceMinor:
+                line.catalogUnitPriceMinor,
 
               soldUnitPriceMinor:
                 originalItem.soldUnitPriceMinor,
@@ -2304,7 +2911,7 @@ export async function handleCreatePosExchange(
                   session.businessDate,
                 ),
               originalPosSaleId:
-                sale.id,
+                sale?.id ?? null,
               cashSessionId:
                 session.id,
               registerKey:
