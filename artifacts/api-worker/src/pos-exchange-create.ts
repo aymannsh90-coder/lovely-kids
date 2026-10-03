@@ -1708,6 +1708,432 @@ export async function handleCreatePosExchange(
             });
           }
 
+          const newStockPlans = [];
+
+          let newSubtotalMinor = 0;
+          let newItemDiscountMinor = 0;
+
+          for (const item of resolvedNewItems) {
+            const stockState =
+              productStockStates.get(
+                item.productId,
+              );
+
+            if (!stockState) {
+              throw new PosExchangeError(
+                "تعذر قفل مخزون أحد المنتجات الجديدة",
+                409,
+              );
+            }
+
+            const product =
+              stockState.product;
+
+            if (
+              !Number.isSafeInteger(
+                product.price,
+              ) ||
+              product.price < 0
+            ) {
+              throw new PosExchangeError(
+                `سعر المنتج ${product.nameAr} غير صالح`,
+              );
+            }
+
+            if (
+              item.mappedColor &&
+              item.color &&
+              item.mappedColor !==
+                item.color
+            ) {
+              throw new PosExchangeError(
+                `لون باركود ${item.barcode} غير مطابق`,
+              );
+            }
+
+            if (
+              item.mappedSize &&
+              item.size &&
+              item.mappedSize !==
+                item.size
+            ) {
+              throw new PosExchangeError(
+                `مقاس باركود ${item.barcode} غير مطابق`,
+              );
+            }
+
+            const color =
+              item.mappedColor ??
+              item.color;
+
+            const size =
+              item.mappedSize ??
+              item.size;
+
+            const colorVariants =
+              stockState.colorVariants;
+
+            const generalSizes =
+              (
+                product.sizes as
+                  | string[]
+                  | null
+              ) ?? [];
+
+            let nextColorVariants:
+              ColorVariant[] | null = null;
+
+            let variantStockBefore:
+              number | null = null;
+
+            let variantStockAfter:
+              number | null = null;
+
+            if (colorVariants.length > 0) {
+              if (!color) {
+                throw new PosExchangeError(
+                  `يجب تحديد لون ${product.nameAr}`,
+                );
+              }
+
+              const variantIndex =
+                colorVariants.findIndex(
+                  (variant) =>
+                    variant.color ===
+                    color,
+                );
+
+              if (variantIndex < 0) {
+                throw new PosExchangeError(
+                  `لون ${product.nameAr} غير متوفر`,
+                );
+              }
+
+              const variant =
+                colorVariants[variantIndex];
+
+              const variantSizes =
+                Array.isArray(
+                  variant.sizes,
+                )
+                  ? variant.sizes
+                  : [];
+
+              if (variantSizes.length > 0) {
+                if (!size) {
+                  throw new PosExchangeError(
+                    `يجب تحديد مقاس ${product.nameAr}`,
+                  );
+                }
+
+                const sizeIndex =
+                  variantSizes.findIndex(
+                    (entry) =>
+                      entry.size === size,
+                  );
+
+                if (sizeIndex < 0) {
+                  throw new PosExchangeError(
+                    `مقاس ${product.nameAr} غير متوفر`,
+                  );
+                }
+
+                const selectedSize =
+                  variantSizes[sizeIndex];
+
+                variantStockBefore =
+                  selectedSize.stock ??
+                  null;
+
+                if (
+                  selectedSize.outOfStock ||
+                  (
+                    selectedSize.stock !==
+                      null &&
+                    selectedSize.stock !==
+                      undefined &&
+                    selectedSize.stock <
+                      item.quantity
+                  )
+                ) {
+                  throw new PosExchangeError(
+                    `الكمية المطلوبة من ${product.nameAr} غير متوفرة`,
+                    409,
+                  );
+                }
+
+                if (
+                  selectedSize.stock !==
+                    null &&
+                  selectedSize.stock !==
+                    undefined
+                ) {
+                  variantStockAfter =
+                    selectedSize.stock -
+                    item.quantity;
+
+                  if (
+                    !Number.isSafeInteger(
+                      variantStockAfter,
+                    ) ||
+                    variantStockAfter < 0
+                  ) {
+                    throw new PosExchangeError(
+                      `مخزون ${product.nameAr} غير صالح`,
+                      409,
+                    );
+                  }
+
+                  const nextSizes =
+                    variantSizes.map(
+                      (entry, index) =>
+                        index === sizeIndex
+                          ? {
+                              ...entry,
+                              stock:
+                                variantStockAfter,
+                              outOfStock:
+                                variantStockAfter! <= 0,
+                            }
+                          : entry,
+                    );
+
+                  nextColorVariants =
+                    colorVariants.map(
+                      (entry, index) =>
+                        index === variantIndex
+                          ? {
+                              ...entry,
+                              sizes:
+                                nextSizes,
+                            }
+                          : entry,
+                    );
+
+                  stockState.colorVariants =
+                    nextColorVariants;
+                }
+              } else if (size) {
+                throw new PosExchangeError(
+                  `المقاس غير صالح للمنتج ${product.nameAr}`,
+                );
+              }
+            } else {
+              if (color) {
+                throw new PosExchangeError(
+                  `اللون غير صالح للمنتج ${product.nameAr}`,
+                );
+              }
+
+              if (generalSizes.length > 0) {
+                if (
+                  !size ||
+                  !generalSizes.includes(
+                    size,
+                  )
+                ) {
+                  throw new PosExchangeError(
+                    `مقاس ${product.nameAr} غير متوفر`,
+                  );
+                }
+              } else if (size) {
+                throw new PosExchangeError(
+                  `المقاس غير صالح للمنتج ${product.nameAr}`,
+                );
+              }
+            }
+
+            const generalStockBefore =
+              stockState.generalStock;
+
+            let generalStockAfter:
+              number | null = null;
+
+            if (
+              generalStockBefore !== null
+            ) {
+              if (
+                generalStockBefore <
+                item.quantity
+              ) {
+                throw new PosExchangeError(
+                  `الكمية المطلوبة من ${product.nameAr} غير متوفرة`,
+                  409,
+                );
+              }
+
+              generalStockAfter =
+                generalStockBefore -
+                item.quantity;
+
+              if (
+                !Number.isSafeInteger(
+                  generalStockAfter,
+                ) ||
+                generalStockAfter < 0
+              ) {
+                throw new PosExchangeError(
+                  `مخزون ${product.nameAr} غير صالح`,
+                  409,
+                );
+              }
+
+              stockState.generalStock =
+                generalStockAfter;
+            }
+
+            const websiteUnitPriceMinor =
+              product.price * 100;
+
+            const lineGrossMinor =
+              item.soldUnitPriceMinor *
+              item.quantity;
+
+            const lineDiscountMinor =
+              item.lineDiscountMinor;
+
+            const lineTotalMinor =
+              lineGrossMinor -
+              lineDiscountMinor;
+
+            if (
+              !Number.isSafeInteger(
+                websiteUnitPriceMinor,
+              ) ||
+              websiteUnitPriceMinor >
+                MAX_MINOR ||
+              !Number.isSafeInteger(
+                lineGrossMinor,
+              ) ||
+              lineGrossMinor >
+                MAX_MINOR ||
+              !Number.isSafeInteger(
+                lineDiscountMinor,
+              ) ||
+              lineDiscountMinor < 0 ||
+              lineDiscountMinor >
+                lineGrossMinor ||
+              !Number.isSafeInteger(
+                lineTotalMinor,
+              ) ||
+              lineTotalMinor < 0 ||
+              lineTotalMinor >
+                MAX_MINOR
+            ) {
+              throw new PosExchangeError(
+                "قيمة الأصناف الجديدة تتجاوز الحد المسموح",
+              );
+            }
+
+            newSubtotalMinor +=
+              lineGrossMinor;
+
+            newItemDiscountMinor +=
+              lineDiscountMinor;
+
+            if (
+              !Number.isSafeInteger(
+                newSubtotalMinor,
+              ) ||
+              newSubtotalMinor >
+                MAX_MINOR ||
+              !Number.isSafeInteger(
+                newItemDiscountMinor,
+              ) ||
+              newItemDiscountMinor >
+                MAX_MINOR
+            ) {
+              throw new PosExchangeError(
+                "إجمالي الأصناف الجديدة يتجاوز الحد المسموح",
+              );
+            }
+
+            newStockPlans.push({
+              lineNumber:
+                item.lineNumber,
+
+              productId:
+                product.id,
+
+              barcode:
+                item.barcode,
+
+              productCode:
+                product.productCode ??
+                null,
+
+              productNameAr:
+                product.nameAr,
+
+              productImage:
+                product.image,
+
+              color,
+              size,
+
+              quantity:
+                item.quantity,
+
+              websiteUnitPriceMinor,
+
+              soldUnitPriceMinor:
+                item.soldUnitPriceMinor,
+
+              lineDiscountMinor,
+
+              lineTotalMinor,
+
+              generalStockBefore,
+              generalStockAfter,
+
+              variantStockBefore,
+              variantStockAfter,
+
+              nextColorVariants,
+            });
+          }
+
+          const newItemsNetMinor =
+            newSubtotalMinor -
+            newItemDiscountMinor;
+
+          if (
+            payload.newInvoiceDiscountMinor >
+            newItemsNetMinor
+          ) {
+            throw new PosExchangeError(
+              "خصم فاتورة الأصناف الجديدة أكبر من صافي قيمتها",
+            );
+          }
+
+          const newDiscountMinor =
+            newItemDiscountMinor +
+            payload.newInvoiceDiscountMinor;
+
+          const newNetMinor =
+            newSubtotalMinor -
+            newDiscountMinor;
+
+          if (
+            !Number.isSafeInteger(
+              newDiscountMinor,
+            ) ||
+            newDiscountMinor >
+              newSubtotalMinor ||
+            !Number.isSafeInteger(
+              newNetMinor,
+            ) ||
+            newNetMinor < 0 ||
+            newNetMinor >
+              MAX_MINOR ||
+            newStockPlans.length !==
+              resolvedNewItems.length
+          ) {
+            throw new PosExchangeError(
+              "إجمالي الأصناف الجديدة غير صالح",
+            );
+          }
+
           return {
             exchange: {
               id: 0,
