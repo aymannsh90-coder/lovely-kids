@@ -21,6 +21,7 @@ import { handleOwnerReportRequest } from "./gross-profit-report-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
 import { handlePosSaleRequest } from "./pos-sale-routes";
 import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
+import { handlePosExchangeRequest } from "./pos-exchange-routes";
 import { handleSupplierRequest } from "./supplier-routes";
 import { handleDeliveryCompanyRequest } from "./delivery-company-routes";
 import { handleDeliverySettlementRequest } from "./delivery-settlement-routes";
@@ -375,6 +376,27 @@ export default {
 
         return posSaleReturnResponse;
       }
+
+      const posExchangeResponse = await handlePosExchangeRequest(
+        request,
+        db,
+        env,
+      );
+
+      if (posExchangeResponse) {
+        if (
+          posExchangeResponse.ok &&
+          isMutation(request)
+        ) {
+          await purgePublicTags(
+            ctx,
+            [PUBLIC_CACHE_TAGS.products],
+          );
+        }
+
+        return posExchangeResponse;
+      }
+
       const supplierResponse = await handleSupplierRequest(
         request,
         db,
