@@ -1434,6 +1434,12 @@ interface PosExchangeCreateBaseInput {
 
   validationOnly?: boolean;
 
+  expectedQuote?: {
+    returnNetMinor: number;
+    newNetMinor: number;
+    settlementAmountMinor: number;
+  };
+
   reason?: string;
   notes?: string;
 }

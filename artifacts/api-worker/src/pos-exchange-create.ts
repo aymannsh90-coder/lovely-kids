@@ -124,6 +124,13 @@ export interface ParsedPosExchangePayload {
   newItems: ParsedExchangeSaleItem[];
   newInvoiceDiscountMinor: number;
   validationOnly: boolean;
+
+  expectedQuote: {
+    returnNetMinor: number;
+    newNetMinor: number;
+    settlementAmountMinor: number;
+  } | null;
+
   reason: string | null;
   notes: string | null;
 }
@@ -235,6 +242,93 @@ function parseMoneyToMinor(
   }
 
   return minor;
+}
+
+function parseExpectedExchangeQuote(
+  value: unknown,
+): {
+  returnNetMinor: number;
+  newNetMinor: number;
+  settlementAmountMinor: number;
+} | null {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return null;
+  }
+
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    throw new PosExchangeError(
+      "بيانات معاينة التبديل المعتمدة غير صالحة",
+    );
+  }
+
+  const quote =
+    value as Record<string, unknown>;
+
+  const returnNetMinor =
+    quote.returnNetMinor;
+
+  const newNetMinor =
+    quote.newNetMinor;
+
+  const settlementAmountMinor =
+    quote.settlementAmountMinor;
+
+  if (
+    !Number.isSafeInteger(
+      returnNetMinor,
+    ) ||
+    (returnNetMinor as number) < 0 ||
+    (returnNetMinor as number) >
+      MAX_MINOR
+  ) {
+    throw new PosExchangeError(
+      "صافي المرتجع في المعاينة المعتمدة غير صالح",
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(
+      newNetMinor,
+    ) ||
+    (newNetMinor as number) < 0 ||
+    (newNetMinor as number) >
+      MAX_MINOR
+  ) {
+    throw new PosExchangeError(
+      "صافي الأصناف الجديدة في المعاينة المعتمدة غير صالح",
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(
+      settlementAmountMinor,
+    ) ||
+    Math.abs(
+      settlementAmountMinor as number,
+    ) > MAX_MINOR
+  ) {
+    throw new PosExchangeError(
+      "فرق التبديل في المعاينة المعتمدة غير صالح",
+    );
+  }
+
+  return {
+    returnNetMinor:
+      returnNetMinor as number,
+
+    newNetMinor:
+      newNetMinor as number,
+
+    settlementAmountMinor:
+      settlementAmountMinor as number,
+  };
 }
 
 function parseOptionalText(
@@ -782,6 +876,12 @@ export function parsePosExchangePayload(
     newInvoiceDiscountMinor,
     validationOnly:
       payload.validationOnly === true,
+
+    expectedQuote:
+      parseExpectedExchangeQuote(
+        payload.expectedQuote,
+      ),
+
     reason:
       parseOptionalText(
         payload.reason,
@@ -3061,6 +3161,35 @@ export async function handleCreatePosExchange(
               "تعذر توزيع خصم فاتورة الأصناف الجديدة بالكامل",
               409,
             );
+          }
+
+          // -------------------------------------------------
+          // Protect execution against a stale approved quote.
+          // A real create must still match the totals that the
+          // cashier reviewed immediately before execution.
+          // This check runs before any persistent write.
+          // -------------------------------------------------
+
+          if (
+            !payload.validationOnly &&
+            payload.expectedQuote
+          ) {
+            const expected =
+              payload.expectedQuote;
+
+            if (
+              expected.returnNetMinor !==
+                returnNetMinor ||
+              expected.newNetMinor !==
+                newNetMinor ||
+              expected.settlementAmountMinor !==
+                settlementAmountMinor
+            ) {
+              throw new PosExchangeError(
+                "تغيّرت قيمة التبديل منذ آخر معاينة. حدّث فرق التبديل ثم حاول مرة أخرى",
+                409,
+              );
+            }
           }
 
           // -------------------------------------------------
