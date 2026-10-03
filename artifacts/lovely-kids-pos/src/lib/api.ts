@@ -1297,3 +1297,318 @@ export function getGrossProfitReport(
     token,
   );
 }
+
+
+// ===== POS EXCHANGE =====
+
+export type PosExchangeSourceType =
+  | "pos_sale"
+  | "pos_no_receipt";
+
+export type PosExchangeSettlementType =
+  | "cash"
+  | "card";
+
+export interface PosExchangePreviewItem {
+  id: string;
+  productId: string | null;
+  lineNumber: number;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  productImage: string | null;
+
+  color: string | null;
+  size: string | null;
+
+  soldQuantity: number;
+  returnedQuantity: number;
+  exchangedQuantity: number;
+  consumedQuantity: number;
+  returnableQuantity: number;
+
+  soldUnitPriceMinor: number;
+  soldUnitPrice: number;
+
+  lineDiscountMinor: number;
+  lineDiscount: number;
+
+  consumedLineDiscountMinor: number;
+  remainingLineDiscountMinor: number;
+
+  originalLineTotalMinor: number;
+  originalLineTotal: number;
+}
+
+export interface PosExchangePreviewResult {
+  sale: {
+    id: string;
+    publicId: string;
+
+    status: string;
+    registerKey: string;
+    businessDate: string;
+
+    customerName: string | null;
+    customerPhone: string | null;
+
+    subtotalMinor: number;
+    subtotal: number;
+
+    discountMinor: number;
+    discount: number;
+
+    itemDiscountMinor: number;
+    itemDiscount: number;
+
+    invoiceDiscountMinor: number;
+    invoiceDiscount: number;
+
+    totalMinor: number;
+    total: number;
+
+    createdAt: string;
+  };
+
+  filter: {
+    barcode: string | null;
+  };
+
+  summary: {
+    soldQuantity: number;
+    returnedQuantity: number;
+    exchangedQuantity: number;
+    returnableQuantity: number;
+
+    priorReturnNetMinor: number;
+    priorExchangeNetMinor: number;
+    previouslyCreditedNetMinor: number;
+
+    returnableNetMinor: number;
+    returnableNet: number;
+
+    fullyConsumed: boolean;
+  };
+
+  items: PosExchangePreviewItem[];
+}
+
+export interface PosExchangeNewItemInput {
+  productId?: string | number | null;
+  barcode?: string | null;
+  quantity: number;
+
+  soldUnitPrice: string | number;
+  lineDiscount?: string | number;
+
+  color?: string | null;
+  size?: string | null;
+}
+
+export interface PosExchangeReceiptReturnItemInput {
+  originalSaleItemId: string | number;
+  quantity: number;
+}
+
+export interface PosExchangeNoReceiptReturnItemInput {
+  productId?: string | number | null;
+  barcode?: string | null;
+  quantity: number;
+
+  returnUnitPrice?: string | number;
+
+  color?: string | null;
+  size?: string | null;
+}
+
+interface PosExchangeCreateBaseInput {
+  registerKey: string;
+  idempotencyKey: string;
+
+  settlementType: PosExchangeSettlementType;
+
+  newItems: PosExchangeNewItemInput[];
+
+  newInvoiceDiscount?: string | number;
+
+  reason?: string;
+  notes?: string;
+}
+
+export type PosExchangeCreateInput =
+  | (
+      PosExchangeCreateBaseInput & {
+        sourceType: "pos_sale";
+        originalSalePublicId: string;
+        returnItems: PosExchangeReceiptReturnItemInput[];
+      }
+    )
+  | (
+      PosExchangeCreateBaseInput & {
+        sourceType: "pos_no_receipt";
+        returnItems: PosExchangeNoReceiptReturnItemInput[];
+      }
+    );
+
+export interface PosExchangeReturnItemResult {
+  id: number;
+  lineNumber: number;
+
+  originalPosSaleItemId: number | null;
+  productId: number | null;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  productImage: string | null;
+
+  color: string | null;
+  size: string | null;
+
+  quantity: number;
+
+  catalogUnitPriceMinor: number | null;
+  soldUnitPriceMinor: number;
+
+  grossAmountMinor: number;
+  lineDiscountMinor: number;
+  invoiceDiscountMinor: number;
+  allocatedDiscountMinor: number;
+  returnNetMinor: number;
+
+  generalStockBefore: number | null;
+  generalStockAfter: number | null;
+
+  variantStockBefore: number | null;
+  variantStockAfter: number | null;
+
+  createdAt: string;
+}
+
+export interface PosExchangeSaleItemResult {
+  id: number;
+  lineNumber: number;
+  productId: number;
+
+  barcode: string | null;
+  productCode: string | null;
+  productNameAr: string;
+  productImage: string | null;
+
+  color: string | null;
+  size: string | null;
+
+  quantity: number;
+
+  websiteUnitPriceMinor: number;
+  soldUnitPriceMinor: number;
+
+  grossAmountMinor: number;
+  lineDiscountMinor: number;
+  invoiceDiscountMinor: number;
+  allocatedDiscountMinor: number;
+  lineNetMinor: number;
+
+  generalStockBefore: number | null;
+  generalStockAfter: number | null;
+
+  variantStockBefore: number | null;
+  variantStockAfter: number | null;
+
+  createdAt: string;
+}
+
+export interface PosExchangeCreateResult {
+  ok: boolean;
+  validationOnly: boolean;
+  alreadyCreated: boolean;
+
+  exchange: {
+    id: number;
+    publicId: string;
+
+    sourceType: PosExchangeSourceType;
+
+    businessDate: string;
+    registerKey: string | null;
+
+    status: "completed" | "voided";
+
+    settlementType:
+      PosExchangeSettlementType;
+
+    returnGrossMinor: number;
+    returnDiscountMinor: number;
+    returnNetMinor: number;
+
+    newGrossMinor: number;
+    newDiscountMinor: number;
+    newNetMinor: number;
+
+    differenceMinor: number;
+    settlementAmountMinor: number;
+
+    expectedCashBeforeMinor?: number;
+    expectedCashAfterMinor?: number;
+
+    createdAt: string;
+  };
+
+  returnItems: PosExchangeReturnItemResult[];
+  saleItems: PosExchangeSaleItemResult[];
+}
+
+export function getPosExchangePreview(
+  token: string,
+  publicId: string,
+  barcode?: string,
+) {
+  const params = new URLSearchParams({
+    publicId:
+      publicId.trim().toUpperCase(),
+  });
+
+  const normalizedBarcode =
+    barcode?.trim();
+
+  if (normalizedBarcode) {
+    params.set(
+      "barcode",
+      normalizedBarcode,
+    );
+  }
+
+  return apiRequest<PosExchangePreviewResult>(
+    `/api/pos/exchanges/preview?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+export function createPosExchange(
+  token: string,
+  input: PosExchangeCreateInput,
+) {
+  const normalizedInput =
+    input.sourceType === "pos_sale"
+      ? {
+          ...input,
+          originalSalePublicId:
+            input.originalSalePublicId
+              .trim()
+              .toUpperCase(),
+        }
+      : input;
+
+  return apiRequest<PosExchangeCreateResult>(
+    "/api/pos/exchanges",
+    {
+      method: "POST",
+      body: JSON.stringify(
+        normalizedInput,
+      ),
+    },
+    token,
+  );
+}
