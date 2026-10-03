@@ -1,8 +1,12 @@
 import {
   cashSessionsTable,
   exchangeDocumentsTable,
+  exchangeReturnItemCostsTable,
   exchangeReturnItemsTable,
+  exchangeSaleItemCostsTable,
+  exchangeSaleItemsTable,
   inventoryMovementsTable,
+  posSaleItemCostsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
@@ -16,6 +20,14 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  addProductCostAtCurrentAverage,
+  allocateProportionalCostMinor,
+  consumeProductCost,
+  deriveUnitCostMinor,
+  restoreExactProductCost,
+  type CostQuality,
+} from "./inventory-cost-engine";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -918,10 +930,30 @@ export async function handleCreatePosExchange(
                   ),
                 );
 
+            const existingSaleItems =
+              await tx
+                .select()
+                .from(
+                  exchangeSaleItemsTable,
+                )
+                .where(
+                  eq(
+                    exchangeSaleItemsTable.exchangeId,
+                    existing.id,
+                  ),
+                )
+                .orderBy(
+                  asc(
+                    exchangeSaleItemsTable.lineNumber,
+                  ),
+                );
+
             return {
               exchange: existing,
               returnItems:
                 existingItems,
+              saleItems:
+                existingSaleItems,
               alreadyCreated: true,
             };
           }
@@ -1006,6 +1038,9 @@ export async function handleCreatePosExchange(
 
           const resolvedNoReceiptReturnItems:
             ResolvedNoReceiptReturnItem[] = [];
+
+          const historicalPreviouslyConsumedByOriginalItem =
+            new Map<number, number>();
 
           if (
             payload.sourceType === "pos_sale"
@@ -1252,6 +1287,16 @@ export async function handleCreatePosExchange(
 
               priorInvoiceDiscountMinor +=
                 item.invoiceDiscountMinor;
+            }
+
+            for (
+              const [originalItemId, quantity] of
+              consumedByOriginalItem
+            ) {
+              historicalPreviouslyConsumedByOriginalItem.set(
+                originalItemId,
+                quantity,
+              );
             }
 
             const invoiceBaseMinor =
@@ -1980,7 +2025,7 @@ export async function handleCreatePosExchange(
               }
 
               const catalogUnitPriceMinor =
-                product.price;
+                product.price * 100;
 
               const soldUnitPriceMinor =
                 item.returnUnitPriceMinor ??
@@ -2012,10 +2057,12 @@ export async function handleCreatePosExchange(
                     item.barcode ??
                     product.barcode ??
                     null,
-                  productCode: null,
+                  productCode:
+                    product.productCode ?? null,
                   productNameAr:
                     product.nameAr,
-                  productImage: null,
+                  productImage:
+                    product.image ?? null,
                   color,
                   size,
                   quantity: item.quantity,
@@ -2903,51 +2950,1268 @@ export async function handleCreatePosExchange(
             }
           }
 
+          // -------------------------------------------------
+          // Allocate the new invoice discount across sale lines.
+          // -------------------------------------------------
+
+          let runningNewInvoiceBaseMinor = 0;
+          let runningNewInvoiceDiscountMinor = 0;
+
+          const newSalePlans =
+            [...newStockPlans]
+              .sort(
+                (left, right) =>
+                  left.lineNumber -
+                  right.lineNumber,
+              )
+              .map((line) => {
+                const grossAmountMinor =
+                  line.soldUnitPriceMinor *
+                  line.quantity;
+
+                let invoiceDiscountMinor = 0;
+
+                if (
+                  payload.newInvoiceDiscountMinor > 0 &&
+                  newItemsNetMinor > 0
+                ) {
+                  const nextBase =
+                    runningNewInvoiceBaseMinor +
+                    line.lineTotalMinor;
+
+                  const targetDiscount =
+                    nextBase ===
+                    newItemsNetMinor
+                      ? payload.newInvoiceDiscountMinor
+                      : Number(
+                          (
+                            BigInt(
+                              payload.newInvoiceDiscountMinor,
+                            ) *
+                            BigInt(nextBase)
+                          ) /
+                            BigInt(
+                              newItemsNetMinor,
+                            ),
+                        );
+
+                  invoiceDiscountMinor =
+                    targetDiscount -
+                    runningNewInvoiceDiscountMinor;
+
+                  runningNewInvoiceBaseMinor =
+                    nextBase;
+
+                  runningNewInvoiceDiscountMinor =
+                    targetDiscount;
+                }
+
+                const allocatedDiscountMinor =
+                  line.lineDiscountMinor +
+                  invoiceDiscountMinor;
+
+                const lineNetMinor =
+                  grossAmountMinor -
+                  allocatedDiscountMinor;
+
+                if (
+                  !Number.isSafeInteger(
+                    invoiceDiscountMinor,
+                  ) ||
+                  invoiceDiscountMinor < 0 ||
+                  !Number.isSafeInteger(
+                    allocatedDiscountMinor,
+                  ) ||
+                  allocatedDiscountMinor < 0 ||
+                  allocatedDiscountMinor >
+                    grossAmountMinor ||
+                  !Number.isSafeInteger(
+                    lineNetMinor,
+                  ) ||
+                  lineNetMinor < 0
+                ) {
+                  throw new PosExchangeError(
+                    "توزيع خصم الأصناف الجديدة غير صالح",
+                    409,
+                  );
+                }
+
+                return {
+                  ...line,
+                  grossAmountMinor,
+                  invoiceDiscountMinor,
+                  allocatedDiscountMinor,
+                  lineNetMinor,
+                };
+              });
+
+          if (
+            runningNewInvoiceDiscountMinor !==
+            payload.newInvoiceDiscountMinor
+          ) {
+            throw new PosExchangeError(
+              "تعذر توزيع خصم فاتورة الأصناف الجديدة بالكامل",
+              409,
+            );
+          }
+
+          // -------------------------------------------------
+          // Create exchange document.
+          // -------------------------------------------------
+
+          const exchangePublicId =
+            getExchangePublicId(
+              session.businessDate,
+            );
+
+          const exchangeRows =
+            await tx
+              .insert(
+                exchangeDocumentsTable,
+              )
+              .values({
+                publicId:
+                  exchangePublicId,
+
+                idempotencyKey:
+                  payload.idempotencyKey,
+
+                sourceType:
+                  payload.sourceType,
+
+                originalPosSaleId:
+                  sale?.id ?? null,
+
+                originalOrderId:
+                  null,
+
+                businessDate:
+                  session.businessDate,
+
+                cashSessionId:
+                  session.id,
+
+                registerKey:
+                  payload.registerKey,
+
+                createdByUserId:
+                  user.id,
+
+                status:
+                  "completed",
+
+                settlementType:
+                  payload.settlementType,
+
+                settlementPartyId:
+                  null,
+
+                returnGrossMinor,
+                returnDiscountMinor,
+                returnNetMinor,
+
+                newGrossMinor:
+                  newSubtotalMinor,
+
+                newDiscountMinor,
+                newNetMinor,
+
+                differenceMinor,
+
+                deliveryChargeMinor,
+                deliveryCompanyCostMinor,
+
+                settlementAmountMinor,
+
+                reason:
+                  payload.reason,
+
+                notes:
+                  payload.notes,
+              })
+              .returning();
+
+          const exchange =
+            exchangeRows[0];
+
+          if (!exchange) {
+            throw new Error(
+              "POS_EXCHANGE_DOCUMENT_INSERT_FAILED",
+            );
+          }
+
+          // -------------------------------------------------
+          // Insert return lines.
+          // -------------------------------------------------
+
+          const insertedReturnItems =
+            returnStockPlans.length > 0
+              ? await tx
+                  .insert(
+                    exchangeReturnItemsTable,
+                  )
+                  .values(
+                    returnStockPlans
+                      .slice()
+                      .sort(
+                        (left, right) =>
+                          left.lineNumber -
+                          right.lineNumber,
+                      )
+                      .map((line) => ({
+                        exchangeId:
+                          exchange.id,
+
+                        lineNumber:
+                          line.lineNumber,
+
+                        originalPosSaleItemId:
+                          line.originalSaleItemId,
+
+                        originalOrderLineNumber:
+                          null,
+
+                        productId:
+                          line.productId,
+
+                        barcode:
+                          line.barcode,
+
+                        productCode:
+                          line.productCode,
+
+                        productNameAr:
+                          line.productNameAr,
+
+                        productImage:
+                          line.productImage,
+
+                        color:
+                          line.color,
+
+                        size:
+                          line.size,
+
+                        quantity:
+                          line.quantity,
+
+                        catalogUnitPriceMinor:
+                          line.catalogUnitPriceMinor,
+
+                        soldUnitPriceMinor:
+                          line.soldUnitPriceMinor,
+
+                        grossAmountMinor:
+                          line.grossAmountMinor,
+
+                        lineDiscountMinor:
+                          line.lineDiscountMinor,
+
+                        invoiceDiscountMinor:
+                          line.invoiceDiscountMinor,
+
+                        allocatedDiscountMinor:
+                          line.allocatedDiscountMinor,
+
+                        returnNetMinor:
+                          line.returnNetMinor,
+
+                        generalStockBefore:
+                          line.generalStockBefore,
+
+                        generalStockAfter:
+                          line.generalStockAfter,
+
+                        variantStockBefore:
+                          line.variantStockBefore,
+
+                        variantStockAfter:
+                          line.variantStockAfter,
+                      })),
+                  )
+                  .returning()
+              : [];
+
+          // -------------------------------------------------
+          // Insert new sale lines.
+          // -------------------------------------------------
+
+          const insertedSaleItems =
+            newSalePlans.length > 0
+              ? await tx
+                  .insert(
+                    exchangeSaleItemsTable,
+                  )
+                  .values(
+                    newSalePlans.map(
+                      (line) => ({
+                        exchangeId:
+                          exchange.id,
+
+                        lineNumber:
+                          line.lineNumber,
+
+                        productId:
+                          line.productId,
+
+                        barcode:
+                          line.barcode,
+
+                        productCode:
+                          line.productCode,
+
+                        productNameAr:
+                          line.productNameAr,
+
+                        productImage:
+                          line.productImage,
+
+                        color:
+                          line.color,
+
+                        size:
+                          line.size,
+
+                        quantity:
+                          line.quantity,
+
+                        websiteUnitPriceMinor:
+                          line.websiteUnitPriceMinor,
+
+                        soldUnitPriceMinor:
+                          line.soldUnitPriceMinor,
+
+                        grossAmountMinor:
+                          line.grossAmountMinor,
+
+                        lineDiscountMinor:
+                          line.lineDiscountMinor,
+
+                        invoiceDiscountMinor:
+                          line.invoiceDiscountMinor,
+
+                        allocatedDiscountMinor:
+                          line.allocatedDiscountMinor,
+
+                        lineNetMinor:
+                          line.lineNetMinor,
+
+                        generalStockBefore:
+                          line.generalStockBefore,
+
+                        generalStockAfter:
+                          line.generalStockAfter,
+
+                        variantStockBefore:
+                          line.variantStockBefore,
+
+                        variantStockAfter:
+                          line.variantStockAfter,
+                      }),
+                    ),
+                  )
+                  .returning()
+              : [];
+
+          // -------------------------------------------------
+          // Persist the final stock state once per product.
+          // Planning above already applied return then sale.
+          // -------------------------------------------------
+
+          for (
+            const [productId, state] of
+            [...productStockStates.entries()]
+              .sort(
+                ([leftId], [rightId]) =>
+                  leftId - rightId,
+              )
+          ) {
+            const touchesGeneral =
+              returnStockPlans.some(
+                (line) =>
+                  line.productId ===
+                    productId &&
+                  line.generalStockAfter !==
+                    null,
+              ) ||
+              newSalePlans.some(
+                (line) =>
+                  line.productId ===
+                    productId &&
+                  line.generalStockAfter !==
+                    null,
+              );
+
+            const touchesVariants =
+              returnStockPlans.some(
+                (line) =>
+                  line.productId ===
+                    productId &&
+                  line.nextColorVariants !==
+                    null,
+              ) ||
+              newSalePlans.some(
+                (line) =>
+                  line.productId ===
+                    productId &&
+                  line.nextColorVariants !==
+                    null,
+              );
+
+            const updates: {
+              stock?: number;
+              colorVariants?: ColorVariant[];
+            } = {};
+
+            if (touchesGeneral) {
+              if (
+                state.generalStock === null
+              ) {
+                throw new Error(
+                  `POS_EXCHANGE_GENERAL_STOCK_STATE_MISSING:${productId}`,
+                );
+              }
+
+              updates.stock =
+                state.generalStock;
+            }
+
+            if (touchesVariants) {
+              updates.colorVariants =
+                state.colorVariants;
+            }
+
+            if (
+              Object.keys(updates).length >
+              0
+            ) {
+              await tx
+                .update(
+                  productsTable,
+                )
+                .set(updates)
+                .where(
+                  eq(
+                    productsTable.id,
+                    productId,
+                  ),
+                );
+            }
+          }
+
+          // -------------------------------------------------
+          // Stock-card movements.
+          // -------------------------------------------------
+
+          const returnItemByLine =
+            new Map(
+              insertedReturnItems.map(
+                (item) => [
+                  item.lineNumber,
+                  item,
+                ],
+              ),
+            );
+
+          const saleItemByLine =
+            new Map(
+              insertedSaleItems.map(
+                (item) => [
+                  item.lineNumber,
+                  item,
+                ],
+              ),
+            );
+
+          if (
+            returnStockPlans.length > 0
+          ) {
+            await tx
+              .insert(
+                inventoryMovementsTable,
+              )
+              .values(
+                returnStockPlans.map(
+                  (line) => {
+                    const insertedItem =
+                      returnItemByLine.get(
+                        line.lineNumber,
+                      );
+
+                    if (!insertedItem) {
+                      throw new Error(
+                        "POS_EXCHANGE_RETURN_ITEM_MAPPING_FAILED",
+                      );
+                    }
+
+                    return {
+                      productId:
+                        line.productId,
+
+                      barcode:
+                        line.barcode,
+
+                      productCode:
+                        line.productCode,
+
+                      productNameAr:
+                        line.productNameAr,
+
+                      color:
+                        line.color,
+
+                      size:
+                        line.size,
+
+                      movementType:
+                        "exchange_return",
+
+                      quantityDelta:
+                        line.quantity,
+
+                      generalStockBefore:
+                        line.generalStockBefore,
+
+                      generalStockAfter:
+                        line.generalStockAfter,
+
+                      variantStockBefore:
+                        line.variantStockBefore,
+
+                      variantStockAfter:
+                        line.variantStockAfter,
+
+                      sourceType:
+                        "exchange",
+
+                      sourceId:
+                        exchange.id,
+
+                      sourceItemId:
+                        insertedItem.id,
+
+                      sourcePublicId:
+                        exchange.publicId,
+
+                      eventKey:
+                        `exchange:${exchange.id}:return:${insertedItem.id}:completed`,
+
+                      occurredAt:
+                        exchange.createdAt,
+                    };
+                  },
+                ),
+              );
+          }
+
+          if (
+            newSalePlans.length > 0
+          ) {
+            await tx
+              .insert(
+                inventoryMovementsTable,
+              )
+              .values(
+                newSalePlans.map(
+                  (line) => {
+                    const insertedItem =
+                      saleItemByLine.get(
+                        line.lineNumber,
+                      );
+
+                    if (!insertedItem) {
+                      throw new Error(
+                        "POS_EXCHANGE_SALE_ITEM_MAPPING_FAILED",
+                      );
+                    }
+
+                    return {
+                      productId:
+                        line.productId,
+
+                      barcode:
+                        line.barcode,
+
+                      productCode:
+                        line.productCode,
+
+                      productNameAr:
+                        line.productNameAr,
+
+                      color:
+                        line.color,
+
+                      size:
+                        line.size,
+
+                      movementType:
+                        "exchange_sale",
+
+                      quantityDelta:
+                        -line.quantity,
+
+                      generalStockBefore:
+                        line.generalStockBefore,
+
+                      generalStockAfter:
+                        line.generalStockAfter,
+
+                      variantStockBefore:
+                        line.variantStockBefore,
+
+                      variantStockAfter:
+                        line.variantStockAfter,
+
+                      sourceType:
+                        "exchange",
+
+                      sourceId:
+                        exchange.id,
+
+                      sourceItemId:
+                        insertedItem.id,
+
+                      sourcePublicId:
+                        exchange.publicId,
+
+                      eventKey:
+                        `exchange:${exchange.id}:sale:${insertedItem.id}:completed`,
+
+                      occurredAt:
+                        exchange.createdAt,
+                    };
+                  },
+                ),
+              );
+          }
+
+          // -------------------------------------------------
+          // Return cost accounting.
+          //
+          // Receipt:
+          // restore the exact historical frozen cost.
+          //
+          // No receipt / legacy missing snapshot:
+          // estimate using current moving average.
+          // -------------------------------------------------
+
+          const historicalOriginalIds =
+            insertedReturnItems
+              .map(
+                (item) =>
+                  item.originalPosSaleItemId,
+              )
+              .filter(
+                (
+                  value,
+                ): value is number =>
+                  value !== null,
+              );
+
+          const originalCostRows =
+            historicalOriginalIds.length >
+            0
+              ? await tx
+                  .select()
+                  .from(
+                    posSaleItemCostsTable,
+                  )
+                  .where(
+                    inArray(
+                      posSaleItemCostsTable.saleItemId,
+                      historicalOriginalIds,
+                    ),
+                  )
+              : [];
+
+          const originalCostBySaleItemId =
+            new Map(
+              originalCostRows.map(
+                (cost) => [
+                  cost.saleItemId,
+                  cost,
+                ],
+              ),
+            );
+
+          for (
+            const returnItem of
+            [...insertedReturnItems]
+              .sort(
+                (left, right) =>
+                  left.lineNumber -
+                  right.lineNumber,
+              )
+          ) {
+            if (
+              returnItem.productId ===
+              null
+            ) {
+              continue;
+            }
+
+            const originalSaleItemId =
+              returnItem.originalPosSaleItemId;
+
+            if (
+              payload.sourceType ===
+                "pos_sale" &&
+              originalSaleItemId !==
+                null
+            ) {
+              const originalCost =
+                originalCostBySaleItemId.get(
+                  originalSaleItemId,
+                );
+
+              if (!originalCost) {
+                const estimatedCost =
+                  await addProductCostAtCurrentAverage(
+                    tx,
+                    {
+                      productId:
+                        returnItem.productId,
+
+                      quantity:
+                        returnItem.quantity,
+
+                      addedCostQuality:
+                        "estimated",
+
+                      eventType:
+                        "exchange_return",
+
+                      sourceType:
+                        "exchange",
+
+                      sourceRef:
+                        String(
+                          exchange.id,
+                        ),
+
+                      sourceItemRef:
+                        String(
+                          returnItem.id,
+                        ),
+
+                      businessDate:
+                        exchange.businessDate,
+
+                      note:
+                        `Legacy exchange return estimated cost ${exchange.publicId}`,
+
+                      createdByUserId:
+                        user.id,
+                    },
+                  );
+
+                if (
+                  !estimatedCost.tracked
+                ) {
+                  console.warn(
+                    "POS_EXCHANGE_RETURN_COST_UNTRACKED",
+                    {
+                      exchangeId:
+                        exchange.id,
+
+                      returnItemId:
+                        returnItem.id,
+
+                      productId:
+                        returnItem.productId,
+
+                      reason:
+                        estimatedCost.reason,
+                    },
+                  );
+
+                  continue;
+                }
+
+                await tx
+                  .insert(
+                    exchangeReturnItemCostsTable,
+                  )
+                  .values({
+                    returnItemId:
+                      returnItem.id,
+
+                    productId:
+                      returnItem.productId,
+
+                    quantity:
+                      returnItem.quantity,
+
+                    unitCostMinor:
+                      estimatedCost.unitCostMinor,
+
+                    costTotalMinor:
+                      estimatedCost.costTotalMinor,
+
+                    costQuality:
+                      "estimated",
+                  });
+
+                continue;
+              }
+
+              if (
+                originalCost.productId !==
+                  returnItem.productId
+              ) {
+                throw new Error(
+                  `POS_EXCHANGE_ORIGINAL_COST_PRODUCT_MISMATCH:${originalSaleItemId}`,
+                );
+              }
+
+              const previouslyConsumed =
+                historicalPreviouslyConsumedByOriginalItem.get(
+                  originalSaleItemId,
+                ) ?? 0;
+
+              const consumedAfter =
+                previouslyConsumed +
+                returnItem.quantity;
+
+              if (
+                !Number.isSafeInteger(
+                  consumedAfter,
+                ) ||
+                consumedAfter <= 0 ||
+                consumedAfter >
+                  originalCost.quantity
+              ) {
+                throw new Error(
+                  `POS_EXCHANGE_RETURN_COST_QUANTITY_INVALID:${originalSaleItemId}`,
+                );
+              }
+
+              const cumulativeCostAfter =
+                allocateProportionalCostMinor(
+                  originalCost.costTotalMinor,
+                  consumedAfter,
+                  originalCost.quantity,
+                );
+
+              const cumulativeCostBefore =
+                previouslyConsumed > 0
+                  ? allocateProportionalCostMinor(
+                      originalCost.costTotalMinor,
+                      previouslyConsumed,
+                      originalCost.quantity,
+                    )
+                  : 0;
+
+              const returnCostTotalMinor =
+                cumulativeCostAfter -
+                cumulativeCostBefore;
+
+              let costQuality:
+                CostQuality;
+
+              if (
+                originalCost.costQuality ===
+                  "confirmed" ||
+                originalCost.costQuality ===
+                  "estimated" ||
+                originalCost.costQuality ===
+                  "mixed"
+              ) {
+                costQuality =
+                  originalCost.costQuality;
+              } else {
+                throw new Error(
+                  "POS_EXCHANGE_INVALID_ORIGINAL_COST_QUALITY",
+                );
+              }
+
+              const restoredCost =
+                await restoreExactProductCost(
+                  tx,
+                  {
+                    productId:
+                      returnItem.productId,
+
+                    quantity:
+                      returnItem.quantity,
+
+                    costTotalMinor:
+                      returnCostTotalMinor,
+
+                    costQuality,
+
+                    eventType:
+                      "exchange_return",
+
+                    sourceType:
+                      "exchange",
+
+                    sourceRef:
+                      String(
+                        exchange.id,
+                      ),
+
+                    sourceItemRef:
+                      String(
+                        returnItem.id,
+                      ),
+
+                    businessDate:
+                      exchange.businessDate,
+
+                    note:
+                      `Exchange return ${exchange.publicId}`,
+
+                    createdByUserId:
+                      user.id,
+                  },
+                );
+
+              if (
+                !restoredCost.tracked
+              ) {
+                throw new Error(
+                  `POS_EXCHANGE_RETURN_COST_RESTORE_FAILED:${returnItem.id}:${restoredCost.reason}`,
+                );
+              }
+
+              await tx
+                .insert(
+                  exchangeReturnItemCostsTable,
+                )
+                .values({
+                  returnItemId:
+                    returnItem.id,
+
+                  productId:
+                    returnItem.productId,
+
+                  quantity:
+                    returnItem.quantity,
+
+                  unitCostMinor:
+                    restoredCost.unitCostMinor,
+
+                  costTotalMinor:
+                    restoredCost.costTotalMinor,
+
+                  costQuality,
+                });
+
+              continue;
+            }
+
+            const estimatedCost =
+              await addProductCostAtCurrentAverage(
+                tx,
+                {
+                  productId:
+                    returnItem.productId,
+
+                  quantity:
+                    returnItem.quantity,
+
+                  addedCostQuality:
+                    "estimated",
+
+                  eventType:
+                    "exchange_return",
+
+                  sourceType:
+                    "exchange",
+
+                  sourceRef:
+                    String(
+                      exchange.id,
+                    ),
+
+                  sourceItemRef:
+                    String(
+                      returnItem.id,
+                    ),
+
+                  businessDate:
+                    exchange.businessDate,
+
+                  note:
+                    `No-receipt exchange return ${exchange.publicId}`,
+
+                  createdByUserId:
+                    user.id,
+                },
+              );
+
+            if (
+              !estimatedCost.tracked
+            ) {
+              console.warn(
+                "POS_EXCHANGE_NO_RECEIPT_COST_UNTRACKED",
+                {
+                  exchangeId:
+                    exchange.id,
+
+                  returnItemId:
+                    returnItem.id,
+
+                  productId:
+                    returnItem.productId,
+
+                  reason:
+                    estimatedCost.reason,
+                },
+              );
+
+              continue;
+            }
+
+            await tx
+              .insert(
+                exchangeReturnItemCostsTable,
+              )
+              .values({
+                returnItemId:
+                  returnItem.id,
+
+                productId:
+                  returnItem.productId,
+
+                quantity:
+                  returnItem.quantity,
+
+                unitCostMinor:
+                  estimatedCost.unitCostMinor,
+
+                costTotalMinor:
+                  estimatedCost.costTotalMinor,
+
+                costQuality:
+                  "estimated",
+              });
+          }
+
+          // -------------------------------------------------
+          // New-item cost accounting.
+          //
+          // Consume once per product and allocate that exact
+          // cost deterministically across exchange sale lines.
+          // -------------------------------------------------
+
+          const saleItemsByProduct =
+            new Map<
+              number,
+              Array<
+                typeof exchangeSaleItemsTable.$inferSelect
+              >
+            >();
+
+          for (
+            const item of
+            insertedSaleItems
+          ) {
+            const list =
+              saleItemsByProduct.get(
+                item.productId,
+              ) ?? [];
+
+            list.push(item);
+
+            saleItemsByProduct.set(
+              item.productId,
+              list,
+            );
+          }
+
+          for (
+            const [productId, items] of
+            [...saleItemsByProduct.entries()]
+              .sort(
+                ([leftId], [rightId]) =>
+                  leftId - rightId,
+              )
+          ) {
+            const sortedItems =
+              [...items].sort(
+                (left, right) =>
+                  left.lineNumber -
+                  right.lineNumber,
+              );
+
+            const totalQuantity =
+              sortedItems.reduce(
+                (total, item) =>
+                  total +
+                  item.quantity,
+                0,
+              );
+
+            const consumedCost =
+              await consumeProductCost(
+                tx,
+                {
+                  productId,
+
+                  quantity:
+                    totalQuantity,
+
+                  eventType:
+                    "exchange_sale",
+
+                  sourceType:
+                    "exchange",
+
+                  sourceRef:
+                    String(
+                      exchange.id,
+                    ),
+
+                  sourceItemRef:
+                    `product:${productId}`,
+
+                  businessDate:
+                    exchange.businessDate,
+
+                  note:
+                    `Exchange sale ${exchange.publicId}`,
+
+                  createdByUserId:
+                    user.id,
+                },
+              );
+
+            if (
+              !consumedCost.tracked
+            ) {
+              console.warn(
+                "POS_EXCHANGE_SALE_COST_UNTRACKED",
+                {
+                  exchangeId:
+                    exchange.id,
+
+                  productId,
+
+                  reason:
+                    consumedCost.reason,
+                },
+              );
+
+              continue;
+            }
+
+            let cumulativeQuantity = 0;
+            let cumulativeCostMinor = 0;
+
+            for (
+              const item of
+              sortedItems
+            ) {
+              cumulativeQuantity +=
+                item.quantity;
+
+              const targetCostMinor =
+                allocateProportionalCostMinor(
+                  consumedCost.costTotalMinor,
+                  cumulativeQuantity,
+                  totalQuantity,
+                );
+
+              const itemCostTotalMinor =
+                targetCostMinor -
+                cumulativeCostMinor;
+
+              cumulativeCostMinor =
+                targetCostMinor;
+
+              await tx
+                .insert(
+                  exchangeSaleItemCostsTable,
+                )
+                .values({
+                  saleItemId:
+                    item.id,
+
+                  productId:
+                    item.productId,
+
+                  quantity:
+                    item.quantity,
+
+                  unitCostMinor:
+                    deriveUnitCostMinor(
+                      itemCostTotalMinor,
+                      item.quantity,
+                    ),
+
+                  costTotalMinor:
+                    itemCostTotalMinor,
+
+                  costQuality:
+                    consumedCost.costQuality,
+                });
+            }
+          }
+
+          // -------------------------------------------------
+          // Cash settlement.
+          // Card does not touch the drawer.
+          // -------------------------------------------------
+
+          if (
+            payload.settlementType ===
+            "cash"
+          ) {
+            const updatedSessionRows =
+              await tx
+                .update(
+                  cashSessionsTable,
+                )
+                .set({
+                  expectedBalanceMinor:
+                    expectedCashAfterMinor,
+
+                  updatedAt:
+                    new Date(),
+                })
+                .where(
+                  and(
+                    eq(
+                      cashSessionsTable.id,
+                      session.id,
+                    ),
+                    eq(
+                      cashSessionsTable.status,
+                      "open",
+                    ),
+                  ),
+                )
+                .returning({
+                  id:
+                    cashSessionsTable.id,
+                });
+
+            if (
+              !updatedSessionRows[0]
+            ) {
+              throw new PosExchangeError(
+                "تم إغلاق الصندوق قبل إتمام فاتورة التبديل",
+                409,
+              );
+            }
+          }
+
           return {
             exchange: {
-              id: 0,
-              publicId:
-                getExchangePublicId(
-                  session.businessDate,
-                ),
-              originalPosSaleId:
-                sale?.id ?? null,
-              cashSessionId:
-                session.id,
-              registerKey:
-                payload.registerKey,
-              businessDate:
-                session.businessDate,
-
-              settlementType:
-                payload.settlementType,
-
-              returnGrossMinor,
-              returnDiscountMinor,
-              returnNetMinor,
-
-              newGrossMinor:
-                newSubtotalMinor,
-              newDiscountMinor,
-              newNetMinor,
-
-              differenceMinor,
-
-              deliveryChargeMinor,
-              deliveryCompanyCostMinor,
-
-              settlementAmountMinor,
+              ...exchange,
 
               expectedCashBeforeMinor,
               expectedCashAfterMinor,
             },
+
             returnItems:
-              returnStockPlans.map(
-                ({
-                  nextColorVariants: _nextColorVariants,
-                  ...line
-                }) => line,
-              ),
+              insertedReturnItems,
+
+            saleItems:
+              insertedSaleItems,
+
             alreadyCreated: false,
           };
         },
@@ -2956,13 +4220,15 @@ export async function handleCreatePosExchange(
     return json(
       {
         ok: true,
-        validationOnly: true,
+        validationOnly: false,
         alreadyCreated:
           result.alreadyCreated,
         exchange:
           result.exchange,
         returnItems:
           result.returnItems,
+        saleItems:
+          result.saleItems,
       },
       200,
     );
@@ -2978,14 +4244,14 @@ export async function handleCreatePosExchange(
     }
 
     console.error(
-      "POS_EXCHANGE_VALIDATE_FAILED",
+      "POS_EXCHANGE_CREATE_FAILED",
       error,
     );
 
     return json(
       {
         error:
-          "تعذر التحقق من فاتورة التبديل",
+          "تعذر إنشاء فاتورة التبديل",
       },
       500,
     );
