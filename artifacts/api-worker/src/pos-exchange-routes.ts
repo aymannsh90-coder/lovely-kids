@@ -7,6 +7,7 @@ import {
   posSalesTable,
 } from "@workspace/db/schema";
 import { handleCreatePosExchange } from "./pos-exchange-create";
+import { handleVoidPosExchange } from "./pos-exchange-void";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
@@ -504,6 +505,17 @@ export async function handlePosExchangeRequest(
     path === "/api/pos/exchanges/preview"
   ) {
     return handleExchangePreview(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/exchanges/void"
+  ) {
+    return handleVoidPosExchange(
       request,
       db,
       env,
