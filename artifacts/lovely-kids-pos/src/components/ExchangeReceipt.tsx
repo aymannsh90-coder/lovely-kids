@@ -181,8 +181,7 @@ export default function ExchangeReceipt({
                 </td>
 
                 <td dir="ltr">
-                  {item.barcode ??
-                    item.productCode ??
+                  {item.productCode ??
                     "—"}
                 </td>
 
