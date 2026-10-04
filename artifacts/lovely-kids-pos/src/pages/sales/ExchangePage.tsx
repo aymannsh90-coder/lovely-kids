@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
+import ExchangeReceipt from "../../components/ExchangeReceipt";
 import {
   ApiError,
   createPosExchange,
@@ -15,11 +16,13 @@ import {
   quotePosExchange,
   searchPosProducts,
   type PosExchangeCreateInput,
+  type PosExchangeCreateResult,
   type PosExchangePreviewResult,
   type PosExchangeQuoteResult,
   type PosExchangeSettlementType,
   type PosProductLookup,
 } from "../../lib/api";
+import { printReceiptElementDirect } from "../../lib/directReceiptPrint";
 import {
   captureScannerKeyboardEvent,
   createScannerKeyboardBuffer,
@@ -180,6 +183,9 @@ export default function ExchangePage() {
 
   const invoiceInputRef =
     useRef<HTMLInputElement>(null);
+
+  const exchangeReceiptRef =
+    useRef<HTMLElement>(null);
 
   const invoiceScannerKeyboard = useRef(
     createScannerKeyboardBuffer(),
@@ -372,6 +378,22 @@ export default function ExchangePage() {
     createdExchangeWasExisting,
     setCreatedExchangeWasExisting,
   ] = useState(false);
+
+  const [
+    createdExchangeResult,
+    setCreatedExchangeResult,
+  ] = useState<
+    PosExchangeCreateResult | null
+  >(null);
+
+  const [printBusy, setPrintBusy] =
+    useState(false);
+
+  const [printError, setPrintError] =
+    useState("");
+
+  const [printMessage, setPrintMessage] =
+    useState("");
 
   const selectedItems = useMemo(() => {
     if (!preview) {
@@ -887,6 +909,13 @@ export default function ExchangePage() {
       setCreatedExchangeWasExisting(
         result.alreadyCreated,
       );
+
+      setCreatedExchangeResult(
+        result,
+      );
+
+      setPrintError("");
+      setPrintMessage("");
     } catch (caught) {
       if (
         caught instanceof ApiError &&
@@ -926,6 +955,42 @@ export default function ExchangePage() {
         false;
 
       setCreateBusy(false);
+    }
+  }
+
+  async function handlePrintExchange() {
+    const source =
+      exchangeReceiptRef.current;
+
+    if (
+      !createdExchangeResult ||
+      !createdExchangeResult.exchange ||
+      !source
+    ) {
+      setPrintError(
+        "لا توجد فاتورة تبديل جاهزة للطباعة",
+      );
+      return;
+    }
+
+    setPrintBusy(true);
+    setPrintError("");
+    setPrintMessage("");
+
+    try {
+      await printReceiptElementDirect(
+        source,
+      );
+
+      setPrintMessage(
+        `تم إرسال فاتورة التبديل ${createdExchangeResult.exchange.publicId} إلى الطابعة.`,
+      );
+    } catch (caught) {
+      setPrintError(
+        errorMessage(caught),
+      );
+    } finally {
+      setPrintBusy(false);
     }
   }
 
@@ -978,6 +1043,11 @@ export default function ExchangePage() {
 
     setCreatedExchangePublicId(null);
     setCreatedExchangeWasExisting(false);
+    setCreatedExchangeResult(null);
+
+    setPrintBusy(false);
+    setPrintError("");
+    setPrintMessage("");
 
     window.setTimeout(() => {
       if (
@@ -4004,15 +4074,54 @@ export default function ExchangePage() {
                   </p>
                 )}
 
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={
-                    startNewExchange
-                  }
+                {printError && (
+                  <p
+                    className="error-message"
+                    role="alert"
+                  >
+                    {printError}
+                  </p>
+                )}
+
+                {printMessage && (
+                  <p>
+                    {printMessage}
+                  </p>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    justifyContent:
+                      "center",
+                    flexWrap: "wrap",
+                  }}
                 >
-                  فاتورة تبديل جديدة
-                </button>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={printBusy}
+                    onClick={() =>
+                      void handlePrintExchange()
+                    }
+                  >
+                    {printBusy
+                      ? "جاري الطباعة..."
+                      : "طباعة مباشرة"}
+                  </button>
+
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={printBusy}
+                    onClick={
+                      startNewExchange
+                    }
+                  >
+                    فاتورة تبديل جديدة
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -4090,6 +4199,13 @@ export default function ExchangePage() {
           )
         )}
       </article>
+
+      {createdExchangeResult?.exchange ? (
+        <ExchangeReceipt
+          result={createdExchangeResult}
+          receiptRef={exchangeReceiptRef}
+        />
+      ) : null}
     </section>
   );
 }
