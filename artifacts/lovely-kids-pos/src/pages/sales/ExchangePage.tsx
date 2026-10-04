@@ -9,6 +9,7 @@ import {
 import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
+  createPosExchange,
   getPosExchangePreview,
   lookupPosProductByBarcode,
   quotePosExchange,
@@ -208,6 +209,15 @@ export default function ExchangePage() {
   const newItemScannerSubmitValue =
     useRef<string | null>(null);
 
+  const exchangeCreateInFlight =
+    useRef(false);
+
+  const exchangeExecutionKey =
+    useRef<string | null>(null);
+
+  const exchangeExecutionSignature =
+    useRef<string | null>(null);
+
   const [mode, setMode] =
     useState<ExchangeMode>("with_receipt");
 
@@ -346,6 +356,22 @@ export default function ExchangePage() {
 
   const [quoteError, setQuoteError] =
     useState("");
+
+  const [createBusy, setCreateBusy] =
+    useState(false);
+
+  const [createError, setCreateError] =
+    useState("");
+
+  const [
+    createdExchangePublicId,
+    setCreatedExchangePublicId,
+  ] = useState<string | null>(null);
+
+  const [
+    createdExchangeWasExisting,
+    setCreatedExchangeWasExisting,
+  ] = useState(false);
 
   const selectedItems = useMemo(() => {
     if (!preview) {
@@ -512,8 +538,10 @@ export default function ExchangePage() {
       ? quote
       : null;
 
-  function buildQuoteInput():
-    PosExchangeCreateInput {
+  function buildQuoteInput(
+    idempotencyKey =
+      `quote:${createKey()}`,
+  ): PosExchangeCreateInput {
     const discountMinor =
       moneyToMinor(
         newInvoiceDiscount,
@@ -583,8 +611,7 @@ export default function ExchangePage() {
     const common = {
       registerKey,
 
-      idempotencyKey:
-        `quote:${createKey()}`,
+      idempotencyKey,
 
       settlementType,
 
@@ -757,6 +784,210 @@ export default function ExchangePage() {
     } finally {
       setQuoteBusy(false);
     }
+  }
+
+  async function handleCreateExchange() {
+    if (
+      exchangeCreateInFlight.current ||
+      createBusy
+    ) {
+      return;
+    }
+
+    if (createdExchangePublicId) {
+      return;
+    }
+
+    if (!activeQuote) {
+      setCreateError(
+        "يجب حساب فرق التبديل واعتماد المعاينة الحالية قبل التنفيذ",
+      );
+      return;
+    }
+
+    let executionKey =
+      exchangeExecutionKey.current;
+
+    if (
+      !executionKey ||
+      exchangeExecutionSignature.current !==
+        quoteInputSignature
+    ) {
+      executionKey =
+        `exchange:${createKey()}`;
+
+      exchangeExecutionKey.current =
+        executionKey;
+
+      exchangeExecutionSignature.current =
+        quoteInputSignature;
+    }
+
+    let baseInput:
+      PosExchangeCreateInput;
+
+    try {
+      baseInput =
+        buildQuoteInput(
+          executionKey,
+        );
+    } catch (caught) {
+      setCreateError(
+        errorMessage(caught),
+      );
+      return;
+    }
+
+    const input:
+      PosExchangeCreateInput = {
+        ...baseInput,
+
+        validationOnly: false,
+
+        expectedQuote: {
+          returnNetMinor:
+            activeQuote.returnNetMinor,
+
+          newNetMinor:
+            activeQuote.newNetMinor,
+
+          settlementAmountMinor:
+            activeQuote
+              .settlementAmountMinor,
+        },
+      };
+
+    exchangeCreateInFlight.current =
+      true;
+
+    setCreateBusy(true);
+    setCreateError("");
+    setQuoteError("");
+
+    try {
+      const result =
+        await createPosExchange(
+          token,
+          input,
+        );
+
+      if (
+        result.validationOnly ||
+        !result.exchange
+      ) {
+        throw new Error(
+          "لم يتم إنشاء فاتورة التبديل",
+        );
+      }
+
+      setCreatedExchangePublicId(
+        result.exchange.publicId,
+      );
+
+      setCreatedExchangeWasExisting(
+        result.alreadyCreated,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      if (
+        caught instanceof ApiError &&
+        caught.status === 409
+      ) {
+        setQuote(null);
+        setQuoteSignature("");
+
+        exchangeExecutionKey.current =
+          null;
+
+        exchangeExecutionSignature.current =
+          null;
+
+        setCreateError(
+          `${errorMessage(
+            caught,
+          )} — احسب فرق التبديل من جديد قبل التنفيذ.`,
+        );
+
+        return;
+      }
+
+      setCreateError(
+        errorMessage(caught),
+      );
+    } finally {
+      exchangeCreateInFlight.current =
+        false;
+
+      setCreateBusy(false);
+    }
+  }
+
+  function startNewExchange() {
+    exchangeCreateInFlight.current =
+      false;
+
+    exchangeExecutionKey.current =
+      null;
+
+    exchangeExecutionSignature.current =
+      null;
+
+    setInvoiceInput("");
+    setBarcodeInput("");
+    setPreview(null);
+    setQuantities({});
+    setError("");
+
+    setNoReceiptInput("");
+    setNoReceiptSearchResults([]);
+    setNoReceiptSearchOpen(false);
+    setNoReceiptSearchBusy(false);
+    setNoReceiptLookupBusy(false);
+    setActiveNoReceiptSearchIndex(0);
+    setNoReceiptMessage("");
+    setNoReceiptError("");
+    setNoReceiptCart([]);
+
+    setNewItemInput("");
+    setNewItemSearchResults([]);
+    setNewItemSearchOpen(false);
+    setNewItemSearchBusy(false);
+    setNewItemLookupBusy(false);
+    setActiveNewItemSearchIndex(0);
+    setNewItemMessage("");
+    setNewItemError("");
+    setNewCart([]);
+
+    setNewInvoiceDiscount("0.00");
+    setSettlementType("cash");
+
+    setQuote(null);
+    setQuoteSignature("");
+    setQuoteBusy(false);
+    setQuoteError("");
+
+    setCreateBusy(false);
+    setCreateError("");
+
+    setCreatedExchangePublicId(null);
+    setCreatedExchangeWasExisting(false);
+
+    window.setTimeout(() => {
+      if (
+        mode === "with_receipt"
+      ) {
+        invoiceInputRef.current?.focus();
+      } else {
+        noReceiptInputRef.current?.focus();
+      }
+    }, 0);
   }
 
   function resetReceiptExchange() {
@@ -3736,16 +3967,107 @@ export default function ExchangePage() {
               </div>
             )}
 
-            <p
-              style={{
-                margin:
-                  "0 16px 16px",
-              }}
-            >
-              هذه معاينة فقط — لم يتم إنشاء
-              فاتورة تبديل ولم يتغير المخزون
-              أو رصيد الصندوق.
-            </p>
+            {createdExchangePublicId ? (
+              <div
+                style={{
+                  margin:
+                    "0 16px 16px",
+                  padding: "18px",
+                  border:
+                    "2px solid rgba(0,0,0,0.18)",
+                  borderRadius: "12px",
+                  textAlign: "center",
+                }}
+              >
+                <h3
+                  style={{
+                    margin:
+                      "0 0 8px",
+                  }}
+                >
+                  تم تنفيذ فاتورة التبديل بنجاح
+                </h3>
+
+                <p>
+                  رقم فاتورة التبديل:
+                  {" "}
+                  <strong dir="ltr">
+                    {createdExchangePublicId}
+                  </strong>
+                </p>
+
+                {createdExchangeWasExisting && (
+                  <p>
+                    تم استرجاع نفس الفاتورة
+                    المحفوظة مسبقًا ولم يتم
+                    تكرار العملية.
+                  </p>
+                )}
+
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={
+                    startNewExchange
+                  }
+                >
+                  فاتورة تبديل جديدة
+                </button>
+              </div>
+            ) : (
+              <>
+                <p
+                  style={{
+                    margin:
+                      "0 16px 12px",
+                  }}
+                >
+                  هذه معاينة فقط. عند الضغط
+                  على تنفيذ فاتورة التبديل
+                  سيتم تحديث المخزون والصندوق
+                  حسب البيانات المعروضة أعلاه.
+                </p>
+
+                {createError && (
+                  <p
+                    className="error-message"
+                    role="alert"
+                    style={{
+                      margin:
+                        "0 16px 12px",
+                    }}
+                  >
+                    {createError}
+                  </p>
+                )}
+
+                <div
+                  style={{
+                    padding:
+                      "0 16px 18px",
+                    display: "flex",
+                    justifyContent:
+                      "flex-end",
+                  }}
+                >
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={
+                      handleCreateExchange
+                    }
+                    disabled={
+                      createBusy ||
+                      quoteBusy
+                    }
+                  >
+                    {createBusy
+                      ? "جاري تنفيذ التبديل..."
+                      : "تنفيذ فاتورة التبديل"}
+                  </button>
+                </div>
+              </>
+            )}
           </>
         ) : (
           !quoteBusy &&
