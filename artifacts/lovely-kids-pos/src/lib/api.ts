@@ -1652,6 +1652,65 @@ export interface PosExchangeCreateResult {
   >;
 }
 
+export interface PosExchangeVoidResult {
+  ok: boolean;
+  alreadyVoided: boolean;
+
+  exchange: {
+    id: number;
+    publicId: string;
+
+    status: "completed" | "voided";
+
+    sourceType:
+      PosExchangeSourceType;
+
+    settlementType:
+      PosExchangeSettlementType;
+
+    settlementAmountMinor: number;
+
+    businessDate: string;
+
+    voidedAt: string | null;
+    voidReason: string | null;
+
+    createdAt: string;
+
+    expectedCashBeforeMinor:
+      number | null;
+
+    expectedCashAfterMinor:
+      number | null;
+  };
+}
+
+export function voidPosExchange(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<PosExchangeVoidResult>(
+    "/api/pos/exchanges/void",
+    {
+      method: "POST",
+
+      body: JSON.stringify({
+        publicId:
+          input.publicId
+            .trim()
+            .toUpperCase(),
+
+        reason:
+          input.reason.trim(),
+      }),
+    },
+    token,
+  );
+}
+
 export function getPosExchangePreview(
   token: string,
   publicId: string,

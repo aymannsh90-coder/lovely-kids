@@ -8,6 +8,7 @@ import {
 
 import { usePosRuntime } from "../../app/pos-context";
 import ExchangeReceipt from "../../components/ExchangeReceipt";
+import { voidPosExchange } from "../../lib/api";
 import {
   ApiError,
   createPosExchange,
@@ -394,6 +395,20 @@ export default function ExchangePage() {
 
   const [printMessage, setPrintMessage] =
     useState("");
+
+  const [voidBusy, setVoidBusy] =
+    useState(false);
+
+  const [voidError, setVoidError] =
+    useState("");
+
+  const [voidMessage, setVoidMessage] =
+    useState("");
+
+  const [
+    exchangeVoided,
+    setExchangeVoided,
+  ] = useState(false);
 
   const selectedItems = useMemo(() => {
     if (!preview) {
@@ -994,6 +1009,101 @@ export default function ExchangePage() {
     }
   }
 
+  async function handleVoidExchange() {
+    const exchange =
+      createdExchangeResult?.exchange;
+
+    if (!exchange) {
+      setVoidError(
+        "لا توجد فاتورة تبديل جاهزة للإلغاء",
+      );
+      return;
+    }
+
+    if (exchangeVoided) {
+      setVoidMessage(
+        "فاتورة التبديل ملغاة بالفعل.",
+      );
+      return;
+    }
+
+    const enteredReason =
+      window.prompt(
+        "أدخل سبب إلغاء فاتورة التبديل:",
+      );
+
+    if (enteredReason === null) {
+      return;
+    }
+
+    const reason =
+      enteredReason.trim();
+
+    if (reason.length < 2) {
+      setVoidError(
+        "يجب إدخال سبب إلغاء فاتورة التبديل",
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        [
+          "تأكيد إلغاء فاتورة التبديل؟",
+          "",
+          `رقم الفاتورة: ${exchange.publicId}`,
+          "",
+          "سيتم عكس حركة المخزون والتكلفة وحركة الصندوق النقدية إن وجدت.",
+        ].join("\n"),
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setVoidBusy(true);
+    setVoidError("");
+    setVoidMessage("");
+
+    try {
+      const result =
+        await voidPosExchange(
+          token,
+          {
+            publicId:
+              exchange.publicId,
+
+            reason,
+          },
+        );
+
+      setExchangeVoided(true);
+
+      setPrintError("");
+      setPrintMessage("");
+
+      setVoidMessage(
+        result.alreadyVoided
+          ? "فاتورة التبديل ملغاة مسبقًا."
+          : "تم إلغاء فاتورة التبديل بنجاح.",
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setVoidError(
+        errorMessage(caught),
+      );
+    } finally {
+      setVoidBusy(false);
+    }
+  }
+
   function startNewExchange() {
     exchangeCreateInFlight.current =
       false;
@@ -1048,6 +1158,11 @@ export default function ExchangePage() {
     setPrintBusy(false);
     setPrintError("");
     setPrintMessage("");
+
+    setVoidBusy(false);
+    setVoidError("");
+    setVoidMessage("");
+    setExchangeVoided(false);
 
     window.setTimeout(() => {
       if (
@@ -4074,6 +4189,29 @@ export default function ExchangePage() {
                   </p>
                 )}
 
+                {exchangeVoided && (
+                  <p>
+                    <strong>
+                      فاتورة التبديل ملغاة
+                    </strong>
+                  </p>
+                )}
+
+                {voidError && (
+                  <p
+                    className="error-message"
+                    role="alert"
+                  >
+                    {voidError}
+                  </p>
+                )}
+
+                {voidMessage && (
+                  <p>
+                    {voidMessage}
+                  </p>
+                )}
+
                 {printError && (
                   <p
                     className="error-message"
@@ -4101,7 +4239,11 @@ export default function ExchangePage() {
                   <button
                     className="primary-button"
                     type="button"
-                    disabled={printBusy}
+                    disabled={
+                      printBusy ||
+                      voidBusy ||
+                      exchangeVoided
+                    }
                     onClick={() =>
                       void handlePrintExchange()
                     }
@@ -4111,10 +4253,31 @@ export default function ExchangePage() {
                       : "طباعة مباشرة"}
                   </button>
 
+                  {!exchangeVoided && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={
+                        voidBusy ||
+                        printBusy
+                      }
+                      onClick={() =>
+                        void handleVoidExchange()
+                      }
+                    >
+                      {voidBusy
+                        ? "جاري الإلغاء..."
+                        : "إلغاء فاتورة التبديل"}
+                    </button>
+                  )}
+
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={printBusy}
+                    disabled={
+                      printBusy ||
+                      voidBusy
+                    }
                     onClick={
                       startNewExchange
                     }
