@@ -38,6 +38,16 @@ export function getMediaObjectRef(
 ): MediaObjectRef | null {
   if (!value) return null;
 
+  // Fast path: product/order payloads contain many ordinary strings.
+  // Avoid constructing/parsing a URL unless the value could actually
+  // reference one of our supported media hosts.
+  if (
+    !value.includes("media.lovelykids.net") &&
+    !value.includes(STORAGE_HOST)
+  ) {
+    return null;
+  }
+
   try {
     const url = new URL(value);
 
