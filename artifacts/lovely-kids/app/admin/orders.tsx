@@ -1393,28 +1393,41 @@ export default function AdminOrdersScreen() {
     setThermalPrintingId(order.id);
 
     try {
-      const productsResponse = await fetch(`${API_BASE}/api/products`);
+      const productCodeById = new Map<string, string | null>();
 
-      if (!productsResponse.ok) {
-        throw new Error("تعذر تحميل أكواد المنتجات للطباعة");
+      // Product codes improve the receipt, but a temporary API/network
+      // failure must never prevent an already-loaded order from printing.
+      try {
+        const productsResponse = await fetch(`${API_BASE}/api/products`);
+
+        if (productsResponse.ok) {
+          const productsPayload = await productsResponse.json();
+
+          const productList = Array.isArray(productsPayload)
+            ? productsPayload
+            : Array.isArray(productsPayload?.products)
+              ? productsPayload.products
+              : [];
+
+          productList.forEach((product: any) => {
+            productCodeById.set(
+              String(product.id),
+              typeof product.productCode === "string"
+                ? product.productCode
+                : null,
+            );
+          });
+        } else {
+          console.warn(
+            "تعذر تحميل أكواد المنتجات للطباعة، سيتم طباعة الطلب بدون الأكواد",
+          );
+        }
+      } catch (productCodeError) {
+        console.warn(
+          "تعذر تحميل أكواد المنتجات للطباعة، سيتم طباعة الطلب بدون الأكواد",
+          productCodeError,
+        );
       }
-
-      const productsPayload = await productsResponse.json();
-
-      const productList = Array.isArray(productsPayload)
-        ? productsPayload
-        : Array.isArray(productsPayload?.products)
-          ? productsPayload.products
-          : [];
-
-      const productCodeById = new Map<string, string | null>(
-        productList.map((product: any) => [
-          String(product.id),
-          typeof product.productCode === "string"
-            ? product.productCode
-            : null,
-        ]),
-      );
 
       await printOrderThermalReceipt({
         ...order,

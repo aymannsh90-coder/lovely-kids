@@ -666,16 +666,26 @@ export async function printOrderThermalReceipt(
 
     const png = await canvasToPngBlob(canvas);
 
-    const response = await fetch(
-      `${PRINT_BRIDGE_BASE}/print-receipt-png?width=${RECEIPT_WIDTH_DOTS}&copies=1`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "image/png",
+    let response: Response;
+
+    try {
+      response = await fetch(
+        `${PRINT_BRIDGE_BASE}/print-receipt-png?width=${RECEIPT_WIDTH_DOTS}&copies=1`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "image/png",
+          },
+          body: png,
         },
-        body: png,
-      },
-    );
+      );
+    } catch {
+      // Never auto-retry a print POST: the bridge may already have sent it
+      // to the printer even if the browser did not receive the response.
+      throw new Error(
+        "تعذر التأكد من إرسال الفاتورة إلى برنامج الطباعة المحلي. تأكد أن Print Bridge يعمل، وإذا لم تُطبع الفاتورة حاول مرة أخرى.",
+      );
+    }
 
     if (!response.ok) {
       const message = await response.text().catch(() => "");
