@@ -1621,6 +1621,9 @@ export interface PosExchangeCreateResult {
 
     status: "completed" | "voided";
 
+    voidedAt?: string | null;
+    voidReason?: string | null;
+
     settlementType:
       PosExchangeSettlementType;
 
@@ -1650,6 +1653,78 @@ export interface PosExchangeCreateResult {
     | PosExchangeSaleItemResult
     | PosExchangeQuoteSaleItemResult
   >;
+}
+
+export interface PosExchangeSummary {
+  id: number;
+  publicId: string;
+
+  sourceType: string;
+
+  businessDate: string;
+  registerKey: string | null;
+
+  status:
+    | "completed"
+    | "voided";
+
+  settlementType: string;
+
+  returnNetMinor: number;
+  newNetMinor: number;
+
+  differenceMinor: number;
+  settlementAmountMinor: number;
+
+  reason: string | null;
+  notes: string | null;
+
+  voidedAt: string | null;
+  voidReason: string | null;
+
+  createdAt: string;
+}
+
+export interface PosTodayExchangesResult {
+  session: {
+    id: string;
+    registerKey: string;
+    businessDate: string;
+  } | null;
+
+  exchanges:
+    PosExchangeSummary[];
+}
+
+export function getTodayPosExchanges(
+  token: string,
+  registerKey = "main",
+) {
+  const register =
+    encodeURIComponent(
+      registerKey,
+    );
+
+  return apiRequest<PosTodayExchangesResult>(
+    `/api/pos/exchanges?register=${register}`,
+    {},
+    token,
+  );
+}
+
+export function getPosExchangeByPublicId(
+  token: string,
+  publicId: string,
+) {
+  return apiRequest<PosExchangeCreateResult>(
+    `/api/pos/exchanges/by-public-id?publicId=${encodeURIComponent(
+      publicId
+        .trim()
+        .toUpperCase(),
+    )}`,
+    {},
+    token,
+  );
 }
 
 export interface PosExchangeVoidResult {

@@ -1,10 +1,15 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
 import ExchangeReceipt from "../../components/ExchangeReceipt";
@@ -12,6 +17,7 @@ import { voidPosExchange } from "../../lib/api";
 import {
   ApiError,
   createPosExchange,
+  getPosExchangeByPublicId,
   getPosExchangePreview,
   lookupPosProductByBarcode,
   quotePosExchange,
@@ -182,6 +188,21 @@ export default function ExchangePage() {
     clearAuthentication,
   } = usePosRuntime();
 
+  const navigate =
+    useNavigate();
+
+  const [searchParams] =
+    useSearchParams();
+
+  const historyPublicId =
+    (
+      searchParams.get(
+        "publicId",
+      ) ?? ""
+    )
+      .trim()
+      .toUpperCase();
+
   const invoiceInputRef =
     useRef<HTMLInputElement>(null);
 
@@ -227,6 +248,16 @@ export default function ExchangePage() {
 
   const [mode, setMode] =
     useState<ExchangeMode>("with_receipt");
+
+  const [
+    historyLoadBusy,
+    setHistoryLoadBusy,
+  ] = useState(false);
+
+  const [
+    historyLoadError,
+    setHistoryLoadError,
+  ] = useState("");
 
   const [invoiceInput, setInvoiceInput] =
     useState("");
@@ -973,6 +1004,97 @@ export default function ExchangePage() {
     }
   }
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!historyPublicId) {
+      return;
+    }
+
+    setHistoryLoadBusy(true);
+    setHistoryLoadError("");
+
+    void getPosExchangeByPublicId(
+      token,
+      historyPublicId,
+    )
+      .then((result) => {
+        if (
+          cancelled ||
+          !result.exchange
+        ) {
+          return;
+        }
+
+        setCreatedExchangePublicId(
+          result.exchange.publicId,
+        );
+
+        setCreatedExchangeWasExisting(
+          false,
+        );
+
+        setCreatedExchangeResult(
+          result,
+        );
+
+        setExchangeVoided(
+          result.exchange.status ===
+            "voided",
+        );
+
+        setPrintError("");
+        setPrintMessage("");
+        setVoidError("");
+        setVoidMessage("");
+
+        window.setTimeout(() => {
+          document
+            .getElementById(
+              "exchange-result-actions",
+            )
+            ?.scrollIntoView({
+              behavior:
+                "smooth",
+              block:
+                "center",
+            });
+        }, 0);
+      })
+      .catch((caught) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (
+          caught instanceof
+            ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+          return;
+        }
+
+        setHistoryLoadError(
+          errorMessage(caught),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHistoryLoadBusy(
+            false,
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    token,
+    historyPublicId,
+  ]);
+
   async function handlePrintExchange() {
     const source =
       exchangeReceiptRef.current;
@@ -1079,6 +1201,23 @@ export default function ExchangePage() {
 
       setExchangeVoided(true);
 
+      setCreatedExchangeResult(
+        (current) =>
+          current?.exchange
+            ? {
+                ...current,
+                exchange: {
+                  ...current.exchange,
+                  status: "voided",
+                  voidedAt:
+                    result.exchange.voidedAt,
+                  voidReason:
+                    result.exchange.voidReason,
+                },
+              }
+            : current,
+      );
+
       setPrintError("");
       setPrintMessage("");
 
@@ -1105,6 +1244,13 @@ export default function ExchangePage() {
   }
 
   function startNewExchange() {
+    if (historyPublicId) {
+      navigate(
+        "/sales/exchange",
+        { replace: true },
+      );
+    }
+
     exchangeCreateInFlight.current =
       false;
 
@@ -2265,6 +2411,18 @@ export default function ExchangePage() {
           </div>
         </div>
 
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() =>
+            navigate(
+              "/sales/today#pos-exchange-history",
+            )
+          }
+        >
+          حركات التبديل السابقة
+        </button>
+
         <div className="sales-return-session">
           <span>جلسة الصندوق</span>
 
@@ -2273,6 +2431,22 @@ export default function ExchangePage() {
           </strong>
         </div>
       </header>
+
+      {historyLoadBusy && (
+        <div className="alert">
+          جاري تحميل فاتورة
+          التبديل...
+        </div>
+      )}
+
+      {historyLoadError && (
+        <div
+          className="alert error-alert"
+          role="alert"
+        >
+          {historyLoadError}
+        </div>
+      )}
 
       <article className="sales-return-search-panel">
         <div className="sales-return-section-title">
@@ -4154,6 +4328,7 @@ export default function ExchangePage() {
 
             {createdExchangePublicId ? (
               <div
+                id="exchange-result-actions"
                 style={{
                   margin:
                     "0 16px 16px",
@@ -4170,7 +4345,9 @@ export default function ExchangePage() {
                       "0 0 8px",
                   }}
                 >
-                  تم تنفيذ فاتورة التبديل بنجاح
+                  {historyPublicId
+                    ? "فاتورة تبديل محفوظة"
+                    : "تم تنفيذ فاتورة التبديل بنجاح"}
                 </h3>
 
                 <p>
@@ -4241,8 +4418,7 @@ export default function ExchangePage() {
                     type="button"
                     disabled={
                       printBusy ||
-                      voidBusy ||
-                      exchangeVoided
+                      voidBusy
                     }
                     onClick={() =>
                       void handlePrintExchange()

@@ -5,10 +5,12 @@ import { useNavigate } from "react-router-dom";
 import {
   ApiError,
   getPosSaleByPublicId,
+  getTodayPosExchanges,
   getTodayPosSales,
   type CashSession,
   type PosSaleItemResult,
   type PosSaleResult,
+  type PosExchangeSummary,
   type PosMobileReturnResult,
   type PosSaleReturnResult,
 } from "./lib/api";
@@ -49,6 +51,28 @@ function formatMinor(value: number) {
 
 function paymentMethodLabel(value: string) {
   return value === "card" ? "فيزا" : "نقدي";
+}
+
+function exchangeSettlementLabel(
+  value: string,
+) {
+  if (value === "card") {
+    return "فيزا";
+  }
+
+  if (value === "cash") {
+    return "نقدي";
+  }
+
+  if (value === "delivery_company") {
+    return "شركة التوصيل";
+  }
+
+  if (value === "customer") {
+    return "الزبون";
+  }
+
+  return value;
 }
 
 function formatDateTime(value: string) {
@@ -124,6 +148,9 @@ export default function TodaySalesPanel({
 
   const [mobileReturns, setMobileReturns] =
     useState<PosMobileReturnResult[]>([]);
+
+  const [exchanges, setExchanges] =
+    useState<PosExchangeSummary[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -256,11 +283,32 @@ export default function TodaySalesPanel({
     setLoadError("");
 
     try {
-      const result = await getTodayPosSales(token, session.registerKey);
+      const [
+        result,
+        exchangeResult,
+      ] = await Promise.all([
+        getTodayPosSales(
+          token,
+          session.registerKey,
+        ),
+        getTodayPosExchanges(
+          token,
+          session.registerKey,
+        ),
+      ]);
 
-      setSales(result.sales as TodaySaleResult[]);
-      setSaleReturns(result.saleReturns ?? []);
-      setMobileReturns(result.mobileReturns ?? []);
+      setSales(
+        result.sales as TodaySaleResult[],
+      );
+      setSaleReturns(
+        result.saleReturns ?? [],
+      );
+      setMobileReturns(
+        result.mobileReturns ?? [],
+      );
+      setExchanges(
+        exchangeResult.exchanges ?? [],
+      );
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         onUnauthorized();
@@ -276,6 +324,30 @@ export default function TodaySalesPanel({
   useEffect(() => {
     void loadTodaySales();
   }, [token, session.registerKey, refreshKey]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      window.location.hash !==
+        "#pos-exchange-history"
+    ) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      document
+        .getElementById(
+          "pos-exchange-history",
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 0);
+  }, [
+    loading,
+    exchanges.length,
+  ]);
 
   async function handleInvoiceSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -323,6 +395,16 @@ export default function TodaySalesPanel({
 
     navigate(
       `/sales/returns?publicId=${encodeURIComponent(originalSalePublicId)}&from=today`,
+    );
+  }
+
+  function openExchange(
+    publicId: string,
+  ) {
+    navigate(
+      `/sales/exchange?publicId=${encodeURIComponent(
+        publicId,
+      )}&from=today`,
     );
   }
 
@@ -415,7 +497,8 @@ export default function TodaySalesPanel({
         !loadError &&
         rows.length === 0 &&
         saleReturnRows.length === 0 &&
-        mobileReturnRows.length === 0 && (
+        mobileReturnRows.length === 0 &&
+        exchanges.length === 0 && (
           <div className="empty-cart">
             لا توجد مبيعات مسجلة في جلسة اليوم حتى الآن.
           </div>
@@ -436,6 +519,7 @@ export default function TodaySalesPanel({
                   <th>الباركود</th>
                   <th>الكمية</th>
                   <th>السعر</th>
+                  <th>التاريخ والوقت</th>
                   <th>اسم الزبون</th>
                   <th>ملاحظات</th>
                 </tr>
@@ -473,6 +557,12 @@ export default function TodaySalesPanel({
                     <td>{row.item.quantity}</td>
 
                     <td>{formatMinor(row.item.soldUnitPriceMinor)}</td>
+
+                    <td>
+                      {formatDateTime(
+                        row.sale.createdAt,
+                      )}
+                    </td>
 
                     <td>
                       {row.sale.customerName ||
@@ -531,6 +621,12 @@ export default function TodaySalesPanel({
                       -{formatMinor(row.item.soldUnitPriceMinor)}
                     </td>
 
+                    <td>
+                      {formatDateTime(
+                        row.saleReturn.createdAt,
+                      )}
+                    </td>
+
                     <td>مردود فاتورة</td>
 
                     <td>
@@ -566,6 +662,13 @@ export default function TodaySalesPanel({
                       -{formatMinor(row.item.refundUnitPriceMinor)}
                     </td>
 
+
+                    <td>
+                      {formatDateTime(
+                        row.saleReturn.createdAt,
+                      )}
+                    </td>
+
                     <td>مردود نقدي</td>
 
                     <td>{row.saleReturn.reason}</td>
@@ -575,6 +678,188 @@ export default function TodaySalesPanel({
             </table>
           </div>
         )}
+
+        <div
+          id="pos-exchange-history"
+          style={{
+            marginTop: "28px",
+          }}
+        >
+          <div className="today-sales-heading">
+            <div className="panel-heading">
+              <div className="panel-icon">
+                🔄
+              </div>
+
+              <div>
+                <h2>
+                  حركات التبديل
+                </h2>
+
+                <p>
+                  فواتير التبديل المسجلة
+                  في جلسة اليوم.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {!loading &&
+            exchanges.length === 0 && (
+              <div className="empty-cart">
+                لا توجد حركات تبديل
+                مسجلة في جلسة اليوم.
+              </div>
+            )}
+
+          {exchanges.length > 0 && (
+            <div className="today-sales-table-wrap">
+              <table className="today-sales-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>
+                      رقم فاتورة التبديل
+                    </th>
+                    <th>
+                      التاريخ والوقت
+                    </th>
+                    <th>
+                      نوع التبديل
+                    </th>
+                    <th>
+                      قيمة المرتجع
+                    </th>
+                    <th>
+                      الأصناف الجديدة
+                    </th>
+                    <th>
+                      فرق التبديل
+                    </th>
+                    <th>
+                      التسوية
+                    </th>
+                    <th>
+                      الحالة
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {exchanges.map(
+                    (
+                      exchange,
+                      index,
+                    ) => (
+                      <tr
+                        key={
+                          exchange.id
+                        }
+                        className="today-sale-clickable-row"
+                        role="button"
+                        tabIndex={0}
+                        title="فتح فاتورة التبديل"
+                        aria-label={`فتح فاتورة التبديل ${exchange.publicId}`}
+                        onClick={() =>
+                          openExchange(
+                            exchange.publicId,
+                          )
+                        }
+                        onKeyDown={(
+                          event,
+                        ) => {
+                          if (
+                            event.key ===
+                              "Enter" ||
+                            event.key ===
+                              " "
+                          ) {
+                            event.preventDefault();
+
+                            openExchange(
+                              exchange.publicId,
+                            );
+                          }
+                        }}
+                      >
+                        <td>
+                          {index + 1}
+                        </td>
+
+                        <td dir="ltr">
+                          <strong>
+                            {
+                              exchange.publicId
+                            }
+                          </strong>
+                        </td>
+
+                        <td>
+                          {formatDateTime(
+                            exchange.createdAt,
+                          )}
+                        </td>
+
+                        <td>
+                          {exchange.sourceType ===
+                          "pos_sale"
+                            ? "مع فاتورة"
+                            : exchange.sourceType ===
+                                "pos_no_receipt"
+                              ? "بدون فاتورة"
+                              : "طلب أونلاين"}
+                        </td>
+
+                        <td>
+                          {formatMinor(
+                            exchange.returnNetMinor,
+                          )}
+                        </td>
+
+                        <td>
+                          {formatMinor(
+                            exchange.newNetMinor,
+                          )}
+                        </td>
+
+                        <td>
+                          {exchange.settlementAmountMinor >
+                          0
+                            ? `على الزبون ${formatMinor(
+                                exchange.settlementAmountMinor,
+                              )}`
+                            : exchange.settlementAmountMinor <
+                                0
+                              ? `للزبون ${formatMinor(
+                                  Math.abs(
+                                    exchange.settlementAmountMinor,
+                                  ),
+                                )}`
+                              : formatMinor(
+                                  0,
+                                )}
+                        </td>
+
+                        <td>
+                          {exchangeSettlementLabel(
+                            exchange.settlementType,
+                          )}
+                        </td>
+
+                        <td>
+                          {exchange.status ===
+                          "voided"
+                            ? "ملغاة"
+                            : "مكتملة"}
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         <div className="invoice-search-block">
           <div>

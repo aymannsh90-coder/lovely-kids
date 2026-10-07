@@ -25,6 +25,28 @@ function formatMinor(value: number) {
   return `${(value / 100).toFixed(2)} ₪`;
 }
 
+function settlementTypeLabel(
+  value: string,
+) {
+  if (value === "card") {
+    return "بطاقة";
+  }
+
+  if (value === "cash") {
+    return "نقدي";
+  }
+
+  if (value === "delivery_company") {
+    return "شركة التوصيل";
+  }
+
+  if (value === "customer") {
+    return "الزبون";
+  }
+
+  return value;
+}
+
 function shortProductName(value: string) {
   return (
     value.trim().split(/\s+/)[0] ||
@@ -105,22 +127,32 @@ export default function ExchangeReceipt({
           )}
         </span>
 
+        {exchange.status === "voided" && (
+          <span>
+            الحالة:
+            {" "}
+            <b>ملغاة</b>
+          </span>
+        )}
+
         <span>
           نوع التبديل:
           {" "}
           {exchange.sourceType ===
           "pos_sale"
             ? "مع فاتورة"
-            : "بدون فاتورة"}
+            : exchange.sourceType ===
+                "pos_no_receipt"
+              ? "بدون فاتورة"
+              : "طلب أونلاين"}
         </span>
 
         <span>
           طريقة التسوية:
           {" "}
-          {exchange.settlementType ===
-          "card"
-            ? "بطاقة"
-            : "نقدي"}
+          {settlementTypeLabel(
+            exchange.settlementType,
+          )}
         </span>
       </div>
 
@@ -325,10 +357,9 @@ export default function ExchangeReceipt({
           </span>
 
           <strong>
-            {exchange.settlementType ===
-            "card"
-              ? "بطاقة"
-              : "نقدي"}
+            {settlementTypeLabel(
+              exchange.settlementType,
+            )}
           </strong>
         </div>
       </div>
