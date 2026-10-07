@@ -7,6 +7,10 @@ import {
   posSalesTable,
 } from "@workspace/db/schema";
 import { handleCreatePosExchange } from "./pos-exchange-create";
+import {
+  handleGetPosExchangeByPublicId,
+  handleListPosExchanges,
+} from "./pos-exchange-history";
 import { handleVoidPosExchange } from "./pos-exchange-void";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
@@ -505,6 +509,28 @@ export async function handlePosExchangeRequest(
     path === "/api/pos/exchanges/preview"
   ) {
     return handleExchangePreview(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/exchanges/by-public-id"
+  ) {
+    return handleGetPosExchangeByPublicId(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/exchanges"
+  ) {
+    return handleListPosExchanges(
       request,
       db,
       env,
