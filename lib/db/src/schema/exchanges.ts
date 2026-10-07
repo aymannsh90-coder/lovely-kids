@@ -45,6 +45,8 @@ export const exchangeDocumentsTable = pgTable(
 
     registerKey: text("register_key"),
 
+    customerName: text("customer_name"),
+
     createdByUserId: integer("created_by_user_id")
       .notNull()
       .references(() => usersTable.id, {

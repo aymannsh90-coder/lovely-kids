@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import JsBarcode from "jsbarcode";
-import { useNavigate } from "react-router-dom";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 
 import {
   ApiError,
@@ -75,6 +78,29 @@ function exchangeSettlementLabel(
   return value;
 }
 
+function getPalestineDate() {
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone: "Asia/Hebron",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      },
+    ).formatToParts(new Date());
+
+  const values =
+    Object.fromEntries(
+      parts.map((part) => [
+        part.type,
+        part.value,
+      ]),
+    );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ar-PS", {
     dateStyle: "short",
@@ -134,6 +160,19 @@ export default function TodaySalesPanel({
   onUnauthorized,
 }: TodaySalesPanelProps) {
   const navigate = useNavigate();
+
+  const [searchParams] =
+    useSearchParams();
+
+  const queryDate =
+    searchParams.get("date") ?? "";
+
+  const [selectedDate, setSelectedDate] =
+    useState(
+      /^\d{4}-\d{2}-\d{2}$/.test(queryDate)
+        ? queryDate
+        : getPalestineDate(),
+    );
 
   const [sales, setSales] = useState<TodaySaleResult[]>([]);
 
@@ -290,10 +329,12 @@ export default function TodaySalesPanel({
         getTodayPosSales(
           token,
           session.registerKey,
+          selectedDate,
         ),
         getTodayPosExchanges(
           token,
           session.registerKey,
+          selectedDate,
         ),
       ]);
 
@@ -323,7 +364,12 @@ export default function TodaySalesPanel({
 
   useEffect(() => {
     void loadTodaySales();
-  }, [token, session.registerKey, refreshKey]);
+  }, [
+    token,
+    session.registerKey,
+    refreshKey,
+    selectedDate,
+  ]);
 
   useEffect(() => {
     if (
@@ -404,7 +450,9 @@ export default function TodaySalesPanel({
     navigate(
       `/sales/exchange?publicId=${encodeURIComponent(
         publicId,
-      )}&from=today`,
+      )}&from=movements&date=${encodeURIComponent(
+        selectedDate,
+      )}`,
     );
   }
 
@@ -416,12 +464,37 @@ export default function TodaySalesPanel({
             <div className="panel-icon">📋</div>
 
             <div>
-              <h2>مبيعات اليوم</h2>
-              <p>مراجعة الفواتير وطباعة تقرير الإدخال إلى برنامج المحاسبة.</p>
+              <h2>المبيعات والحركات</h2>
+              <p>
+                مراجعة المبيعات والمرتجعات والتبديلات حسب التاريخ.
+              </p>
             </div>
           </div>
 
           <div className="today-sales-actions">
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontWeight: 700,
+              }}
+            >
+              <span>التاريخ</span>
+
+              <input
+                type="date"
+                value={selectedDate}
+                max={getPalestineDate()}
+                disabled={loading}
+                onChange={(event) =>
+                  setSelectedDate(
+                    event.target.value,
+                  )
+                }
+              />
+            </label>
+
             <button
               className="secondary-button"
               type="button"

@@ -203,6 +203,9 @@ export default function ExchangePage() {
       .trim()
       .toUpperCase();
 
+  const historyDate =
+    (searchParams.get("date") ?? "").trim();
+
   const invoiceInputRef =
     useRef<HTMLInputElement>(null);
 
@@ -248,6 +251,9 @@ export default function ExchangePage() {
 
   const [mode, setMode] =
     useState<ExchangeMode>("with_receipt");
+
+  const [customerName, setCustomerName] =
+    useState("");
 
   const [
     historyLoadBusy,
@@ -688,6 +694,10 @@ export default function ExchangePage() {
       newInvoiceDiscount:
         newInvoiceDiscount.trim() ||
         "0",
+
+      customerName:
+        customerName.trim() ||
+        undefined,
     };
 
     if (
@@ -1038,6 +1048,10 @@ export default function ExchangePage() {
           result,
         );
 
+        setCustomerName(
+          result.exchange.customerName ?? "",
+        );
+
         setExchangeVoided(
           result.exchange.status ===
             "voided",
@@ -1244,6 +1258,8 @@ export default function ExchangePage() {
   }
 
   function startNewExchange() {
+    setCustomerName("");
+
     if (historyPublicId) {
       navigate(
         "/sales/exchange",
@@ -2389,6 +2405,206 @@ export default function ExchangePage() {
     focusNewItemInput();
   }
 
+  if (historyPublicId) {
+    return (
+      <section
+        className="sales-return-page"
+        id="pos-sales-exchange"
+      >
+        <header className="sales-return-heading">
+          <div className="panel-heading">
+            <div className="panel-icon">
+              🔄
+            </div>
+
+            <div>
+              <h2>فاتورة تبديل محفوظة</h2>
+
+              <p>
+                عرض تفاصيل فاتورة التبديل السابقة وطباعتها.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() =>
+              navigate(
+                `/sales/today${
+                  /^\\d{4}-\\d{2}-\\d{2}$/.test(historyDate)
+                    ? `?date=${encodeURIComponent(historyDate)}`
+                    : ""
+                }#pos-exchange-history`,
+              )
+            }
+          >
+            الرجوع إلى المبيعات والحركات
+          </button>
+
+          <div className="sales-return-session">
+            <span>جلسة الصندوق</span>
+
+            <strong dir="ltr">
+              {session.registerKey}
+            </strong>
+          </div>
+        </header>
+
+        {historyLoadBusy && (
+          <div className="alert">
+            جاري تحميل فاتورة التبديل...
+          </div>
+        )}
+
+        {historyLoadError && (
+          <div
+            className="alert error-alert"
+            role="alert"
+          >
+            {historyLoadError}
+          </div>
+        )}
+
+        {!historyLoadBusy &&
+          !historyLoadError &&
+          createdExchangeResult?.exchange && (
+            <>
+              <article
+                id="exchange-result-actions"
+                className="sales-return-search-panel"
+                style={{
+                  padding: "18px",
+                  textAlign: "center",
+                }}
+              >
+                <h3>
+                  فاتورة تبديل محفوظة
+                </h3>
+
+                <p>
+                  رقم فاتورة التبديل:{" "}
+                  <strong dir="ltr">
+                    {
+                      createdExchangeResult
+                        .exchange.publicId
+                    }
+                  </strong>
+                </p>
+
+                {createdExchangeResult.exchange
+                  .customerName && (
+                  <p>
+                    اسم الزبون:{" "}
+                    <strong>
+                      {
+                        createdExchangeResult
+                          .exchange.customerName
+                      }
+                    </strong>
+                  </p>
+                )}
+
+                {exchangeVoided && (
+                  <p>
+                    <strong>
+                      فاتورة التبديل ملغاة
+                    </strong>
+                  </p>
+                )}
+
+                {voidError && (
+                  <p
+                    className="error-message"
+                    role="alert"
+                  >
+                    {voidError}
+                  </p>
+                )}
+
+                {voidMessage && (
+                  <p>{voidMessage}</p>
+                )}
+
+                {printError && (
+                  <p
+                    className="error-message"
+                    role="alert"
+                  >
+                    {printError}
+                  </p>
+                )}
+
+                {printMessage && (
+                  <p>{printMessage}</p>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={
+                      printBusy ||
+                      voidBusy
+                    }
+                    onClick={() =>
+                      void handlePrintExchange()
+                    }
+                  >
+                    {printBusy
+                      ? "جاري الطباعة..."
+                      : "طباعة مباشرة"}
+                  </button>
+
+                  {!exchangeVoided && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={
+                        voidBusy ||
+                        printBusy
+                      }
+                      onClick={() =>
+                        void handleVoidExchange()
+                      }
+                    >
+                      {voidBusy
+                        ? "جاري الإلغاء..."
+                        : "إلغاء فاتورة التبديل"}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={
+                      printBusy ||
+                      voidBusy
+                    }
+                    onClick={startNewExchange}
+                  >
+                    تبديل جديد
+                  </button>
+                </div>
+              </article>
+
+              <ExchangeReceipt
+                result={createdExchangeResult}
+                receiptRef={exchangeReceiptRef}
+              />
+            </>
+          )}
+      </section>
+    );
+  }
+
   return (
     <section
       className="sales-return-page"
@@ -2416,7 +2632,11 @@ export default function ExchangePage() {
           className="secondary-button"
           onClick={() =>
             navigate(
-              "/sales/today#pos-exchange-history",
+              `/sales/today${
+                /^\d{4}-\d{2}-\d{2}$/.test(historyDate)
+                  ? `?date=${encodeURIComponent(historyDate)}`
+                  : ""
+              }#pos-exchange-history`,
             )
           }
         >
@@ -2447,6 +2667,34 @@ export default function ExchangePage() {
           {historyLoadError}
         </div>
       )}
+
+      <article className="sales-return-search-panel">
+        <div className="sales-return-section-title">
+          <div>
+            <h3>بيانات الزبون</h3>
+
+            <p>
+              اسم الزبون اختياري ويُحفظ مع فاتورة التبديل.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ padding: "16px" }}>
+          <label className="sales-return-field">
+            <span>اسم الزبون (اختياري)</span>
+
+            <input
+              value={customerName}
+              maxLength={150}
+              autoComplete="off"
+              placeholder="اسم الزبون"
+              onChange={(event) =>
+                setCustomerName(event.target.value)
+              }
+            />
+          </label>
+        </div>
+      </article>
 
       <article className="sales-return-search-panel">
         <div className="sales-return-section-title">

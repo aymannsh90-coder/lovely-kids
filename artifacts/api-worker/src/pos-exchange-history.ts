@@ -1,5 +1,4 @@
 import {
-  cashSessionsTable,
   exchangeDocumentsTable,
   exchangeReturnItemsTable,
   exchangeSaleItemsTable,
@@ -105,6 +104,41 @@ function normalizeRegisterKey(
   return registerKey;
 }
 
+function palestineBusinessDate() {
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone: "Asia/Hebron",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      },
+    ).formatToParts(new Date());
+
+  const values =
+    Object.fromEntries(
+      parts.map((part) => [
+        part.type,
+        part.value,
+      ]),
+    );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function normalizeBusinessDate(
+  value: string | null,
+) {
+  const date =
+    value?.trim() ||
+    palestineBusinessDate();
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? date
+    : null;
+}
+
 function normalizePublicId(
   value: string | null,
 ) {
@@ -162,38 +196,21 @@ export async function handleListPosExchanges(
     );
   }
 
-  const sessionRows =
-    await db
-      .select()
-      .from(cashSessionsTable)
-      .where(
-        and(
-          eq(
-            cashSessionsTable
-              .registerKey,
-            registerKey,
-          ),
-          eq(
-            cashSessionsTable.status,
-            "open",
-          ),
-        ),
-      )
-      .orderBy(
-        desc(
-          cashSessionsTable.openedAt,
-        ),
-      )
-      .limit(1);
+  const businessDate =
+    normalizeBusinessDate(
+      url.searchParams.get(
+        "date",
+      ),
+    );
 
-  const session =
-    sessionRows[0];
-
-  if (!session) {
-    return json({
-      session: null,
-      exchanges: [],
-    });
+  if (!businessDate) {
+    return json(
+      {
+        error:
+          "التاريخ غير صالح",
+      },
+      400,
+    );
   }
 
   const exchanges =
@@ -203,16 +220,20 @@ export async function handleListPosExchanges(
         exchangeDocumentsTable,
       )
       .where(
-        eq(
-          exchangeDocumentsTable
-            .cashSessionId,
-          session.id,
+        and(
+          eq(
+            exchangeDocumentsTable.registerKey,
+            registerKey,
+          ),
+          eq(
+            exchangeDocumentsTable.businessDate,
+            businessDate,
+          ),
         ),
       )
       .orderBy(
         desc(
-          exchangeDocumentsTable
-            .createdAt,
+          exchangeDocumentsTable.createdAt,
         ),
         desc(
           exchangeDocumentsTable.id,
@@ -220,64 +241,43 @@ export async function handleListPosExchanges(
       );
 
   return json({
-    session: {
-      id:
-        String(session.id),
-      registerKey:
-        session.registerKey,
-      businessDate:
-        session.businessDate,
-    },
+    session: null,
+    businessDate,
 
     exchanges:
       exchanges.map(
         (exchange) => ({
-          id:
-            exchange.id,
-
+          id: exchange.id,
           publicId:
             exchange.publicId,
-
           sourceType:
             exchange.sourceType,
-
           businessDate:
             exchange.businessDate,
-
           registerKey:
             exchange.registerKey,
-
+          customerName:
+            exchange.customerName,
           status:
             exchange.status,
-
           settlementType:
             exchange.settlementType,
-
           returnNetMinor:
             exchange.returnNetMinor,
-
           newNetMinor:
             exchange.newNetMinor,
-
           differenceMinor:
             exchange.differenceMinor,
-
           settlementAmountMinor:
-            exchange
-              .settlementAmountMinor,
-
+            exchange.settlementAmountMinor,
           reason:
             exchange.reason,
-
           notes:
             exchange.notes,
-
           voidedAt:
             exchange.voidedAt,
-
           voidReason:
             exchange.voidReason,
-
           createdAt:
             exchange.createdAt,
         }),

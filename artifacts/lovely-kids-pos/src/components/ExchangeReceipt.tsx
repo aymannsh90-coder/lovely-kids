@@ -127,6 +127,16 @@ export default function ExchangeReceipt({
           )}
         </span>
 
+        {exchange.customerName && (
+          <span>
+            اسم الزبون:
+            {" "}
+            <b>
+              {exchange.customerName}
+            </b>
+          </span>
+        )}
+
         {exchange.status === "voided" && (
           <span>
             الحالة:

@@ -435,11 +435,21 @@ export interface PosTodaySalesResult {
   mobileReturns: PosMobileReturnResult[];
 }
 
-export function getTodayPosSales(token: string, registerKey = "main") {
-  const register = encodeURIComponent(registerKey);
+export function getTodayPosSales(
+  token: string,
+  registerKey = "main",
+  businessDate?: string,
+) {
+  const params = new URLSearchParams({
+    register: registerKey,
+  });
+
+  if (businessDate) {
+    params.set("date", businessDate);
+  }
 
   return apiRequest<PosTodaySalesResult>(
-    `/api/pos/sales/today?register=${register}`,
+    `/api/pos/sales/today?${params.toString()}`,
     {},
     token,
   );
@@ -1432,6 +1442,8 @@ interface PosExchangeCreateBaseInput {
 
   newInvoiceDiscount?: string | number;
 
+  customerName?: string;
+
   validationOnly?: boolean;
 
   expectedQuote?: {
@@ -1619,6 +1631,8 @@ export interface PosExchangeCreateResult {
     businessDate: string;
     registerKey: string | null;
 
+    customerName?: string | null;
+
     status: "completed" | "voided";
 
     voidedAt?: string | null;
@@ -1699,14 +1713,18 @@ export interface PosTodayExchangesResult {
 export function getTodayPosExchanges(
   token: string,
   registerKey = "main",
+  businessDate?: string,
 ) {
-  const register =
-    encodeURIComponent(
-      registerKey,
-    );
+  const params = new URLSearchParams({
+    register: registerKey,
+  });
+
+  if (businessDate) {
+    params.set("date", businessDate);
+  }
 
   return apiRequest<PosTodayExchangesResult>(
-    `/api/pos/exchanges?register=${register}`,
+    `/api/pos/exchanges?${params.toString()}`,
     {},
     token,
   );
