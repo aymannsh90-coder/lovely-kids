@@ -9,6 +9,7 @@ import {
   desc,
   eq,
   or,
+  sql,
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
@@ -222,10 +223,7 @@ export async function handleListPosExchanges(
       )
       .where(
         and(
-          eq(
-            exchangeDocumentsTable.businessDate,
-            businessDate,
-          ),
+          sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date = ${businessDate}::date`,
           or(
             eq(
               exchangeDocumentsTable.registerKey,

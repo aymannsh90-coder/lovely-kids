@@ -171,9 +171,7 @@ export default function TodaySalesPanel({
     useState(
       /^\d{4}-\d{2}-\d{2}$/.test(queryDate)
         ? queryDate
-        : /^\d{4}-\d{2}-\d{2}$/.test(session.businessDate)
-          ? session.businessDate
-          : getPalestineDate(),
+        : getPalestineDate(),
     );
 
   const [sales, setSales] = useState<TodaySaleResult[]>([]);

@@ -11,7 +11,7 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -2113,7 +2113,7 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
       .where(
         and(
           eq(posSalesTable.registerKey, registerKey),
-          eq(posSalesTable.businessDate, businessDate),
+          sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date = ${businessDate}::date`,
           eq(posSalesTable.status, "completed"),
         ),
       )
@@ -2125,7 +2125,7 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
       .where(
         and(
           eq(posSaleReturnsTable.registerKey, registerKey),
-          eq(posSaleReturnsTable.businessDate, businessDate),
+          sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date = ${businessDate}::date`,
           eq(posSaleReturnsTable.status, "completed"),
           isNull(posSaleReturnsTable.originalSaleId),
         ),
@@ -2145,7 +2145,7 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
       .where(
         and(
           eq(posSaleReturnsTable.registerKey, registerKey),
-          eq(posSaleReturnsTable.businessDate, businessDate),
+          sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date = ${businessDate}::date`,
           eq(posSaleReturnsTable.status, "completed"),
           isNotNull(posSaleReturnsTable.originalSaleId),
         ),
