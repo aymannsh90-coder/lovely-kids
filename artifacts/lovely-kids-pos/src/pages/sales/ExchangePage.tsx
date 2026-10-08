@@ -16,12 +16,19 @@ import ExchangeReceipt from "../../components/ExchangeReceipt";
 import { voidPosExchange } from "../../lib/api";
 import {
   ApiError,
+  createOnlineOrderExchange,
   createPosExchange,
+  getOnlineOrderExchangePreview,
+  getOnlineOrderExchangeStatus,
+  receiveOnlineExchangeReturn,
   getPosExchangeByPublicId,
   getPosExchangePreview,
   lookupPosProductByBarcode,
   quotePosExchange,
   searchPosProducts,
+  type OnlineExchangeDeliveryDiscountMode,
+  type OnlineOrderExchangePreviewResult,
+  type OnlineOrderExchangeResult,
   type PosExchangeCreateInput,
   type PosExchangeCreateResult,
   type PosExchangePreviewResult,
@@ -37,7 +44,8 @@ import {
 
 type ExchangeMode =
   | "with_receipt"
-  | "no_receipt";
+  | "no_receipt"
+  | "online_order";
 
 interface ExchangeNewLine {
   id: string;
@@ -203,6 +211,9 @@ export default function ExchangePage() {
       .trim()
       .toUpperCase();
 
+  const historyDate =
+    (searchParams.get("date") ?? "").trim();
+
   const invoiceInputRef =
     useRef<HTMLInputElement>(null);
 
@@ -246,8 +257,85 @@ export default function ExchangePage() {
   const exchangeExecutionSignature =
     useRef<string | null>(null);
 
+  const onlineExchangeExecutionKey =
+    useRef<string | null>(null);
+
+  const [onlineOrderInput, setOnlineOrderInput] =
+    useState("");
+
+  const [onlinePreview, setOnlinePreview] =
+    useState<OnlineOrderExchangePreviewResult | null>(
+      null,
+    );
+
+  const [onlineQuantities, setOnlineQuantities] =
+    useState<Record<number, number>>({});
+
+  const [onlineSearchBusy, setOnlineSearchBusy] =
+    useState(false);
+
+  const [onlineError, setOnlineError] =
+    useState("");
+
+  const [
+    onlineReplacementMode,
+    setOnlineReplacementMode,
+  ] = useState<"system_created" | "existing_order">(
+    "system_created",
+  );
+
+  const [
+    onlineReplacementOrderId,
+    setOnlineReplacementOrderId,
+  ] = useState("");
+
+  const [
+    onlineDeliveryDiscountMode,
+    setOnlineDeliveryDiscountMode,
+  ] = useState<OnlineExchangeDeliveryDiscountMode>(
+    "none",
+  );
+
+  const [
+    onlineManualDeliveryDiscount,
+    setOnlineManualDeliveryDiscount,
+  ] = useState("0");
+
+  const [onlineNotes, setOnlineNotes] =
+    useState("");
+
+  const [onlineCreateBusy, setOnlineCreateBusy] =
+    useState(false);
+
+  const [onlineCreateError, setOnlineCreateError] =
+    useState("");
+
+  const [onlineResult, setOnlineResult] =
+    useState<OnlineOrderExchangeResult | null>(
+      null,
+    );
+
+  const [onlineStatusBusy, setOnlineStatusBusy] =
+    useState(false);
+
+  const [onlineReceiveBusy, setOnlineReceiveBusy] =
+    useState(false);
+
+  const [onlineReceiveError, setOnlineReceiveError] =
+    useState("");
+
+  const [onlineReceiveMessage, setOnlineReceiveMessage] =
+    useState("");
+
   const [mode, setMode] =
-    useState<ExchangeMode>("with_receipt");
+    useState<ExchangeMode>(
+      session
+        ? "with_receipt"
+        : "online_order",
+    );
+
+  const [customerName, setCustomerName] =
+    useState("");
 
   const [
     historyLoadBusy,
@@ -592,12 +680,8 @@ export default function ExchangePage() {
       ],
     );
 
-  if (!session) {
-    return null;
-  }
-
   const registerKey =
-    session.registerKey;
+    session?.registerKey ?? "";
 
   const activeQuote =
     quote &&
@@ -610,6 +694,12 @@ export default function ExchangePage() {
     idempotencyKey =
       `quote:${createKey()}`,
   ): PosExchangeCreateInput {
+    if (!session) {
+      throw new Error(
+        "افتح جلسة الصندوق لاستخدام تبديل نقاط البيع",
+      );
+    }
+
     const discountMinor =
       moneyToMinor(
         newInvoiceDiscount,
@@ -688,6 +778,10 @@ export default function ExchangePage() {
       newInvoiceDiscount:
         newInvoiceDiscount.trim() ||
         "0",
+
+      customerName:
+        customerName.trim() ||
+        undefined,
     };
 
     if (
@@ -1038,6 +1132,10 @@ export default function ExchangePage() {
           result,
         );
 
+        setCustomerName(
+          result.exchange.customerName ?? "",
+        );
+
         setExchangeVoided(
           result.exchange.status ===
             "voided",
@@ -1243,8 +1341,930 @@ export default function ExchangePage() {
     }
   }
 
+  function renderOnlineOrderExchange() {
+    const selectedPieces =
+      onlinePreview?.items.reduce(
+        (total, item) =>
+          total +
+          (
+            onlineQuantities[
+              item.lineNumber
+            ] ?? 0
+          ),
+        0,
+      ) ?? 0;
+
+    const selectedGrossMinor =
+      onlinePreview?.items.reduce(
+        (total, item) =>
+          total +
+          item.soldUnitPriceMinor *
+            (
+              onlineQuantities[
+                item.lineNumber
+              ] ?? 0
+            ),
+        0,
+      ) ?? 0;
+
+    const exchange =
+      onlineResult?.exchange ?? null;
+
+    return (
+      <>
+        <article className="sales-return-search-panel">
+          <div className="sales-return-section-title">
+            <div>
+              <h3>
+                🌐 الطلب الأصلي من المتجر
+              </h3>
+
+              <p>
+                أدخل رقم طلب المتجر الذي تم
+                تسليمه للزبون، ثم اختر
+                الأصناف التي سيعيدها.
+              </p>
+            </div>
+
+            {(onlinePreview ||
+              onlineOrderInput) && (
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={
+                  onlineSearchBusy ||
+                  onlineCreateBusy
+                }
+                onClick={
+                  resetOnlineExchange
+                }
+              >
+                طلب آخر
+              </button>
+            )}
+          </div>
+
+          <form
+            className="sales-return-search-form"
+            onSubmit={
+              handleOnlineOrderSearch
+            }
+          >
+            <label className="sales-return-field">
+              <span>
+                رقم طلب المتجر
+              </span>
+
+              <input
+                dir="ltr"
+                inputMode="numeric"
+                autoComplete="off"
+                value={onlineOrderInput}
+                placeholder="مثال: 1234"
+                disabled={
+                  onlineSearchBusy ||
+                  Boolean(onlineResult)
+                }
+                onChange={(event) =>
+                  setOnlineOrderInput(
+                    event.target.value,
+                  )
+                }
+              />
+            </label>
+
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={
+                onlineSearchBusy ||
+                Boolean(onlineResult)
+              }
+            >
+              {onlineSearchBusy
+                ? "جاري تحميل الطلب..."
+                : "عرض الطلب"}
+            </button>
+          </form>
+
+          {onlineError && (
+            <p
+              className="error-message"
+              role="alert"
+            >
+              {onlineError}
+            </p>
+          )}
+        </article>
+
+        {onlinePreview && (
+          <>
+            <article className="sales-return-search-panel">
+              <div className="sales-return-section-title">
+                <div>
+                  <h3>
+                    الطلب #
+                    <span dir="ltr">
+                      {
+                        onlinePreview
+                          .order.id
+                      }
+                    </span>
+                  </h3>
+
+                  <p>
+                    {
+                      onlinePreview.order
+                        .customerName
+                    }
+                    {" — "}
+                    {
+                      onlinePreview.order
+                        .customerPhone
+                    }
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(150px, 1fr))",
+                  gap: "12px",
+                  padding: "16px",
+                }}
+              >
+                <div>
+                  <small>
+                    إجمالي الطلب
+                  </small>
+                  <br />
+                  <strong>
+                    {formatMoney(
+                      Math.round(
+                        onlinePreview
+                          .order.totalPrice *
+                          100,
+                      ),
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    مباع
+                  </small>
+                  <br />
+                  <strong>
+                    {
+                      onlinePreview.summary
+                        .soldQuantity
+                    }
+                    {" قطعة"}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    تم تبديله سابقًا
+                  </small>
+                  <br />
+                  <strong>
+                    {
+                      onlinePreview.summary
+                        .exchangedQuantity
+                    }
+                    {" قطعة"}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    متاح للتبديل
+                  </small>
+                  <br />
+                  <strong>
+                    {
+                      onlinePreview.summary
+                        .returnableQuantity
+                    }
+                    {" قطعة"}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    القيمة المتاحة
+                  </small>
+                  <br />
+                  <strong>
+                    {formatMoney(
+                      onlinePreview.summary
+                        .returnableValueMinor,
+                    )}
+                  </strong>
+                </div>
+              </div>
+            </article>
+
+            <article className="sales-return-search-panel">
+              <div className="sales-return-section-title">
+                <div>
+                  <h3>
+                    الأصناف القديمة
+                  </h3>
+
+                  <p>
+                    حدد الكمية التي سيعيدها
+                    الزبون من كل سطر.
+                  </p>
+                </div>
+              </div>
+
+              <div className="sales-return-table-wrap">
+                <table className="sales-return-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>الصنف</th>
+                      <th>اللون / المقاس</th>
+                      <th>سعر البيع</th>
+                      <th>مباع</th>
+                      <th>تبديل سابق</th>
+                      <th>متاح</th>
+                      <th>كمية التبديل</th>
+                      <th>القيمة</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {onlinePreview.items.map(
+                      (item) => {
+                        const quantity =
+                          onlineQuantities[
+                            item.lineNumber
+                          ] ?? 0;
+
+                        return (
+                          <tr
+                            key={
+                              item.lineNumber
+                            }
+                          >
+                            <td>
+                              {
+                                item.lineNumber
+                              }
+                            </td>
+
+                            <td>
+                              <div className="sales-return-product">
+                                {item.productImage && (
+                                  <img
+                                    src={
+                                      item.productImage
+                                    }
+                                    alt=""
+                                  />
+                                )}
+
+                                <div>
+                                  <strong>
+                                    {
+                                      item.productNameAr
+                                    }
+                                  </strong>
+
+                                  <small dir="ltr">
+                                    ID:{" "}
+                                    {
+                                      item.productId
+                                    }
+                                  </small>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td>
+                              <strong>
+                                {item.color ??
+                                  "—"}
+                              </strong>
+                              <br />
+                              <small>
+                                {item.size ??
+                                  "—"}
+                              </small>
+                            </td>
+
+                            <td>
+                              {formatMoney(
+                                item.soldUnitPriceMinor,
+                              )}
+                            </td>
+
+                            <td>
+                              {
+                                item.soldQuantity
+                              }
+                            </td>
+
+                            <td>
+                              {
+                                item.exchangedQuantity
+                              }
+                            </td>
+
+                            <td>
+                              {
+                                item.returnableQuantity
+                              }
+                            </td>
+
+                            <td>
+                              <input
+                                className="sales-return-quantity-input"
+                                type="number"
+                                inputMode="numeric"
+                                min={0}
+                                max={
+                                  item.returnableQuantity
+                                }
+                                step={1}
+                                value={
+                                  quantity
+                                }
+                                disabled={
+                                  Boolean(
+                                    onlineResult,
+                                  ) ||
+                                  item.returnableQuantity ===
+                                    0
+                                }
+                                onChange={(
+                                  event,
+                                ) =>
+                                  updateOnlineQuantity(
+                                    item.lineNumber,
+                                    Number(
+                                      event
+                                        .target
+                                        .value,
+                                    ),
+                                    item.returnableQuantity,
+                                  )
+                                }
+                              />
+                            </td>
+
+                            <td>
+                              <strong>
+                                {formatMoney(
+                                  item.soldUnitPriceMinor *
+                                    quantity,
+                                )}
+                              </strong>
+                            </td>
+                          </tr>
+                        );
+                      },
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  flexWrap: "wrap",
+                  gap: "16px",
+                  padding: "16px",
+                }}
+              >
+                <div>
+                  <small>
+                    القطع المحددة
+                  </small>
+                  <br />
+                  <strong>
+                    {selectedPieces}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>
+                    القيمة قبل توزيع خصم
+                    الفاتورة الأصلية
+                  </small>
+                  <br />
+                  <strong>
+                    {formatMoney(
+                      selectedGrossMinor,
+                    )}
+                  </strong>
+                </div>
+              </div>
+            </article>
+
+            {!onlineResult && (
+              <article className="sales-return-search-panel">
+                <div className="sales-return-section-title">
+                  <div>
+                    <h3>
+                      الطلب البديل
+                    </h3>
+
+                    <p>
+                      إما إنشاء طلب جديد تلقائيًا
+                      ثم تعديله، أو ربط طلب
+                      موجود مسبقًا.
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "16px",
+                    padding: "16px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(2, minmax(0, 1fr))",
+                      gap: "10px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={
+                        onlineReplacementMode ===
+                        "system_created"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={() => {
+                        setOnlineReplacementMode(
+                          "system_created",
+                        );
+                        setOnlineReplacementOrderId(
+                          "",
+                        );
+                        onlineExchangeExecutionKey.current =
+                          null;
+                      }}
+                    >
+                      ➕ إنشاء طلب بديل جديد
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        onlineReplacementMode ===
+                        "existing_order"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={() => {
+                        setOnlineReplacementMode(
+                          "existing_order",
+                        );
+                        onlineExchangeExecutionKey.current =
+                          null;
+                      }}
+                    >
+                      🔗 ربط طلب موجود
+                    </button>
+                  </div>
+
+                  {onlineReplacementMode ===
+                    "existing_order" && (
+                    <label className="sales-return-field">
+                      <span>
+                        رقم الطلب البديل
+                      </span>
+
+                      <input
+                        dir="ltr"
+                        inputMode="numeric"
+                        value={
+                          onlineReplacementOrderId
+                        }
+                        placeholder="رقم الطلب الجديد"
+                        onChange={(event) => {
+                          setOnlineReplacementOrderId(
+                            event.target.value,
+                          );
+                          onlineExchangeExecutionKey.current =
+                            null;
+                        }}
+                      />
+                    </label>
+                  )}
+
+                  <div>
+                    <strong>
+                      خصم التوصيل للزبون
+                    </strong>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(4, minmax(0, 1fr))",
+                        gap: "8px",
+                        marginTop: "8px",
+                      }}
+                    >
+                      {(
+                        [
+                          [
+                            "none",
+                            "بدون خصم",
+                          ],
+                          [
+                            "half",
+                            "نصف التوصيل",
+                          ],
+                          [
+                            "full",
+                            "توصيل مجاني",
+                          ],
+                          [
+                            "manual",
+                            "يدوي",
+                          ],
+                        ] as const
+                      ).map(
+                        ([
+                          value,
+                          label,
+                        ]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={
+                              onlineDeliveryDiscountMode ===
+                              value
+                                ? "primary-button"
+                                : "secondary-button"
+                            }
+                            onClick={() => {
+                              setOnlineDeliveryDiscountMode(
+                                value,
+                              );
+                              onlineExchangeExecutionKey.current =
+                                null;
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </div>
+
+                  {onlineDeliveryDiscountMode ===
+                    "manual" && (
+                    <label className="sales-return-field">
+                      <span>
+                        قيمة خصم التوصيل
+                        اليدوي
+                      </span>
+
+                      <input
+                        dir="ltr"
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step={1}
+                        value={
+                          onlineManualDeliveryDiscount
+                        }
+                        onChange={(event) => {
+                          setOnlineManualDeliveryDiscount(
+                            event.target.value,
+                          );
+                          onlineExchangeExecutionKey.current =
+                            null;
+                        }}
+                      />
+                    </label>
+                  )}
+
+                  <label className="sales-return-field">
+                    <span>
+                      ملاحظات (اختياري)
+                    </span>
+
+                    <textarea
+                      value={onlineNotes}
+                      maxLength={1000}
+                      rows={3}
+                      onChange={(event) => {
+                        setOnlineNotes(
+                          event.target.value,
+                        );
+                        onlineExchangeExecutionKey.current =
+                          null;
+                      }}
+                    />
+                  </label>
+
+                  {onlineCreateError && (
+                    <p
+                      className="error-message"
+                      role="alert"
+                    >
+                      {onlineCreateError}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={
+                      onlineCreateBusy ||
+                      selectedPieces === 0
+                    }
+                    onClick={() =>
+                      void handleCreateOnlineExchange()
+                    }
+                  >
+                    {onlineCreateBusy
+                      ? "جاري إنشاء التبديل..."
+                      : onlineReplacementMode ===
+                          "system_created"
+                        ? "إنشاء عملية التبديل والطلب البديل"
+                        : "ربط الطلب وتنفيذ عملية التبديل"}
+                  </button>
+                </div>
+              </article>
+            )}
+
+            {onlineResult && exchange && (
+              <article className="sales-return-search-panel">
+                <div className="sales-return-section-title">
+                  <div>
+                    <h3>
+                      ✅ تم إنشاء تبديل
+                      الأونلاين
+                    </h3>
+
+                    <p>
+                      رقم العملية:{" "}
+                      <strong dir="ltr">
+                        {
+                          exchange.publicId
+                        }
+                      </strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(160px, 1fr))",
+                    gap: "12px",
+                    padding: "16px",
+                  }}
+                >
+                  <div>
+                    <small>
+                      قيمة المرتجع الفعلية
+                    </small>
+                    <br />
+                    <strong>
+                      {formatMoney(
+                        exchange.returnNetMinor,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <small>
+                      قيمة أصناف الطلب البديل
+                    </small>
+                    <br />
+                    <strong>
+                      {formatMoney(
+                        exchange.newNetMinor,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <small>
+                      فرق البضاعة
+                    </small>
+                    <br />
+                    <strong>
+                      {formatMoney(
+                        exchange.differenceMinor,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <small>
+                      التوصيل الأساسي
+                    </small>
+                    <br />
+                    <strong>
+                      {formatMoney(
+                        exchange.deliveryBaseChargeMinor,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <small>
+                      خصم التوصيل
+                    </small>
+                    <br />
+                    <strong>
+                      {formatMoney(
+                        exchange.deliveryDiscountMinor,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <small>
+                      التوصيل على الزبون
+                    </small>
+                    <br />
+                    <strong>
+                      {formatMoney(
+                        exchange.deliveryChargeMinor,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <small>
+                      صافي التسوية مع شركة
+                      التوصيل
+                    </small>
+                    <br />
+                    <strong>
+                      {formatMoney(
+                        exchange.settlementAmountMinor,
+                      )}
+                    </strong>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "10px",
+                    padding:
+                      "0 16px 16px",
+                  }}
+                >
+                  <p>
+                    الطلب الأصلي:{" "}
+                    <strong dir="ltr">
+                      #
+                      {
+                        exchange.originalOrderId
+                      }
+                    </strong>
+                    {" — "}
+                    الطلب البديل:{" "}
+                    <strong dir="ltr">
+                      #
+                      {
+                        exchange.replacementOrderId
+                      }
+                    </strong>
+                  </p>
+
+                  <p>
+                    حالة الحساب:{" "}
+                    <strong>
+                      {exchange.financialCompletedAt
+                        ? "✅ تم احتساب التبديل عند تسليم الطلب البديل"
+                        : "⏳ بانتظار تسليم الطلب البديل"}
+                    </strong>
+                  </p>
+
+                  <p>
+                    حالة المرتجع:{" "}
+                    <strong>
+                      {exchange.returnReceivedAt
+                        ? "✅ تم استلام الطرد المرتجع"
+                        : exchange.financialCompletedAt
+                          ? "🚚 مرتجع بالطريق"
+                          : "⏳ بانتظار تسليم الطلب البديل"}
+                    </strong>
+                  </p>
+
+                  {onlineReceiveError && (
+                    <p
+                      className="error-message"
+                      role="alert"
+                    >
+                      {onlineReceiveError}
+                    </p>
+                  )}
+
+                  {onlineReceiveMessage && (
+                    <p>
+                      {
+                        onlineReceiveMessage
+                      }
+                    </p>
+                  )}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "10px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={
+                        handleOpenReplacementOrder
+                      }
+                    >
+                      ✏️ تعديل الطلب الجديد
+                    </button>
+
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={
+                        onlineStatusBusy
+                      }
+                      onClick={() =>
+                        void handleRefreshOnlineStatus()
+                      }
+                    >
+                      {onlineStatusBusy
+                        ? "جاري التحديث..."
+                        : "🔄 تحديث الحالة"}
+                    </button>
+
+                    {exchange.financialCompletedAt &&
+                      !exchange.returnReceivedAt && (
+                        <button
+                          type="button"
+                          className="primary-button"
+                          disabled={
+                            onlineReceiveBusy
+                          }
+                          onClick={() =>
+                            void handleReceiveOnlineReturn()
+                          }
+                        >
+                          {onlineReceiveBusy
+                            ? "جاري الاستلام..."
+                            : "📦 تم استلام الطرد"}
+                        </button>
+                      )}
+
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={
+                        onlineCreateBusy ||
+                        onlineReceiveBusy
+                      }
+                      onClick={
+                        resetOnlineExchange
+                      }
+                    >
+                      تبديل أونلاين جديد
+                    </button>
+                  </div>
+                </div>
+              </article>
+            )}
+          </>
+        )}
+      </>
+    );
+  }
+
   function startNewExchange() {
-    if (historyPublicId) {
+    setCustomerName("");
+    resetOnlineExchange();
+
+
+
+  if (historyPublicId) {
       navigate(
         "/sales/exchange",
         { replace: true },
@@ -1315,7 +2335,9 @@ export default function ExchangePage() {
         mode === "with_receipt"
       ) {
         invoiceInputRef.current?.focus();
-      } else {
+      } else if (
+        mode === "no_receipt"
+      ) {
         noReceiptInputRef.current?.focus();
       }
     }, 0);
@@ -1337,6 +2359,7 @@ export default function ExchangePage() {
     nextMode: ExchangeMode,
   ) {
     setMode(nextMode);
+    resetOnlineExchange();
 
     setInvoiceInput("");
     setBarcodeInput("");
@@ -1363,6 +2386,414 @@ export default function ExchangePage() {
         noReceiptInputRef.current?.focus();
       }
     }, 0);
+  }
+
+  function resetOnlineExchange() {
+    onlineExchangeExecutionKey.current =
+      null;
+
+    setOnlineOrderInput("");
+    setOnlinePreview(null);
+    setOnlineQuantities({});
+    setOnlineSearchBusy(false);
+    setOnlineError("");
+
+    setOnlineReplacementMode(
+      "system_created",
+    );
+    setOnlineReplacementOrderId("");
+
+    setOnlineDeliveryDiscountMode(
+      "none",
+    );
+    setOnlineManualDeliveryDiscount(
+      "0",
+    );
+
+    setOnlineNotes("");
+    setOnlineCreateBusy(false);
+    setOnlineCreateError("");
+    setOnlineResult(null);
+
+    setOnlineStatusBusy(false);
+    setOnlineReceiveBusy(false);
+    setOnlineReceiveError("");
+    setOnlineReceiveMessage("");
+  }
+
+  function updateOnlineQuantity(
+    lineNumber: number,
+    requestedValue: number,
+    maximum: number,
+  ) {
+    const normalized =
+      Number.isFinite(requestedValue)
+        ? Math.max(
+            0,
+            Math.min(
+              maximum,
+              Math.trunc(
+                requestedValue,
+              ),
+            ),
+          )
+        : 0;
+
+    setOnlineQuantities(
+      (current) => ({
+        ...current,
+        [lineNumber]:
+          normalized,
+      }),
+    );
+
+    onlineExchangeExecutionKey.current =
+      null;
+
+    setOnlineCreateError("");
+    setOnlineResult(null);
+  }
+
+  async function handleOnlineOrderSearch(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    const orderId =
+      Number(
+        onlineOrderInput.trim(),
+      );
+
+    if (
+      !Number.isSafeInteger(orderId) ||
+      orderId <= 0
+    ) {
+      setOnlineError(
+        "أدخل رقم طلب أونلاين صحيح",
+      );
+      return;
+    }
+
+    setOnlineSearchBusy(true);
+    setOnlineError("");
+    setOnlinePreview(null);
+    setOnlineQuantities({});
+    setOnlineResult(null);
+    setOnlineCreateError("");
+    setOnlineReceiveError("");
+    setOnlineReceiveMessage("");
+    onlineExchangeExecutionKey.current =
+      null;
+
+    try {
+      const result =
+        await getOnlineOrderExchangePreview(
+          token,
+          orderId,
+        );
+
+      setOnlinePreview(result);
+
+      setOnlineQuantities(
+        Object.fromEntries(
+          result.items.map(
+            (item) => [
+              item.lineNumber,
+              0,
+            ],
+          ),
+        ),
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setOnlineError(
+        errorMessage(caught),
+      );
+    } finally {
+      setOnlineSearchBusy(false);
+    }
+  }
+
+  async function handleCreateOnlineExchange() {
+    if (
+      !onlinePreview ||
+      onlineCreateBusy
+    ) {
+      return;
+    }
+
+    const returnItems =
+      onlinePreview.items
+        .map((item) => ({
+          originalOrderLineNumber:
+            item.lineNumber,
+          quantity:
+            onlineQuantities[
+              item.lineNumber
+            ] ?? 0,
+        }))
+        .filter(
+          (item) =>
+            item.quantity > 0,
+        );
+
+    if (returnItems.length === 0) {
+      setOnlineCreateError(
+        "اختر صنفًا واحدًا على الأقل للتبديل",
+      );
+      return;
+    }
+
+    let replacementOrderId:
+      number | null = null;
+
+    if (
+      onlineReplacementMode ===
+      "existing_order"
+    ) {
+      replacementOrderId =
+        Number(
+          onlineReplacementOrderId
+            .trim(),
+        );
+
+      if (
+        !Number.isSafeInteger(
+          replacementOrderId,
+        ) ||
+        replacementOrderId <= 0
+      ) {
+        setOnlineCreateError(
+          "أدخل رقم الطلب البديل بشكل صحيح",
+        );
+        return;
+      }
+    }
+
+    let manualDeliveryDiscountMinor =
+      0;
+
+    if (
+      onlineDeliveryDiscountMode ===
+      "manual"
+    ) {
+      const parsed =
+        moneyToMinor(
+          onlineManualDeliveryDiscount,
+        );
+
+      if (
+        parsed === null ||
+        parsed % 100 !== 0
+      ) {
+        setOnlineCreateError(
+          "خصم التوصيل اليدوي يجب أن يكون بمبلغ شيكل كامل",
+        );
+        return;
+      }
+
+      manualDeliveryDiscountMinor =
+        parsed;
+    }
+
+    if (
+      !onlineExchangeExecutionKey
+        .current
+    ) {
+      onlineExchangeExecutionKey.current =
+        `online-exchange:${createKey()}`;
+    }
+
+    setOnlineCreateBusy(true);
+    setOnlineCreateError("");
+    setOnlineReceiveError("");
+    setOnlineReceiveMessage("");
+
+    try {
+      const result =
+        await createOnlineOrderExchange(
+          token,
+          {
+            idempotencyKey:
+              onlineExchangeExecutionKey
+                .current,
+
+            originalOrderId:
+              onlinePreview.order.id,
+
+            replacementOrderId,
+
+            returnItems,
+
+            deliveryDiscountMode:
+              onlineDeliveryDiscountMode,
+
+            manualDeliveryDiscountMinor,
+
+            notes:
+              onlineNotes.trim() ||
+              undefined,
+          },
+        );
+
+      setOnlineResult(result);
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setOnlineCreateError(
+        errorMessage(caught),
+      );
+    } finally {
+      setOnlineCreateBusy(false);
+    }
+  }
+
+  async function handleRefreshOnlineStatus() {
+    const publicId =
+      onlineResult?.exchange
+        .publicId;
+
+    if (
+      !publicId ||
+      onlineStatusBusy
+    ) {
+      return;
+    }
+
+    setOnlineStatusBusy(true);
+    setOnlineCreateError("");
+    setOnlineReceiveError("");
+    setOnlineReceiveMessage("");
+
+    try {
+      const result =
+        await getOnlineOrderExchangeStatus(
+          token,
+          publicId,
+        );
+
+      setOnlineResult(result);
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setOnlineCreateError(
+        errorMessage(caught),
+      );
+    } finally {
+      setOnlineStatusBusy(false);
+    }
+  }
+
+  function handleOpenReplacementOrder() {
+    const replacementOrderId =
+      onlineResult?.exchange
+        .replacementOrderId;
+
+    if (!replacementOrderId) {
+      setOnlineCreateError(
+        "لا يوجد طلب بديل مرتبط",
+      );
+      return;
+    }
+
+    window.open(
+      `https://lovelykids.net/admin/orders?orderId=${encodeURIComponent(
+        replacementOrderId,
+      )}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  }
+
+  async function handleReceiveOnlineReturn() {
+    const exchange =
+      onlineResult?.exchange;
+
+    if (
+      !exchange ||
+      onlineReceiveBusy
+    ) {
+      return;
+    }
+
+    if (!exchange.financialCompletedAt) {
+      setOnlineReceiveError(
+        "يجب إنهاء وتسليم الطلب البديل أولًا قبل استلام المرتجع",
+      );
+      return;
+    }
+
+    if (exchange.returnReceivedAt) {
+      setOnlineReceiveMessage(
+        "الطرد المرتجع مستلم مسبقًا.",
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "تأكيد استلام الطرد المرتجع وإرجاع الأصناف القديمة إلى المخزون؟",
+      )
+    ) {
+      return;
+    }
+
+    setOnlineReceiveBusy(true);
+    setOnlineReceiveError("");
+    setOnlineReceiveMessage("");
+
+    try {
+      await receiveOnlineExchangeReturn(
+        token,
+        exchange.publicId,
+      );
+
+      const refreshed =
+        await getOnlineOrderExchangeStatus(
+          token,
+          exchange.publicId,
+        );
+
+      setOnlineResult(refreshed);
+
+      setOnlineReceiveMessage(
+        "تم استلام الطرد وإرجاع الأصناف القديمة إلى المخزون بنجاح.",
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setOnlineReceiveError(
+        errorMessage(caught),
+      );
+    } finally {
+      setOnlineReceiveBusy(false);
+    }
   }
 
   function initializeQuantities(
@@ -2389,6 +3820,207 @@ export default function ExchangePage() {
     focusNewItemInput();
   }
 
+  if (historyPublicId) {
+    return (
+      <section
+        className="sales-return-page"
+        id="pos-sales-exchange"
+      >
+        <header className="sales-return-heading">
+          <div className="panel-heading">
+            <div className="panel-icon">
+              🔄
+            </div>
+
+            <div>
+              <h2>فاتورة تبديل محفوظة</h2>
+
+              <p>
+                عرض تفاصيل فاتورة التبديل السابقة وطباعتها.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() =>
+              navigate(
+                `/sales/today${
+                  /^\\d{4}-\\d{2}-\\d{2}$/.test(historyDate)
+                    ? `?date=${encodeURIComponent(historyDate)}`
+                    : ""
+                }#pos-exchange-history`,
+              )
+            }
+          >
+            الرجوع إلى المبيعات والحركات
+          </button>
+
+          <div className="sales-return-session">
+            <span>جلسة الصندوق</span>
+
+            <strong dir="ltr">
+              {session?.registerKey ??
+              "لا تحتاج جلسة في تبديل الأونلاين"}
+            </strong>
+          </div>
+        </header>
+
+        {historyLoadBusy && (
+          <div className="alert">
+            جاري تحميل فاتورة التبديل...
+          </div>
+        )}
+
+        {historyLoadError && (
+          <div
+            className="alert error-alert"
+            role="alert"
+          >
+            {historyLoadError}
+          </div>
+        )}
+
+        {!historyLoadBusy &&
+          !historyLoadError &&
+          createdExchangeResult?.exchange && (
+            <>
+              <article
+                id="exchange-result-actions"
+                className="sales-return-search-panel"
+                style={{
+                  padding: "18px",
+                  textAlign: "center",
+                }}
+              >
+                <h3>
+                  فاتورة تبديل محفوظة
+                </h3>
+
+                <p>
+                  رقم فاتورة التبديل:{" "}
+                  <strong dir="ltr">
+                    {
+                      createdExchangeResult
+                        .exchange.publicId
+                    }
+                  </strong>
+                </p>
+
+                {createdExchangeResult.exchange
+                  .customerName && (
+                  <p>
+                    اسم الزبون:{" "}
+                    <strong>
+                      {
+                        createdExchangeResult
+                          .exchange.customerName
+                      }
+                    </strong>
+                  </p>
+                )}
+
+                {exchangeVoided && (
+                  <p>
+                    <strong>
+                      فاتورة التبديل ملغاة
+                    </strong>
+                  </p>
+                )}
+
+                {voidError && (
+                  <p
+                    className="error-message"
+                    role="alert"
+                  >
+                    {voidError}
+                  </p>
+                )}
+
+                {voidMessage && (
+                  <p>{voidMessage}</p>
+                )}
+
+                {printError && (
+                  <p
+                    className="error-message"
+                    role="alert"
+                  >
+                    {printError}
+                  </p>
+                )}
+
+                {printMessage && (
+                  <p>{printMessage}</p>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={
+                      printBusy ||
+                      voidBusy
+                    }
+                    onClick={() =>
+                      void handlePrintExchange()
+                    }
+                  >
+                    {printBusy
+                      ? "جاري الطباعة..."
+                      : "طباعة مباشرة"}
+                  </button>
+
+                  {!exchangeVoided && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={
+                        voidBusy ||
+                        printBusy
+                      }
+                      onClick={() =>
+                        void handleVoidExchange()
+                      }
+                    >
+                      {voidBusy
+                        ? "جاري الإلغاء..."
+                        : "إلغاء فاتورة التبديل"}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={
+                      printBusy ||
+                      voidBusy
+                    }
+                    onClick={startNewExchange}
+                  >
+                    تبديل جديد
+                  </button>
+                </div>
+              </article>
+
+              <ExchangeReceipt
+                result={createdExchangeResult}
+                receiptRef={exchangeReceiptRef}
+              />
+            </>
+          )}
+      </section>
+    );
+  }
+
   return (
     <section
       className="sales-return-page"
@@ -2416,7 +4048,11 @@ export default function ExchangePage() {
           className="secondary-button"
           onClick={() =>
             navigate(
-              "/sales/today#pos-exchange-history",
+              `/sales/today${
+                /^\d{4}-\d{2}-\d{2}$/.test(historyDate)
+                  ? `?date=${encodeURIComponent(historyDate)}`
+                  : ""
+              }#pos-exchange-history`,
             )
           }
         >
@@ -2427,7 +4063,8 @@ export default function ExchangePage() {
           <span>جلسة الصندوق</span>
 
           <strong dir="ltr">
-            {session.registerKey}
+            {session?.registerKey ??
+              "لا تحتاج جلسة في تبديل الأونلاين"}
           </strong>
         </div>
       </header>
@@ -2451,6 +4088,34 @@ export default function ExchangePage() {
       <article className="sales-return-search-panel">
         <div className="sales-return-section-title">
           <div>
+            <h3>بيانات الزبون</h3>
+
+            <p>
+              اسم الزبون اختياري ويُحفظ مع فاتورة التبديل.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ padding: "16px" }}>
+          <label className="sales-return-field">
+            <span>اسم الزبون (اختياري)</span>
+
+            <input
+              value={customerName}
+              maxLength={150}
+              autoComplete="off"
+              placeholder="اسم الزبون"
+              onChange={(event) =>
+                setCustomerName(event.target.value)
+              }
+            />
+          </label>
+        </div>
+      </article>
+
+      <article className="sales-return-search-panel">
+        <div className="sales-return-section-title">
+          <div>
             <h3>نوع التبديل</h3>
 
             <p>
@@ -2464,7 +4129,7 @@ export default function ExchangePage() {
           style={{
             display: "grid",
             gridTemplateColumns:
-              "repeat(2, minmax(0, 1fr))",
+              "repeat(3, minmax(0, 1fr))",
             gap: "12px",
             padding: "16px",
           }}
@@ -2476,6 +4141,7 @@ export default function ExchangePage() {
                 ? "primary-button"
                 : "secondary-button"
             }
+            disabled={!session}
             onClick={() =>
               changeMode(
                 "with_receipt",
@@ -2492,6 +4158,7 @@ export default function ExchangePage() {
                 ? "primary-button"
                 : "secondary-button"
             }
+            disabled={!session}
             onClick={() =>
               changeMode(
                 "no_receipt",
@@ -2499,6 +4166,22 @@ export default function ExchangePage() {
             }
           >
             📦 تبديل بدون فاتورة
+          </button>
+
+          <button
+            type="button"
+            className={
+              mode === "online_order"
+                ? "primary-button"
+                : "secondary-button"
+            }
+            onClick={() =>
+              changeMode(
+                "online_order",
+              )
+            }
+          >
+            🌐 تبديل طلب أونلاين
           </button>
         </div>
       </article>
@@ -2997,6 +4680,8 @@ export default function ExchangePage() {
             </>
           )}
         </>
+      ) : mode === "online_order" ? (
+        renderOnlineOrderExchange()
       ) : (
         <article className="sales-return-search-panel">
           <div className="sales-return-section-title">

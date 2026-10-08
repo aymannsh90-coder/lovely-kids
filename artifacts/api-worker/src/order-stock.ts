@@ -1,4 +1,5 @@
 import {
+  exchangeDocumentsTable,
   inventoryMovementsTable,
   appSettingsTable,
   orderItemCostsTable,
@@ -6,7 +7,7 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { openDb } from "./db";
 import {
   addProductCostAtCurrentAverage,
@@ -987,6 +988,48 @@ export async function editOrderItemsAndAdjustStock(
       );
     }
 
+    const linkedExchangeRows =
+      await tx
+        .select()
+        .from(exchangeDocumentsTable)
+        .where(
+          and(
+            eq(
+              exchangeDocumentsTable.sourceType,
+              "online_order",
+            ),
+            eq(
+              exchangeDocumentsTable.replacementOrderId,
+              orderId,
+            ),
+            eq(
+              exchangeDocumentsTable.status,
+              "completed",
+            ),
+          ),
+        )
+        .for("update");
+
+    if (linkedExchangeRows.length > 1) {
+      throw new OrderEditError(
+        "الطلب البديل مرتبط بأكثر من عملية تبديل",
+        409,
+      );
+    }
+
+    const linkedOnlineExchange =
+      linkedExchangeRows[0] ?? null;
+
+    if (
+      linkedOnlineExchange?.financialCompletedAt !== null &&
+      linkedOnlineExchange !== null
+    ) {
+      throw new OrderEditError(
+        "لا يمكن تعديل طلب تبديل تم تسجيله محاسبيًا",
+        409,
+      );
+    }
+
     const oldItems = Array.isArray(order.items)
       ? (order.items as StoredOrderItem[])
       : [];
@@ -1525,6 +1568,16 @@ export async function editOrderItemsAndAdjustStock(
         ? order.paymentMethod
         : parseOrderEditPaymentMethod(details.paymentMethod);
 
+    if (
+      linkedOnlineExchange &&
+      paymentMethod !== "cod"
+    ) {
+      throw new OrderEditError(
+        "طلب التبديل يجب أن يبقى دفع عند الاستلام لأن التسوية تتم مع شركة التوصيل",
+        409,
+      );
+    }
+
     const paymentMethodChanged =
       paymentMethod !== order.paymentMethod;
 
@@ -1611,11 +1664,86 @@ export async function editOrderItemsAndAdjustStock(
         invoiceDiscountAllocations[index];
     });
 
-    const shippingCost = resolveShippingCost(
+    let shippingCost = resolveShippingCost(
       settingsData,
       shipping,
       productsTotal,
     );
+
+    let exchangeDeliveryBaseChargeMinor:
+      number | null = null;
+
+    let exchangeDeliveryChargeMinor:
+      number | null = null;
+
+    if (linkedOnlineExchange) {
+      if (
+        shipping.label ===
+        STORE_PICKUP_LABEL
+      ) {
+        throw new OrderEditError(
+          "طلب التبديل المرتبط يجب أن يبقى طلب توصيل",
+          409,
+        );
+      }
+
+      const baseChargeMinor =
+        shipping.cost * 100;
+
+      const deliveryDiscountMode =
+        linkedOnlineExchange.deliveryDiscountMode;
+
+      const preservedDiscountMinor =
+        deliveryDiscountMode === "none"
+          ? 0
+          : deliveryDiscountMode === "full"
+            ? baseChargeMinor
+            : deliveryDiscountMode === "half"
+              ? baseChargeMinor / 2
+              : deliveryDiscountMode === "manual"
+                ? linkedOnlineExchange.deliveryDiscountMinor
+                : Number.NaN;
+
+      if (
+        !Number.isSafeInteger(
+          baseChargeMinor,
+        ) ||
+        baseChargeMinor < 0 ||
+        !Number.isSafeInteger(
+          preservedDiscountMinor,
+        ) ||
+        preservedDiscountMinor < 0 ||
+        preservedDiscountMinor >
+          baseChargeMinor
+      ) {
+        throw new OrderEditError(
+          "خصم توصيل طلب التبديل غير صالح للمنطقة المختارة",
+          409,
+        );
+      }
+
+      const customerDeliveryMinor =
+        baseChargeMinor -
+        preservedDiscountMinor;
+
+      if (
+        customerDeliveryMinor % 100 !== 0
+      ) {
+        throw new OrderEditError(
+          "رسوم توصيل طلب التبديل يجب أن تكون بمبلغ شيكل كامل",
+          409,
+        );
+      }
+
+      shippingCost =
+        customerDeliveryMinor / 100;
+
+      exchangeDeliveryBaseChargeMinor =
+        baseChargeMinor;
+
+      exchangeDeliveryChargeMinor =
+        customerDeliveryMinor;
+    }
 
     const totalPrice =
       productsTotal -
@@ -2212,6 +2340,94 @@ export async function editOrderItemsAndAdjustStock(
       })
       .where(eq(ordersTable.id, orderId))
       .returning();
+
+    if (linkedOnlineExchange) {
+      if (
+        exchangeDeliveryBaseChargeMinor === null ||
+        exchangeDeliveryChargeMinor === null
+      ) {
+        throw new OrderEditError(
+          "تعذر احتساب توصيل طلب التبديل",
+          409,
+        );
+      }
+
+      const newGrossMinor =
+        productsTotal * 100;
+
+      const newDiscountMinor =
+        invoiceDiscount * 100;
+
+      const newNetMinor =
+        newGrossMinor -
+        newDiscountMinor;
+
+      const differenceMinor =
+        newNetMinor -
+        linkedOnlineExchange.returnNetMinor;
+
+      const settlementAmountMinor =
+        differenceMinor +
+        exchangeDeliveryChargeMinor;
+
+      if (
+        !Number.isSafeInteger(
+          newGrossMinor,
+        ) ||
+        !Number.isSafeInteger(
+          newDiscountMinor,
+        ) ||
+        !Number.isSafeInteger(
+          newNetMinor,
+        ) ||
+        !Number.isSafeInteger(
+          differenceMinor,
+        ) ||
+        !Number.isSafeInteger(
+          settlementAmountMinor,
+        ) ||
+        newGrossMinor < 0 ||
+        newDiscountMinor < 0 ||
+        newNetMinor < 0 ||
+        newDiscountMinor >
+          newGrossMinor
+      ) {
+        throw new OrderEditError(
+          "تعذر تحديث حسابات طلب التبديل",
+          409,
+        );
+      }
+
+      await tx
+        .update(exchangeDocumentsTable)
+        .set({
+          newGrossMinor,
+          newDiscountMinor,
+          newNetMinor,
+          differenceMinor,
+
+          deliveryBaseChargeMinor:
+            exchangeDeliveryBaseChargeMinor,
+
+          deliveryDiscountMinor:
+            exchangeDeliveryBaseChargeMinor -
+            exchangeDeliveryChargeMinor,
+
+          deliveryChargeMinor:
+            exchangeDeliveryChargeMinor,
+
+          settlementAmountMinor,
+
+          updatedAt:
+            new Date(),
+        })
+        .where(
+          eq(
+            exchangeDocumentsTable.id,
+            linkedOnlineExchange.id,
+          ),
+        );
+    }
 
     return updatedRows[0];
   });

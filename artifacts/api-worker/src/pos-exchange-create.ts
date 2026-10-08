@@ -131,6 +131,8 @@ export interface ParsedPosExchangePayload {
     settlementAmountMinor: number;
   } | null;
 
+  customerName: string | null;
+
   reason: string | null;
   notes: string | null;
 }
@@ -880,6 +882,13 @@ export function parsePosExchangePayload(
     expectedQuote:
       parseExpectedExchangeQuote(
         payload.expectedQuote,
+      ),
+
+    customerName:
+      parseOptionalText(
+        payload.customerName,
+        150,
+        "اسم الزبون",
       ),
 
     reason:
@@ -3414,6 +3423,9 @@ export async function handleCreatePosExchange(
                 deliveryCompanyCostMinor,
 
                 settlementAmountMinor,
+
+                customerName:
+                  payload.customerName,
 
                 reason:
                   payload.reason,

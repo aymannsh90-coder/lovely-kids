@@ -36,6 +36,13 @@ export const exchangeDocumentsTable = pgTable(
       { onDelete: "restrict" },
     ),
 
+    replacementOrderId: integer("replacement_order_id").references(
+      () => ordersTable.id,
+      { onDelete: "restrict" },
+    ),
+
+    replacementOrderOrigin: text("replacement_order_origin"),
+
     businessDate: date("business_date").notNull(),
 
     cashSessionId: integer("cash_session_id").references(
@@ -45,11 +52,35 @@ export const exchangeDocumentsTable = pgTable(
 
     registerKey: text("register_key"),
 
+    customerName: text("customer_name"),
+
     createdByUserId: integer("created_by_user_id")
       .notNull()
       .references(() => usersTable.id, {
         onDelete: "restrict",
       }),
+
+    financialBusinessDate: date("financial_business_date"),
+
+    financialCompletedAt: timestamp("financial_completed_at", {
+      withTimezone: true,
+    }),
+
+    financialCompletedByUserId: integer(
+      "financial_completed_by_user_id",
+    ).references(() => usersTable.id, {
+      onDelete: "restrict",
+    }),
+
+    returnReceivedAt: timestamp("return_received_at", {
+      withTimezone: true,
+    }),
+
+    returnReceivedByUserId: integer(
+      "return_received_by_user_id",
+    ).references(() => usersTable.id, {
+      onDelete: "restrict",
+    }),
 
     status: text("status").notNull().default("completed"),
 
@@ -65,6 +96,16 @@ export const exchangeDocumentsTable = pgTable(
     newNetMinor: integer("new_net_minor").notNull(),
 
     differenceMinor: integer("difference_minor").notNull(),
+
+    deliveryBaseChargeMinor: integer("delivery_base_charge_minor")
+      .notNull()
+      .default(0),
+
+    deliveryDiscountMinor: integer("delivery_discount_minor")
+      .notNull()
+      .default(0),
+
+    deliveryDiscountMode: text("delivery_discount_mode"),
 
     deliveryChargeMinor: integer("delivery_charge_minor")
       .notNull()
@@ -102,18 +143,40 @@ export const exchangeDocumentsTable = pgTable(
           ${table.sourceType} = 'pos_sale'
           and ${table.originalPosSaleId} is not null
           and ${table.originalOrderId} is null
+          and ${table.replacementOrderId} is null
         )
         or
         (
           ${table.sourceType} = 'pos_no_receipt'
           and ${table.originalPosSaleId} is null
           and ${table.originalOrderId} is null
+          and ${table.replacementOrderId} is null
         )
         or
         (
           ${table.sourceType} = 'online_order'
           and ${table.originalPosSaleId} is null
           and ${table.originalOrderId} is not null
+          and ${table.replacementOrderId} is not null
+          and ${table.replacementOrderId} <> ${table.originalOrderId}
+        )
+      `,
+    ),
+
+    check(
+      "exchange_documents_replacement_origin_valid",
+      sql`
+        (
+          ${table.sourceType} = 'online_order'
+          and ${table.replacementOrderOrigin} in (
+            'existing_order',
+            'system_created'
+          )
+        )
+        or
+        (
+          ${table.sourceType} <> 'online_order'
+          and ${table.replacementOrderOrigin} is null
         )
       `,
     ),
@@ -132,13 +195,27 @@ export const exchangeDocumentsTable = pgTable(
       "exchange_documents_settlement_party_valid",
       sql`
         (
-          ${table.settlementType} in ('cash', 'card')
-          and ${table.settlementPartyId} is null
+          ${table.sourceType} = 'online_order'
+          and ${table.settlementType} = 'delivery_company'
+          and (
+            ${table.financialCompletedAt} is null
+            or ${table.settlementPartyId} is not null
+          )
         )
         or
         (
-          ${table.settlementType} in ('delivery_company', 'customer')
-          and ${table.settlementPartyId} is not null
+          ${table.sourceType} <> 'online_order'
+          and (
+            (
+              ${table.settlementType} in ('cash', 'card')
+              and ${table.settlementPartyId} is null
+            )
+            or
+            (
+              ${table.settlementType} in ('delivery_company', 'customer')
+              and ${table.settlementPartyId} is not null
+            )
+          )
         )
       `,
     ),
@@ -152,8 +229,91 @@ export const exchangeDocumentsTable = pgTable(
         and ${table.newGrossMinor} >= 0
         and ${table.newDiscountMinor} >= 0
         and ${table.newNetMinor} >= 0
+        and ${table.deliveryBaseChargeMinor} >= 0
+        and ${table.deliveryDiscountMinor} >= 0
         and ${table.deliveryChargeMinor} >= 0
         and ${table.deliveryCompanyCostMinor} >= 0
+      `,
+    ),
+
+    check(
+      "exchange_documents_delivery_discount_mode_valid",
+      sql`
+        (
+          ${table.sourceType} = 'online_order'
+          and ${table.deliveryDiscountMode} in ('none', 'half', 'full', 'manual')
+        )
+        or
+        (
+          ${table.sourceType} <> 'online_order'
+          and ${table.deliveryDiscountMode} is null
+        )
+      `,
+    ),
+
+    check(
+      "exchange_documents_online_delivery_valid",
+      sql`
+        (
+          ${table.sourceType} <> 'online_order'
+          and ${table.deliveryBaseChargeMinor} = 0
+          and ${table.deliveryDiscountMinor} = 0
+        )
+        or
+        (
+          ${table.sourceType} = 'online_order'
+          and ${table.deliveryDiscountMinor} <= ${table.deliveryBaseChargeMinor}
+          and ${table.deliveryChargeMinor} =
+            ${table.deliveryBaseChargeMinor} - ${table.deliveryDiscountMinor}
+          and ${table.settlementType} = 'delivery_company'
+        )
+      `,
+    ),
+
+    check(
+      "exchange_documents_online_workflow_valid",
+      sql`
+        (
+          ${table.financialCompletedAt} is null
+          and ${table.financialCompletedByUserId} is null
+          and ${table.financialBusinessDate} is null
+        )
+        or
+        (
+          ${table.financialCompletedAt} is not null
+          and ${table.financialCompletedByUserId} is not null
+          and ${table.financialBusinessDate} is not null
+        )
+      `,
+    ),
+
+    check(
+      "exchange_documents_return_received_valid",
+      sql`
+        (
+          ${table.returnReceivedAt} is null
+          and ${table.returnReceivedByUserId} is null
+        )
+        or
+        (
+          ${table.returnReceivedAt} is not null
+          and ${table.returnReceivedByUserId} is not null
+          and ${table.financialCompletedAt} is not null
+        )
+      `,
+    ),
+
+    check(
+      "exchange_documents_non_online_workflow_valid",
+      sql`
+        ${table.sourceType} = 'online_order'
+        or (
+          ${table.financialCompletedAt} is null
+          and ${table.financialCompletedByUserId} is null
+          and ${table.financialBusinessDate} is null
+          and ${table.returnReceivedAt} is null
+          and ${table.returnReceivedByUserId} is null
+        )
       `,
     ),
 
@@ -223,6 +383,23 @@ export const exchangeDocumentsTable = pgTable(
     index("exchange_documents_pos_sale_idx").on(table.originalPosSaleId),
 
     index("exchange_documents_order_idx").on(table.originalOrderId),
+
+    index("exchange_documents_replacement_order_idx").on(
+      table.replacementOrderId,
+    ),
+
+    uniqueIndex("exchange_documents_active_replacement_order_idx")
+      .on(table.replacementOrderId)
+      .where(
+        sql`
+          ${table.replacementOrderId} is not null
+          and ${table.status} = 'completed'
+        `,
+      ),
+
+    index("exchange_documents_financial_business_date_idx").on(
+      table.financialBusinessDate,
+    ),
 
     index("exchange_documents_business_date_idx").on(table.businessDate),
 

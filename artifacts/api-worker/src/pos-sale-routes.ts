@@ -11,7 +11,7 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -2079,6 +2079,19 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     );
   }
 
+  const requestedDate =
+    url.searchParams.get("date")?.trim() ?? "";
+
+  const businessDate =
+    requestedDate ||
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Hebron",
+    }).format(new Date());
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate)) {
+    return json({ error: "التاريخ غير صالح" }, 400);
+  }
+
   const sessionRows = await db
     .select()
     .from(cashSessionsTable)
@@ -2093,22 +2106,14 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
 
   const session = sessionRows[0];
 
-  if (!session) {
-    return json({
-      session: null,
-      sales: [],
-      saleReturns: [],
-      mobileReturns: [],
-    });
-  }
-
-  const [sales, mobileReturns] = await Promise.all([
+   const [sales, mobileReturns] = await Promise.all([
     db
       .select()
       .from(posSalesTable)
       .where(
         and(
-          eq(posSalesTable.cashSessionId, session.id),
+          eq(posSalesTable.registerKey, registerKey),
+          eq(posSalesTable.businessDate, businessDate),
           eq(posSalesTable.status, "completed"),
         ),
       )
@@ -2119,7 +2124,8 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
       .from(posSaleReturnsTable)
       .where(
         and(
-          eq(posSaleReturnsTable.cashSessionId, session.id),
+          eq(posSaleReturnsTable.registerKey, registerKey),
+          eq(posSaleReturnsTable.businessDate, businessDate),
           eq(posSaleReturnsTable.status, "completed"),
           isNull(posSaleReturnsTable.originalSaleId),
         ),
@@ -2133,17 +2139,21 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
   const saleIds = sales.map((sale) => sale.id);
 
   const completedReturns =
-    saleIds.length > 0
-      ? await db
-          .select()
-            .from(posSaleReturnsTable)
-          .where(
-            and(
-              inArray(posSaleReturnsTable.originalSaleId, saleIds),
-              eq(posSaleReturnsTable.status, "completed"),
-            ),
-          )
-      : [];
+    await db
+      .select()
+      .from(posSaleReturnsTable)
+      .where(
+        and(
+          eq(posSaleReturnsTable.registerKey, registerKey),
+          eq(posSaleReturnsTable.businessDate, businessDate),
+          eq(posSaleReturnsTable.status, "completed"),
+          isNotNull(posSaleReturnsTable.originalSaleId),
+        ),
+      )
+      .orderBy(
+        asc(posSaleReturnsTable.createdAt),
+        asc(posSaleReturnsTable.id),
+      );
 
   const returnedMinorBySale = new Map<number, number>();
 
@@ -2250,17 +2260,40 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     normalItemsByReturn.set(item.returnId, current);
   }
 
+  const originalSaleIds = [
+    ...new Set(
+      completedReturns
+        .map((saleReturn) => saleReturn.originalSaleId)
+        .filter((id): id is number => id !== null),
+    ),
+  ];
+
+  const originalSales =
+    originalSaleIds.length > 0
+      ? await db
+          .select({
+            id: posSalesTable.id,
+            publicId: posSalesTable.publicId,
+          })
+          .from(posSalesTable)
+          .where(inArray(posSalesTable.id, originalSaleIds))
+      : [];
+
   const salePublicIdById = new Map(
-    sales.map((sale) => [sale.id, sale.publicId]),
+    originalSales.map((sale) => [sale.id, sale.publicId]),
   );
 
-
   return json({
-    session: {
-      id: String(session.id),
-      registerKey: session.registerKey,
-      businessDate: session.businessDate,
-    },
+    session:
+      session && session.businessDate === businessDate
+        ? {
+            id: String(session.id),
+            registerKey: session.registerKey,
+            businessDate: session.businessDate,
+          }
+        : null,
+
+    businessDate,
 
     sales: sales.map((sale) => {
       const refundAmountMinor =

@@ -1,12 +1,18 @@
 import {
   exchangeDocumentsTable,
   exchangeReturnItemsTable,
+  ordersTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
 } from "@workspace/db/schema";
 import { handleCreatePosExchange } from "./pos-exchange-create";
+import {
+  handleCreateOnlineOrderExchange,
+  handleGetOnlineOrderExchangeStatus,
+} from "./pos-online-exchange-create";
+import { handleReceiveOnlineExchangeReturn } from "./pos-online-exchange-receive";
 import {
   handleGetPosExchangeByPublicId,
   handleListPosExchanges,
@@ -497,12 +503,401 @@ async function handleExchangePreview(
   });
 }
 
+interface StoredOnlineOrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  size?: string;
+  color?: string;
+}
+
+async function handleOnlineOrderExchangePreview(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requirePosUser(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const rawOrderId =
+    url.searchParams
+      .get("orderId")
+      ?.trim() ?? "";
+
+  const orderId =
+    Number(rawOrderId);
+
+  if (
+    !Number.isSafeInteger(orderId) ||
+    orderId <= 0
+  ) {
+    return json(
+      {
+        error:
+          "رقم طلب المتجر غير صالح",
+      },
+      400,
+    );
+  }
+
+  const orderRows =
+    await db
+      .select()
+      .from(ordersTable)
+      .where(
+        eq(
+          ordersTable.id,
+          orderId,
+        ),
+      )
+      .limit(1);
+
+  const order =
+    orderRows[0];
+
+  if (!order) {
+    return json(
+      {
+        error:
+          "طلب المتجر غير موجود",
+      },
+      404,
+    );
+  }
+
+  if (order.status !== "done") {
+    return json(
+      {
+        error:
+          "يمكن تبديل طلبات المتجر التي تم تسليمها فقط",
+      },
+      409,
+    );
+  }
+
+  const storedItems =
+    Array.isArray(order.items)
+      ? (
+          order.items as StoredOnlineOrderItem[]
+        )
+      : [];
+
+  if (storedItems.length === 0) {
+    return json(
+      {
+        error:
+          "الطلب لا يحتوي على أصناف قابلة للتبديل",
+      },
+      409,
+    );
+  }
+
+  const completedExchanges =
+    await db
+      .select({
+        id:
+          exchangeDocumentsTable.id,
+      })
+      .from(
+        exchangeDocumentsTable,
+      )
+      .where(
+        and(
+          eq(
+            exchangeDocumentsTable.sourceType,
+            "online_order",
+          ),
+          eq(
+            exchangeDocumentsTable.originalOrderId,
+            order.id,
+          ),
+          eq(
+            exchangeDocumentsTable.status,
+            "completed",
+          ),
+        ),
+      );
+
+  const completedExchangeIds =
+    completedExchanges.map(
+      (row) => row.id,
+    );
+
+  let priorExchangeItems:
+    Array<
+      typeof exchangeReturnItemsTable.$inferSelect
+    > = [];
+
+  if (
+    completedExchangeIds.length > 0
+  ) {
+    priorExchangeItems =
+      await db
+        .select()
+        .from(
+          exchangeReturnItemsTable,
+        )
+        .where(
+          inArray(
+            exchangeReturnItemsTable.exchangeId,
+            completedExchangeIds,
+          ),
+        );
+  }
+
+  const exchangedByLine =
+    new Map<number, number>();
+
+  for (
+    const item of
+    priorExchangeItems
+  ) {
+    if (
+      item.originalOrderLineNumber ===
+      null
+    ) {
+      continue;
+    }
+
+    const lineNumber =
+      item.originalOrderLineNumber;
+
+    exchangedByLine.set(
+      lineNumber,
+      (
+        exchangedByLine.get(
+          lineNumber,
+        ) ?? 0
+      ) + item.quantity,
+    );
+  }
+
+  const items =
+    storedItems.map(
+      (item, index) => {
+        const lineNumber =
+          index + 1;
+
+        const productId =
+          Number(item.id);
+
+        const soldQuantity =
+          Number(item.quantity);
+
+        const price =
+          Number(item.price);
+
+        if (
+          !Number.isSafeInteger(productId) ||
+          productId <= 0 ||
+          !Number.isSafeInteger(soldQuantity) ||
+          soldQuantity <= 0 ||
+          !Number.isFinite(price) ||
+          price < 0
+        ) {
+          throw new Error(
+            `Invalid online order item at line ${lineNumber}`,
+          );
+        }
+
+        const soldUnitPriceMinor =
+          Math.round(
+            price * 100,
+          );
+
+        if (
+          !Number.isSafeInteger(
+            soldUnitPriceMinor,
+          ) ||
+          soldUnitPriceMinor < 0
+        ) {
+          throw new Error(
+            `Invalid online order price at line ${lineNumber}`,
+          );
+        }
+
+        const exchangedQuantity =
+          exchangedByLine.get(
+            lineNumber,
+          ) ?? 0;
+
+        if (
+          !Number.isSafeInteger(
+            exchangedQuantity,
+          ) ||
+          exchangedQuantity < 0 ||
+          exchangedQuantity >
+            soldQuantity
+        ) {
+          throw new Error(
+            `Invalid exchanged quantity at order line ${lineNumber}`,
+          );
+        }
+
+        const returnableQuantity =
+          soldQuantity -
+          exchangedQuantity;
+
+        return {
+          lineNumber,
+
+          productId:
+            String(productId),
+
+          productNameAr:
+            String(
+              item.name ?? "",
+            ).trim() ||
+            `صنف ${lineNumber}`,
+
+          productImage:
+            typeof item.image ===
+            "string"
+              ? item.image
+              : null,
+
+          color:
+            typeof item.color ===
+            "string"
+              ? item.color
+              : null,
+
+          size:
+            typeof item.size ===
+            "string"
+              ? item.size
+              : null,
+
+          soldQuantity,
+          exchangedQuantity,
+          returnableQuantity,
+
+          soldUnitPriceMinor,
+          soldUnitPrice:
+            soldUnitPriceMinor /
+            100,
+
+          originalLineTotalMinor:
+            soldUnitPriceMinor *
+            soldQuantity,
+
+          originalLineTotal:
+            (
+              soldUnitPriceMinor *
+              soldQuantity
+            ) / 100,
+        };
+      },
+    );
+
+  const soldQuantity =
+    items.reduce(
+      (total, item) =>
+        total +
+        item.soldQuantity,
+      0,
+    );
+
+  const exchangedQuantity =
+    items.reduce(
+      (total, item) =>
+        total +
+        item.exchangedQuantity,
+      0,
+    );
+
+  const returnableQuantity =
+    items.reduce(
+      (total, item) =>
+        total +
+        item.returnableQuantity,
+      0,
+    );
+
+  const returnableValueMinor =
+    items.reduce(
+      (total, item) =>
+        total +
+        (
+          item.soldUnitPriceMinor *
+          item.returnableQuantity
+        ),
+      0,
+    );
+
+  return json({
+    order: {
+      id:
+        String(order.id),
+
+      status:
+        order.status,
+
+      customerName:
+        order.customerName,
+
+      customerPhone:
+        order.customerPhone,
+
+      totalPrice:
+        order.totalPrice,
+
+      shippingCost:
+        order.shippingCost,
+
+      createdAt:
+        order.createdAt.toISOString(),
+    },
+
+    summary: {
+      soldQuantity,
+      exchangedQuantity,
+      returnableQuantity,
+
+      returnableValueMinor,
+      returnableValue:
+        returnableValueMinor /
+        100,
+
+      fullyConsumed:
+        returnableQuantity ===
+        0,
+    },
+
+    items,
+  });
+}
+
 export async function handlePosExchangeRequest(
   request: Request,
   db: Db,
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/exchanges/order-preview"
+  ) {
+    return handleOnlineOrderExchangePreview(
+      request,
+      db,
+      env,
+    );
+  }
 
   if (
     request.method === "GET" &&
@@ -542,6 +937,39 @@ export async function handlePosExchangeRequest(
     path === "/api/pos/exchanges/void"
   ) {
     return handleVoidPosExchange(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/exchanges/online/status"
+  ) {
+    return handleGetOnlineOrderExchangeStatus(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/exchanges/online/receive-return"
+  ) {
+    return handleReceiveOnlineExchangeReturn(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/exchanges/online"
+  ) {
+    return handleCreateOnlineOrderExchange(
       request,
       db,
       env,

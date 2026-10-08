@@ -435,11 +435,21 @@ export interface PosTodaySalesResult {
   mobileReturns: PosMobileReturnResult[];
 }
 
-export function getTodayPosSales(token: string, registerKey = "main") {
-  const register = encodeURIComponent(registerKey);
+export function getTodayPosSales(
+  token: string,
+  registerKey = "main",
+  businessDate?: string,
+) {
+  const params = new URLSearchParams({
+    register: registerKey,
+  });
+
+  if (businessDate) {
+    params.set("date", businessDate);
+  }
 
   return apiRequest<PosTodaySalesResult>(
-    `/api/pos/sales/today?register=${register}`,
+    `/api/pos/sales/today?${params.toString()}`,
     {},
     token,
   );
@@ -1299,6 +1309,181 @@ export function getGrossProfitReport(
 }
 
 
+// ===== ONLINE ORDER EXCHANGE =====
+
+export type OnlineExchangeDeliveryDiscountMode =
+  | "none"
+  | "half"
+  | "full"
+  | "manual";
+
+export interface OnlineOrderExchangePreviewResult {
+  order: {
+    id: string;
+    status: string;
+    customerName: string;
+    customerPhone: string;
+    totalPrice: number;
+    shippingCost: number | null;
+    createdAt: string;
+  };
+
+  summary: {
+    soldQuantity: number;
+    exchangedQuantity: number;
+    returnableQuantity: number;
+    returnableValueMinor: number;
+  };
+
+  items: Array<{
+    lineNumber: number;
+    productId: string;
+    productNameAr: string;
+    productImage: string | null;
+    color: string | null;
+    size: string | null;
+    soldQuantity: number;
+    exchangedQuantity: number;
+    returnableQuantity: number;
+    soldUnitPriceMinor: number;
+    originalLineTotalMinor: number;
+  }>;
+}
+
+export interface OnlineOrderExchangeResult {
+  replayed: boolean;
+
+  exchange: {
+    id: string;
+    publicId: string;
+    sourceType: "online_order";
+    originalOrderId: string | null;
+    replacementOrderId: string | null;
+    replacementOrderOrigin:
+      | "existing_order"
+      | "system_created"
+      | null;
+
+    businessDate: string;
+    status: "completed" | "voided";
+
+    returnGrossMinor: number;
+    returnDiscountMinor: number;
+    returnNetMinor: number;
+
+    newGrossMinor: number;
+    newDiscountMinor: number;
+    newNetMinor: number;
+
+    differenceMinor: number;
+
+    deliveryBaseChargeMinor: number;
+    deliveryDiscountMinor: number;
+    deliveryDiscountMode:
+      OnlineExchangeDeliveryDiscountMode | null;
+    deliveryChargeMinor: number;
+
+    settlementAmountMinor: number;
+
+    financialCompletedAt: string | null;
+    returnReceivedAt: string | null;
+  };
+
+  replacementOrder: {
+    id: string;
+    status: string;
+    customerName: string;
+    customerPhone: string;
+    shippingZone: string | null;
+    shippingCost: number | null;
+    totalPrice: number;
+  } | null;
+
+  returnItems: Array<{
+    id: string;
+    lineNumber: number;
+    originalOrderLineNumber: number | null;
+    productId: string | null;
+    productNameAr: string;
+    productImage: string | null;
+    color: string | null;
+    size: string | null;
+    quantity: number;
+    soldUnitPriceMinor: number;
+    grossAmountMinor: number;
+    allocatedDiscountMinor: number;
+    returnNetMinor: number;
+  }>;
+}
+
+export function getOnlineOrderExchangePreview(
+  token: string,
+  orderId: string | number,
+) {
+  return apiRequest<OnlineOrderExchangePreviewResult>(
+    `/api/pos/exchanges/order-preview?orderId=${encodeURIComponent(String(orderId))}`,
+    {},
+    token,
+  );
+}
+
+export function createOnlineOrderExchange(
+  token: string,
+  input: {
+    idempotencyKey: string;
+    originalOrderId: string | number;
+    replacementOrderId?: string | number | null;
+
+    returnItems: Array<{
+      originalOrderLineNumber: number;
+      quantity: number;
+    }>;
+
+    deliveryDiscountMode:
+      OnlineExchangeDeliveryDiscountMode;
+
+    manualDeliveryDiscountMinor?: number;
+    notes?: string;
+  },
+) {
+  return apiRequest<OnlineOrderExchangeResult>(
+    "/api/pos/exchanges/online",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function getOnlineOrderExchangeStatus(
+  token: string,
+  publicId: string,
+) {
+  return apiRequest<OnlineOrderExchangeResult>(
+    `/api/pos/exchanges/online/status?publicId=${encodeURIComponent(publicId.trim().toUpperCase())}`,
+    {},
+    token,
+  );
+}
+
+export function receiveOnlineExchangeReturn(
+  token: string,
+  publicId: string,
+) {
+  return apiRequest<unknown>(
+    "/api/pos/exchanges/online/receive-return",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        publicId:
+          publicId.trim().toUpperCase(),
+      }),
+    },
+    token,
+  );
+}
+
 // ===== POS EXCHANGE =====
 
 export type PosExchangeSourceType =
@@ -1431,6 +1616,8 @@ interface PosExchangeCreateBaseInput {
   newItems: PosExchangeNewItemInput[];
 
   newInvoiceDiscount?: string | number;
+
+  customerName?: string;
 
   validationOnly?: boolean;
 
@@ -1619,6 +1806,8 @@ export interface PosExchangeCreateResult {
     businessDate: string;
     registerKey: string | null;
 
+    customerName?: string | null;
+
     status: "completed" | "voided";
 
     voidedAt?: string | null;
@@ -1699,14 +1888,18 @@ export interface PosTodayExchangesResult {
 export function getTodayPosExchanges(
   token: string,
   registerKey = "main",
+  businessDate?: string,
 ) {
-  const register =
-    encodeURIComponent(
-      registerKey,
-    );
+  const params = new URLSearchParams({
+    register: registerKey,
+  });
+
+  if (businessDate) {
+    params.set("date", businessDate);
+  }
 
   return apiRequest<PosTodayExchangesResult>(
-    `/api/pos/exchanges?register=${register}`,
+    `/api/pos/exchanges?${params.toString()}`,
     {},
     token,
   );
