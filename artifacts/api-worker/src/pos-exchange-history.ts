@@ -8,6 +8,7 @@ import {
   asc,
   desc,
   eq,
+  or,
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
@@ -222,12 +223,18 @@ export async function handleListPosExchanges(
       .where(
         and(
           eq(
-            exchangeDocumentsTable.registerKey,
-            registerKey,
-          ),
-          eq(
             exchangeDocumentsTable.businessDate,
             businessDate,
+          ),
+          or(
+            eq(
+              exchangeDocumentsTable.registerKey,
+              registerKey,
+            ),
+            eq(
+              exchangeDocumentsTable.sourceType,
+              "online_order",
+            ),
           ),
         ),
       )

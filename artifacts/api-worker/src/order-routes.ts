@@ -1,6 +1,7 @@
 import {
   appSettingsTable,
   deliveryCompaniesTable,
+  exchangeDocumentsTable,
   insertOrderSchema,
   ordersTable,
 } from "@workspace/db/schema";
@@ -440,7 +441,49 @@ async function handleGetOrders(
     .from(ordersTable)
     .orderBy(desc(ordersTable.createdAt));
 
-  return json(orders);
+  const exchangeLinks =
+    await db
+      .select({
+        replacementOrderId:
+          exchangeDocumentsTable.replacementOrderId,
+        originalOrderId:
+          exchangeDocumentsTable.originalOrderId,
+      })
+      .from(exchangeDocumentsTable)
+      .where(
+        and(
+          eq(
+            exchangeDocumentsTable.sourceType,
+            "online_order",
+          ),
+          eq(
+            exchangeDocumentsTable.status,
+            "completed",
+          ),
+        ),
+      );
+
+  const originalByReplacement =
+    new Map(
+      exchangeLinks
+        .filter(
+          (row) =>
+            row.replacementOrderId !== null &&
+            row.originalOrderId !== null,
+        )
+        .map((row) => [
+          row.replacementOrderId!,
+          row.originalOrderId!,
+        ]),
+    );
+
+  return json(
+    orders.map((order) => ({
+      ...order,
+      exchangeOriginalOrderId:
+        originalByReplacement.get(order.id) ?? null,
+    })),
+  );
 }
 
 async function handleLookupOrder(

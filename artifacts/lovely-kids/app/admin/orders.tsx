@@ -90,6 +90,7 @@ interface EditableOrderItem extends OrderItem {}
 
 interface Order {
   id: number;
+  exchangeOriginalOrderId?: number | null;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -1992,6 +1993,15 @@ export default function AdminOrdersScreen() {
                   <View style={styles.cardTopRight}>
                     <View style={styles.orderIdRow}>
                       <Text style={[styles.orderId, { color: colors.primary }]}>#{item.id}</Text>
+
+                      {item.exchangeOriginalOrderId && (
+                        <View style={[styles.newDot, { backgroundColor: "#7C3AED" }]}>
+                          <Text style={styles.newDotText}>
+                            طلب تبديل — بدل الطلب #{item.exchangeOriginalOrderId}
+                          </Text>
+                        </View>
+                      )}
+
                       {item.status === "new" && (
                         <View style={[styles.newDot, { backgroundColor: colors.primary }]}>
                           <Text style={styles.newDotText}>جديد</Text>

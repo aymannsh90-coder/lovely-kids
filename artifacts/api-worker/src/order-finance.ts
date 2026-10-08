@@ -1,6 +1,7 @@
 import {
   cashSessionsTable,
   deliveryCompaniesTable,
+  exchangeDocumentsTable,
   financeAccountsTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
@@ -110,6 +111,58 @@ export async function completeOrderWithFinance(
       );
     }
 
+    const linkedExchangeRows =
+      await tx
+        .select()
+        .from(exchangeDocumentsTable)
+        .where(
+          and(
+            eq(
+              exchangeDocumentsTable.sourceType,
+              "online_order",
+            ),
+            eq(
+              exchangeDocumentsTable.replacementOrderId,
+              order.id,
+            ),
+            eq(
+              exchangeDocumentsTable.status,
+              "completed",
+            ),
+          ),
+        )
+        .for("update");
+
+    if (linkedExchangeRows.length > 1) {
+      throw new OrderFinanceError(
+        "الطلب مرتبط بأكثر من عملية تبديل فعّالة",
+        409,
+      );
+    }
+
+    const linkedOnlineExchange =
+      linkedExchangeRows[0] ?? null;
+
+    if (
+      linkedOnlineExchange &&
+      linkedOnlineExchange.financialCompletedAt !== null
+    ) {
+      throw new OrderFinanceError(
+        "تم تسجيل محاسبة عملية التبديل مسبقًا",
+        409,
+      );
+    }
+
+    if (
+      linkedOnlineExchange &&
+      linkedOnlineExchange.returnReceivedAt !== null
+    ) {
+      throw new OrderFinanceError(
+        "حالة استلام مرتجع التبديل غير متطابقة",
+        409,
+      );
+    }
+
     let fulfillmentMethod =
       fulfillmentUpdate?.fulfillmentMethod ??
       order.fulfillmentMethod;
@@ -170,6 +223,93 @@ export async function completeOrderWithFinance(
 
     const productSalesMinor =
       totalMinor - shippingMinor;
+
+    let onlineExchangeDifferenceMinor:
+      number | null = null;
+
+    let onlineExchangeSettlementAmountMinor:
+      number | null = null;
+
+    if (linkedOnlineExchange) {
+      if (isPickup) {
+        throw new OrderFinanceError(
+          "طلب التبديل المرتبط يجب أن يكون طلب توصيل",
+          409,
+        );
+      }
+
+      if (order.paymentMethod !== "cod") {
+        throw new OrderFinanceError(
+          "طلب التبديل يجب أن يكون دفع عند الاستلام",
+          409,
+        );
+      }
+
+      if (
+        linkedOnlineExchange.settlementType !==
+        "delivery_company"
+      ) {
+        throw new OrderFinanceError(
+          "طريقة تسوية عملية التبديل غير صالحة",
+          409,
+        );
+      }
+
+      if (
+        linkedOnlineExchange.newNetMinor !==
+        productSalesMinor
+      ) {
+        throw new OrderFinanceError(
+          "قيمة الطلب البديل تغيّرت دون تحديث عملية التبديل",
+          409,
+        );
+      }
+
+      if (
+        linkedOnlineExchange.deliveryChargeMinor !==
+        shippingMinor
+      ) {
+        throw new OrderFinanceError(
+          "رسوم توصيل الطلب البديل لا تطابق عملية التبديل",
+          409,
+        );
+      }
+
+      const returnNetMinor =
+        linkedOnlineExchange.returnNetMinor;
+
+      if (
+        !Number.isSafeInteger(returnNetMinor) ||
+        returnNetMinor < 0
+      ) {
+        throw new OrderFinanceError(
+          "قيمة مرتجع عملية التبديل غير صالحة",
+          409,
+        );
+      }
+
+      onlineExchangeDifferenceMinor =
+        productSalesMinor -
+        returnNetMinor;
+
+      onlineExchangeSettlementAmountMinor =
+        onlineExchangeDifferenceMinor +
+        shippingMinor;
+
+      if (
+        !Number.isSafeInteger(
+          onlineExchangeDifferenceMinor,
+        ) ||
+        !Number.isSafeInteger(
+          onlineExchangeSettlementAmountMinor,
+        )
+      ) {
+        throw new OrderFinanceError(
+          "قيمة تسوية عملية التبديل غير صالحة",
+          409,
+        );
+      }
+    }
 
     if (
       order.paymentMethod !== "cod" &&
@@ -422,8 +562,123 @@ export async function completeOrderWithFinance(
       deliveryCompany = company;
     }
 
-    // الطرف المدين حسب طريقة التحصيل.
-    if (isPickup) {
+    if (linkedOnlineExchange) {
+      if (
+        !deliveryCompany ||
+        deliveryCompanyId === null ||
+        onlineExchangeDifferenceMinor === null ||
+        onlineExchangeSettlementAmountMinor === null
+      ) {
+        throw new OrderFinanceError(
+          "بيانات تسوية شركة التوصيل لعملية التبديل غير مكتملة",
+          409,
+        );
+      }
+
+      const netCompanyMinor =
+        onlineExchangeSettlementAmountMinor -
+        deliveryCostMinor;
+
+      if (netCompanyMinor > 0) {
+        const receivableAccount =
+          await ensureAccount({
+            code:
+              `DELIVERY_COMPANY_AR_${deliveryCompany.id}`,
+            name:
+              `ذمم مدينة - شركة التوصيل: ${deliveryCompany.name}`,
+            accountType: "asset",
+            linkedEntityType:
+              "delivery_company_receivable",
+            linkedEntityId:
+              deliveryCompany.id,
+          });
+
+        financeLines.push({
+          accountId:
+            receivableAccount.id,
+          debitMinor:
+            netCompanyMinor,
+          creditMinor:
+            0,
+          memo:
+            `صافي تبديل مستحق على ${deliveryCompanyName} ` +
+            `للطلب #${order.id}`,
+        });
+      } else if (netCompanyMinor < 0) {
+        const payableAccount =
+          await ensureAccount({
+            code:
+              `DELIVERY_COMPANY_AP_${deliveryCompany.id}`,
+            name:
+              `ذمم دائنة - شركة التوصيل: ${deliveryCompany.name}`,
+            accountType:
+              "liability",
+            linkedEntityType:
+              "delivery_company_payable",
+            linkedEntityId:
+              deliveryCompany.id,
+          });
+
+        financeLines.push({
+          accountId:
+            payableAccount.id,
+          debitMinor:
+            0,
+          creditMinor:
+            -netCompanyMinor,
+          memo:
+            `صافي تبديل مستحق لـ ${deliveryCompanyName} ` +
+            `للطلب #${order.id}`,
+        });
+      }
+
+      if (
+        linkedOnlineExchange.returnNetMinor >
+        0
+      ) {
+        const salesReturnsAccount =
+          await ensureAccount({
+            code:
+              "SALES_RETURNS",
+            name:
+              "مردودات المبيعات",
+            accountType:
+              "income",
+          });
+
+        financeLines.push({
+          accountId:
+            salesReturnsAccount.id,
+          debitMinor:
+            linkedOnlineExchange.returnNetMinor,
+          creditMinor:
+            0,
+          memo:
+            `مرتجع عملية التبديل ${linkedOnlineExchange.publicId}`,
+        });
+      }
+
+      if (
+        deliveryExpenseAccount &&
+        deliveryCostMinor > 0
+      ) {
+        financeLines.push({
+          accountId:
+            deliveryExpenseAccount.id,
+          debitMinor:
+            deliveryCostMinor,
+          creditMinor:
+            0,
+          memo:
+            `تكلفة توصيل طلب التبديل #${order.id}`,
+        });
+      }
+    }
+
+    // الطلبات العادية تبقى على نفس منطق التحصيل السابق.
+    if (!linkedOnlineExchange) {
+      // الطرف المدين حسب طريقة التحصيل.
+      if (isPickup) {
       if (
         order.paymentMethod === "cod" &&
         cashAccount &&
@@ -560,6 +815,8 @@ export async function completeOrderWithFinance(
       }
     }
 
+    }
+
     if (
       productSalesAccount &&
       productSalesMinor > 0
@@ -668,6 +925,84 @@ export async function completeOrderWithFinance(
         throw new OrderFinanceError(
           "تم إغلاق الصندوق قبل إتمام استلام الطلب",
           409,
+        );
+      }
+    }
+
+    if (linkedOnlineExchange) {
+      if (
+        deliveryCompanyId === null ||
+        onlineExchangeDifferenceMinor === null ||
+        onlineExchangeSettlementAmountMinor === null
+      ) {
+        throw new OrderFinanceError(
+          "تعذر تثبيت محاسبة عملية التبديل",
+          409,
+        );
+      }
+
+      const completedAt =
+        new Date();
+
+      const updatedExchangeRows =
+        await tx
+          .update(
+            exchangeDocumentsTable,
+          )
+          .set({
+            settlementType:
+              "delivery_company",
+
+            settlementPartyId:
+              deliveryCompanyId,
+
+            newNetMinor:
+              productSalesMinor,
+
+            differenceMinor:
+              onlineExchangeDifferenceMinor,
+
+            deliveryChargeMinor:
+              shippingMinor,
+
+            deliveryCompanyCostMinor:
+              deliveryCostMinor,
+
+            settlementAmountMinor:
+              onlineExchangeSettlementAmountMinor,
+
+            financialBusinessDate:
+              businessDate,
+
+            financialCompletedAt:
+              completedAt,
+
+            financialCompletedByUserId:
+              userId,
+
+            updatedAt:
+              completedAt,
+          })
+          .where(
+            and(
+              eq(
+                exchangeDocumentsTable.id,
+                linkedOnlineExchange.id,
+              ),
+              eq(
+                exchangeDocumentsTable.status,
+                "completed",
+              ),
+            ),
+          )
+          .returning({
+            id:
+              exchangeDocumentsTable.id,
+          });
+
+      if (!updatedExchangeRows[0]) {
+        throw new Error(
+          "ONLINE_EXCHANGE_FINANCE_UPDATE_FAILED",
         );
       }
     }

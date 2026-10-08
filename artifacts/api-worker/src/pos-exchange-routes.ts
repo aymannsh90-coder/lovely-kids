@@ -9,6 +9,11 @@ import {
 } from "@workspace/db/schema";
 import { handleCreatePosExchange } from "./pos-exchange-create";
 import {
+  handleCreateOnlineOrderExchange,
+  handleGetOnlineOrderExchangeStatus,
+} from "./pos-online-exchange-create";
+import { handleReceiveOnlineExchangeReturn } from "./pos-online-exchange-receive";
+import {
   handleGetPosExchangeByPublicId,
   handleListPosExchanges,
 } from "./pos-exchange-history";
@@ -932,6 +937,39 @@ export async function handlePosExchangeRequest(
     path === "/api/pos/exchanges/void"
   ) {
     return handleVoidPosExchange(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/exchanges/online/status"
+  ) {
+    return handleGetOnlineOrderExchangeStatus(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/exchanges/online/receive-return"
+  ) {
+    return handleReceiveOnlineExchangeReturn(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/exchanges/online"
+  ) {
+    return handleCreateOnlineOrderExchange(
       request,
       db,
       env,

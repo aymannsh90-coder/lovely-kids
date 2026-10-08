@@ -69,9 +69,7 @@ export default function AppRouter() {
         <Route
           path="sales/exchange"
           element={
-            <RequireOpenSession>
-              <ExchangePage />
-            </RequireOpenSession>
+            <ExchangePage />
           }
         />
 
