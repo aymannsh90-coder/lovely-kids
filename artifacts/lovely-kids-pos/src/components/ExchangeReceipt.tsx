@@ -8,6 +8,7 @@ import type {
 interface ExchangeReceiptProps {
   result: PosExchangeCreateResult;
   receiptRef?: Ref<HTMLElement>;
+  showOnScreen?: boolean;
 }
 
 function formatDateTime(value: string) {
@@ -66,6 +67,7 @@ function variantText(
 export default function ExchangeReceipt({
   result,
   receiptRef,
+  showOnScreen = false,
 }: ExchangeReceiptProps) {
   const exchange = result.exchange;
 
@@ -85,6 +87,7 @@ export default function ExchangeReceipt({
       ref={receiptRef}
       className="receipt-print-area"
       dir="rtl"
+      style={showOnScreen ? { display: "block" } : undefined}
     >
       <header className="receipt-header">
         <img

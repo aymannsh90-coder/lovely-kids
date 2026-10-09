@@ -4014,6 +4014,7 @@ export default function ExchangePage() {
               <ExchangeReceipt
                 result={createdExchangeResult}
                 receiptRef={exchangeReceiptRef}
+                showOnScreen
               />
             </>
           )}
