@@ -85,9 +85,10 @@ export default function ExchangeReceipt({
   return (
     <section
       ref={receiptRef}
-      className="receipt-print-area"
+      className={`receipt-print-area${
+        showOnScreen ? " exchange-receipt-screen" : ""
+      }`}
       dir="rtl"
-      style={showOnScreen ? { display: "block" } : undefined}
     >
       <header className="receipt-header">
         <img
