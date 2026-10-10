@@ -262,6 +262,11 @@ export interface PosSaleResult {
     cashierUserId: string;
     status: string;
     paymentMethod: string;
+
+    customerId: string | null;
+
+    accountDueMinor: number;
+    accountDue: number;
     subtotalMinor: number;
     subtotal: number;
     discountMinor: number;
@@ -385,14 +390,192 @@ export function getPosProductCard(
   );
 }
 
+export interface PosCustomer {
+  id: number;
+  code: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+
+  creditLimitMinor: number | null;
+
+  status:
+    | "active"
+    | "inactive";
+
+  balanceMinor: number;
+  balance: number;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosCustomerListResult {
+  results: PosCustomer[];
+}
+
+export function getPosCustomers(
+  token: string,
+  options: {
+    query?: string;
+    status?:
+      | "active"
+      | "inactive";
+  } = {},
+) {
+  const params =
+    new URLSearchParams();
+
+  if (options.query?.trim()) {
+    params.set(
+      "query",
+      options.query.trim(),
+    );
+  }
+
+  if (options.status) {
+    params.set(
+      "status",
+      options.status,
+    );
+  }
+
+  const query =
+    params.toString();
+
+  return apiRequest<PosCustomerListResult>(
+    `/api/pos/customers${query ? `?${query}` : ""}`,
+    {},
+    token,
+  );
+}
+
+
+export interface PosCustomerLedgerEntry {
+  transactionId:
+    | number
+    | string
+    | null;
+
+  publicId: string | null;
+  transactionType: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
+  sourceEvent: string | null;
+  status: string | null;
+  businessDate: string | null;
+  createdAt: string;
+
+  debitMinor: number;
+  creditMinor: number;
+
+  memo: string | null;
+}
+
+export interface PosCustomerLedgerResult {
+  customer: {
+    id: number;
+    code: string;
+    name: string;
+    phone: string | null;
+    address: string | null;
+    notes: string | null;
+    creditLimitMinor: number | null;
+    status: string;
+  };
+
+  balanceMinor: number;
+  balance: number;
+
+  entries: PosCustomerLedgerEntry[];
+}
+
+export function createPosCustomer(
+  token: string,
+  input: {
+    name: string;
+    phone?: string;
+    address?: string;
+    notes?: string;
+    creditLimit?: string;
+  },
+) {
+  return apiRequest<{
+    customer: PosCustomer;
+  }>(
+    "/api/pos/customers",
+    {
+      method: "POST",
+      body: JSON.stringify(
+        input,
+      ),
+    },
+    token,
+  );
+}
+
+export function getPosCustomerLedger(
+  token: string,
+  customerId: number,
+) {
+  return apiRequest<PosCustomerLedgerResult>(
+    `/api/pos/customers/${customerId}/ledger`,
+    {},
+    token,
+  );
+}
+
+export function createPosCustomerReceipt(
+  token: string,
+  customerId: number,
+  input: {
+    amount: string;
+    paymentMethod:
+      | "cash"
+      | "card";
+    registerKey: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated?: boolean;
+    voucher: {
+      id: number;
+      publicId: string;
+      voucherType: string;
+      paymentMethod: string;
+      amountMinor: number;
+      businessDate: string;
+      status: string;
+    };
+  }>(
+    `/api/pos/customers/${customerId}/receipt`,
+    {
+      method: "POST",
+      body: JSON.stringify(
+        input,
+      ),
+    },
+    token,
+  );
+}
+
+
 export function createPosSale(
   token: string,
   input: {
     registerKey: string;
     idempotencyKey: string;
-    paymentMethod: "cash" | "card";
+    paymentMethod:
+      | "cash"
+      | "card"
+      | "credit"
+      | "mixed";
     discountAmount: string;
     paidAmount: string;
+    customerId?: number;
     customerName?: string;
     customerPhone?: string;
     notes?: string;

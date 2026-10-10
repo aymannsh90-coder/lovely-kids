@@ -1,3 +1,4 @@
+import { handlePartyFinanceRequest } from "./party-finance-routes";
 import { appSettingsTable, productsTable } from "@workspace/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { openDb, type Env } from "./db";
@@ -395,6 +396,16 @@ export default {
         }
 
         return posExchangeResponse;
+      }
+
+      const partyFinanceResponse = await handlePartyFinanceRequest(
+        request,
+        db,
+        env,
+      );
+
+      if (partyFinanceResponse) {
+        return partyFinanceResponse;
       }
 
       const supplierResponse = await handleSupplierRequest(

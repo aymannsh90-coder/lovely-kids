@@ -1558,6 +1558,17 @@ export async function handleUpdatePosSale(
       }
 
       if (
+        sale.paymentMethod === "credit" ||
+        sale.paymentMethod === "mixed" ||
+        sale.accountDueMinor > 0
+      ) {
+        throw new PosSaleEditError(
+          "لا يمكن تعديل فاتورة مرتبطة بذمة زبون؛ ألغِ الفاتورة وأعد إصدارها حاليًا",
+          409,
+        );
+      }
+
+      if (
         requestedPaymentMethod !== undefined &&
         requestedPaymentMethod !== sale.paymentMethod
       ) {

@@ -1,6 +1,10 @@
 import {
   inventoryMovementsTable,
   cashSessionsTable,
+  customersTable,
+  financeAccountsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   posSaleItemCostsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
@@ -295,6 +299,142 @@ function getPublicId(businessDate: string): string {
   return `POS-${datePart}-${randomPart}`;
 }
 
+
+async function ensureSaleFinanceAccount(
+  tx: any,
+  input: {
+    code: string;
+    name: string;
+    accountType:
+      | "asset"
+      | "liability"
+      | "income"
+      | "expense"
+      | "equity";
+    linkedEntityType?: string;
+    linkedEntityId?: number;
+  },
+) {
+  const existingRows =
+    await tx
+      .select()
+      .from(financeAccountsTable)
+      .where(
+        eq(
+          financeAccountsTable.code,
+          input.code,
+        ),
+      )
+      .limit(1);
+
+  if (existingRows[0]) {
+    return existingRows[0];
+  }
+
+  const insertedRows =
+    await tx
+      .insert(financeAccountsTable)
+      .values({
+        code: input.code,
+        name: input.name,
+        accountType: input.accountType,
+        linkedEntityType:
+          input.linkedEntityType ?? null,
+        linkedEntityId:
+          input.linkedEntityId ?? null,
+        currencyCode: "ILS",
+        status: "active",
+      })
+      .onConflictDoNothing()
+      .returning();
+
+  if (insertedRows[0]) {
+    return insertedRows[0];
+  }
+
+  if (
+    input.linkedEntityType &&
+    input.linkedEntityId !== undefined
+  ) {
+    const linkedRows =
+      await tx
+        .select()
+        .from(financeAccountsTable)
+        .where(
+          and(
+            eq(
+              financeAccountsTable.linkedEntityType,
+              input.linkedEntityType,
+            ),
+            eq(
+              financeAccountsTable.linkedEntityId,
+              input.linkedEntityId,
+            ),
+          ),
+        )
+        .limit(1);
+
+    if (linkedRows[0]) {
+      return linkedRows[0];
+    }
+  }
+
+  const retryRows =
+    await tx
+      .select()
+      .from(financeAccountsTable)
+      .where(
+        eq(
+          financeAccountsTable.code,
+          input.code,
+        ),
+      )
+      .limit(1);
+
+  if (!retryRows[0]) {
+    throw new Error(
+      "POS_SALE_FINANCE_ACCOUNT_CREATE_FAILED",
+    );
+  }
+
+  return retryRows[0];
+}
+
+async function financeAssetBalanceMinor(
+  tx: any,
+  accountId: number,
+) {
+  const rows =
+    await tx
+      .select({
+        debitMinor:
+          financeTransactionLinesTable.debitMinor,
+        creditMinor:
+          financeTransactionLinesTable.creditMinor,
+      })
+      .from(financeTransactionLinesTable)
+      .where(
+        eq(
+          financeTransactionLinesTable.accountId,
+          accountId,
+        ),
+      );
+
+  return rows.reduce(
+    (
+      total: number,
+      row: {
+        debitMinor: number;
+        creditMinor: number;
+      },
+    ) =>
+      total +
+      row.debitMinor -
+      row.creditMinor,
+    0,
+  );
+}
+
 function toSaleResponse(
   sale: typeof posSalesTable.$inferSelect,
   items: Array<typeof posSaleItemsTable.$inferSelect>,
@@ -320,6 +460,17 @@ function toSaleResponse(
       cashierUserId: String(sale.cashierUserId),
       status: sale.status,
       paymentMethod: sale.paymentMethod,
+
+      customerId:
+        sale.customerId === null
+          ? null
+          : String(sale.customerId),
+
+      accountDueMinor:
+        sale.accountDueMinor,
+
+      accountDue:
+        sale.accountDueMinor / 100,
 
       subtotalMinor: sale.subtotalMinor,
       subtotal: sale.subtotalMinor / 100,
@@ -873,8 +1024,53 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
     const paymentMethod =
       payload.paymentMethod === undefined ? "cash" : payload.paymentMethod;
 
-    if (paymentMethod !== "cash" && paymentMethod !== "card") {
+    if (
+      paymentMethod !== "cash" &&
+      paymentMethod !== "card" &&
+      paymentMethod !== "credit" &&
+      paymentMethod !== "mixed"
+    ) {
       throw new PosSaleError("طريقة الدفع غير صالحة");
+    }
+
+    const rawCustomerId =
+      (payload as Record<string, unknown>)
+        .customerId;
+
+    let customerId:
+      number | null = null;
+
+    if (
+      rawCustomerId !== undefined &&
+      rawCustomerId !== null &&
+      rawCustomerId !== ""
+    ) {
+      const parsedCustomerId =
+        Number(rawCustomerId);
+
+      if (
+        !Number.isSafeInteger(parsedCustomerId) ||
+        parsedCustomerId <= 0
+      ) {
+        throw new PosSaleError(
+          "معرّف الزبون غير صالح",
+        );
+      }
+
+      customerId =
+        parsedCustomerId;
+    }
+
+    if (
+      (
+        paymentMethod === "credit" ||
+        paymentMethod === "mixed"
+      ) &&
+      customerId === null
+    ) {
+      throw new PosSaleError(
+        "يجب اختيار زبون للبيع على الحساب",
+      );
     }
 
     const items = parseSaleItems(payload.items);
@@ -1057,6 +1253,63 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       if (!session) {
         throw new PosSaleError("يجب فتح يوم الصندوق قبل البيع", 409);
       }
+
+      let customer:
+        typeof customersTable.$inferSelect |
+        null = null;
+
+      if (customerId !== null) {
+        const customerRows =
+          await tx
+            .select()
+            .from(customersTable)
+            .where(
+              eq(
+                customersTable.id,
+                customerId,
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+        customer =
+          customerRows[0] ?? null;
+
+        if (!customer) {
+          throw new PosSaleError(
+            "الزبون غير موجود",
+            404,
+          );
+        }
+
+        if (customer.status !== "active") {
+          throw new PosSaleError(
+            "حساب الزبون غير فعال",
+            409,
+          );
+        }
+      }
+
+      if (
+        (
+          paymentMethod === "credit" ||
+          paymentMethod === "mixed"
+        ) &&
+        !customer
+      ) {
+        throw new PosSaleError(
+          "يجب اختيار زبون فعال للبيع على الحساب",
+          409,
+        );
+      }
+
+      const effectiveCustomerName =
+        customer?.name ??
+        customerName;
+
+      const effectiveCustomerPhone =
+        customer?.phone ??
+        customerPhone;
 
       const saleLines: Array<typeof posSaleItemsTable.$inferInsert> = [];
 
@@ -1302,22 +1555,123 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
       const totalMinor = subtotalMinor - discountMinor;
 
-      if (paidMinor < totalMinor) {
-        throw new PosSaleError("المبلغ المدفوع أقل من قيمة الفاتورة");
+      let accountDueMinor = 0;
+      let changeMinor = 0;
+      let cashReceivedMinor = 0;
+
+      if (paymentMethod === "cash") {
+        if (paidMinor < totalMinor) {
+          throw new PosSaleError(
+            "المبلغ المدفوع أقل من قيمة الفاتورة",
+          );
+        }
+
+        changeMinor =
+          paidMinor - totalMinor;
+
+        cashReceivedMinor =
+          totalMinor;
+      } else if (paymentMethod === "card") {
+        if (paidMinor !== totalMinor) {
+          throw new PosSaleError(
+            "مبلغ البطاقة يجب أن يساوي قيمة الفاتورة",
+          );
+        }
+      } else if (paymentMethod === "credit") {
+        if (paidMinor !== 0) {
+          throw new PosSaleError(
+            "البيع الآجل يجب أن يكون بدون دفعة نقدية",
+          );
+        }
+
+        accountDueMinor =
+          totalMinor;
+      } else {
+        if (
+          paidMinor <= 0 ||
+          paidMinor >= totalMinor
+        ) {
+          throw new PosSaleError(
+            "الدفعة يجب أن تكون أكبر من صفر وأقل من قيمة الفاتورة",
+          );
+        }
+
+        cashReceivedMinor =
+          paidMinor;
+
+        accountDueMinor =
+          totalMinor - paidMinor;
       }
 
-      const changeMinor = paidMinor - totalMinor;
-
       const expectedBefore =
-        session.expectedBalanceMinor ?? session.openingBalanceMinor;
+        session.expectedBalanceMinor ??
+        session.openingBalanceMinor;
 
       const expectedAfter =
-        paymentMethod === "cash"
-          ? expectedBefore + totalMinor
-          : expectedBefore;
+        expectedBefore +
+        cashReceivedMinor;
 
-      if (!Number.isSafeInteger(expectedAfter) || expectedAfter > MAX_MINOR) {
-        throw new PosSaleError("رصيد الصندوق يتجاوز الحد المسموح");
+      if (
+        !Number.isSafeInteger(expectedAfter) ||
+        expectedAfter < 0 ||
+        expectedAfter > MAX_MINOR
+      ) {
+        throw new PosSaleError(
+          "رصيد الصندوق يتجاوز الحد المسموح",
+        );
+      }
+
+      let customerAccount:
+        typeof financeAccountsTable.$inferSelect |
+        null = null;
+
+      if (accountDueMinor > 0) {
+        if (!customer) {
+          throw new PosSaleError(
+            "تعذر تحميل حساب الزبون",
+            409,
+          );
+        }
+
+        customerAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                `CUSTOMER_AR_${customer.id}`,
+              name:
+                `ذمم الزبون: ${customer.name}`,
+              accountType: "asset",
+              linkedEntityType:
+                "customer_receivable",
+              linkedEntityId:
+                customer.id,
+            },
+          );
+
+        if (!customerAccount) {
+          throw new Error(
+            "POS_SALE_CUSTOMER_ACCOUNT_CREATE_FAILED",
+          );
+        }
+
+        const currentBalanceMinor =
+          await financeAssetBalanceMinor(
+            tx,
+            customerAccount.id,
+          );
+
+        if (
+          customer.creditLimitMinor !== null &&
+          currentBalanceMinor +
+            accountDueMinor >
+            customer.creditLimitMinor
+        ) {
+          throw new PosSaleError(
+            "قيمة الفاتورة تتجاوز الحد الائتماني للزبون",
+            409,
+          );
+        }
       }
 
       const saleRows = await tx
@@ -1338,8 +1692,18 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           totalMinor,
           paidMinor,
           changeMinor,
-          customerName,
-          customerPhone,
+
+          customerId:
+            customer?.id ?? null,
+
+          accountDueMinor,
+
+          customerName:
+            effectiveCustomerName,
+
+          customerPhone:
+            effectiveCustomerPhone,
+
           notes,
         })
         .returning();
@@ -1348,6 +1712,99 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
       if (!sale) {
         throw new Error("POS_SALE_INSERT_FAILED");
+      }
+
+      if (accountDueMinor > 0) {
+        if (
+          !customer ||
+          !customerAccount
+        ) {
+          throw new Error(
+            "POS_SALE_CUSTOMER_ACCOUNT_MISSING",
+          );
+        }
+
+        const onAccountSalesAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                "POS_SALES_ON_ACCOUNT",
+              name:
+                "مبيعات نقطة البيع على الحساب",
+              accountType:
+                "income",
+            },
+          );
+
+        const financeRows =
+          await tx
+            .insert(financeTransactionsTable)
+            .values({
+              publicId:
+                `FIN-AR-${sale.publicId}`,
+              idempotencyKey:
+                `pos-sale:${sale.id}:account-due`,
+              businessDate:
+                sale.businessDate,
+              transactionType:
+                "sale",
+              sourceType:
+                "pos_sale",
+              sourceId:
+                String(sale.id),
+              sourceEvent:
+                "account_due",
+              cashSessionId:
+                session.id,
+              status:
+                "posted",
+              notes:
+                `ذمة فاتورة ${sale.publicId}`,
+              createdByUserId:
+                auth.user.id,
+            })
+            .returning();
+
+        const financeTransaction =
+          financeRows[0];
+
+        if (!financeTransaction) {
+          throw new Error(
+            "POS_SALE_FINANCE_INSERT_FAILED",
+          );
+        }
+
+        await tx
+          .insert(
+            financeTransactionLinesTable,
+          )
+          .values([
+            {
+              transactionId:
+                financeTransaction.id,
+              lineNumber: 1,
+              accountId:
+                customerAccount.id,
+              debitMinor:
+                accountDueMinor,
+              creditMinor: 0,
+              memo:
+                `ذمة الزبون ${customer.name}`,
+            },
+            {
+              transactionId:
+                financeTransaction.id,
+              lineNumber: 2,
+              accountId:
+                onAccountSalesAccount.id,
+              debitMinor: 0,
+              creditMinor:
+                accountDueMinor,
+              memo:
+                `الجزء الآجل من ${sale.publicId}`,
+            },
+          ]);
       }
 
       const insertedItems = await tx
@@ -1667,13 +2124,24 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
       }
 
       const expectedBefore =
-        session.expectedBalanceMinor ?? session.openingBalanceMinor;
+        session.expectedBalanceMinor ??
+        session.openingBalanceMinor;
+
+      const cashImpactMinor =
+        sale.paymentMethod === "cash"
+          ? sale.totalMinor
+          : sale.paymentMethod === "mixed"
+            ? sale.paidMinor - sale.changeMinor
+            : 0;
 
       if (
-        sale.paymentMethod === "cash" &&
-        expectedBefore < sale.totalMinor
+        cashImpactMinor > 0 &&
+        expectedBefore < cashImpactMinor
       ) {
-        throw new PosSaleError("رصيد الصندوق لا يكفي لإلغاء الفاتورة", 409);
+        throw new PosSaleError(
+          "رصيد الصندوق لا يكفي لإلغاء الفاتورة",
+          409,
+        );
       }
 
       const stockCardVoidOccurredAt = new Date();
@@ -1985,9 +2453,159 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
       }
 
       const expectedAfter =
-        sale.paymentMethod === "cash"
-          ? expectedBefore - sale.totalMinor
-          : expectedBefore;
+        expectedBefore -
+        cashImpactMinor;
+
+      const accountFinanceRows =
+        sale.accountDueMinor > 0
+          ? await tx
+              .select()
+              .from(
+                financeTransactionsTable,
+              )
+              .where(
+                and(
+                  eq(
+                    financeTransactionsTable.sourceType,
+                    "pos_sale",
+                  ),
+                  eq(
+                    financeTransactionsTable.sourceId,
+                    String(sale.id),
+                  ),
+                  eq(
+                    financeTransactionsTable.sourceEvent,
+                    "account_due",
+                  ),
+                  eq(
+                    financeTransactionsTable.status,
+                    "posted",
+                  ),
+                ),
+              )
+              .limit(1)
+              .for("update")
+          : [];
+
+      const accountFinance =
+        accountFinanceRows[0] ??
+        null;
+
+      if (
+        sale.accountDueMinor > 0 &&
+        !accountFinance
+      ) {
+        throw new PosSaleError(
+          "قيد ذمة الزبون غير موجود ولا يمكن إلغاء الفاتورة بأمان",
+          409,
+        );
+      }
+
+      if (accountFinance) {
+        const originalLines =
+          await tx
+            .select()
+            .from(
+              financeTransactionLinesTable,
+            )
+            .where(
+              eq(
+                financeTransactionLinesTable.transactionId,
+                accountFinance.id,
+              ),
+            )
+            .orderBy(
+              asc(
+                financeTransactionLinesTable.lineNumber,
+              ),
+            );
+
+        if (originalLines.length < 2) {
+          throw new Error(
+            "POS_SALE_ACCOUNT_FINANCE_LINES_MISSING",
+          );
+        }
+
+        const reversalRows =
+          await tx
+            .insert(
+              financeTransactionsTable,
+            )
+            .values({
+              publicId:
+                `FIN-AR-VOID-${sale.publicId}`,
+              idempotencyKey:
+                `pos-sale:${sale.id}:account-due:void`,
+              businessDate:
+                session.businessDate,
+              transactionType:
+                "reversal",
+              sourceType:
+                "pos_sale",
+              sourceId:
+                String(sale.id),
+              sourceEvent:
+                "account_due_void",
+              cashSessionId:
+                session.id,
+              status:
+                "posted",
+              notes:
+                `عكس ذمة الفاتورة ${sale.publicId}`,
+              createdByUserId:
+                auth.user.id,
+            })
+            .returning();
+
+        const reversal =
+          reversalRows[0];
+
+        if (!reversal) {
+          throw new Error(
+            "POS_SALE_ACCOUNT_REVERSAL_FAILED",
+          );
+        }
+
+        await tx
+          .insert(
+            financeTransactionLinesTable,
+          )
+          .values(
+            originalLines.map(
+              (line, index) => ({
+                transactionId:
+                  reversal.id,
+                lineNumber:
+                  index + 1,
+                accountId:
+                  line.accountId,
+                debitMinor:
+                  line.creditMinor,
+                creditMinor:
+                  line.debitMinor,
+                memo:
+                  `عكس ${sale.publicId}`,
+              }),
+            ),
+          );
+
+        await tx
+          .update(
+            financeTransactionsTable,
+          )
+          .set({
+            status:
+              "reversed",
+            updatedAt:
+              new Date(),
+          })
+          .where(
+            eq(
+              financeTransactionsTable.id,
+              accountFinance.id,
+            ),
+          );
+      }
 
       const updatedSessionRows = await tx
         .update(cashSessionsTable)

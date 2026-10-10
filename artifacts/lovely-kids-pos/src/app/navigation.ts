@@ -178,7 +178,7 @@ export const posNavigation: PosNavigationItem[] = [
     description: "بيانات الزبائن والمشتريات والأرصدة.",
     icon: "👨‍👩‍👧",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "suppliers",

@@ -11,6 +11,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { cashSessionsTable } from "./cash-sessions";
+import { customersTable } from "./customers";
 import { productsTable } from "./products";
 import { usersTable } from "./users";
 
@@ -56,8 +57,20 @@ export const posSalesTable = pgTable(
 
     changeMinor: integer("change_minor").notNull().default(0),
 
+    customerId: integer("customer_id").references(
+      () => customersTable.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
+
     customerName: text("customer_name"),
     customerPhone: text("customer_phone"),
+
+    accountDueMinor: integer("account_due_minor")
+      .notNull()
+      .default(0),
+
     notes: text("notes"),
 
     voidedAt: timestamp("voided_at", {
@@ -98,7 +111,7 @@ export const posSalesTable = pgTable(
 
     check(
       "pos_sales_payment_method_valid",
-      sql`${table.paymentMethod} in ('cash', 'card', 'mixed')`,
+      sql`${table.paymentMethod} in ('cash', 'card', 'mixed', 'credit')`,
     ),
 
     check(
@@ -111,6 +124,7 @@ export const posSalesTable = pgTable(
         and ${table.totalMinor} >= 0
         and ${table.paidMinor} >= 0
         and ${table.changeMinor} >= 0
+        and ${table.accountDueMinor} >= 0
       `,
     ),
 
@@ -138,9 +152,33 @@ export const posSalesTable = pgTable(
     check(
       "pos_sales_payment_matches",
       sql`
-        ${table.paidMinor} >= ${table.totalMinor}
-        and ${table.changeMinor} =
-          ${table.paidMinor} - ${table.totalMinor}
+        (
+          ${table.paymentMethod} = 'cash'
+          and ${table.accountDueMinor} = 0
+          and ${table.paidMinor} >= ${table.totalMinor}
+          and ${table.changeMinor} =
+            ${table.paidMinor} - ${table.totalMinor}
+        )
+        or
+        (
+          ${table.paymentMethod} = 'card'
+          and ${table.accountDueMinor} = 0
+          and ${table.paidMinor} = ${table.totalMinor}
+          and ${table.changeMinor} = 0
+        )
+        or
+        (
+          ${table.paymentMethod} = 'mixed'
+          and ${table.accountDueMinor} = 0
+        )
+        or
+        (
+          ${table.paymentMethod} = 'credit'
+          and ${table.customerId} is not null
+          and ${table.accountDueMinor} = ${table.totalMinor}
+          and ${table.paidMinor} = 0
+          and ${table.changeMinor} = 0
+        )
       `,
     ),
 
@@ -170,6 +208,8 @@ export const posSalesTable = pgTable(
     index("pos_sales_business_date_idx").on(table.businessDate),
 
     index("pos_sales_cashier_idx").on(table.cashierUserId),
+
+    index("pos_sales_customer_idx").on(table.customerId),
 
     index("pos_sales_created_at_idx").on(table.createdAt),
   ],

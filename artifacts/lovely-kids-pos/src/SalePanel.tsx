@@ -18,10 +18,13 @@ import { printReceiptElementDirect } from "./lib/directReceiptPrint";
 import {
   ApiError,
   createPosSale,
+  createPosCustomerReceipt,
   getCurrentCashSession,
+  getPosCustomers,
   lookupPosProductByBarcode,
   searchPosProducts,
   type CashSession,
+  type PosCustomer,
   type PosProductLookup,
   type PosSaleResult,
 } from "./lib/api";
@@ -170,6 +173,9 @@ export default function SalePanel({
 
   const idempotencyKey = useRef<string | null>(null);
 
+  const settlementIdempotencyKey =
+    useRef<string | null>(null);
+
   function focusBarcodeField() {
     window.requestAnimationFrame(() => {
       window.setTimeout(() => {
@@ -238,11 +244,47 @@ export default function SalePanel({
   const [paidAmount, setPaidAmount] = useState("0.00");
 
   const [paymentMethod, setPaymentMethod] =
-    useState<"cash" | "card">("cash");
+    useState<
+      | "cash"
+      | "card"
+      | "credit"
+      | "mixed"
+    >("cash");
+
+  const [customers, setCustomers] =
+    useState<PosCustomer[]>([]);
+
+  const [
+    customersBusy,
+    setCustomersBusy,
+  ] = useState(false);
+
+  const [
+    customersError,
+    setCustomersError,
+  ] = useState("");
+
+  const [
+    selectedCustomerId,
+    setSelectedCustomerId,
+  ] = useState("");
 
   const [customerName, setCustomerName] = useState("");
 
   const [customerPhone, setCustomerPhone] = useState("");
+
+  const [
+    settlementAmount,
+    setSettlementAmount,
+  ] = useState("0.00");
+
+  const [
+    settlementMethod,
+    setSettlementMethod,
+  ] = useState<
+    | "cash"
+    | "card"
+  >("cash");
 
   const [notes, setNotes] = useState("");
 
@@ -271,15 +313,158 @@ export default function SalePanel({
 
   const paidMinor = moneyToMinor(paidAmount) ?? 0;
 
-  const changeMinor = Math.max(0, paidMinor - totalMinor);
+  const changeMinor =
+    Math.max(
+      0,
+      paidMinor - totalMinor,
+    );
+
+  const accountDueMinor =
+    paymentMethod === "credit"
+      ? totalMinor
+      : paymentMethod === "mixed"
+        ? Math.max(
+            0,
+            totalMinor -
+              paidMinor,
+          )
+        : 0;
 
   useEffect(() => {
     barcodeInput.current?.focus();
   }, []);
 
   useEffect(() => {
-    setPaidAmount((totalMinor / 100).toFixed(2));
-  }, [totalMinor]);
+    if (
+      paymentMethod === "credit"
+    ) {
+      setPaidAmount("0.00");
+
+      setSettlementAmount(
+        (totalMinor / 100).toFixed(2),
+      );
+
+      return;
+    }
+
+    if (
+      paymentMethod === "mixed"
+    ) {
+      setPaidAmount("0.00");
+      return;
+    }
+
+    setPaidAmount(
+      (totalMinor / 100).toFixed(2),
+    );
+  }, [
+    totalMinor,
+    paymentMethod,
+  ]);
+
+  const customerIdFromQuery =
+    new URLSearchParams(
+      window.location.search,
+    ).get("customerId");
+
+  const accountFromQuery =
+    new URLSearchParams(
+      window.location.search,
+    ).get("account") === "1";
+
+  useEffect(() => {
+    if (
+      !customerIdFromQuery ||
+      customers.length === 0
+    ) {
+      return;
+    }
+
+    const customer =
+      customers.find(
+        (item) =>
+          String(item.id) ===
+          customerIdFromQuery,
+      );
+
+    if (!customer) {
+      return;
+    }
+
+    setSelectedCustomerId(
+      String(customer.id),
+    );
+
+    setCustomerName(
+      customer.name,
+    );
+
+    setCustomerPhone(
+      customer.phone ?? "",
+    );
+
+    if (accountFromQuery) {
+      setPaymentMethod(
+        "credit",
+      );
+    }
+  }, [
+    customerIdFromQuery,
+    accountFromQuery,
+    customers,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+
+    setCustomersBusy(true);
+    setCustomersError("");
+
+    void getPosCustomers(
+      token,
+      {
+        status: "active",
+      },
+    )
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+
+        setCustomers(
+          response.results,
+        );
+      })
+      .catch((caught) => {
+        if (!active) {
+          return;
+        }
+
+        if (
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          onUnauthorized();
+          return;
+        }
+
+        setCustomersError(
+          errorMessage(caught),
+        );
+      })
+      .finally(() => {
+        if (active) {
+          setCustomersBusy(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    token,
+    onUnauthorized,
+  ]);
 
   function clearProductSearch() {
     setSearchResults([]);
@@ -602,7 +787,14 @@ export default function SalePanel({
     focusLineField(targetId, "quantity");
   }
 
-  async function completeSale() {
+  async function completeSale(
+    settlement?: {
+      amount: string;
+      method:
+        | "cash"
+        | "card";
+    },
+  ) {
     setError("");
     setMessage("");
 
@@ -649,9 +841,100 @@ export default function SalePanel({
       return;
     }
 
-    if (paidMinor < totalMinor) {
-      setError("المبلغ المدفوع أقل من قيمة الفاتورة");
+
+    if (
+      (
+        paymentMethod === "credit" ||
+        paymentMethod === "mixed"
+      ) &&
+      !selectedCustomerId
+    ) {
+      setError(
+        "يجب اختيار زبون للبيع على الحساب",
+      );
       return;
+    }
+
+    if (
+      paymentMethod === "cash" &&
+      paidMinor < totalMinor
+    ) {
+      setError(
+        "المبلغ المدفوع أقل من قيمة الفاتورة",
+      );
+      return;
+    }
+
+    if (
+      paymentMethod === "card" &&
+      paidMinor !== totalMinor
+    ) {
+      setError(
+        "مبلغ الفيزا يجب أن يساوي قيمة الفاتورة",
+      );
+      return;
+    }
+
+    if (
+      paymentMethod === "credit" &&
+      paidMinor !== 0
+    ) {
+      setError(
+        "البيع الآجل يجب أن يكون بدون دفعة",
+      );
+      return;
+    }
+
+    if (
+      paymentMethod === "mixed" &&
+      (
+        paidMinor <= 0 ||
+        paidMinor >= totalMinor
+      )
+    ) {
+      setError(
+        "أدخل دفعة نقدية أكبر من صفر وأقل من قيمة الفاتورة",
+      );
+      return;
+    }
+
+    if (settlement) {
+      if (
+        paymentMethod !==
+          "credit" ||
+        !selectedCustomerId
+      ) {
+        setError(
+          "التسديد المباشر متاح فقط لفاتورة زبون على الحساب",
+        );
+        return;
+      }
+
+      const settleMinor =
+        moneyToMinor(
+          settlement.amount,
+        );
+
+      if (
+        settleMinor === null ||
+        settleMinor <= 0
+      ) {
+        setError(
+          "قيمة التسديد غير صالحة",
+        );
+        return;
+      }
+
+      if (
+        settlement.method ===
+          "cash" &&
+        !session
+      ) {
+        setError(
+          "يجب فتح الصندوق لتسجيل دفعة نقدية",
+        );
+        return;
+      }
     }
 
     const confirmed = window.confirm(
@@ -676,6 +959,13 @@ export default function SalePanel({
 
         paidAmount: paidAmount.trim(),
 
+        customerId:
+          selectedCustomerId
+            ? Number(
+                selectedCustomerId,
+              )
+            : undefined,
+
         customerName: customerName.trim() || undefined,
 
         customerPhone: customerPhone.trim() || undefined,
@@ -695,11 +985,49 @@ export default function SalePanel({
         })),
       });
 
+      if (settlement) {
+        const receiptKey =
+          settlementIdempotencyKey.current ??
+          `customer_receipt_${createKey()}`;
+
+        settlementIdempotencyKey.current =
+          receiptKey;
+
+        await createPosCustomerReceipt(
+          token,
+          Number(
+            selectedCustomerId,
+          ),
+          {
+            amount:
+              settlement.amount,
+
+            paymentMethod:
+              settlement.method,
+
+            registerKey:
+              session.registerKey,
+
+            notes:
+              `تسديد مع الفاتورة ${result.sale.publicId}`,
+
+            idempotencyKey:
+              receiptKey,
+          },
+        );
+
+        settlementIdempotencyKey.current =
+          null;
+      }
+
       idempotencyKey.current = null;
       setLastSale(result);
       setCart([]);
       setDiscountAmount("0.00");
       setPaymentMethod("cash");
+      setSelectedCustomerId("");
+      setSettlementAmount("0.00");
+      setSettlementMethod("cash");
       setCustomerName("");
       setCustomerPhone("");
       setNotes("");
@@ -1090,29 +1418,186 @@ export default function SalePanel({
             </div>
 
             <div>
+              <span>
+                حساب الزبون
+              </span>
+
+              <select
+                value={
+                  selectedCustomerId
+                }
+                disabled={
+                  customersBusy
+                }
+                onChange={(event) => {
+                  const value =
+                    event.target.value;
+
+                  setSelectedCustomerId(
+                    value,
+                  );
+
+                  const selected =
+                    customers.find(
+                      (customer) =>
+                        String(
+                          customer.id,
+                        ) === value,
+                    );
+
+                  if (selected) {
+                    setCustomerName(
+                      selected.name,
+                    );
+
+                    setCustomerPhone(
+                      selected.phone ??
+                        "",
+                    );
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  marginTop: 8,
+                  minHeight: 42,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                }}
+              >
+                <option value="">
+                  {customersBusy
+                    ? "جاري تحميل الزبائن…"
+                    : "بدون حساب زبون"}
+                </option>
+
+                {customers.map(
+                  (customer) => (
+                    <option
+                      key={
+                        customer.id
+                      }
+                      value={
+                        customer.id
+                      }
+                    >
+                      {customer.name}
+                      {" — "}
+                      رصيد:
+                      {" "}
+                      {formatMinor(
+                        customer.balanceMinor,
+                      )}
+                    </option>
+                  ),
+                )}
+              </select>
+
+              {customersError && (
+                <small
+                  className="error-message"
+                  style={{
+                    display: "block",
+                    marginTop: 6,
+                  }}
+                >
+                  {customersError}
+                </small>
+              )}
+
+              {selectedCustomerId && (
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: 6,
+                  }}
+                >
+                  الرصيد الحالي:
+                  {" "}
+                  {formatMinor(
+                    customers.find(
+                      (customer) =>
+                        String(
+                          customer.id,
+                        ) ===
+                        selectedCustomerId,
+                    )?.balanceMinor ??
+                      0,
+                  )}
+                </small>
+              )}
+            </div>
+
+            <div>
               <span>طريقة الدفع</span>
 
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginTop: 8,
+                  flexWrap: "wrap",
+                }}
+              >
                 <button
                   type="button"
-                  className={paymentMethod === "cash" ? "primary-button" : "secondary-button"}
-                  onClick={() => setPaymentMethod("cash")}
+                  className={
+                    paymentMethod ===
+                    "cash"
+                      ? "primary-button"
+                      : "secondary-button"
+                  }
+                  onClick={() =>
+                    setPaymentMethod(
+                      "cash",
+                    )
+                  }
                 >
                   💵 نقدي
                 </button>
 
                 <button
                   type="button"
-                  className={paymentMethod === "card" ? "primary-button" : "secondary-button"}
-                  onClick={() => setPaymentMethod("card")}
+                  className={
+                    paymentMethod ===
+                    "card"
+                      ? "primary-button"
+                      : "secondary-button"
+                  }
+                  onClick={() =>
+                    setPaymentMethod(
+                      "card",
+                    )
+                  }
                 >
                   💳 فيزا
+                </button>
+
+                <button
+                  type="button"
+                  className={
+                    paymentMethod ===
+                    "credit"
+                      ? "primary-button"
+                      : "secondary-button"
+                  }
+                  onClick={() =>
+                    setPaymentMethod(
+                      "credit",
+                    )
+                  }
+                >
+                  🧾 آجل
                 </button>
               </div>
             </div>
 
             <label>
-              <span>المبلغ المدفوع</span>
+              <span>
+                {paymentMethod ===
+                "mixed"
+                  ? "الدفعة النقدية"
+                  : "المبلغ المدفوع"}
+              </span>
 
               <div className="money-input">
                 <input
@@ -1120,8 +1605,23 @@ export default function SalePanel({
                   type="number"
                   min="0"
                   step="0.01"
-                  value={paidAmount}
-                  onChange={(event) => setPaidAmount(event.target.value)}
+                  value={
+                    paidAmount
+                  }
+                  disabled={
+                    paymentMethod ===
+                      "card" ||
+                    paymentMethod ===
+                      "credit"
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setPaidAmount(
+                      event.target
+                        .value,
+                    )
+                  }
                 />
 
                 <span>₪</span>
@@ -1129,10 +1629,190 @@ export default function SalePanel({
             </label>
 
             <div>
-              <span>الباقي للزبون</span>
-              <strong>{formatMinor(changeMinor)}</strong>
+              <span>
+                {accountDueMinor > 0
+                  ? "المتبقي على الحساب"
+                  : "الباقي للزبون"}
+              </span>
+
+              <strong>
+                {formatMinor(
+                  accountDueMinor > 0
+                    ? accountDueMinor
+                    : changeMinor,
+                )}
+              </strong>
             </div>
 
+            {paymentMethod === "credit" &&
+              selectedCustomerId && (
+              <div
+                style={{
+                  padding: 14,
+                  border:
+                    "1px solid #ddd",
+                  borderRadius: 12,
+                }}
+              >
+                <strong>
+                  فاتورة على حساب الزبون
+                </strong>
+
+                <p
+                  style={{
+                    margin:
+                      "7px 0 12px",
+                    fontSize: 13,
+                  }}
+                >
+                  الفاتورة تنزل كاملة
+                  على الحساب. يمكنك
+                  حفظها بدون دفع أو
+                  حفظها وتسجيل سند قبض
+                  مباشرة.
+                </p>
+
+                <label>
+                  <span>
+                    قيمة التسديد الآن
+                  </span>
+
+                  <div className="money-input">
+                    <input
+                      dir="ltr"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={
+                        settlementAmount
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        setSettlementAmount(
+                          event.target
+                            .value,
+                        )
+                      }
+                    />
+
+                    <span>₪</span>
+                  </div>
+                </label>
+
+                <div
+                  style={{
+                    marginTop: 12,
+                  }}
+                >
+                  <span>
+                    طريقة التسديد
+                  </span>
+
+                  <div
+                    style={{
+                      display:
+                        "flex",
+                      gap: 8,
+                      marginTop: 7,
+                      flexWrap:
+                        "wrap",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={
+                        settlementMethod ===
+                        "cash"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={() =>
+                        setSettlementMethod(
+                          "cash",
+                        )
+                      }
+                    >
+                      💵 كاش
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        settlementMethod ===
+                        "card"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={() =>
+                        setSettlementMethod(
+                          "card",
+                        )
+                      }
+                    >
+                      💳 فيزا
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display:
+                      "flex",
+                    gap: 8,
+                    marginTop: 14,
+                    flexWrap:
+                      "wrap",
+                  }}
+                >
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={
+                      saleBusy ||
+                      cart.length === 0
+                    }
+                    onClick={() =>
+                      void completeSale()
+                    }
+                  >
+                    {saleBusy
+                      ? "جاري الحفظ…"
+                      : "حفظ الفاتورة"}
+                  </button>
+
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={
+                      saleBusy ||
+                      cart.length === 0 ||
+                      (
+                        settlementMethod ===
+                          "cash" &&
+                        !session
+                      )
+                    }
+                    onClick={() =>
+                      void completeSale(
+                        {
+                          amount:
+                            settlementAmount,
+                          method:
+                            settlementMethod,
+                        },
+                      )
+                    }
+                  >
+                    {saleBusy
+                      ? "جاري الحفظ والتسديد…"
+                      : "حفظ وتسديد"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {paymentMethod !== "credit" && (
             <button
               className="primary-button complete-sale-button"
               type="button"
@@ -1141,6 +1821,7 @@ export default function SalePanel({
             >
               {saleBusy ? "جاري حفظ البيع…" : "إتمام البيع وخصم المخزون"}
             </button>
+            )}
           </div>
         </div>
 
@@ -1150,6 +1831,16 @@ export default function SalePanel({
               <strong>آخر فاتورة: {lastSale.sale.publicId}</strong>
 
               <span>الإجمالي: {formatMinor(lastSale.sale.totalMinor)}</span>
+
+              {lastSale.sale.accountDueMinor > 0 && (
+                <span>
+                  متبقي على الحساب:
+                  {" "}
+                  {formatMinor(
+                    lastSale.sale.accountDueMinor,
+                  )}
+                </span>
+              )}
             </div>
 
             <button
@@ -1192,8 +1883,26 @@ export default function SalePanel({
             <span>الزبون: {lastSale.sale.customerName || "زبون نقدي"}</span>
 
             <span>
-              طريقة الدفع: {lastSale.sale.paymentMethod === "card" ? "فيزا" : "نقدي"}
+              طريقة الدفع: {
+                lastSale.sale.paymentMethod === "card"
+                  ? "فيزا"
+                  : lastSale.sale.paymentMethod === "credit"
+                    ? "آجل"
+                    : lastSale.sale.paymentMethod === "mixed"
+                      ? "دفعة نقدية + حساب"
+                      : "نقدي"
+              }
             </span>
+
+            {lastSale.sale.accountDueMinor > 0 && (
+              <span>
+                المتبقي على الحساب:
+                {" "}
+                {formatMinor(
+                  lastSale.sale.accountDueMinor,
+                )}
+              </span>
+            )}
           </div>
 
           <div className="receipt-divider" />

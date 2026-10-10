@@ -20,6 +20,10 @@ export * from "./pos-sale-revisions";
 
 export * from "./pos-sale-returns";
 export * from "./suppliers";
+export * from "./customers";
+export * from "./employees";
+export * from "./expense-categories";
+export * from "./finance-vouchers";
 export * from "./pos-purchases";
 export * from "./visitor-daily-visits";
 export * from "./delivery-companies";

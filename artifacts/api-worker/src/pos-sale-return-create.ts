@@ -455,6 +455,17 @@ export async function handleCreatePosSaleReturn(
         throw new PosSaleReturnError("لا يمكن إنشاء مرتجع لهذه الفاتورة", 409);
       }
 
+      if (
+        sale.paymentMethod === "credit" ||
+        sale.paymentMethod === "mixed" ||
+        sale.accountDueMinor > 0
+      ) {
+        throw new PosSaleReturnError(
+          "لا يمكن تنفيذ مرتجع نقدي مباشرة لفاتورة عليها ذمة زبون قبل تسوية حساب الزبون",
+          409,
+        );
+      }
+
       const sessionRows = await tx
         .select()
         .from(cashSessionsTable)

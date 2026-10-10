@@ -21,6 +21,25 @@ function shortProductName(value: string) {
   return value.trim().split(/\s+/)[0] || "صنف";
 }
 
+
+function paymentMethodLabel(
+  value: string,
+) {
+  if (value === "card") {
+    return "فيزا";
+  }
+
+  if (value === "credit") {
+    return "آجل";
+  }
+
+  if (value === "mixed") {
+    return "دفعة نقدية + حساب";
+  }
+
+  return "نقدي";
+}
+
 export default function SaleReceipt({
   result,
   isReprint = false,
@@ -50,7 +69,7 @@ export default function SaleReceipt({
         <span>الزبون: {result.sale.customerName || "زبون نقدي"}</span>
 
         <span>
-          طريقة الدفع: {result.sale.paymentMethod === "card" ? "فيزا" : "نقدي"}
+          طريقة الدفع: {paymentMethodLabel(result.sale.paymentMethod)}
         </span>
       </div>
 
@@ -108,6 +127,19 @@ export default function SaleReceipt({
           <span>المدفوع</span>
           <strong>{result.sale.paid.toFixed(2)} ₪</strong>
         </div>
+
+
+        {result.sale.accountDueMinor > 0 && (
+          <div>
+            <span>
+              المتبقي على الحساب
+            </span>
+
+            <strong>
+              {result.sale.accountDue.toFixed(2)} ₪
+            </strong>
+          </div>
+        )}
 
         <div>
           <span>الباقي</span>

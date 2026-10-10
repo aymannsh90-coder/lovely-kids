@@ -1120,6 +1120,21 @@ export async function handleCreatePosExchange(
             }
           }
 
+          if (
+            sale &&
+            (
+              sale.paymentMethod === "credit" ||
+              sale.paymentMethod === "mixed" ||
+              sale.accountDueMinor > 0
+            )
+          ) {
+            throw new PosExchangeError(
+              "لا يمكن تبديل فاتورة عليها ذمة زبون قبل تسوية الحساب",
+              409,
+            );
+          }
+
+
           const sessionRows =
             await tx
               .select()
