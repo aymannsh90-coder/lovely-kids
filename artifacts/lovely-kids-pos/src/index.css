@@ -8659,34 +8659,45 @@ textarea:disabled {
 
 /* CUSTOMER ACCOUNT CHECKOUT LAYOUT FIX START */
 
-/*
- * Customer-account sales add substantially more controls to the
- * checkout summary. Keep the normal sales workspace flexible and
- * give the summary enough width so Arabic labels/buttons never clip.
- */
 @media screen and (min-width: 1001px) {
+  .route-content .sale-panel {
+    overflow: visible;
+  }
+
   .sale-panel .sale-checkout {
-    grid-template-columns:
-      minmax(0, 1fr)
-      minmax(365px, 390px);
+    grid-template-columns: minmax(0, 1fr) 390px;
     gap: 10px;
     align-items: start;
     overflow: visible;
   }
 
   .sale-panel .sale-summary {
-    min-width: 0;
     width: 100%;
-    overflow: visible;
-    display: grid;
+    min-width: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
     gap: 10px;
     padding: 10px;
+    overflow: visible;
+    box-sizing: border-box;
   }
 
-  .sale-panel .sale-summary > div,
-  .sale-panel .sale-summary > label {
-    min-width: 0;
+  .sale-panel .sale-summary > * {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sale-panel .sale-summary span,
+  .sale-panel .sale-summary strong,
+  .sale-panel .sale-summary small,
+  .sale-panel .sale-summary p,
+  .sale-panel .sale-summary label {
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
   }
 
   .sale-panel .sale-summary select,
@@ -8699,41 +8710,84 @@ textarea:disabled {
   }
 
   .sale-panel .sale-summary select {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .sale-panel .sale-summary small,
-  .sale-panel .sale-summary p,
-  .sale-panel .sale-summary span,
-  .sale-panel .sale-summary strong {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    word-break: normal;
+  .customer-account-credit-box {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 14px !important;
+    border: 1px solid #d7dde2 !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
   }
 
-  .sale-panel .sale-summary button {
-    min-width: 88px;
-    white-space: nowrap;
+  .customer-account-credit-box > strong {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+    text-align: right;
   }
 
-  .route-content .sale-panel {
-    overflow: visible;
+  .customer-account-credit-box > p {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.8 !important;
+    text-align: right;
+  }
+
+  .customer-account-credit-box > label {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .customer-account-credit-box > label > span {
+    display: block !important;
+    margin-bottom: 6px !important;
+  }
+
+  .customer-account-credit-box > div {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .customer-account-credit-box button {
+    min-width: 90px !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+
+  .customer-account-credit-box > div:last-child {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-top: 2px !important;
+  }
+
+  .customer-account-credit-box > div:last-child button {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 }
 
-/* Slightly narrower desktop/laptop widths */
 @media screen and (min-width: 1001px) and (max-width: 1250px) {
   .sale-panel .sale-checkout {
-    grid-template-columns:
-      minmax(0, 1fr)
-      minmax(330px, 350px);
-  }
-
-  .sale-panel .sale-summary button {
-    min-width: 78px;
-    padding-inline: 9px;
+    grid-template-columns: minmax(0, 1fr) 350px;
   }
 }
 

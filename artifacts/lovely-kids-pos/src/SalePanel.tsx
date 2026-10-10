@@ -1681,14 +1681,7 @@ export default function SalePanel({
 
             {paymentMethod === "credit" &&
               selectedCustomerId && (
-              <div
-                style={{
-                  padding: 14,
-                  border:
-                    "1px solid #ddd",
-                  borderRadius: 12,
-                }}
-              >
+              <div className="customer-account-credit-box">
                 <strong>
                   فاتورة على حساب الزبون
                 </strong>
