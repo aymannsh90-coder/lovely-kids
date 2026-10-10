@@ -8656,3 +8656,85 @@ textarea:disabled {
   margin-top: 8px;
   font-size: 12px;
 }
+
+/* CUSTOMER ACCOUNT CHECKOUT LAYOUT FIX START */
+
+/*
+ * Customer-account sales add substantially more controls to the
+ * checkout summary. Keep the normal sales workspace flexible and
+ * give the summary enough width so Arabic labels/buttons never clip.
+ */
+@media screen and (min-width: 1001px) {
+  .sale-panel .sale-checkout {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(365px, 390px);
+    gap: 10px;
+    align-items: start;
+    overflow: visible;
+  }
+
+  .sale-panel .sale-summary {
+    min-width: 0;
+    width: 100%;
+    overflow: visible;
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .sale-panel .sale-summary > div,
+  .sale-panel .sale-summary > label {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .sale-panel .sale-summary select,
+  .sale-panel .sale-summary input,
+  .sale-panel .sale-summary .money-input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sale-panel .sale-summary select {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .sale-panel .sale-summary small,
+  .sale-panel .sale-summary p,
+  .sale-panel .sale-summary span,
+  .sale-panel .sale-summary strong {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .sale-panel .sale-summary button {
+    min-width: 88px;
+    white-space: nowrap;
+  }
+
+  .route-content .sale-panel {
+    overflow: visible;
+  }
+}
+
+/* Slightly narrower desktop/laptop widths */
+@media screen and (min-width: 1001px) and (max-width: 1250px) {
+  .sale-panel .sale-checkout {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(330px, 350px);
+  }
+
+  .sale-panel .sale-summary button {
+    min-width: 78px;
+    padding-inline: 9px;
+  }
+}
+
+/* CUSTOMER ACCOUNT CHECKOUT LAYOUT FIX END */
