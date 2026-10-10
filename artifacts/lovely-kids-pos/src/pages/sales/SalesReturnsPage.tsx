@@ -1,3 +1,4 @@
+import CustomerPicker from "../../components/CustomerPicker";
 import {
   useEffect,
   useMemo,
@@ -1593,44 +1594,29 @@ export default function SalesReturnsPage() {
 
                 {refundMethod ===
                   "customer" && (
-                  <label
-                    className="sales-return-field"
+                  <div
                     style={{
-                      display:
-                        "block",
                       marginTop: 12,
                     }}
                   >
-                    <span>
-                      حساب الزبون
-                    </span>
-
-                    <select
+                    <CustomerPicker
+                      customers={
+                        customers
+                      }
                       value={
-                        refundCustomerId ??
-                        ""
+                        refundCustomerId
                       }
                       disabled={
                         submitBusy
                       }
+                      label="اسم الزبون"
+                      placeholder="اختر الزبون للمردود"
                       onChange={(
-                        event,
+                        customer,
                       ) => {
-                        const id =
-                          Number(
-                            event
-                              .target
-                              .value,
-                          );
-
                         setRefundCustomerId(
-                          Number
-                            .isSafeInteger(
-                              id,
-                            ) &&
-                            id > 0
-                            ? id
-                            : null,
+                          customer?.id ??
+                            null,
                         );
 
                         setCompletedReturn(
@@ -1641,49 +1627,8 @@ export default function SalesReturnsPage() {
                           createIdempotencyKey(),
                         );
                       }}
-                    >
-                      <option value="">
-                        اختر الزبون
-                      </option>
-
-                      {customers.map(
-                        (
-                          customer,
-                        ) => (
-                          <option
-                            key={
-                              customer.id
-                            }
-                            value={
-                              customer.id
-                            }
-                          >
-                            {
-                              customer.name
-                            }
-                            {" — "}
-                            {customer
-                              .balanceMinor >
-                            0
-                              ? `عليه ${formatMoney(
-                                  customer
-                                    .balanceMinor,
-                                )}`
-                              : customer
-                                    .balanceMinor <
-                                  0
-                                ? `له ${formatMoney(
-                                    Math.abs(
-                                      customer
-                                        .balanceMinor,
-                                    ),
-                                  )}`
-                                : "الحساب مسدد"}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </label>
+                    />
+                  </div>
                 )}
 
                 <small

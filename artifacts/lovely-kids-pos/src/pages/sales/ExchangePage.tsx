@@ -1,3 +1,4 @@
+import CustomerPicker from "../../components/CustomerPicker";
 import {
   useEffect,
   useMemo,
@@ -5877,96 +5878,39 @@ export default function ExchangePage() {
 
             {settlementType ===
               "customer" && (
-              <label
-                className="sales-return-field"
+              <div
                 style={{
-                  display: "block",
                   marginTop: 12,
                 }}
               >
-                <span>
-                  حساب الزبون
-                </span>
-
-                <select
-                  value={
-                    selectedCustomerId ??
-                    ""
+                <CustomerPicker
+                  customers={
+                    customers
                   }
+                  value={
+                    selectedCustomerId
+                  }
+                  label="اسم الزبون"
+                  placeholder="اختر الزبون للتبديل"
                   onChange={(
-                    event,
+                    customer,
                   ) => {
-                    const id =
-                      Number(
-                        event.target
-                          .value,
-                      );
-
-                    const customer =
-                      customers.find(
-                        (item) =>
-                          item.id === id,
-                      ) ??
-                      null;
-
                     setSelectedCustomerId(
                       customer?.id ??
                         null,
                     );
 
-                    if (customer) {
-                      setCustomerName(
-                        customer.name,
-                      );
-                    }
+                    setCustomerName(
+                      customer?.name ??
+                        "",
+                    );
 
                     setQuote(null);
                     setQuoteSignature("");
                     setQuoteError("");
                   }}
-                >
-                  <option value="">
-                    اختر الزبون
-                  </option>
-
-                  {customers.map(
-                    (
-                      customer,
-                    ) => (
-                      <option
-                        key={
-                          customer.id
-                        }
-                        value={
-                          customer.id
-                        }
-                      >
-                        {
-                          customer.name
-                        }
-                        {" — "}
-                        {customer
-                          .balanceMinor >
-                        0
-                          ? `عليه ${formatMoney(
-                              customer
-                                .balanceMinor,
-                            )}`
-                          : customer
-                                .balanceMinor <
-                              0
-                            ? `له ${formatMoney(
-                                Math.abs(
-                                  customer
-                                    .balanceMinor,
-                                ),
-                              )}`
-                            : "الحساب مسدد"}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
+                />
+              </div>
             )}
 
             <small>

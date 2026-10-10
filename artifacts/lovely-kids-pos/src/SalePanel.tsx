@@ -1,3 +1,4 @@
+import CustomerPicker from "./components/CustomerPicker";
 import {
   useEffect,
   useMemo,
@@ -1381,31 +1382,46 @@ export default function SalePanel({
 
         <div className="sale-checkout">
           <div className="sale-customer-fields">
-            <label>
-              <span>
-                اسم الزبون
-                <small> اختياري</small>
-              </span>
+            <CustomerPicker
+              customers={customers}
+              value={selectedCustomerId}
+              fallbackName={customerName}
+              loading={customersBusy}
+              disabled={saleBusy}
+              error={customersError}
+              label="اسم الزبون"
+              placeholder="بدون حساب زبون"
+              onChange={(customer) => {
+                if (!customer) {
+                  setSelectedCustomerId("");
+                  setCustomerName("");
+                  setCustomerPhone("");
 
-              <input
-                maxLength={150}
-                value={customerName}
-                onChange={(event) => setCustomerName(event.target.value)}
-              />
-            </label>
+                  return;
+                }
+
+                setSelectedCustomerId(
+                  String(customer.id),
+                );
+
+                setCustomerName(
+                  customer.name,
+                );
+
+                setCustomerPhone(
+                  customer.phone ?? "",
+                );
+              }}
+            />
 
             <label>
-              <span>
-                هاتف الزبون
-                <small> اختياري</small>
-              </span>
+              <span>هاتف الزبون</span>
 
               <input
                 dir="ltr"
-                maxLength={50}
-                inputMode="tel"
                 value={customerPhone}
-                onChange={(event) => setCustomerPhone(event.target.value)}
+                readOnly
+                placeholder="يظهر بعد اختيار الزبون"
               />
             </label>
 
@@ -1452,100 +1468,20 @@ export default function SalePanel({
               <strong>{formatMinor(totalMinor)}</strong>
             </div>
 
-            <div>
+            <div className="customer-account-summary">
               <span>
                 حساب الزبون
               </span>
 
-              <select
-                value={
-                  selectedCustomerId
-                }
-                disabled={
-                  customersBusy
-                }
-                onChange={(event) => {
-                  const value =
-                    event.target.value;
-
-                  setSelectedCustomerId(
-                    value,
-                  );
-
-                  const selected =
-                    customers.find(
-                      (customer) =>
-                        String(
-                          customer.id,
-                        ) === value,
-                    );
-
-                  if (selected) {
-                    setCustomerName(
-                      selected.name,
-                    );
-
-                    setCustomerPhone(
-                      selected.phone ??
-                        "",
-                    );
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  marginTop: 8,
-                  minHeight: 42,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                }}
-              >
-                <option value="">
-                  {customersBusy
-                    ? "جاري تحميل الزبائن…"
-                    : "بدون حساب زبون"}
-                </option>
-
-                {customers.map(
-                  (customer) => (
-                    <option
-                      key={
-                        customer.id
-                      }
-                      value={
-                        customer.id
-                      }
-                    >
-                      {customer.name}
-                      {" — "}
-                      رصيد:
-                      {" "}
-                      {formatMinor(
-                        customer.balanceMinor,
-                      )}
-                    </option>
-                  ),
-                )}
-              </select>
-
-              {customersError && (
-                <small
-                  className="error-message"
-                  style={{
-                    display: "block",
-                    marginTop: 6,
-                  }}
-                >
-                  {customersError}
-                </small>
-              )}
+              <strong>
+                {selectedCustomerId
+                  ? customerName ||
+                    "زبون محدد"
+                  : "غير محدد"}
+              </strong>
 
               {selectedCustomerId && (
-                <small
-                  style={{
-                    display: "block",
-                    marginTop: 6,
-                  }}
-                >
+                <small>
                   الرصيد الحالي:
                   {" "}
                   {formatMinor(

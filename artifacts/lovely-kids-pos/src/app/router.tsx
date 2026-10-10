@@ -22,6 +22,7 @@ import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
 import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
 import ExchangePage from "../pages/sales/ExchangePage";
 import TodaySalesPage from "../pages/sales/TodaySalesPage";
+import CustomerBalancesReportPage from "../pages/reports/CustomerBalancesReportPage";
 import CustomerStatementReportPage from "../pages/reports/CustomerStatementReportPage";
 import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
 
@@ -227,6 +228,11 @@ export default function AppRouter() {
         <Route
           path="finance/delivery-company"
           element={<DeliveryCompanyAccountingPage />}
+        />
+
+        <Route
+          path="reports/customer-balances"
+          element={<CustomerBalancesReportPage />}
         />
 
         <Route

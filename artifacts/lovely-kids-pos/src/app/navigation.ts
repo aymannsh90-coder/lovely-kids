@@ -231,6 +231,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "customer-balances",
+    group: "reports",
+    path: "/reports/customer-balances",
+    title: "أرصدة الزبائن",
+    description: "إجمالي أرصدة الزبائن المدين والدائن مع المجاميع.",
+    icon: "📊",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "customer-statement",
     group: "reports",
     path: "/reports/customer-statement",

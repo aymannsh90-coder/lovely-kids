@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom";
+import CustomerPicker from "../../components/CustomerPicker";
 import {
   useEffect,
   useMemo,
@@ -114,6 +116,14 @@ export default function CustomerStatementReportPage() {
     clearAuthentication,
   } = usePosRuntime();
 
+  const [searchParams] =
+    useSearchParams();
+
+  const requestedCustomerId =
+    searchParams.get(
+      "customerId",
+    ) ?? "";
+
   const [
     customers,
     setCustomers,
@@ -171,9 +181,6 @@ export default function CustomerStatementReportPage() {
 
     void getPosCustomers(
       token,
-      {
-        status: "active",
-      },
     )
       .then((response) => {
         if (!active) {
@@ -210,6 +217,38 @@ export default function CustomerStatementReportPage() {
   }, [
     token,
     clearAuthentication,
+  ]);
+
+  useEffect(() => {
+    if (
+      !requestedCustomerId ||
+      customers.length === 0
+    ) {
+      return;
+    }
+
+    const requested =
+      customers.find(
+        (customer) =>
+          String(
+            customer.id,
+          ) ===
+          requestedCustomerId,
+      );
+
+    if (
+      requested &&
+      customerId !==
+        String(requested.id)
+    ) {
+      setCustomerId(
+        String(requested.id),
+      );
+    }
+  }, [
+    requestedCustomerId,
+    customers,
+    customerId,
   ]);
 
   useEffect(() => {
@@ -417,47 +456,24 @@ export default function CustomerStatementReportPage() {
           marginBottom: 18,
         }}
       >
-        <label>
-          <span>الزبون</span>
-
-          <select
-            value={
-              customerId
-            }
-            disabled={
-              customersBusy
-            }
-            onChange={(
-              event,
-            ) =>
-              setCustomerId(
-                event.target.value,
-              )
-            }
-          >
-            <option value="">
-              اختر الزبون
-            </option>
-
-            {customers.map(
-              (customer) => (
-                <option
-                  key={
-                    customer.id
-                  }
-                  value={
-                    customer.id
-                  }
-                >
-                  {customer.name}
-                  {customer.phone
-                    ? ` — ${customer.phone}`
-                    : ""}
-                </option>
-              ),
-            )}
-          </select>
-        </label>
+        <CustomerPicker
+          customers={customers}
+          value={customerId}
+          loading={
+            customersBusy
+          }
+          label="الزبون"
+          placeholder="اختر الزبون"
+          onChange={(customer) =>
+            setCustomerId(
+              customer
+                ? String(
+                    customer.id,
+                  )
+                : "",
+            )
+          }
+        />
 
         <label>
           <span>

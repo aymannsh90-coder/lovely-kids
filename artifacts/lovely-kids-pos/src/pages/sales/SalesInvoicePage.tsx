@@ -1,3 +1,4 @@
+import CustomerPicker from "../../components/CustomerPicker";
 import {
   useEffect,
   useMemo,
@@ -19,11 +20,13 @@ import {
   ApiError,
   createPosSale,
   getCurrentCashSession,
+  getPosCustomers,
   getPosSaleByPublicId,
   lookupPosProductByBarcode,
   searchPosProducts,
   updatePosSale,
   voidPosSale,
+  type PosCustomer,
   type PosProductLookup,
   type PosSaleResult,
 } from "../../lib/api";
@@ -238,6 +241,25 @@ export default function SalesInvoicePage() {
   const [warehouse, setWarehouse] = useState("main");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+
+  const [
+    selectedCustomerId,
+    setSelectedCustomerId,
+  ] = useState<number | null>(null);
+
+  const [customers, setCustomers] =
+    useState<PosCustomer[]>([]);
+
+  const [
+    customersBusy,
+    setCustomersBusy,
+  ] = useState(false);
+
+  const [
+    customersError,
+    setCustomersError,
+  ] = useState("");
+
   const [representative, setRepresentative] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -281,6 +303,57 @@ export default function SalesInvoicePage() {
       void loadStoredInvoice(requestedPublicId);
     }
   }, [requestedPublicId]);
+
+  useEffect(() => {
+    let active = true;
+
+    setCustomersBusy(true);
+    setCustomersError("");
+
+    void getPosCustomers(
+      token,
+    )
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+
+        setCustomers(
+          response.results,
+        );
+      })
+      .catch((caught) => {
+        if (!active) {
+          return;
+        }
+
+        if (
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+          return;
+        }
+
+        setCustomersError(
+          caught instanceof Error
+            ? caught.message
+            : "تعذر تحميل الزبائن",
+        );
+      })
+      .finally(() => {
+        if (active) {
+          setCustomersBusy(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    token,
+    clearAuthentication,
+  ]);
 
   useEffect(() => {
     const lineId = lastTouchedLineId.current;
@@ -638,8 +711,29 @@ export default function SalesInvoicePage() {
       return "نوع الفاتورة غير مدعوم حاليًا";
     }
 
-    if (loadedSale === null && paymentMethod !== "cash") {
-      return "الدفع النقدي فقط متاح حاليًا من شاشة الفاتورة";
+    if (
+      loadedSale === null &&
+      paymentMethod !== "cash" &&
+      paymentMethod !== "credit"
+    ) {
+      return "المتاح من شاشة الفاتورة: نقدي أو على حساب الزبون";
+    }
+
+    if (
+      loadedSale === null &&
+      paymentMethod === "credit" &&
+      !selectedCustomerId
+    ) {
+      return "اختر الزبون أولًا للبيع على الحساب";
+    }
+
+    if (
+      loadedSale !== null &&
+      loadedSale.sale.paymentMethod ===
+        "credit" &&
+      editMode
+    ) {
+      return "تعديل فاتورة آجل محفوظة غير متاح من هذه الشاشة حاليًا";
     }
 
     if (
@@ -728,9 +822,19 @@ export default function SalesInvoicePage() {
       return "المبلغ المدفوع غير صالح";
     }
 
+    if (
+      paymentMethod === "credit" &&
+      strictPaidMinor !== 0
+    ) {
+      return "البيع على حساب الزبون يجب أن يكون بدون دفعة";
+    }
+
     const totalMinor = itemsNetMinor - strictInvoiceDiscountMinor;
 
-    if (strictPaidMinor < totalMinor) {
+    if (
+      paymentMethod !== "credit" &&
+      strictPaidMinor < totalMinor
+    ) {
       return "المبلغ المدفوع أقل من قيمة الفاتورة";
     }
 
@@ -858,6 +962,8 @@ export default function SalesInvoicePage() {
           : ("cash" as const),
       discountAmount: invoiceDiscount.trim(),
       paidAmount: paidAmount.trim(),
+      customerId:
+        selectedCustomerId ?? undefined,
       customerName: customerName.trim() || undefined,
       customerPhone: customerPhone.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -946,7 +1052,9 @@ export default function SalesInvoicePage() {
       const confirmed = window.confirm(
         [
           `سيتم حفظ فاتورة جديدة بقيمة ${formatMinor(finalTotalMinor)}.`,
-          "سيتم خصم الكميات من المخزون وإضافة القيمة إلى الصندوق.",
+          paymentMethod === "credit"
+            ? "سيتم خصم الكميات من المخزون وإضافة كامل قيمة الفاتورة إلى حساب الزبون."
+            : "سيتم خصم الكميات من المخزون وإضافة القيمة إلى الصندوق.",
           "",
           "هل تريد المتابعة؟",
         ].join("\n"),
@@ -961,10 +1069,51 @@ export default function SalesInvoicePage() {
 
       createIdempotencyKey.current = requestKey;
 
-      const result = await createPosSale(token, {
-        ...commonInput,
-        idempotencyKey: requestKey,
-      });
+      const result =
+        await createPosSale(
+          token,
+          {
+            registerKey:
+              session.registerKey,
+
+            idempotencyKey:
+              requestKey,
+
+            paymentMethod:
+              paymentMethod ===
+              "credit"
+                ? "credit"
+                : "cash",
+
+            discountAmount:
+              invoiceDiscount.trim(),
+
+            paidAmount:
+              paymentMethod ===
+              "credit"
+                ? "0.00"
+                : paidAmount.trim(),
+
+            customerId:
+              selectedCustomerId ??
+              undefined,
+
+            customerName:
+              customerName.trim() ||
+              undefined,
+
+            customerPhone:
+              customerPhone.trim() ||
+              undefined,
+
+            notes:
+              notes.trim() ||
+              undefined,
+
+            items:
+              getInvoiceRequestItems(),
+          },
+        );
 
       createIdempotencyKey.current = null;
       setLoadedSale(result);
@@ -1035,6 +1184,14 @@ export default function SalesInvoicePage() {
       setWarehouse("main");
 
       setCustomerName(response.sale.customerName ?? "");
+
+      setSelectedCustomerId(
+        response.sale.customerId
+          ? Number(
+              response.sale.customerId,
+            )
+          : null,
+      );
 
       setCustomerPhone(response.sale.customerPhone ?? "");
 
@@ -1290,6 +1447,7 @@ export default function SalesInvoicePage() {
     setInvoiceDateTime(getLocalDateTimeValue());
     setInvoiceType("cash");
     setWarehouse("main");
+    setSelectedCustomerId(null);
     setCustomerName("");
     setCustomerPhone("");
     setRepresentative("");
@@ -1673,14 +1831,65 @@ export default function SalesInvoicePage() {
             <h2>بيانات الزبون</h2>
 
             <div className="accounting-fields-grid">
-              <label className="accounting-wide-field">
-                <span>اسم الزبون</span>
-                <input
-                  placeholder="زبون نقدي"
-                  value={customerName}
-                  onChange={(event) => setCustomerName(event.target.value)}
+              <div className="accounting-wide-field">
+                <CustomerPicker
+                  customers={
+                    customers
+                  }
+                  value={
+                    selectedCustomerId
+                  }
+                  fallbackName={
+                    customerName
+                  }
+                  loading={
+                    customersBusy
+                  }
+                  disabled={
+                    invoiceBusy ||
+                    loadedSale !==
+                      null
+                  }
+                  error={
+                    customersError
+                  }
+                  label="اسم الزبون"
+                  placeholder="بدون حساب زبون"
+                  onChange={(
+                    customer,
+                  ) => {
+                    if (!customer) {
+                      setSelectedCustomerId(
+                        null,
+                      );
+                      setCustomerName(
+                        "",
+                      );
+                      setCustomerPhone(
+                        "",
+                      );
+
+                      return;
+                    }
+
+                    setSelectedCustomerId(
+                      customer.id,
+                    );
+
+                    setCustomerName(
+                      customer.name,
+                    );
+
+                    setCustomerPhone(
+                      customer.phone ??
+                        "",
+                    );
+
+                    // اختيار الزبون لا يغيّر طريقة الدفع.
+                    // المستخدم يختار نقدي أو آجل بشكل مستقل.
+                  }}
                 />
-              </label>
+              </div>
 
               <label>
                 <span>رقم الهاتف</span>
@@ -1688,7 +1897,8 @@ export default function SalesInvoicePage() {
                   dir="ltr"
                   inputMode="tel"
                   value={customerPhone}
-                  onChange={(event) => setCustomerPhone(event.target.value)}
+                  readOnly
+                  placeholder="يظهر بعد اختيار الزبون"
                 />
               </label>
 
@@ -2006,13 +2216,66 @@ export default function SalesInvoicePage() {
                 <span>طريقة الدفع</span>
                 <select
                   value={paymentMethod}
-                  onChange={(event) => setPaymentMethod(event.target.value)}
+                  disabled={
+                    loadedSale !==
+                      null
+                  }
+                  onChange={(event) => {
+                    const next =
+                      event.target
+                        .value;
+
+                    setPaymentMethod(
+                      next,
+                    );
+
+                    if (
+                      next ===
+                      "credit"
+                    ) {
+                      setPaidAmountAuto(
+                        false,
+                      );
+                      setPaidAmount(
+                        "0.00",
+                      );
+                    } else if (
+                      next ===
+                      "cash"
+                    ) {
+                      setPaidAmountAuto(
+                        true,
+                      );
+                      setPaidAmount(
+                        (
+                          finalTotalMinor /
+                          100
+                        ).toFixed(
+                          2,
+                        ),
+                      );
+                    }
+                  }}
                 >
-                  <option value="cash">نقدي</option>
-                  <option value="card" disabled>
+                  <option value="cash">
+                    نقدي
+                  </option>
+
+                  <option value="credit">
+                    آجل — حساب الزبون
+                  </option>
+
+                  <option
+                    value="card"
+                    disabled
+                  >
                     بطاقة — قريبًا
                   </option>
-                  <option value="mixed" disabled>
+
+                  <option
+                    value="mixed"
+                    disabled
+                  >
                     دفع مختلط — قريبًا
                   </option>
                 </select>
@@ -2027,6 +2290,10 @@ export default function SalesInvoicePage() {
                     min="0"
                     step="0.01"
                     value={paidAmount}
+                    disabled={
+                      paymentMethod ===
+                      "credit"
+                    }
                     onChange={(event) => {
                       setPaidAmountAuto(false);
                       setPaidAmount(event.target.value);
