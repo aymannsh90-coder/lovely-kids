@@ -1,4 +1,8 @@
 import {
+  customersTable,
+  financeAccountsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   cashSessionsTable,
   exchangeDocumentsTable,
   exchangeReturnItemCostsTable,
@@ -20,6 +24,10 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  ensureSaleFinanceAccount,
+  financeAssetBalanceMinor,
+} from "./pos-sale-routes";
 import {
   addProductCostAtCurrentAverage,
   allocateProportionalCostMinor,
@@ -111,7 +119,8 @@ export interface ParsedExchangeSaleItem {
 
 export type ExchangeSettlementType =
   | "cash"
-  | "card";
+  | "card"
+  | "customer";
 
 export interface ParsedPosExchangePayload {
   registerKey: string;
@@ -119,6 +128,7 @@ export interface ParsedPosExchangePayload {
   sourceType: PosExchangeSourceType;
   originalSalePublicId: string | null;
   settlementType: ExchangeSettlementType;
+  customerId: number | null;
   returnItems: ParsedExchangeReturnItem[];
   noReceiptReturnItems: ParsedNoReceiptReturnItem[];
   newItems: ParsedExchangeSaleItem[];
@@ -827,10 +837,45 @@ export function parsePosExchangePayload(
 
   if (
     settlementType !== "cash" &&
-    settlementType !== "card"
+    settlementType !== "card" &&
+    settlementType !== "customer"
   ) {
     throw new PosExchangeError(
       "طريقة تسوية فاتورة التبديل غير صالحة",
+    );
+  }
+
+  const rawCustomerId =
+    payload.customerId;
+
+  const customerId =
+    rawCustomerId === undefined ||
+    rawCustomerId === null ||
+    rawCustomerId === ""
+      ? null
+      : Number(rawCustomerId);
+
+  if (
+    customerId !== null &&
+    (
+      !Number.isSafeInteger(
+        customerId,
+      ) ||
+      customerId <= 0
+    )
+  ) {
+    throw new PosExchangeError(
+      "حساب الزبون غير صالح",
+    );
+  }
+
+  if (
+    settlementType ===
+      "customer" &&
+    !customerId
+  ) {
+    throw new PosExchangeError(
+      "اختر الزبون لتسوية فرق التبديل على حسابه",
     );
   }
 
@@ -869,6 +914,7 @@ export function parsePosExchangePayload(
     sourceType,
     originalSalePublicId,
     settlementType,
+    customerId,
     returnItems,
     noReceiptReturnItems,
     newItems:
@@ -3029,6 +3075,123 @@ export async function handleCreatePosExchange(
             );
           }
 
+          let settlementCustomer:
+            typeof customersTable.$inferSelect |
+            null = null;
+
+          let customerAccount:
+            typeof financeAccountsTable.$inferSelect |
+            null = null;
+
+          if (
+            payload.settlementType ===
+            "customer"
+          ) {
+            if (!payload.customerId) {
+              throw new PosExchangeError(
+                "اختر الزبون لتسوية فرق التبديل على حسابه",
+              );
+            }
+
+            const customerRows =
+              await tx
+                .select()
+                .from(
+                  customersTable,
+                )
+                .where(
+                  eq(
+                    customersTable.id,
+                    payload.customerId,
+                  ),
+                )
+                .limit(1);
+
+            settlementCustomer =
+              customerRows[0] ??
+              null;
+
+            if (!settlementCustomer) {
+              throw new PosExchangeError(
+                "الزبون غير موجود",
+                404,
+              );
+            }
+
+            const accountRows =
+              await tx
+                .select()
+                .from(
+                  financeAccountsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      financeAccountsTable
+                        .linkedEntityType,
+                      "customer_receivable",
+                    ),
+                    eq(
+                      financeAccountsTable
+                        .linkedEntityId,
+                      settlementCustomer.id,
+                    ),
+                  ),
+                )
+                .limit(1);
+
+            customerAccount =
+              accountRows[0] ??
+              null;
+
+            const currentBalanceMinor =
+              customerAccount
+                ? await financeAssetBalanceMinor(
+                    tx,
+                    customerAccount.id,
+                  )
+                : 0;
+
+            if (
+              settlementAmountMinor >
+                0 &&
+              settlementCustomer
+                .creditLimitMinor !==
+                null &&
+              currentBalanceMinor +
+                settlementAmountMinor >
+                settlementCustomer
+                  .creditLimitMinor
+            ) {
+              throw new PosExchangeError(
+                "فرق التبديل يتجاوز الحد الائتماني للزبون",
+                409,
+              );
+            }
+
+            if (
+              !payload.validationOnly &&
+              !customerAccount
+            ) {
+              customerAccount =
+                await ensureSaleFinanceAccount(
+                  tx,
+                  {
+                    code:
+                      `CUSTOMER_AR_${settlementCustomer.id}`,
+                    name:
+                      `ذمم الزبون: ${settlementCustomer.name}`,
+                    accountType:
+                      "asset",
+                    linkedEntityType:
+                      "customer_receivable",
+                    linkedEntityId:
+                      settlementCustomer.id,
+                  },
+                );
+            }
+          }
+
           const expectedCashBeforeMinor =
             session.expectedBalanceMinor ??
             session.openingBalanceMinor;
@@ -3420,7 +3583,11 @@ export async function handleCreatePosExchange(
                   payload.settlementType,
 
                 settlementPartyId:
-                  null,
+                  payload.settlementType ===
+                  "customer"
+                    ? settlementCustomer?.id ??
+                      null
+                    : null,
 
                 returnGrossMinor,
                 returnDiscountMinor,
@@ -3440,7 +3607,11 @@ export async function handleCreatePosExchange(
                 settlementAmountMinor,
 
                 customerName:
-                  payload.customerName,
+                  payload.settlementType ===
+                    "customer"
+                    ? settlementCustomer?.name ??
+                      payload.customerName
+                    : payload.customerName,
 
                 reason:
                   payload.reason,
@@ -4467,6 +4638,136 @@ export async function handleCreatePosExchange(
                     consumedCost.costQuality,
                 });
             }
+          }
+
+          // -------------------------------------------------
+          // Customer-account settlement.
+          // Positive = customer owes store.
+          // Negative = customer receives store credit.
+          // -------------------------------------------------
+
+          if (
+            payload.settlementType ===
+              "customer" &&
+            settlementAmountMinor !==
+              0
+          ) {
+            if (
+              !settlementCustomer ||
+              !customerAccount
+            ) {
+              throw new Error(
+                "POS_EXCHANGE_CUSTOMER_ACCOUNT_MISSING",
+              );
+            }
+
+            const salesAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    "POS_SALES_ON_ACCOUNT",
+                  name:
+                    "مبيعات نقطة البيع على الحساب",
+                  accountType:
+                    "income",
+                },
+              );
+
+            const amountMinor =
+              Math.abs(
+                settlementAmountMinor,
+              );
+
+            const financeRows =
+              await tx
+                .insert(
+                  financeTransactionsTable,
+                )
+                .values({
+                  publicId:
+                    `FIN-EXC-AR-${exchange.publicId}`,
+                  idempotencyKey:
+                    `pos-exchange:${exchange.id}:customer-settlement`,
+                  businessDate:
+                    exchange.businessDate,
+                  transactionType:
+                    "adjustment",
+                  sourceType:
+                    "exchange",
+                  sourceId:
+                    String(
+                      exchange.id,
+                    ),
+                  sourceEvent:
+                    "customer_settlement",
+                  cashSessionId:
+                    session.id,
+                  status:
+                    "posted",
+                  notes:
+                    settlementAmountMinor >
+                    0
+                      ? `فرق تبديل ${exchange.publicId} على حساب ${settlementCustomer.name}`
+                      : `رصيد تبديل ${exchange.publicId} للزبون ${settlementCustomer.name}`,
+                  createdByUserId:
+                    user.id,
+                })
+                .returning();
+
+            const financeTransaction =
+              financeRows[0];
+
+            if (!financeTransaction) {
+              throw new Error(
+                "POS_EXCHANGE_CUSTOMER_FINANCE_INSERT_FAILED",
+              );
+            }
+
+            const customerDebit =
+              settlementAmountMinor >
+              0
+                ? amountMinor
+                : 0;
+
+            const customerCredit =
+              settlementAmountMinor <
+              0
+                ? amountMinor
+                : 0;
+
+            await tx
+              .insert(
+                financeTransactionLinesTable,
+              )
+              .values([
+                {
+                  transactionId:
+                    financeTransaction.id,
+                  lineNumber: 1,
+                  accountId:
+                    customerAccount.id,
+                  debitMinor:
+                    customerDebit,
+                  creditMinor:
+                    customerCredit,
+                  memo:
+                    `حساب الزبون ${settlementCustomer.name}`,
+                },
+                {
+                  transactionId:
+                    financeTransaction.id,
+                  lineNumber: 2,
+                  accountId:
+                    salesAccount.id,
+                  debitMinor:
+                    customerCredit,
+                  creditMinor:
+                    customerDebit,
+                  memo:
+                    `فرق التبديل ${exchange.publicId}`,
+                },
+              ]);
           }
 
           // -------------------------------------------------

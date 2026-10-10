@@ -16,8 +16,10 @@ import {
   createPosSaleReturn,
   voidPosSaleReturn,
   getCurrentCashSession,
+  getPosCustomers,
   getPosSaleReturnPreview,
   lookupPosProductByBarcode,
+  type PosCustomer,
   type PosMobileReturnResult,
   type PosProductLookup,
   type PosSaleReturnPreviewResult,
@@ -108,6 +110,23 @@ export default function SalesReturnsPage() {
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [
+    refundMethod,
+    setRefundMethod,
+  ] = useState<
+    "cash" | "card" | "customer"
+  >("cash");
+
+  const [
+    refundCustomerId,
+    setRefundCustomerId,
+  ] = useState<number | null>(
+    null,
+  );
+
+  const [customers, setCustomers] =
+    useState<PosCustomer[]>([]);
+
   const [searchBusy, setSearchBusy] = useState(false);
 
   const [submitBusy, setSubmitBusy] = useState(false);
@@ -165,6 +184,37 @@ export default function SalesReturnsPage() {
     (barcodeReturnUnitMinor ?? 0) * barcodeReturnQuantity;
 
   useEffect(() => {
+    let cancelled = false;
+
+    void getPosCustomers(
+      token,
+      {
+        status: "active",
+      },
+    )
+      .then((result) => {
+        if (!cancelled) {
+          setCustomers(
+            result.results,
+          );
+        }
+      })
+      .catch((caught) => {
+        if (
+          !cancelled &&
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
     if (!session || !requestedPublicId) {
       return;
     }
@@ -202,6 +252,8 @@ export default function SalesReturnsPage() {
     setBarcodeInput("");
     setReason("");
     setNotes("");
+    setRefundMethod("cash");
+    setRefundCustomerId(null);
     setError("");
     setCompletedReturn(null);
     setBarcodeReturnProduct(null);
@@ -461,6 +513,23 @@ export default function SalesReturnsPage() {
       return;
     }
 
+    if (
+      refundMethod === "customer" &&
+      !refundCustomerId
+    ) {
+      setError(
+        "اختر الزبون الذي سيضاف المرتجع إلى حسابه",
+      );
+      return;
+    }
+
+    const refundDescription =
+      refundMethod === "cash"
+        ? "سيتم إرجاع المخزون وخصم مبلغ الاسترداد من الصندوق."
+        : refundMethod === "card"
+          ? "سيتم إرجاع المخزون وتسجيل الاسترداد على البطاقة بدون تغيير الصندوق."
+          : "سيتم إرجاع المخزون وإضافة مبلغ الاسترداد إلى حساب الزبون.";
+
     const confirmed = window.confirm(
       [
         "تأكيد تنفيذ مردود مبيعات؟",
@@ -469,7 +538,7 @@ export default function SalesReturnsPage() {
         `عدد القطع: ${selectedPieces}`,
         `قيمة الأصناف قبل توزيع الخصم: ${formatMoney(selectedGrossMinor)}`,
         "",
-        "سيتم إرجاع المخزون وخصم مبلغ الاسترداد من الصندوق.",
+        refundDescription,
       ].join("\n"),
     );
 
@@ -487,6 +556,13 @@ export default function SalesReturnsPage() {
         publicId: preview.sale.publicId,
         reason,
         notes,
+        refundMethod,
+        customerId:
+          refundMethod ===
+          "customer"
+            ? refundCustomerId ??
+              undefined
+            : undefined,
         items: selectedItems.map(({ item, quantity }) => ({
           originalSaleItemId: item.id,
           quantity,
@@ -610,6 +686,7 @@ export default function SalesReturnsPage() {
     returnPublicId: string,
     refundAmountMinor: number,
     originalSalePublicId: string | null,
+    originalRefundMethod: string,
   ) {
     const enteredReason = window.prompt(
       "أدخل سبب إلغاء المرتجع:",
@@ -633,7 +710,13 @@ export default function SalesReturnsPage() {
         `رقم المرتجع: ${returnPublicId}`,
         `قيمة المرتجع: ${formatMoney(refundAmountMinor)}`,
         "",
-        "سيتم خصم الكمية التي أعادها المرتجع من المخزون وإعادة مبلغ المرتجع إلى رصيد الصندوق.",
+        originalRefundMethod ===
+        "cash"
+          ? "سيتم خصم الكمية من المخزون وإعادة مبلغ المرتجع إلى رصيد الصندوق."
+          : originalRefundMethod ===
+              "customer"
+            ? "سيتم خصم الكمية من المخزون وعكس حركة حساب الزبون."
+            : "سيتم خصم الكمية من المخزون وعكس استرداد البطاقة.",
       ].join("\n"),
     );
 
@@ -838,6 +921,7 @@ export default function SalesReturnsPage() {
                   completedReturn.saleReturn.publicId,
                   completedReturn.saleReturn.refundAmountMinor,
                   preview?.sale.publicId ?? null,
+                  completedReturn.saleReturn.refundMethod,
                 )
               }
             >
@@ -882,6 +966,7 @@ export default function SalesReturnsPage() {
                   completedBarcodeReturn.saleReturn.publicId,
                   completedBarcodeReturn.saleReturn.refundAmountMinor,
                   null,
+                  "cash",
                 )
               }
             >
@@ -1416,6 +1501,200 @@ export default function SalesReturnsPage() {
                     placeholder="تفاصيل إضافية عن المرتجع"
                   />
                 </label>
+              </div>
+
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 14,
+                  border:
+                    "1px solid #d9e0e5",
+                  borderRadius: 10,
+                }}
+              >
+                <strong>
+                  طريقة الاسترداد
+                </strong>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 14,
+                    flexWrap: "wrap",
+                    marginTop: 10,
+                  }}
+                >
+                  {(
+                    [
+                      [
+                        "cash",
+                        "نقدي",
+                      ],
+                      [
+                        "card",
+                        "فيزا / بطاقة",
+                      ],
+                      [
+                        "customer",
+                        "حساب الزبون",
+                      ],
+                    ] as const
+                  ).map(
+                    ([
+                      method,
+                      label,
+                    ]) => (
+                      <label
+                        key={method}
+                        style={{
+                          display:
+                            "flex",
+                          alignItems:
+                            "center",
+                          gap: 6,
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="sale-return-refund-method"
+                          checked={
+                            refundMethod ===
+                            method
+                          }
+                          onChange={() => {
+                            setRefundMethod(
+                              method,
+                            );
+
+                            if (
+                              method !==
+                              "customer"
+                            ) {
+                              setRefundCustomerId(
+                                null,
+                              );
+                            }
+
+                            setCompletedReturn(
+                              null,
+                            );
+
+                            setIdempotencyKey(
+                              createIdempotencyKey(),
+                            );
+                          }}
+                        />
+
+                        {label}
+                      </label>
+                    ),
+                  )}
+                </div>
+
+                {refundMethod ===
+                  "customer" && (
+                  <label
+                    className="sales-return-field"
+                    style={{
+                      display:
+                        "block",
+                      marginTop: 12,
+                    }}
+                  >
+                    <span>
+                      حساب الزبون
+                    </span>
+
+                    <select
+                      value={
+                        refundCustomerId ??
+                        ""
+                      }
+                      disabled={
+                        submitBusy
+                      }
+                      onChange={(
+                        event,
+                      ) => {
+                        const id =
+                          Number(
+                            event
+                              .target
+                              .value,
+                          );
+
+                        setRefundCustomerId(
+                          Number
+                            .isSafeInteger(
+                              id,
+                            ) &&
+                            id > 0
+                            ? id
+                            : null,
+                        );
+
+                        setCompletedReturn(
+                          null,
+                        );
+
+                        setIdempotencyKey(
+                          createIdempotencyKey(),
+                        );
+                      }}
+                    >
+                      <option value="">
+                        اختر الزبون
+                      </option>
+
+                      {customers.map(
+                        (
+                          customer,
+                        ) => (
+                          <option
+                            key={
+                              customer.id
+                            }
+                            value={
+                              customer.id
+                            }
+                          >
+                            {
+                              customer.name
+                            }
+                            {" — "}
+                            {customer
+                              .balanceMinor >
+                            0
+                              ? `عليه ${formatMoney(
+                                  customer
+                                    .balanceMinor,
+                                )}`
+                              : customer
+                                    .balanceMinor <
+                                  0
+                                ? `له ${formatMoney(
+                                    Math.abs(
+                                      customer
+                                        .balanceMinor,
+                                    ),
+                                  )}`
+                                : "الحساب مسدد"}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                )}
+
+                <small
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 10,
+                  }}
+                >
+                  عند اختيار حساب الزبون، مبلغ المرتجع ينزل رصيدًا له بدون إخراج نقدي من الصندوق.
+                </small>
               </div>
 
               <div className="sales-return-final-row">

@@ -23,12 +23,14 @@ import {
   receiveOnlineExchangeReturn,
   getPosExchangeByPublicId,
   getPosExchangePreview,
+  getPosCustomers,
   lookupPosProductByBarcode,
   quotePosExchange,
   searchPosProducts,
   type OnlineExchangeDeliveryDiscountMode,
   type OnlineOrderExchangePreviewResult,
   type OnlineOrderExchangeResult,
+  type PosCustomer,
   type PosExchangeCreateInput,
   type PosExchangeCreateResult,
   type PosExchangePreviewResult,
@@ -337,6 +339,16 @@ export default function ExchangePage() {
   const [customerName, setCustomerName] =
     useState("");
 
+  const [customers, setCustomers] =
+    useState<PosCustomer[]>([]);
+
+  const [
+    selectedCustomerId,
+    setSelectedCustomerId,
+  ] = useState<number | null>(
+    null,
+  );
+
   const [
     historyLoadBusy,
     setHistoryLoadBusy,
@@ -529,6 +541,37 @@ export default function ExchangePage() {
     setExchangeVoided,
   ] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void getPosCustomers(
+      token,
+      {
+        status: "active",
+      },
+    )
+      .then((result) => {
+        if (!cancelled) {
+          setCustomers(
+            result.results,
+          );
+        }
+      })
+      .catch((caught) => {
+        if (
+          !cancelled &&
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   const selectedItems = useMemo(() => {
     if (!preview) {
       return [];
@@ -700,6 +743,16 @@ export default function ExchangePage() {
       );
     }
 
+    if (
+      settlementType ===
+        "customer" &&
+      !selectedCustomerId
+    ) {
+      throw new Error(
+        "اختر الزبون لتسوية فرق التبديل على حسابه",
+      );
+    }
+
     const discountMinor =
       moneyToMinor(
         newInvoiceDiscount,
@@ -772,6 +825,13 @@ export default function ExchangePage() {
       idempotencyKey,
 
       settlementType,
+
+      customerId:
+        settlementType ===
+        "customer"
+          ? selectedCustomerId ??
+            undefined
+          : undefined,
 
       newItems,
 
@@ -2308,6 +2368,7 @@ export default function ExchangePage() {
 
     setNewInvoiceDiscount("0.00");
     setSettlementType("cash");
+    setSelectedCustomerId(null);
 
     setQuote(null);
     setQuoteSignature("");
@@ -5783,11 +5844,137 @@ export default function ExchangePage() {
 
                 بطاقة Card
               </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  alignItems:
+                    "center",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="exchange-settlement"
+                  checked={
+                    settlementType ===
+                    "customer"
+                  }
+                  onChange={() => {
+                    setSettlementType(
+                      "customer",
+                    );
+
+                    setQuote(null);
+                    setQuoteSignature("");
+                    setQuoteError("");
+                  }}
+                />
+
+                حساب الزبون
+              </label>
             </div>
+
+            {settlementType ===
+              "customer" && (
+              <label
+                className="sales-return-field"
+                style={{
+                  display: "block",
+                  marginTop: 12,
+                }}
+              >
+                <span>
+                  حساب الزبون
+                </span>
+
+                <select
+                  value={
+                    selectedCustomerId ??
+                    ""
+                  }
+                  onChange={(
+                    event,
+                  ) => {
+                    const id =
+                      Number(
+                        event.target
+                          .value,
+                      );
+
+                    const customer =
+                      customers.find(
+                        (item) =>
+                          item.id === id,
+                      ) ??
+                      null;
+
+                    setSelectedCustomerId(
+                      customer?.id ??
+                        null,
+                    );
+
+                    if (customer) {
+                      setCustomerName(
+                        customer.name,
+                      );
+                    }
+
+                    setQuote(null);
+                    setQuoteSignature("");
+                    setQuoteError("");
+                  }}
+                >
+                  <option value="">
+                    اختر الزبون
+                  </option>
+
+                  {customers.map(
+                    (
+                      customer,
+                    ) => (
+                      <option
+                        key={
+                          customer.id
+                        }
+                        value={
+                          customer.id
+                        }
+                      >
+                        {
+                          customer.name
+                        }
+                        {" — "}
+                        {customer
+                          .balanceMinor >
+                        0
+                          ? `عليه ${formatMoney(
+                              customer
+                                .balanceMinor,
+                            )}`
+                          : customer
+                                .balanceMinor <
+                              0
+                            ? `له ${formatMoney(
+                                Math.abs(
+                                  customer
+                                    .balanceMinor,
+                                ),
+                              )}`
+                            : "الحساب مسدد"}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            )}
 
             <small>
               البطاقة مسموحة فقط إذا كان
               هناك مبلغ إضافي على الزبون.
+              حساب الزبون يسجل فرق التبديل
+              عليه إذا كان الفرق موجبًا،
+              أو له إذا كان الفرق سالبًا.
             </small>
           </div>
         </div>
@@ -5967,7 +6154,11 @@ export default function ExchangePage() {
                   .settlementType ===
                 "cash"
                   ? "نقدي Cash"
-                  : "بطاقة Card"}
+                  : activeQuote
+                        .settlementType ===
+                      "customer"
+                    ? "حساب الزبون"
+                    : "بطاقة Card"}
               </strong>
             </div>
 

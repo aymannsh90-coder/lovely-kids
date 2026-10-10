@@ -1,4 +1,8 @@
 import {
+  customersTable,
+  financeAccountsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   inventoryMovementsTable,
   cashSessionsTable,
   posSaleItemCostsTable,
@@ -15,6 +19,9 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  ensureSaleFinanceAccount,
+} from "./pos-sale-routes";
 import {
   addProductCostAtCurrentAverage,
   allocateProportionalCostMinor,
@@ -247,6 +254,11 @@ function toReturnResponse(
 
       originalSaleId: String(saleReturn.originalSaleId),
 
+      customerId:
+        saleReturn.customerId === null
+          ? null
+          : String(saleReturn.customerId),
+
       cashSessionId: String(saleReturn.cashSessionId),
       registerKey: saleReturn.registerKey,
       businessDate: saleReturn.businessDate,
@@ -401,6 +413,51 @@ export async function handleCreatePosSaleReturn(
 
     const notes = parseOptionalText(payload.notes, 1000, "ملاحظات المرتجع");
 
+    const refundMethodRaw =
+      payload.refundMethod === undefined
+        ? "cash"
+        : payload.refundMethod;
+
+    if (
+      refundMethodRaw !== "cash" &&
+      refundMethodRaw !== "card" &&
+      refundMethodRaw !== "customer"
+    ) {
+      throw new PosSaleReturnError(
+        "طريقة استرداد المرتجع غير صالحة",
+      );
+    }
+
+    const refundMethod =
+      refundMethodRaw as
+        | "cash"
+        | "card"
+        | "customer";
+
+    const rawCustomerId =
+      payload.customerId;
+
+    const requestedCustomerId =
+      rawCustomerId === undefined ||
+      rawCustomerId === null ||
+      rawCustomerId === ""
+        ? null
+        : Number(rawCustomerId);
+
+    if (
+      requestedCustomerId !== null &&
+      (
+        !Number.isSafeInteger(
+          requestedCustomerId,
+        ) ||
+        requestedCustomerId <= 0
+      )
+    ) {
+      throw new PosSaleReturnError(
+        "حساب الزبون غير صالح",
+      );
+    }
+
     const requestedItems = parseReturnItems(payload.items);
 
     const existing = await getExistingReturn(db, idempotencyKey);
@@ -456,14 +513,107 @@ export async function handleCreatePosSaleReturn(
       }
 
       if (
-        sale.paymentMethod === "credit" ||
-        sale.paymentMethod === "mixed" ||
-        sale.accountDueMinor > 0
+        refundMethod !== "customer" &&
+        (
+          sale.paymentMethod === "credit" ||
+          sale.paymentMethod === "mixed" ||
+          sale.accountDueMinor > 0
+        )
       ) {
         throw new PosSaleReturnError(
-          "لا يمكن تنفيذ مرتجع نقدي مباشرة لفاتورة عليها ذمة زبون قبل تسوية حساب الزبون",
+          "الفاتورة مرتبطة بذمة زبون؛ اختر الاسترداد إلى حساب الزبون",
           409,
         );
+      }
+
+      if (
+        refundMethod !== "customer" &&
+        requestedCustomerId !== null
+      ) {
+        throw new PosSaleReturnError(
+          "لا يجوز تحديد حساب زبون مع الاسترداد النقدي أو البطاقة",
+        );
+      }
+
+      const effectiveCustomerId =
+        refundMethod === "customer"
+          ? (
+              requestedCustomerId ??
+              sale.customerId
+            )
+          : null;
+
+      if (
+        refundMethod === "customer" &&
+        !effectiveCustomerId
+      ) {
+        throw new PosSaleReturnError(
+          "اختر الزبون الذي سيضاف المرتجع إلى حسابه",
+        );
+      }
+
+      if (
+        refundMethod === "customer" &&
+        sale.customerId !== null &&
+        effectiveCustomerId !==
+          sale.customerId
+      ) {
+        throw new PosSaleReturnError(
+          "يجب تسجيل المرتجع على نفس حساب الزبون المرتبط بالفاتورة",
+          409,
+        );
+      }
+
+      let refundCustomer:
+        typeof customersTable.$inferSelect |
+        null = null;
+
+      let customerAccount:
+        typeof financeAccountsTable.$inferSelect |
+        null = null;
+
+      if (
+        refundMethod === "customer" &&
+        effectiveCustomerId
+      ) {
+        const customerRows =
+          await tx
+            .select()
+            .from(customersTable)
+            .where(
+              eq(
+                customersTable.id,
+                effectiveCustomerId,
+              ),
+            )
+            .limit(1);
+
+        refundCustomer =
+          customerRows[0] ?? null;
+
+        if (!refundCustomer) {
+          throw new PosSaleReturnError(
+            "الزبون غير موجود",
+            404,
+          );
+        }
+
+        customerAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                `CUSTOMER_AR_${refundCustomer.id}`,
+              name:
+                `ذمم الزبون: ${refundCustomer.name}`,
+              accountType:
+                "asset",
+              linkedEntityType:
+                "customer_receivable",
+              linkedEntityId:
+                refundCustomer.id,
+            },
+          );
       }
 
       const sessionRows = await tx
@@ -812,16 +962,27 @@ export async function handleCreatePosSaleReturn(
       }
 
       const expectedBefore =
-        session.expectedBalanceMinor ?? session.openingBalanceMinor;
+        session.expectedBalanceMinor ??
+        session.openingBalanceMinor;
 
-      if (expectedBefore < refundAmountMinor) {
-        throw new PosSaleReturnError(
-          "رصيد الصندوق لا يكفي لتنفيذ مبلغ المرتجع",
-          409,
-        );
+      let expectedAfter =
+        expectedBefore;
+
+      if (refundMethod === "cash") {
+        if (
+          expectedBefore <
+          refundAmountMinor
+        ) {
+          throw new PosSaleReturnError(
+            "رصيد الصندوق لا يكفي لتنفيذ مبلغ المرتجع",
+            409,
+          );
+        }
+
+        expectedAfter =
+          expectedBefore -
+          refundAmountMinor;
       }
-
-      const expectedAfter = expectedBefore - refundAmountMinor;
 
       const returnLines: Array<typeof posSaleReturnItemsTable.$inferInsert> =
         [];
@@ -1039,6 +1200,9 @@ export async function handleCreatePosSaleReturn(
 
           originalSaleId: sale.id,
 
+          customerId:
+            effectiveCustomerId,
+
           cashSessionId: session.id,
           registerKey,
           businessDate: session.businessDate,
@@ -1046,7 +1210,7 @@ export async function handleCreatePosSaleReturn(
           cashierUserId: auth.user.id,
 
           status: "completed",
-          refundMethod: "cash",
+          refundMethod,
 
           grossAmountMinor,
           discountAmountMinor,
@@ -1402,24 +1566,137 @@ export async function handleCreatePosSaleReturn(
           });
       }
 
-      const updatedSessionRows = await tx
-        .update(cashSessionsTable)
-        .set({
-          expectedBalanceMinor: expectedAfter,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(cashSessionsTable.id, session.id),
-            eq(cashSessionsTable.status, "open"),
-          ),
-        )
-        .returning({
-          id: cashSessionsTable.id,
-        });
+      if (
+        refundMethod === "customer" &&
+        refundAmountMinor > 0
+      ) {
+        if (
+          !refundCustomer ||
+          !customerAccount
+        ) {
+          throw new Error(
+            "POS_RETURN_CUSTOMER_ACCOUNT_MISSING",
+          );
+        }
 
-      if (!updatedSessionRows[0]) {
-        throw new PosSaleReturnError("تم إغلاق الصندوق قبل إتمام المرتجع", 409);
+        const salesAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                "POS_SALES_ON_ACCOUNT",
+              name:
+                "مبيعات نقطة البيع على الحساب",
+              accountType:
+                "income",
+            },
+          );
+
+        const financeRows =
+          await tx
+            .insert(
+              financeTransactionsTable,
+            )
+            .values({
+              publicId:
+                `FIN-RET-AR-${saleReturn.publicId}`,
+              idempotencyKey:
+                `pos-sale-return:${saleReturn.id}:customer-credit`,
+              businessDate:
+                saleReturn.businessDate,
+              transactionType:
+                "refund",
+              sourceType:
+                "pos_sale_return",
+              sourceId:
+                String(saleReturn.id),
+              sourceEvent:
+                "customer_credit",
+              cashSessionId:
+                session.id,
+              status:
+                "posted",
+              notes:
+                `مردود ${saleReturn.publicId} إلى حساب ${refundCustomer.name}`,
+              createdByUserId:
+                auth.user.id,
+            })
+            .returning();
+
+        const financeTransaction =
+          financeRows[0];
+
+        if (!financeTransaction) {
+          throw new Error(
+            "POS_RETURN_CUSTOMER_FINANCE_INSERT_FAILED",
+          );
+        }
+
+        await tx
+          .insert(
+            financeTransactionLinesTable,
+          )
+          .values([
+            {
+              transactionId:
+                financeTransaction.id,
+              lineNumber: 1,
+              accountId:
+                salesAccount.id,
+              debitMinor:
+                refundAmountMinor,
+              creditMinor: 0,
+              memo:
+                `مردود ${saleReturn.publicId}`,
+            },
+            {
+              transactionId:
+                financeTransaction.id,
+              lineNumber: 2,
+              accountId:
+                customerAccount.id,
+              debitMinor: 0,
+              creditMinor:
+                refundAmountMinor,
+              memo:
+                `رصيد للزبون ${refundCustomer.name}`,
+            },
+          ]);
+      }
+
+      if (refundMethod === "cash") {
+        const updatedSessionRows =
+          await tx
+            .update(cashSessionsTable)
+            .set({
+              expectedBalanceMinor:
+                expectedAfter,
+              updatedAt:
+                new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  session.id,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .returning({
+              id:
+                cashSessionsTable.id,
+            });
+
+        if (!updatedSessionRows[0]) {
+          throw new PosSaleReturnError(
+            "تم إغلاق الصندوق قبل إتمام المرتجع",
+            409,
+          );
+        }
       }
 
       return {

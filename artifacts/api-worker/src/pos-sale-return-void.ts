@@ -1,4 +1,6 @@
 import {
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   cashSessionsTable,
   inventoryMovementsTable,
   posSaleReturnItemCostsTable,
@@ -253,8 +255,11 @@ export async function handleVoidPosSaleReturn(
             session.openingBalanceMinor;
 
           const expectedAfter =
-            expectedBefore +
-            saleReturn.refundAmountMinor;
+            saleReturn.refundMethod ===
+            "cash"
+              ? expectedBefore +
+                saleReturn.refundAmountMinor
+              : expectedBefore;
 
           if (
             !Number.isSafeInteger(
@@ -752,42 +757,205 @@ export async function handleVoidPosSaleReturn(
             }
           }
 
-          const sessionRowsUpdated =
+          if (
+            saleReturn.refundMethod ===
+              "customer" &&
+            saleReturn.refundAmountMinor >
+              0
+          ) {
+            const financeRows =
+              await tx
+                .select()
+                .from(
+                  financeTransactionsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      financeTransactionsTable.sourceType,
+                      "pos_sale_return",
+                    ),
+                    eq(
+                      financeTransactionsTable.sourceId,
+                      String(
+                        saleReturn.id,
+                      ),
+                    ),
+                    eq(
+                      financeTransactionsTable.sourceEvent,
+                      "customer_credit",
+                    ),
+                    eq(
+                      financeTransactionsTable.status,
+                      "posted",
+                    ),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+
+            const originalFinance =
+              financeRows[0];
+
+            if (!originalFinance) {
+              throw new PosSaleReturnVoidError(
+                "تعذر العثور على قيد حساب الزبون للمرتجع",
+                409,
+              );
+            }
+
+            const originalLines =
+              await tx
+                .select()
+                .from(
+                  financeTransactionLinesTable,
+                )
+                .where(
+                  eq(
+                    financeTransactionLinesTable
+                      .transactionId,
+                    originalFinance.id,
+                  ),
+                )
+                .orderBy(
+                  asc(
+                    financeTransactionLinesTable
+                      .lineNumber,
+                  ),
+                );
+
+            if (
+              originalLines.length < 2
+            ) {
+              throw new Error(
+                "POS_RETURN_CUSTOMER_FINANCE_LINES_MISSING",
+              );
+            }
+
+            const reversalRows =
+              await tx
+                .insert(
+                  financeTransactionsTable,
+                )
+                .values({
+                  publicId:
+                    `FIN-RET-VOID-${saleReturn.publicId}`,
+                  idempotencyKey:
+                    `pos-sale-return:${saleReturn.id}:customer-credit:void`,
+                  businessDate:
+                    saleReturn.businessDate,
+                  transactionType:
+                    "reversal",
+                  sourceType:
+                    "pos_sale_return",
+                  sourceId:
+                    String(
+                      saleReturn.id,
+                    ),
+                  sourceEvent:
+                    "customer_credit_void",
+                  cashSessionId:
+                    saleReturn.cashSessionId,
+                  status:
+                    "posted",
+                  notes:
+                    `عكس مردود حساب الزبون ${saleReturn.publicId}`,
+                  createdByUserId:
+                    user.id,
+                })
+                .returning();
+
+            const reversal =
+              reversalRows[0];
+
+            if (!reversal) {
+              throw new Error(
+                "POS_RETURN_CUSTOMER_REVERSAL_FAILED",
+              );
+            }
+
+            await tx
+              .insert(
+                financeTransactionLinesTable,
+              )
+              .values(
+                originalLines.map(
+                  (line, index) => ({
+                    transactionId:
+                      reversal.id,
+                    lineNumber:
+                      index + 1,
+                    accountId:
+                      line.accountId,
+                    debitMinor:
+                      line.creditMinor,
+                    creditMinor:
+                      line.debitMinor,
+                    memo:
+                      `عكس ${saleReturn.publicId}`,
+                  }),
+                ),
+              );
+
             await tx
               .update(
-                cashSessionsTable,
+                financeTransactionsTable,
               )
               .set({
-                expectedBalanceMinor:
-                  expectedAfter,
-
+                status:
+                  "reversed",
                 updatedAt:
                   voidedAt,
               })
               .where(
-                and(
-                  eq(
-                    cashSessionsTable.id,
-                    session.id,
-                  ),
-                  eq(
-                    cashSessionsTable.status,
-                    "open",
-                  ),
+                eq(
+                  financeTransactionsTable.id,
+                  originalFinance.id,
                 ),
-              )
-              .returning({
-                id:
-                  cashSessionsTable.id,
-              });
+              );
+          }
 
           if (
-            !sessionRowsUpdated[0]
+            saleReturn.refundMethod ===
+            "cash"
           ) {
-            throw new PosSaleReturnVoidError(
-              "تم إغلاق الصندوق قبل إلغاء المرتجع",
-              409,
-            );
+            const sessionRowsUpdated =
+              await tx
+                .update(
+                  cashSessionsTable,
+                )
+                .set({
+                  expectedBalanceMinor:
+                    expectedAfter,
+
+                  updatedAt:
+                    voidedAt,
+                })
+                .where(
+                  and(
+                    eq(
+                      cashSessionsTable.id,
+                      session.id,
+                    ),
+                    eq(
+                      cashSessionsTable.status,
+                      "open",
+                    ),
+                  ),
+                )
+                .returning({
+                  id:
+                    cashSessionsTable.id,
+                });
+
+            if (
+              !sessionRowsUpdated[0]
+            ) {
+              throw new PosSaleReturnVoidError(
+                "تم إغلاق الصندوق قبل إلغاء المرتجع",
+                409,
+              );
+            }
           }
 
           const updatedRows =

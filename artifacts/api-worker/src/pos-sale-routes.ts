@@ -300,7 +300,7 @@ function getPublicId(businessDate: string): string {
 }
 
 
-async function ensureSaleFinanceAccount(
+export async function ensureSaleFinanceAccount(
   tx: any,
   input: {
     code: string;
@@ -400,7 +400,7 @@ async function ensureSaleFinanceAccount(
   return retryRows[0];
 }
 
-async function financeAssetBalanceMinor(
+export async function financeAssetBalanceMinor(
   tx: any,
   accountId: number,
 ) {

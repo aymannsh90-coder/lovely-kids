@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { cashSessionsTable } from "./cash-sessions";
+import { customersTable } from "./customers";
 import { posSaleItemsTable, posSalesTable } from "./pos-sales";
 import { productsTable } from "./products";
 import { usersTable } from "./users";
@@ -26,6 +27,11 @@ export const posSaleReturnsTable = pgTable(
 
     originalSaleId: integer("original_sale_id")
       .references(() => posSalesTable.id, {
+        onDelete: "restrict",
+      }),
+
+    customerId: integer("customer_id")
+      .references(() => customersTable.id, {
         onDelete: "restrict",
       }),
 
@@ -92,7 +98,22 @@ export const posSaleReturnsTable = pgTable(
 
     check(
       "pos_sale_returns_refund_method_valid",
-      sql`${table.refundMethod} in ('cash')`,
+      sql`${table.refundMethod} in ('cash', 'card', 'customer')`,
+    ),
+
+    check(
+      "pos_sale_returns_customer_refund_valid",
+      sql`
+        (
+          ${table.refundMethod} = 'customer'
+          and ${table.customerId} is not null
+        )
+        or
+        (
+          ${table.refundMethod} in ('cash', 'card')
+          and ${table.customerId} is null
+        )
+      `,
     ),
 
     check(
@@ -147,6 +168,8 @@ export const posSaleReturnsTable = pgTable(
     index("pos_sale_returns_business_date_idx").on(table.businessDate),
 
     index("pos_sale_returns_cashier_idx").on(table.cashierUserId),
+
+    index("pos_sale_returns_customer_idx").on(table.customerId),
 
     index("pos_sale_returns_created_at_idx").on(table.createdAt),
   ],

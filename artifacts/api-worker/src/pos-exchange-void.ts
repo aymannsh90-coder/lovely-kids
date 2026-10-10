@@ -1,4 +1,6 @@
 import {
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   cashSessionsTable,
   exchangeDocumentsTable,
   exchangeReturnItemCostsTable,
@@ -317,7 +319,9 @@ export async function handleVoidPosExchange(
             exchange.settlementType !==
               "cash" &&
             exchange.settlementType !==
-              "card"
+              "card" &&
+            exchange.settlementType !==
+              "customer"
           ) {
             throw new PosExchangeVoidError(
               "طريقة تسوية فاتورة التبديل غير مدعومة",
@@ -1344,6 +1348,172 @@ export async function handleVoidPosExchange(
                 409,
               );
             }
+          }
+
+          if (
+            exchange.settlementType ===
+              "customer" &&
+            exchange.settlementAmountMinor !==
+              0
+          ) {
+            const financeRows =
+              await tx
+                .select()
+                .from(
+                  financeTransactionsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      financeTransactionsTable
+                        .sourceType,
+                      "exchange",
+                    ),
+                    eq(
+                      financeTransactionsTable
+                        .sourceId,
+                      String(
+                        exchange.id,
+                      ),
+                    ),
+                    eq(
+                      financeTransactionsTable
+                        .sourceEvent,
+                      "customer_settlement",
+                    ),
+                    eq(
+                      financeTransactionsTable
+                        .status,
+                      "posted",
+                    ),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+
+            const originalFinance =
+              financeRows[0];
+
+            if (!originalFinance) {
+              throw new PosExchangeVoidError(
+                "تعذر العثور على قيد حساب الزبون لفاتورة التبديل",
+                409,
+              );
+            }
+
+            const originalLines =
+              await tx
+                .select()
+                .from(
+                  financeTransactionLinesTable,
+                )
+                .where(
+                  eq(
+                    financeTransactionLinesTable
+                      .transactionId,
+                    originalFinance.id,
+                  ),
+                )
+                .orderBy(
+                  asc(
+                    financeTransactionLinesTable
+                      .lineNumber,
+                  ),
+                );
+
+            if (
+              originalLines.length <
+              2
+            ) {
+              throw new Error(
+                "POS_EXCHANGE_CUSTOMER_FINANCE_LINES_MISSING",
+              );
+            }
+
+            const reversalRows =
+              await tx
+                .insert(
+                  financeTransactionsTable,
+                )
+                .values({
+                  publicId:
+                    `FIN-EXC-VOID-${exchange.publicId}`,
+                  idempotencyKey:
+                    `pos-exchange:${exchange.id}:customer-settlement:void`,
+                  businessDate:
+                    exchange.businessDate,
+                  transactionType:
+                    "reversal",
+                  sourceType:
+                    "exchange",
+                  sourceId:
+                    String(
+                      exchange.id,
+                    ),
+                  sourceEvent:
+                    "customer_settlement_void",
+                  cashSessionId:
+                    exchange.cashSessionId,
+                  status:
+                    "posted",
+                  notes:
+                    `عكس حركة حساب الزبون لفاتورة التبديل ${exchange.publicId}`,
+                  createdByUserId:
+                    user.id,
+                })
+                .returning();
+
+            const reversal =
+              reversalRows[0];
+
+            if (!reversal) {
+              throw new Error(
+                "POS_EXCHANGE_CUSTOMER_REVERSAL_FAILED",
+              );
+            }
+
+            await tx
+              .insert(
+                financeTransactionLinesTable,
+              )
+              .values(
+                originalLines.map(
+                  (
+                    line,
+                    index,
+                  ) => ({
+                    transactionId:
+                      reversal.id,
+                    lineNumber:
+                      index + 1,
+                    accountId:
+                      line.accountId,
+                    debitMinor:
+                      line.creditMinor,
+                    creditMinor:
+                      line.debitMinor,
+                    memo:
+                      `عكس ${exchange.publicId}`,
+                  }),
+                ),
+              );
+
+            await tx
+              .update(
+                financeTransactionsTable,
+              )
+              .set({
+                status:
+                  "reversed",
+                updatedAt:
+                  voidedAt,
+              })
+              .where(
+                eq(
+                  financeTransactionsTable.id,
+                  originalFinance.id,
+                ),
+              );
           }
 
           if (

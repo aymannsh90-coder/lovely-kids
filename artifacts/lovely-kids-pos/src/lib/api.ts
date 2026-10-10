@@ -857,6 +857,7 @@ export interface PosSaleReturnResult {
     publicId: string;
 
     originalSaleId: string;
+    customerId: string | null;
     cashSessionId: string;
 
     registerKey: string;
@@ -893,6 +894,13 @@ export function createPosSaleReturn(
     reason: string;
     notes?: string;
 
+    refundMethod:
+      | "cash"
+      | "card"
+      | "customer";
+
+    customerId?: number;
+
     items: Array<{
       originalSaleItemId: string;
       quantity: number;
@@ -909,6 +917,10 @@ export function createPosSaleReturn(
         publicId: input.publicId.trim().toUpperCase(),
         reason: input.reason,
         notes: input.notes || undefined,
+        refundMethod:
+          input.refundMethod,
+        customerId:
+          input.customerId,
         items: input.items,
       }),
     },
@@ -1675,7 +1687,8 @@ export type PosExchangeSourceType =
 
 export type PosExchangeSettlementType =
   | "cash"
-  | "card";
+  | "card"
+  | "customer";
 
 export interface PosExchangePreviewItem {
   id: string;
@@ -1795,6 +1808,8 @@ interface PosExchangeCreateBaseInput {
   idempotencyKey: string;
 
   settlementType: PosExchangeSettlementType;
+
+  customerId?: number;
 
   newItems: PosExchangeNewItemInput[];
 
