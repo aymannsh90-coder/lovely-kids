@@ -231,6 +231,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "customer-statement",
+    group: "reports",
+    path: "/reports/customer-statement",
+    title: "كشف حساب زبون",
+    description: "كشف كامل لحركات ورصيد الزبون مع طباعة A4.",
+    icon: "📒",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "reports",
     group: "reports",
     path: "/reports",

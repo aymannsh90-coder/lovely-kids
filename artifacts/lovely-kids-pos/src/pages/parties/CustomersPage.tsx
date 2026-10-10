@@ -817,7 +817,7 @@ export default function CustomersPage() {
                     disabled={!session}
                     onClick={() =>
                       navigate(
-                        `/sales/new?customerId=${selected.id}&account=1`,
+                        `/sales/pos?customerId=${selected.id}&account=1`,
                       )
                     }
                   >

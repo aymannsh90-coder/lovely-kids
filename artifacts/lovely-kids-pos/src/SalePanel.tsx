@@ -787,6 +787,41 @@ export default function SalePanel({
     focusLineField(targetId, "quantity");
   }
 
+  // AUTO_CUSTOMER_ACCOUNT_SELECTION
+  // Choosing a registered customer automatically prepares
+  // the invoice as a full customer-account sale.
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      return;
+    }
+
+    const customer =
+      customers.find(
+        (item) =>
+          String(item.id) ===
+          selectedCustomerId,
+      );
+
+    if (!customer) {
+      return;
+    }
+
+    setCustomerName(
+      customer.name,
+    );
+
+    setCustomerPhone(
+      customer.phone ?? "",
+    );
+
+    setPaymentMethod(
+      "credit",
+    );
+  }, [
+    selectedCustomerId,
+    customers,
+  ]);
+
   async function completeSale(
     settlement?: {
       amount: string;
