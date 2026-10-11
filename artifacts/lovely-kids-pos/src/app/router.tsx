@@ -28,6 +28,7 @@ import TodaySalesPage from "../pages/sales/TodaySalesPage";
 import CustomerBalancesReportPage from "../pages/reports/CustomerBalancesReportPage";
 import CustomerStatementReportPage from "../pages/reports/CustomerStatementReportPage";
 import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
+import StatementsPage from "../pages/reports/StatementsPage";
 
 export default function AppRouter() {
   return (
@@ -222,6 +223,15 @@ export default function AppRouter() {
         <Route
           path="finance/delivery-company"
           element={<DeliveryCompanyAccountingPage />}
+        />
+
+        <Route
+          path="statements"
+          element={
+            <RequireOwner>
+              <StatementsPage />
+            </RequireOwner>
+          }
         />
 
         <Route
