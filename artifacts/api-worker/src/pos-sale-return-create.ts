@@ -17,6 +17,9 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  ensureCustomerReceivableControlAccount,
+} from "./finance-customer-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import {
   ensureSaleFinanceAccount,
@@ -591,20 +594,8 @@ export async function handleCreatePosSaleReturn(
         refundCustomer
       ) {
         customerAccount =
-          await ensureSaleFinanceAccount(
+          await ensureCustomerReceivableControlAccount(
             tx,
-            {
-              code:
-                `CUSTOMER_AR_${refundCustomer.id}`,
-              name:
-                `ذمم الزبون: ${refundCustomer.name}`,
-              accountType:
-                "asset",
-              linkedEntityType:
-                "customer_receivable",
-              linkedEntityId:
-                refundCustomer.id,
-            },
           );
       }
 
@@ -1620,6 +1611,8 @@ export async function handleCreatePosSaleReturn(
               {
                 accountId:
                   customerAccount.id,
+                customerId:
+                  refundCustomer.id,
                 debitMinor: 0,
                 creditMinor:
                   refundAmountMinor,
