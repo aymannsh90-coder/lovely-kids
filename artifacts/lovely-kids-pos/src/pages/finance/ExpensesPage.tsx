@@ -2089,7 +2089,7 @@ export default function ExpensesPage() {
                               ),
                             );
                           }
-                        }
+                        }}
                         disabled={
                           saving
                         }
