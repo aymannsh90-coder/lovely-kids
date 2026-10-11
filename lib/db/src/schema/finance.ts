@@ -12,6 +12,9 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { cashSessionsTable } from "./cash-sessions";
+import { customersTable } from "./customers";
+import { employeesTable } from "./employees";
+import { suppliersTable } from "./suppliers";
 import { usersTable } from "./users";
 
 export const financeAccountsTable = pgTable(
@@ -243,6 +246,21 @@ export const financeTransactionLinesTable = pgTable(
         onDelete: "restrict",
       }),
 
+    customerId: integer("customer_id")
+      .references(() => customersTable.id, {
+        onDelete: "restrict",
+      }),
+
+    employeeId: integer("employee_id")
+      .references(() => employeesTable.id, {
+        onDelete: "restrict",
+      }),
+
+    supplierId: integer("supplier_id")
+      .references(() => suppliersTable.id, {
+        onDelete: "restrict",
+      }),
+
     debitMinor: integer("debit_minor")
       .notNull()
       .default(0),
@@ -280,6 +298,17 @@ export const financeTransactionLinesTable = pgTable(
       `,
     ),
 
+    check(
+      "finance_transaction_lines_single_party",
+      sql`
+        num_nonnulls(
+          ${table.customerId},
+          ${table.employeeId},
+          ${table.supplierId}
+        ) <= 1
+      `,
+    ),
+
     uniqueIndex("finance_transaction_lines_number_idx")
       .on(table.transactionId, table.lineNumber),
 
@@ -288,5 +317,17 @@ export const financeTransactionLinesTable = pgTable(
 
     index("finance_transaction_lines_account_idx")
       .on(table.accountId),
+
+    index("finance_transaction_lines_customer_idx")
+      .on(table.customerId)
+      .where(sql`${table.customerId} is not null`),
+
+    index("finance_transaction_lines_employee_idx")
+      .on(table.employeeId)
+      .where(sql`${table.employeeId} is not null`),
+
+    index("finance_transaction_lines_supplier_idx")
+      .on(table.supplierId)
+      .where(sql`${table.supplierId} is not null`),
   ],
 ).enableRLS();
