@@ -1573,7 +1573,7 @@ export default function SalesInvoicePage() {
   });
 
   return (
-    <section className="accounting-invoice-page">
+    <section className="accounting-invoice-page sales-invoice-scroll-page">
       <header className="accounting-invoice-titlebar">
         <div>
           <span>الفواتير</span>
