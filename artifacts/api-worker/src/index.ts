@@ -1,5 +1,6 @@
 import { handlePartyFinanceRequest } from "./party-finance-routes";
 import { handleFinanceBankingRequest } from "./finance-banking-routes";
+import { handleFinanceCheckRequest } from "./finance-check-routes";
 import { appSettingsTable, productsTable } from "@workspace/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { openDb, type Env } from "./db";
@@ -408,6 +409,17 @@ export default {
 
       if (financeBankingResponse) {
         return financeBankingResponse;
+      }
+
+      const financeCheckResponse =
+        await handleFinanceCheckRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (financeCheckResponse) {
+        return financeCheckResponse;
       }
 
       const partyFinanceResponse = await handlePartyFinanceRequest(
