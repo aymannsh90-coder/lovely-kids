@@ -1,6 +1,5 @@
 import {
   customersTable,
-  financeAccountsTable,
   cashSessionsTable,
   exchangeDocumentsTable,
   exchangeReturnItemCostsTable,
@@ -22,10 +21,13 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  customerReceivableBalanceMinor,
+  ensureCustomerReceivableControlAccount,
+} from "./finance-customer-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import {
   ensureSaleFinanceAccount,
-  financeAssetBalanceMinor,
 } from "./pos-sale-routes";
 import {
   addProductCostAtCurrentAverage,
@@ -3079,7 +3081,11 @@ export async function handleCreatePosExchange(
             null = null;
 
           let customerAccount:
-            typeof financeAccountsTable.$inferSelect |
+            Awaited<
+              ReturnType<
+                typeof ensureCustomerReceivableControlAccount
+              >
+            > |
             null = null;
 
           if (
@@ -3117,39 +3123,11 @@ export async function handleCreatePosExchange(
               );
             }
 
-            const accountRows =
-              await tx
-                .select()
-                .from(
-                  financeAccountsTable,
-                )
-                .where(
-                  and(
-                    eq(
-                      financeAccountsTable
-                        .linkedEntityType,
-                      "customer_receivable",
-                    ),
-                    eq(
-                      financeAccountsTable
-                        .linkedEntityId,
-                      settlementCustomer.id,
-                    ),
-                  ),
-                )
-                .limit(1);
-
-            customerAccount =
-              accountRows[0] ??
-              null;
-
             const currentBalanceMinor =
-              customerAccount
-                ? await financeAssetBalanceMinor(
-                    tx,
-                    customerAccount.id,
-                  )
-                : 0;
+              await customerReceivableBalanceMinor(
+                tx,
+                settlementCustomer.id,
+              );
 
             if (
               settlementAmountMinor >
@@ -3169,24 +3147,11 @@ export async function handleCreatePosExchange(
             }
 
             if (
-              !payload.validationOnly &&
-              !customerAccount
+              !payload.validationOnly
             ) {
               customerAccount =
-                await ensureSaleFinanceAccount(
+                await ensureCustomerReceivableControlAccount(
                   tx,
-                  {
-                    code:
-                      `CUSTOMER_AR_${settlementCustomer.id}`,
-                    name:
-                      `ذمم الزبون: ${settlementCustomer.name}`,
-                    accountType:
-                      "asset",
-                    linkedEntityType:
-                      "customer_receivable",
-                    linkedEntityId:
-                      settlementCustomer.id,
-                  },
                 );
             }
           }
@@ -4722,6 +4687,8 @@ export async function handleCreatePosExchange(
                   {
                     accountId:
                       customerAccount.id,
+                    customerId:
+                      settlementCustomer.id,
                     debitMinor:
                       customerDebit,
                     creditMinor:
