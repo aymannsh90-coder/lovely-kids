@@ -626,6 +626,23 @@ export default function SalesReturnsPage() {
       return;
     }
 
+    if (
+      refundMethod === "customer" &&
+      !refundCustomerId
+    ) {
+      setError(
+        "اختر الزبون الذي سيضاف المرتجع إلى حسابه",
+      );
+      return;
+    }
+
+    const refundDescription =
+      refundMethod === "cash"
+        ? "سيتم إرجاع المخزون وخصم مبلغ الاسترداد من الصندوق."
+        : refundMethod === "card"
+          ? "سيتم إرجاع المخزون وتسجيل الاسترداد على البطاقة بدون تغيير الصندوق."
+          : "سيتم إرجاع المخزون وإضافة مبلغ الاسترداد إلى حساب الزبون بدون إخراج نقدي من الصندوق.";
+
     const confirmed = window.confirm(
       [
         "تأكيد تنفيذ مردود بدون فاتورة؟",
@@ -635,7 +652,7 @@ export default function SalesReturnsPage() {
         `سعر القطعة: ${formatMoney(barcodeReturnUnitMinor)}`,
         `إجمالي المردود: ${formatMoney(barcodeReturnTotalMinor)}`,
         "",
-        "سيتم إرجاع الكمية للمخزون وخصم مبلغ الاسترداد من الصندوق.",
+        refundDescription,
       ].join("\n"),
     );
 
@@ -650,6 +667,7 @@ export default function SalesReturnsPage() {
       const result = await createPosMobileReturn(token, {
         registerKey,
         idempotencyKey,
+        refundMethod,
         customerId:
           refundCustomerId ??
           undefined,
@@ -885,7 +903,7 @@ export default function SalesReturnsPage() {
               marginTop: 8,
             }}
           >
-            اختيار الزبون لتوثيق صاحب المرتجع فقط. طريقة الاسترداد هي التي تحدد الحركة المالية.
+            اختيار الزبون يحدد صاحب المرتجع، وطريقة الاسترداد هي التي تحدد الحركة المالية.
           </small>
         </div>
 
@@ -1011,7 +1029,7 @@ export default function SalesReturnsPage() {
                   completedBarcodeReturn.saleReturn.publicId,
                   completedBarcodeReturn.saleReturn.refundAmountMinor,
                   null,
-                  "cash",
+                  completedBarcodeReturn.saleReturn.refundMethod,
                 )
               }
             >
@@ -1230,6 +1248,78 @@ export default function SalesReturnsPage() {
                   placeholder="تفاصيل إضافية عن المرتجع"
                 />
               </label>
+            </div>
+
+            <div
+              style={{
+                marginBottom: 16,
+                padding: 14,
+                border: "1px solid #d9e0e5",
+                borderRadius: 10,
+              }}
+            >
+              <strong>
+                طريقة الاسترداد
+              </strong>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  flexWrap: "wrap",
+                  marginTop: 10,
+                }}
+              >
+                {(
+                  [
+                    ["cash", "نقدي"],
+                    ["card", "فيزا / بطاقة"],
+                    ["customer", "حساب الزبون"],
+                  ] as const
+                ).map(([method, label]) => (
+                  <label
+                    key={method}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="mobile-sale-return-refund-method"
+                      checked={
+                        refundMethod ===
+                        method
+                      }
+                      onChange={() => {
+                        setRefundMethod(
+                          method,
+                        );
+
+                        setCompletedBarcodeReturn(
+                          null,
+                        );
+
+                        setIdempotencyKey(
+                          createIdempotencyKey(),
+                        );
+                      }}
+                    />
+
+                    {label}
+                  </label>
+                ))}
+              </div>
+
+              <small
+                style={{
+                  display: "block",
+                  marginTop: 10,
+                }}
+              >
+                عند اختيار حساب الزبون، مبلغ المرتجع ينزل رصيدًا له بدون إخراج نقدي من الصندوق.
+              </small>
             </div>
 
             <div className="sales-return-final-row">

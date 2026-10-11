@@ -1195,6 +1195,7 @@ export function voidPosPurchase(
 export interface CreatePosMobileReturnInput {
   registerKey: string;
   idempotencyKey: string;
+  refundMethod?: "cash" | "card" | "customer";
   customerId?: number;
   reason?: string;
   notes?: string;
@@ -1224,6 +1225,7 @@ export interface PosMobileReturnResult {
     cashierUserId: string;
 
     status: string;
+    refundMethod: "cash" | "card" | "customer";
 
     grossAmountMinor: number;
     grossAmount: number;

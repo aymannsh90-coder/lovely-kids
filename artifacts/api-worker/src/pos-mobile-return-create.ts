@@ -1,5 +1,8 @@
 import {
   customersTable,
+  financeAccountsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   inventoryMovementsTable,
   cashSessionsTable,
   posSaleReturnItemCostsTable,
@@ -14,6 +17,9 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  ensureSaleFinanceAccount,
+} from "./pos-sale-routes";
 import {
   addProductCostAtCurrentAverage,
 } from "./inventory-cost-engine";
@@ -413,6 +419,8 @@ function toResponse(
       ),
 
       status: saleReturn.status,
+      refundMethod:
+        saleReturn.refundMethod,
 
       grossAmountMinor:
         saleReturn.grossAmountMinor,
@@ -549,6 +557,21 @@ export async function handleCreateMobileEmergencyReturn(
       );
     }
 
+    const refundMethod =
+      payload.refundMethod === undefined
+        ? "cash"
+        : payload.refundMethod === "cash" ||
+            payload.refundMethod === "card" ||
+            payload.refundMethod === "customer"
+          ? payload.refundMethod
+          : null;
+
+    if (!refundMethod) {
+      throw new MobileReturnError(
+        "طريقة الاسترداد غير صالحة",
+      );
+    }
+
     const rawCustomerId =
       payload.customerId;
 
@@ -652,14 +675,28 @@ export async function handleCreateMobileEmergencyReturn(
             };
           }
 
-          // customerId is optional identity metadata.
-          // This return remains cash-only financially.
+          let refundCustomer:
+            typeof customersTable.$inferSelect |
+            null = null;
+
+          let customerAccount:
+            typeof financeAccountsTable.$inferSelect |
+            null = null;
+
+          if (
+            refundMethod === "customer" &&
+            !requestedCustomerId
+          ) {
+            throw new MobileReturnError(
+              "اختر الزبون الذي سيضاف المرتجع إلى حسابه",
+            );
+          }
+
+          // Customer identity is independent from refund method.
           if (requestedCustomerId) {
             const customerRows =
               await tx
-                .select({
-                  id: customersTable.id,
-                })
+                .select()
                 .from(customersTable)
                 .where(
                   eq(
@@ -669,12 +706,38 @@ export async function handleCreateMobileEmergencyReturn(
                 )
                 .limit(1);
 
-            if (!customerRows[0]) {
+            refundCustomer =
+              customerRows[0] ?? null;
+
+            if (!refundCustomer) {
               throw new MobileReturnError(
                 "الزبون غير موجود",
                 404,
               );
             }
+          }
+
+          // Only customer-account refunds create/use a finance account.
+          if (
+            refundMethod === "customer" &&
+            refundCustomer
+          ) {
+            customerAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    `CUSTOMER_AR_${refundCustomer.id}`,
+                  name:
+                    `ذمم الزبون: ${refundCustomer.name}`,
+                  accountType:
+                    "asset",
+                  linkedEntityType:
+                    "customer_receivable",
+                  linkedEntityId:
+                    refundCustomer.id,
+                },
+              );
           }
 
           const sessionRows =
@@ -732,8 +795,9 @@ export async function handleCreateMobileEmergencyReturn(
             session.openingBalanceMinor;
 
           if (
+            refundMethod === "cash" &&
             expectedBefore <
-            grossAmountMinor
+              grossAmountMinor
           ) {
             throw new MobileReturnError(
               "رصيد الصندوق لا يكفي لتنفيذ مبلغ المردود",
@@ -742,8 +806,10 @@ export async function handleCreateMobileEmergencyReturn(
           }
 
           const expectedAfter =
-            expectedBefore -
-            grossAmountMinor;
+            refundMethod === "cash"
+              ? expectedBefore -
+                grossAmountMinor
+              : expectedBefore;
 
           const returnLines: Array<
             Omit<
@@ -1121,7 +1187,7 @@ export async function handleCreateMobileEmergencyReturn(
 
                 status: "completed",
 
-                refundMethod: "cash",
+                refundMethod,
 
                 grossAmountMinor,
 
@@ -1318,42 +1384,142 @@ export async function handleCreateMobileEmergencyReturn(
               );
           }
 
-          const updatedSessionRows =
-            await tx
-              .update(
-                cashSessionsTable,
-              )
-              .set({
-                expectedBalanceMinor:
-                  expectedAfter,
-
-                updatedAt:
-                  new Date(),
-              })
-              .where(
-                and(
-                  eq(
-                    cashSessionsTable.id,
-                    session.id,
-                  ),
-
-                  eq(
-                    cashSessionsTable.status,
-                    "open",
-                  ),
-                ),
-              )
-              .returning({
-                id: cashSessionsTable.id,
-              });
-
           if (
-            !updatedSessionRows[0]
+            refundMethod === "customer" &&
+            grossAmountMinor > 0
           ) {
-            throw new MobileReturnError(
-              "تم إغلاق الصندوق قبل إتمام المردود",
-              409,
-            );
+            if (
+              !refundCustomer ||
+              !customerAccount
+            ) {
+              throw new Error(
+                "MOBILE_POS_RETURN_CUSTOMER_ACCOUNT_MISSING",
+              );
+            }
+
+            const salesAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    "POS_SALES_ON_ACCOUNT",
+                  name:
+                    "مبيعات نقطة البيع على الحساب",
+                  accountType:
+                    "income",
+                },
+              );
+
+            const financeRows =
+              await tx
+                .insert(
+                  financeTransactionsTable,
+                )
+                .values({
+                  publicId:
+                    `FIN-RET-AR-${saleReturn.publicId}`,
+                  idempotencyKey:
+                    `pos-sale-return:${saleReturn.id}:customer-credit`,
+                  businessDate:
+                    saleReturn.businessDate,
+                  transactionType:
+                    "refund",
+                  sourceType:
+                    "pos_sale_return",
+                  sourceId:
+                    String(saleReturn.id),
+                  sourceEvent:
+                    "customer_credit",
+                  cashSessionId:
+                    session.id,
+                  status:
+                    "posted",
+                  notes:
+                    `مردود ${saleReturn.publicId} إلى حساب ${refundCustomer.name}`,
+                  createdByUserId:
+                    auth.user.id,
+                })
+                .returning();
+
+            const financeTransaction =
+              financeRows[0];
+
+            if (!financeTransaction) {
+              throw new Error(
+                "MOBILE_POS_RETURN_CUSTOMER_FINANCE_INSERT_FAILED",
+              );
+            }
+
+            await tx
+              .insert(
+                financeTransactionLinesTable,
+              )
+              .values([
+                {
+                  transactionId:
+                    financeTransaction.id,
+                  lineNumber: 1,
+                  accountId:
+                    salesAccount.id,
+                  debitMinor:
+                    grossAmountMinor,
+                  creditMinor: 0,
+                  memo:
+                    `مردود ${saleReturn.publicId}`,
+                },
+                {
+                  transactionId:
+                    financeTransaction.id,
+                  lineNumber: 2,
+                  accountId:
+                    customerAccount.id,
+                  debitMinor: 0,
+                  creditMinor:
+                    grossAmountMinor,
+                  memo:
+                    `رصيد للزبون ${refundCustomer.name}`,
+                },
+              ]);
+          }
+
+          if (refundMethod === "cash") {
+            const updatedSessionRows =
+              await tx
+                .update(
+                  cashSessionsTable,
+                )
+                .set({
+                  expectedBalanceMinor:
+                    expectedAfter,
+
+                  updatedAt:
+                    new Date(),
+                })
+                .where(
+                  and(
+                    eq(
+                      cashSessionsTable.id,
+                      session.id,
+                    ),
+
+                    eq(
+                      cashSessionsTable.status,
+                      "open",
+                    ),
+                  ),
+                )
+                .returning({
+                  id: cashSessionsTable.id,
+                });
+
+            if (
+              !updatedSessionRows[0]
+            ) {
+              throw new MobileReturnError(
+                "تم إغلاق الصندوق قبل إتمام المردود",
+                409,
+              );
+            }
           }
 
           return {
