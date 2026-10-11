@@ -152,7 +152,7 @@ VALUES
   )
 ON CONFLICT (code) DO NOTHING;
 
-DO $
+DO $party_guard$
 BEGIN
   IF EXISTS (
     SELECT 1
@@ -167,6 +167,6 @@ BEGIN
       'Control account code exists with an unexpected account_type';
   END IF;
 END
-$;
+$party_guard$;
 
 COMMIT;
