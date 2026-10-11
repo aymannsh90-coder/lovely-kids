@@ -8,6 +8,7 @@ import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
+import ExpensesPage from "../pages/finance/ExpensesPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import CustomersPage from "../pages/parties/CustomersPage";
@@ -191,17 +192,7 @@ export default function AppRouter() {
           path="finance/expenses"
           element={
             <RequireOpenSession>
-              <ComingSoonPage
-                icon="💸"
-                title="مصروفات اليوم"
-                description="تسجيل كل مبلغ يخرج من الصندوق."
-                points={[
-                  "قيمة المصروف وتصنيفه.",
-                  "السبب والملاحظات.",
-                  "الموظف ووقت التسجيل.",
-                  "خصمه من الرصيد المتوقع.",
-                ]}
-              />
+              <ExpensesPage />
             </RequireOpenSession>
           }
         />
