@@ -560,50 +560,6 @@ async function ensureAccount(
   return retryCode[0];
 }
 
-async function accountBalanceMinor(
-  tx: any,
-  accountId: number,
-  normal:
-    | "asset"
-    | "liability",
-) {
-  const rows =
-    await tx
-      .select({
-        debitMinor:
-          financeTransactionLinesTable
-            .debitMinor,
-        creditMinor:
-          financeTransactionLinesTable
-            .creditMinor,
-      })
-      .from(
-        financeTransactionLinesTable,
-      )
-      .where(
-        eq(
-          financeTransactionLinesTable
-            .accountId,
-          accountId,
-        ),
-      );
-
-  let result = 0;
-
-  for (
-    const row of rows
-  ) {
-    result +=
-      normal === "asset"
-        ? row.debitMinor -
-          row.creditMinor
-        : row.creditMinor -
-          row.debitMinor;
-  }
-
-  return result;
-}
-
 async function settlementAccount(
   tx: any,
   method:
