@@ -14,6 +14,7 @@ import {
 import { cashSessionsTable } from "./cash-sessions";
 import { customersTable } from "./customers";
 import { employeesTable } from "./employees";
+import { financeCurrenciesTable } from "./finance-currencies";
 import { suppliersTable } from "./suppliers";
 import { usersTable } from "./users";
 
@@ -32,7 +33,13 @@ export const financeAccountsTable = pgTable(
 
     currencyCode: text("currency_code")
       .notNull()
-      .default("ILS"),
+      .default("ILS")
+      .references(
+        () => financeCurrenciesTable.code,
+        {
+          onDelete: "restrict",
+        },
+      ),
 
     status: text("status")
       .notNull()
@@ -261,6 +268,22 @@ export const financeTransactionLinesTable = pgTable(
         onDelete: "restrict",
       }),
 
+    currencyCode: text("currency_code")
+      .references(
+        () => financeCurrenciesTable.code,
+        {
+          onDelete: "restrict",
+        },
+      ),
+
+    currencyAmountMinor: integer(
+      "currency_amount_minor",
+    ),
+
+    exchangeRateMicros: integer(
+      "exchange_rate_micros",
+    ),
+
     debitMinor: integer("debit_minor")
       .notNull()
       .default(0),
@@ -309,6 +332,25 @@ export const financeTransactionLinesTable = pgTable(
       `,
     ),
 
+    check(
+      "finance_transaction_lines_currency_pair_valid",
+      sql`
+        (
+          ${table.currencyCode} is null
+          and ${table.currencyAmountMinor} is null
+          and ${table.exchangeRateMicros} is null
+        )
+        or
+        (
+          ${table.currencyCode} is not null
+          and ${table.currencyAmountMinor} is not null
+          and ${table.currencyAmountMinor} > 0
+          and ${table.exchangeRateMicros} is not null
+          and ${table.exchangeRateMicros} > 0
+        )
+      `,
+    ),
+
     uniqueIndex("finance_transaction_lines_number_idx")
       .on(table.transactionId, table.lineNumber),
 
@@ -329,5 +371,9 @@ export const financeTransactionLinesTable = pgTable(
     index("finance_transaction_lines_supplier_idx")
       .on(table.supplierId)
       .where(sql`${table.supplierId} is not null`),
+
+    index("finance_transaction_lines_currency_idx")
+      .on(table.currencyCode)
+      .where(sql`${table.currencyCode} is not null`),
   ],
 ).enableRLS();
