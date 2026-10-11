@@ -9113,9 +9113,9 @@ textarea:disabled {
 
 .expense-summary-grid article {
   display: grid;
-  gap: 8px;
-  min-height: 112px;
-  padding: 18px;
+  gap: 6px;
+  min-height: 88px;
+  padding: 14px 16px;
   border: 1px solid #dce7ec;
   border-radius: 18px;
   background: #fff;
@@ -9130,7 +9130,7 @@ textarea:disabled {
 
 .expense-summary-grid strong {
   margin-top: auto;
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.2;
 }
 
@@ -9173,15 +9173,15 @@ textarea:disabled {
 
 .expense-tile-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
 }
 
 .expense-quick-tile {
   display: grid;
-  gap: 6px;
-  min-height: 142px;
-  padding: 18px 16px;
+  gap: 8px;
+  min-height: 156px;
+  padding: 20px 18px;
   border: 1px solid #d9e5ea;
   border-radius: 18px;
   color: #172033;
@@ -9202,17 +9202,17 @@ textarea:disabled {
 
 .expense-tile-icon {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   place-items: center;
   border-radius: 15px;
   background: #f4f8fa;
-  font-size: 25px;
+  font-size: 28px;
 }
 
 .expense-quick-tile strong {
   margin-top: 6px;
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .expense-quick-tile small {
@@ -9620,9 +9620,6 @@ textarea:disabled {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .expense-tile-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 760px) {
@@ -9641,9 +9638,6 @@ textarea:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .expense-tile-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .expense-history-side {
     justify-content: space-between;
