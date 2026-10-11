@@ -3616,52 +3616,56 @@ async function handleVoidVoucher(
           const businessDate =
             currentPalestineDate();
 
-          await postFinanceTransaction(
-            tx,
-            {
-              publicId:
-                `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
-              idempotencyKey:
-                `voucher:${voucher.id}:void`,
-              businessDate,
-              transactionType:
-                "reversal",
-              sourceType:
-                "finance_voucher",
-              sourceId:
-                String(
-                  voucher.id,
-                ),
-              sourceEvent:
-                "voided",
-              cashSessionId:
-                session?.id ??
-                null,
-              notes:
-                `عكس ${voucher.publicId}: ${reason}`,
-              createdByUserId:
-                auth.user.id,
-              lines:
-                originalLines.map(
-                  (line) => ({
-                    accountId:
-                      line.accountId,
-                    customerId:
-                      line.customerId,
-                    employeeId:
-                      line.employeeId,
-                    supplierId:
-                      line.supplierId,
-                    debitMinor:
-                      line.creditMinor,
-                    creditMinor:
-                      line.debitMinor,
-                    memo:
-                      `عكس: ${line.memo ?? voucher.publicId}`,
-                  }),
-                ),
-            },
-          );
+          const reversalPosting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey:
+                  `voucher:${voucher.id}:void`,
+                businessDate,
+                transactionType:
+                  "reversal",
+                sourceType:
+                  "finance_voucher",
+                sourceId:
+                  String(
+                    voucher.id,
+                  ),
+                sourceEvent:
+                  "voided",
+                cashSessionId:
+                  session?.id ??
+                  null,
+                notes:
+                  `عكس ${voucher.publicId}: ${reason}`,
+                createdByUserId:
+                  auth.user.id,
+                lines:
+                  originalLines.map(
+                    (line) => ({
+                      accountId:
+                        line.accountId,
+                      customerId:
+                        line.customerId,
+                      employeeId:
+                        line.employeeId,
+                      supplierId:
+                        line.supplierId,
+                      debitMinor:
+                        line.creditMinor,
+                      creditMinor:
+                        line.debitMinor,
+                      memo:
+                        `عكس: ${line.memo ?? voucher.publicId}`,
+                    }),
+                  ),
+              },
+            );
+
+          const reversal =
+            reversalPosting.transaction;
 
           await tx
             .update(
