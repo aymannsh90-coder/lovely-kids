@@ -21,6 +21,7 @@ import {
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
 import {
   consumeExactProductCost,
   restoreExactProductCost,
@@ -1430,73 +1431,46 @@ export async function handleVoidPosExchange(
               );
             }
 
-            const reversalRows =
-              await tx
-                .insert(
-                  financeTransactionsTable,
-                )
-                .values({
-                  publicId:
-                    `FIN-EXC-VOID-${exchange.publicId}`,
-                  idempotencyKey:
-                    `pos-exchange:${exchange.id}:customer-settlement:void`,
-                  businessDate:
-                    exchange.businessDate,
-                  transactionType:
-                    "reversal",
-                  sourceType:
-                    "exchange",
-                  sourceId:
-                    String(
-                      exchange.id,
-                    ),
-                  sourceEvent:
-                    "customer_settlement_void",
-                  cashSessionId:
-                    exchange.cashSessionId,
-                  status:
-                    "posted",
-                  notes:
-                    `عكس حركة حساب الزبون لفاتورة التبديل ${exchange.publicId}`,
-                  createdByUserId:
-                    user.id,
-                })
-                .returning();
-
-            const reversal =
-              reversalRows[0];
-
-            if (!reversal) {
-              throw new Error(
-                "POS_EXCHANGE_CUSTOMER_REVERSAL_FAILED",
-              );
-            }
-
-            await tx
-              .insert(
-                financeTransactionLinesTable,
-              )
-              .values(
-                originalLines.map(
-                  (
-                    line,
-                    index,
-                  ) => ({
-                    transactionId:
-                      reversal.id,
-                    lineNumber:
-                      index + 1,
-                    accountId:
-                      line.accountId,
-                    debitMinor:
-                      line.creditMinor,
-                    creditMinor:
-                      line.debitMinor,
-                    memo:
-                      `عكس ${exchange.publicId}`,
-                  }),
-                ),
-              );
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-EXC-VOID-${exchange.publicId}`,
+                idempotencyKey:
+                  `pos-exchange:${exchange.id}:customer-settlement:void`,
+                businessDate:
+                  exchange.businessDate,
+                transactionType:
+                  "reversal",
+                sourceType:
+                  "exchange",
+                sourceId:
+                  String(
+                    exchange.id,
+                  ),
+                sourceEvent:
+                  "customer_settlement_void",
+                cashSessionId:
+                  exchange.cashSessionId,
+                notes:
+                  `عكس حركة حساب الزبون لفاتورة التبديل ${exchange.publicId}`,
+                createdByUserId:
+                  user.id,
+                lines:
+                  originalLines.map(
+                    (line) => ({
+                      accountId:
+                        line.accountId,
+                      debitMinor:
+                        line.creditMinor,
+                      creditMinor:
+                        line.debitMinor,
+                      memo:
+                        `عكس ${exchange.publicId}`,
+                    }),
+                  ),
+              },
+            );
 
             await tx
               .update(
