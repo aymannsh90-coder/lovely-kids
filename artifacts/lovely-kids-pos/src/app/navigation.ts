@@ -215,10 +215,10 @@ export const posNavigation: PosNavigationItem[] = [
     group: "finance",
     path: "/finance/checks",
     title: "الشيكات",
-    description: "متابعة الشيكات المستلمة والمدفوعة ومواعيدها.",
+    description: "الشيكات المستلمة والصادرة والإيداع والتحصيل.",
     icon: "📝",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "cash-session",
