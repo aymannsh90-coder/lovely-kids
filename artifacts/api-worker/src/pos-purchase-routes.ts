@@ -1095,46 +1095,47 @@ async function handleVoidPurchase(
           }
         }
 
-        const reversalRows = await tx
-          .insert(financeTransactionsTable)
-          .values({
+        await postFinanceTransaction(
+          tx,
+          {
             publicId:
               `FIN-${purchase.businessDate.replaceAll("-", "")}-` +
               randomUUID().slice(0, 8).toUpperCase(),
-            idempotencyKey: `purchase:${purchase.id}:voided`,
-            businessDate: purchase.businessDate,
-            transactionType: "reversal",
-            sourceType: "pos_purchase",
-            sourceId: String(purchase.id),
-            sourceEvent: "voided",
+            idempotencyKey:
+              `purchase:${purchase.id}:voided`,
+            businessDate:
+              purchase.businessDate,
+            transactionType:
+              "reversal",
+            sourceType:
+              "pos_purchase",
+            sourceId:
+              String(purchase.id),
+            sourceEvent:
+              "voided",
             cashSessionId:
               reversalCashSession?.id ??
               originalFinance.cashSessionId ??
               null,
-            status: "posted",
-            notes: `عكس فاتورة المشتريات ${purchase.publicId}: ${reason}`,
-            createdByUserId: auth.user.id,
-          })
-          .returning();
-
-        const reversal = reversalRows[0];
-
-        if (!reversal) {
-          throw new Error("PURCHASE_REVERSAL_INSERT_FAILED");
-        }
-
-        await tx
-          .insert(financeTransactionLinesTable)
-          .values(
-            originalFinanceLines.map((line, index) => ({
-              transactionId: reversal.id,
-              lineNumber: index + 1,
-              accountId: line.accountId,
-              debitMinor: line.creditMinor,
-              creditMinor: line.debitMinor,
-              memo: `عكس: ${line.memo ?? purchase.publicId}`,
-            })),
-          );
+            notes:
+              `عكس فاتورة المشتريات ${purchase.publicId}: ${reason}`,
+            createdByUserId:
+              auth.user.id,
+            lines:
+              originalFinanceLines.map(
+                (line) => ({
+                  accountId:
+                    line.accountId,
+                  debitMinor:
+                    line.creditMinor,
+                  creditMinor:
+                    line.debitMinor,
+                  memo:
+                    `عكس: ${line.memo ?? purchase.publicId}`,
+                }),
+              ),
+          },
+        );
 
         const reversedOriginalRows = await tx
           .update(financeTransactionsTable)
