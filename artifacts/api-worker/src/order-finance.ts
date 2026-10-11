@@ -3,14 +3,13 @@ import {
   deliveryCompaniesTable,
   exchangeDocumentsTable,
   financeAccountsTable,
-  financeTransactionLinesTable,
-  financeTransactionsTable,
   ordersTable,
 } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import type { openDb } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
 import { STORE_PICKUP_LABEL } from "./order-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -842,63 +841,29 @@ export async function completeOrderWithFinance(
     }
 
     if (financeLines.length > 0) {
-      const debitTotal = financeLines.reduce(
-        (sum, line) =>
-          sum + line.debitMinor,
-        0,
-      );
-
-      const creditTotal = financeLines.reduce(
-        (sum, line) =>
-          sum + line.creditMinor,
-        0,
-      );
-
-      if (debitTotal !== creditTotal) {
-        throw new Error(
-          `ORDER_FINANCE_NOT_BALANCED:${debitTotal}:${creditTotal}`,
-        );
-      }
-
-      const financeRows = await tx
-        .insert(financeTransactionsTable)
-        .values({
+      await postFinanceTransaction(
+        tx,
+        {
           publicId:
             `FIN-${businessDate.replaceAll("-", "")}-` +
             randomUUID().slice(0, 8).toUpperCase(),
-          idempotencyKey: `order:${order.id}:done`,
+          idempotencyKey:
+            `order:${order.id}:done`,
           businessDate,
           transactionType: "sale",
           sourceType: "web_order",
-          sourceId: String(order.id),
+          sourceId:
+            String(order.id),
           sourceEvent: "done",
-          cashSessionId: cashSession?.id ?? null,
-          status: "posted",
-          notes: `تسليم طلب المتجر #${order.id}`,
-          createdByUserId: userId,
-        })
-        .returning();
-
-      const financeTransaction = financeRows[0];
-
-      if (!financeTransaction) {
-        throw new Error(
-          "ORDER_FINANCE_INSERT_FAILED",
-        );
-      }
-
-      await tx
-        .insert(financeTransactionLinesTable)
-        .values(
-          financeLines.map((line, index) => ({
-            transactionId: financeTransaction.id,
-            lineNumber: index + 1,
-            accountId: line.accountId,
-            debitMinor: line.debitMinor,
-            creditMinor: line.creditMinor,
-            memo: line.memo,
-          })),
-        );
+          cashSessionId:
+            cashSession?.id ?? null,
+          notes:
+            `تسليم طلب المتجر #${order.id}`,
+          createdByUserId:
+            userId,
+          lines: financeLines,
+        },
+      );
     }
 
     if (
