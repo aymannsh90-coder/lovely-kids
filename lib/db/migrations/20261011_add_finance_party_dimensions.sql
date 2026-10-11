@@ -19,6 +19,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'finance_transaction_lines_customer_id_fkey'
+      AND conrelid = 'public.finance_transaction_lines'::regclass
   ) THEN
     ALTER TABLE public.finance_transaction_lines
       ADD CONSTRAINT finance_transaction_lines_customer_id_fkey
@@ -35,6 +36,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'finance_transaction_lines_employee_id_fkey'
+      AND conrelid = 'public.finance_transaction_lines'::regclass
   ) THEN
     ALTER TABLE public.finance_transaction_lines
       ADD CONSTRAINT finance_transaction_lines_employee_id_fkey
@@ -51,6 +53,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'finance_transaction_lines_supplier_id_fkey'
+      AND conrelid = 'public.finance_transaction_lines'::regclass
   ) THEN
     ALTER TABLE public.finance_transaction_lines
       ADD CONSTRAINT finance_transaction_lines_supplier_id_fkey
@@ -67,6 +70,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'finance_transaction_lines_single_party'
+      AND conrelid = 'public.finance_transaction_lines'::regclass
   ) THEN
     ALTER TABLE public.finance_transaction_lines
       ADD CONSTRAINT finance_transaction_lines_single_party
@@ -147,5 +151,22 @@ VALUES
     'Control account for employee payables; employee identity is stored on finance transaction lines.'
   )
 ON CONFLICT (code) DO NOTHING;
+
+DO $
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.finance_accounts
+    WHERE
+      (code = 'CUSTOMER_RECEIVABLE_CONTROL' AND account_type <> 'asset')
+      OR (code = 'EMPLOYEE_ADVANCE_CONTROL' AND account_type <> 'asset')
+      OR (code = 'SUPPLIER_PAYABLE_CONTROL' AND account_type <> 'liability')
+      OR (code = 'EMPLOYEE_PAYABLE_CONTROL' AND account_type <> 'liability')
+  ) THEN
+    RAISE EXCEPTION
+      'Control account code exists with an unexpected account_type';
+  END IF;
+END
+$;
 
 COMMIT;
