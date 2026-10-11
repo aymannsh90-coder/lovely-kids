@@ -572,7 +572,7 @@ export default function StatementsPage() {
                   <strong>
                     {money(
                       statement.openingBalanceMinor,
-                      statement.account.currencyCode,
+                      "ILS",
                     )}
                   </strong>
                 </article>
@@ -606,7 +606,7 @@ export default function StatementsPage() {
                   <strong>
                     {money(
                       statement.closingBalanceMinor,
-                      statement.account.currencyCode,
+                      "ILS",
                     )}
                   </strong>
                 </article>
@@ -620,6 +620,11 @@ export default function StatementsPage() {
                     </strong>
                     <span>
                       {statement.range.from} — {statement.range.to}
+                      {" · "}
+                      القيمة الدفترية بالشيكل
+                      {statement.account.currencyCode !== "ILS"
+                        ? ` · عملة الحساب: ${statement.account.currencyCode}`
+                        : ""}
                     </span>
                   </div>
 
@@ -682,7 +687,7 @@ export default function StatementsPage() {
                                 <strong>
                                   {money(
                                     entry.runningBalanceMinor,
-                                    statement.account.currencyCode,
+                                    "ILS",
                                   )}
                                 </strong>
                               </td>
