@@ -9682,3 +9682,325 @@ textarea:disabled {
 }
 
 /* FINANCE EXPENSE HUB END */
+
+
+/* BANKING + CURRENCIES START */
+
+.banking-page {
+  display: grid;
+  gap: 22px;
+}
+
+.banking-heading,
+.banking-section {
+  padding: 22px;
+  border: 1px solid #dce7ec;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(29, 71, 93, 0.05);
+}
+
+.banking-heading,
+.banking-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.banking-heading h2,
+.banking-section-title h3 {
+  margin: 4px 0 6px;
+}
+
+.banking-heading p,
+.banking-section-title p {
+  margin: 0;
+  color: #657481;
+  line-height: 1.7;
+}
+
+.banking-eyebrow {
+  color: #e91e8c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.banking-currency-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.banking-currency-card {
+  display: grid;
+  gap: 16px;
+  min-height: 180px;
+  padding: 18px;
+  border: 1px solid #dce7ec;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(29, 71, 93, 0.05);
+}
+
+.banking-currency-card.is-base {
+  border-color: #cce9df;
+  background: #f6fffb;
+}
+
+.banking-currency-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.banking-currency-title > span {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: #f3f8fa;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.banking-currency-title div,
+.banking-account-head div {
+  display: grid;
+  gap: 3px;
+}
+
+.banking-currency-title small,
+.banking-account-head small,
+.banking-rate-footer small,
+.banking-account-balance small {
+  color: #71808b;
+}
+
+.banking-currency-card label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.banking-currency-card input,
+.banking-account-form input,
+.banking-account-form select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid #cfdee5;
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+}
+
+.banking-currency-card input:focus,
+.banking-account-form input:focus,
+.banking-account-form select:focus {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 4px rgba(233, 30, 140, 0.08);
+}
+
+.banking-rate-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.banking-rate-footer .primary-button {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.banking-base-rate {
+  display: grid;
+  gap: 5px;
+  margin-top: auto;
+}
+
+.banking-base-rate span {
+  color: #4f6d62;
+  font-size: 13px;
+}
+
+.banking-base-rate strong {
+  font-size: 26px;
+}
+
+.banking-bank-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.banking-bank-grid article {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 82px;
+  padding: 14px;
+  border: 1px solid #dde7eb;
+  border-radius: 14px;
+  background: #f9fcfd;
+}
+
+.banking-bank-grid article > span {
+  font-size: 26px;
+}
+
+.banking-bank-grid article div {
+  display: grid;
+  gap: 4px;
+}
+
+.banking-bank-grid small {
+  color: #75838d;
+}
+
+.banking-account-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.banking-account-form label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.banking-account-form label small {
+  color: #83909a;
+  font-weight: 500;
+}
+
+.banking-form-notes {
+  grid-column: span 2;
+}
+
+.banking-account-form .primary-button {
+  align-self: end;
+  min-height: 46px;
+}
+
+.banking-section-title > span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef6fa;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.banking-account-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.banking-account-card {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #dde7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.banking-account-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.banking-account-head > div {
+  display: flex;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.banking-account-head > div > span {
+  font-size: 23px;
+}
+
+.banking-account-head > b {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #8e1559;
+  background: #ffeaf5;
+  font-size: 11px;
+}
+
+.banking-account-balance {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fbfc;
+}
+
+.banking-account-balance > span {
+  color: #71808b;
+  font-size: 12px;
+}
+
+.banking-account-balance > strong {
+  font-size: 22px;
+}
+
+.banking-account-meta {
+  display: grid;
+  gap: 5px;
+  color: #697782;
+  font-size: 12px;
+}
+
+.banking-empty {
+  margin-top: 16px;
+  padding: 28px 16px;
+  border: 1px dashed #cfdee5;
+  border-radius: 14px;
+  color: #71808b;
+  text-align: center;
+  background: #f9fcfd;
+}
+
+@media (max-width: 980px) {
+  .banking-currency-grid,
+  .banking-bank-grid,
+  .banking-account-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .banking-account-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .banking-heading,
+  .banking-section-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .banking-currency-grid,
+  .banking-bank-grid,
+  .banking-account-grid,
+  .banking-account-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .banking-form-notes {
+    grid-column: auto;
+  }
+}
+
+/* BANKING + CURRENCIES END */
