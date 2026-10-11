@@ -19,6 +19,7 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
 import {
   ensureSaleFinanceAccount,
 } from "./pos-sale-routes";
@@ -1585,76 +1586,51 @@ export async function handleCreatePosSaleReturn(
             },
           );
 
-        const financeRows =
-          await tx
-            .insert(
-              financeTransactionsTable,
-            )
-            .values({
-              publicId:
-                `FIN-RET-AR-${saleReturn.publicId}`,
-              idempotencyKey:
-                `pos-sale-return:${saleReturn.id}:customer-credit`,
-              businessDate:
-                saleReturn.businessDate,
-              transactionType:
-                "refund",
-              sourceType:
-                "pos_sale_return",
-              sourceId:
-                String(saleReturn.id),
-              sourceEvent:
-                "customer_credit",
-              cashSessionId:
-                session.id,
-              status:
-                "posted",
-              notes:
-                `مردود ${saleReturn.publicId} إلى حساب ${refundCustomer.name}`,
-              createdByUserId:
-                auth.user.id,
-            })
-            .returning();
-
-        const financeTransaction =
-          financeRows[0];
-
-        if (!financeTransaction) {
-          throw new Error(
-            "POS_RETURN_CUSTOMER_FINANCE_INSERT_FAILED",
-          );
-        }
-
-        await tx
-          .insert(
-            financeTransactionLinesTable,
-          )
-          .values([
-            {
-              transactionId:
-                financeTransaction.id,
-              lineNumber: 1,
-              accountId:
-                salesAccount.id,
-              debitMinor:
-                refundAmountMinor,
-              creditMinor: 0,
-              memo:
-                `مردود ${saleReturn.publicId}`,
-            },
-            {
-              transactionId:
-                financeTransaction.id,
-              lineNumber: 2,
-              accountId:
-                customerAccount.id,
-              debitMinor: 0,
-              creditMinor:
-                refundAmountMinor,
-              memo:
-                `رصيد للزبون ${refundCustomer.name}`,
-            },
-          ]);
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-RET-AR-${saleReturn.publicId}`,
+            idempotencyKey:
+              `pos-sale-return:${saleReturn.id}:customer-credit`,
+            businessDate:
+              saleReturn.businessDate,
+            transactionType:
+              "refund",
+            sourceType:
+              "pos_sale_return",
+            sourceId:
+              String(saleReturn.id),
+            sourceEvent:
+              "customer_credit",
+            cashSessionId:
+              session.id,
+            notes:
+              `مردود ${saleReturn.publicId} إلى حساب ${refundCustomer.name}`,
+            createdByUserId:
+              auth.user.id,
+            lines: [
+              {
+                accountId:
+                  salesAccount.id,
+                debitMinor:
+                  refundAmountMinor,
+                creditMinor: 0,
+                memo:
+                  `مردود ${saleReturn.publicId}`,
+              },
+              {
+                accountId:
+                  customerAccount.id,
+                debitMinor: 0,
+                creditMinor:
+                  refundAmountMinor,
+                memo:
+                  `رصيد للزبون ${refundCustomer.name}`,
+              },
+            ],
+          },
+        );
       }
 
       if (refundMethod === "cash") {
