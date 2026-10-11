@@ -335,7 +335,7 @@ export default function DeliveryCompanyAccountingPage() {
   }
 
   return (
-    <section className="accounting-invoice-page">
+    <section className="accounting-invoice-page delivery-company-scroll-page">
       <div className="panel-heading">
         <div className="panel-icon">🚚</div>
 
