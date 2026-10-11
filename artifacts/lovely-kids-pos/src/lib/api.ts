@@ -831,6 +831,151 @@ export function voidPosFinanceVoucher(
 }
 
 
+export interface PosFinanceCurrency {
+  code: string;
+  nameAr: string;
+  nameEn: string;
+  symbol: string;
+  minorUnit: number;
+  isBase: boolean;
+  status: "active" | "inactive";
+  latestRate: {
+    rateDate: string;
+    ilsPerUnitMicros: number;
+    ilsPerUnit: number;
+    source: string | null;
+  } | null;
+}
+
+export interface PosBank {
+  id: number;
+  code: string;
+  nameAr: string;
+  nameEn: string | null;
+  status: "active" | "inactive";
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosBankAccount {
+  id: number;
+  bankId: number;
+  code: string;
+  name: string;
+  accountNumber: string | null;
+  iban: string | null;
+  currencyCode: string;
+  financeAccountId: number;
+  status: "active" | "inactive";
+  notes: string | null;
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string;
+  bank: {
+    id: number;
+    code: string;
+    nameAr: string;
+    nameEn: string | null;
+  };
+  financeAccount: {
+    id: number;
+    code: string;
+    name: string;
+    currencyCode: string;
+  };
+  baseBalanceMinor: number;
+  currencyBalanceMinor: number;
+}
+
+export function getPosFinanceBankingReference(
+  token: string,
+) {
+  return apiRequest<{
+    currencies: PosFinanceCurrency[];
+    banks: PosBank[];
+  }>(
+    "/api/pos/finance/banking/reference",
+    {},
+    token,
+  );
+}
+
+export function getPosBankAccounts(
+  token: string,
+) {
+  return apiRequest<{
+    results: PosBankAccount[];
+  }>(
+    "/api/pos/finance/bank-accounts",
+    {},
+    token,
+  );
+}
+
+export function createPosBankAccount(
+  token: string,
+  input: {
+    bankId: number;
+    name: string;
+    accountNumber?: string;
+    iban?: string;
+    currencyCode: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    account: PosBankAccount;
+    bank: PosBank;
+    financeAccount: {
+      id: number;
+      code: string;
+      name: string;
+      currencyCode: string;
+    };
+  }>(
+    "/api/pos/finance/bank-accounts",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function savePosExchangeRate(
+  token: string,
+  input: {
+    currencyCode: string;
+    ilsPerUnit: string;
+    rateDate?: string;
+    source?: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    rate: {
+      id: number;
+      currencyCode: string;
+      rateDate: string;
+      ilsPerUnitMicros: number;
+      source: string | null;
+      notes: string | null;
+      createdByUserId: number | null;
+      createdAt: string;
+    };
+    ilsPerUnit: number;
+  }>(
+    "/api/pos/finance/exchange-rates",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+
 export function createPosSale(
   token: string,
   input: {
