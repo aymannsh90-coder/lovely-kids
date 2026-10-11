@@ -19,6 +19,9 @@ export type FinanceTransactionType =
 
 export interface FinancePostingLineInput {
   accountId: number;
+  customerId?: number | null;
+  employeeId?: number | null;
+  supplierId?: number | null;
   debitMinor?: number;
   creditMinor?: number;
   memo?: string | null;
@@ -95,6 +98,17 @@ function positiveInteger(
   return value;
 }
 
+function optionalPositiveInteger(
+  value: number | null | undefined,
+  field: string,
+) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return positiveInteger(value, field);
+}
+
 function minorAmount(
   value: number | undefined,
   field: string,
@@ -147,6 +161,34 @@ export function normalizeFinancePostingLines(
       `رقم الحساب في السطر ${index + 1}`,
     );
 
+    const customerId = optionalPositiveInteger(
+      line.customerId,
+      `رقم الزبون في السطر ${index + 1}`,
+    );
+
+    const employeeId = optionalPositiveInteger(
+      line.employeeId,
+      `رقم الموظف في السطر ${index + 1}`,
+    );
+
+    const supplierId = optionalPositiveInteger(
+      line.supplierId,
+      `رقم المورد في السطر ${index + 1}`,
+    );
+
+    const partyCount = [
+      customerId,
+      employeeId,
+      supplierId,
+    ].filter((partyId) => partyId !== null).length;
+
+    if (partyCount > 1) {
+      throw new FinancePostingError(
+        "FINANCE_POSTING_LINE_MULTIPLE_PARTIES",
+        `السطر ${index + 1} لا يمكن ربطه بأكثر من طرف مالي واحد`,
+      );
+    }
+
     const debitMinor = minorAmount(
       line.debitMinor,
       `المدين في السطر ${index + 1}`,
@@ -186,6 +228,9 @@ export function normalizeFinancePostingLines(
     return {
       lineNumber: index + 1,
       accountId,
+      customerId,
+      employeeId,
+      supplierId,
       debitMinor,
       creditMinor,
       memo: line.memo?.trim() || null,
@@ -379,6 +424,9 @@ export async function postFinanceTransaction(
         transactionId: transaction.id,
         lineNumber: line.lineNumber,
         accountId: line.accountId,
+        customerId: line.customerId,
+        employeeId: line.employeeId,
+        supplierId: line.supplierId,
         debitMinor: line.debitMinor,
         creditMinor: line.creditMinor,
         memo: line.memo,
