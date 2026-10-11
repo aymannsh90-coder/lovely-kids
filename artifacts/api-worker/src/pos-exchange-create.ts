@@ -1,8 +1,6 @@
 import {
   customersTable,
   financeAccountsTable,
-  financeTransactionLinesTable,
-  financeTransactionsTable,
   cashSessionsTable,
   exchangeDocumentsTable,
   exchangeReturnItemCostsTable,
@@ -24,6 +22,7 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
 import {
   ensureSaleFinanceAccount,
   financeAssetBalanceMinor,
@@ -4679,51 +4678,6 @@ export async function handleCreatePosExchange(
                 settlementAmountMinor,
               );
 
-            const financeRows =
-              await tx
-                .insert(
-                  financeTransactionsTable,
-                )
-                .values({
-                  publicId:
-                    `FIN-EXC-AR-${exchange.publicId}`,
-                  idempotencyKey:
-                    `pos-exchange:${exchange.id}:customer-settlement`,
-                  businessDate:
-                    exchange.businessDate,
-                  transactionType:
-                    "adjustment",
-                  sourceType:
-                    "exchange",
-                  sourceId:
-                    String(
-                      exchange.id,
-                    ),
-                  sourceEvent:
-                    "customer_settlement",
-                  cashSessionId:
-                    session.id,
-                  status:
-                    "posted",
-                  notes:
-                    settlementAmountMinor >
-                    0
-                      ? `فرق تبديل ${exchange.publicId} على حساب ${settlementCustomer.name}`
-                      : `رصيد تبديل ${exchange.publicId} للزبون ${settlementCustomer.name}`,
-                  createdByUserId:
-                    user.id,
-                })
-                .returning();
-
-            const financeTransaction =
-              financeRows[0];
-
-            if (!financeTransaction) {
-              throw new Error(
-                "POS_EXCHANGE_CUSTOMER_FINANCE_INSERT_FAILED",
-              );
-            }
-
             const customerDebit =
               settlementAmountMinor >
               0
@@ -4736,38 +4690,58 @@ export async function handleCreatePosExchange(
                 ? amountMinor
                 : 0;
 
-            await tx
-              .insert(
-                financeTransactionLinesTable,
-              )
-              .values([
-                {
-                  transactionId:
-                    financeTransaction.id,
-                  lineNumber: 1,
-                  accountId:
-                    customerAccount.id,
-                  debitMinor:
-                    customerDebit,
-                  creditMinor:
-                    customerCredit,
-                  memo:
-                    `حساب الزبون ${settlementCustomer.name}`,
-                },
-                {
-                  transactionId:
-                    financeTransaction.id,
-                  lineNumber: 2,
-                  accountId:
-                    salesAccount.id,
-                  debitMinor:
-                    customerCredit,
-                  creditMinor:
-                    customerDebit,
-                  memo:
-                    `فرق التبديل ${exchange.publicId}`,
-                },
-              ]);
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-EXC-AR-${exchange.publicId}`,
+                idempotencyKey:
+                  `pos-exchange:${exchange.id}:customer-settlement`,
+                businessDate:
+                  exchange.businessDate,
+                transactionType:
+                  "adjustment",
+                sourceType:
+                  "exchange",
+                sourceId:
+                  String(
+                    exchange.id,
+                  ),
+                sourceEvent:
+                  "customer_settlement",
+                cashSessionId:
+                  session.id,
+                notes:
+                  settlementAmountMinor >
+                  0
+                    ? `فرق تبديل ${exchange.publicId} على حساب ${settlementCustomer.name}`
+                    : `رصيد تبديل ${exchange.publicId} للزبون ${settlementCustomer.name}`,
+                createdByUserId:
+                  user.id,
+                lines: [
+                  {
+                    accountId:
+                      customerAccount.id,
+                    debitMinor:
+                      customerDebit,
+                    creditMinor:
+                      customerCredit,
+                    memo:
+                      `حساب الزبون ${settlementCustomer.name}`,
+                  },
+                  {
+                    accountId:
+                      salesAccount.id,
+                    debitMinor:
+                      customerCredit,
+                    creditMinor:
+                      customerDebit,
+                    memo:
+                      `فرق التبديل ${exchange.publicId}`,
+                  },
+                ],
+              },
+            );
           }
 
           // -------------------------------------------------
