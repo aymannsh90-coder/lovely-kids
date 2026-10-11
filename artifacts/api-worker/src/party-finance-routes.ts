@@ -20,6 +20,11 @@ import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import {
+  customerReceivableBalances,
+  customerReceivableLedgerLines,
+  ensureCustomerReceivableControlAccount,
+} from "./finance-customer-ledger";
+import {
   postFinanceTransaction,
   type FinanceTransactionType,
 } from "./finance-posting";
@@ -643,112 +648,9 @@ async function settlementAccount(
 async function customerBalances(
   db: Db,
 ) {
-  const accounts =
-    await db
-      .select({
-        id:
-          financeAccountsTable.id,
-        customerId:
-          financeAccountsTable
-            .linkedEntityId,
-      })
-      .from(
-        financeAccountsTable,
-      )
-      .where(
-        eq(
-          financeAccountsTable
-            .linkedEntityType,
-          "customer_receivable",
-        ),
-      );
-
-  const accountMap =
-    new Map<
-      number,
-      number
-    >();
-
-  for (
-    const account of
-    accounts
-  ) {
-    if (
-      account.customerId !==
-      null
-    ) {
-      accountMap.set(
-        account.id,
-        account.customerId,
-      );
-    }
-  }
-
-  const result =
-    new Map<
-      number,
-      number
-    >();
-
-  const ids =
-    [...accountMap.keys()];
-
-  if (!ids.length) {
-    return result;
-  }
-
-  const lines =
-    await db
-      .select({
-        accountId:
-          financeTransactionLinesTable
-            .accountId,
-        debitMinor:
-          financeTransactionLinesTable
-            .debitMinor,
-        creditMinor:
-          financeTransactionLinesTable
-            .creditMinor,
-      })
-      .from(
-        financeTransactionLinesTable,
-      )
-      .where(
-        inArray(
-          financeTransactionLinesTable
-            .accountId,
-          ids,
-        ),
-      );
-
-  for (
-    const line of lines
-  ) {
-    const customerId =
-      accountMap.get(
-        line.accountId,
-      );
-
-    if (
-      customerId ===
-      undefined
-    ) {
-      continue;
-    }
-
-    result.set(
-      customerId,
-      (
-        result.get(
-          customerId,
-        ) ?? 0
-      ) +
-        line.debitMinor -
-        line.creditMinor,
-    );
-  }
-
-  return result;
+  return customerReceivableBalances(
+    db,
+  );
 }
 
 async function employeeBalances(
@@ -1093,22 +995,6 @@ async function handleCreateCustomer(
             );
           }
 
-          await ensureAccount(
-            tx,
-            {
-              code:
-                `CUSTOMER_AR_${customer.id}`,
-              name:
-                `ذمم الزبون: ${customer.name}`,
-              accountType:
-                "asset",
-              linkedEntityType:
-                "customer_receivable",
-              linkedEntityId:
-                customer.id,
-            },
-          );
-
           return customer;
         },
       );
@@ -1394,58 +1280,11 @@ async function handleCustomerLedger(
     );
   }
 
-  const accountRows =
-    await db
-      .select()
-      .from(
-        financeAccountsTable,
-      )
-      .where(
-        and(
-          eq(
-            financeAccountsTable
-              .linkedEntityType,
-            "customer_receivable",
-          ),
-          eq(
-            financeAccountsTable
-              .linkedEntityId,
-            customerId,
-          ),
-        ),
-      )
-      .limit(1);
-
-  const account =
-    accountRows[0];
-
-  if (!account) {
-    return json({
-      customer,
-      balanceMinor: 0,
-      entries: [],
-    });
-  }
-
   const lines =
-    await db
-      .select()
-      .from(
-        financeTransactionLinesTable,
-      )
-      .where(
-        eq(
-          financeTransactionLinesTable
-            .accountId,
-          account.id,
-        ),
-      )
-      .orderBy(
-        asc(
-          financeTransactionLinesTable
-            .id,
-        ),
-      );
+    await customerReceivableLedgerLines(
+      db,
+      customerId,
+    );
 
   const txIds =
     [
@@ -2842,6 +2681,12 @@ async function createVoucher(
             string;
           let creditMemo:
             string;
+          let debitCustomerId:
+            number | null =
+            null;
+          let creditCustomerId:
+            number | null =
+            null;
 
           if (
             input.voucherType ===
@@ -2858,20 +2703,8 @@ async function createVoucher(
               );
 
             const customerAccount =
-              await ensureAccount(
+              await ensureCustomerReceivableControlAccount(
                 tx,
-                {
-                  code:
-                    `CUSTOMER_AR_${party!.id}`,
-                  name:
-                    `ذمم الزبون: ${party!.name}`,
-                  accountType:
-                    "asset",
-                  linkedEntityType:
-                    "customer_receivable",
-                  linkedEntityId:
-                    party!.id,
-                },
               );
 
             debitAccountId =
@@ -2879,6 +2712,8 @@ async function createVoucher(
 
             creditAccountId =
               customerAccount.id;
+            creditCustomerId =
+              party!.id;
 
             debitMemo =
               `قبض من الزبون ${party!.name}`;
@@ -3186,6 +3021,8 @@ async function createVoucher(
                   {
                     accountId:
                       debitAccountId,
+                    customerId:
+                      debitCustomerId,
                     debitMinor:
                       amountMinor,
                     creditMinor: 0,
@@ -3195,6 +3032,8 @@ async function createVoucher(
                   {
                     accountId:
                       creditAccountId,
+                    customerId:
+                      creditCustomerId,
                     debitMinor: 0,
                     creditMinor:
                       amountMinor,
@@ -3777,73 +3616,52 @@ async function handleVoidVoucher(
           const businessDate =
             currentPalestineDate();
 
-          const reversalRows =
-            await tx
-              .insert(
-                financeTransactionsTable,
-              )
-              .values({
-                publicId:
-                  `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
-                idempotencyKey:
-                  `voucher:${voucher.id}:void`,
-                businessDate,
-                transactionType:
-                  "reversal",
-                sourceType:
-                  "finance_voucher",
-                sourceId:
-                  String(
-                    voucher.id,
-                  ),
-                sourceEvent:
-                  "voided",
-                cashSessionId:
-                  session?.id ??
-                  null,
-                status:
-                  "posted",
-                notes:
-                  `عكس ${voucher.publicId}: ${reason}`,
-                createdByUserId:
-                  auth.user.id,
-              })
-              .returning();
-
-          const reversal =
-            reversalRows[0];
-
-          if (!reversal) {
-            throw new Error(
-              "VOUCHER_REVERSAL_CREATE_FAILED",
-            );
-          }
-
-          await tx
-            .insert(
-              financeTransactionLinesTable,
-            )
-            .values(
-              originalLines.map(
-                (
-                  line,
-                  index,
-                ) => ({
-                  transactionId:
-                    reversal.id,
-                  lineNumber:
-                    index + 1,
-                  accountId:
-                    line.accountId,
-                  debitMinor:
-                    line.creditMinor,
-                  creditMinor:
-                    line.debitMinor,
-                  memo:
-                    `عكس: ${line.memo ?? voucher.publicId}`,
-                }),
-              ),
-            );
+          await postFinanceTransaction(
+            tx,
+            {
+              publicId:
+                `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+              idempotencyKey:
+                `voucher:${voucher.id}:void`,
+              businessDate,
+              transactionType:
+                "reversal",
+              sourceType:
+                "finance_voucher",
+              sourceId:
+                String(
+                  voucher.id,
+                ),
+              sourceEvent:
+                "voided",
+              cashSessionId:
+                session?.id ??
+                null,
+              notes:
+                `عكس ${voucher.publicId}: ${reason}`,
+              createdByUserId:
+                auth.user.id,
+              lines:
+                originalLines.map(
+                  (line) => ({
+                    accountId:
+                      line.accountId,
+                    customerId:
+                      line.customerId,
+                    employeeId:
+                      line.employeeId,
+                    supplierId:
+                      line.supplierId,
+                    debitMinor:
+                      line.creditMinor,
+                    creditMinor:
+                      line.debitMinor,
+                    memo:
+                      `عكس: ${line.memo ?? voucher.publicId}`,
+                  }),
+                ),
+            },
+          );
 
           await tx
             .update(
