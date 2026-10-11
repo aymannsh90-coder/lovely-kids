@@ -921,8 +921,21 @@ export default function ExpensesPage() {
             saved.length >
             0
           ) {
+            const withFuel =
+              saved.includes(
+                "preset:fuel",
+              ) ||
+              !validKeys.has(
+                "preset:fuel",
+              )
+                ? saved
+                : [
+                    ...saved,
+                    "preset:fuel",
+                  ];
+
             setPinOrder(
-              saved,
+              withFuel,
             );
             return;
           }
