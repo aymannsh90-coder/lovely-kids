@@ -10004,3 +10004,407 @@ textarea:disabled {
 }
 
 /* BANKING + CURRENCIES END */
+
+
+/* FINANCE CHECKS START */
+
+.checks-page {
+  display: grid;
+  gap: 22px;
+}
+
+.checks-heading,
+.checks-list-section {
+  padding: 22px;
+  border: 1px solid #dce7ec;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(29, 71, 93, 0.05);
+}
+
+.checks-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.checks-heading h2 {
+  margin: 5px 0 6px;
+  font-size: clamp(28px, 4vw, 38px);
+}
+
+.checks-heading p {
+  margin: 0;
+  color: #657481;
+  line-height: 1.7;
+}
+
+.checks-eyebrow {
+  color: #e91e8c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.checks-heading-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.checks-heading-actions .primary-button,
+.checks-heading-actions .secondary-button {
+  padding: 0 16px;
+}
+
+.checks-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.checks-summary-grid article {
+  display: grid;
+  gap: 7px;
+  min-height: 92px;
+  padding: 15px 16px;
+  border: 1px solid #dce7ec;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.checks-summary-grid article.has-warning {
+  border-color: #f0d29b;
+  background: #fffaf0;
+}
+
+.checks-summary-grid span {
+  color: #71808b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.checks-summary-grid strong {
+  margin-top: auto;
+  font-size: 24px;
+}
+
+.checks-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.checks-toolbar > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.checks-toolbar select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d2dfe5;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.checks-table-wrap {
+  overflow-x: auto;
+}
+
+.checks-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.checks-table th,
+.checks-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e5ecef;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.checks-table th {
+  color: #657481;
+  background: #f8fbfc;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.checks-table td > small {
+  display: block;
+  margin-top: 4px;
+  color: #7a8790;
+  font-size: 11px;
+}
+
+.check-direction,
+.check-status,
+.check-due {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.check-direction.received {
+  color: #176443;
+  background: #e9f9f1;
+}
+
+.check-direction.issued {
+  color: #92561a;
+  background: #fff2df;
+}
+
+.check-status.status-on_hand {
+  color: #4c6170;
+  background: #edf4f7;
+}
+
+.check-status.status-deposited {
+  color: #1b5c81;
+  background: #e7f5fd;
+}
+
+.check-status.status-issued {
+  color: #8b5b18;
+  background: #fff3dd;
+}
+
+.check-status.status-cleared {
+  color: #176443;
+  background: #e9f9f1;
+}
+
+.check-status.status-returned {
+  color: #8a4d1c;
+  background: #fff0df;
+}
+
+.check-status.status-cancelled {
+  color: #9f2c39;
+  background: #fdecef;
+}
+
+.check-due {
+  color: #596975;
+  background: #f3f6f8;
+}
+
+.check-due.is-due {
+  color: #9a5b15;
+  background: #fff0d9;
+}
+
+.check-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.check-actions button {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid #d6e1e6;
+  border-radius: 8px;
+  color: #44535e;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.check-actions button.is-primary {
+  border-color: #e91e8c;
+  color: #a31563;
+  background: #fff0f8;
+}
+
+.check-actions button.is-danger {
+  border-color: #efc8cd;
+  color: #9c2835;
+  background: #fff6f7;
+}
+
+.checks-empty {
+  padding: 30px 18px;
+  border: 1px dashed #cfdee5;
+  border-radius: 14px;
+  color: #71808b;
+  background: #f9fcfd;
+  text-align: center;
+}
+
+.checks-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(13, 32, 43, 0.52);
+  backdrop-filter: blur(3px);
+}
+
+.checks-modal {
+  width: min(760px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border: 1px solid #d8e3e8;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.24);
+}
+
+.checks-action-modal {
+  width: min(560px, 100%);
+}
+
+.checks-modal-header,
+.checks-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.checks-modal-header {
+  border-bottom: 1px solid #e5ecef;
+}
+
+.checks-modal-header h3 {
+  margin: 0 0 5px;
+}
+
+.checks-modal-header p {
+  margin: 0;
+  color: #71808b;
+  line-height: 1.6;
+}
+
+.checks-modal-header > button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #d8e1e6;
+  border-radius: 50%;
+  color: #4b5964;
+  background: #fff;
+  font-size: 24px;
+}
+
+.checks-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 20px;
+}
+
+.checks-form-grid label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.checks-form-grid label span small {
+  color: #85919a;
+  font-weight: 500;
+}
+
+.checks-form-grid input,
+.checks-form-grid select,
+.checks-form-grid textarea {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid #cfdee5;
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+  color: #172033;
+}
+
+.checks-form-grid textarea {
+  min-height: 84px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.checks-form-grid input:focus,
+.checks-form-grid select:focus,
+.checks-form-grid textarea:focus {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 4px rgba(233, 30, 140, 0.08);
+}
+
+.checks-notes-field {
+  grid-column: 1 / -1;
+}
+
+.checks-modal-alert {
+  margin: 0 20px 16px;
+}
+
+.checks-modal-footer {
+  border-top: 1px solid #e5ecef;
+  background: #fafcfd;
+}
+
+.checks-modal-footer .primary-button,
+.checks-modal-footer .secondary-button {
+  min-width: 120px;
+  padding: 0 16px;
+}
+
+@media (max-width: 850px) {
+  .checks-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .checks-heading,
+  .checks-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .checks-heading-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .checks-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .checks-notes-field {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 430px) {
+  .checks-summary-grid,
+  .checks-heading-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .checks-modal-overlay {
+    padding: 8px;
+  }
+}
+
+/* FINANCE CHECKS END */
