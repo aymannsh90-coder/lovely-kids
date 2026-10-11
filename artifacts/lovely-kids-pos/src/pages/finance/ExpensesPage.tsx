@@ -85,6 +85,12 @@ const DEFAULT_EXPENSE_PRESETS:
       pattern: /توصيل|مواصل|نقل/,
     },
     {
+      key: "preset:fuel",
+      title: "محروقات سيارة",
+      icon: "⛽",
+      pattern: /محروقات|بنزين|سولار|ديزل|وقود/,
+    },
+    {
       key: "preset:maintenance",
       title: "صيانة",
       icon: "🛠️",
@@ -173,6 +179,12 @@ function expenseIcon(name: string) {
   }
 
   if (
+    /محروقات|بنزين|سولار|ديزل|وقود/.test(value)
+  ) {
+    return "⛽";
+  }
+
+  if (
     /صيان|تصليح/.test(value)
   ) {
     return "🛠️";
@@ -219,6 +231,7 @@ function categoryPriority(name: string) {
     /كهرب/,
     /مياه|ميه|ماء/,
     /توصيل|مواصل|نقل/,
+    /محروقات|بنزين|سولار|ديزل|وقود/,
     /صيان|تصليح/,
   ];
 
