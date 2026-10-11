@@ -9062,3 +9062,629 @@ textarea:disabled {
 }
 
 /* UNIFIED CUSTOMER PICKER END */
+
+
+/* FINANCE EXPENSE HUB START */
+
+.expense-hub-page {
+  display: grid;
+  gap: 22px;
+}
+
+.expense-hub-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid #dce9ef;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(29, 71, 93, 0.07);
+}
+
+.expense-hub-heading h2 {
+  margin: 5px 0 6px;
+  font-size: clamp(26px, 4vw, 36px);
+}
+
+.expense-hub-heading p,
+.expense-section-title p {
+  margin: 0;
+  color: #657481;
+  line-height: 1.7;
+}
+
+.expense-hub-eyebrow {
+  color: #e91e8c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.expense-manage-button {
+  flex: 0 0 auto;
+}
+
+.expense-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.expense-summary-grid article {
+  display: grid;
+  gap: 8px;
+  min-height: 112px;
+  padding: 18px;
+  border: 1px solid #dce7ec;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(29, 71, 93, 0.05);
+}
+
+.expense-summary-grid span {
+  color: #71808c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.expense-summary-grid strong {
+  margin-top: auto;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.expense-summary-cash {
+  border-color: #cce9df !important;
+  background: #f5fffb !important;
+}
+
+.expense-quick-section,
+.expense-history-section {
+  padding: 22px;
+  border: 1px solid #dce7ec;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(29, 71, 93, 0.05);
+}
+
+.expense-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.expense-section-title h3 {
+  margin: 0 0 5px;
+  font-size: 20px;
+}
+
+.expense-section-title > span {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border-radius: 999px;
+  color: #8d1458;
+  background: #ffe9f5;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.expense-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.expense-quick-tile {
+  display: grid;
+  gap: 6px;
+  min-height: 142px;
+  padding: 18px 16px;
+  border: 1px solid #d9e5ea;
+  border-radius: 18px;
+  color: #172033;
+  background: #fff;
+  text-align: right;
+  box-shadow: 0 8px 20px rgba(29, 71, 93, 0.05);
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.expense-quick-tile:hover {
+  transform: translateY(-2px);
+  border-color: #e91e8c;
+  box-shadow: 0 12px 25px rgba(233, 30, 140, 0.12);
+}
+
+.expense-tile-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 15px;
+  background: #f4f8fa;
+  font-size: 25px;
+}
+
+.expense-quick-tile strong {
+  margin-top: 6px;
+  font-size: 16px;
+}
+
+.expense-quick-tile small {
+  color: #72808b;
+  font-size: 12px;
+}
+
+.expense-empty-card {
+  padding: 30px 18px;
+  border: 1px dashed #ccdce4;
+  border-radius: 16px;
+  color: #73818d;
+  background: #f9fcfd;
+  text-align: center;
+}
+
+.expense-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.expense-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid #dfe8ec;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.expense-history-row.is-voided {
+  opacity: 0.7;
+  background: #fafafa;
+}
+
+.expense-history-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.expense-history-main > div {
+  min-width: 0;
+}
+
+.expense-history-main strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.expense-history-main small {
+  color: #72808b;
+}
+
+.expense-history-main p {
+  margin: 6px 0 0;
+  color: #596975;
+  font-size: 13px;
+}
+
+.expense-history-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 13px;
+  background: #f4f8fa;
+  font-size: 21px;
+}
+
+.expense-history-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.expense-history-side > strong {
+  min-width: 92px;
+  font-size: 16px;
+  text-align: left;
+}
+
+.expense-status {
+  min-width: 52px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.expense-status.posted {
+  color: #176443;
+  background: #e9f9f1;
+}
+
+.expense-status.voided {
+  color: #8b3941;
+  background: #fdecef;
+}
+
+.expense-void-button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #efc9ce;
+  border-radius: 9px;
+  color: #a32331;
+  background: #fff6f7;
+  font-weight: 800;
+}
+
+.expense-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(13, 32, 43, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.expense-modal {
+  width: min(560px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border: 1px solid #d8e3e8;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.24);
+}
+
+.expense-manager-modal {
+  width: min(760px, 100%);
+}
+
+.expense-modal-header,
+.expense-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.expense-modal-header {
+  border-bottom: 1px solid #e6ecef;
+}
+
+.expense-modal-footer {
+  border-top: 1px solid #e6ecef;
+  background: #fafcfd;
+}
+
+.expense-modal-footer .primary-button,
+.expense-modal-footer .secondary-button {
+  min-width: 120px;
+  padding: 0 18px;
+}
+
+.expense-modal-footer > span {
+  color: #71808b;
+  font-size: 12px;
+}
+
+.expense-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.expense-modal-title > span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 14px;
+  background: #f4f8fa;
+  font-size: 24px;
+}
+
+.expense-modal-title h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.expense-modal-title p {
+  margin: 4px 0 0;
+  color: #74818b;
+  font-size: 12px;
+}
+
+.expense-modal-close {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #d8e1e6;
+  border-radius: 50%;
+  color: #4b5964;
+  background: #fff;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.expense-modal-body {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.expense-modal-body label {
+  display: grid;
+  gap: 8px;
+  color: #344554;
+  font-weight: 800;
+}
+
+.expense-modal-body label > span small {
+  color: #89959e;
+  font-weight: 500;
+}
+
+.expense-modal-body input,
+.expense-modal-body select,
+.expense-modal-body textarea,
+.expense-add-category input {
+  width: 100%;
+  border: 1px solid #cfdee5;
+  border-radius: 12px;
+  outline: none;
+  background: #fff;
+  color: #172033;
+}
+
+.expense-modal-body input,
+.expense-modal-body select,
+.expense-add-category input {
+  min-height: 48px;
+  padding: 0 13px;
+}
+
+.expense-modal-body textarea {
+  padding: 13px;
+  resize: vertical;
+}
+
+.expense-modal-body input:focus,
+.expense-modal-body select:focus,
+.expense-modal-body textarea:focus,
+.expense-add-category input:focus {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 4px rgba(233, 30, 140, 0.08);
+}
+
+.expense-money-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #cfdee5;
+  border-radius: 12px;
+}
+
+.expense-money-input input {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-size: 22px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.expense-money-input b {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  border-right: 1px solid #e0e7eb;
+  background: #f8fbfc;
+}
+
+.expense-payment-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.expense-payment-options button {
+  min-height: 44px;
+  border: 1px solid #d5e0e5;
+  border-radius: 11px;
+  color: #344554;
+  background: #fff;
+  font-weight: 800;
+}
+
+.expense-payment-options button.is-selected {
+  border-color: #e91e8c;
+  color: #9e155f;
+  background: #fff0f8;
+  box-shadow: inset 0 0 0 1px #e91e8c;
+}
+
+.expense-manager-list {
+  display: grid;
+  gap: 8px;
+}
+
+.expense-manager-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 74px 76px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e0e8ec;
+  border-radius: 13px;
+}
+
+.expense-manager-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  background: #f4f8fa;
+  font-size: 20px;
+}
+
+.expense-manager-name {
+  display: grid;
+  gap: 2px;
+}
+
+.expense-manager-name small {
+  color: #75838d;
+  font-size: 11px;
+}
+
+.expense-pin-toggle {
+  min-height: 34px;
+  border: 1px solid #d5e0e5;
+  border-radius: 9px;
+  color: #66747e;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.expense-pin-toggle.is-pinned {
+  border-color: #efb9d7;
+  color: #a31563;
+  background: #fff0f8;
+}
+
+.expense-order-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+}
+
+.expense-order-buttons button {
+  height: 34px;
+  border: 1px solid #d8e2e7;
+  border-radius: 8px;
+  background: #fff;
+  font-weight: 900;
+}
+
+.expense-add-category {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(180px, 1.2fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px dashed #d3e0e6;
+  border-radius: 14px;
+  background: #f9fcfd;
+}
+
+.expense-add-category > div {
+  display: grid;
+  gap: 3px;
+}
+
+.expense-add-category small {
+  color: #75838d;
+  font-size: 11px;
+}
+
+.expense-add-category .primary-button {
+  min-width: 92px;
+  padding: 0 14px;
+}
+
+@media (max-width: 1050px) {
+  .expense-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .expense-tile-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .expense-hub-heading,
+  .expense-section-title,
+  .expense-history-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .expense-manage-button {
+    width: 100%;
+  }
+
+  .expense-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expense-tile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expense-history-side {
+    justify-content: space-between;
+  }
+
+  .expense-history-side > strong {
+    min-width: 0;
+    text-align: right;
+  }
+
+  .expense-add-category {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .expense-summary-grid,
+  .expense-tile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .expense-modal-overlay {
+    padding: 8px;
+  }
+
+  .expense-modal {
+    max-height: 96vh;
+    border-radius: 16px;
+  }
+
+  .expense-payment-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .expense-manager-row {
+    grid-template-columns: 38px minmax(0, 1fr) 68px;
+  }
+
+  .expense-order-buttons {
+    grid-column: 2 / 4;
+  }
+}
+
+/* FINANCE EXPENSE HUB END */
