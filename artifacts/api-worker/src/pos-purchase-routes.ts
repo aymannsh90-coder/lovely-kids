@@ -18,7 +18,10 @@ import { openDb, type Env } from "./db";
 import {
   ensureSupplierPayableControlAccount,
 } from "./finance-supplier-ledger";
-import { postFinanceTransaction } from "./finance-posting";
+import {
+  postFinanceTransaction,
+  type FinancePostingLineInput,
+} from "./finance-posting";
 import {
   isPurchaseWriteEnabled,
   purchaseWritesDisabledResponse,
@@ -1959,23 +1962,28 @@ async function handleCreatePurchase(
               )
             : null;
 
-        const financeLines = [
-          {
-            accountId: purchaseAccount.id,
-            supplierId: null,
-            debitMinor: totalMinor,
-            creditMinor: 0,
-            memo: `فاتورة مشتريات ${purchase.publicId}`,
-          },
-        ];
+        const financeLines:
+          FinancePostingLineInput[] = [
+            {
+              accountId:
+                purchaseAccount.id,
+              debitMinor:
+                totalMinor,
+              creditMinor: 0,
+              memo:
+                `فاتورة مشتريات ${purchase.publicId}`,
+            },
+          ];
 
         if (paidMinor > 0 && cashAccount) {
           financeLines.push({
-            accountId: cashAccount.id,
-            supplierId: null,
+            accountId:
+              cashAccount.id,
             debitMinor: 0,
-            creditMinor: paidMinor,
-            memo: "دفعة نقدية للمورد",
+            creditMinor:
+              paidMinor,
+            memo:
+              "دفعة نقدية للمورد",
           });
         }
 
