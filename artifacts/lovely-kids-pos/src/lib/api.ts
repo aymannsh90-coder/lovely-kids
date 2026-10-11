@@ -563,6 +563,274 @@ export function createPosCustomerReceipt(
 }
 
 
+export type PosFinancePaymentMethod =
+  | "cash"
+  | "card"
+  | "bank";
+
+export interface PosExpenseCategory {
+  id: number;
+  code: string;
+  name: string;
+  financeAccountId: number;
+  status: "active" | "inactive";
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosEmployee {
+  id: number;
+  code: string;
+  name: string;
+  phone: string | null;
+  userId: number | null;
+  baseSalaryMinor: number;
+  hireDate: string | null;
+  status: "active" | "inactive";
+  notes: string | null;
+  createdByUserId: number;
+  createdAt: string;
+  updatedAt: string;
+  advanceMinor: number;
+  payableMinor: number;
+  netDueToEmployeeMinor: number;
+}
+
+export interface PosFinanceVoucher {
+  id: number;
+  publicId: string;
+  idempotencyKey: string;
+  voucherType:
+    | "customer_receipt"
+    | "expense"
+    | "employee_advance"
+    | "employee_repayment"
+    | "salary_accrual"
+    | "employee_payment"
+    | "owner_withdrawal"
+    | "adjustment";
+  partyType:
+    | "customer"
+    | "employee"
+    | "owner"
+    | null;
+  partyId: number | null;
+  expenseCategoryId: number | null;
+  paymentMethod:
+    | PosFinancePaymentMethod
+    | "non_cash";
+  amountMinor: number;
+  businessDate: string;
+  referencePeriod: string | null;
+  cashSessionId: number | null;
+  financeTransactionId: number | null;
+  status: "posted" | "voided";
+  notes: string | null;
+  createdByUserId: number;
+  voidedAt: string | null;
+  voidedByUserId: number | null;
+  voidReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function getPosExpenseCategories(
+  token: string,
+) {
+  return apiRequest<{
+    results: PosExpenseCategory[];
+  }>(
+    "/api/pos/finance/expense-categories",
+    {},
+    token,
+  );
+}
+
+export function createPosExpenseCategory(
+  token: string,
+  name: string,
+) {
+  return apiRequest<{
+    category: PosExpenseCategory;
+  }>(
+    "/api/pos/finance/expense-categories",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+      }),
+    },
+    token,
+  );
+}
+
+export function getPosEmployees(
+  token: string,
+  options: {
+    query?: string;
+    status?: "active" | "inactive";
+  } = {},
+) {
+  const params =
+    new URLSearchParams();
+
+  if (options.query?.trim()) {
+    params.set(
+      "query",
+      options.query.trim(),
+    );
+  }
+
+  if (options.status) {
+    params.set(
+      "status",
+      options.status,
+    );
+  }
+
+  const query =
+    params.toString();
+
+  return apiRequest<{
+    results: PosEmployee[];
+  }>(
+    `/api/pos/employees${query ? `?${query}` : ""}`,
+    {},
+    token,
+  );
+}
+
+export function createPosExpense(
+  token: string,
+  input: {
+    expenseCategoryId: number;
+    amount: string;
+    paymentMethod: PosFinancePaymentMethod;
+    registerKey: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated?: boolean;
+    voucher: PosFinanceVoucher;
+  }>(
+    "/api/pos/finance/expenses",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosEmployeeAdvance(
+  token: string,
+  employeeId: number,
+  input: {
+    amount: string;
+    paymentMethod: PosFinancePaymentMethod;
+    registerKey: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated?: boolean;
+    voucher: PosFinanceVoucher;
+  }>(
+    `/api/pos/employees/${employeeId}/advance`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosOwnerWithdrawal(
+  token: string,
+  input: {
+    amount: string;
+    paymentMethod: PosFinancePaymentMethod;
+    registerKey: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated?: boolean;
+    voucher: PosFinanceVoucher;
+  }>(
+    "/api/pos/finance/owner-withdrawals",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function getPosFinanceVouchers(
+  token: string,
+  options: {
+    type?: PosFinanceVoucher["voucherType"];
+    date?: string;
+  } = {},
+) {
+  const params =
+    new URLSearchParams();
+
+  if (options.type) {
+    params.set(
+      "type",
+      options.type,
+    );
+  }
+
+  if (options.date) {
+    params.set(
+      "date",
+      options.date,
+    );
+  }
+
+  const query =
+    params.toString();
+
+  return apiRequest<{
+    results: PosFinanceVoucher[];
+  }>(
+    `/api/pos/finance/vouchers${query ? `?${query}` : ""}`,
+    {},
+    token,
+  );
+}
+
+export function voidPosFinanceVoucher(
+  token: string,
+  voucherId: number,
+  reason: string,
+) {
+  return apiRequest<{
+    voucher: PosFinanceVoucher;
+    reversal: unknown;
+    expectedCashBeforeMinor: number | null;
+    expectedCashAfterMinor: number | null;
+  }>(
+    `/api/pos/finance/vouchers/${voucherId}/void`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reason,
+      }),
+    },
+    token,
+  );
+}
+
+
 export function createPosSale(
   token: string,
   input: {
