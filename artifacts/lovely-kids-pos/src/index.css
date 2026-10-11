@@ -10686,3 +10686,41 @@ textarea:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* Sales invoice totals visibility fix 2026-10-11 */
+
+.sales-invoice-scroll-page {
+  padding-bottom: 18px;
+}
+
+.sales-invoice-scroll-page .accounting-invoice-bottom {
+  align-items: start;
+}
+
+.sales-invoice-scroll-page .accounting-invoice-totals {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: visible;
+  padding: 10px 12px 14px;
+}
+
+.sales-invoice-scroll-page .accounting-invoice-totals > div {
+  min-height: 30px;
+  padding: 4px 0 7px;
+}
+
+.sales-invoice-scroll-page .accounting-invoice-totals > div:first-child {
+  padding-top: 6px;
+}
+
+@media screen and (min-width: 1001px) {
+  .route-content .sales-invoice-scroll-page .accounting-invoice-bottom {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .route-content .sales-invoice-scroll-page .accounting-invoice-totals {
+    min-width: 340px;
+  }
+}
