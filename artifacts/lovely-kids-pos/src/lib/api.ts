@@ -976,6 +976,259 @@ export function savePosExchangeRate(
 }
 
 
+export type PosFinanceCheckStatus =
+  | "on_hand"
+  | "deposited"
+  | "issued"
+  | "cleared"
+  | "returned"
+  | "cancelled";
+
+export interface PosFinanceCheck {
+  id: number;
+  publicId: string;
+  idempotencyKey: string;
+  direction:
+    | "received"
+    | "issued";
+  checkNumber: string;
+  bankId: number;
+  bankAccountId: number | null;
+  depositedToBankAccountId: number | null;
+  currencyCode: string;
+  amountMinor: number;
+  exchangeRateMicros: number;
+  baseAmountMinor: number;
+  dueDate: string;
+  customerId: number | null;
+  supplierId: number | null;
+  employeeId: number | null;
+  drawerName: string | null;
+  payeeName: string | null;
+  status: PosFinanceCheckStatus;
+  initialFinanceTransactionId: number | null;
+  settlementFinanceTransactionId: number | null;
+  notes: string | null;
+  createdByUserId: number;
+  depositedAt: string | null;
+  clearedAt: string | null;
+  returnedAt: string | null;
+  cancelledAt: string | null;
+  cancelledByUserId: number | null;
+  cancelReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  bank: PosBank | null;
+  bankAccount: {
+    id: number;
+    bankId: number;
+    code: string;
+    name: string;
+    accountNumber: string | null;
+    iban: string | null;
+    currencyCode: string;
+    financeAccountId: number;
+    status: "active" | "inactive";
+  } | null;
+  depositedToBankAccount: {
+    id: number;
+    bankId: number;
+    code: string;
+    name: string;
+    accountNumber: string | null;
+    iban: string | null;
+    currencyCode: string;
+    financeAccountId: number;
+    status: "active" | "inactive";
+  } | null;
+  party: {
+    type:
+      | "customer"
+      | "supplier"
+      | "employee";
+    id: number;
+    name: string;
+  } | null;
+}
+
+export function getPosFinanceChecks(
+  token: string,
+  options: {
+    direction?: "received" | "issued";
+    status?: PosFinanceCheckStatus;
+  } = {},
+) {
+  const params =
+    new URLSearchParams();
+
+  if (options.direction) {
+    params.set(
+      "direction",
+      options.direction,
+    );
+  }
+
+  if (options.status) {
+    params.set(
+      "status",
+      options.status,
+    );
+  }
+
+  const suffix =
+    params.size > 0
+      ? `?${params.toString()}`
+      : "";
+
+  return apiRequest<{
+    results: PosFinanceCheck[];
+  }>(
+    `/api/pos/finance/checks${suffix}`,
+    {},
+    token,
+  );
+}
+
+export function createPosReceivedCheck(
+  token: string,
+  input: {
+    idempotencyKey: string;
+    checkNumber: string;
+    bankId: number;
+    customerId: number;
+    currencyCode: string;
+    amount: string;
+    exchangeRate?: string;
+    dueDate: string;
+    drawerName?: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    check: PosFinanceCheck;
+  }>(
+    "/api/pos/finance/checks/received",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosIssuedCheck(
+  token: string,
+  input: {
+    idempotencyKey: string;
+    checkNumber: string;
+    bankAccountId: number;
+    supplierId: number;
+    amount: string;
+    exchangeRate?: string;
+    dueDate: string;
+    payeeName?: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    check: PosFinanceCheck;
+  }>(
+    "/api/pos/finance/checks/issued",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function depositPosFinanceCheck(
+  token: string,
+  checkId: number,
+  bankAccountId: number,
+) {
+  return apiRequest<{
+    check: PosFinanceCheck;
+    alreadyDeposited: boolean;
+  }>(
+    `/api/pos/finance/checks/${checkId}/deposit`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        bankAccountId,
+      }),
+    },
+    token,
+  );
+}
+
+export function clearPosFinanceCheck(
+  token: string,
+  checkId: number,
+  input: {
+    bankAccountId?: number;
+    exchangeRate?: string;
+  } = {},
+) {
+  return apiRequest<{
+    check: PosFinanceCheck;
+    alreadyCleared: boolean;
+    bankBaseMinor?: number;
+    clearingRateMicros?: number;
+  }>(
+    `/api/pos/finance/checks/${checkId}/clear`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function returnPosFinanceCheck(
+  token: string,
+  checkId: number,
+  reason?: string,
+) {
+  return apiRequest<{
+    check: PosFinanceCheck;
+    alreadyReversed: boolean;
+  }>(
+    `/api/pos/finance/checks/${checkId}/return`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reason:
+          reason || undefined,
+      }),
+    },
+    token,
+  );
+}
+
+export function cancelPosFinanceCheck(
+  token: string,
+  checkId: number,
+  reason: string,
+) {
+  return apiRequest<{
+    check: PosFinanceCheck;
+    alreadyReversed: boolean;
+  }>(
+    `/api/pos/finance/checks/${checkId}/cancel`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reason,
+      }),
+    },
+    token,
+  );
+}
+
+
 export function createPosSale(
   token: string,
   input: {
