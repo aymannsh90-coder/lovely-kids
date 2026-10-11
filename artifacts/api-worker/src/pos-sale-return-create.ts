@@ -1,8 +1,6 @@
 import {
   customersTable,
   financeAccountsTable,
-  financeTransactionLinesTable,
-  financeTransactionsTable,
   inventoryMovementsTable,
   cashSessionsTable,
   posSaleItemCostsTable,
