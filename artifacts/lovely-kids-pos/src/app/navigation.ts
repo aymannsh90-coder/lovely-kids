@@ -195,10 +195,10 @@ export const posNavigation: PosNavigationItem[] = [
     group: "finance",
     path: "/finance/expenses",
     title: "مصروفات اليوم",
-    description: "تسجيل المصروفات والسحوبات من الصندوق.",
+    description: "مربعات سريعة للمصاريف وسلف الموظفين والسحوبات.",
     icon: "💸",
     requiresOpenSession: true,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "checks",
