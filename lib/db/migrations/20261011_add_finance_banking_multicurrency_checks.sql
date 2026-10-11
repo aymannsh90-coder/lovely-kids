@@ -64,7 +64,7 @@ SET
   status = 'active',
   updated_at = now();
 
-DO $
+DO $bank_currency_fk$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
@@ -79,7 +79,7 @@ BEGIN
       ON DELETE RESTRICT;
   END IF;
 END
-$;
+$bank_currency_fk$;
 
 CREATE TABLE IF NOT EXISTS public.finance_exchange_rates (
   id serial PRIMARY KEY,
