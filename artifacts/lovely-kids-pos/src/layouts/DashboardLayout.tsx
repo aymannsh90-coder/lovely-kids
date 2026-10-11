@@ -12,7 +12,12 @@ import { API_BASE_URL, POS_REGISTER_KEY } from "../lib/api";
 import { formatMoney } from "../lib/format";
 
 type MenuSectionKey =
-  "documents" | "inventory" | "parties" | "finance" | "reports";
+  | "documents"
+  | "inventory"
+  | "parties"
+  | "finance"
+  | "statements"
+  | "reports";
 
 interface MenuSection {
   key: MenuSectionKey;
@@ -45,6 +50,12 @@ const menuSections: MenuSection[] = [
     title: "المالية",
     icon: "💰",
     groups: ["finance"],
+  },
+  {
+    key: "statements",
+    title: "كشوفات",
+    icon: "📑",
+    groups: ["statements"],
   },
   {
     key: "reports",
@@ -94,7 +105,8 @@ export default function DashboardLayout() {
         (item) =>
           activeSection.groups.includes(item.group) &&
           (item.group !== "purchases" || user?.isOwner === true) &&
-          (item.group !== "reports" || user?.isOwner === true),
+          (item.group !== "reports" || user?.isOwner === true) &&
+          (item.group !== "statements" || user?.isOwner === true),
       ),
     [activeSection, user?.isOwner],
   );
