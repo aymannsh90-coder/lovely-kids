@@ -4154,25 +4154,77 @@ export default function ExchangePage() {
             <h3>بيانات الزبون</h3>
 
             <p>
-              اسم الزبون اختياري ويُحفظ مع فاتورة التبديل.
+              اختر حساب الزبون إذا كان مسجلًا،
+              أو اكتب الاسم فقط لزبون غير مسجل.
             </p>
           </div>
         </div>
 
-        <div style={{ padding: "16px" }}>
-          <label className="sales-return-field">
-            <span>اسم الزبون (اختياري)</span>
+        <div
+          style={{
+            padding: "16px",
+            display: "grid",
+            gap: "12px",
+          }}
+        >
+          <CustomerPicker
+            customers={customers}
+            value={selectedCustomerId}
+            label="حساب الزبون (اختياري)"
+            placeholder="اختر الزبون من الحسابات"
+            onChange={(customer) => {
+              setSelectedCustomerId(
+                customer?.id ?? null,
+              );
 
-            <input
-              value={customerName}
-              maxLength={150}
-              autoComplete="off"
-              placeholder="اسم الزبون"
-              onChange={(event) =>
-                setCustomerName(event.target.value)
-              }
-            />
-          </label>
+              setCustomerName(
+                customer?.name ?? "",
+              );
+
+              setQuote(null);
+              setQuoteSignature("");
+              setQuoteError("");
+              setCreateError("");
+            }}
+          />
+
+          {!selectedCustomerId && (
+            <label className="sales-return-field">
+              <span>
+                أو اسم الزبون فقط (اختياري)
+              </span>
+
+              <input
+                value={customerName}
+                maxLength={150}
+                autoComplete="off"
+                placeholder="اسم زبون غير مسجل"
+                onChange={(event) => {
+                  setCustomerName(
+                    event.target.value,
+                  );
+
+                  setQuoteError("");
+                  setCreateError("");
+                }}
+              />
+
+              <small>
+                هذا الاسم يُحفظ مع فاتورة التبديل
+                فقط ولا ينشئ حساب زبون جديد.
+              </small>
+            </label>
+          )}
+
+          {selectedCustomerId && (
+            <small>
+              الزبون المختار:{" "}
+              <strong>{customerName}</strong>.
+              إذا أردت تسجيل فرق التبديل على
+              حسابه اختر طريقة التسوية
+              «حساب الزبون».
+            </small>
+          )}
         </div>
       </article>
 
