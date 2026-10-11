@@ -19,6 +19,7 @@ import {
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
 import {
   consumeExactProductCost,
 } from "./inventory-cost-engine";
@@ -832,70 +833,46 @@ export async function handleVoidPosSaleReturn(
               );
             }
 
-            const reversalRows =
-              await tx
-                .insert(
-                  financeTransactionsTable,
-                )
-                .values({
-                  publicId:
-                    `FIN-RET-VOID-${saleReturn.publicId}`,
-                  idempotencyKey:
-                    `pos-sale-return:${saleReturn.id}:customer-credit:void`,
-                  businessDate:
-                    saleReturn.businessDate,
-                  transactionType:
-                    "reversal",
-                  sourceType:
-                    "pos_sale_return",
-                  sourceId:
-                    String(
-                      saleReturn.id,
-                    ),
-                  sourceEvent:
-                    "customer_credit_void",
-                  cashSessionId:
-                    saleReturn.cashSessionId,
-                  status:
-                    "posted",
-                  notes:
-                    `عكس مردود حساب الزبون ${saleReturn.publicId}`,
-                  createdByUserId:
-                    user.id,
-                })
-                .returning();
-
-            const reversal =
-              reversalRows[0];
-
-            if (!reversal) {
-              throw new Error(
-                "POS_RETURN_CUSTOMER_REVERSAL_FAILED",
-              );
-            }
-
-            await tx
-              .insert(
-                financeTransactionLinesTable,
-              )
-              .values(
-                originalLines.map(
-                  (line, index) => ({
-                    transactionId:
-                      reversal.id,
-                    lineNumber:
-                      index + 1,
-                    accountId:
-                      line.accountId,
-                    debitMinor:
-                      line.creditMinor,
-                    creditMinor:
-                      line.debitMinor,
-                    memo:
-                      `عكس ${saleReturn.publicId}`,
-                  }),
-                ),
-              );
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-RET-VOID-${saleReturn.publicId}`,
+                idempotencyKey:
+                  `pos-sale-return:${saleReturn.id}:customer-credit:void`,
+                businessDate:
+                  saleReturn.businessDate,
+                transactionType:
+                  "reversal",
+                sourceType:
+                  "pos_sale_return",
+                sourceId:
+                  String(
+                    saleReturn.id,
+                  ),
+                sourceEvent:
+                  "customer_credit_void",
+                cashSessionId:
+                  saleReturn.cashSessionId,
+                notes:
+                  `عكس مردود حساب الزبون ${saleReturn.publicId}`,
+                createdByUserId:
+                  user.id,
+                lines:
+                  originalLines.map(
+                    (line) => ({
+                      accountId:
+                        line.accountId,
+                      debitMinor:
+                        line.creditMinor,
+                      creditMinor:
+                        line.debitMinor,
+                      memo:
+                        `عكس ${saleReturn.publicId}`,
+                    }),
+                  ),
+              },
+            );
 
             await tx
               .update(
