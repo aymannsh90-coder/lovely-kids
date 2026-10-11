@@ -15,6 +15,9 @@ import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  ensureSupplierPayableControlAccount,
+} from "./finance-supplier-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import {
   isPurchaseWriteEnabled,
@@ -1126,6 +1129,12 @@ async function handleVoidPurchase(
                 (line) => ({
                   accountId:
                     line.accountId,
+                  customerId:
+                    line.customerId,
+                  employeeId:
+                    line.employeeId,
+                  supplierId:
+                    line.supplierId,
                   debitMinor:
                     line.creditMinor,
                   creditMinor:
@@ -1945,18 +1954,15 @@ async function handleCreatePurchase(
 
         const supplierAccount =
           dueMinor > 0
-            ? await ensureAccount({
-                code: `SUPPLIER_${supplier.id}`,
-                name: `المورد: ${supplier.name}`,
-                accountType: "liability",
-                linkedEntityType: "supplier",
-                linkedEntityId: supplier.id,
-              })
+            ? await ensureSupplierPayableControlAccount(
+                tx,
+              )
             : null;
 
         const financeLines = [
           {
             accountId: purchaseAccount.id,
+            supplierId: null,
             debitMinor: totalMinor,
             creditMinor: 0,
             memo: `فاتورة مشتريات ${purchase.publicId}`,
@@ -1966,6 +1972,7 @@ async function handleCreatePurchase(
         if (paidMinor > 0 && cashAccount) {
           financeLines.push({
             accountId: cashAccount.id,
+            supplierId: null,
             debitMinor: 0,
             creditMinor: paidMinor,
             memo: "دفعة نقدية للمورد",
@@ -1975,6 +1982,8 @@ async function handleCreatePurchase(
         if (dueMinor > 0 && supplierAccount) {
           financeLines.push({
             accountId: supplierAccount.id,
+            supplierId:
+              supplier.id,
             debitMinor: 0,
             creditMinor: dueMinor,
             memo: `ذمة المورد ${supplier.name}`,
