@@ -25,6 +25,14 @@ import {
   ensureCustomerReceivableControlAccount,
 } from "./finance-customer-ledger";
 import {
+  employeeAdvanceBalanceMinor,
+  employeeBalancesAll,
+  employeeLedgerLines,
+  employeePayableBalanceMinor,
+  ensureEmployeeAdvanceControlAccount,
+  ensureEmployeePayableControlAccount,
+} from "./finance-employee-ledger";
+import {
   postFinanceTransaction,
   type FinanceTransactionType,
 } from "./finance-posting";
@@ -656,142 +664,9 @@ async function customerBalances(
 async function employeeBalances(
   db: Db,
 ) {
-  const accounts =
-    await db
-      .select({
-        id:
-          financeAccountsTable.id,
-        entityType:
-          financeAccountsTable
-            .linkedEntityType,
-        employeeId:
-          financeAccountsTable
-            .linkedEntityId,
-      })
-      .from(
-        financeAccountsTable,
-      )
-      .where(
-        inArray(
-          financeAccountsTable
-            .linkedEntityType,
-          [
-            "employee_advance",
-            "employee_payable",
-          ],
-        ),
-      );
-
-  const accountMap =
-    new Map<
-      number,
-      {
-        employeeId: number;
-        type: string;
-      }
-    >();
-
-  for (
-    const account of
-    accounts
-  ) {
-    if (
-      account.employeeId !==
-        null &&
-      account.entityType
-    ) {
-      accountMap.set(
-        account.id,
-        {
-          employeeId:
-            account.employeeId,
-          type:
-            account.entityType,
-        },
-      );
-    }
-  }
-
-  const result =
-    new Map<
-      number,
-      {
-        advanceMinor: number;
-        payableMinor: number;
-      }
-    >();
-
-  const ids =
-    [...accountMap.keys()];
-
-  if (!ids.length) {
-    return result;
-  }
-
-  const lines =
-    await db
-      .select({
-        accountId:
-          financeTransactionLinesTable
-            .accountId,
-        debitMinor:
-          financeTransactionLinesTable
-            .debitMinor,
-        creditMinor:
-          financeTransactionLinesTable
-            .creditMinor,
-      })
-      .from(
-        financeTransactionLinesTable,
-      )
-      .where(
-        inArray(
-          financeTransactionLinesTable
-            .accountId,
-          ids,
-        ),
-      );
-
-  for (
-    const line of lines
-  ) {
-    const info =
-      accountMap.get(
-        line.accountId,
-      );
-
-    if (!info) {
-      continue;
-    }
-
-    const current =
-      result.get(
-        info.employeeId,
-      ) ?? {
-        advanceMinor: 0,
-        payableMinor: 0,
-      };
-
-    if (
-      info.type ===
-      "employee_advance"
-    ) {
-      current.advanceMinor +=
-        line.debitMinor -
-        line.creditMinor;
-    } else {
-      current.payableMinor +=
-        line.creditMinor -
-        line.debitMinor;
-    }
-
-    result.set(
-      info.employeeId,
-      current,
-    );
-  }
-
-  return result;
+  return employeeBalancesAll(
+    db,
+  );
 }
 
 async function handleListCustomers(
@@ -1636,38 +1511,6 @@ async function handleCreateEmployee(
             );
           }
 
-          await ensureAccount(
-            tx,
-            {
-              code:
-                `EMPLOYEE_ADVANCE_${inserted.id}`,
-              name:
-                `سلف ومسحوبات الموظف: ${inserted.name}`,
-              accountType:
-                "asset",
-              linkedEntityType:
-                "employee_advance",
-              linkedEntityId:
-                inserted.id,
-            },
-          );
-
-          await ensureAccount(
-            tx,
-            {
-              code:
-                `EMPLOYEE_PAYABLE_${inserted.id}`,
-              name:
-                `مستحقات الموظف: ${inserted.name}`,
-              accountType:
-                "liability",
-              linkedEntityType:
-                "employee_payable",
-              linkedEntityId:
-                inserted.id,
-            },
-          );
-
           return inserted;
         },
       );
@@ -2008,77 +1851,27 @@ async function handleEmployeeLedger(
     );
   }
 
-  const accounts =
-    await db
-      .select()
-      .from(
-        financeAccountsTable,
-      )
-      .where(
-        and(
-          inArray(
-            financeAccountsTable
-              .linkedEntityType,
-            [
-              "employee_advance",
-              "employee_payable",
-            ],
-          ),
-          eq(
-            financeAccountsTable
-              .linkedEntityId,
-            employeeId,
-          ),
-        ),
-      );
-
-  const accountIds =
-    accounts.map(
-      (account) =>
-        account.id,
-    );
-
-  if (!accountIds.length) {
-    return json({
-      employee,
-      advanceMinor: 0,
-      payableMinor: 0,
-      netDueToEmployeeMinor:
-        0,
-      entries: [],
-    });
-  }
-
-  const accountTypeById =
-    new Map(
-      accounts.map(
-        (account) => [
-          account.id,
-          account
-            .linkedEntityType,
-        ],
-      ),
+  const ledgerEntries =
+    await employeeLedgerLines(
+      db,
+      employeeId,
     );
 
   const lines =
-    await db
-      .select()
-      .from(
-        financeTransactionLinesTable,
-      )
-      .where(
-        inArray(
-          financeTransactionLinesTable
-            .accountId,
-          accountIds,
-        ),
-      )
-      .orderBy(
-        asc(
-          financeTransactionLinesTable
-            .id,
-        ),
-      );
+    ledgerEntries.map(
+      (entry) =>
+        entry.line,
+    );
+
+  const accountTypeByLineId =
+    new Map(
+      ledgerEntries.map(
+        (entry) => [
+          entry.line.id,
+          entry.kind,
+        ],
+      ),
+    );
 
   const txIds =
     [
@@ -2123,8 +1916,8 @@ async function handleEmployeeLedger(
     lines.map(
       (line) => {
         const kind =
-          accountTypeById.get(
-            line.accountId,
+          accountTypeByLineId.get(
+            line.id,
           );
 
         const transaction =
@@ -2687,6 +2480,12 @@ async function createVoucher(
           let creditCustomerId:
             number | null =
             null;
+          let debitEmployeeId:
+            number | null =
+            null;
+          let creditEmployeeId:
+            number | null =
+            null;
 
           if (
             input.voucherType ===
@@ -2751,20 +2550,8 @@ async function createVoucher(
               "employee_advance"
           ) {
             const employeeAdvance =
-              await ensureAccount(
+              await ensureEmployeeAdvanceControlAccount(
                 tx,
-                {
-                  code:
-                    `EMPLOYEE_ADVANCE_${party!.id}`,
-                  name:
-                    `سلف ومسحوبات الموظف: ${party!.name}`,
-                  accountType:
-                    "asset",
-                  linkedEntityType:
-                    "employee_advance",
-                  linkedEntityId:
-                    party!.id,
-                },
               );
 
             const destination =
@@ -2779,6 +2566,8 @@ async function createVoucher(
 
             debitAccountId =
               employeeAdvance.id;
+            debitEmployeeId =
+              party!.id;
 
             creditAccountId =
               destination.id;
@@ -2793,27 +2582,14 @@ async function createVoucher(
               "employee_repayment"
           ) {
             const employeeAdvance =
-              await ensureAccount(
+              await ensureEmployeeAdvanceControlAccount(
                 tx,
-                {
-                  code:
-                    `EMPLOYEE_ADVANCE_${party!.id}`,
-                  name:
-                    `سلف ومسحوبات الموظف: ${party!.name}`,
-                  accountType:
-                    "asset",
-                  linkedEntityType:
-                    "employee_advance",
-                  linkedEntityId:
-                    party!.id,
-                },
               );
 
             const advanceBalance =
-              await accountBalanceMinor(
+              await employeeAdvanceBalanceMinor(
                 tx,
-                employeeAdvance.id,
-                "asset",
+                party!.id,
               );
 
             if (
@@ -2841,6 +2617,8 @@ async function createVoucher(
 
             creditAccountId =
               employeeAdvance.id;
+            creditEmployeeId =
+              party!.id;
 
             debitMemo =
               `تسديد من الموظف ${party!.name}`;
@@ -2865,20 +2643,8 @@ async function createVoucher(
               );
 
             const employeePayable =
-              await ensureAccount(
+              await ensureEmployeePayableControlAccount(
                 tx,
-                {
-                  code:
-                    `EMPLOYEE_PAYABLE_${party!.id}`,
-                  name:
-                    `مستحقات الموظف: ${party!.name}`,
-                  accountType:
-                    "liability",
-                  linkedEntityType:
-                    "employee_payable",
-                  linkedEntityId:
-                    party!.id,
-                },
               );
 
             debitAccountId =
@@ -2886,6 +2652,8 @@ async function createVoucher(
 
             creditAccountId =
               employeePayable.id;
+            creditEmployeeId =
+              party!.id;
 
             debitMemo =
               `استحقاق راتب ${party!.name}`;
@@ -2897,27 +2665,14 @@ async function createVoucher(
               "employee_payment"
           ) {
             const employeePayable =
-              await ensureAccount(
+              await ensureEmployeePayableControlAccount(
                 tx,
-                {
-                  code:
-                    `EMPLOYEE_PAYABLE_${party!.id}`,
-                  name:
-                    `مستحقات الموظف: ${party!.name}`,
-                  accountType:
-                    "liability",
-                  linkedEntityType:
-                    "employee_payable",
-                  linkedEntityId:
-                    party!.id,
-                },
               );
 
             const payableBalance =
-              await accountBalanceMinor(
+              await employeePayableBalanceMinor(
                 tx,
-                employeePayable.id,
-                "liability",
+                party!.id,
               );
 
             if (
@@ -2942,6 +2697,8 @@ async function createVoucher(
 
             debitAccountId =
               employeePayable.id;
+            debitEmployeeId =
+              party!.id;
 
             creditAccountId =
               destination.id;
@@ -3023,6 +2780,8 @@ async function createVoucher(
                       debitAccountId,
                     customerId:
                       debitCustomerId,
+                    employeeId:
+                      debitEmployeeId,
                     debitMinor:
                       amountMinor,
                     creditMinor: 0,
@@ -3034,6 +2793,8 @@ async function createVoucher(
                       creditAccountId,
                     customerId:
                       creditCustomerId,
+                    employeeId:
+                      creditEmployeeId,
                     debitMinor: 0,
                     creditMinor:
                       amountMinor,
