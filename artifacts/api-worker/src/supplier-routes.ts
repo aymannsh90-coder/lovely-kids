@@ -1,13 +1,14 @@
 import {
-  financeAccountsTable,
-  financeTransactionLinesTable,
   financeTransactionsTable,
   posPurchasesTable,
   suppliersTable,
 } from "@workspace/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  supplierPayableBalances,
+} from "./finance-supplier-ledger";
 import {
   isPurchaseApiEnabled,
   isPurchaseWriteEnabled,
@@ -224,63 +225,10 @@ async function getSupplierFinanceSummaries(
     coveredFinanceRows.map((row) => row.sourceId),
   );
 
-  const accountRows = await db
-    .select({
-      id: financeAccountsTable.id,
-      linkedEntityId: financeAccountsTable.linkedEntityId,
-    })
-    .from(financeAccountsTable)
-    .where(
-      eq(financeAccountsTable.linkedEntityType, "supplier"),
+  const financeBalanceBySupplier =
+    await supplierPayableBalances(
+      db,
     );
-
-  const supplierIdByAccountId = new Map<number, number>();
-
-  for (const account of accountRows) {
-    if (account.linkedEntityId !== null) {
-      supplierIdByAccountId.set(
-        account.id,
-        account.linkedEntityId,
-      );
-    }
-  }
-
-  const financeBalanceBySupplier = new Map<number, number>();
-
-  const accountIds = [...supplierIdByAccountId.keys()];
-
-  if (accountIds.length > 0) {
-    const lineRows = await db
-      .select({
-        accountId: financeTransactionLinesTable.accountId,
-        debitMinor: financeTransactionLinesTable.debitMinor,
-        creditMinor: financeTransactionLinesTable.creditMinor,
-      })
-      .from(financeTransactionLinesTable)
-      .where(
-        inArray(
-          financeTransactionLinesTable.accountId,
-          accountIds,
-        ),
-      );
-
-    for (const line of lineRows) {
-      const supplierId =
-        supplierIdByAccountId.get(line.accountId);
-
-      if (supplierId === undefined) {
-        continue;
-      }
-
-      const current =
-        financeBalanceBySupplier.get(supplierId) ?? 0;
-
-      financeBalanceBySupplier.set(
-        supplierId,
-        current + line.creditMinor - line.debitMinor,
-      );
-    }
-  }
 
   const totalsBySupplier = new Map<
     number,
