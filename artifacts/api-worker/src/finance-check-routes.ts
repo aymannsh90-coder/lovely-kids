@@ -683,6 +683,81 @@ async function activeBankAccount(
   return rows[0];
 }
 
+async function handleCheckReference(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requirePosUser(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const [
+    customers,
+    suppliers,
+  ] =
+    await Promise.all([
+      db
+        .select({
+          id:
+            customersTable.id,
+          code:
+            customersTable.code,
+          name:
+            customersTable.name,
+          status:
+            customersTable.status,
+        })
+        .from(customersTable)
+        .where(
+          eq(
+            customersTable.status,
+            "active",
+          ),
+        )
+        .orderBy(
+          asc(
+            customersTable.name,
+          ),
+        ),
+      db
+        .select({
+          id:
+            suppliersTable.id,
+          code:
+            suppliersTable.code,
+          name:
+            suppliersTable.name,
+          status:
+            suppliersTable.status,
+        })
+        .from(suppliersTable)
+        .where(
+          eq(
+            suppliersTable.status,
+            "active",
+          ),
+        )
+        .orderBy(
+          asc(
+            suppliersTable.name,
+          ),
+        ),
+    ]);
+
+  return json({
+    customers,
+    suppliers,
+  });
+}
+
 async function handleListChecks(
   request: Request,
   db: Db,
@@ -2526,6 +2601,19 @@ export async function handleFinanceCheckRequest(
     new URL(
       request.url,
     ).pathname;
+
+  if (
+    request.method ===
+      "GET" &&
+    path ===
+      "/api/pos/finance/checks/reference"
+  ) {
+    return handleCheckReference(
+      request,
+      db,
+      env,
+    );
+  }
 
   if (
     request.method ===
