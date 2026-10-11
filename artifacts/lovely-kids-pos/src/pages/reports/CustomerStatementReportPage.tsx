@@ -89,6 +89,24 @@ function movementLabel(
   );
 }
 
+function statusLabel(
+  value: string | null,
+) {
+  if (value === "posted") {
+    return "مرحّل";
+  }
+
+  if (value === "reversed") {
+    return "معكوس";
+  }
+
+  if (value === "voided") {
+    return "ملغى";
+  }
+
+  return value ?? "—";
+}
+
 function entryDate(
   entry:
     PosCustomerLedgerEntry,
@@ -173,6 +191,17 @@ export default function CustomerStatementReportPage() {
     setToDate,
   ] =
     useState("");
+
+  const [
+    selectedMovement,
+    setSelectedMovement,
+  ] =
+    useState<{
+      entry:
+        PosCustomerLedgerEntry;
+      running: number;
+      date: string;
+    } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -302,6 +331,36 @@ export default function CustomerStatementReportPage() {
     clearAuthentication,
   ]);
 
+  useEffect(() => {
+    setSelectedMovement(null);
+  }, [customerId]);
+
+  useEffect(() => {
+    if (!selectedMovement) {
+      return;
+    }
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (event.key === "Escape") {
+        setSelectedMovement(null);
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [selectedMovement]);
+
   const rows =
     useMemo(() => {
       if (!ledger) {
@@ -379,6 +438,83 @@ export default function CustomerStatementReportPage() {
 
         .customer-statement-table th {
           font-weight: 700;
+        }
+
+        .customer-statement-clickable-row {
+          cursor: pointer;
+        }
+
+        .customer-statement-clickable-row:hover {
+          background: #f7fbfd;
+        }
+
+        .customer-movement-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 2000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          background: rgb(15 34 45 / 45%);
+        }
+
+        .customer-movement-dialog {
+          width: min(720px, 96vw);
+          max-height: 86vh;
+          overflow: auto;
+          background: #fff;
+          border-radius: 12px;
+          box-shadow: 0 18px 55px rgb(0 0 0 / 28%);
+          border: 1px solid #ccd9df;
+        }
+
+        .customer-movement-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          padding: 16px 18px;
+          border-bottom: 1px solid #dde5e9;
+        }
+
+        .customer-movement-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          padding: 18px;
+        }
+
+        .customer-movement-field {
+          border: 1px solid #dde5e9;
+          border-radius: 8px;
+          padding: 12px;
+          min-width: 0;
+        }
+
+        .customer-movement-field span {
+          display: block;
+          font-size: 12px;
+          margin-bottom: 5px;
+          color: #5a6970;
+        }
+
+        .customer-movement-field strong {
+          overflow-wrap: anywhere;
+        }
+
+        .customer-movement-field-wide {
+          grid-column: 1 / -1;
+        }
+
+        @media (max-width: 680px) {
+          .customer-movement-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .customer-movement-field-wide {
+            grid-column: auto;
+          }
         }
 
         @media print {
@@ -667,6 +803,33 @@ export default function CustomerStatementReportPage() {
                   ) => (
                     <tr
                       key={`${row.entry.transactionId ?? "x"}_${index}`}
+                      className="customer-statement-clickable-row"
+                      role="button"
+                      tabIndex={0}
+                      title="فتح تفاصيل الحركة"
+                      onClick={() =>
+                        setSelectedMovement(
+                          row,
+                        )
+                      }
+                      onKeyDown={(
+                        event,
+                      ) => {
+                        if (
+                          event.key !==
+                            "Enter" &&
+                          event.key !==
+                            " "
+                        ) {
+                          return;
+                        }
+
+                        event.preventDefault();
+
+                        setSelectedMovement(
+                          row,
+                        );
+                      }}
                     >
                       <td>
                         {index + 1}
@@ -769,6 +932,155 @@ export default function CustomerStatementReportPage() {
             كشف الحساب.
           </div>
         )}
+
+      {selectedMovement && (
+        <div
+          className="customer-movement-overlay customer-statement-no-print"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setSelectedMovement(
+                null,
+              );
+            }
+          }}
+        >
+          <section
+            className="customer-movement-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="تفاصيل حركة حساب الزبون"
+          >
+            <header className="customer-movement-header">
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+                  }}
+                >
+                  📄 تفاصيل الحركة
+                </h3>
+
+                <small>
+                  {movementLabel(
+                    selectedMovement.entry,
+                  )}
+                </small>
+              </div>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  setSelectedMovement(
+                    null,
+                  )
+                }
+              >
+                ✕ إغلاق
+              </button>
+            </header>
+
+            <div className="customer-movement-grid">
+              <div className="customer-movement-field">
+                <span>
+                  التاريخ
+                </span>
+                <strong>
+                  {selectedMovement.date}
+                </strong>
+              </div>
+
+              <div className="customer-movement-field">
+                <span>
+                  نوع الحركة
+                </span>
+                <strong>
+                  {movementLabel(
+                    selectedMovement.entry,
+                  )}
+                </strong>
+              </div>
+
+              <div className="customer-movement-field customer-movement-field-wide">
+                <span>
+                  رقم المستند
+                </span>
+                <strong dir="ltr">
+                  {selectedMovement.entry.publicId ??
+                    "—"}
+                </strong>
+              </div>
+
+              <div className="customer-movement-field customer-movement-field-wide">
+                <span>
+                  البيان
+                </span>
+                <strong>
+                  {selectedMovement.entry.memo ??
+                    "—"}
+                </strong>
+              </div>
+
+              <div className="customer-movement-field">
+                <span>
+                  عليه
+                </span>
+                <strong>
+                  {selectedMovement.entry.debitMinor >
+                  0
+                    ? money(
+                        selectedMovement.entry
+                          .debitMinor,
+                      )
+                    : "—"}
+                </strong>
+              </div>
+
+              <div className="customer-movement-field">
+                <span>
+                  له
+                </span>
+                <strong>
+                  {selectedMovement.entry.creditMinor >
+                  0
+                    ? money(
+                        selectedMovement.entry
+                          .creditMinor,
+                      )
+                    : "—"}
+                </strong>
+              </div>
+
+              <div className="customer-movement-field">
+                <span>
+                  الرصيد بعد الحركة
+                </span>
+                <strong>
+                  {balanceLabel(
+                    selectedMovement.running,
+                  )}
+                </strong>
+              </div>
+
+              <div className="customer-movement-field">
+                <span>
+                  حالة القيد
+                </span>
+                <strong>
+                  {statusLabel(
+                    selectedMovement.entry
+                      .status,
+                  )}
+                </strong>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

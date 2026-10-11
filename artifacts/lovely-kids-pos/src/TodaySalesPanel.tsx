@@ -56,6 +56,24 @@ function paymentMethodLabel(value: string) {
   return value === "card" ? "فيزا" : "نقدي";
 }
 
+function refundMethodLabel(
+  value: string,
+) {
+  if (value === "cash") {
+    return "مردود نقدي";
+  }
+
+  if (value === "card") {
+    return "مردود فيزا";
+  }
+
+  if (value === "customer") {
+    return "مردود على حساب الزبون";
+  }
+
+  return "مردود مبيعات";
+}
+
 function exchangeSettlementLabel(
   value: string,
 ) {
@@ -305,6 +323,99 @@ export default function TodaySalesPanel({
       ),
     [saleReturns, mobileReturns],
   );
+
+  const cashReturnedMinor =
+    useMemo(
+      () =>
+        saleReturns.reduce(
+          (total, result) =>
+            result.saleReturn
+              .refundMethod ===
+            "cash"
+              ? total +
+                result.saleReturn
+                  .refundAmountMinor
+              : total,
+          0,
+        ) +
+        mobileReturns.reduce(
+          (total, result) =>
+            result.saleReturn
+              .refundMethod ===
+            "cash"
+              ? total +
+                result.saleReturn
+                  .refundAmountMinor
+              : total,
+          0,
+        ),
+      [
+        saleReturns,
+        mobileReturns,
+      ],
+    );
+
+  const cardReturnedMinor =
+    useMemo(
+      () =>
+        saleReturns.reduce(
+          (total, result) =>
+            result.saleReturn
+              .refundMethod ===
+            "card"
+              ? total +
+                result.saleReturn
+                  .refundAmountMinor
+              : total,
+          0,
+        ) +
+        mobileReturns.reduce(
+          (total, result) =>
+            result.saleReturn
+              .refundMethod ===
+            "card"
+              ? total +
+                result.saleReturn
+                  .refundAmountMinor
+              : total,
+          0,
+        ),
+      [
+        saleReturns,
+        mobileReturns,
+      ],
+    );
+
+  const customerReturnedMinor =
+    useMemo(
+      () =>
+        saleReturns.reduce(
+          (total, result) =>
+            result.saleReturn
+              .refundMethod ===
+            "customer"
+              ? total +
+                result.saleReturn
+                  .refundAmountMinor
+              : total,
+          0,
+        ) +
+        mobileReturns.reduce(
+          (total, result) =>
+            result.saleReturn
+              .refundMethod ===
+            "customer"
+              ? total +
+                result.saleReturn
+                  .refundAmountMinor
+              : total,
+          0,
+        ),
+      [
+        saleReturns,
+        mobileReturns,
+      ],
+    );
 
   const netTotalMinor = useMemo(
     () =>
@@ -559,6 +670,21 @@ export default function TodaySalesPanel({
           </div>
 
           <div>
+            <span>مردود نقدي</span>
+            <strong>{formatMinor(cashReturnedMinor)}</strong>
+          </div>
+
+          <div>
+            <span>مردود فيزا</span>
+            <strong>{formatMinor(cardReturnedMinor)}</strong>
+          </div>
+
+          <div>
+            <span>مردود حساب الزبون</span>
+            <strong>{formatMinor(customerReturnedMinor)}</strong>
+          </div>
+
+          <div>
             <span>صافي المبيعات</span>
             <strong>{formatMinor(netTotalMinor)}</strong>
           </div>
@@ -700,7 +826,12 @@ export default function TodaySalesPanel({
                       )}
                     </td>
 
-                    <td>مردود فاتورة</td>
+                    <td>
+                      {refundMethodLabel(
+                        row.saleReturn.refundMethod,
+                      )}
+                      <small>فاتورة</small>
+                    </td>
 
                     <td>
                       {row.saleReturn.reason || "مردود مبيعات"}
@@ -742,7 +873,11 @@ export default function TodaySalesPanel({
                       )}
                     </td>
 
-                    <td>مردود نقدي</td>
+                    <td>
+                      {refundMethodLabel(
+                        row.saleReturn.refundMethod,
+                      )}
+                    </td>
 
                     <td>{row.saleReturn.reason}</td>
                   </tr>
@@ -1079,7 +1214,13 @@ export default function TodaySalesPanel({
 
           <span>فيزا: {formatMinor(cardSalesMinor)}</span>
 
-          <span>المردودات النقدية: {formatMinor(returnedMinor)}</span>
+          <span>إجمالي المردودات: {formatMinor(returnedMinor)}</span>
+
+          <span>مردود نقدي: {formatMinor(cashReturnedMinor)}</span>
+
+          <span>مردود فيزا: {formatMinor(cardReturnedMinor)}</span>
+
+          <span>مردود حساب الزبون: {formatMinor(customerReturnedMinor)}</span>
 
           <strong>الصافي: {formatMinor(netTotalMinor)}</strong>
         </div>
@@ -1163,7 +1304,11 @@ export default function TodaySalesPanel({
 
                 <td>-{row.item.soldUnitPrice.toFixed(2)} ₪</td>
 
-                <td>مردود فاتورة</td>
+                <td>
+                  {refundMethodLabel(
+                    row.saleReturn.refundMethod,
+                  )} — فاتورة
+                </td>
 
                 <td>
                   {row.saleReturn.reason || "مردود مبيعات"}
@@ -1203,7 +1348,11 @@ export default function TodaySalesPanel({
 
                 <td>-{row.item.refundUnitPrice.toFixed(2)} ₪</td>
 
-                <td>مردود نقدي</td>
+                <td>
+                  {refundMethodLabel(
+                    row.saleReturn.refundMethod,
+                  )}
+                </td>
 
                 <td>{row.saleReturn.reason}</td>
               </tr>
