@@ -64,6 +64,23 @@ SET
   status = 'active',
   updated_at = now();
 
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'finance_accounts_currency_code_fkey'
+      AND conrelid = 'public.finance_accounts'::regclass
+  ) THEN
+    ALTER TABLE public.finance_accounts
+      ADD CONSTRAINT finance_accounts_currency_code_fkey
+      FOREIGN KEY (currency_code)
+      REFERENCES public.finance_currencies(code)
+      ON DELETE RESTRICT;
+  END IF;
+END
+$;
+
 CREATE TABLE IF NOT EXISTS public.finance_exchange_rates (
   id serial PRIMARY KEY,
   currency_code text NOT NULL
@@ -293,8 +310,9 @@ ALTER TABLE public.finance_vouchers
 ALTER TABLE public.finance_vouchers
   ALTER COLUMN currency_code SET NOT NULL;
 
-ALTER TABLE public.finance_vouchers
-  ALTER COLUMN transaction_amount_minor SET NOT NULL;
+-- transaction_amount_minor intentionally remains nullable during the
+-- rolling-deployment transition so the pre-migration Worker can continue
+-- creating vouchers until the new Worker is deployed.
 
 ALTER TABLE public.finance_vouchers
   ALTER COLUMN exchange_rate_micros SET DEFAULT 1000000;
@@ -346,7 +364,10 @@ BEGIN
   ) THEN
     ALTER TABLE public.finance_vouchers
       ADD CONSTRAINT finance_vouchers_transaction_amount_valid
-      CHECK (transaction_amount_minor > 0);
+      CHECK (
+        transaction_amount_minor IS NULL
+        OR transaction_amount_minor > 0
+      );
   END IF;
 END
 $$;
