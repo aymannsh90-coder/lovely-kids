@@ -13,12 +13,16 @@ import {
   createPosExpenseCategory,
   createPosOwnerWithdrawal,
   getCurrentCashSession,
+  getPosBankAccounts,
   getPosEmployees,
   getPosExpenseCategories,
+  getPosFinanceBankingReference,
   getPosFinanceVouchers,
   voidPosFinanceVoucher,
+  type PosBankAccount,
   type PosEmployee,
   type PosExpenseCategory,
+  type PosFinanceCurrency,
   type PosFinancePaymentMethod,
   type PosFinanceVoucher,
 } from "../../lib/api";
@@ -342,6 +346,20 @@ export default function ExpensesPage() {
   >([]);
 
   const [
+    bankAccounts,
+    setBankAccounts,
+  ] = useState<
+    PosBankAccount[]
+  >([]);
+
+  const [
+    currencies,
+    setCurrencies,
+  ] = useState<
+    PosFinanceCurrency[]
+  >([]);
+
+  const [
     pinOrder,
     setPinOrder,
   ] = useState<string[]>([]);
@@ -370,6 +388,18 @@ export default function ExpensesPage() {
     useState<PosFinancePaymentMethod>(
       "cash",
     );
+
+  const [
+    selectedBankAccountId,
+    setSelectedBankAccountId,
+  ] = useState<
+    number | null
+  >(null);
+
+  const [
+    exchangeRate,
+    setExchangeRate,
+  ] = useState("1");
 
   const [
     selectedCategoryId,
@@ -429,6 +459,70 @@ export default function ExpensesPage() {
         ),
       [categories],
     );
+
+  const selectedBankAccount =
+    useMemo(
+      () =>
+        bankAccounts.find(
+          (account) =>
+            account.id ===
+            selectedBankAccountId,
+        ) ?? null,
+      [
+        bankAccounts,
+        selectedBankAccountId,
+      ],
+    );
+
+  const selectedCurrency =
+    selectedBankAccount
+      ? currencies.find(
+          (currency) =>
+            currency.code ===
+            selectedBankAccount.currencyCode,
+        ) ?? null
+      : currencies.find(
+          (currency) =>
+            currency.code ===
+            "ILS",
+        ) ?? null;
+
+  const transactionCurrencyCode =
+    paymentMethod === "bank" &&
+    selectedBankAccount
+      ? selectedBankAccount.currencyCode
+      : "ILS";
+
+  const transactionCurrencySymbol =
+    paymentMethod === "bank" &&
+    selectedCurrency
+      ? selectedCurrency.symbol
+      : "₪";
+
+  function rateForBankAccount(
+    account:
+      PosBankAccount | null,
+  ) {
+    if (
+      !account ||
+      account.currencyCode ===
+        "ILS"
+    ) {
+      return "1";
+    }
+
+    const rate =
+      currencies.find(
+        (currency) =>
+          currency.code ===
+          account.currencyCode,
+      )?.latestRate
+        ?.ilsPerUnit;
+
+    return rate
+      ? String(rate)
+      : "";
+  }
 
   const allTiles =
     useMemo<QuickTile[]>(() => {
@@ -686,6 +780,8 @@ export default function ExpensesPage() {
         categoryResponse,
         voucherResponse,
         employeeResponse,
+        bankAccountResponse,
+        bankingReference,
       ] =
         await Promise.all([
           getPosExpenseCategories(
@@ -711,6 +807,12 @@ export default function ExpensesPage() {
                 results:
                   [] as PosEmployee[],
               }),
+          getPosBankAccounts(
+            token,
+          ),
+          getPosFinanceBankingReference(
+            token,
+          ),
         ]);
 
       setCategories(
@@ -723,6 +825,18 @@ export default function ExpensesPage() {
 
       setEmployees(
         employeeResponse.results,
+      );
+
+      setBankAccounts(
+        bankAccountResponse.results.filter(
+          (account) =>
+            account.status ===
+            "active",
+        ),
+      );
+
+      setCurrencies(
+        bankingReference.currencies,
       );
     } catch (caught) {
       if (
@@ -895,6 +1009,16 @@ export default function ExpensesPage() {
     setPaymentMethod(
       "cash",
     );
+    setSelectedBankAccountId(
+      bankAccounts[0]?.id ??
+      null,
+    );
+    setExchangeRate(
+      rateForBankAccount(
+        bankAccounts[0] ??
+        null,
+      ),
+    );
     setSelectedCategoryId(
       tile.categoryId ??
         activeCategories[0]
@@ -1032,6 +1156,54 @@ export default function ExpensesPage() {
       session?.registerKey ??
       "main";
 
+    if (
+      paymentMethod ===
+      "bank"
+    ) {
+      if (
+        !selectedBankAccount
+      ) {
+        setError(
+          "اختر الحساب البنكي.",
+        );
+        return;
+      }
+
+      if (
+        selectedBankAccount
+          .currencyCode !==
+          "ILS" &&
+        (
+          !exchangeRate.trim() ||
+          Number(
+            exchangeRate
+              .trim()
+              .replace(",", "."),
+          ) <= 0
+        )
+      ) {
+        setError(
+          "أدخل سعر الصرف للعملة الأجنبية.",
+        );
+        return;
+      }
+    }
+
+    const bankFields =
+      paymentMethod ===
+      "bank"
+        ? {
+            bankAccountId:
+              selectedBankAccount!.id,
+            exchangeRate:
+              selectedBankAccount!
+                .currencyCode ===
+              "ILS"
+                ? undefined
+                : exchangeRate.trim(),
+          }
+        : {};
+
     setSaving(true);
     setError("");
     setMessage("");
@@ -1093,6 +1265,7 @@ export default function ExpensesPage() {
               normalizedAmount,
             paymentMethod,
             registerKey,
+            ...bankFields,
             notes:
               notes.trim() ||
               undefined,
@@ -1122,6 +1295,7 @@ export default function ExpensesPage() {
               normalizedAmount,
             paymentMethod,
             registerKey,
+            ...bankFields,
             notes:
               notes.trim() ||
               undefined,
@@ -1139,6 +1313,7 @@ export default function ExpensesPage() {
               normalizedAmount,
             paymentMethod,
             registerKey,
+            ...bankFields,
             notes:
               notes.trim() ||
               undefined,
@@ -1155,7 +1330,7 @@ export default function ExpensesPage() {
       setNotes("");
 
       setMessage(
-        `تم تسجيل ${activeTile.title} بقيمة ${normalizedAmount} ₪.`,
+        `تم تسجيل ${activeTile.title} بقيمة ${normalizedAmount} ${transactionCurrencyCode}.`,
       );
 
       await Promise.all([
@@ -1846,7 +2021,9 @@ export default function ExpensesPage() {
                     }
                   />
 
-                  <b>₪</b>
+                  <b>
+                    {transactionCurrencySymbol}
+                  </b>
                 </div>
               </label>
 
@@ -1887,10 +2064,31 @@ export default function ExpensesPage() {
                             ? "is-selected"
                             : ""
                         }
-                        onClick={() =>
+                        onClick={() => {
                           setPaymentMethod(
                             value,
-                          )
+                          );
+
+                          if (
+                            value ===
+                            "bank"
+                          ) {
+                            const account =
+                              selectedBankAccount ??
+                              bankAccounts[0] ??
+                              null;
+
+                            setSelectedBankAccountId(
+                              account?.id ??
+                              null,
+                            );
+
+                            setExchangeRate(
+                              rateForBankAccount(
+                                account,
+                              ),
+                            );
+                          }
                         }
                         disabled={
                           saving
@@ -1902,6 +2100,134 @@ export default function ExpensesPage() {
                   )}
                 </div>
               </label>
+
+              {paymentMethod ===
+                "bank" && (
+                <>
+                  <label>
+                    <span>
+                      الحساب البنكي
+                    </span>
+
+                    <select
+                      value={
+                        selectedBankAccountId ??
+                        ""
+                      }
+                      onChange={(
+                        event,
+                      ) => {
+                        const id =
+                          Number(
+                            event
+                              .target
+                              .value,
+                          );
+
+                        const account =
+                          bankAccounts.find(
+                            (item) =>
+                              item.id ===
+                              id,
+                          ) ??
+                          null;
+
+                        setSelectedBankAccountId(
+                          account?.id ??
+                          null,
+                        );
+
+                        setExchangeRate(
+                          rateForBankAccount(
+                            account,
+                          ),
+                        );
+                      }}
+                      disabled={
+                        saving
+                      }
+                    >
+                      <option value="">
+                        اختر الحساب البنكي
+                      </option>
+
+                      {bankAccounts.map(
+                        (account) => (
+                          <option
+                            key={
+                              account.id
+                            }
+                            value={
+                              account.id
+                            }
+                          >
+                            {
+                              account.bank.nameAr
+                            }{" "}
+                            -{" "}
+                            {
+                              account.name
+                            }{" "}
+                            (
+                            {
+                              account.currencyCode
+                            }
+                            )
+                          </option>
+                        ),
+                      )}
+                    </select>
+
+                    {bankAccounts.length ===
+                      0 && (
+                      <small>
+                        لا توجد حسابات بنكية. أضف حسابًا من صفحة البنوك والعملات أولًا.
+                      </small>
+                    )}
+                  </label>
+
+                  {selectedBankAccount &&
+                    selectedBankAccount.currencyCode !==
+                      "ILS" && (
+                      <label>
+                        <span>
+                          سعر الصرف
+                          <small>
+                            {" "}
+                            1{" "}
+                            {
+                              selectedBankAccount.currencyCode
+                            }{" "}
+                            = كم ₪
+                          </small>
+                        </span>
+
+                        <input
+                          dir="ltr"
+                          type="number"
+                          min="0.000001"
+                          step="0.000001"
+                          inputMode="decimal"
+                          value={
+                            exchangeRate
+                          }
+                          onChange={(
+                            event,
+                          ) =>
+                            setExchangeRate(
+                              event
+                                .target
+                                .value,
+                            )
+                          }
+                          disabled={
+                            saving
+                          }
+                        />
+                      </label>
+                    )}
+                </>
+              )}
 
               <label>
                 <span>
