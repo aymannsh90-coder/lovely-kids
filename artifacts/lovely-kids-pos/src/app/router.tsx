@@ -8,6 +8,7 @@ import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import BankingPage from "../pages/finance/BankingPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
+import ChecksPage from "../pages/finance/ChecksPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
@@ -210,17 +211,9 @@ export default function AppRouter() {
         <Route
           path="finance/checks"
           element={
-            <ComingSoonPage
-              icon="📝"
-              title="الشيكات"
-              description="متابعة الشيكات المستلمة والمدفوعة."
-              points={[
-                "رقم الشيك والبنك.",
-                "صاحب الشيك والمستفيد.",
-                "تاريخ الاستحقاق والحالة.",
-                "ربطه بزبون أو مورد.",
-              ]}
-            />
+            <RequireOwner>
+              <ChecksPage />
+            </RequireOwner>
           }
         />
 
