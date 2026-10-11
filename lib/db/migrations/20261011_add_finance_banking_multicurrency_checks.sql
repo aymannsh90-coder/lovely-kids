@@ -450,6 +450,7 @@ ON CONFLICT (code) DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.finance_checks (
   id serial PRIMARY KEY,
   public_id text NOT NULL,
+  idempotency_key text NOT NULL,
   direction text NOT NULL,
   check_number text NOT NULL,
   bank_id integer NOT NULL
@@ -509,6 +510,9 @@ CREATE TABLE IF NOT EXISTS public.finance_checks (
 
   CONSTRAINT finance_checks_public_id_valid
     CHECK (length(btrim(public_id)) BETWEEN 6 AND 100),
+
+  CONSTRAINT finance_checks_idempotency_valid
+    CHECK (length(btrim(idempotency_key)) BETWEEN 8 AND 160),
 
   CONSTRAINT finance_checks_direction_valid
     CHECK (direction IN ('received', 'issued')),
@@ -588,6 +592,9 @@ CREATE TABLE IF NOT EXISTS public.finance_checks (
 
 CREATE UNIQUE INDEX IF NOT EXISTS finance_checks_public_id_idx
   ON public.finance_checks(public_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS finance_checks_idempotency_idx
+  ON public.finance_checks(idempotency_key);
 
 CREATE INDEX IF NOT EXISTS finance_checks_number_idx
   ON public.finance_checks(check_number);
