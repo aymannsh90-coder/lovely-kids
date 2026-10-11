@@ -9,6 +9,7 @@ import {
   ApiError,
   getPosCustomers,
   getPosFinanceAccountStatement,
+  getPosFinanceCashStatement,
   getPosFinanceStatementReference,
   getPosSuppliers,
   type PosCustomer,
@@ -266,14 +267,23 @@ export default function StatementsPage() {
 
     try {
       const result =
-        await getPosFinanceAccountStatement(
-          token,
-          {
-            accountId,
-            from,
-            to,
-          },
-        );
+        mode === "cash"
+          ? await getPosFinanceCashStatement(
+              token,
+              {
+                accountId,
+                from,
+                to,
+              },
+            )
+          : await getPosFinanceAccountStatement(
+              token,
+              {
+                accountId,
+                from,
+                to,
+              },
+            );
 
       setStatement(
         result,
