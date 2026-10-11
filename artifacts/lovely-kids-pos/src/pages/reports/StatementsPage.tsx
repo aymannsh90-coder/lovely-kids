@@ -631,8 +631,11 @@ export default function StatementsPage() {
                     <span>
                       {statement.range.from} — {statement.range.to}
                       {" · "}
-                      القيمة الدفترية بالشيكل
-                      {statement.account.currencyCode !== "ILS"
+                      {mode === "cash"
+                        ? "الرصيد التشغيلي حسب حركات وجرد الصندوق"
+                        : "القيمة الدفترية بالشيكل"}
+                      {mode !== "cash" &&
+                      statement.account.currencyCode !== "ILS"
                         ? ` · عملة الحساب: ${statement.account.currencyCode}`
                         : ""}
                     </span>
