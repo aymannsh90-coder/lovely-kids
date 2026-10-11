@@ -19,6 +19,7 @@ import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql 
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
 import { handleUpdatePosSale } from "./pos-sale-edit";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import {
@@ -1737,74 +1738,51 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
             },
           );
 
-        const financeRows =
-          await tx
-            .insert(financeTransactionsTable)
-            .values({
-              publicId:
-                `FIN-AR-${sale.publicId}`,
-              idempotencyKey:
-                `pos-sale:${sale.id}:account-due`,
-              businessDate:
-                sale.businessDate,
-              transactionType:
-                "sale",
-              sourceType:
-                "pos_sale",
-              sourceId:
-                String(sale.id),
-              sourceEvent:
-                "account_due",
-              cashSessionId:
-                session.id,
-              status:
-                "posted",
-              notes:
-                `ذمة فاتورة ${sale.publicId}`,
-              createdByUserId:
-                auth.user.id,
-            })
-            .returning();
-
-        const financeTransaction =
-          financeRows[0];
-
-        if (!financeTransaction) {
-          throw new Error(
-            "POS_SALE_FINANCE_INSERT_FAILED",
-          );
-        }
-
-        await tx
-          .insert(
-            financeTransactionLinesTable,
-          )
-          .values([
-            {
-              transactionId:
-                financeTransaction.id,
-              lineNumber: 1,
-              accountId:
-                customerAccount.id,
-              debitMinor:
-                accountDueMinor,
-              creditMinor: 0,
-              memo:
-                `ذمة الزبون ${customer.name}`,
-            },
-            {
-              transactionId:
-                financeTransaction.id,
-              lineNumber: 2,
-              accountId:
-                onAccountSalesAccount.id,
-              debitMinor: 0,
-              creditMinor:
-                accountDueMinor,
-              memo:
-                `الجزء الآجل من ${sale.publicId}`,
-            },
-          ]);
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-AR-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:account-due`,
+            businessDate:
+              sale.businessDate,
+            transactionType:
+              "sale",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              "account_due",
+            cashSessionId:
+              session.id,
+            notes:
+              `ذمة فاتورة ${sale.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines: [
+              {
+                accountId:
+                  customerAccount.id,
+                debitMinor:
+                  accountDueMinor,
+                creditMinor: 0,
+                memo:
+                  `ذمة الزبون ${customer.name}`,
+              },
+              {
+                accountId:
+                  onAccountSalesAccount.id,
+                debitMinor: 0,
+                creditMinor:
+                  accountDueMinor,
+                memo:
+                  `الجزء الآجل من ${sale.publicId}`,
+              },
+            ],
+          },
+        );
       }
 
       const insertedItems = await tx
@@ -2526,68 +2504,44 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           );
         }
 
-        const reversalRows =
-          await tx
-            .insert(
-              financeTransactionsTable,
-            )
-            .values({
-              publicId:
-                `FIN-AR-VOID-${sale.publicId}`,
-              idempotencyKey:
-                `pos-sale:${sale.id}:account-due:void`,
-              businessDate:
-                session.businessDate,
-              transactionType:
-                "reversal",
-              sourceType:
-                "pos_sale",
-              sourceId:
-                String(sale.id),
-              sourceEvent:
-                "account_due_void",
-              cashSessionId:
-                session.id,
-              status:
-                "posted",
-              notes:
-                `عكس ذمة الفاتورة ${sale.publicId}`,
-              createdByUserId:
-                auth.user.id,
-            })
-            .returning();
-
-        const reversal =
-          reversalRows[0];
-
-        if (!reversal) {
-          throw new Error(
-            "POS_SALE_ACCOUNT_REVERSAL_FAILED",
-          );
-        }
-
-        await tx
-          .insert(
-            financeTransactionLinesTable,
-          )
-          .values(
-            originalLines.map(
-              (line, index) => ({
-                transactionId:
-                  reversal.id,
-                lineNumber:
-                  index + 1,
-                accountId:
-                  line.accountId,
-                debitMinor:
-                  line.creditMinor,
-                creditMinor:
-                  line.debitMinor,
-                memo:
-                  `عكس ${sale.publicId}`,
-              }),
-            ),
-          );
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-AR-VOID-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:account-due:void`,
+            businessDate:
+              session.businessDate,
+            transactionType:
+              "reversal",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              "account_due_void",
+            cashSessionId:
+              session.id,
+            notes:
+              `عكس ذمة الفاتورة ${sale.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines:
+              originalLines.map(
+                (line) => ({
+                  accountId:
+                    line.accountId,
+                  debitMinor:
+                    line.creditMinor,
+                  creditMinor:
+                    line.debitMinor,
+                  memo:
+                    `عكس ${sale.publicId}`,
+                }),
+              ),
+          },
+        );
 
         await tx
           .update(
