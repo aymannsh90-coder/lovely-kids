@@ -1,4 +1,5 @@
 import {
+  bankAccountsTable,
   cashSessionsTable,
   customersTable,
   employeesTable,
@@ -318,6 +319,85 @@ function normalizeStatus(
   return value;
 }
 
+function exchangeRateMicros(
+  value: unknown,
+  currencyCode: string,
+) {
+  if (
+    currencyCode === "ILS"
+  ) {
+    return 1_000_000;
+  }
+
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" &&
+          value.trim()
+        ? Number(
+            value
+              .trim()
+              .replace(",", "."),
+          )
+        : NaN;
+
+  if (
+    !Number.isFinite(numeric) ||
+    numeric <= 0
+  ) {
+    throw new PartyFinanceError(
+      "سعر الصرف مطلوب للعملة الأجنبية",
+    );
+  }
+
+  const micros =
+    Math.round(
+      numeric *
+      1_000_000,
+    );
+
+  if (
+    !Number.isSafeInteger(
+      micros,
+    ) ||
+    micros <= 0 ||
+    micros > MAX_MINOR
+  ) {
+    throw new PartyFinanceError(
+      "سعر الصرف غير صالح",
+    );
+  }
+
+  return micros;
+}
+
+function convertedBaseMinor(
+  transactionAmountMinor: number,
+  rateMicros: number,
+) {
+  const result =
+    (
+      BigInt(
+        transactionAmountMinor,
+      ) *
+        BigInt(rateMicros) +
+      500_000n
+    ) /
+    1_000_000n;
+
+  if (
+    result <= 0n ||
+    result >
+      BigInt(MAX_MINOR)
+  ) {
+    throw new PartyFinanceError(
+      "القيمة بعد تحويل العملة خارج الحد المسموح",
+    );
+  }
+
+  return Number(result);
+}
+
 function paymentMethod(
   value: unknown,
   defaultValue:
@@ -567,6 +647,8 @@ async function settlementAccount(
     | "card"
     | "bank",
   register: string,
+  bankAccountId:
+    number | null,
 ) {
   if (method === "cash") {
     return ensureAccount(
@@ -597,16 +679,67 @@ async function settlementAccount(
     );
   }
 
-  return ensureAccount(
-    tx,
-    {
-      code: "BANK_TRANSFER",
-      name:
-        "البنك / التحويلات البنكية",
-      accountType:
-        "asset",
-    },
-  );
+  if (!bankAccountId) {
+    throw new PartyFinanceError(
+      "اختر الحساب البنكي",
+    );
+  }
+
+  const accountRows =
+    await tx
+      .select()
+      .from(
+        bankAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            bankAccountsTable.id,
+            bankAccountId,
+          ),
+          eq(
+            bankAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  const bankAccount =
+    accountRows[0];
+
+  if (!bankAccount) {
+    throw new PartyFinanceError(
+      "الحساب البنكي غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  const financeRows =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        eq(
+          financeAccountsTable.id,
+          bankAccount.financeAccountId,
+        ),
+      )
+      .limit(1);
+
+  const financeAccount =
+    financeRows[0];
+
+  if (!financeAccount) {
+    throw new PartyFinanceError(
+      "الحساب المحاسبي للبنك غير موجود",
+      409,
+    );
+  }
+
+  return financeAccount;
 }
 
 async function customerBalances(
@@ -2043,7 +2176,7 @@ async function createVoucher(
   }
 
   try {
-    const amountMinor =
+    const transactionAmountMinor =
       moneyMinor(
         body.amount,
         "المبلغ",
@@ -2067,6 +2200,83 @@ async function createVoucher(
         "طريقة الدفع غير صالحة لهذه الحركة",
       );
     }
+
+    let bankAccountId:
+      number | null =
+      null;
+
+    let currencyCode =
+      "ILS";
+
+    if (
+      method === "bank"
+    ) {
+      bankAccountId =
+        positiveId(
+          body.bankAccountId,
+          "الحساب البنكي",
+        );
+
+      const bankRows =
+        await db
+          .select()
+          .from(
+            bankAccountsTable,
+          )
+          .where(
+            and(
+              eq(
+                bankAccountsTable.id,
+                bankAccountId,
+              ),
+              eq(
+                bankAccountsTable.status,
+                "active",
+              ),
+            ),
+          )
+          .limit(1);
+
+      const bankAccount =
+        bankRows[0];
+
+      if (!bankAccount) {
+        throw new PartyFinanceError(
+          "الحساب البنكي غير موجود أو غير فعال",
+          404,
+        );
+      }
+
+      currencyCode =
+        bankAccount.currencyCode;
+    } else if (
+      body.currencyCode !==
+        undefined &&
+      body.currencyCode !==
+        null &&
+      String(
+        body.currencyCode,
+      )
+        .trim()
+        .toUpperCase() !==
+        "ILS"
+    ) {
+      throw new PartyFinanceError(
+        "العملة الأجنبية مدعومة حاليًا للحركات البنكية فقط",
+      );
+    }
+
+    const rateMicros =
+      exchangeRateMicros(
+        body.exchangeRate,
+        currencyCode,
+      );
+
+    const amountMinor =
+      convertedBaseMinor(
+        transactionAmountMinor,
+        rateMicros,
+      );
 
     const register =
       registerKey(
@@ -2398,6 +2608,11 @@ async function createVoucher(
                 paymentMethod:
                   method,
                 amountMinor,
+                currencyCode,
+                transactionAmountMinor,
+                exchangeRateMicros:
+                  rateMicros,
+                bankAccountId,
                 businessDate,
                 referencePeriod,
                 cashSessionId:
@@ -2442,6 +2657,54 @@ async function createVoucher(
           let creditEmployeeId:
             number | null =
             null;
+          let debitCurrencyCode:
+            string | null =
+            null;
+          let debitCurrencyAmountMinor:
+            number | null =
+            null;
+          let debitExchangeRateMicros:
+            number | null =
+            null;
+          let creditCurrencyCode:
+            string | null =
+            null;
+          let creditCurrencyAmountMinor:
+            number | null =
+            null;
+          let creditExchangeRateMicros:
+            number | null =
+            null;
+
+          const markDebitSettlement =
+            () => {
+              if (
+                method ===
+                "bank"
+              ) {
+                debitCurrencyCode =
+                  currencyCode;
+                debitCurrencyAmountMinor =
+                  transactionAmountMinor;
+                debitExchangeRateMicros =
+                  rateMicros;
+              }
+            };
+
+          const markCreditSettlement =
+            () => {
+              if (
+                method ===
+                "bank"
+              ) {
+                creditCurrencyCode =
+                  currencyCode;
+                creditCurrencyAmountMinor =
+                  transactionAmountMinor;
+                creditExchangeRateMicros =
+                  rateMicros;
+              }
+            };
 
           if (
             input.voucherType ===
@@ -2455,6 +2718,7 @@ async function createVoucher(
                   | "card"
                   | "bank",
                 register,
+                bankAccountId,
               );
 
             const customerAccount =
@@ -2464,6 +2728,7 @@ async function createVoucher(
 
             debitAccountId =
               destination.id;
+            markDebitSettlement();
 
             creditAccountId =
               customerAccount.id;
@@ -2487,6 +2752,7 @@ async function createVoucher(
                   | "card"
                   | "bank",
                 register,
+                bankAccountId,
               );
 
             debitAccountId =
@@ -2495,6 +2761,7 @@ async function createVoucher(
 
             creditAccountId =
               destination.id;
+            markCreditSettlement();
 
             debitMemo =
               `مصروف: ${category!.name}`;
@@ -2518,6 +2785,7 @@ async function createVoucher(
                   | "card"
                   | "bank",
                 register,
+                bankAccountId,
               );
 
             debitAccountId =
@@ -2527,6 +2795,7 @@ async function createVoucher(
 
             creditAccountId =
               destination.id;
+            markCreditSettlement();
 
             debitMemo =
               `سلفة / مسحوب للموظف ${party!.name}`;
@@ -2566,10 +2835,12 @@ async function createVoucher(
                   | "card"
                   | "bank",
                 register,
+                bankAccountId,
               );
 
             debitAccountId =
               destination.id;
+            markDebitSettlement();
 
             creditAccountId =
               employeeAdvance.id;
@@ -2649,6 +2920,7 @@ async function createVoucher(
                   | "card"
                   | "bank",
                 register,
+                bankAccountId,
               );
 
             debitAccountId =
@@ -2658,6 +2930,7 @@ async function createVoucher(
 
             creditAccountId =
               destination.id;
+            markCreditSettlement();
 
             debitMemo =
               `دفع مستحقات الموظف ${party!.name}`;
@@ -2686,6 +2959,7 @@ async function createVoucher(
                   | "card"
                   | "bank",
                 register,
+                bankAccountId,
               );
 
             debitAccountId =
@@ -2693,6 +2967,7 @@ async function createVoucher(
 
             creditAccountId =
               destination.id;
+            markCreditSettlement();
 
             debitMemo =
               "مسحوبات شخصية للمالك";
@@ -2738,6 +3013,12 @@ async function createVoucher(
                       debitCustomerId,
                     employeeId:
                       debitEmployeeId,
+                    currencyCode:
+                      debitCurrencyCode,
+                    currencyAmountMinor:
+                      debitCurrencyAmountMinor,
+                    exchangeRateMicros:
+                      debitExchangeRateMicros,
                     debitMinor:
                       amountMinor,
                     creditMinor: 0,
@@ -2751,6 +3032,12 @@ async function createVoucher(
                       creditCustomerId,
                     employeeId:
                       creditEmployeeId,
+                    currencyCode:
+                      creditCurrencyCode,
+                    currencyAmountMinor:
+                      creditCurrencyAmountMinor,
+                    exchangeRateMicros:
+                      creditExchangeRateMicros,
                     debitMinor: 0,
                     creditMinor:
                       amountMinor,
@@ -3370,6 +3657,12 @@ async function handleVoidVoucher(
                         line.employeeId,
                       supplierId:
                         line.supplierId,
+                      currencyCode:
+                        line.currencyCode,
+                      currencyAmountMinor:
+                        line.currencyAmountMinor,
+                      exchangeRateMicros:
+                        line.exchangeRateMicros,
                       debitMinor:
                         line.creditMinor,
                       creditMinor:
