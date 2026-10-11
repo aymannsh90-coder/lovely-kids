@@ -953,6 +953,114 @@ export function createPosBankAccount(
   );
 }
 
+
+export interface PosFinanceStatementReference {
+  cashAccounts: Array<{
+    id: number;
+    code: string;
+    name: string;
+    currencyCode: string;
+    accountType: string;
+  }>;
+
+  bankAccounts: Array<{
+    id: number;
+    name: string;
+    currencyCode: string;
+    financeAccountId: number;
+    bankName: string;
+  }>;
+
+  expenseCategories: Array<{
+    id: number;
+    code: string;
+    name: string;
+    financeAccountId: number;
+  }>;
+}
+
+export interface PosFinanceAccountStatementEntry {
+  lineId: number;
+  lineNumber: number;
+  businessDate: string;
+  transactionId: number;
+  publicId: string;
+  transactionType: string;
+  sourceType: string;
+  sourceId: string;
+  sourceEvent: string;
+  status: string;
+  transactionNotes: string | null;
+  createdAt: string;
+  debitMinor: number;
+  creditMinor: number;
+  currencyCode: string | null;
+  currencyAmountMinor: number | null;
+  exchangeRateMicros: number | null;
+  memo: string | null;
+  changeMinor: number;
+  runningBalanceMinor: number;
+}
+
+export interface PosFinanceAccountStatement {
+  account: {
+    id: number;
+    code: string;
+    name: string;
+    accountType: string;
+    currencyCode: string;
+  };
+
+  range: {
+    from: string;
+    to: string;
+  };
+
+  openingBalanceMinor: number;
+  periodDebitMinor: number;
+  periodCreditMinor: number;
+  closingBalanceMinor: number;
+  entries: PosFinanceAccountStatementEntry[];
+}
+
+export function getPosFinanceStatementReference(
+  token: string,
+) {
+  return apiRequest<PosFinanceStatementReference>(
+    "/api/pos/finance/statements/reference",
+    {},
+    token,
+  );
+}
+
+export function getPosFinanceAccountStatement(
+  token: string,
+  input: {
+    accountId: number;
+    from: string;
+    to: string;
+  },
+) {
+  const params =
+    new URLSearchParams({
+      accountId:
+        String(
+          input.accountId,
+        ),
+      from:
+        input.from,
+      to:
+        input.to,
+    });
+
+  return apiRequest<PosFinanceAccountStatement>(
+    `/api/pos/finance/statements/account?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+
 export function savePosExchangeRate(
   token: string,
   input: {
