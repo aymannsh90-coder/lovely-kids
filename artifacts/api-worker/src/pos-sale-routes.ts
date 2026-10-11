@@ -1702,6 +1702,82 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         throw new Error("POS_SALE_INSERT_FAILED");
       }
 
+      if (cashReceivedMinor > 0) {
+        const cashAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                `CASH_${registerKey.toUpperCase()}`,
+              name:
+                registerKey === "main"
+                  ? "الصندوق الرئيسي"
+                  : `الصندوق ${registerKey}`,
+              accountType:
+                "asset",
+            },
+          );
+
+        const cashSalesAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                "POS_SALES_CASH",
+              name:
+                "مبيعات نقطة البيع النقدية",
+              accountType:
+                "income",
+            },
+          );
+
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-CASH-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:cash-settlement`,
+            businessDate:
+              sale.businessDate,
+            transactionType:
+              "sale",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              "cash_settlement",
+            cashSessionId:
+              session.id,
+            notes:
+              `بيع نقدي ${sale.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines: [
+              {
+                accountId:
+                  cashAccount.id,
+                debitMinor:
+                  cashReceivedMinor,
+                creditMinor: 0,
+                memo:
+                  `تحصيل بيع نقدي ${sale.publicId}`,
+              },
+              {
+                accountId:
+                  cashSalesAccount.id,
+                debitMinor: 0,
+                creditMinor:
+                  cashReceivedMinor,
+                memo:
+                  `مبيعات نقدية ${sale.publicId}`,
+              },
+            ],
+          },
+        );
+      }
+
       if (accountDueMinor > 0) {
         if (
           !customer ||
@@ -2422,6 +2498,132 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
       const expectedAfter =
         expectedBefore -
         cashImpactMinor;
+
+      const cashFinanceRows =
+        cashImpactMinor > 0
+          ? await tx
+              .select()
+              .from(
+                financeTransactionsTable,
+              )
+              .where(
+                and(
+                  eq(
+                    financeTransactionsTable.sourceType,
+                    "pos_sale",
+                  ),
+                  eq(
+                    financeTransactionsTable.sourceId,
+                    String(sale.id),
+                  ),
+                  eq(
+                    financeTransactionsTable.sourceEvent,
+                    "cash_settlement",
+                  ),
+                  eq(
+                    financeTransactionsTable.status,
+                    "posted",
+                  ),
+                ),
+              )
+              .limit(1)
+              .for("update")
+          : [];
+
+      const cashFinance =
+        cashFinanceRows[0] ??
+        null;
+
+      if (cashFinance) {
+        const originalCashLines =
+          await tx
+            .select()
+            .from(
+              financeTransactionLinesTable,
+            )
+            .where(
+              eq(
+                financeTransactionLinesTable.transactionId,
+                cashFinance.id,
+              ),
+            )
+            .orderBy(
+              asc(
+                financeTransactionLinesTable.lineNumber,
+              ),
+            );
+
+        if (
+          originalCashLines.length <
+          2
+        ) {
+          throw new Error(
+            "POS_SALE_CASH_FINANCE_LINES_MISSING",
+          );
+        }
+
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-CASH-VOID-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:cash-settlement:void`,
+            businessDate:
+              session.businessDate,
+            transactionType:
+              "reversal",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              "cash_settlement_void",
+            cashSessionId:
+              session.id,
+            notes:
+              `عكس البيع النقدي ${sale.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines:
+              originalCashLines.map(
+                (line) => ({
+                  accountId:
+                    line.accountId,
+                  customerId:
+                    line.customerId,
+                  employeeId:
+                    line.employeeId,
+                  supplierId:
+                    line.supplierId,
+                  debitMinor:
+                    line.creditMinor,
+                  creditMinor:
+                    line.debitMinor,
+                  memo:
+                    `عكس ${sale.publicId}`,
+                }),
+              ),
+          },
+        );
+
+        await tx
+          .update(
+            financeTransactionsTable,
+          )
+          .set({
+            status:
+              "reversed",
+            updatedAt:
+              new Date(),
+          })
+          .where(
+            eq(
+              financeTransactionsTable.id,
+              cashFinance.id,
+            ),
+          );
+      }
 
       const accountFinanceRows =
         sale.accountDueMinor > 0
