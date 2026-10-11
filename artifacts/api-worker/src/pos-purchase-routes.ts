@@ -15,6 +15,7 @@ import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
 import {
   isPurchaseWriteEnabled,
   purchaseWritesDisabledResponse,
@@ -1952,40 +1953,8 @@ async function handleCreatePurchase(
               })
             : null;
 
-        const financeRows = await tx
-          .insert(financeTransactionsTable)
-          .values({
-            publicId:
-              `FIN-${businessDate.replaceAll("-", "")}-` +
-              randomUUID().slice(0, 8).toUpperCase(),
-            idempotencyKey: `purchase:${purchase.id}:completed`,
-            businessDate,
-            transactionType: "purchase",
-            sourceType: "pos_purchase",
-            sourceId: String(purchase.id),
-            sourceEvent: "completed",
-            cashSessionId: cashSession?.id ?? null,
-            status: "posted",
-            notes:
-              supplierInvoiceNumber
-                ? `فاتورة مورد ${supplierInvoiceNumber}`
-                : `فاتورة مشتريات ${purchase.publicId}`,
-            createdByUserId: auth.user.id,
-          })
-          .returning();
-
-        const financeTransaction = financeRows[0];
-
-        if (!financeTransaction) {
-          throw new Error("PURCHASE_FINANCE_INSERT_FAILED");
-        }
-
-        const financeLines: Array<
-          typeof financeTransactionLinesTable.$inferInsert
-        > = [
+        const financeLines = [
           {
-            transactionId: financeTransaction.id,
-            lineNumber: 1,
             accountId: purchaseAccount.id,
             debitMinor: totalMinor,
             creditMinor: 0,
@@ -1993,12 +1962,8 @@ async function handleCreatePurchase(
           },
         ];
 
-        let financeLineNumber = 2;
-
         if (paidMinor > 0 && cashAccount) {
           financeLines.push({
-            transactionId: financeTransaction.id,
-            lineNumber: financeLineNumber++,
             accountId: cashAccount.id,
             debitMinor: 0,
             creditMinor: paidMinor,
@@ -2008,8 +1973,6 @@ async function handleCreatePurchase(
 
         if (dueMinor > 0 && supplierAccount) {
           financeLines.push({
-            transactionId: financeTransaction.id,
-            lineNumber: financeLineNumber++,
             accountId: supplierAccount.id,
             debitMinor: 0,
             creditMinor: dueMinor,
@@ -2017,23 +1980,31 @@ async function handleCreatePurchase(
           });
         }
 
-        const debitTotal = financeLines.reduce(
-          (sum, line) => sum + (line.debitMinor ?? 0),
-          0,
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-${businessDate.replaceAll("-", "")}-` +
+              randomUUID().slice(0, 8).toUpperCase(),
+            idempotencyKey:
+              `purchase:${purchase.id}:completed`,
+            businessDate,
+            transactionType: "purchase",
+            sourceType: "pos_purchase",
+            sourceId:
+              String(purchase.id),
+            sourceEvent: "completed",
+            cashSessionId:
+              cashSession?.id ?? null,
+            notes:
+              supplierInvoiceNumber
+                ? `فاتورة مورد ${supplierInvoiceNumber}`
+                : `فاتورة مشتريات ${purchase.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines: financeLines,
+          },
         );
-
-        const creditTotal = financeLines.reduce(
-          (sum, line) => sum + (line.creditMinor ?? 0),
-          0,
-        );
-
-        if (debitTotal !== creditTotal) {
-          throw new Error("PURCHASE_FINANCE_NOT_BALANCED");
-        }
-
-        await tx
-          .insert(financeTransactionLinesTable)
-          .values(financeLines);
       }
 
       if (
