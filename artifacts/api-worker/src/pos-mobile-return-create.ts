@@ -1379,6 +1379,87 @@ export async function handleCreateMobileEmergencyReturn(
           }
 
           if (
+            refundMethod === "cash" &&
+            grossAmountMinor > 0
+          ) {
+            const cashAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    `CASH_${registerKey.toUpperCase()}`,
+                  name:
+                    registerKey === "main"
+                      ? "الصندوق الرئيسي"
+                      : `الصندوق ${registerKey}`,
+                  accountType:
+                    "asset",
+                },
+              );
+
+            const cashSalesAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    "POS_SALES_CASH",
+                  name:
+                    "مبيعات نقطة البيع النقدية",
+                  accountType:
+                    "income",
+                },
+              );
+
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-RET-CASH-${saleReturn.publicId}`,
+                idempotencyKey:
+                  `pos-sale-return:${saleReturn.id}:cash-refund`,
+                businessDate:
+                  saleReturn.businessDate,
+                transactionType:
+                  "refund",
+                sourceType:
+                  "pos_sale_return",
+                sourceId:
+                  String(
+                    saleReturn.id,
+                  ),
+                sourceEvent:
+                  "cash_refund",
+                cashSessionId:
+                  session.id,
+                notes:
+                  `مردود نقدي ${saleReturn.publicId}`,
+                createdByUserId:
+                  auth.user.id,
+                lines: [
+                  {
+                    accountId:
+                      cashSalesAccount.id,
+                    debitMinor:
+                      grossAmountMinor,
+                    creditMinor: 0,
+                    memo:
+                      `مردود مبيعات نقدي ${saleReturn.publicId}`,
+                  },
+                  {
+                    accountId:
+                      cashAccount.id,
+                    debitMinor: 0,
+                    creditMinor:
+                      grossAmountMinor,
+                    memo:
+                      `دفع مردود نقدي ${saleReturn.publicId}`,
+                  },
+                ],
+              },
+            );
+          }
+
+          if (
             refundMethod === "customer" &&
             grossAmountMinor > 0
           ) {
