@@ -201,6 +201,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "banking",
+    group: "finance",
+    path: "/finance/banking",
+    title: "البنوك والعملات",
+    description: "الحسابات البنكية وأسعار الدولار والدينار.",
+    icon: "🏦",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "checks",
     group: "finance",
     path: "/finance/checks",
