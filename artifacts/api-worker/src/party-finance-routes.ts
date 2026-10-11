@@ -19,6 +19,10 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  postFinanceTransaction,
+  type FinanceTransactionType,
+} from "./finance-posting";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -3149,12 +3153,10 @@ async function createVoucher(
               "دفع مسحوبات شخصية للمالك";
           }
 
-          const financeRows =
-            await tx
-              .insert(
-                financeTransactionsTable,
-              )
-              .values({
+          const financePosting =
+            await postFinanceTransaction(
+              tx,
+              {
                 publicId:
                   `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
                 idempotencyKey:
@@ -3163,7 +3165,7 @@ async function createVoucher(
                 transactionType:
                   financeTransactionType(
                     input.voucherType,
-                  ),
+                  ) as FinanceTransactionType,
                 sourceType:
                   "finance_voucher",
                 sourceId:
@@ -3175,57 +3177,36 @@ async function createVoucher(
                 cashSessionId:
                   session?.id ??
                   null,
-                status:
-                  "posted",
                 notes:
                   notes ??
                   voucher.publicId,
                 createdByUserId:
                   auth.user.id,
-              })
-              .returning();
+                lines: [
+                  {
+                    accountId:
+                      debitAccountId,
+                    debitMinor:
+                      amountMinor,
+                    creditMinor: 0,
+                    memo:
+                      debitMemo,
+                  },
+                  {
+                    accountId:
+                      creditAccountId,
+                    debitMinor: 0,
+                    creditMinor:
+                      amountMinor,
+                    memo:
+                      creditMemo,
+                  },
+                ],
+              },
+            );
 
           const financeTransaction =
-            financeRows[0];
-
-          if (
-            !financeTransaction
-          ) {
-            throw new Error(
-              "FINANCE_TRANSACTION_CREATE_FAILED",
-            );
-          }
-
-          await tx
-            .insert(
-              financeTransactionLinesTable,
-            )
-            .values([
-              {
-                transactionId:
-                  financeTransaction.id,
-                lineNumber: 1,
-                accountId:
-                  debitAccountId,
-                debitMinor:
-                  amountMinor,
-                creditMinor: 0,
-                memo:
-                  debitMemo,
-              },
-              {
-                transactionId:
-                  financeTransaction.id,
-                lineNumber: 2,
-                accountId:
-                  creditAccountId,
-                debitMinor: 0,
-                creditMinor:
-                  amountMinor,
-                memo:
-                  creditMemo,
-              },
-            ]);
+            financePosting.transaction;
 
           const updatedVoucherRows =
             await tx
