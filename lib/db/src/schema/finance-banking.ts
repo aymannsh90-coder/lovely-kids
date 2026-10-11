@@ -174,6 +174,9 @@ export const financeChecksTable = pgTable(
   {
     id: serial("id").primaryKey(),
     publicId: text("public_id").notNull(),
+    idempotencyKey: text(
+      "idempotency_key",
+    ).notNull(),
     direction: text(
       "direction",
     ).notNull(),
@@ -339,6 +342,10 @@ export const financeChecksTable = pgTable(
       sql`length(btrim(${table.publicId})) between 6 and 100`,
     ),
     check(
+      "finance_checks_idempotency_valid",
+      sql`length(btrim(${table.idempotencyKey})) between 8 and 160`,
+    ),
+    check(
       "finance_checks_direction_valid",
       sql`${table.direction} in ('received', 'issued')`,
     ),
@@ -423,6 +430,9 @@ export const financeChecksTable = pgTable(
     uniqueIndex(
       "finance_checks_public_id_idx",
     ).on(table.publicId),
+    uniqueIndex(
+      "finance_checks_idempotency_idx",
+    ).on(table.idempotencyKey),
     index(
       "finance_checks_number_idx",
     ).on(table.checkNumber),
