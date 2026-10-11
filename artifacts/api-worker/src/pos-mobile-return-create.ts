@@ -1,8 +1,5 @@
 import {
   customersTable,
-  financeAccountsTable,
-  financeTransactionLinesTable,
-  financeTransactionsTable,
   inventoryMovementsTable,
   cashSessionsTable,
   posSaleReturnItemCostsTable,
@@ -17,6 +14,10 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  ensureCustomerReceivableControlAccount,
+} from "./finance-customer-ledger";
+import { postFinanceTransaction } from "./finance-posting";
 import {
   ensureSaleFinanceAccount,
 } from "./pos-sale-routes";
@@ -680,7 +681,11 @@ export async function handleCreateMobileEmergencyReturn(
             null = null;
 
           let customerAccount:
-            typeof financeAccountsTable.$inferSelect |
+            Awaited<
+              ReturnType<
+                typeof ensureCustomerReceivableControlAccount
+              >
+            > |
             null = null;
 
           if (
@@ -717,26 +722,15 @@ export async function handleCreateMobileEmergencyReturn(
             }
           }
 
-          // Only customer-account refunds create/use a finance account.
+          // Customer-account refunds use the shared receivables
+          // control account; the customer identity lives on the line.
           if (
             refundMethod === "customer" &&
             refundCustomer
           ) {
             customerAccount =
-              await ensureSaleFinanceAccount(
+              await ensureCustomerReceivableControlAccount(
                 tx,
-                {
-                  code:
-                    `CUSTOMER_AR_${refundCustomer.id}`,
-                  name:
-                    `ذمم الزبون: ${refundCustomer.name}`,
-                  accountType:
-                    "asset",
-                  linkedEntityType:
-                    "customer_receivable",
-                  linkedEntityId:
-                    refundCustomer.id,
-                },
               );
           }
 
@@ -1410,76 +1404,53 @@ export async function handleCreateMobileEmergencyReturn(
                 },
               );
 
-            const financeRows =
-              await tx
-                .insert(
-                  financeTransactionsTable,
-                )
-                .values({
-                  publicId:
-                    `FIN-RET-AR-${saleReturn.publicId}`,
-                  idempotencyKey:
-                    `pos-sale-return:${saleReturn.id}:customer-credit`,
-                  businessDate:
-                    saleReturn.businessDate,
-                  transactionType:
-                    "refund",
-                  sourceType:
-                    "pos_sale_return",
-                  sourceId:
-                    String(saleReturn.id),
-                  sourceEvent:
-                    "customer_credit",
-                  cashSessionId:
-                    session.id,
-                  status:
-                    "posted",
-                  notes:
-                    `مردود ${saleReturn.publicId} إلى حساب ${refundCustomer.name}`,
-                  createdByUserId:
-                    auth.user.id,
-                })
-                .returning();
-
-            const financeTransaction =
-              financeRows[0];
-
-            if (!financeTransaction) {
-              throw new Error(
-                "MOBILE_POS_RETURN_CUSTOMER_FINANCE_INSERT_FAILED",
-              );
-            }
-
-            await tx
-              .insert(
-                financeTransactionLinesTable,
-              )
-              .values([
-                {
-                  transactionId:
-                    financeTransaction.id,
-                  lineNumber: 1,
-                  accountId:
-                    salesAccount.id,
-                  debitMinor:
-                    grossAmountMinor,
-                  creditMinor: 0,
-                  memo:
-                    `مردود ${saleReturn.publicId}`,
-                },
-                {
-                  transactionId:
-                    financeTransaction.id,
-                  lineNumber: 2,
-                  accountId:
-                    customerAccount.id,
-                  debitMinor: 0,
-                  creditMinor:
-                    grossAmountMinor,
-                  memo:
-                    `رصيد للزبون ${refundCustomer.name}`,
-                },
-              ]);
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-RET-AR-${saleReturn.publicId}`,
+                idempotencyKey:
+                  `pos-sale-return:${saleReturn.id}:customer-credit`,
+                businessDate:
+                  saleReturn.businessDate,
+                transactionType:
+                  "refund",
+                sourceType:
+                  "pos_sale_return",
+                sourceId:
+                  String(saleReturn.id),
+                sourceEvent:
+                  "customer_credit",
+                cashSessionId:
+                  session.id,
+                notes:
+                  `مردود ${saleReturn.publicId} إلى حساب ${refundCustomer.name}`,
+                createdByUserId:
+                  auth.user.id,
+                lines: [
+                  {
+                    accountId:
+                      salesAccount.id,
+                    debitMinor:
+                      grossAmountMinor,
+                    creditMinor: 0,
+                    memo:
+                      `مردود ${saleReturn.publicId}`,
+                  },
+                  {
+                    accountId:
+                      customerAccount.id,
+                    customerId:
+                      refundCustomer.id,
+                    debitMinor: 0,
+                    creditMinor:
+                      grossAmountMinor,
+                    memo:
+                      `رصيد للزبون ${refundCustomer.name}`,
+                  },
+                ],
+              },
+            );
           }
 
           if (refundMethod === "cash") {
