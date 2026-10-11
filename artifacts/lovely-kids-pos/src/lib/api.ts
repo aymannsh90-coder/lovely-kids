@@ -621,6 +621,10 @@ export interface PosFinanceVoucher {
     | PosFinancePaymentMethod
     | "non_cash";
   amountMinor: number;
+  currencyCode: string;
+  transactionAmountMinor: number | null;
+  exchangeRateMicros: number;
+  bankAccountId: number | null;
   businessDate: string;
   referencePeriod: string | null;
   cashSessionId: number | null;
@@ -708,6 +712,8 @@ export function createPosExpense(
     amount: string;
     paymentMethod: PosFinancePaymentMethod;
     registerKey: string;
+    bankAccountId?: number;
+    exchangeRate?: string;
     notes?: string;
     idempotencyKey: string;
   },
@@ -732,6 +738,8 @@ export function createPosEmployeeAdvance(
     amount: string;
     paymentMethod: PosFinancePaymentMethod;
     registerKey: string;
+    bankAccountId?: number;
+    exchangeRate?: string;
     notes?: string;
     idempotencyKey: string;
   },
@@ -755,6 +763,8 @@ export function createPosOwnerWithdrawal(
     amount: string;
     paymentMethod: PosFinancePaymentMethod;
     registerKey: string;
+    bankAccountId?: number;
+    exchangeRate?: string;
     notes?: string;
     idempotencyKey: string;
   },
