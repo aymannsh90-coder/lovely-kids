@@ -25,6 +25,7 @@ import {
 
 type QuickTileKind =
   | "expense"
+  | "expense_preset"
   | "expense_other"
   | "employee_advance"
   | "owner_withdrawal";
@@ -36,11 +37,59 @@ interface QuickTile {
   subtitle: string;
   icon: string;
   categoryId?: number;
+  presetName?: string;
   ownerOnly?: boolean;
 }
 
+interface DefaultExpensePreset {
+  key: string;
+  title: string;
+  icon: string;
+  pattern: RegExp;
+}
+
+const DEFAULT_EXPENSE_PRESETS:
+  DefaultExpensePreset[] = [
+    {
+      key: "preset:hospitality",
+      title: "ضيافة",
+      icon: "☕",
+      pattern: /ضياف|قهو|شاي/,
+    },
+    {
+      key: "preset:cleaning",
+      title: "تنظيف",
+      icon: "🧹",
+      pattern: /تنظيف|منظف|نظافة/,
+    },
+    {
+      key: "preset:electricity",
+      title: "كهرباء",
+      icon: "⚡",
+      pattern: /كهرب/,
+    },
+    {
+      key: "preset:water",
+      title: "مياه",
+      icon: "💧",
+      pattern: /مياه|ميه|ماء/,
+    },
+    {
+      key: "preset:transport",
+      title: "مواصلات / توصيل",
+      icon: "🚚",
+      pattern: /توصيل|مواصل|نقل/,
+    },
+    {
+      key: "preset:maintenance",
+      title: "صيانة",
+      icon: "🛠️",
+      pattern: /صيان|تصليح/,
+    },
+  ];
+
 const PIN_STORAGE_KEY =
-  "lovely-kids-pos.finance-expense-pins.v1";
+  "lovely-kids-pos.finance-expense-pins.v2";
 
 function errorText(error: unknown) {
   return error instanceof Error
@@ -138,6 +187,22 @@ function expenseIcon(name: string) {
   }
 
   return "💸";
+}
+
+function defaultPresetForCategory(
+  name: string,
+) {
+  const value =
+    name.trim().toLowerCase();
+
+  return (
+    DEFAULT_EXPENSE_PRESETS.find(
+      (preset) =>
+        preset.pattern.test(
+          value,
+        ),
+    ) ?? null
+  );
 }
 
 function categoryPriority(name: string) {
@@ -367,28 +432,70 @@ export default function ExpensesPage() {
 
   const allTiles =
     useMemo<QuickTile[]>(() => {
+      const presetTiles =
+        DEFAULT_EXPENSE_PRESETS.map(
+          (preset) => {
+            const category =
+              activeCategories.find(
+                (item) =>
+                  preset.pattern.test(
+                    item.name
+                      .trim()
+                      .toLowerCase(),
+                  ),
+              );
+
+            return {
+              key:
+                preset.key,
+              kind:
+                "expense_preset" as const,
+              title:
+                preset.title,
+              subtitle:
+                category
+                  ? "مصروف"
+                  : "يُنشأ عند أول حفظ",
+              icon:
+                preset.icon,
+              categoryId:
+                category?.id,
+              presetName:
+                preset.title,
+            };
+          },
+        );
+
       const categoryTiles =
-        activeCategories.map(
-          (category) => ({
-            key:
-              `expense:${category.id}`,
-            kind:
-              "expense" as const,
-            title:
-              category.name,
-            subtitle:
-              "مصروف",
-            icon:
-              expenseIcon(
+        activeCategories
+          .filter(
+            (category) =>
+              !defaultPresetForCategory(
                 category.name,
               ),
-            categoryId:
-              category.id,
-          }),
-        );
+          )
+          .map(
+            (category) => ({
+              key:
+                `expense:${category.id}`,
+              kind:
+                "expense" as const,
+              title:
+                category.name,
+              subtitle:
+                "مصروف",
+              icon:
+                expenseIcon(
+                  category.name,
+                ),
+              categoryId:
+                category.id,
+            }),
+          );
 
       const tiles:
         QuickTile[] = [
+          ...presetTiles,
           ...categoryTiles,
           {
             key:
@@ -698,8 +805,14 @@ export default function ExpensesPage() {
       }
     }
 
-    const categoryDefaults =
+    const otherCategoryDefaults =
       activeCategories
+        .filter(
+          (category) =>
+            !defaultPresetForCategory(
+              category.name,
+            ),
+        )
         .slice()
         .sort(
           (left, right) => {
@@ -721,14 +834,18 @@ export default function ExpensesPage() {
             );
           },
         )
-        .slice(0, 6)
+        .slice(0, 2)
         .map(
           (category) =>
             `expense:${category.id}`,
         );
 
     const defaults = [
-      ...categoryDefaults,
+      ...DEFAULT_EXPENSE_PRESETS.map(
+        (preset) =>
+          preset.key,
+      ),
+      ...otherCategoryDefaults,
       "expense:other",
     ];
 
@@ -924,11 +1041,42 @@ export default function ExpensesPage() {
         activeTile.kind ===
           "expense" ||
         activeTile.kind ===
+          "expense_preset" ||
+        activeTile.kind ===
           "expense_other"
       ) {
-        const categoryId =
+        let categoryId =
           activeTile.categoryId ??
           selectedCategoryId;
+
+        if (
+          activeTile.kind ===
+            "expense_preset" &&
+          !activeTile.categoryId
+        ) {
+          if (!user?.isOwner) {
+            throw new Error(
+              "هذا التصنيف يحتاج أن يضيفه المالك أولًا.",
+            );
+          }
+
+          const created =
+            await createPosExpenseCategory(
+              token,
+              activeTile.presetName ??
+                activeTile.title,
+            );
+
+          categoryId =
+            created.category.id;
+
+          setCategories(
+            (current) => [
+              ...current,
+              created.category,
+            ],
+          );
+        }
 
         if (!categoryId) {
           throw new Error(
