@@ -1051,6 +1051,29 @@ export interface PosFinanceCheck {
   } | null;
 }
 
+export interface PosFinanceCheckPartyReference {
+  id: number;
+  code: string;
+  name: string;
+  status: "active" | "inactive";
+}
+
+export function getPosFinanceCheckReference(
+  token: string,
+) {
+  return apiRequest<{
+    customers:
+      PosFinanceCheckPartyReference[];
+    suppliers:
+      PosFinanceCheckPartyReference[];
+  }>(
+    "/api/pos/finance/checks/reference",
+    {},
+    token,
+  );
+}
+
+
 export function getPosFinanceChecks(
   token: string,
   options: {
