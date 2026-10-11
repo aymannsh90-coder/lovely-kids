@@ -863,6 +863,12 @@ export async function handleVoidPosSaleReturn(
                     (line) => ({
                       accountId:
                         line.accountId,
+                      customerId:
+                        line.customerId,
+                      employeeId:
+                        line.employeeId,
+                      supplierId:
+                        line.supplierId,
                       debitMinor:
                         line.creditMinor,
                       creditMinor:
