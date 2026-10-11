@@ -22,6 +22,9 @@ export interface FinancePostingLineInput {
   customerId?: number | null;
   employeeId?: number | null;
   supplierId?: number | null;
+  currencyCode?: string | null;
+  currencyAmountMinor?: number | null;
+  exchangeRateMicros?: number | null;
   debitMinor?: number;
   creditMinor?: number;
   memo?: string | null;
@@ -129,6 +132,88 @@ function minorAmount(
   return amount;
 }
 
+function optionalCurrencyCode(
+  value: string | null | undefined,
+  field: string,
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  const normalized =
+    value.trim().toUpperCase();
+
+  if (
+    !/^[A-Z]{3}$/.test(
+      normalized,
+    )
+  ) {
+    throw new FinancePostingError(
+      "FINANCE_POSTING_INVALID_CURRENCY",
+      `${field} غير صالحة`,
+    );
+  }
+
+  return normalized;
+}
+
+function optionalStrictPositiveInteger(
+  value: number | null | undefined,
+  field: string,
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  if (
+    !Number.isSafeInteger(value) ||
+    value <= 0 ||
+    value > MAX_MINOR
+  ) {
+    throw new FinancePostingError(
+      "FINANCE_POSTING_INVALID_CURRENCY_AMOUNT",
+      `${field} غير صالح`,
+    );
+  }
+
+  return value;
+}
+
+function convertedBaseMinor(
+  currencyAmountMinor: number,
+  exchangeRateMicros: number,
+) {
+  const numerator =
+    BigInt(currencyAmountMinor) *
+    BigInt(exchangeRateMicros);
+
+  const rounded =
+    (
+      numerator +
+      500_000n
+    ) /
+    1_000_000n;
+
+  if (
+    rounded <= 0n ||
+    rounded >
+      BigInt(MAX_MINOR)
+  ) {
+    throw new FinancePostingError(
+      "FINANCE_POSTING_CURRENCY_CONVERSION_OVERFLOW",
+      "قيمة العملة بعد التحويل أكبر من الحد المسموح",
+    );
+  }
+
+  return Number(rounded);
+}
+
 function businessDate(value: string) {
   const normalized = value.trim();
 
@@ -189,6 +274,43 @@ export function normalizeFinancePostingLines(
       );
     }
 
+    const currencyCode =
+      optionalCurrencyCode(
+        line.currencyCode,
+        `عملة السطر ${index + 1}`,
+      );
+
+    const currencyAmountMinor =
+      optionalStrictPositiveInteger(
+        line.currencyAmountMinor,
+        `مبلغ العملة في السطر ${index + 1}`,
+      );
+
+    const exchangeRateMicros =
+      optionalStrictPositiveInteger(
+        line.exchangeRateMicros,
+        `سعر الصرف في السطر ${index + 1}`,
+      );
+
+    const currencyFieldCount = [
+      currencyCode,
+      currencyAmountMinor,
+      exchangeRateMicros,
+    ].filter(
+      (value) =>
+        value !== null,
+    ).length;
+
+    if (
+      currencyFieldCount !== 0 &&
+      currencyFieldCount !== 3
+    ) {
+      throw new FinancePostingError(
+        "FINANCE_POSTING_CURRENCY_FIELDS_INCOMPLETE",
+        `بيانات العملة في السطر ${index + 1} يجب أن تكون كاملة`,
+      );
+    }
+
     const debitMinor = minorAmount(
       line.debitMinor,
       `المدين في السطر ${index + 1}`,
@@ -208,6 +330,55 @@ export function normalizeFinancePostingLines(
         "FINANCE_POSTING_LINE_SIDE_INVALID",
         `السطر ${index + 1} يجب أن يكون مدينًا أو دائنًا فقط`,
       );
+    }
+
+    if (
+      currencyCode &&
+      currencyAmountMinor !== null &&
+      exchangeRateMicros !== null
+    ) {
+      const baseMinor =
+        debitMinor >
+        0
+          ? debitMinor
+          : creditMinor;
+
+      if (
+        currencyCode ===
+          "ILS" &&
+        (
+          exchangeRateMicros !==
+            1_000_000 ||
+          currencyAmountMinor !==
+            baseMinor
+        )
+      ) {
+        throw new FinancePostingError(
+          "FINANCE_POSTING_ILS_CONVERSION_INVALID",
+          `بيانات الشيكل في السطر ${index + 1} غير متطابقة مع قيمة القيد`,
+        );
+      }
+
+      if (
+        currencyCode !==
+        "ILS"
+      ) {
+        const converted =
+          convertedBaseMinor(
+            currencyAmountMinor,
+            exchangeRateMicros,
+          );
+
+        if (
+          converted !==
+          baseMinor
+        ) {
+          throw new FinancePostingError(
+            "FINANCE_POSTING_CURRENCY_CONVERSION_MISMATCH",
+            `قيمة السطر ${index + 1} لا تطابق مبلغ العملة وسعر الصرف`,
+          );
+        }
+      }
     }
 
     debitTotal += debitMinor;
@@ -231,6 +402,9 @@ export function normalizeFinancePostingLines(
       customerId,
       employeeId,
       supplierId,
+      currencyCode,
+      currencyAmountMinor,
+      exchangeRateMicros,
       debitMinor,
       creditMinor,
       memo: line.memo?.trim() || null,
@@ -427,6 +601,11 @@ export async function postFinanceTransaction(
         customerId: line.customerId,
         employeeId: line.employeeId,
         supplierId: line.supplierId,
+        currencyCode: line.currencyCode,
+        currencyAmountMinor:
+          line.currencyAmountMinor,
+        exchangeRateMicros:
+          line.exchangeRateMicros,
         debitMinor: line.debitMinor,
         creditMinor: line.creditMinor,
         memo: line.memo,
