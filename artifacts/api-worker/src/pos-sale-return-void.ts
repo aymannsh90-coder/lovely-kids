@@ -760,6 +760,143 @@ export async function handleVoidPosSaleReturn(
 
           if (
             saleReturn.refundMethod ===
+              "cash" &&
+            saleReturn.refundAmountMinor >
+              0
+          ) {
+            const cashFinanceRows =
+              await tx
+                .select()
+                .from(
+                  financeTransactionsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      financeTransactionsTable.sourceType,
+                      "pos_sale_return",
+                    ),
+                    eq(
+                      financeTransactionsTable.sourceId,
+                      String(
+                        saleReturn.id,
+                      ),
+                    ),
+                    eq(
+                      financeTransactionsTable.sourceEvent,
+                      "cash_refund",
+                    ),
+                    eq(
+                      financeTransactionsTable.status,
+                      "posted",
+                    ),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+
+            const cashFinance =
+              cashFinanceRows[0] ??
+              null;
+
+            if (cashFinance) {
+              const originalCashLines =
+                await tx
+                  .select()
+                  .from(
+                    financeTransactionLinesTable,
+                  )
+                  .where(
+                    eq(
+                      financeTransactionLinesTable
+                        .transactionId,
+                      cashFinance.id,
+                    ),
+                  )
+                  .orderBy(
+                    asc(
+                      financeTransactionLinesTable
+                        .lineNumber,
+                    ),
+                  );
+
+              if (
+                originalCashLines.length <
+                2
+              ) {
+                throw new Error(
+                  "POS_RETURN_CASH_FINANCE_LINES_MISSING",
+                );
+              }
+
+              await postFinanceTransaction(
+                tx,
+                {
+                  publicId:
+                    `FIN-RET-CASH-VOID-${saleReturn.publicId}`,
+                  idempotencyKey:
+                    `pos-sale-return:${saleReturn.id}:cash-refund:void`,
+                  businessDate:
+                    saleReturn.businessDate,
+                  transactionType:
+                    "reversal",
+                  sourceType:
+                    "pos_sale_return",
+                  sourceId:
+                    String(
+                      saleReturn.id,
+                    ),
+                  sourceEvent:
+                    "cash_refund_void",
+                  cashSessionId:
+                    saleReturn.cashSessionId,
+                  notes:
+                    `عكس المردود النقدي ${saleReturn.publicId}`,
+                  createdByUserId:
+                    user.id,
+                  lines:
+                    originalCashLines.map(
+                      (line) => ({
+                        accountId:
+                          line.accountId,
+                        customerId:
+                          line.customerId,
+                        employeeId:
+                          line.employeeId,
+                        supplierId:
+                          line.supplierId,
+                        debitMinor:
+                          line.creditMinor,
+                        creditMinor:
+                          line.debitMinor,
+                        memo:
+                          `عكس ${saleReturn.publicId}`,
+                      }),
+                    ),
+                },
+              );
+
+              await tx
+                .update(
+                  financeTransactionsTable,
+                )
+                .set({
+                  status:
+                    "reversed",
+                  updatedAt:
+                    voidedAt,
+                })
+                .where(
+                  eq(
+                    financeTransactionsTable.id,
+                    cashFinance.id,
+                  ),
+                );
+            }
+          }
+
+          if (
+            saleReturn.refundMethod ===
               "customer" &&
             saleReturn.refundAmountMinor >
               0
