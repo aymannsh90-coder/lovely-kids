@@ -1061,6 +1061,34 @@ export function getPosFinanceAccountStatement(
 }
 
 
+export function getPosFinanceCashStatement(
+  token: string,
+  input: {
+    accountId: number;
+    from: string;
+    to: string;
+  },
+) {
+  const params =
+    new URLSearchParams({
+      accountId:
+        String(
+          input.accountId,
+        ),
+      from:
+        input.from,
+      to:
+        input.to,
+    });
+
+  return apiRequest<PosFinanceAccountStatement>(
+    `/api/pos/finance/statements/cash?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+
 export function savePosExchangeRate(
   token: string,
   input: {
