@@ -146,6 +146,7 @@ export default function SalePanel({
   onUnauthorized,
 }: SalePanelProps) {
   const directReceiptRef = useRef<HTMLElement>(null);
+  const printAfterSaleRef = useRef(false);
 
   async function handleDirectReceiptPrint() {
     const source = directReceiptRef.current;
@@ -297,6 +298,22 @@ export default function SalePanel({
   const [message, setMessage] = useState("");
 
   const [lastSale, setLastSale] = useState<PosSaleResult | null>(null);
+
+  useEffect(() => {
+    if (!lastSale || !printAfterSaleRef.current) {
+      return;
+    }
+
+    printAfterSaleRef.current = false;
+
+    const frame = window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        void handleDirectReceiptPrint();
+      }, 0);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [lastSale]);
 
   const subtotalMinor = useMemo(
     () =>
@@ -830,6 +847,7 @@ export default function SalePanel({
         | "cash"
         | "card";
     },
+    printAfter = false,
   ) {
     setError("");
     setMessage("");
@@ -1057,6 +1075,7 @@ export default function SalePanel({
       }
 
       idempotencyKey.current = null;
+      printAfterSaleRef.current = printAfter;
       setLastSale(result);
       setCart([]);
       setDiscountAmount("0.00");
@@ -1777,14 +1796,27 @@ export default function SalePanel({
             )}
 
             {paymentMethod !== "credit" && (
-            <button
-              className="primary-button complete-sale-button"
-              type="button"
-              disabled={saleBusy || cart.length === 0}
-              onClick={() => void completeSale()}
-            >
-              {saleBusy ? "جاري حفظ البيع…" : "إتمام البيع وخصم المخزون"}
-            </button>
+              <div className="complete-sale-actions">
+                <button
+                  className="primary-button complete-sale-button"
+                  type="button"
+                  disabled={saleBusy || cart.length === 0}
+                  onClick={() => void completeSale()}
+                >
+                  {saleBusy ? "جاري حفظ البيع…" : "إتمام البيع وخصم المخزون"}
+                </button>
+
+                <button
+                  className="secondary-button complete-sale-print-button"
+                  type="button"
+                  disabled={saleBusy || cart.length === 0}
+                  onClick={() => void completeSale(undefined, true)}
+                >
+                  {saleBusy
+                    ? "جاري الحفظ…"
+                    : "إتمام البيع + خصم المخزون + طباعة إيصال"}
+                </button>
+              </div>
             )}
           </div>
         </div>
