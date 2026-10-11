@@ -13,6 +13,8 @@ import {
 
 import { cashSessionsTable } from "./cash-sessions";
 import { expenseCategoriesTable } from "./expense-categories";
+import { bankAccountsTable } from "./finance-banking";
+import { financeCurrenciesTable } from "./finance-currencies";
 import { financeTransactionsTable } from "./finance";
 import { usersTable } from "./users";
 
@@ -41,6 +43,35 @@ export const financeVouchersTable = pgTable(
 
     amountMinor: integer("amount_minor")
       .notNull(),
+
+    currencyCode: text("currency_code")
+      .notNull()
+      .default("ILS")
+      .references(
+        () => financeCurrenciesTable.code,
+        {
+          onDelete: "restrict",
+        },
+      ),
+
+    transactionAmountMinor: integer(
+      "transaction_amount_minor",
+    ),
+
+    exchangeRateMicros: integer(
+      "exchange_rate_micros",
+    )
+      .notNull()
+      .default(1000000),
+
+    bankAccountId: integer(
+      "bank_account_id",
+    ).references(
+      () => bankAccountsTable.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
 
     businessDate: date("business_date")
       .notNull(),
@@ -204,6 +235,19 @@ export const financeVouchersTable = pgTable(
     ),
 
     check(
+      "finance_vouchers_transaction_amount_valid",
+      sql`
+        ${table.transactionAmountMinor} is null
+        or ${table.transactionAmountMinor} > 0
+      `,
+    ),
+
+    check(
+      "finance_vouchers_exchange_rate_valid",
+      sql`${table.exchangeRateMicros} > 0`,
+    ),
+
+    check(
       "finance_vouchers_cash_session_valid",
       sql`
         (
@@ -265,6 +309,13 @@ export const financeVouchersTable = pgTable(
 
     index("finance_vouchers_cash_session_idx")
       .on(table.cashSessionId),
+
+    index("finance_vouchers_currency_idx")
+      .on(table.currencyCode),
+
+    index("finance_vouchers_bank_account_idx")
+      .on(table.bankAccountId)
+      .where(sql`${table.bankAccountId} is not null`),
   ],
 ).enableRLS();
 
