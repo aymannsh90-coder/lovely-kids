@@ -19,6 +19,10 @@ import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql 
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import {
+  customerReceivableBalanceMinor,
+  ensureCustomerReceivableControlAccount,
+} from "./finance-customer-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import { handleUpdatePosSale } from "./pos-sale-edit";
 import { rewriteMediaUrlsForPublic } from "./media-url";
@@ -1635,31 +1639,14 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         }
 
         customerAccount =
-          await ensureSaleFinanceAccount(
+          await ensureCustomerReceivableControlAccount(
             tx,
-            {
-              code:
-                `CUSTOMER_AR_${customer.id}`,
-              name:
-                `ذمم الزبون: ${customer.name}`,
-              accountType: "asset",
-              linkedEntityType:
-                "customer_receivable",
-              linkedEntityId:
-                customer.id,
-            },
           );
-
-        if (!customerAccount) {
-          throw new Error(
-            "POS_SALE_CUSTOMER_ACCOUNT_CREATE_FAILED",
-          );
-        }
 
         const currentBalanceMinor =
-          await financeAssetBalanceMinor(
+          await customerReceivableBalanceMinor(
             tx,
-            customerAccount.id,
+            customer.id,
           );
 
         if (
@@ -1765,6 +1752,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
               {
                 accountId:
                   customerAccount.id,
+                customerId:
+                  customer.id,
                 debitMinor:
                   accountDueMinor,
                 creditMinor: 0,
@@ -2532,6 +2521,12 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
                 (line) => ({
                   accountId:
                     line.accountId,
+                  customerId:
+                    line.customerId,
+                  employeeId:
+                    line.employeeId,
+                  supplierId:
+                    line.supplierId,
                   debitMinor:
                     line.creditMinor,
                   creditMinor:
