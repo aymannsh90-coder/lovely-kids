@@ -6,6 +6,7 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
+import BankingPage from "../pages/finance/BankingPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
@@ -194,6 +195,15 @@ export default function AppRouter() {
             <RequireOpenSession>
               <ExpensesPage />
             </RequireOpenSession>
+          }
+        />
+
+        <Route
+          path="finance/banking"
+          element={
+            <RequireOwner>
+              <BankingPage />
+            </RequireOwner>
           }
         />
 
