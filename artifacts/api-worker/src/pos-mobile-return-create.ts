@@ -1,4 +1,5 @@
 import {
+  customersTable,
   inventoryMovementsTable,
   cashSessionsTable,
   posSaleReturnItemCostsTable,
@@ -392,6 +393,11 @@ function toResponse(
       id: String(saleReturn.id),
       publicId: saleReturn.publicId,
 
+      customerId:
+        saleReturn.customerId === null
+          ? null
+          : String(saleReturn.customerId),
+
       cashSessionId: String(
         saleReturn.cashSessionId,
       ),
@@ -543,6 +549,30 @@ export async function handleCreateMobileEmergencyReturn(
       );
     }
 
+    const rawCustomerId =
+      payload.customerId;
+
+    const requestedCustomerId =
+      rawCustomerId === undefined ||
+      rawCustomerId === null ||
+      rawCustomerId === ""
+        ? null
+        : Number(rawCustomerId);
+
+    if (
+      requestedCustomerId !== null &&
+      (
+        !Number.isSafeInteger(
+          requestedCustomerId,
+        ) ||
+        requestedCustomerId <= 0
+      )
+    ) {
+      throw new MobileReturnError(
+        "حساب الزبون غير صالح",
+      );
+    }
+
     const requestedItems =
       parseItems(payload.items);
 
@@ -620,6 +650,31 @@ export async function handleCreateMobileEmergencyReturn(
 
               alreadyCreated: true,
             };
+          }
+
+          // customerId is optional identity metadata.
+          // This return remains cash-only financially.
+          if (requestedCustomerId) {
+            const customerRows =
+              await tx
+                .select({
+                  id: customersTable.id,
+                })
+                .from(customersTable)
+                .where(
+                  eq(
+                    customersTable.id,
+                    requestedCustomerId,
+                  ),
+                )
+                .limit(1);
+
+            if (!customerRows[0]) {
+              throw new MobileReturnError(
+                "الزبون غير موجود",
+                404,
+              );
+            }
           }
 
           const sessionRows =
@@ -1049,6 +1104,9 @@ export async function handleCreateMobileEmergencyReturn(
                 idempotencyKey,
 
                 originalSaleId: null,
+
+                customerId:
+                  requestedCustomerId,
 
                 cashSessionId:
                   session.id,

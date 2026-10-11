@@ -315,6 +315,11 @@ export default function SalesReturnsPage() {
       setInvoiceInput(result.sale.publicId);
       setBarcodeInput(barcode);
 
+      setRefundCustomerId((current) =>
+        result.sale.customerId ??
+        current
+      );
+
       initializeQuantities(result, barcode);
 
       setIdempotencyKey(createIdempotencyKey());
@@ -559,11 +564,8 @@ export default function SalesReturnsPage() {
         notes,
         refundMethod,
         customerId:
-          refundMethod ===
-          "customer"
-            ? refundCustomerId ??
-              undefined
-            : undefined,
+          refundCustomerId ??
+          undefined,
         items: selectedItems.map(({ item, quantity }) => ({
           originalSaleItemId: item.id,
           quantity,
@@ -648,6 +650,9 @@ export default function SalesReturnsPage() {
       const result = await createPosMobileReturn(token, {
         registerKey,
         idempotencyKey,
+        customerId:
+          refundCustomerId ??
+          undefined,
         reason,
         notes: notes.trim(),
         items: [
@@ -843,6 +848,45 @@ export default function SalesReturnsPage() {
               مرتجع جديد
             </button>
           )}
+        </div>
+
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 14,
+            border: "1px solid #d9e0e5",
+            borderRadius: 10,
+          }}
+        >
+          <CustomerPicker
+            customers={customers}
+            value={refundCustomerId}
+            disabled={searchBusy || submitBusy}
+            label="اسم الزبون"
+            placeholder="اختر الزبون للمردود"
+            onChange={(customer) => {
+              setRefundCustomerId(
+                customer?.id ??
+                  null,
+              );
+
+              setCompletedReturn(null);
+              setCompletedBarcodeReturn(null);
+
+              setIdempotencyKey(
+                createIdempotencyKey(),
+              );
+            }}
+          />
+
+          <small
+            style={{
+              display: "block",
+              marginTop: 8,
+            }}
+          >
+            اختيار الزبون لتوثيق صاحب المرتجع فقط. طريقة الاسترداد هي التي تحدد الحركة المالية.
+          </small>
         </div>
 
         <form className="sales-return-search-form" onSubmit={loadPreview}>
@@ -1567,15 +1611,6 @@ export default function SalesReturnsPage() {
                               method,
                             );
 
-                            if (
-                              method !==
-                              "customer"
-                            ) {
-                              setRefundCustomerId(
-                                null,
-                              );
-                            }
-
                             setCompletedReturn(
                               null,
                             );
@@ -1592,45 +1627,6 @@ export default function SalesReturnsPage() {
                   )}
                 </div>
 
-                {refundMethod ===
-                  "customer" && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                    }}
-                  >
-                    <CustomerPicker
-                      customers={
-                        customers
-                      }
-                      value={
-                        refundCustomerId
-                      }
-                      disabled={
-                        submitBusy
-                      }
-                      label="اسم الزبون"
-                      placeholder="اختر الزبون للمردود"
-                      onChange={(
-                        customer,
-                      ) => {
-                        setRefundCustomerId(
-                          customer?.id ??
-                            null,
-                        );
-
-                        setCompletedReturn(
-                          null,
-                        );
-
-                        setIdempotencyKey(
-                          createIdempotencyKey(),
-                        );
-                      }}
-                    />
-                  </div>
-                )}
-
                 <small
                   style={{
                     display:
@@ -1638,7 +1634,7 @@ export default function SalesReturnsPage() {
                     marginTop: 10,
                   }}
                 >
-                  عند اختيار حساب الزبون، مبلغ المرتجع ينزل رصيدًا له بدون إخراج نقدي من الصندوق.
+                  اختيار الزبون مستقل عن طريقة الاسترداد. عند اختيار حساب الزبون فقط، مبلغ المرتجع ينزل رصيدًا له بدون إخراج نقدي من الصندوق.
                 </small>
               </div>
 

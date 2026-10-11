@@ -746,6 +746,7 @@ export interface PosSaleReturnPreviewResult {
     registerKey: string;
     businessDate: string;
 
+    customerId: number | null;
     customerName: string | null;
     customerPhone: string | null;
 
@@ -1194,6 +1195,7 @@ export function voidPosPurchase(
 export interface CreatePosMobileReturnInput {
   registerKey: string;
   idempotencyKey: string;
+  customerId?: number;
   reason?: string;
   notes?: string;
 
@@ -1212,6 +1214,7 @@ export interface PosMobileReturnResult {
   saleReturn: {
     id: string;
     publicId: string;
+    customerId: string | null;
 
     cashSessionId: string;
 

@@ -526,22 +526,11 @@ export async function handleCreatePosSaleReturn(
         );
       }
 
-      if (
-        refundMethod !== "customer" &&
-        requestedCustomerId !== null
-      ) {
-        throw new PosSaleReturnError(
-          "لا يجوز تحديد حساب زبون مع الاسترداد النقدي أو البطاقة",
-        );
-      }
-
+      // customerId identifies the customer independently from refundMethod.
+      // refundMethod alone controls the financial effect.
       const effectiveCustomerId =
-        refundMethod === "customer"
-          ? (
-              requestedCustomerId ??
-              sale.customerId
-            )
-          : null;
+        requestedCustomerId ??
+        sale.customerId;
 
       if (
         refundMethod === "customer" &&
@@ -553,9 +542,9 @@ export async function handleCreatePosSaleReturn(
       }
 
       if (
-        refundMethod === "customer" &&
         sale.customerId !== null &&
-        effectiveCustomerId !==
+        requestedCustomerId !== null &&
+        requestedCustomerId !==
           sale.customerId
       ) {
         throw new PosSaleReturnError(
@@ -572,10 +561,8 @@ export async function handleCreatePosSaleReturn(
         typeof financeAccountsTable.$inferSelect |
         null = null;
 
-      if (
-        refundMethod === "customer" &&
-        effectiveCustomerId
-      ) {
+      // Validate customer identity independently from refundMethod.
+      if (effectiveCustomerId) {
         const customerRows =
           await tx
             .select()
@@ -597,7 +584,13 @@ export async function handleCreatePosSaleReturn(
             404,
           );
         }
+      }
 
+      // Only account refunds create/use the customer finance account.
+      if (
+        refundMethod === "customer" &&
+        refundCustomer
+      ) {
         customerAccount =
           await ensureSaleFinanceAccount(
             tx,

@@ -319,6 +319,7 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
       registerKey: sale.registerKey,
       businessDate: sale.businessDate,
 
+      customerId: sale.customerId,
       customerName: sale.customerName,
       customerPhone: sale.customerPhone,
 

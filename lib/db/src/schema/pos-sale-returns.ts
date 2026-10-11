@@ -104,15 +104,8 @@ export const posSaleReturnsTable = pgTable(
     check(
       "pos_sale_returns_customer_refund_valid",
       sql`
-        (
-          ${table.refundMethod} = 'customer'
-          and ${table.customerId} is not null
-        )
-        or
-        (
-          ${table.refundMethod} in ('cash', 'card')
-          and ${table.customerId} is null
-        )
+        ${table.refundMethod} <> 'customer'
+        or ${table.customerId} is not null
       `,
     ),
 
