@@ -1,5 +1,11 @@
 export type NavigationGroup =
-  "sales" | "purchases" | "inventory" | "parties" | "finance" | "reports";
+  | "sales"
+  | "purchases"
+  | "inventory"
+  | "parties"
+  | "finance"
+  | "statements"
+  | "reports";
 
 export interface PosNavigationItem {
   key: string;
@@ -41,6 +47,11 @@ export const navigationGroups: Array<{
     key: "finance",
     title: "الصندوق والمالية",
     description: "المصروفات والشيكات وإدارة يوم العمل.",
+  },
+  {
+    key: "statements",
+    title: "كشوفات",
+    description: "كشوف الصندوق والبنوك وأرصدة الأطراف وتحليل الحسابات.",
   },
   {
     key: "reports",
@@ -237,6 +248,16 @@ export const posNavigation: PosNavigationItem[] = [
     title: "حساب شركة التوصيل",
     description: "متابعة مستحقات شركة التوصيل والتسويات المجمعة.",
     icon: "🚚",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
+    key: "statements",
+    group: "statements",
+    path: "/statements",
+    title: "كشوفات",
+    description: "كشف الصندوق والبنك وأرصدة الزبائن والموردين وتحليل المصروفات.",
+    icon: "📑",
     requiresOpenSession: false,
     status: "ready",
   },
