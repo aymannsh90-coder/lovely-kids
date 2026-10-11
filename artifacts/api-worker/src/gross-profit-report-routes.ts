@@ -15,6 +15,7 @@ import {
   gte,
   inArray,
   lte,
+  sql,
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
@@ -341,14 +342,8 @@ async function handleGrossProfit(
             posSalesTable.status,
             "completed",
           ),
-          gte(
-            posSalesTable.businessDate,
-            from,
-          ),
-          lte(
-            posSalesTable.businessDate,
-            to,
-          ),
+          sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+          sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
         ),
       );
 
@@ -486,14 +481,8 @@ async function handleGrossProfit(
             posSaleReturnsTable.status,
             "completed",
           ),
-          gte(
-            posSaleReturnsTable.businessDate,
-            from,
-          ),
-          lte(
-            posSaleReturnsTable.businessDate,
-            to,
-          ),
+          sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+          sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
         ),
       );
 
@@ -1172,7 +1161,7 @@ async function handleGrossProfit(
 
     methodology: {
       posDateBasis:
-        "POS business date",
+        "POS sale/return actual creation date in Asia/Hebron",
 
       onlineDateBasis:
         "Finance business date when web order becomes done",
