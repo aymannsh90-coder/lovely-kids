@@ -1382,8 +1382,8 @@ async function handleHistoricalCostRepair(
                   posSalesTable.status,
                   "completed",
                 ),
-                sql\`(\${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= \${from}::date\`,
-                sql\`(\${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= \${to}::date\`,
+                sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
                 isNull(
                   posSaleItemCostsTable.saleItemId,
                 ),
@@ -1427,8 +1427,8 @@ async function handleHistoricalCostRepair(
                   posSaleReturnsTable.status,
                   "completed",
                 ),
-                sql\`(\${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= \${from}::date\`,
-                sql\`(\${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= \${to}::date\`,
+                sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
                 isNull(
                   posSaleReturnItemCostsTable.returnItemId,
                 ),
@@ -1477,8 +1477,8 @@ async function handleHistoricalCostRepair(
                     "pos_no_receipt",
                   ],
                 ),
-                sql\`(\${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= \${from}::date\`,
-                sql\`(\${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= \${to}::date\`,
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
                 isNull(
                   exchangeReturnItemCostsTable.returnItemId,
                 ),
@@ -1527,8 +1527,8 @@ async function handleHistoricalCostRepair(
                     "pos_no_receipt",
                   ],
                 ),
-                sql\`(\${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= \${from}::date\`,
-                sql\`(\${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= \${to}::date\`,
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
                 isNull(
                   exchangeSaleItemCostsTable.saleItemId,
                 ),
@@ -1639,7 +1639,7 @@ async function handleHistoricalCostRepair(
           new Set(
             existingOnlineCosts.map(
               (entry) =>
-                \`\${entry.orderId}:\${entry.lineNumber}\`,
+                `${entry.orderId}:${entry.lineNumber}`,
             ),
           );
 
@@ -1797,7 +1797,7 @@ async function handleHistoricalCostRepair(
 
             if (
               existingOnlineCostKeys.has(
-                \`\${order.id}:\${lineNumber}\`,
+                `${order.id}:${lineNumber}`,
               )
             ) {
               continue;
