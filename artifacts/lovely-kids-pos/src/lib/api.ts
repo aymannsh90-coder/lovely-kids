@@ -2702,6 +2702,46 @@ export function getOwnerInventoryValuationProducts(
 }
 
 
+export function setOwnerOpeningCost(
+  token: string,
+  input: {
+    productId: string;
+    unitCostMinor: number;
+    costQuality?: "confirmed" | "estimated";
+  },
+) {
+  return apiRequest<{
+    historicalBackfill: {
+      posSaleItems: number;
+      posReturnItems: number;
+      onlineOrderItems: number;
+    };
+    product: {
+      productId: string;
+      nameAr: string;
+      quantity: number;
+      unitCostMinor: number;
+      referenceUnitCostMinor: number;
+      inventoryValueMinor: number;
+      costQuality: "confirmed" | "estimated";
+    };
+  }>(
+    "/api/owner/costs/opening",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        productId: input.productId,
+        unitCostMinor: input.unitCostMinor,
+        costQuality:
+          input.costQuality ??
+          "confirmed",
+      }),
+    },
+    token,
+  );
+}
+
+
 export interface GrossProfitChannelSummary {
   documents: number;
   returnDocuments: number;
@@ -2745,6 +2785,19 @@ export interface GrossProfitChannelSummary {
     | "not_applicable";
 }
 
+export interface GrossProfitMissingCostProduct {
+  productId: string;
+  nameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  image: string;
+  soldQuantity: number;
+  channels: Array<
+    "pos" | "exchange" | "online"
+  >;
+  canSetOpeningCost: boolean;
+}
+
 export interface GrossProfitReport {
   range: {
     from: string;
@@ -2765,6 +2818,11 @@ export interface GrossProfitReport {
   };
 
   warnings: string[];
+
+  missingCostProducts:
+    GrossProfitMissingCostProduct[];
+
+  unresolvedMissingCostLines: number;
 
   methodology: {
     posDateBasis: string;
