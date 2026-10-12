@@ -272,6 +272,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "inventory-valuation",
+    group: "reports",
+    path: "/reports/inventory-valuation",
+    title: "تقييم المخزون",
+    description: "الكمية الحالية وقيمة البيع والتكلفة والربح المتوقع حسب الفترة أو أرقام المنتجات.",
+    icon: "📦",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "customer-balances",
     group: "reports",
     path: "/reports/customer-balances",

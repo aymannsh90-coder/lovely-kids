@@ -136,6 +136,9 @@ async function handleProducts(
       productCode: productsTable.productCode,
       barcode: productsTable.barcode,
       price: productsTable.price,
+      category: productsTable.category,
+      isHidden: productsTable.isHidden,
+      createdAt: productsTable.createdAt,
       stock: productsTable.stock,
       colorVariants: productsTable.colorVariants,
 
@@ -215,6 +218,10 @@ async function handleProducts(
         barcode:
           row.barcode ?? null,
         price: row.price,
+        category: row.category,
+        isHidden: row.isHidden,
+        createdAt:
+          row.createdAt.toISOString(),
 
         currentQuantity,
         stockTracked:
