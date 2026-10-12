@@ -997,6 +997,8 @@ async function getProductAnalyticsReport(
 
     summary: {
       ...totals,
+      orders:
+        onlineOrders.length,
       uniqueViewers:
         Number(
           uniqueViewerRows[0]
