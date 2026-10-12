@@ -1531,47 +1531,42 @@ async function handleGrossProfit(
 
   const missingCostProducts =
     missingCostProductRows
-      .map((product) => {
+      .flatMap((product) => {
         const aggregate =
           missingCostByProduct.get(
             product.id,
           );
 
         if (!aggregate) {
-          return null;
+          return [];
         }
 
-        return {
-          productId:
-            String(product.id),
-          nameAr:
-            product.nameAr,
-          productCode:
-            product.productCode ??
-            null,
-          barcode:
-            product.barcode ??
-            null,
-          image:
-            product.image,
-          soldQuantity:
-            aggregate.soldQuantity,
-          channels:
-            [...aggregate.channels],
-          canSetOpeningCost:
-            product.costProductId ===
-              null &&
-            product.deletedAt ===
+        return [
+          {
+            productId:
+              String(product.id),
+            nameAr:
+              product.nameAr,
+            productCode:
+              product.productCode ??
               null,
-        };
+            barcode:
+              product.barcode ??
+              null,
+            image:
+              product.image,
+            soldQuantity:
+              aggregate.soldQuantity,
+            channels:
+              [...aggregate.channels],
+            canSetOpeningCost:
+              product.costProductId ===
+                null &&
+              product.deletedAt ===
+                null,
+          },
+        ];
       })
-      .filter(
-        (
-          product,
-        ): product is NonNullable<
-          typeof product
-        > => product !== null,
-      )
       .sort(
         (left, right) =>
           right.soldQuantity -
