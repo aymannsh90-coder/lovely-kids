@@ -315,6 +315,13 @@ function ChannelCard({
           )}
         />
 
+        <Metric
+          label="عدد عمليات التبديل"
+          value={String(
+            data.exchangeDocuments,
+          )}
+        />
+
         {showDelivery && (
           <>
             <Metric
