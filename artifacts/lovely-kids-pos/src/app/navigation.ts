@@ -282,6 +282,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "product-analytics",
+    group: "reports",
+    path: "/reports/product-analytics",
+    title: "أداء المنتجات",
+    description: "مشاهدات المنتجات والإضافة للسلة والمبيعات الإلكترونية وفرص الاهتمام بدون بيع.",
+    icon: "🌐",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "customer-balances",
     group: "reports",
     path: "/reports/customer-balances",
