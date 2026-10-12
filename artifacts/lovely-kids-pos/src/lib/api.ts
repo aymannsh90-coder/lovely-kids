@@ -637,11 +637,11 @@ export interface PosEmployeeLedgerResult {
 
 export interface PosEmployeeInput {
   name: string;
-  phone?: string;
+  phone?: string | null;
   baseSalary?: string;
-  hireDate?: string;
+  hireDate?: string | null;
   status?: "active" | "inactive";
-  notes?: string;
+  notes?: string | null;
 }
 
 export interface PosFinanceVoucher {
