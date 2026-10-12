@@ -579,8 +579,10 @@ export default function GrossProfitReportPage() {
       );
 
       await loadRange(
-        from,
-        to,
+        report?.range.from ??
+          from,
+        report?.range.to ??
+          to,
       );
     } catch (error) {
       if (
@@ -653,6 +655,20 @@ export default function GrossProfitReportPage() {
         handleKeyDown,
       );
   }, [missingCostsOpen]);
+
+  useEffect(() => {
+    if (
+      missingCostsOpen &&
+      report &&
+      report.missingCostProducts
+        .length === 0
+    ) {
+      setMissingCostsOpen(false);
+    }
+  }, [
+    missingCostsOpen,
+    report,
+  ]);
 
   const missingSoldQuantity =
     report?.missingCostProducts.reduce(
