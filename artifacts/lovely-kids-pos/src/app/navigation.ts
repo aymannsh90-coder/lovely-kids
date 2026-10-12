@@ -262,6 +262,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "sales-analytics",
+    group: "reports",
+    path: "/reports/sales",
+    title: "تحليلات المبيعات",
+    description: "إجمالي وصافي المبيعات ومقارنة المحل بالمتجر الإلكتروني.",
+    icon: "📈",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "customer-balances",
     group: "reports",
     path: "/reports/customer-balances",
