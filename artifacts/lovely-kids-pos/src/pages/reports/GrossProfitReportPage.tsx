@@ -545,6 +545,7 @@ export default function GrossProfitReportPage() {
         >
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 todayRange(),
@@ -556,6 +557,7 @@ export default function GrossProfitReportPage() {
 
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 weekRange(),
@@ -567,6 +569,7 @@ export default function GrossProfitReportPage() {
 
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 monthRange(),
@@ -637,6 +640,7 @@ export default function GrossProfitReportPage() {
 
           <button
             type="button"
+            className="primary-button"
             disabled={
               loading ||
               !from ||
