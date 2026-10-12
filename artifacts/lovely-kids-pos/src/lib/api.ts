@@ -2543,6 +2543,7 @@ export function getOwnerInventoryValuationProducts(
 export interface GrossProfitChannelSummary {
   documents: number;
   returnDocuments: number;
+  exchangeDocuments: number;
 
   salesMinor: number;
   returnsMinor: number;
