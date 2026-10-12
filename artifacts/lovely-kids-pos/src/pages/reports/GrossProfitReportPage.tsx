@@ -10,6 +10,7 @@ import {
 import {
   ApiError,
   getGrossProfitReport,
+  setOwnerHistoricalCostRepair,
   setOwnerOpeningCost,
   type GrossProfitChannelSummary,
   type GrossProfitMissingCostProduct,
@@ -523,7 +524,7 @@ export default function GrossProfitReportPage() {
     }
   }
 
-  async function handleOpeningCost(
+  async function handleCostAction(
     product:
       GrossProfitMissingCostProduct,
   ) {
@@ -552,17 +553,44 @@ export default function GrossProfitReportPage() {
     );
     setCostActionError("");
 
+    const reportFrom =
+      report?.range.from ??
+      from;
+
+    const reportTo =
+      report?.range.to ??
+      to;
+
     try {
-      await setOwnerOpeningCost(
-        token,
-        {
-          productId:
-            product.productId,
-          unitCostMinor,
-          costQuality:
-            "confirmed",
-        },
-      );
+      if (
+        product.canSetOpeningCost
+      ) {
+        await setOwnerOpeningCost(
+          token,
+          {
+            productId:
+              product.productId,
+            unitCostMinor,
+            costQuality:
+              "confirmed",
+          },
+        );
+      } else {
+        await setOwnerHistoricalCostRepair(
+          token,
+          {
+            productId:
+              product.productId,
+            unitCostMinor,
+            from:
+              reportFrom,
+            to:
+              reportTo,
+            costQuality:
+              "confirmed",
+          },
+        );
+      }
 
       setOpeningCostInputs(
         (current) => {
@@ -579,10 +607,8 @@ export default function GrossProfitReportPage() {
       );
 
       await loadRange(
-        report?.range.from ??
-          from,
-        report?.range.to ??
-          to,
+        reportFrom,
+        reportTo,
       );
     } catch (error) {
       if (
@@ -861,7 +887,7 @@ export default function GrossProfitReportPage() {
               </strong>
 
               <small>
-                {missingSoldQuantity} قطعة ضمن الفترة — اضغط لإدخال التكلفة الافتتاحية
+                {missingSoldQuantity} قطعة ضمن الفترة — اضغط لإكمال التكلفة الناقصة
               </small>
             </button>
           )}
@@ -951,7 +977,7 @@ export default function GrossProfitReportPage() {
                 </h2>
 
                 <p>
-                  أدخل تكلفة القطعة صنفًا صنفًا. بعد الحفظ يتم تحديث التكلفة التاريخية وإعادة حساب التقرير تلقائيًا.
+                  أدخل تكلفة القطعة صنفًا صنفًا. إذا لم تكن للصنف تكلفة حالية تُسجل كتكلفة افتتاحية، وإذا كان لديه سجل تكلفة قائم تُستكمل الحركة التاريخية فقط بدون تغيير تكلفة المخزون الحالية.
                 </p>
               </div>
 
@@ -1038,58 +1064,62 @@ export default function GrossProfitReportPage() {
                     </div>
 
                     <div className="gross-profit-cost-action">
-                      {product.canSetOpeningCost ? (
-                        <>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            inputMode="decimal"
-                            value={
-                              openingCostInputs[
-                                product.productId
-                              ] ?? ""
-                            }
-                            onChange={(
-                              event,
-                            ) =>
-                              setOpeningCostInputs(
-                                (
-                                  current,
-                                ) => ({
-                                  ...current,
-                                  [product.productId]:
-                                    event
-                                      .target
-                                      .value,
-                                }),
-                              )
-                            }
-                            placeholder="تكلفة القطعة بالشيكل"
-                          />
-
-                          <button
-                            type="button"
-                            className="primary-button"
-                            disabled={
-                              savingCostProductId ===
-                              product.productId
-                            }
-                            onClick={() =>
-                              void handleOpeningCost(
-                                product,
-                              )
-                            }
-                          >
-                            {savingCostProductId ===
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={
+                          openingCostInputs[
                             product.productId
-                              ? "جارٍ الحفظ..."
-                              : "إضافة التكلفة الافتتاحية"}
-                          </button>
-                        </>
-                      ) : (
+                          ] ?? ""
+                        }
+                        onChange={(
+                          event,
+                        ) =>
+                          setOpeningCostInputs(
+                            (
+                              current,
+                            ) => ({
+                              ...current,
+                              [product.productId]:
+                                event
+                                  .target
+                                  .value,
+                            }),
+                          )
+                        }
+                        placeholder={
+                          product.canSetOpeningCost
+                            ? "تكلفة القطعة بالشيكل"
+                            : "تكلفة القطعة وقت البيع بالشيكل"
+                        }
+                      />
+
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={
+                          savingCostProductId ===
+                          product.productId
+                        }
+                        onClick={() =>
+                          void handleCostAction(
+                            product,
+                          )
+                        }
+                      >
+                        {savingCostProductId ===
+                        product.productId
+                          ? "جارٍ الحفظ..."
+                          : product.canSetOpeningCost
+                            ? "إضافة التكلفة الافتتاحية"
+                            : "إكمال التكلفة التاريخية"}
+                      </button>
+
+                      {!product.canSetOpeningCost && (
                         <div className="gross-profit-cost-review">
-                          لهذا الصنف سجل تكلفة موجود مسبقًا؛ النقص يحتاج مراجعة حركة التكلفة بدل إدخال افتتاحية جديدة.
+                          سيتم حفظ التكلفة على الحركات القديمة الناقصة ضمن فترة التقرير فقط، بدون تغيير تكلفة المخزون الحالية أو الكمية.
                         </div>
                       )}
                     </div>
