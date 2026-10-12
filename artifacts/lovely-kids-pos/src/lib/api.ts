@@ -2414,6 +2414,48 @@ export function reverseDeliveryCompanySettlement(
 }
 
 
+export interface OwnerInventoryValuationProduct {
+  productId: string;
+  nameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  price: number;
+  category: string;
+  isHidden: boolean;
+  createdAt: string;
+
+  currentQuantity: number | null;
+  stockTracked: boolean;
+
+  initialized: boolean;
+  accountingQuantity: number | null;
+  inventoryValueMinor: number | null;
+  referenceUnitCostMinor: number | null;
+  averageCostMinor: number | null;
+  costQuality:
+    | "confirmed"
+    | "estimated"
+    | "mixed"
+    | null;
+
+  stockMatchesAccounting: boolean;
+  initializedAt: string | null;
+  updatedAt: string | null;
+}
+
+export function getOwnerInventoryValuationProducts(
+  token: string,
+) {
+  return apiRequest<{
+    products: OwnerInventoryValuationProduct[];
+  }>(
+    "/api/owner/costs/products",
+    {},
+    token,
+  );
+}
+
+
 export interface GrossProfitChannelSummary {
   documents: number;
   returnDocuments: number;
