@@ -1,19 +1,6 @@
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('path');
 
-const projectRoot = __dirname;
-const monorepoRoot = path.resolve(projectRoot, '../..');
-
-const config = getDefaultConfig(projectRoot);
-
-config.watchFolders = [
-  ...(config.watchFolders ?? []),
-  monorepoRoot,
-];
-
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(monorepoRoot, 'node_modules'),
-];
-
-module.exports = config;
+// Expo SDK 52+ configures pnpm/yarn/npm monorepos automatically.
+// Keeping the legacy manual watchFolders/nodeModulesPaths overrides can make
+// Metro reuse or resolve modules outside the active worktree.
+module.exports = getDefaultConfig(__dirname);
