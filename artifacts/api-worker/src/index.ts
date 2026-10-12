@@ -21,6 +21,7 @@ import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
 import { handleVisitorAnalyticsRequest } from "./visitor-analytics-routes";
+import { handleProductAnalyticsRequest } from "./product-analytics-routes";
 import { handleOwnerCostRequest } from "./owner-cost-routes";
 import { handleOwnerReportRequest } from "./gross-profit-report-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
@@ -617,6 +618,17 @@ export default {
 
       if (ownerReportResponse) {
         return ownerReportResponse;
+      }
+
+      const productAnalyticsResponse =
+        await handleProductAnalyticsRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (productAnalyticsResponse) {
+        return productAnalyticsResponse;
       }
 
       const visitorAnalyticsResponse =
