@@ -361,51 +361,107 @@ export default function CustomerStatementReportPage() {
     };
   }, [selectedMovement]);
 
-  const rows =
+  const statement =
     useMemo(() => {
       if (!ledger) {
-        return [];
+        return {
+          rows: [] as Array<{
+            entry:
+              PosCustomerLedgerEntry;
+            running: number;
+            date: string;
+          }>,
+          openingBalanceMinor:
+            0,
+          closingBalanceMinor:
+            0,
+        };
       }
 
       let running = 0;
+      let openingBalanceMinor =
+        0;
 
-      return ledger.entries
-        .map((entry) => {
-          running +=
-            entry.debitMinor -
-            entry.creditMinor;
+      const allRows =
+        ledger.entries.map(
+          (entry) => {
+            running +=
+              entry.debitMinor -
+              entry.creditMinor;
 
-          return {
-            entry,
-            running,
-            date:
+            const date =
               entryDate(
                 entry,
-              ),
-          };
-        })
-        .filter((row) => {
-          if (
-            fromDate &&
-            row.date < fromDate
-          ) {
-            return false;
-          }
+              );
 
-          if (
-            toDate &&
-            row.date > toDate
-          ) {
-            return false;
-          }
+            if (
+              fromDate &&
+              date < fromDate
+            ) {
+              openingBalanceMinor =
+                running;
+            }
 
-          return true;
-        });
+            return {
+              entry,
+              running,
+              date,
+            };
+          },
+        );
+
+      const rows =
+        allRows.filter(
+          (row) => {
+            if (
+              fromDate &&
+              row.date <
+                fromDate
+            ) {
+              return false;
+            }
+
+            if (
+              toDate &&
+              row.date >
+                toDate
+            ) {
+              return false;
+            }
+
+            return true;
+          },
+        );
+
+      const periodDeltaMinor =
+        rows.reduce(
+          (
+            total,
+            row,
+          ) =>
+            total +
+            row.entry
+              .debitMinor -
+            row.entry
+              .creditMinor,
+          0,
+        );
+
+      return {
+        rows,
+        openingBalanceMinor,
+        closingBalanceMinor:
+          openingBalanceMinor +
+          periodDeltaMinor,
+      };
     }, [
       ledger,
       fromDate,
       toDate,
     ]);
+
+  const rows =
+    statement.rows;
 
   const selectedCustomer =
     customers.find(
@@ -416,7 +472,7 @@ export default function CustomerStatementReportPage() {
 
   return (
     <section
-      className="work-panel"
+      className="work-panel customer-statement-page"
       dir="rtl"
     >
       <style>{`
@@ -427,6 +483,96 @@ export default function CustomerStatementReportPage() {
         .customer-statement-table {
           width: 100%;
           border-collapse: collapse;
+        }
+
+        .customer-statement-page {
+          display: grid;
+          gap: 16px;
+        }
+
+        .customer-statement-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+          padding: 16px 18px;
+          border: 1px solid #e6edf3;
+          border-radius: 14px;
+          background: #fff;
+        }
+
+        .customer-statement-toolbar h2 {
+          margin: 0 0 4px;
+          font-size: 20px;
+        }
+
+        .customer-statement-toolbar p {
+          margin: 0;
+          color: #667085;
+          font-size: 12px;
+        }
+
+        .customer-statement-filters {
+          display: grid;
+          grid-template-columns:
+            minmax(260px, 2fr)
+            repeat(2, minmax(150px, 1fr))
+            auto;
+          gap: 10px;
+          align-items: end;
+          padding: 14px;
+          border: 1px solid #e6edf3;
+          border-radius: 14px;
+          background: #fff;
+        }
+
+        .customer-statement-filters label > span {
+          display: block;
+          margin-bottom: 5px;
+          color: #475467;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .customer-statement-filters input {
+          width: 100%;
+          min-height: 38px;
+          box-sizing: border-box;
+          padding: 0 10px;
+          border: 1px solid #cfd9df;
+          border-radius: 7px;
+          background: #fff;
+        }
+
+        .customer-statement-balance-strip {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+
+        .customer-statement-balance-strip > div {
+          padding: 12px 14px;
+          border: 1px solid #e1e8ed;
+          border-radius: 12px;
+          background: #f9fbfc;
+        }
+
+        .customer-statement-balance-strip span,
+        .customer-statement-balance-strip strong {
+          display: block;
+        }
+
+        .customer-statement-balance-strip span {
+          margin-bottom: 5px;
+          color: #667085;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .customer-statement-balance-strip strong {
+          font-size: 15px;
         }
 
         .customer-statement-table th,
@@ -507,11 +653,24 @@ export default function CustomerStatementReportPage() {
           grid-column: 1 / -1;
         }
 
+        @media (max-width: 900px) {
+          .customer-statement-filters {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .customer-statement-filters > :first-child {
+            grid-column: 1 / -1;
+          }
+        }
+
         @media (max-width: 680px) {
-          .customer-movement-grid {
+          .customer-movement-grid,
+          .customer-statement-balance-strip,
+          .customer-statement-filters {
             grid-template-columns: 1fr;
           }
 
+          .customer-statement-filters > :first-child,
           .customer-movement-field-wide {
             grid-column: auto;
           }
@@ -547,18 +706,7 @@ export default function CustomerStatementReportPage() {
         }
       `}</style>
 
-      <div
-        className="customer-statement-no-print"
-        style={{
-          display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems: "center",
-          gap: 14,
-          flexWrap: "wrap",
-          marginBottom: 18,
-        }}
-      >
+      <div className="customer-statement-no-print customer-statement-toolbar">
         <div>
           <h2>
             📒 كشف حساب زبون
@@ -582,16 +730,7 @@ export default function CustomerStatementReportPage() {
         </button>
       </div>
 
-      <div
-        className="customer-statement-no-print"
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "minmax(260px, 2fr) repeat(2, minmax(150px, 1fr))",
-          gap: 12,
-          marginBottom: 18,
-        }}
-      >
+      <div className="customer-statement-no-print customer-statement-filters">
         <CustomerPicker
           customers={customers}
           value={customerId}
@@ -646,6 +785,21 @@ export default function CustomerStatementReportPage() {
             }
           />
         </label>
+
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={
+            !fromDate &&
+            !toDate
+          }
+          onClick={() => {
+            setFromDate("");
+            setToDate("");
+          }}
+        >
+          مسح الفترة
+        </button>
       </div>
 
       {error && (
@@ -760,6 +914,42 @@ export default function CustomerStatementReportPage() {
                   "حتى الآن"}
               </div>
             )}
+          </div>
+
+          <div className="customer-statement-balance-strip">
+            <div>
+              <span>
+                الرصيد الافتتاحي للفترة
+              </span>
+              <strong>
+                {balanceLabel(
+                  statement.openingBalanceMinor,
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                حركة الفترة
+              </span>
+              <strong>
+                {balanceLabel(
+                  statement.closingBalanceMinor -
+                    statement.openingBalanceMinor,
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                الرصيد الختامي للفترة
+              </span>
+              <strong>
+                {balanceLabel(
+                  statement.closingBalanceMinor,
+                )}
+              </strong>
+            </div>
           </div>
 
           {rows.length ===
@@ -900,12 +1090,17 @@ export default function CustomerStatementReportPage() {
             }}
           >
             <strong>
-              الرصيد النهائي
+              {fromDate || toDate
+                ? "الرصيد الختامي للفترة"
+                : "الرصيد النهائي"}
             </strong>
 
             <strong>
               {balanceLabel(
-                ledger.balanceMinor,
+                fromDate ||
+                  toDate
+                  ? statement.closingBalanceMinor
+                  : ledger.balanceMinor,
               )}
             </strong>
           </div>

@@ -20,6 +20,11 @@ type SortMode =
   | "sales"
   | "interest";
 
+type ProductPreview = {
+  image: string;
+  name: string;
+};
+
 function dateInput(
   date: Date,
 ) {
@@ -161,6 +166,7 @@ function RankingCard({
   rows,
   metric,
   metricLabel,
+  onPreview,
 }: {
   title: string;
   hint: string;
@@ -169,6 +175,9 @@ function RankingCard({
     row: OwnerProductAnalyticsRow,
   ) => string;
   metricLabel: string;
+  onPreview: (
+    product: ProductPreview,
+  ) => void;
 }) {
   return (
     <article className="product-analytics-ranking">
@@ -200,10 +209,24 @@ function RankingCard({
                   {index + 1}
                 </span>
 
-                <img
-                  src={row.image}
-                  alt=""
-                />
+                <button
+                  type="button"
+                  className="product-analytics-image-button product-analytics-ranking-image-button"
+                  onClick={() =>
+                    onPreview({
+                      image:
+                        row.image,
+                      name:
+                        row.nameAr,
+                    })
+                  }
+                  aria-label={`معاينة صورة ${row.nameAr}`}
+                >
+                  <img
+                    src={row.image}
+                    alt={row.nameAr}
+                  />
+                </button>
 
                 <div className="product-analytics-ranking-name">
                   <strong>
@@ -243,6 +266,14 @@ export default function ProductAnalyticsReportPage() {
     clearAuthentication,
   } =
     usePosRuntime();
+
+  const [
+    preview,
+    setPreview,
+  ] =
+    useState<
+      ProductPreview | null
+    >(null);
 
   const initialRange =
     monthRange();
@@ -573,6 +604,33 @@ export default function ProductAnalyticsReportPage() {
         )
       : null;
 
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (
+        event.key === "Escape"
+      ) {
+        setPreview(null);
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+  }, [preview]);
+
   return (
     <div
       className="product-analytics-page"
@@ -809,6 +867,7 @@ export default function ProductAnalyticsReportPage() {
                 )
               }
               metricLabel="مشاهدة"
+              onPreview={setPreview}
             />
 
             <RankingCard
@@ -825,6 +884,7 @@ export default function ProductAnalyticsReportPage() {
                 )
               }
               metricLabel="إضافة"
+              onPreview={setPreview}
             />
 
             <RankingCard
@@ -841,6 +901,7 @@ export default function ProductAnalyticsReportPage() {
                 )
               }
               metricLabel="نقاط اهتمام"
+              onPreview={setPreview}
             />
           </section>
 
@@ -956,12 +1017,28 @@ export default function ProductAnalyticsReportPage() {
                         >
                           <td>
                             <div className="product-analytics-product-cell">
-                              <img
-                                src={
-                                  row.image
+                              <button
+                                type="button"
+                                className="product-analytics-image-button"
+                                onClick={() =>
+                                  setPreview({
+                                    image:
+                                      row.image,
+                                    name:
+                                      row.nameAr,
+                                  })
                                 }
-                                alt=""
-                              />
+                                aria-label={`معاينة صورة ${row.nameAr}`}
+                              >
+                                <img
+                                  src={
+                                    row.image
+                                  }
+                                  alt={
+                                    row.nameAr
+                                  }
+                                />
+                              </button>
 
                               <div>
                                 <strong>
@@ -1070,6 +1147,63 @@ export default function ProductAnalyticsReportPage() {
             </p>
           </section>
         </>
+      )}
+
+      {preview && (
+        <div
+          className="product-analytics-preview-backdrop"
+          role="presentation"
+          onMouseDown={(
+            event,
+          ) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setPreview(null);
+            }
+          }}
+        >
+          <section
+            className="product-analytics-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`معاينة صورة ${preview.name}`}
+          >
+            <div className="product-analytics-preview-head">
+              <div>
+                <span>
+                  معاينة المنتج
+                </span>
+                <strong>
+                  {preview.name}
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                className="product-analytics-preview-close"
+                onClick={() =>
+                  setPreview(null)
+                }
+                aria-label="إغلاق المعاينة"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="product-analytics-preview-image">
+              <img
+                src={
+                  preview.image
+                }
+                alt={
+                  preview.name
+                }
+              />
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );
