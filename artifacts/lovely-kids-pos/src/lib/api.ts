@@ -954,6 +954,159 @@ export function createPosBankAccount(
 }
 
 
+export interface PosFinanceCashAccount {
+  id: number;
+  code: string;
+  name: string;
+  currencyCode: string;
+  bookBalanceMinor: number;
+  operationalBalanceMinor: number;
+  balanceSource:
+    | "cash_session"
+    | "ledger";
+  cashSessionId: number | null;
+}
+
+export interface PosFinanceTransferAccount {
+  id: number;
+  code: string;
+  name: string;
+  currencyCode: string;
+}
+
+export interface PosFinanceTransferTransaction {
+  id: number;
+  publicId: string;
+  idempotencyKey: string;
+  businessDate: string;
+  transactionType: string;
+  sourceType: string;
+  sourceId: string;
+  sourceEvent: string;
+  cashSessionId: number | null;
+  status:
+    | "posted"
+    | "reversed";
+  notes: string | null;
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosFinanceTransfer {
+  transaction:
+    PosFinanceTransferTransaction;
+  source:
+    | PosFinanceTransferAccount
+    | null;
+  destination:
+    | PosFinanceTransferAccount
+    | null;
+  amountMinor: number;
+  baseAmountMinor: number;
+  exchangeRateMicros: number;
+}
+
+export function getPosFinanceCashAccounts(
+  token: string,
+) {
+  return apiRequest<{
+    results:
+      PosFinanceCashAccount[];
+  }>(
+    "/api/pos/finance/cash-accounts",
+    {},
+    token,
+  );
+}
+
+export function createPosFinanceCashAccount(
+  token: string,
+  input: {
+    name: string;
+    currencyCode?: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    account: {
+      id: number;
+      code: string;
+      name: string;
+      currencyCode: string;
+      status: string;
+    };
+  }>(
+    "/api/pos/finance/cash-accounts",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function getPosFinanceTransfers(
+  token: string,
+) {
+  return apiRequest<{
+    results:
+      PosFinanceTransfer[];
+  }>(
+    "/api/pos/finance/transfers",
+    {},
+    token,
+  );
+}
+
+export function createPosFinanceTransfer(
+  token: string,
+  input: {
+    idempotencyKey: string;
+    fromAccountId: number;
+    toAccountId: number;
+    amount: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    transaction:
+      PosFinanceTransferTransaction;
+  }>(
+    "/api/pos/finance/transfers",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function reversePosFinanceTransfer(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<{
+    alreadyReversed: boolean;
+    transaction:
+      PosFinanceTransferTransaction;
+    reversal?:
+      PosFinanceTransferTransaction;
+  }>(
+    "/api/pos/finance/transfers/reverse",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+
 export interface PosFinanceStatementReference {
   cashAccounts: Array<{
     id: number;

@@ -1,5 +1,6 @@
 import { handlePartyFinanceRequest } from "./party-finance-routes";
 import { handleFinanceBankingRequest } from "./finance-banking-routes";
+import { handleFinanceTransferRequest } from "./finance-transfer-routes";
 import { handleFinanceCheckRequest } from "./finance-check-routes";
 import { handleFinanceStatementRequest } from "./finance-statement-routes";
 import { appSettingsTable, productsTable } from "@workspace/db/schema";
@@ -410,6 +411,17 @@ export default {
 
       if (financeBankingResponse) {
         return financeBankingResponse;
+      }
+
+      const financeTransferResponse =
+        await handleFinanceTransferRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (financeTransferResponse) {
+        return financeTransferResponse;
       }
 
       const financeCheckResponse =
