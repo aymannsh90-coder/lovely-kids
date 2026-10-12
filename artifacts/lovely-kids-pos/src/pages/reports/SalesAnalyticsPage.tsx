@@ -612,6 +612,7 @@ export default function SalesAnalyticsPage() {
         <div className="sales-analytics-presets">
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 todayRange(),
@@ -623,6 +624,7 @@ export default function SalesAnalyticsPage() {
 
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 weekRange(),
@@ -634,6 +636,7 @@ export default function SalesAnalyticsPage() {
 
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 monthRange(),
