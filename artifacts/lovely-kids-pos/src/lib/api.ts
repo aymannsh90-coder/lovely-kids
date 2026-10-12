@@ -2714,6 +2714,8 @@ export function setOwnerOpeningCost(
     historicalBackfill: {
       posSaleItems: number;
       posReturnItems: number;
+      exchangeReturnItems: number;
+      exchangeSaleItems: number;
       onlineOrderItems: number;
     };
     product: {
