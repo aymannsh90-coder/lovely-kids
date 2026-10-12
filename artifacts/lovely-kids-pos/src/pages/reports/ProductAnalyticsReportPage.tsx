@@ -772,7 +772,7 @@ export default function ProductAnalyticsReportPage() {
                 unitsPerView ===
                 null
                   ? `${formatNumber(summary.completedOnlineOrders)} طلب مكتمل`
-                  : `${unitsPerView}% قطعة لكل 100 مشاهدة`
+                  : `${unitsPerView} قطعة لكل 100 مشاهدة`
               }
             />
 
