@@ -892,10 +892,7 @@ export default function CustomerStatementReportPage() {
                 الرصيد الحالي:
               </strong>{" "}
               {balanceLabel(
-                fromDate ||
-                  toDate
-                  ? statement.closingBalanceMinor
-                  : ledger.balanceMinor,
+                ledger.balanceMinor,
               )}
             </div>
 
@@ -1100,7 +1097,10 @@ export default function CustomerStatementReportPage() {
 
             <strong>
               {balanceLabel(
-                ledger.balanceMinor,
+                fromDate ||
+                  toDate
+                  ? statement.closingBalanceMinor
+                  : ledger.balanceMinor,
               )}
             </strong>
           </div>
