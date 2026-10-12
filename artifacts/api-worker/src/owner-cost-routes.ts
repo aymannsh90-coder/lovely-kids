@@ -1,4 +1,9 @@
 import {
+  exchangeDocumentsTable,
+  exchangeReturnItemCostsTable,
+  exchangeReturnItemsTable,
+  exchangeSaleItemCostsTable,
+  exchangeSaleItemsTable,
   orderItemCostsTable,
   ordersTable,
   posSaleItemCostsTable,
@@ -557,6 +562,88 @@ async function handleOpeningCost(
               ),
             );
 
+        const historicalExchangeReturnItems =
+          await tx
+            .select({
+              returnItemId:
+                exchangeReturnItemsTable.id,
+              quantity:
+                exchangeReturnItemsTable.quantity,
+            })
+            .from(
+              exchangeReturnItemsTable,
+            )
+            .innerJoin(
+              exchangeDocumentsTable,
+              eq(
+                exchangeDocumentsTable.id,
+                exchangeReturnItemsTable.exchangeId,
+              ),
+            )
+            .leftJoin(
+              exchangeReturnItemCostsTable,
+              eq(
+                exchangeReturnItemCostsTable.returnItemId,
+                exchangeReturnItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  exchangeReturnItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  exchangeDocumentsTable.status,
+                  "completed",
+                ),
+                isNull(
+                  exchangeReturnItemCostsTable.returnItemId,
+                ),
+              ),
+            );
+
+        const historicalExchangeSaleItems =
+          await tx
+            .select({
+              saleItemId:
+                exchangeSaleItemsTable.id,
+              quantity:
+                exchangeSaleItemsTable.quantity,
+            })
+            .from(
+              exchangeSaleItemsTable,
+            )
+            .innerJoin(
+              exchangeDocumentsTable,
+              eq(
+                exchangeDocumentsTable.id,
+                exchangeSaleItemsTable.exchangeId,
+              ),
+            )
+            .leftJoin(
+              exchangeSaleItemCostsTable,
+              eq(
+                exchangeSaleItemCostsTable.saleItemId,
+                exchangeSaleItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  exchangeSaleItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  exchangeDocumentsTable.status,
+                  "completed",
+                ),
+                isNull(
+                  exchangeSaleItemCostsTable.saleItemId,
+                ),
+              ),
+            );
+
         const saleBackfillInvalid =
           historicalSaleItems.some(
             (item) =>
@@ -573,9 +660,27 @@ async function handleOpeningCost(
               ) === null,
           );
 
+        const exchangeReturnBackfillInvalid =
+          historicalExchangeReturnItems.some(
+            (item) =>
+              historicalCostTotal(
+                item.quantity,
+              ) === null,
+          );
+
+        const exchangeSaleBackfillInvalid =
+          historicalExchangeSaleItems.some(
+            (item) =>
+              historicalCostTotal(
+                item.quantity,
+              ) === null,
+          );
+
         if (
           saleBackfillInvalid ||
-          returnBackfillInvalid
+          returnBackfillInvalid ||
+          exchangeReturnBackfillInvalid ||
+          exchangeSaleBackfillInvalid
         ) {
           return {
             ok: false as const,
@@ -612,6 +717,40 @@ async function handleOpeningCost(
               productId,
               quantity:
                 item.quantity,
+              costTotalMinor:
+                historicalCostTotal(
+                  item.quantity,
+                )!,
+              costQuality,
+            }),
+          );
+
+        const exchangeReturnBackfillRows =
+          historicalExchangeReturnItems.map(
+            (item) => ({
+              returnItemId:
+                item.returnItemId,
+              productId,
+              quantity:
+                item.quantity,
+              unitCostMinor,
+              costTotalMinor:
+                historicalCostTotal(
+                  item.quantity,
+                )!,
+              costQuality,
+            }),
+          );
+
+        const exchangeSaleBackfillRows =
+          historicalExchangeSaleItems.map(
+            (item) => ({
+              saleItemId:
+                item.saleItemId,
+              productId,
+              quantity:
+                item.quantity,
+              unitCostMinor,
               costTotalMinor:
                 historicalCostTotal(
                   item.quantity,
@@ -893,6 +1032,38 @@ async function handleOpeningCost(
                 })
             : [];
 
+        const backfilledExchangeReturns =
+          exchangeReturnBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  exchangeReturnItemCostsTable,
+                )
+                .values(
+                  exchangeReturnBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  returnItemId:
+                    exchangeReturnItemCostsTable.returnItemId,
+                })
+            : [];
+
+        const backfilledExchangeSales =
+          exchangeSaleBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  exchangeSaleItemCostsTable,
+                )
+                .values(
+                  exchangeSaleBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  saleItemId:
+                    exchangeSaleItemCostsTable.saleItemId,
+                })
+            : [];
+
         const backfilledOnline =
           onlineBackfillRows.length > 0
             ? await tx
@@ -917,6 +1088,10 @@ async function handleOpeningCost(
               backfilledSales.length,
             posReturnItems:
               backfilledReturns.length,
+            exchangeReturnItems:
+              backfilledExchangeReturns.length,
+            exchangeSaleItems:
+              backfilledExchangeSales.length,
             onlineOrderItems:
               backfilledOnline.length,
           },
