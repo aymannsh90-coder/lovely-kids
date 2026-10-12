@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -9,13 +10,29 @@ import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
   createPosBankAccount,
+  createPosFinanceCashAccount,
+  createPosFinanceTransfer,
   getPosBankAccounts,
   getPosFinanceBankingReference,
+  getPosFinanceCashAccounts,
+  getPosFinanceTransfers,
+  reversePosFinanceTransfer,
   savePosExchangeRate,
   type PosBank,
   type PosBankAccount,
+  type PosFinanceCashAccount,
   type PosFinanceCurrency,
+  type PosFinanceTransfer,
 } from "../../lib/api";
+
+interface TransferAccountOption {
+  id: number;
+  name: string;
+  detail: string;
+  currencyCode: string;
+  balanceMinor: number;
+  kind: "cash" | "bank";
+}
 
 function errorText(error: unknown) {
   return error instanceof Error
@@ -27,10 +44,25 @@ function formatMinor(
   minor: number,
   symbol: string,
 ) {
-  return `${new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(minor / 100)} ${symbol}`;
+  }).format(minor / 100) + " " + symbol;
+}
+
+function newTransferIdempotencyKey() {
+  const randomPart =
+    globalThis.crypto?.randomUUID?.() ??
+    (Date.now().toString(36) +
+      "-" +
+      Math.random()
+        .toString(36)
+        .slice(2));
+
+  return (
+    "finance-transfer:" +
+    randomPart
+  );
 }
 
 export default function BankingPage() {
@@ -52,6 +84,20 @@ export default function BankingPage() {
     accounts,
     setAccounts,
   ] = useState<PosBankAccount[]>([]);
+
+  const [
+    cashAccounts,
+    setCashAccounts,
+  ] = useState<
+    PosFinanceCashAccount[]
+  >([]);
+
+  const [
+    transfers,
+    setTransfers,
+  ] = useState<
+    PosFinanceTransfer[]
+  >([]);
 
   const [
     rateInputs,
@@ -86,11 +132,68 @@ export default function BankingPage() {
     setAccountNotes,
   ] = useState("");
 
+  const [
+    cashAccountName,
+    setCashAccountName,
+  ] = useState(
+    "الصندوق الفرعي",
+  );
+
+  const [
+    cashAccountCurrency,
+    setCashAccountCurrency,
+  ] = useState("ILS");
+
+  const [
+    cashAccountNotes,
+    setCashAccountNotes,
+  ] = useState("");
+
+  const [
+    fromAccountId,
+    setFromAccountId,
+  ] = useState<number | null>(null);
+
+  const [
+    toAccountId,
+    setToAccountId,
+  ] = useState<number | null>(null);
+
+  const [
+    transferAmount,
+    setTransferAmount,
+  ] = useState("");
+
+  const [
+    transferNotes,
+    setTransferNotes,
+  ] = useState("");
+
+  const transferIdempotencyKey =
+    useRef<string | null>(null);
+
   const [loading, setLoading] =
     useState(true);
 
   const [saving, setSaving] =
     useState(false);
+
+  const [
+    cashAccountSaving,
+    setCashAccountSaving,
+  ] = useState(false);
+
+  const [
+    transferSaving,
+    setTransferSaving,
+  ] = useState(false);
+
+  const [
+    reversingTransferId,
+    setReversingTransferId,
+  ] = useState<string | null>(
+    null,
+  );
 
   const [
     rateSaving,
@@ -108,9 +211,31 @@ export default function BankingPage() {
     setError("");
 
     try {
+      const cashPromise =
+        user?.isOwner
+          ? getPosFinanceCashAccounts(
+              token,
+            )
+          : Promise.resolve({
+              results:
+                [] as PosFinanceCashAccount[],
+            });
+
+      const transferPromise =
+        user?.isOwner
+          ? getPosFinanceTransfers(
+              token,
+            )
+          : Promise.resolve({
+              results:
+                [] as PosFinanceTransfer[],
+            });
+
       const [
         reference,
         accountResult,
+        cashResult,
+        transferResult,
       ] =
         await Promise.all([
           getPosFinanceBankingReference(
@@ -119,6 +244,8 @@ export default function BankingPage() {
           getPosBankAccounts(
             token,
           ),
+          cashPromise,
+          transferPromise,
         ]);
 
       setCurrencies(
@@ -129,6 +256,12 @@ export default function BankingPage() {
       );
       setAccounts(
         accountResult.results,
+      );
+      setCashAccounts(
+        cashResult.results,
+      );
+      setTransfers(
+        transferResult.results,
       );
 
       setRateInputs(
@@ -176,7 +309,10 @@ export default function BankingPage() {
 
   useEffect(() => {
     void loadData();
-  }, [token]);
+  }, [
+    token,
+    user?.isOwner,
+  ]);
 
   const currencyByCode =
     useMemo(
@@ -191,6 +327,176 @@ export default function BankingPage() {
         ),
       [currencies],
     );
+
+  const transferAccounts =
+    useMemo<
+      TransferAccountOption[]
+    >(
+      () => [
+        ...cashAccounts.map(
+          (account) => ({
+            id: account.id,
+            name: account.name,
+            detail:
+              account.code ===
+              "CASH_MAIN"
+                ? "الصندوق الرئيسي"
+                : "صندوق فرعي",
+            currencyCode:
+              account.currencyCode,
+            balanceMinor:
+              account
+                .operationalBalanceMinor,
+            kind:
+              "cash" as const,
+          }),
+        ),
+        ...accounts
+          .filter(
+            (account) =>
+              account.status ===
+              "active",
+          )
+          .map(
+            (account) => ({
+              id:
+                account
+                  .financeAccountId,
+              name:
+                account.bank
+                  .nameAr +
+                " - " +
+                account.name,
+              detail:
+                "حساب بنكي",
+              currencyCode:
+                account.currencyCode,
+              balanceMinor:
+                account
+                  .currencyBalanceMinor,
+              kind:
+                "bank" as const,
+            }),
+          ),
+      ],
+      [
+        cashAccounts,
+        accounts,
+      ],
+    );
+
+  const fromAccount =
+    useMemo(
+      () =>
+        transferAccounts.find(
+          (account) =>
+            account.id ===
+            fromAccountId,
+        ) ?? null,
+      [
+        transferAccounts,
+        fromAccountId,
+      ],
+    );
+
+  const destinationOptions =
+    useMemo(
+      () =>
+        fromAccount
+          ? transferAccounts.filter(
+              (account) =>
+                account.id !==
+                  fromAccount.id &&
+                account.currencyCode ===
+                  fromAccount.currencyCode,
+            )
+          : [],
+      [
+        transferAccounts,
+        fromAccount,
+      ],
+    );
+
+  const toAccount =
+    useMemo(
+      () =>
+        destinationOptions.find(
+          (account) =>
+            account.id ===
+            toAccountId,
+        ) ?? null,
+      [
+        destinationOptions,
+        toAccountId,
+      ],
+    );
+
+  useEffect(() => {
+    if (
+      !user?.isOwner ||
+      transferAccounts.length ===
+        0
+    ) {
+      setFromAccountId(null);
+      setToAccountId(null);
+      return;
+    }
+
+    const currentFrom =
+      transferAccounts.find(
+        (account) =>
+          account.id ===
+          fromAccountId,
+      ) ??
+      transferAccounts[0];
+
+    if (
+      fromAccountId !==
+      currentFrom.id
+    ) {
+      setFromAccountId(
+        currentFrom.id,
+      );
+    }
+
+    const destinations =
+      transferAccounts.filter(
+        (account) =>
+          account.id !==
+            currentFrom.id &&
+          account.currencyCode ===
+            currentFrom.currencyCode,
+      );
+
+    const currentTo =
+      destinations.find(
+        (account) =>
+          account.id ===
+          toAccountId,
+      );
+
+    if (!currentTo) {
+      setToAccountId(
+        destinations[0]?.id ??
+          null,
+      );
+    }
+  }, [
+    user?.isOwner,
+    transferAccounts,
+    fromAccountId,
+    toAccountId,
+  ]);
+
+  function currencySymbol(
+    code: string,
+  ) {
+    return (
+      currencyByCode.get(code)
+        ?.symbol ??
+      code
+    );
+  }
 
   async function saveRate(
     currencyCode: string,
@@ -233,7 +539,9 @@ export default function BankingPage() {
       );
 
       setMessage(
-        `تم حفظ سعر ${currencyCode}.`,
+        "تم حفظ سعر " +
+          currencyCode +
+          ".",
       );
 
       await loadData();
@@ -336,6 +644,294 @@ export default function BankingPage() {
     }
   }
 
+  async function createCashAccount(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      !user?.isOwner ||
+      cashAccountSaving
+    ) {
+      return;
+    }
+
+    if (
+      !cashAccountName.trim()
+    ) {
+      setError(
+        "أدخل اسم الصندوق.",
+      );
+      return;
+    }
+
+    setCashAccountSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await createPosFinanceCashAccount(
+        token,
+        {
+          name:
+            cashAccountName.trim(),
+          currencyCode:
+            cashAccountCurrency,
+          notes:
+            cashAccountNotes.trim() ||
+            undefined,
+        },
+      );
+
+      setCashAccountName(
+        "الصندوق الفرعي",
+      );
+      setCashAccountNotes("");
+
+      setMessage(
+        "تمت إضافة الصندوق الفرعي.",
+      );
+
+      await loadData();
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setCashAccountSaving(
+        false,
+      );
+    }
+  }
+
+  async function createTransfer(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      !user?.isOwner ||
+      transferSaving
+    ) {
+      return;
+    }
+
+    if (
+      !fromAccount ||
+      !toAccount
+    ) {
+      setError(
+        "اختر الحساب المصدر والحساب الوجهة.",
+      );
+      return;
+    }
+
+    const numericAmount =
+      Number(
+        transferAmount
+          .trim()
+          .replace(",", "."),
+      );
+
+    if (
+      !Number.isFinite(
+        numericAmount,
+      ) ||
+      numericAmount <= 0
+    ) {
+      setError(
+        "أدخل مبلغ تحويل صحيح.",
+      );
+      return;
+    }
+
+    const amountMinor =
+      Math.round(
+        numericAmount * 100,
+      );
+
+    if (
+      amountMinor >
+      fromAccount.balanceMinor
+    ) {
+      setError(
+        "المبلغ أكبر من الرصيد المتاح في الحساب المصدر.",
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        [
+          "تأكيد التحويل المالي؟",
+          "",
+          "من: " +
+            fromAccount.name,
+          "إلى: " +
+            toAccount.name,
+          "المبلغ: " +
+            transferAmount +
+            " " +
+            fromAccount.currencyCode,
+          "",
+          "هذه الحركة ليست مصروفًا أو إيرادًا؛ سيتم تسجيلها كتحويل بين حسابين.",
+        ].join("\n"),
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setTransferSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const idempotencyKey =
+        transferIdempotencyKey.current ??
+        newTransferIdempotencyKey();
+
+      transferIdempotencyKey.current =
+        idempotencyKey;
+
+      await createPosFinanceTransfer(
+        token,
+        {
+          idempotencyKey,
+          fromAccountId:
+            fromAccount.id,
+          toAccountId:
+            toAccount.id,
+          amount:
+            transferAmount
+              .trim()
+              .replace(
+                ",",
+                ".",
+              ),
+          notes:
+            transferNotes.trim() ||
+            undefined,
+        },
+      );
+
+      transferIdempotencyKey.current =
+        null;
+
+      setTransferAmount("");
+      setTransferNotes("");
+
+      setMessage(
+        "تم تسجيل التحويل المالي بنجاح.",
+      );
+
+      await loadData();
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setTransferSaving(
+        false,
+      );
+    }
+  }
+
+  async function reverseTransfer(
+    transfer:
+      PosFinanceTransfer,
+  ) {
+    if (
+      !user?.isOwner ||
+      reversingTransferId
+    ) {
+      return;
+    }
+
+    const reason =
+      window.prompt(
+        "اكتب سبب عكس التحويل " +
+          transfer.transaction
+            .publicId +
+          ":",
+      );
+
+    if (
+      reason === null ||
+      !reason.trim()
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "سيتم إنشاء قيد عكسي ولن يتم حذف الحركة الأصلية. متابعة؟",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setReversingTransferId(
+      transfer.transaction.publicId,
+    );
+    setError("");
+    setMessage("");
+
+    try {
+      await reversePosFinanceTransfer(
+        token,
+        {
+          publicId:
+            transfer.transaction
+              .publicId,
+          reason:
+            reason.trim(),
+        },
+      );
+
+      setMessage(
+        "تم عكس التحويل بقيد محاسبي معاكس.",
+      );
+
+      await loadData();
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setReversingTransferId(
+        null,
+      );
+    }
+  }
+
   return (
     <section className="banking-page">
       <div className="banking-heading">
@@ -344,10 +940,10 @@ export default function BankingPage() {
             المالية
           </span>
           <h2>
-            البنوك والعملات
+            البنوك والصناديق والتحويلات
           </h2>
           <p>
-            إدارة الحسابات البنكية وأسعار الدولار والدينار مقابل الشيكل.
+            إدارة الحسابات البنكية والصناديق وأسعار العملات والتحويلات الداخلية.
           </p>
         </div>
 
@@ -373,6 +969,661 @@ export default function BankingPage() {
         <div className="alert success-alert">
           {message}
         </div>
+      )}
+
+      {user?.isOwner && (
+        <>
+          <section className="banking-section banking-transfer-section">
+            <div className="banking-section-title">
+              <div>
+                <h3>
+                  تحويل بين الصندوق والبنوك
+                </h3>
+                <p>
+                  التحويل ينقل أصلًا ماليًا من حساب إلى آخر، ولا يُسجل كمصروف أو إيراد.
+                </p>
+              </div>
+              <span>
+                {
+                  transferAccounts.length
+                }{" "}
+                حساب متاح
+              </span>
+            </div>
+
+            {transferAccounts.length <
+            2 ? (
+              <div className="banking-empty">
+                أضف حسابًا بنكيًا أو صندوقًا فرعيًا حتى تتمكن من تنفيذ التحويلات.
+              </div>
+            ) : (
+              <form
+                className="banking-transfer-form"
+                onSubmit={
+                  createTransfer
+                }
+              >
+                <label>
+                  <span>
+                    من الحساب
+                  </span>
+                  <select
+                    value={
+                      fromAccountId ??
+                      ""
+                    }
+                    onChange={(
+                      event,
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
+                      setFromAccountId(
+                        Number(
+                          event
+                            .target
+                            .value,
+                        ) ||
+                          null,
+                      );
+                    }}
+                    disabled={
+                      transferSaving
+                    }
+                  >
+                    {transferAccounts.map(
+                      (account) => (
+                        <option
+                          key={
+                            account.id
+                          }
+                          value={
+                            account.id
+                          }
+                        >
+                          {
+                            account.name
+                          }{" "}
+                          —{" "}
+                          {formatMinor(
+                            account.balanceMinor,
+                            currencySymbol(
+                              account.currencyCode,
+                            ),
+                          )}
+                        </option>
+                      ),
+                    )}
+                  </select>
+
+                  {fromAccount && (
+                    <small>
+                      الرصيد المتاح:{" "}
+                      <b>
+                        {formatMinor(
+                          fromAccount.balanceMinor,
+                          currencySymbol(
+                            fromAccount.currencyCode,
+                          ),
+                        )}
+                      </b>
+                    </small>
+                  )}
+                </label>
+
+                <label>
+                  <span>
+                    إلى الحساب
+                  </span>
+                  <select
+                    value={
+                      toAccountId ??
+                      ""
+                    }
+                    onChange={(
+                      event,
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
+                      setToAccountId(
+                        Number(
+                          event
+                            .target
+                            .value,
+                        ) ||
+                          null,
+                      );
+                    }}
+                    disabled={
+                      transferSaving ||
+                      destinationOptions.length ===
+                        0
+                    }
+                  >
+                    {destinationOptions.map(
+                      (account) => (
+                        <option
+                          key={
+                            account.id
+                          }
+                          value={
+                            account.id
+                          }
+                        >
+                          {
+                            account.name
+                          }{" "}
+                          —{" "}
+                          {
+                            account.currencyCode
+                          }
+                        </option>
+                      ),
+                    )}
+                  </select>
+
+                  {fromAccount &&
+                    destinationOptions.length ===
+                      0 && (
+                      <small className="banking-form-warning">
+                        لا يوجد حساب وجهة آخر بنفس العملة.
+                      </small>
+                    )}
+                </label>
+
+                <label>
+                  <span>
+                    المبلغ
+                  </span>
+                  <input
+                    dir="ltr"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={
+                      transferAmount
+                    }
+                    onChange={(
+                      event,
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
+                      setTransferAmount(
+                        event
+                          .target
+                          .value,
+                      );
+                    }}
+                    placeholder="0.00"
+                    disabled={
+                      transferSaving
+                    }
+                  />
+                </label>
+
+                <label className="banking-transfer-notes">
+                  <span>
+                    ملاحظات
+                    <small>
+                      {" "}
+                      اختياري
+                    </small>
+                  </span>
+                  <input
+                    value={
+                      transferNotes
+                    }
+                    onChange={(
+                      event,
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
+                      setTransferNotes(
+                        event
+                          .target
+                          .value,
+                      );
+                    }}
+                    placeholder="مثال: إيداع نقدية اليوم في البنك"
+                    disabled={
+                      transferSaving
+                    }
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={
+                    transferSaving ||
+                    !fromAccount ||
+                    !toAccount ||
+                    !transferAmount
+                  }
+                >
+                  {transferSaving
+                    ? "جاري التحويل…"
+                    : "تنفيذ التحويل"}
+                </button>
+              </form>
+            )}
+          </section>
+
+          <section className="banking-section">
+            <div className="banking-section-title">
+              <div>
+                <h3>
+                  الصناديق النقدية
+                </h3>
+                <p>
+                  الصندوق الرئيسي يتبع جلسة نقطة البيع، أما الصندوق الفرعي فله رصيد مستقل.
+                </p>
+              </div>
+              <span>
+                {
+                  cashAccounts.length
+                }{" "}
+                صندوق
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="banking-empty">
+                جاري التحميل…
+              </div>
+            ) : cashAccounts.length ===
+              0 ? (
+              <div className="banking-empty">
+                لا توجد حسابات صندوق متاحة.
+              </div>
+            ) : (
+              <div className="banking-cash-grid">
+                {cashAccounts.map(
+                  (account) => (
+                    <article
+                      key={
+                        account.id
+                      }
+                      className={
+                        account.code ===
+                        "CASH_MAIN"
+                          ? "banking-cash-card is-main"
+                          : "banking-cash-card"
+                      }
+                    >
+                      <div className="banking-account-head">
+                        <div>
+                          <span>
+                            {account.code ===
+                            "CASH_MAIN"
+                              ? "💵"
+                              : "🧰"}
+                          </span>
+                          <div>
+                            <strong>
+                              {
+                                account.name
+                              }
+                            </strong>
+                            <small>
+                              {account.code ===
+                              "CASH_MAIN"
+                                ? "الصندوق الرئيسي"
+                                : "صندوق فرعي"}
+                            </small>
+                          </div>
+                        </div>
+
+                        <b>
+                          {
+                            account.currencyCode
+                          }
+                        </b>
+                      </div>
+
+                      <div className="banking-account-balance">
+                        <span>
+                          {account.balanceSource ===
+                          "cash_session"
+                            ? "الرصيد التشغيلي"
+                            : "الرصيد الدفتري"}
+                        </span>
+                        <strong>
+                          {formatMinor(
+                            account.operationalBalanceMinor,
+                            currencySymbol(
+                              account.currencyCode,
+                            ),
+                          )}
+                        </strong>
+
+                        {account.balanceSource ===
+                          "cash_session" && (
+                          <small>
+                            الدفتري:{" "}
+                            {formatMinor(
+                              account.bookBalanceMinor,
+                              currencySymbol(
+                                account.currencyCode,
+                              ),
+                            )}
+                          </small>
+                        )}
+                      </div>
+                    </article>
+                  ),
+                )}
+              </div>
+            )}
+
+            <form
+              className="banking-cash-create-form"
+              onSubmit={
+                createCashAccount
+              }
+            >
+              <label>
+                <span>
+                  اسم الصندوق الفرعي
+                </span>
+                <input
+                  value={
+                    cashAccountName
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setCashAccountName(
+                      event
+                        .target
+                        .value,
+                    )
+                  }
+                  disabled={
+                    cashAccountSaving
+                  }
+                />
+              </label>
+
+              <label>
+                <span>
+                  العملة
+                </span>
+                <select
+                  value={
+                    cashAccountCurrency
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setCashAccountCurrency(
+                      event
+                        .target
+                        .value,
+                    )
+                  }
+                  disabled={
+                    cashAccountSaving
+                  }
+                >
+                  {currencies
+                    .filter(
+                      (currency) =>
+                        currency.status ===
+                        "active",
+                    )
+                    .map(
+                      (currency) => (
+                        <option
+                          key={
+                            currency.code
+                          }
+                          value={
+                            currency.code
+                          }
+                        >
+                          {
+                            currency.nameAr
+                          }{" "}
+                          (
+                          {
+                            currency.code
+                          }
+                          )
+                        </option>
+                      ),
+                    )}
+                </select>
+              </label>
+
+              <label className="banking-cash-notes">
+                <span>
+                  ملاحظة
+                  <small>
+                    {" "}
+                    اختياري
+                  </small>
+                </span>
+                <input
+                  value={
+                    cashAccountNotes
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setCashAccountNotes(
+                      event
+                        .target
+                        .value,
+                    )
+                  }
+                  placeholder="مثال: صندوق للمشتريات اليومية"
+                  disabled={
+                    cashAccountSaving
+                  }
+                />
+              </label>
+
+              <button
+                type="submit"
+                className="secondary-button"
+                disabled={
+                  cashAccountSaving ||
+                  !cashAccountName.trim()
+                }
+              >
+                {cashAccountSaving
+                  ? "جاري الإضافة…"
+                  : "إضافة صندوق فرعي"}
+              </button>
+            </form>
+          </section>
+
+          <section className="banking-section">
+            <div className="banking-section-title">
+              <div>
+                <h3>
+                  سجل التحويلات
+                </h3>
+                <p>
+                  كل تحويل يبقى محفوظًا. الإلغاء يتم بقيد عكسي ولا يحذف الحركة الأصلية.
+                </p>
+              </div>
+              <span>
+                {
+                  transfers.length
+                }{" "}
+                حركة
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="banking-empty">
+                جاري التحميل…
+              </div>
+            ) : transfers.length ===
+              0 ? (
+              <div className="banking-empty">
+                لا توجد تحويلات مالية بعد.
+              </div>
+            ) : (
+              <div className="banking-transfer-table-wrap">
+                <table className="banking-transfer-table">
+                  <thead>
+                    <tr>
+                      <th>
+                        التحويل
+                      </th>
+                      <th>
+                        التاريخ
+                      </th>
+                      <th>
+                        من
+                      </th>
+                      <th>
+                        إلى
+                      </th>
+                      <th>
+                        المبلغ
+                      </th>
+                      <th>
+                        الحالة
+                      </th>
+                      <th>
+                        إجراء
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transfers.map(
+                      (transfer) => {
+                        const currencyCode =
+                          transfer
+                            .source
+                            ?.currencyCode ??
+                          transfer
+                            .destination
+                            ?.currencyCode ??
+                          "ILS";
+
+                        const isReversed =
+                          transfer
+                            .transaction
+                            .status ===
+                          "reversed";
+
+                        return (
+                          <tr
+                            key={
+                              transfer
+                                .transaction
+                                .id
+                            }
+                          >
+                            <td>
+                              <strong dir="ltr">
+                                {
+                                  transfer
+                                    .transaction
+                                    .publicId
+                                }
+                              </strong>
+                              {transfer
+                                .transaction
+                                .notes && (
+                                <small>
+                                  {
+                                    transfer
+                                      .transaction
+                                      .notes
+                                  }
+                                </small>
+                              )}
+                            </td>
+                            <td>
+                              {
+                                transfer
+                                  .transaction
+                                  .businessDate
+                              }
+                            </td>
+                            <td>
+                              {transfer
+                                .source
+                                ?.name ??
+                                "—"}
+                            </td>
+                            <td>
+                              {transfer
+                                .destination
+                                ?.name ??
+                                "—"}
+                            </td>
+                            <td>
+                              <strong>
+                                {formatMinor(
+                                  transfer.amountMinor,
+                                  currencySymbol(
+                                    currencyCode,
+                                  ),
+                                )}
+                              </strong>
+                            </td>
+                            <td>
+                              <span
+                                className={
+                                  isReversed
+                                    ? "banking-transfer-status is-reversed"
+                                    : "banking-transfer-status is-posted"
+                                }
+                              >
+                                {isReversed
+                                  ? "معكوس"
+                                  : "مرحّل"}
+                              </span>
+                            </td>
+                            <td>
+                              {isReversed ? (
+                                <span className="banking-transfer-locked">
+                                  محفوظ
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="secondary-button banking-reverse-button"
+                                  disabled={
+                                    reversingTransferId !==
+                                    null
+                                  }
+                                  onClick={() =>
+                                    void reverseTransfer(
+                                      transfer,
+                                    )
+                                  }
+                                >
+                                  {reversingTransferId ===
+                                  transfer
+                                    .transaction
+                                    .publicId
+                                    ? "جاري العكس…"
+                                    : "عكس"}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      },
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
       )}
 
       <section className="banking-currency-grid">
@@ -459,7 +1710,10 @@ export default function BankingPage() {
                   <div className="banking-rate-footer">
                     <small>
                       {currency.latestRate
-                        ? `آخر تحديث: ${currency.latestRate.rateDate}`
+                        ? "آخر تحديث: " +
+                          currency
+                            .latestRate
+                            .rateDate
                         : "لم يتم تحديد سعر بعد"}
                     </small>
 
