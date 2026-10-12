@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -167,6 +168,9 @@ export default function BankingPage() {
     transferNotes,
     setTransferNotes,
   ] = useState("");
+
+  const transferIdempotencyKey =
+    useRef<string | null>(null);
 
   const [loading, setLoading] =
     useState(true);
@@ -793,11 +797,17 @@ export default function BankingPage() {
     setMessage("");
 
     try {
+      const idempotencyKey =
+        transferIdempotencyKey.current ??
+        newTransferIdempotencyKey();
+
+      transferIdempotencyKey.current =
+        idempotencyKey;
+
       await createPosFinanceTransfer(
         token,
         {
-          idempotencyKey:
-            newTransferIdempotencyKey(),
+          idempotencyKey,
           fromAccountId:
             fromAccount.id,
           toAccountId:
@@ -814,6 +824,9 @@ export default function BankingPage() {
             undefined,
         },
       );
+
+      transferIdempotencyKey.current =
+        null;
 
       setTransferAmount("");
       setTransferNotes("");
@@ -1001,7 +1014,10 @@ export default function BankingPage() {
                     }
                     onChange={(
                       event,
-                    ) =>
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
                       setFromAccountId(
                         Number(
                           event
@@ -1009,7 +1025,7 @@ export default function BankingPage() {
                             .value,
                         ) ||
                           null,
-                      )
+                      );
                     }
                     disabled={
                       transferSaving
@@ -1066,7 +1082,10 @@ export default function BankingPage() {
                     }
                     onChange={(
                       event,
-                    ) =>
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
                       setToAccountId(
                         Number(
                           event
@@ -1074,7 +1093,7 @@ export default function BankingPage() {
                             .value,
                         ) ||
                           null,
-                      )
+                      );
                     }
                     disabled={
                       transferSaving ||
@@ -1128,12 +1147,15 @@ export default function BankingPage() {
                     }
                     onChange={(
                       event,
-                    ) =>
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
                       setTransferAmount(
                         event
                           .target
                           .value,
-                      )
+                      );
                     }
                     placeholder="0.00"
                     disabled={
@@ -1156,12 +1178,15 @@ export default function BankingPage() {
                     }
                     onChange={(
                       event,
-                    ) =>
+                    ) => {
+                      transferIdempotencyKey.current =
+                        null;
+
                       setTransferNotes(
                         event
                           .target
                           .value,
-                      )
+                      );
                     }
                     placeholder="مثال: إيداع نقدية اليوم في البنك"
                     disabled={
