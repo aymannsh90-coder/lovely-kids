@@ -1,4 +1,9 @@
 import {
+  exchangeDocumentsTable,
+  exchangeReturnItemCostsTable,
+  exchangeReturnItemsTable,
+  exchangeSaleItemCostsTable,
+  exchangeSaleItemsTable,
   financeTransactionsTable,
   orderItemCostsTable,
   ordersTable,
@@ -33,6 +38,7 @@ type CostQualitySummary =
 type ChannelSummary = {
   documents: number;
   returnDocuments: number;
+  exchangeDocuments: number;
 
   salesMinor: number;
   returnsMinor: number;
@@ -142,6 +148,7 @@ function summarizeQuality(
 function buildChannel(input: {
   documents: number;
   returnDocuments?: number;
+  exchangeDocuments?: number;
 
   salesMinor: number;
   returnsMinor?: number;
@@ -224,6 +231,9 @@ function buildChannel(input: {
 
     returnDocuments:
       input.returnDocuments ?? 0,
+
+    exchangeDocuments:
+      input.exchangeDocuments ?? 0,
 
     salesMinor:
       input.salesMinor,
@@ -598,6 +608,283 @@ async function handleGrossProfit(
       false;
   }
 
+  // ==========================================================
+  // POS EXCHANGES
+  //
+  // An exchange is economically a return plus a new sale.
+  // It must affect both revenue and COGS; otherwise the cash
+  // difference can appear in the drawer while gross profit
+  // ignores the underlying merchandise movement.
+  // ==========================================================
+
+  const posExchanges =
+    await db
+      .select({
+        id:
+          exchangeDocumentsTable.id,
+        returnNetMinor:
+          exchangeDocumentsTable.returnNetMinor,
+        newNetMinor:
+          exchangeDocumentsTable.newNetMinor,
+      })
+      .from(
+        exchangeDocumentsTable,
+      )
+      .where(
+        and(
+          eq(
+            exchangeDocumentsTable.status,
+            "completed",
+          ),
+          inArray(
+            exchangeDocumentsTable.sourceType,
+            [
+              "pos_sale",
+              "pos_no_receipt",
+            ],
+          ),
+          gte(
+            exchangeDocumentsTable.businessDate,
+            from,
+          ),
+          lte(
+            exchangeDocumentsTable.businessDate,
+            to,
+          ),
+        ),
+      );
+
+  const posExchangeIds =
+    posExchanges.map(
+      (exchange) =>
+        exchange.id,
+    );
+
+  const [
+    exchangeReturnItems,
+    exchangeSaleItems,
+  ] =
+    posExchangeIds.length > 0
+      ? await Promise.all([
+          db
+            .select({
+              id:
+                exchangeReturnItemsTable.id,
+              quantity:
+                exchangeReturnItemsTable.quantity,
+            })
+            .from(
+              exchangeReturnItemsTable,
+            )
+            .where(
+              inArray(
+                exchangeReturnItemsTable.exchangeId,
+                posExchangeIds,
+              ),
+            ),
+
+          db
+            .select({
+              id:
+                exchangeSaleItemsTable.id,
+              quantity:
+                exchangeSaleItemsTable.quantity,
+            })
+            .from(
+              exchangeSaleItemsTable,
+            )
+            .where(
+              inArray(
+                exchangeSaleItemsTable.exchangeId,
+                posExchangeIds,
+              ),
+            ),
+        ])
+      : [[], []];
+
+  const exchangeReturnItemIds =
+    exchangeReturnItems.map(
+      (item) => item.id,
+    );
+
+  const exchangeSaleItemIds =
+    exchangeSaleItems.map(
+      (item) => item.id,
+    );
+
+  const [
+    exchangeReturnCosts,
+    exchangeSaleCosts,
+  ] =
+    await Promise.all([
+      exchangeReturnItemIds.length > 0
+        ? db
+            .select({
+              returnItemId:
+                exchangeReturnItemCostsTable.returnItemId,
+              quantity:
+                exchangeReturnItemCostsTable.quantity,
+              costTotalMinor:
+                exchangeReturnItemCostsTable.costTotalMinor,
+              costQuality:
+                exchangeReturnItemCostsTable.costQuality,
+            })
+            .from(
+              exchangeReturnItemCostsTable,
+            )
+            .where(
+              inArray(
+                exchangeReturnItemCostsTable.returnItemId,
+                exchangeReturnItemIds,
+              ),
+            )
+        : Promise.resolve([]),
+
+      exchangeSaleItemIds.length > 0
+        ? db
+            .select({
+              saleItemId:
+                exchangeSaleItemCostsTable.saleItemId,
+              quantity:
+                exchangeSaleItemCostsTable.quantity,
+              costTotalMinor:
+                exchangeSaleItemCostsTable.costTotalMinor,
+              costQuality:
+                exchangeSaleItemCostsTable.costQuality,
+            })
+            .from(
+              exchangeSaleItemCostsTable,
+            )
+            .where(
+              inArray(
+                exchangeSaleItemCostsTable.saleItemId,
+                exchangeSaleItemIds,
+              ),
+            )
+        : Promise.resolve([]),
+    ]);
+
+  const exchangeReturnCostByItem =
+    new Map(
+      exchangeReturnCosts.map(
+        (cost) => [
+          cost.returnItemId,
+          cost,
+        ],
+      ),
+    );
+
+  const exchangeSaleCostByItem =
+    new Map(
+      exchangeSaleCosts.map(
+        (cost) => [
+          cost.saleItemId,
+          cost,
+        ],
+      ),
+    );
+
+  let exchangeReturnQuantity = 0;
+  let exchangeTrackedReturnQuantity =
+    0;
+  let exchangeSaleQuantity = 0;
+  let exchangeTrackedSaleQuantity =
+    0;
+  let exchangeCoverageComplete =
+    true;
+
+  const exchangeQualities:
+    string[] = [];
+
+  for (
+    const item of
+    exchangeReturnItems
+  ) {
+    exchangeReturnQuantity +=
+      item.quantity;
+
+    const cost =
+      exchangeReturnCostByItem.get(
+        item.id,
+      );
+
+    if (
+      !cost ||
+      cost.quantity !==
+        item.quantity
+    ) {
+      exchangeCoverageComplete =
+        false;
+      continue;
+    }
+
+    exchangeTrackedReturnQuantity +=
+      item.quantity;
+
+    exchangeQualities.push(
+      cost.costQuality,
+    );
+  }
+
+  for (
+    const item of
+    exchangeSaleItems
+  ) {
+    exchangeSaleQuantity +=
+      item.quantity;
+
+    const cost =
+      exchangeSaleCostByItem.get(
+        item.id,
+      );
+
+    if (
+      !cost ||
+      cost.quantity !==
+        item.quantity
+    ) {
+      exchangeCoverageComplete =
+        false;
+      continue;
+    }
+
+    exchangeTrackedSaleQuantity +=
+      item.quantity;
+
+    exchangeQualities.push(
+      cost.costQuality,
+    );
+  }
+
+  if (
+    posExchanges.length > 0 &&
+    (
+      exchangeReturnItems.length ===
+        0 ||
+      exchangeSaleItems.length ===
+        0
+    )
+  ) {
+    exchangeCoverageComplete =
+      false;
+  }
+
+  const exchangeReturnedCogsMinor =
+    sum(
+      exchangeReturnCosts.map(
+        (cost) =>
+          cost.costTotalMinor,
+      ),
+    );
+
+  const exchangeSaleCogsMinor =
+    sum(
+      exchangeSaleCosts.map(
+        (cost) =>
+          cost.costTotalMinor,
+      ),
+    );
+
   const posSaleCogsMinor =
     sum(
       saleCosts.map(
@@ -622,11 +909,20 @@ async function handleGrossProfit(
       returnDocuments:
         returns.length,
 
+      exchangeDocuments:
+        posExchanges.length,
+
       salesMinor:
         sum(
           sales.map(
             (sale) =>
               sale.totalMinor,
+          ),
+        ) +
+        sum(
+          posExchanges.map(
+            (exchange) =>
+              exchange.newNetMinor,
           ),
         ),
 
@@ -636,30 +932,45 @@ async function handleGrossProfit(
             (entry) =>
               entry.refundAmountMinor,
           ),
+        ) +
+        sum(
+          posExchanges.map(
+            (exchange) =>
+              exchange.returnNetMinor,
+          ),
         ),
 
       cogsKnownMinor:
         posSaleCogsMinor -
-        posReturnedCogsMinor,
+        posReturnedCogsMinor +
+        exchangeSaleCogsMinor -
+        exchangeReturnedCogsMinor,
 
       saleQuantity:
-        posSaleQuantity,
+        posSaleQuantity +
+        exchangeSaleQuantity,
 
       trackedSaleQuantity:
-        posTrackedSaleQuantity,
+        posTrackedSaleQuantity +
+        exchangeTrackedSaleQuantity,
 
       returnQuantity:
-        posReturnQuantity,
+        posReturnQuantity +
+        exchangeReturnQuantity,
 
       trackedReturnQuantity:
-        posTrackedReturnQuantity,
+        posTrackedReturnQuantity +
+        exchangeTrackedReturnQuantity,
 
       costCoverageComplete:
         posSaleCoverageComplete &&
-        posReturnCoverageComplete,
+        posReturnCoverageComplete &&
+        exchangeCoverageComplete,
 
-      costQualities:
-        posQualities,
+      costQualities: [
+        ...posQualities,
+        ...exchangeQualities,
+      ],
     });
 
   // ==========================================================
@@ -1019,6 +1330,10 @@ async function handleGrossProfit(
     returnDocuments:
       pos.returnDocuments,
 
+    exchangeDocuments:
+      pos.exchangeDocuments +
+      online.exchangeDocuments,
+
     salesMinor:
       pos.salesMinor +
       online.salesMinor,
@@ -1105,7 +1420,7 @@ async function handleGrossProfit(
     !pos.costCoverageComplete
   ) {
     warnings.push(
-      "بعض مبيعات أو مردودات POS في الفترة لا تحتوي تكلفة تاريخية مكتملة، لذلك مجمل الربح لا يُعرض كرقم نهائي.",
+      "بعض مبيعات أو مردودات أو تبديلات POS في الفترة لا تحتوي تكلفة تاريخية مكتملة، لذلك مجمل الربح لا يُعرض كرقم نهائي.",
     );
   }
 
@@ -1167,7 +1482,7 @@ async function handleGrossProfit(
         "Finance business date when web order becomes done",
 
       profitDefinition:
-        "Gross profit before operating expenses",
+        "Gross profit before operating expenses; POS exchanges are treated as a return plus a new sale with their historical item costs",
 
       deliveryDefinition:
         "Customer shipping charge minus actual delivery company cost",
