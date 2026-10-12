@@ -14,6 +14,7 @@ import ExpensesPage from "../pages/finance/ExpensesPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import CustomersPage from "../pages/parties/CustomersPage";
+import EmployeesPage from "../pages/parties/EmployeesPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
@@ -192,6 +193,15 @@ export default function AppRouter() {
         <Route
           path="parties/suppliers"
           element={<SuppliersPage />}
+        />
+
+        <Route
+          path="parties/employees"
+          element={
+            <RequireOwner>
+              <EmployeesPage />
+            </RequireOwner>
+          }
         />
 
         <Route

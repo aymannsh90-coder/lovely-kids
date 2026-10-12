@@ -605,6 +605,45 @@ export interface PosEmployee {
   netDueToEmployeeMinor: number;
 }
 
+
+export interface PosEmployeeLedgerEntry {
+  lineId: number;
+  accountKind:
+    | "employee_advance"
+    | "employee_payable";
+  publicId: string | null;
+  transactionType: string | null;
+  sourceEvent: string | null;
+  status: string | null;
+  businessDate: string | null;
+  createdAt: string;
+  debitMinor: number;
+  creditMinor: number;
+  memo: string | null;
+}
+
+export interface PosEmployeeLedgerResult {
+  employee: Omit<
+    PosEmployee,
+    | "advanceMinor"
+    | "payableMinor"
+    | "netDueToEmployeeMinor"
+  >;
+  advanceMinor: number;
+  payableMinor: number;
+  netDueToEmployeeMinor: number;
+  entries: PosEmployeeLedgerEntry[];
+}
+
+export interface PosEmployeeInput {
+  name: string;
+  phone?: string | null;
+  baseSalary?: string;
+  hireDate?: string | null;
+  status?: "active" | "inactive";
+  notes?: string | null;
+}
+
 export interface PosFinanceVoucher {
   id: number;
   publicId: string;
@@ -713,6 +752,66 @@ export function getPosEmployees(
   );
 }
 
+
+export function createPosEmployee(
+  token: string,
+  input: PosEmployeeInput,
+) {
+  return apiRequest<{
+    employee:
+      Omit<
+        PosEmployee,
+        | "advanceMinor"
+        | "payableMinor"
+        | "netDueToEmployeeMinor"
+      >;
+    advanceMinor: number;
+    payableMinor: number;
+    netDueToEmployeeMinor: number;
+  }>(
+    "/api/pos/employees",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function updatePosEmployee(
+  token: string,
+  employeeId: number,
+  input: PosEmployeeInput,
+) {
+  return apiRequest<{
+    employee:
+      Omit<
+        PosEmployee,
+        | "advanceMinor"
+        | "payableMinor"
+        | "netDueToEmployeeMinor"
+      >;
+  }>(
+    `/api/pos/employees/${employeeId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function getPosEmployeeLedger(
+  token: string,
+  employeeId: number,
+) {
+  return apiRequest<PosEmployeeLedgerResult>(
+    `/api/pos/employees/${employeeId}/ledger`,
+    {},
+    token,
+  );
+}
+
 export function createPosExpense(
   token: string,
   input: {
@@ -739,15 +838,60 @@ export function createPosExpense(
   );
 }
 
+export interface PosEmployeeSettlementInput {
+  amount: string;
+  paymentMethod: PosFinancePaymentMethod;
+  registerKey: string;
+  bankAccountId?: number;
+  exchangeRate?: string;
+  referencePeriod?: string;
+  notes?: string;
+  idempotencyKey: string;
+}
+
 export function createPosEmployeeAdvance(
+  token: string,
+  employeeId: number,
+  input: PosEmployeeSettlementInput,
+) {
+  return apiRequest<{
+    alreadyCreated?: boolean;
+    voucher: PosFinanceVoucher;
+  }>(
+    `/api/pos/employees/${employeeId}/advance`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosEmployeeRepayment(
+  token: string,
+  employeeId: number,
+  input: PosEmployeeSettlementInput,
+) {
+  return apiRequest<{
+    alreadyCreated?: boolean;
+    voucher: PosFinanceVoucher;
+  }>(
+    `/api/pos/employees/${employeeId}/repayment`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosEmployeeSalaryAccrual(
   token: string,
   employeeId: number,
   input: {
     amount: string;
-    paymentMethod: PosFinancePaymentMethod;
     registerKey: string;
-    bankAccountId?: number;
-    exchangeRate?: string;
+    referencePeriod?: string;
     notes?: string;
     idempotencyKey: string;
   },
@@ -756,7 +900,25 @@ export function createPosEmployeeAdvance(
     alreadyCreated?: boolean;
     voucher: PosFinanceVoucher;
   }>(
-    `/api/pos/employees/${employeeId}/advance`,
+    `/api/pos/employees/${employeeId}/salary`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosEmployeePayment(
+  token: string,
+  employeeId: number,
+  input: PosEmployeeSettlementInput,
+) {
+  return apiRequest<{
+    alreadyCreated?: boolean;
+    voucher: PosFinanceVoucher;
+  }>(
+    `/api/pos/employees/${employeeId}/payment`,
     {
       method: "POST",
       body: JSON.stringify(input),
