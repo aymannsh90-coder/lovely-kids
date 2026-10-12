@@ -643,14 +643,8 @@ async function handleGrossProfit(
               "pos_no_receipt",
             ],
           ),
-          gte(
-            exchangeDocumentsTable.businessDate,
-            from,
-          ),
-          lte(
-            exchangeDocumentsTable.businessDate,
-            to,
-          ),
+          sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+          sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
         ),
       );
 
