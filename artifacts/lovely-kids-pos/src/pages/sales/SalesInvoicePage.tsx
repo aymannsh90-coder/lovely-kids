@@ -139,8 +139,11 @@ function getBarcodeForSelection(
   color: string | null,
   size: string | null,
 ) {
+  const barcodes =
+    product.barcodes ?? [];
+
   const exactMapping =
-    product.barcodes.find(
+    barcodes.find(
       (entry) =>
         entry.color === color &&
         entry.size === size,
@@ -151,12 +154,12 @@ function getBarcodeForSelection(
   }
 
   const partialMapping =
-    product.barcodes.find(
+    barcodes.find(
       (entry) =>
         entry.color === color &&
         entry.size === null,
     ) ??
-    product.barcodes.find(
+    barcodes.find(
       (entry) =>
         entry.color === null &&
         entry.size === size,
