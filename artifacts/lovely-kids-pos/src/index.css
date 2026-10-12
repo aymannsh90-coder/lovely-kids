@@ -11673,3 +11673,543 @@ textarea:disabled {
   }
 }
 /* INVENTORY VALUATION END */
+
+
+/* PRODUCT ECOMMERCE ANALYTICS START */
+.product-analytics-page {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 34px;
+}
+
+.product-analytics-hero,
+.product-analytics-datebar,
+.product-analytics-table-card,
+.product-analytics-methodology,
+.product-analytics-warning {
+  border: 1px solid #e6edf3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.04);
+}
+
+.product-analytics-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+}
+
+.product-analytics-hero h1 {
+  margin: 3px 0 6px;
+  font-size: 26px;
+}
+
+.product-analytics-hero p {
+  max-width: 780px;
+  margin: 0;
+  color: #667085;
+  line-height: 1.8;
+}
+
+.product-analytics-eyebrow {
+  color: #d91477;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.product-analytics-range-badge {
+  min-width: 210px;
+  padding: 11px 14px;
+  border: 1px solid #f0d0e2;
+  border-radius: 14px;
+  background: #fff8fc;
+  text-align: center;
+}
+
+.product-analytics-range-badge span,
+.product-analytics-range-badge strong {
+  display: block;
+}
+
+.product-analytics-range-badge span {
+  margin-bottom: 4px;
+  color: #8a5872;
+  font-size: 10px;
+}
+
+.product-analytics-range-badge strong {
+  direction: ltr;
+  color: #9f145e;
+  font-size: 12px;
+}
+
+.product-analytics-datebar {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 190px) minmax(150px, 190px) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 15px 18px;
+}
+
+.product-analytics-presets {
+  display: flex;
+  gap: 8px;
+  align-self: end;
+}
+
+.product-analytics-datebar label {
+  display: grid;
+  gap: 5px;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.product-analytics-datebar input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.product-analytics-datebar .primary-button,
+.product-analytics-datebar .secondary-button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.product-analytics-warning {
+  padding: 14px 17px;
+  border-color: #f3cf86;
+  background: #fffaf0;
+}
+
+.product-analytics-warning strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #9a6700;
+  font-size: 12px;
+}
+
+.product-analytics-warning p {
+  margin: 0;
+  color: #7a5b15;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.product-analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.product-analytics-metric {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e6edf3;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.product-analytics-metric.is-emphasis {
+  border-color: #efc9df;
+  background: linear-gradient(145deg, #fff7fb, #fff);
+}
+
+.product-analytics-metric > span,
+.product-analytics-metric > strong,
+.product-analytics-metric > small {
+  display: block;
+}
+
+.product-analytics-metric > span {
+  min-height: 32px;
+  margin-bottom: 7px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.product-analytics-metric > strong {
+  color: #101828;
+  font-size: clamp(18px, 1.8vw, 24px);
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.product-analytics-metric.is-emphasis > strong {
+  color: #c81474;
+}
+
+.product-analytics-metric > small {
+  min-height: 30px;
+  margin-top: 7px;
+  color: #98a2b3;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.product-analytics-rankings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.product-analytics-ranking {
+  overflow: hidden;
+  border: 1px solid #e6edf3;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.product-analytics-ranking-head {
+  padding: 15px 16px 12px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.product-analytics-ranking-head h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.product-analytics-ranking-head p {
+  margin: 0;
+  color: #98a2b3;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.product-analytics-ranking-list {
+  display: grid;
+}
+
+.product-analytics-ranking-row {
+  display: grid;
+  grid-template-columns: 28px 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 62px;
+  padding: 8px 11px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.product-analytics-ranking-row:last-child {
+  border-bottom: 0;
+}
+
+.product-analytics-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: #fff0f8;
+  color: #c81474;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.product-analytics-ranking-row img {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #eef2f6;
+  border-radius: 9px;
+  background: #f8fafc;
+  object-fit: contain;
+}
+
+.product-analytics-ranking-name {
+  min-width: 0;
+}
+
+.product-analytics-ranking-name strong,
+.product-analytics-ranking-name small {
+  display: block;
+}
+
+.product-analytics-ranking-name strong {
+  overflow: hidden;
+  color: #344054;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.product-analytics-ranking-name small {
+  margin-top: 3px;
+  color: #98a2b3;
+  font-size: 9px;
+}
+
+.product-analytics-ranking-value {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.product-analytics-ranking-value strong,
+.product-analytics-ranking-value small {
+  display: block;
+}
+
+.product-analytics-ranking-value strong {
+  color: #101828;
+  font-size: 13px;
+}
+
+.product-analytics-ranking-value small {
+  margin-top: 2px;
+  color: #98a2b3;
+  font-size: 9px;
+}
+
+.product-analytics-ranking-empty {
+  padding: 26px 14px;
+  color: #98a2b3;
+  font-size: 11px;
+  text-align: center;
+}
+
+.product-analytics-table-card {
+  overflow: hidden;
+}
+
+.product-analytics-table-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.product-analytics-table-tools h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.product-analytics-table-tools p {
+  margin: 0;
+  color: #98a2b3;
+  font-size: 10px;
+}
+
+.product-analytics-table-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.product-analytics-table-controls > input,
+.product-analytics-table-controls > select {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 9px;
+  background: #fff;
+  color: #344054;
+  font-size: 11px;
+}
+
+.product-analytics-table-controls > input {
+  width: 245px;
+}
+
+.product-analytics-active-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #e4e7ec;
+  border-radius: 9px;
+  background: #f9fafb;
+  color: #475467;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.product-analytics-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.product-analytics-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+}
+
+.product-analytics-table th,
+.product-analytics-table td {
+  padding: 10px 11px;
+  border-bottom: 1px solid #eef2f6;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.product-analytics-table th {
+  background: #f8fafc;
+  color: #475467;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.product-analytics-table td {
+  color: #344054;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.product-analytics-table tbody tr:hover td {
+  background: #fffafd;
+}
+
+.product-analytics-product-cell {
+  display: grid;
+  grid-template-columns: 46px minmax(180px, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+
+.product-analytics-product-cell img {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #eef2f6;
+  border-radius: 9px;
+  background: #f8fafc;
+  object-fit: contain;
+}
+
+.product-analytics-product-cell strong,
+.product-analytics-product-cell small {
+  display: block;
+}
+
+.product-analytics-product-cell strong {
+  max-width: 330px;
+  overflow: hidden;
+  color: #344054;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.product-analytics-product-cell small {
+  margin-top: 3px;
+  color: #98a2b3;
+  font-size: 9px;
+}
+
+.product-analytics-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.product-analytics-status.needs-attention {
+  background: #fff4e5;
+  color: #b54708;
+}
+
+.product-analytics-status.has-sales {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.product-analytics-status.engaged {
+  background: #eef4ff;
+  color: #3538cd;
+}
+
+.product-analytics-status.quiet {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.product-analytics-empty {
+  padding: 30px !important;
+  color: #98a2b3 !important;
+  text-align: center !important;
+}
+
+.product-analytics-methodology {
+  padding: 15px 18px;
+}
+
+.product-analytics-methodology strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #344054;
+  font-size: 12px;
+}
+
+.product-analytics-methodology p {
+  margin: 0;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.9;
+}
+
+@media (max-width: 1280px) {
+  .product-analytics-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .product-analytics-rankings {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  .product-analytics-hero,
+  .product-analytics-table-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .product-analytics-datebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-analytics-presets {
+    grid-column: 1 / -1;
+  }
+
+  .product-analytics-table-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .product-analytics-table-controls > input {
+    width: auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .product-analytics-metrics,
+  .product-analytics-datebar {
+    grid-template-columns: 1fr;
+  }
+
+  .product-analytics-presets {
+    flex-wrap: wrap;
+    grid-column: auto;
+  }
+
+  .product-analytics-range-badge {
+    min-width: 0;
+  }
+}
+/* PRODUCT ECOMMERCE ANALYTICS END */
