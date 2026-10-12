@@ -10003,6 +10003,195 @@ textarea:disabled {
   }
 }
 
+
+/* FINANCE TRANSFERS + CASH ACCOUNTS START */
+
+.banking-transfer-section {
+  border-color: #cfe2ea;
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #fbfdfe 100%
+    );
+}
+
+.banking-transfer-form,
+.banking-cash-create-form {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.banking-transfer-form label,
+.banking-cash-create-form label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.banking-transfer-form input,
+.banking-transfer-form select,
+.banking-cash-create-form input,
+.banking-cash-create-form select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid #cfdee5;
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+}
+
+.banking-transfer-form input:focus,
+.banking-transfer-form select:focus,
+.banking-cash-create-form input:focus,
+.banking-cash-create-form select:focus {
+  border-color: #e91e8c;
+  box-shadow:
+    0 0 0 4px
+    rgba(233, 30, 140, 0.08);
+}
+
+.banking-transfer-form small,
+.banking-cash-create-form small {
+  color: #71808b;
+  font-weight: 600;
+}
+
+.banking-transfer-notes,
+.banking-cash-notes {
+  grid-column: span 2;
+}
+
+.banking-transfer-form .primary-button,
+.banking-cash-create-form .secondary-button {
+  align-self: end;
+  min-height: 46px;
+}
+
+.banking-form-warning {
+  color: #9a5b15 !important;
+}
+
+.banking-cash-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.banking-cash-card {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #dde7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.banking-cash-card.is-main {
+  border-color: #cce9df;
+  background: #f8fffc;
+}
+
+.banking-transfer-table-wrap {
+  margin-top: 16px;
+  overflow-x: auto;
+}
+
+.banking-transfer-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.banking-transfer-table th,
+.banking-transfer-table td {
+  padding: 12px 10px;
+  border-bottom:
+    1px solid #e5ecef;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.banking-transfer-table th {
+  color: #657481;
+  background: #f8fbfc;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.banking-transfer-table td > small {
+  display: block;
+  max-width: 320px;
+  margin-top: 4px;
+  color: #7a8790;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.banking-transfer-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 27px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.banking-transfer-status.is-posted {
+  color: #176443;
+  background: #e9f9f1;
+}
+
+.banking-transfer-status.is-reversed {
+  color: #9f2c39;
+  background: #fdecef;
+}
+
+.banking-transfer-locked {
+  color: #7a8790;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.banking-reverse-button {
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .banking-transfer-form,
+  .banking-cash-create-form,
+  .banking-cash-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .banking-transfer-form,
+  .banking-cash-create-form,
+  .banking-cash-grid {
+    grid-template-columns:
+      minmax(0, 1fr);
+  }
+
+  .banking-transfer-notes,
+  .banking-cash-notes {
+    grid-column: auto;
+  }
+}
+
+/* FINANCE TRANSFERS + CASH ACCOUNTS END */
+
 /* BANKING + CURRENCIES END */
 
 
