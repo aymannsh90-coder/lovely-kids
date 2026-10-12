@@ -15,8 +15,10 @@ import {
   createPosEmployeePayment,
   createPosEmployeeRepayment,
   createPosEmployeeSalaryAccrual,
+  getPosBankAccounts,
   getPosEmployeeLedger,
   getPosEmployees,
+  type PosBankAccount,
   type PosEmployee,
   type PosEmployeeLedgerResult,
   updatePosEmployee,
@@ -156,6 +158,14 @@ export default function EmployeesPage() {
   ] =
     useState<
       PosEmployee[]
+    >([]);
+
+  const [
+    bankAccounts,
+    setBankAccounts,
+  ] =
+    useState<
+      PosBankAccount[]
     >([]);
 
   const [
@@ -311,8 +321,22 @@ export default function EmployeesPage() {
     setActionMethod,
   ] =
     useState<
-      "cash" | "card"
+      | "cash"
+      | "card"
+      | "bank"
     >("cash");
+
+  const [
+    actionBankAccountId,
+    setActionBankAccountId,
+  ] =
+    useState("");
+
+  const [
+    actionExchangeRate,
+    setActionExchangeRate,
+  ] =
+    useState("");
 
   const [
     referencePeriod,
@@ -343,6 +367,22 @@ export default function EmployeesPage() {
       [
         employees,
         selectedId,
+      ],
+    );
+
+  const selectedBankAccount =
+    useMemo(
+      () =>
+        bankAccounts.find(
+          (account) =>
+            account.id ===
+            Number(
+              actionBankAccountId,
+            ),
+        ) ?? null,
+      [
+        bankAccounts,
+        actionBankAccountId,
       ],
     );
 
@@ -399,13 +439,29 @@ export default function EmployeesPage() {
     setError("");
 
     try {
-      const response =
-        await getPosEmployees(
-          token,
-        );
+      const [
+        response,
+        bankResponse,
+      ] =
+        await Promise.all([
+          getPosEmployees(
+            token,
+          ),
+          getPosBankAccounts(
+            token,
+          ),
+        ]);
 
       setEmployees(
         response.results,
+      );
+
+      setBankAccounts(
+        bankResponse.results.filter(
+          (account) =>
+            account.status ===
+            "active",
+        ),
       );
 
       if (
@@ -751,6 +807,47 @@ export default function EmployeesPage() {
       return;
     }
 
+    if (
+      action !== "salary" &&
+      actionMethod === "bank" &&
+      !selectedBankAccount
+    ) {
+      setError(
+        "اختر الحساب البنكي",
+      );
+      return;
+    }
+
+    if (
+      action !== "salary" &&
+      actionMethod === "bank" &&
+      selectedBankAccount &&
+      selectedBankAccount.currencyCode !==
+        "ILS"
+    ) {
+      const rate =
+        Number(
+          actionExchangeRate
+            .trim()
+            .replace(
+              ",",
+              ".",
+            ),
+        );
+
+      if (
+        !Number.isFinite(
+          rate,
+        ) ||
+        rate <= 0
+      ) {
+        setError(
+          "أدخل سعر صرف صحيح للحساب البنكي",
+        );
+        return;
+      }
+    }
+
     setActionBusy(true);
     setError("");
     setMessage("");
@@ -789,6 +886,18 @@ export default function EmployeesPage() {
               ...base,
               paymentMethod:
                 actionMethod,
+              bankAccountId:
+                actionMethod ===
+                  "bank"
+                  ? selectedBankAccount!.id
+                  : undefined,
+              exchangeRate:
+                actionMethod ===
+                  "bank" &&
+                selectedBankAccount?.currencyCode !==
+                  "ILS"
+                  ? actionExchangeRate.trim()
+                  : undefined,
             },
           );
 
@@ -805,6 +914,18 @@ export default function EmployeesPage() {
               ...base,
               paymentMethod:
                 actionMethod,
+              bankAccountId:
+                actionMethod ===
+                  "bank"
+                  ? selectedBankAccount!.id
+                  : undefined,
+              exchangeRate:
+                actionMethod ===
+                  "bank" &&
+                selectedBankAccount?.currencyCode !==
+                  "ILS"
+                  ? actionExchangeRate.trim()
+                  : undefined,
             },
           );
 
@@ -831,6 +952,18 @@ export default function EmployeesPage() {
               ...base,
               paymentMethod:
                 actionMethod,
+              bankAccountId:
+                actionMethod ===
+                  "bank"
+                  ? selectedBankAccount!.id
+                  : undefined,
+              exchangeRate:
+                actionMethod ===
+                  "bank" &&
+                selectedBankAccount?.currencyCode !==
+                  "ILS"
+                  ? actionExchangeRate.trim()
+                  : undefined,
             },
           );
 
@@ -839,6 +972,8 @@ export default function EmployeesPage() {
       }
 
       setActionAmount("");
+      setActionBankAccountId("");
+      setActionExchangeRate("");
       setReferencePeriod("");
       setActionNotes("");
 
@@ -1513,13 +1648,29 @@ export default function EmployeesPage() {
                         }
                         onChange={(
                           event,
-                        ) =>
-                          setActionMethod(
+                        ) => {
+                          const value =
                             event.target.value as
                               | "cash"
-                              | "card",
-                          )
-                        }
+                              | "card"
+                              | "bank";
+
+                          setActionMethod(
+                            value,
+                          );
+
+                          if (
+                            value !==
+                            "bank"
+                          ) {
+                            setActionBankAccountId(
+                              "",
+                            );
+                            setActionExchangeRate(
+                              "",
+                            );
+                          }
+                        }}
                       >
                         <option value="cash">
                           نقدي
@@ -1527,9 +1678,86 @@ export default function EmployeesPage() {
                         <option value="card">
                           بطاقة
                         </option>
+                        <option value="bank">
+                          بنك
+                        </option>
                       </select>
                     </label>
                   )}
+
+                  {action !==
+                    "salary" &&
+                    actionMethod ===
+                      "bank" && (
+                      <label>
+                        <span>
+                          الحساب البنكي
+                        </span>
+                        <select
+                          value={
+                            actionBankAccountId
+                          }
+                          onChange={(
+                            event,
+                          ) => {
+                            setActionBankAccountId(
+                              event.target.value,
+                            );
+                            setActionExchangeRate(
+                              "",
+                            );
+                          }}
+                        >
+                          <option value="">
+                            اختر الحساب
+                          </option>
+                          {bankAccounts.map(
+                            (
+                              account,
+                            ) => (
+                              <option
+                                key={
+                                  account.id
+                                }
+                                value={
+                                  account.id
+                                }
+                              >
+                                {account.name} — {account.currencyCode}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+                    )}
+
+                  {action !==
+                    "salary" &&
+                    actionMethod ===
+                      "bank" &&
+                    selectedBankAccount &&
+                    selectedBankAccount.currencyCode !==
+                      "ILS" && (
+                      <label>
+                        <span>
+                          سعر الصرف إلى شيكل
+                        </span>
+                        <input
+                          inputMode="decimal"
+                          value={
+                            actionExchangeRate
+                          }
+                          onChange={(
+                            event,
+                          ) =>
+                            setActionExchangeRate(
+                              event.target.value,
+                            )
+                          }
+                          placeholder="مثال: 3.10"
+                        />
+                      </label>
+                    )}
 
                   <label>
                     <span>
