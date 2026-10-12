@@ -219,8 +219,8 @@ export interface PosProductBarcode {
 export interface PosProductLookup {
   productId: string;
   barcode: string | null;
-  primaryBarcode: string | null;
-  barcodes: PosProductBarcode[];
+  primaryBarcode?: string | null;
+  barcodes?: PosProductBarcode[];
   productCode: string | null;
   nameAr: string;
   image: string;
