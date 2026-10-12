@@ -21,6 +21,7 @@ import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
 import { getProductShareUrl } from "@/utils/productShare";
 import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
 import { trackMetaEvent } from "@/utils/metaPixel";
+import { trackProductAnalyticsEvent } from "@/utils/productAnalytics";
 
 interface Props {
   product: Product;
@@ -84,6 +85,13 @@ export function ProductCard({ product, style, imageHeight }: Props) {
         value: product.price,
         currency: "ILS",
       });
+
+      if (Platform.OS === "web") {
+        void trackProductAnalyticsEvent(
+          product.id,
+          "add_to_cart",
+        );
+      }
 
       setTimeout(() => {
         void requestGeneralPrompt("cart");
