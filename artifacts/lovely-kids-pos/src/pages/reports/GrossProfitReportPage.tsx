@@ -315,6 +315,13 @@ function ChannelCard({
           )}
         />
 
+        <Metric
+          label="عدد عمليات التبديل"
+          value={String(
+            data.exchangeDocuments,
+          )}
+        />
+
         {showDelivery && (
           <>
             <Metric
@@ -538,6 +545,7 @@ export default function GrossProfitReportPage() {
         >
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 todayRange(),
@@ -549,6 +557,7 @@ export default function GrossProfitReportPage() {
 
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 weekRange(),
@@ -560,6 +569,7 @@ export default function GrossProfitReportPage() {
 
           <button
             type="button"
+            className="secondary-button"
             onClick={() =>
               applyPreset(
                 monthRange(),
@@ -630,6 +640,7 @@ export default function GrossProfitReportPage() {
 
           <button
             type="button"
+            className="primary-button"
             disabled={
               loading ||
               !from ||
@@ -753,13 +764,14 @@ export default function GrossProfitReportPage() {
             >
               الرقم المعروض هو
               مجمل الربح وليس صافي
-              الربح. المصروفات مثل
+              الربح. المصروفات التشغيلية
+              المسجلة في النظام مثل
               الإيجار والكهرباء
               والرواتب والإعلانات
-              غير محسوبة بعد.
-              عند إضافة نظام
-              المصروفات لاحقاً سيتم
-              احتساب صافي الربح.
+              لا تدخل في هذا التقرير.
+              صافي الربح يحتاج تقريرًا
+              مستقلًا يجمع مجمل الربح
+              مع المصروفات التشغيلية.
             </p>
           </section>
         </>
