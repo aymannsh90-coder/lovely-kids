@@ -4,6 +4,7 @@ import {
   exchangeReturnItemsTable,
   exchangeSaleItemCostsTable,
   exchangeSaleItemsTable,
+  financeTransactionsTable,
   orderItemCostsTable,
   ordersTable,
   posSaleItemCostsTable,
@@ -21,8 +22,11 @@ import {
   and,
   asc,
   eq,
+  gte,
   inArray,
   isNull,
+  lte,
+  sql,
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
@@ -118,6 +122,37 @@ function parseCostQuality(
   }
 
   return null;
+}
+
+function parseReportDate(
+  value: unknown,
+): string | null {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      value,
+    )
+  ) {
+    return null;
+  }
+
+  const date =
+    new Date(
+      `${value}T00:00:00Z`,
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    ) ||
+    date
+      .toISOString()
+      .slice(0, 10) !== value
+  ) {
+    return null;
+  }
+
+  return value;
 }
 
 async function handleProducts(
@@ -1151,6 +1186,880 @@ async function handleOpeningCost(
   );
 }
 
+
+async function handleHistoricalCostRepair(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requireOwner(
+    request,
+    db,
+    env,
+  );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    await request
+      .json()
+      .catch(() => null);
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return json(
+      { error: "البيانات غير صالحة" },
+      400,
+    );
+  }
+
+  const payload =
+    body as Record<string, unknown>;
+
+  const productId =
+    parseProductId(
+      payload.productId,
+    );
+
+  const unitCostMinor =
+    parseUnitCostMinor(
+      payload.unitCostMinor,
+    );
+
+  const costQuality =
+    parseCostQuality(
+      payload.costQuality,
+    );
+
+  const from =
+    parseReportDate(
+      payload.from,
+    );
+
+  const to =
+    parseReportDate(
+      payload.to,
+    );
+
+  if (productId === null) {
+    return json(
+      { error: "رقم الصنف غير صالح" },
+      400,
+    );
+  }
+
+  if (unitCostMinor === null) {
+    return json(
+      {
+        error:
+          "تكلفة الصنف غير صالحة",
+      },
+      400,
+    );
+  }
+
+  if (!costQuality) {
+    return json(
+      {
+        error:
+          "حالة التكلفة يجب أن تكون confirmed أو estimated",
+      },
+      400,
+    );
+  }
+
+  if (!from || !to) {
+    return json(
+      {
+        error:
+          "يجب تحديد فترة التقرير بشكل صحيح",
+      },
+      400,
+    );
+  }
+
+  if (from > to) {
+    return json(
+      {
+        error:
+          "تاريخ البداية يجب أن يسبق تاريخ النهاية",
+      },
+      400,
+    );
+  }
+
+  const result =
+    await db.transaction(
+      async (tx) => {
+        const productRows =
+          await tx
+            .select({
+              id:
+                productsTable.id,
+              nameAr:
+                productsTable.nameAr,
+            })
+            .from(productsTable)
+            .where(
+              eq(
+                productsTable.id,
+                productId,
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+        const product =
+          productRows[0];
+
+        if (!product) {
+          return {
+            ok: false as const,
+            status: 404,
+            error:
+              "الصنف غير موجود",
+          };
+        }
+
+        const historicalCostTotal = (
+          quantity: number,
+        ): number | null => {
+          const total =
+            quantity *
+            unitCostMinor;
+
+          if (
+            !Number.isSafeInteger(
+              total,
+            ) ||
+            total < 0 ||
+            total >
+              2_147_483_647
+          ) {
+            return null;
+          }
+
+          return total;
+        };
+
+        const historicalSaleItems =
+          await tx
+            .select({
+              saleItemId:
+                posSaleItemsTable.id,
+              quantity:
+                posSaleItemsTable.quantity,
+            })
+            .from(
+              posSaleItemsTable,
+            )
+            .innerJoin(
+              posSalesTable,
+              eq(
+                posSalesTable.id,
+                posSaleItemsTable.saleId,
+              ),
+            )
+            .leftJoin(
+              posSaleItemCostsTable,
+              eq(
+                posSaleItemCostsTable.saleItemId,
+                posSaleItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  posSaleItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  posSalesTable.status,
+                  "completed",
+                ),
+                sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+                isNull(
+                  posSaleItemCostsTable.saleItemId,
+                ),
+              ),
+            );
+
+        const historicalReturnItems =
+          await tx
+            .select({
+              returnItemId:
+                posSaleReturnItemsTable.id,
+              originalSaleItemId:
+                posSaleReturnItemsTable.originalSaleItemId,
+              quantity:
+                posSaleReturnItemsTable.quantity,
+            })
+            .from(
+              posSaleReturnItemsTable,
+            )
+            .innerJoin(
+              posSaleReturnsTable,
+              eq(
+                posSaleReturnsTable.id,
+                posSaleReturnItemsTable.returnId,
+              ),
+            )
+            .leftJoin(
+              posSaleReturnItemCostsTable,
+              eq(
+                posSaleReturnItemCostsTable.returnItemId,
+                posSaleReturnItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  posSaleReturnItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  posSaleReturnsTable.status,
+                  "completed",
+                ),
+                sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+                isNull(
+                  posSaleReturnItemCostsTable.returnItemId,
+                ),
+              ),
+            );
+
+        const historicalExchangeReturnItems =
+          await tx
+            .select({
+              returnItemId:
+                exchangeReturnItemsTable.id,
+              quantity:
+                exchangeReturnItemsTable.quantity,
+            })
+            .from(
+              exchangeReturnItemsTable,
+            )
+            .innerJoin(
+              exchangeDocumentsTable,
+              eq(
+                exchangeDocumentsTable.id,
+                exchangeReturnItemsTable.exchangeId,
+              ),
+            )
+            .leftJoin(
+              exchangeReturnItemCostsTable,
+              eq(
+                exchangeReturnItemCostsTable.returnItemId,
+                exchangeReturnItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  exchangeReturnItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  exchangeDocumentsTable.status,
+                  "completed",
+                ),
+                inArray(
+                  exchangeDocumentsTable.sourceType,
+                  [
+                    "pos_sale",
+                    "pos_no_receipt",
+                  ],
+                ),
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+                isNull(
+                  exchangeReturnItemCostsTable.returnItemId,
+                ),
+              ),
+            );
+
+        const historicalExchangeSaleItems =
+          await tx
+            .select({
+              saleItemId:
+                exchangeSaleItemsTable.id,
+              quantity:
+                exchangeSaleItemsTable.quantity,
+            })
+            .from(
+              exchangeSaleItemsTable,
+            )
+            .innerJoin(
+              exchangeDocumentsTable,
+              eq(
+                exchangeDocumentsTable.id,
+                exchangeSaleItemsTable.exchangeId,
+              ),
+            )
+            .leftJoin(
+              exchangeSaleItemCostsTable,
+              eq(
+                exchangeSaleItemCostsTable.saleItemId,
+                exchangeSaleItemsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  exchangeSaleItemsTable.productId,
+                  productId,
+                ),
+                eq(
+                  exchangeDocumentsTable.status,
+                  "completed",
+                ),
+                inArray(
+                  exchangeDocumentsTable.sourceType,
+                  [
+                    "pos_sale",
+                    "pos_no_receipt",
+                  ],
+                ),
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+                sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+                isNull(
+                  exchangeSaleItemCostsTable.saleItemId,
+                ),
+              ),
+            );
+
+        const onlineCompletions =
+          await tx
+            .select({
+              sourceId:
+                financeTransactionsTable.sourceId,
+            })
+            .from(
+              financeTransactionsTable,
+            )
+            .where(
+              and(
+                eq(
+                  financeTransactionsTable.sourceType,
+                  "web_order",
+                ),
+                eq(
+                  financeTransactionsTable.sourceEvent,
+                  "done",
+                ),
+                eq(
+                  financeTransactionsTable.status,
+                  "posted",
+                ),
+                gte(
+                  financeTransactionsTable.businessDate,
+                  from,
+                ),
+                lte(
+                  financeTransactionsTable.businessDate,
+                  to,
+                ),
+              ),
+            );
+
+        const onlineOrderIds =
+          [
+            ...new Set(
+              onlineCompletions
+                .map(
+                  (entry) =>
+                    Number(
+                      entry.sourceId,
+                    ),
+                )
+                .filter(
+                  (value) =>
+                    Number.isSafeInteger(
+                      value,
+                    ) &&
+                    value > 0,
+                ),
+            ),
+          ];
+
+        const historicalOrders =
+          onlineOrderIds.length > 0
+            ? await tx
+                .select({
+                  id:
+                    ordersTable.id,
+                  items:
+                    ordersTable.items,
+                })
+                .from(
+                  ordersTable,
+                )
+                .where(
+                  and(
+                    inArray(
+                      ordersTable.id,
+                      onlineOrderIds,
+                    ),
+                    eq(
+                      ordersTable.status,
+                      "done",
+                    ),
+                  ),
+                )
+            : [];
+
+        const existingOnlineCosts =
+          onlineOrderIds.length > 0
+            ? await tx
+                .select({
+                  orderId:
+                    orderItemCostsTable.orderId,
+                  lineNumber:
+                    orderItemCostsTable.lineNumber,
+                })
+                .from(
+                  orderItemCostsTable,
+                )
+                .where(
+                  inArray(
+                    orderItemCostsTable.orderId,
+                    onlineOrderIds,
+                  ),
+                )
+            : [];
+
+        const existingOnlineCostKeys =
+          new Set(
+            existingOnlineCosts.map(
+              (entry) =>
+                `${entry.orderId}:${entry.lineNumber}`,
+            ),
+          );
+
+        const saleBackfillRows =
+          historicalSaleItems.map(
+            (item) => {
+              const costTotalMinor =
+                historicalCostTotal(
+                  item.quantity,
+                );
+
+              if (
+                costTotalMinor === null
+              ) {
+                throw new Error(
+                  "INVALID_HISTORICAL_COST",
+                );
+              }
+
+              return {
+                saleItemId:
+                  item.saleItemId,
+                productId,
+                quantity:
+                  item.quantity,
+                unitCostMinor,
+                costTotalMinor,
+                costQuality,
+              };
+            },
+          );
+
+        const returnBackfillRows =
+          historicalReturnItems.map(
+            (item) => {
+              const costTotalMinor =
+                historicalCostTotal(
+                  item.quantity,
+                );
+
+              if (
+                costTotalMinor === null
+              ) {
+                throw new Error(
+                  "INVALID_HISTORICAL_COST",
+                );
+              }
+
+              return {
+                returnItemId:
+                  item.returnItemId,
+                originalSaleItemId:
+                  item.originalSaleItemId,
+                productId,
+                quantity:
+                  item.quantity,
+                costTotalMinor,
+                costQuality,
+              };
+            },
+          );
+
+        const exchangeReturnBackfillRows =
+          historicalExchangeReturnItems.map(
+            (item) => {
+              const costTotalMinor =
+                historicalCostTotal(
+                  item.quantity,
+                );
+
+              if (
+                costTotalMinor === null
+              ) {
+                throw new Error(
+                  "INVALID_HISTORICAL_COST",
+                );
+              }
+
+              return {
+                returnItemId:
+                  item.returnItemId,
+                productId,
+                quantity:
+                  item.quantity,
+                unitCostMinor,
+                costTotalMinor,
+                costQuality,
+              };
+            },
+          );
+
+        const exchangeSaleBackfillRows =
+          historicalExchangeSaleItems.map(
+            (item) => {
+              const costTotalMinor =
+                historicalCostTotal(
+                  item.quantity,
+                );
+
+              if (
+                costTotalMinor === null
+              ) {
+                throw new Error(
+                  "INVALID_HISTORICAL_COST",
+                );
+              }
+
+              return {
+                saleItemId:
+                  item.saleItemId,
+                productId,
+                quantity:
+                  item.quantity,
+                unitCostMinor,
+                costTotalMinor,
+                costQuality,
+              };
+            },
+          );
+
+        const onlineBackfillRows: Array<{
+          orderId: number;
+          lineNumber: number;
+          productId: number;
+          color: string | null;
+          size: string | null;
+          quantity: number;
+          unitCostMinor: number;
+          costTotalMinor: number;
+          costQuality:
+            | "confirmed"
+            | "estimated";
+        }> = [];
+
+        for (
+          const order of
+          historicalOrders
+        ) {
+          if (
+            !Array.isArray(
+              order.items,
+            )
+          ) {
+            continue;
+          }
+
+          for (
+            let index = 0;
+            index <
+            order.items.length;
+            index += 1
+          ) {
+            const lineNumber =
+              index + 1;
+
+            if (
+              existingOnlineCostKeys.has(
+                `${order.id}:${lineNumber}`,
+              )
+            ) {
+              continue;
+            }
+
+            const rawItem =
+              order.items[index];
+
+            if (
+              !rawItem ||
+              typeof rawItem !==
+                "object" ||
+              Array.isArray(
+                rawItem,
+              )
+            ) {
+              continue;
+            }
+
+            const item =
+              rawItem as Record<
+                string,
+                unknown
+              >;
+
+            if (
+              parseProductId(
+                item.id,
+              ) !== productId
+            ) {
+              continue;
+            }
+
+            const quantity =
+              typeof item.quantity ===
+              "number"
+                ? item.quantity
+                : Number(
+                    item.quantity,
+                  );
+
+            if (
+              !Number.isSafeInteger(
+                quantity,
+              ) ||
+              quantity <= 0
+            ) {
+              return {
+                ok: false as const,
+                status: 400,
+                error:
+                  "تعذر احتساب كمية أحد أصناف الطلبات القديمة",
+              };
+            }
+
+            const costTotalMinor =
+              historicalCostTotal(
+                quantity,
+              );
+
+            if (
+              costTotalMinor ===
+              null
+            ) {
+              return {
+                ok: false as const,
+                status: 400,
+                error:
+                  "قيمة التكلفة التاريخية أكبر من الحد المسموح",
+              };
+            }
+
+            onlineBackfillRows.push({
+              orderId:
+                order.id,
+              lineNumber,
+              productId,
+              color:
+                typeof item.color ===
+                "string"
+                  ? item.color
+                  : null,
+              size:
+                typeof item.size ===
+                "string"
+                  ? item.size
+                  : null,
+              quantity,
+              unitCostMinor,
+              costTotalMinor,
+              costQuality,
+            });
+          }
+        }
+
+        if (
+          saleBackfillRows.length ===
+            0 &&
+          returnBackfillRows.length ===
+            0 &&
+          exchangeReturnBackfillRows.length ===
+            0 &&
+          exchangeSaleBackfillRows.length ===
+            0 &&
+          onlineBackfillRows.length ===
+            0
+        ) {
+          return {
+            ok: false as const,
+            status: 409,
+            error:
+              "لا توجد حركة تكلفة تاريخية ناقصة لهذا الصنف ضمن الفترة المحددة",
+          };
+        }
+
+        const backfilledSales =
+          saleBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  posSaleItemCostsTable,
+                )
+                .values(
+                  saleBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  saleItemId:
+                    posSaleItemCostsTable.saleItemId,
+                })
+            : [];
+
+        const backfilledReturns =
+          returnBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  posSaleReturnItemCostsTable,
+                )
+                .values(
+                  returnBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  returnItemId:
+                    posSaleReturnItemCostsTable.returnItemId,
+                })
+            : [];
+
+        const backfilledExchangeReturns =
+          exchangeReturnBackfillRows.length >
+          0
+            ? await tx
+                .insert(
+                  exchangeReturnItemCostsTable,
+                )
+                .values(
+                  exchangeReturnBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  returnItemId:
+                    exchangeReturnItemCostsTable.returnItemId,
+                })
+            : [];
+
+        const backfilledExchangeSales =
+          exchangeSaleBackfillRows.length >
+          0
+            ? await tx
+                .insert(
+                  exchangeSaleItemCostsTable,
+                )
+                .values(
+                  exchangeSaleBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  saleItemId:
+                    exchangeSaleItemCostsTable.saleItemId,
+                })
+            : [];
+
+        const backfilledOnline =
+          onlineBackfillRows.length > 0
+            ? await tx
+                .insert(
+                  orderItemCostsTable,
+                )
+                .values(
+                  onlineBackfillRows,
+                )
+                .onConflictDoNothing()
+                .returning({
+                  id:
+                    orderItemCostsTable.id,
+                })
+            : [];
+
+        return {
+          ok: true as const,
+          range: {
+            from,
+            to,
+          },
+          product: {
+            productId:
+              String(
+                product.id,
+              ),
+            nameAr:
+              product.nameAr,
+            unitCostMinor,
+            costQuality,
+          },
+          historicalBackfill: {
+            posSaleItems:
+              backfilledSales.length,
+            posReturnItems:
+              backfilledReturns.length,
+            exchangeReturnItems:
+              backfilledExchangeReturns.length,
+            exchangeSaleItems:
+              backfilledExchangeSales.length,
+            onlineOrderItems:
+              backfilledOnline.length,
+          },
+        };
+      },
+    ).catch(
+      (error) => {
+        if (
+          error instanceof Error &&
+          error.message ===
+            "INVALID_HISTORICAL_COST"
+        ) {
+          return {
+            ok: false as const,
+            status: 400,
+            error:
+              "قيمة التكلفة التاريخية أكبر من الحد المسموح",
+          };
+        }
+
+        throw error;
+      },
+    );
+
+  if (!result.ok) {
+    return json(
+      {
+        error:
+          result.error,
+      },
+      result.status,
+    );
+  }
+
+  return json(
+    result,
+    201,
+  );
+}
+
 export async function handleOwnerCostRequest(
   request: Request,
   db: Db,
@@ -1180,6 +2089,18 @@ export async function handleOwnerCostRequest(
       "/api/owner/costs/opening"
   ) {
     return handleOpeningCost(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path ===
+      "/api/owner/costs/historical-repair"
+  ) {
+    return handleHistoricalCostRepair(
       request,
       db,
       env,

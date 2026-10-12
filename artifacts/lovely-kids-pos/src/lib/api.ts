@@ -2744,6 +2744,53 @@ export function setOwnerOpeningCost(
 }
 
 
+export function setOwnerHistoricalCostRepair(
+  token: string,
+  input: {
+    productId: string;
+    unitCostMinor: number;
+    from: string;
+    to: string;
+    costQuality?: "confirmed" | "estimated";
+  },
+) {
+  return apiRequest<{
+    range: {
+      from: string;
+      to: string;
+    };
+    product: {
+      productId: string;
+      nameAr: string;
+      unitCostMinor: number;
+      costQuality: "confirmed" | "estimated";
+    };
+    historicalBackfill: {
+      posSaleItems: number;
+      posReturnItems: number;
+      exchangeReturnItems: number;
+      exchangeSaleItems: number;
+      onlineOrderItems: number;
+    };
+  }>(
+    "/api/owner/costs/historical-repair",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        productId: input.productId,
+        unitCostMinor: input.unitCostMinor,
+        from: input.from,
+        to: input.to,
+        costQuality:
+          input.costQuality ??
+          "confirmed",
+      }),
+    },
+    token,
+  );
+}
+
+
 export interface GrossProfitChannelSummary {
   documents: number;
   returnDocuments: number;
