@@ -1470,7 +1470,7 @@ async function handleGrossProfit(
 
     methodology: {
       posDateBasis:
-        "POS sale/return actual creation date in Asia/Hebron",
+        "POS sale/return/exchange actual creation date in Asia/Hebron",
 
       onlineDateBasis:
         "Finance business date when web order becomes done",
