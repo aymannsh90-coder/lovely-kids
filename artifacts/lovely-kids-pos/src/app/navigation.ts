@@ -40,8 +40,8 @@ export const navigationGroups: Array<{
   },
   {
     key: "parties",
-    title: "الزبائن والموردون",
-    description: "إدارة بيانات الزبائن والموردين وحساباتهم.",
+    title: "الزبائن والموردون والموظفون",
+    description: "إدارة بيانات الزبائن والموردين والموظفين وحساباتهم.",
   },
   {
     key: "finance",
@@ -198,6 +198,16 @@ export const posNavigation: PosNavigationItem[] = [
     title: "الموردون",
     description: "إدارة بيانات الموردين والبحث فيها.",
     icon: "🚚",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
+    key: "employees",
+    group: "parties",
+    path: "/parties/employees",
+    title: "الموظفون",
+    description: "إدارة الموظفين والسلف والرواتب والمستحقات وكشف الحركة.",
+    icon: "👥",
     requiresOpenSession: false,
     status: "ready",
   },
