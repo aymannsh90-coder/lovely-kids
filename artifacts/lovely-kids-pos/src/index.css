@@ -12873,3 +12873,160 @@ textarea:disabled {
   }
 }
 /* EMPLOYEE MANAGEMENT END */
+
+
+/* GROSS PROFIT REPORT UI START */
+.gross-profit-page {
+  display: grid;
+  gap: 16px;
+  padding: 12px 0 30px;
+}
+
+.gross-profit-hero,
+.gross-profit-warning,
+.gross-profit-note {
+  border: 1px solid #dfe7ec;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(29, 71, 93, 0.05);
+}
+
+.gross-profit-hero {
+  padding: 18px;
+}
+
+.gross-profit-hero-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.gross-profit-eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: #c81474;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.gross-profit-hero h1 {
+  margin: 0;
+  color: #101828;
+  font-size: 24px;
+}
+
+.gross-profit-hero p {
+  margin: 5px 0 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.gross-profit-loading {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #fff0f8;
+  color: #b31469;
+  font-size: 11px;
+}
+
+.gross-profit-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.gross-profit-presets .secondary-button {
+  min-height: 38px;
+  padding-inline: 14px;
+}
+
+.gross-profit-datebar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(170px, 220px)) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.gross-profit-datebar label {
+  display: grid;
+  gap: 5px;
+}
+
+.gross-profit-datebar label > span {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.gross-profit-datebar input {
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid #cfd9df;
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: 13px;
+}
+
+.gross-profit-datebar .primary-button {
+  min-height: 40px;
+  padding-inline: 18px;
+}
+
+.gross-profit-error {
+  margin-top: 12px;
+}
+
+.gross-profit-warning {
+  padding: 16px 18px;
+  border-color: #f6b84f;
+  background: #fffaf0;
+}
+
+.gross-profit-warning strong {
+  color: #9a6700;
+}
+
+.gross-profit-warning ul {
+  margin-bottom: 0;
+  color: #694b00;
+  line-height: 1.8;
+}
+
+.gross-profit-note {
+  padding: 16px 18px;
+  background: #f9fafb;
+}
+
+.gross-profit-note strong {
+  color: #344054;
+}
+
+.gross-profit-note p {
+  margin-bottom: 0;
+  color: #475467;
+  line-height: 1.8;
+}
+
+@media (max-width: 760px) {
+  .gross-profit-page {
+    padding-top: 0;
+  }
+
+  .gross-profit-datebar {
+    grid-template-columns: 1fr;
+  }
+
+  .gross-profit-datebar .primary-button {
+    width: 100%;
+  }
+}
+/* GROSS PROFIT REPORT UI END */
+
