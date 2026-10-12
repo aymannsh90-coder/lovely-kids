@@ -1576,6 +1576,26 @@ export default function AdminProductsScreen() {
                   </Text>
                   <Ionicons name="create-outline" size={12} color={stockInfo ? stockInfo.color : colors.mutedForeground} />
                 </Pressable>
+
+                <Text
+                  selectable
+                  style={{
+                    alignSelf:
+                      "flex-end",
+                    color:
+                      item.productCode
+                        ? colors.foreground
+                        : colors.mutedForeground,
+                    fontSize: 13,
+                    fontWeight: "900",
+                    textAlign: "right",
+                  }}
+                >
+                  كود الصنف:{" "}
+                  {item.productCode?.trim()
+                    ? item.productCode
+                    : "غير متوفر"}
+                </Text>
               </View>
 
               <View style={styles.actions}>
