@@ -487,62 +487,34 @@ export default function GrossProfitReportPage() {
   return (
     <div
       dir="rtl"
-      style={{
-        display: "grid",
-        gap: 16,
-        paddingBottom: 30,
-      }}
+      className="gross-profit-page"
     >
       <section
-        style={cardStyle}
+        className="gross-profit-hero"
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems:
-              "center",
-            justifyContent:
-              "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="gross-profit-hero-head">
           <div>
-            <h1
-              style={{
-                margin:
-                  "0 0 5px",
-                fontSize: 24,
-              }}
-            >
+            <span className="gross-profit-eyebrow">
+              التقارير المالية
+            </span>
+
+            <h1>
               مجمل الربح
             </h1>
 
-            <div
-              style={{
-                color: "#667085",
-                fontSize: 13,
-              }}
-            >
+            <p>
               قبل المصروفات التشغيلية — للمالك فقط
-            </div>
+            </p>
           </div>
 
           {loading && (
-            <strong>
+            <strong className="gross-profit-loading">
               جارٍ الحساب...
             </strong>
           )}
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginTop: 16,
-          }}
-        >
+        <div className="gross-profit-presets">
           <button
             type="button"
             className="secondary-button"
@@ -580,25 +552,11 @@ export default function GrossProfitReportPage() {
           </button>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems:
-              "end",
-            gap: 10,
-            flexWrap: "wrap",
-            marginTop: 14,
-          }}
-        >
+        <div className="gross-profit-datebar">
           <label>
-            <div
-              style={{
-                fontSize: 12,
-                marginBottom: 5,
-              }}
-            >
+            <span>
               من تاريخ
-            </div>
+            </span>
 
             <input
               type="date"
@@ -615,14 +573,9 @@ export default function GrossProfitReportPage() {
           </label>
 
           <label>
-            <div
-              style={{
-                fontSize: 12,
-                marginBottom: 5,
-              }}
-            >
+            <span>
               إلى تاريخ
-            </div>
+            </span>
 
             <input
               type="date"
@@ -658,13 +611,7 @@ export default function GrossProfitReportPage() {
         </div>
 
         {error && (
-          <div
-            style={{
-              marginTop: 12,
-              color: "#b42318",
-              fontWeight: 700,
-            }}
-          >
+          <div className="error-message gross-profit-error">
             {error}
           </div>
         )}
@@ -674,15 +621,7 @@ export default function GrossProfitReportPage() {
         <>
           {report.warnings.length >
             0 && (
-            <section
-              style={{
-                ...cardStyle,
-                borderColor:
-                  "#f79009",
-                background:
-                  "#fffaf0",
-              }}
-            >
+            <section className="gross-profit-warning">
               <strong>
                 تنبيه على دقة التقرير
               </strong>
@@ -744,24 +683,12 @@ export default function GrossProfitReportPage() {
             />
           </div>
 
-          <section
-            style={{
-              ...cardStyle,
-              background:
-                "#f9fafb",
-            }}
-          >
+          <section className="gross-profit-note">
             <strong>
               ملاحظة محاسبية
             </strong>
 
-            <p
-              style={{
-                marginBottom: 0,
-                lineHeight: 1.8,
-                color: "#475467",
-              }}
-            >
+            <p>
               الرقم المعروض هو
               مجمل الربح وليس صافي
               الربح. المصروفات التشغيلية
