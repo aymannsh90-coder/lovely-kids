@@ -21,6 +21,7 @@ import {
   and,
   asc,
   eq,
+  inArray,
   isNull,
 } from "drizzle-orm";
 
@@ -597,6 +598,13 @@ async function handleOpeningCost(
                   exchangeDocumentsTable.status,
                   "completed",
                 ),
+                inArray(
+                  exchangeDocumentsTable.sourceType,
+                  [
+                    "pos_sale",
+                    "pos_no_receipt",
+                  ],
+                ),
                 isNull(
                   exchangeReturnItemCostsTable.returnItemId,
                 ),
@@ -637,6 +645,13 @@ async function handleOpeningCost(
                 eq(
                   exchangeDocumentsTable.status,
                   "completed",
+                ),
+                inArray(
+                  exchangeDocumentsTable.sourceType,
+                  [
+                    "pos_sale",
+                    "pos_no_receipt",
+                  ],
                 ),
                 isNull(
                   exchangeSaleItemCostsTable.saleItemId,
