@@ -210,9 +210,17 @@ export interface PosColorVariant {
   sizes: PosSizeStock[];
 }
 
+export interface PosProductBarcode {
+  barcode: string;
+  color: string | null;
+  size: string | null;
+}
+
 export interface PosProductLookup {
   productId: string;
   barcode: string | null;
+  primaryBarcode: string | null;
+  barcodes: PosProductBarcode[];
   productCode: string | null;
   nameAr: string;
   image: string;
