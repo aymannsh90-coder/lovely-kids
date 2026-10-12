@@ -2414,6 +2414,90 @@ export function reverseDeliveryCompanySettlement(
 }
 
 
+export interface OwnerProductAnalyticsRow {
+  productId: string;
+  nameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  category: string;
+  price: number;
+  image: string;
+  isHidden: boolean;
+  createdAt: string;
+
+  views: number;
+  viewers: number;
+  addToCart: number;
+  cartUsers: number;
+
+  orders: number;
+  units: number;
+  revenueMinor: number;
+
+  interestScore: number;
+  hasInterestWithoutSales: boolean;
+}
+
+export interface OwnerProductAnalyticsReport {
+  range: {
+    from: string;
+    to: string;
+  };
+
+  generatedAt: string;
+
+  tracking: {
+    firstTrackedDate: string | null;
+    engagementHistorical: boolean;
+    salesHistorical: boolean;
+  };
+
+  summary: {
+    views: number;
+    uniqueViewers: number;
+    addToCart: number;
+    orders: number;
+    units: number;
+    revenueMinor: number;
+    interestWithoutSales: number;
+    completedOnlineOrders: number;
+  };
+
+  products:
+    OwnerProductAnalyticsRow[];
+
+  warnings: string[];
+
+  methodology: {
+    views: string;
+    addToCart: string;
+    sales: string;
+    revenue: string;
+    interestScore: string;
+  };
+}
+
+export function getOwnerProductAnalytics(
+  token: string,
+  input: {
+    from: string;
+    to: string;
+  },
+) {
+  const params =
+    new URLSearchParams({
+      from: input.from,
+      to: input.to,
+    });
+
+  return apiRequest<OwnerProductAnalyticsReport>(
+    `/api/owner/reports/product-analytics?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+
 export interface OwnerInventoryValuationProduct {
   productId: string;
   nameAr: string;
