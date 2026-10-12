@@ -1498,6 +1498,147 @@ export async function handleVoidPosExchange(
 
           if (
             exchange.settlementType ===
+              "cash" &&
+            exchange.settlementAmountMinor !==
+              0
+          ) {
+            const financeRows =
+              await tx
+                .select()
+                .from(
+                  financeTransactionsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      financeTransactionsTable
+                        .sourceType,
+                      "exchange",
+                    ),
+                    eq(
+                      financeTransactionsTable
+                        .sourceId,
+                      String(
+                        exchange.id,
+                      ),
+                    ),
+                    eq(
+                      financeTransactionsTable
+                        .sourceEvent,
+                      "cash_settlement",
+                    ),
+                    eq(
+                      financeTransactionsTable
+                        .status,
+                      "posted",
+                    ),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+
+            const originalFinance =
+              financeRows[0] ??
+              null;
+
+            if (originalFinance) {
+              const originalLines =
+                await tx
+                  .select()
+                  .from(
+                    financeTransactionLinesTable,
+                  )
+                  .where(
+                    eq(
+                      financeTransactionLinesTable
+                        .transactionId,
+                      originalFinance.id,
+                    ),
+                  )
+                  .orderBy(
+                    asc(
+                      financeTransactionLinesTable
+                        .lineNumber,
+                    ),
+                  );
+
+              if (
+                originalLines.length <
+                2
+              ) {
+                throw new Error(
+                  "POS_EXCHANGE_CASH_FINANCE_LINES_MISSING",
+                );
+              }
+
+              await postFinanceTransaction(
+                tx,
+                {
+                  publicId:
+                    `FIN-EXC-CASH-VOID-${exchange.publicId}`,
+                  idempotencyKey:
+                    `pos-exchange:${exchange.id}:cash-settlement:void`,
+                  businessDate:
+                    exchange.businessDate,
+                  transactionType:
+                    "reversal",
+                  sourceType:
+                    "exchange",
+                  sourceId:
+                    String(
+                      exchange.id,
+                    ),
+                  sourceEvent:
+                    "cash_settlement_void",
+                  cashSessionId:
+                    exchange.cashSessionId,
+                  notes:
+                    `عكس فرق التبديل النقدي ${exchange.publicId}`,
+                  createdByUserId:
+                    user.id,
+                  lines:
+                    originalLines.map(
+                      (line) => ({
+                        accountId:
+                          line.accountId,
+                        customerId:
+                          line.customerId,
+                        employeeId:
+                          line.employeeId,
+                        supplierId:
+                          line.supplierId,
+                        debitMinor:
+                          line.creditMinor,
+                        creditMinor:
+                          line.debitMinor,
+                        memo:
+                          `عكس ${exchange.publicId}`,
+                      }),
+                    ),
+                },
+              );
+
+              await tx
+                .update(
+                  financeTransactionsTable,
+                )
+                .set({
+                  status:
+                    "reversed",
+                  updatedAt:
+                    voidedAt,
+                })
+                .where(
+                  eq(
+                    financeTransactionsTable.id,
+                    originalFinance.id,
+                  ),
+                );
+            }
+          }
+
+          if (
+            exchange.settlementType ===
             "cash"
           ) {
             const updatedSessionRows =

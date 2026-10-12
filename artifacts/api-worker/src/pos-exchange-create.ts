@@ -4720,6 +4720,113 @@ export async function handleCreatePosExchange(
             payload.settlementType ===
             "cash"
           ) {
+            if (
+              settlementAmountMinor !==
+              0
+            ) {
+              const cashAccount =
+                await ensureSaleFinanceAccount(
+                  tx,
+                  {
+                    code:
+                      `CASH_${payload.registerKey.toUpperCase()}`,
+                    name:
+                      payload.registerKey ===
+                      "main"
+                        ? "الصندوق الرئيسي"
+                        : `الصندوق ${payload.registerKey}`,
+                    accountType:
+                      "asset",
+                  },
+                );
+
+              const cashSalesAccount =
+                await ensureSaleFinanceAccount(
+                  tx,
+                  {
+                    code:
+                      "POS_SALES_CASH",
+                    name:
+                      "مبيعات نقطة البيع النقدية",
+                    accountType:
+                      "income",
+                  },
+                );
+
+              const amountMinor =
+                Math.abs(
+                  settlementAmountMinor,
+                );
+
+              await postFinanceTransaction(
+                tx,
+                {
+                  publicId:
+                    `FIN-EXC-CASH-${exchange.publicId}`,
+                  idempotencyKey:
+                    `pos-exchange:${exchange.id}:cash-settlement`,
+                  businessDate:
+                    exchange.businessDate,
+                  transactionType:
+                    "adjustment",
+                  sourceType:
+                    "exchange",
+                  sourceId:
+                    String(
+                      exchange.id,
+                    ),
+                  sourceEvent:
+                    "cash_settlement",
+                  cashSessionId:
+                    session.id,
+                  notes:
+                    settlementAmountMinor >
+                    0
+                      ? `فرق تبديل نقدي محصل ${exchange.publicId}`
+                      : `فرق تبديل نقدي مرجع ${exchange.publicId}`,
+                  createdByUserId:
+                    user.id,
+                  lines: [
+                    {
+                      accountId:
+                        cashAccount.id,
+                      debitMinor:
+                        settlementAmountMinor >
+                        0
+                          ? amountMinor
+                          : 0,
+                      creditMinor:
+                        settlementAmountMinor <
+                        0
+                          ? amountMinor
+                          : 0,
+                      memo:
+                        settlementAmountMinor >
+                        0
+                          ? `تحصيل فرق تبديل ${exchange.publicId}`
+                          : `رد فرق تبديل ${exchange.publicId}`,
+                    },
+                    {
+                      accountId:
+                        cashSalesAccount.id,
+                      debitMinor:
+                        settlementAmountMinor <
+                        0
+                          ? amountMinor
+                          : 0,
+                      creditMinor:
+                        settlementAmountMinor >
+                        0
+                          ? amountMinor
+                          : 0,
+                      memo:
+                        `فرق التبديل ${exchange.publicId}`,
+                    },
+                  ],
+                },
+              );
+            }
+
             const updatedSessionRows =
               await tx
                 .update(
