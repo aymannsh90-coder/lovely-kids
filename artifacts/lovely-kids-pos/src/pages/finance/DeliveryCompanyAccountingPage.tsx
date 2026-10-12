@@ -439,6 +439,7 @@ export default function DeliveryCompanyAccountingPage() {
               {summary.unsettledOrders.length > 0 && (
                 <button
                   type="button"
+                  className="secondary-button"
                   onClick={toggleAll}
                 >
                   {allSelected
@@ -566,6 +567,7 @@ export default function DeliveryCompanyAccountingPage() {
 
               <button
                 type="button"
+                className="primary-button"
                 disabled={
                   saving ||
                   selectedIds.length === 0 ||
@@ -653,6 +655,7 @@ export default function DeliveryCompanyAccountingPage() {
                             "posted" ? (
                               <button
                                 type="button"
+                                className="danger-button delivery-settlement-danger"
                                 disabled={
                                   reversingId !==
                                   null
