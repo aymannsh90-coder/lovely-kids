@@ -10724,3 +10724,41 @@ textarea:disabled {
     min-width: 340px;
   }
 }
+
+
+/* SALES INVOICE DOCUMENT FLOW FIX 2026-10-12 */
+@media screen and (min-width: 1001px) {
+  .route-content .sales-invoice-scroll-page {
+    height: auto !important;
+    min-height: 0 !important;
+    grid-template-rows: none !important;
+    overflow: visible !important;
+    padding-bottom: 24px;
+  }
+
+  .route-content
+    .sales-invoice-scroll-page
+    .accounting-invoice-lockable {
+    display: block;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .route-content
+    .sales-invoice-scroll-page
+    .accounting-invoice-table-wrap {
+    height: auto !important;
+    min-height: 205px;
+    max-height: none !important;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .route-content
+    .sales-invoice-scroll-page
+    .accounting-invoice-bottom {
+    position: static;
+    margin-bottom: 8px;
+  }
+}
+/* END SALES INVOICE DOCUMENT FLOW FIX 2026-10-12 */

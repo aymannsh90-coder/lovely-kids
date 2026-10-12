@@ -584,6 +584,11 @@ function toPosProductLookup(
   barcode: string | null,
   color: string | null,
   size: string | null,
+  barcodes: Array<{
+    barcode: string;
+    color: string | null;
+    size: string | null;
+  }> = [],
 ) {
   const colorVariants = (product.colorVariants as ColorVariant[] | null) ?? [];
 
@@ -611,6 +616,9 @@ function toPosProductLookup(
   return {
     productId: String(product.id),
     barcode,
+    primaryBarcode:
+      product.barcode?.trim() || null,
+    barcodes,
     productCode: product.productCode ?? null,
     nameAr: product.nameAr,
     image: product.image,
@@ -798,6 +806,7 @@ async function handleProductSearch(request: Request, db: Db, env: Env) {
           selectedBarcode,
           selectedMapping?.color ?? null,
           selectedMapping?.size ?? null,
+          extraBarcodes,
         ),
       };
     })
@@ -856,12 +865,31 @@ async function handleBarcodeLookup(request: Request, db: Db, env: Env) {
     return json({ error: "لم يتم العثور على المنتج" }, 404);
   }
 
+  const productBarcodeRows =
+    await db
+      .select({
+        barcode:
+          productBarcodesTable.barcode,
+        color:
+          productBarcodesTable.color,
+        size:
+          productBarcodesTable.size,
+      })
+      .from(productBarcodesTable)
+      .where(
+        eq(
+          productBarcodesTable.productId,
+          product.id,
+        ),
+      );
+
   return json(
     toPosProductLookup(
       product,
       barcode,
       mapping?.color ?? null,
       mapping?.size ?? null,
+      productBarcodeRows,
     ),
   );
 }
