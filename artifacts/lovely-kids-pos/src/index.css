@@ -11381,3 +11381,295 @@ textarea:disabled {
   }
 }
 /* SALES ANALYTICS END */
+
+
+/* INVENTORY VALUATION START */
+.inventory-valuation-page {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 32px;
+}
+
+.inventory-valuation-hero,
+.inventory-valuation-filters,
+.inventory-valuation-table-card,
+.inventory-valuation-warning {
+  border: 1px solid #e6edf3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.04);
+}
+
+.inventory-valuation-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+}
+
+.inventory-valuation-hero h1 {
+  margin: 3px 0 6px;
+  font-size: 26px;
+}
+
+.inventory-valuation-hero p {
+  margin: 0;
+  color: #667085;
+  line-height: 1.8;
+}
+
+.inventory-valuation-eyebrow {
+  color: #d91477;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.inventory-valuation-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(130px, 0.8fr)) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.inventory-valuation-filters label {
+  display: grid;
+  gap: 5px;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inventory-valuation-filters input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.inventory-valuation-filters .secondary-button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.inventory-valuation-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.inventory-valuation-metric {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e6edf3;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.inventory-valuation-metric.is-emphasis {
+  border-color: #efc9df;
+  background: linear-gradient(145deg, #fff7fb, #fff);
+}
+
+.inventory-valuation-metric > span,
+.inventory-valuation-metric > strong,
+.inventory-valuation-metric > small {
+  display: block;
+}
+
+.inventory-valuation-metric > span {
+  margin-bottom: 8px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inventory-valuation-metric > strong {
+  color: #101828;
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.inventory-valuation-metric.is-emphasis > strong {
+  color: #c81474;
+}
+
+.inventory-valuation-metric > small {
+  margin-top: 7px;
+  color: #98a2b3;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.inventory-valuation-warning {
+  padding: 15px 18px;
+  border-color: #f3cf86;
+  background: #fffaf0;
+}
+
+.inventory-valuation-warning strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #9a6700;
+}
+
+.inventory-valuation-warning p {
+  margin: 0;
+  color: #7a5b15;
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.inventory-valuation-table-card {
+  overflow: hidden;
+}
+
+.inventory-valuation-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 17px 19px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.inventory-valuation-table-head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.inventory-valuation-table-head p {
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+}
+
+.inventory-valuation-table-head > span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f5f7fa;
+  color: #475467;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.inventory-valuation-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.inventory-valuation-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+}
+
+.inventory-valuation-table th,
+.inventory-valuation-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #eef2f6;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.inventory-valuation-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.inventory-valuation-table td {
+  color: #344054;
+  font-size: 12px;
+}
+
+.inventory-valuation-table td:nth-child(n + 4) {
+  white-space: nowrap;
+}
+
+.inventory-valuation-table td strong,
+.inventory-valuation-table td small {
+  display: block;
+}
+
+.inventory-valuation-table td small {
+  margin-top: 3px;
+  color: #98a2b3;
+  font-size: 10px;
+}
+
+.inventory-valuation-table tr.is-hidden-product td {
+  background: #fcfcfd;
+  opacity: 0.82;
+}
+
+.inventory-valuation-table tbody tr:hover td {
+  background: #fffafd;
+}
+
+.inventory-valuation-empty {
+  padding: 32px !important;
+  color: #98a2b3 !important;
+  text-align: center !important;
+}
+
+.inventory-cost-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.inventory-cost-state.is-ok {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.inventory-cost-state.is-warning {
+  background: #fff4e5;
+  color: #b54708;
+}
+
+@media (max-width: 1180px) {
+  .inventory-valuation-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .inventory-valuation-search {
+    grid-column: span 2;
+  }
+
+  .inventory-valuation-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .inventory-valuation-hero,
+  .inventory-valuation-table-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inventory-valuation-filters,
+  .inventory-valuation-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-valuation-search {
+    grid-column: auto;
+  }
+}
+/* INVENTORY VALUATION END */
