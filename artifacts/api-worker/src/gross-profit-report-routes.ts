@@ -500,11 +500,13 @@ async function handleGrossProfit(
       posSaleCoverageComplete =
         false;
 
-      addMissingSoldCost(
-        item.productId,
-        item.quantity,
-        "pos",
-      );
+      if (!cost) {
+        addMissingSoldCost(
+          item.productId,
+          item.quantity,
+          "pos",
+        );
+      }
 
       continue;
     }
@@ -898,11 +900,13 @@ async function handleGrossProfit(
       exchangeCoverageComplete =
         false;
 
-      addMissingSoldCost(
-        item.productId,
-        item.quantity,
-        "exchange",
-      );
+      if (!cost) {
+        addMissingSoldCost(
+          item.productId,
+          item.quantity,
+          "exchange",
+        );
+      }
 
       continue;
     }
@@ -1300,17 +1304,19 @@ async function handleGrossProfit(
           onlineCoverageComplete =
             false;
 
-          const productId =
-            Number(item.id);
+          if (!cost) {
+            const productId =
+              Number(item.id);
 
-          addMissingSoldCost(
-            Number.isSafeInteger(productId) &&
-              productId > 0
-              ? productId
-              : null,
-            quantity,
-            "online",
-          );
+            addMissingSoldCost(
+              Number.isSafeInteger(productId) &&
+                productId > 0
+                ? productId
+                : null,
+              quantity,
+              "online",
+            );
+          }
 
           return;
         }
