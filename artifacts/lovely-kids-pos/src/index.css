@@ -12365,3 +12365,22 @@ textarea:disabled {
   }
 }
 /* PRODUCT ECOMMERCE ANALYTICS END */
+
+
+/* POS UI CONSISTENCY START */
+.delivery-settlement-danger {
+  width: auto;
+  min-width: 96px;
+  min-height: 34px;
+  padding: 5px 12px;
+  justify-self: auto;
+  box-shadow: none;
+}
+
+.sales-analytics-presets .secondary-button {
+  min-height: 38px;
+  padding-inline: 14px;
+  white-space: nowrap;
+}
+/* POS UI CONSISTENCY END */
+
