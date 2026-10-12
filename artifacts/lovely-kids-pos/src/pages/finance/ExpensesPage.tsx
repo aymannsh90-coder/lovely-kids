@@ -96,10 +96,22 @@ const DEFAULT_EXPENSE_PRESETS:
       icon: "🛠️",
       pattern: /صيان|تصليح/,
     },
+    {
+      key: "preset:charity",
+      title: "صدقات يومية",
+      icon: "🤲",
+      pattern: /صدق|صدقات|تبرع|تبرعات/,
+    },
+    {
+      key: "preset:nylon-bags",
+      title: "أكياس نايلون",
+      icon: "🛍️",
+      pattern: /أكياس|اكياس|نايلون|نايلن/,
+    },
   ];
 
 const PIN_STORAGE_KEY =
-  "lovely-kids-pos.finance-expense-pins.v2";
+  "lovely-kids-pos.finance-expense-pins.v3";
 
 function errorText(error: unknown) {
   return error instanceof Error
@@ -191,6 +203,22 @@ function expenseIcon(name: string) {
   }
 
   if (
+    /صدق|صدقات|تبرع|تبرعات/.test(
+      value,
+    )
+  ) {
+    return "🤲";
+  }
+
+  if (
+    /أكياس|اكياس|نايلون|نايلن/.test(
+      value,
+    )
+  ) {
+    return "🛍️";
+  }
+
+  if (
     /قرطاس|مكتب|طباعة/.test(value)
   ) {
     return "✏️";
@@ -233,6 +261,8 @@ function categoryPriority(name: string) {
     /توصيل|مواصل|نقل/,
     /محروقات|بنزين|سولار|ديزل|وقود/,
     /صيان|تصليح/,
+    /صدق|صدقات|تبرع|تبرعات/,
+    /أكياس|اكياس|نايلون|نايلن/,
   ];
 
   const index =
