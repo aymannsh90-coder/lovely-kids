@@ -28,6 +28,7 @@ import TodaySalesPage from "../pages/sales/TodaySalesPage";
 import CustomerBalancesReportPage from "../pages/reports/CustomerBalancesReportPage";
 import CustomerStatementReportPage from "../pages/reports/CustomerStatementReportPage";
 import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
+import SalesAnalyticsPage from "../pages/reports/SalesAnalyticsPage";
 import StatementsPage from "../pages/reports/StatementsPage";
 
 export default function AppRouter() {
@@ -242,6 +243,15 @@ export default function AppRouter() {
         <Route
           path="reports/customer-statement"
           element={<CustomerStatementReportPage />}
+        />
+
+        <Route
+          path="reports/sales"
+          element={
+            <RequireOwner>
+              <SalesAnalyticsPage />
+            </RequireOwner>
+          }
         />
 
         <Route
