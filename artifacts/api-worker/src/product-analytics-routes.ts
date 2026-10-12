@@ -22,12 +22,6 @@ import type { Env, openDb } from "./db";
 type Db =
   Awaited<ReturnType<typeof openDb>>["db"];
 
-type RequestWithCf = Request & {
-  cf?: {
-    country?: string | null;
-  };
-};
-
 const json = (
   data: unknown,
   status = 200,
