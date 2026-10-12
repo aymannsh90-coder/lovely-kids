@@ -3,6 +3,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export const ANALYTICS_VISITOR_ID_KEY =
   "lovely_kids_analytics_visitor_id";
 
+let visitorIdPromise:
+  Promise<string> | null =
+  null;
+
 function createVisitorId() {
   const cryptoObject =
     globalThis.crypto as
@@ -32,22 +36,36 @@ function createVisitorId() {
 }
 
 export async function getOrCreateAnalyticsVisitorId() {
-  const existing =
-    await AsyncStorage.getItem(
-      ANALYTICS_VISITOR_ID_KEY,
-    );
-
-  if (existing) {
-    return existing;
+  if (visitorIdPromise) {
+    return visitorIdPromise;
   }
 
-  const created =
-    createVisitorId();
+  visitorIdPromise =
+    (async () => {
+      const existing =
+        await AsyncStorage.getItem(
+          ANALYTICS_VISITOR_ID_KEY,
+        );
 
-  await AsyncStorage.setItem(
-    ANALYTICS_VISITOR_ID_KEY,
-    created,
-  );
+      if (existing) {
+        return existing;
+      }
 
-  return created;
+      const created =
+        createVisitorId();
+
+      await AsyncStorage.setItem(
+        ANALYTICS_VISITOR_ID_KEY,
+        created,
+      );
+
+      return created;
+    })();
+
+  try {
+    return await visitorIdPromise;
+  } finally {
+    visitorIdPromise =
+      null;
+  }
 }
