@@ -663,18 +663,18 @@ export default function EmployeesPage() {
             editName.trim(),
           phone:
             editPhone.trim() ||
-            undefined,
+            null,
           baseSalary:
             editSalary.trim() ||
             "0",
           hireDate:
             editHireDate ||
-            undefined,
+            null,
           status:
             editStatus,
           notes:
             editNotes.trim() ||
-            undefined,
+            null,
         },
       );
 
