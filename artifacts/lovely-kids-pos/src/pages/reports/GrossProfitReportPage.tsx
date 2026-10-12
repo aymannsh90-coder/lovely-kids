@@ -10,12 +10,11 @@ import {
 import {
   ApiError,
   getGrossProfitReport,
+  setOwnerOpeningCost,
   type GrossProfitChannelSummary,
+  type GrossProfitMissingCostProduct,
   type GrossProfitReport,
 } from "../../lib/api";
-
-import {
-} from "../../lib/format";
 
 function dateInput(
   date: Date,
@@ -121,6 +120,43 @@ function percent(
   return value === null
     ? "—"
     : `${reportNumber(value)}%`;
+}
+
+
+function missingCostChannelLabel(
+  channel:
+    GrossProfitMissingCostProduct["channels"][number],
+) {
+  return channel === "pos"
+    ? "POS"
+    : channel === "exchange"
+      ? "تبديل"
+      : "أونلاين";
+}
+
+function parseOpeningCostMinor(
+  value: string,
+) {
+  const numeric =
+    Number(
+      value
+        .trim()
+        .replace(",", "."),
+    );
+
+  if (
+    !Number.isFinite(numeric) ||
+    numeric < 0
+  ) {
+    return null;
+  }
+
+  const minor =
+    Math.round(numeric * 100);
+
+  return Number.isSafeInteger(minor)
+    ? minor
+    : null;
 }
 
 const cardStyle = {
@@ -423,6 +459,33 @@ export default function GrossProfitReportPage() {
   ] =
     useState("");
 
+  const [
+    missingCostsOpen,
+    setMissingCostsOpen,
+  ] = useState(false);
+
+  const [
+    openingCostInputs,
+    setOpeningCostInputs,
+  ] =
+    useState<
+      Record<string, string>
+    >({});
+
+  const [
+    savingCostProductId,
+    setSavingCostProductId,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const [
+    costActionError,
+    setCostActionError,
+  ] =
+    useState("");
+
   async function loadRange(
     nextFrom: string,
     nextTo: string,
@@ -460,6 +523,86 @@ export default function GrossProfitReportPage() {
     }
   }
 
+  async function handleOpeningCost(
+    product:
+      GrossProfitMissingCostProduct,
+  ) {
+    if (!token) {
+      return;
+    }
+
+    const unitCostMinor =
+      parseOpeningCostMinor(
+        openingCostInputs[
+          product.productId
+        ] ?? "",
+      );
+
+    if (
+      unitCostMinor === null
+    ) {
+      setCostActionError(
+        "أدخل تكلفة صحيحة للقطعة بالشيكل.",
+      );
+      return;
+    }
+
+    setSavingCostProductId(
+      product.productId,
+    );
+    setCostActionError("");
+
+    try {
+      await setOwnerOpeningCost(
+        token,
+        {
+          productId:
+            product.productId,
+          unitCostMinor,
+          costQuality:
+            "confirmed",
+        },
+      );
+
+      setOpeningCostInputs(
+        (current) => {
+          const next = {
+            ...current,
+          };
+
+          delete next[
+            product.productId
+          ];
+
+          return next;
+        },
+      );
+
+      await loadRange(
+        report?.range.from ??
+          from,
+        report?.range.to ??
+          to,
+      );
+    } catch (error) {
+      if (
+        error instanceof
+          ApiError &&
+        error.status === 401
+      ) {
+        clearAuthentication();
+      }
+
+      setCostActionError(
+        errorMessage(error),
+      );
+    } finally {
+      setSavingCostProductId(
+        null,
+      );
+    }
+  }
+
   function applyPreset(
     range: {
       from: string;
@@ -483,6 +626,57 @@ export default function GrossProfitReportPage() {
     // Initial report only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    if (!missingCostsOpen) {
+      return;
+    }
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (
+        event.key === "Escape"
+      ) {
+        setMissingCostsOpen(
+          false,
+        );
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+  }, [missingCostsOpen]);
+
+  useEffect(() => {
+    if (
+      missingCostsOpen &&
+      report &&
+      report.missingCostProducts
+        .length === 0
+    ) {
+      setMissingCostsOpen(false);
+    }
+  }, [
+    missingCostsOpen,
+    report,
+  ]);
+
+  const missingSoldQuantity =
+    report?.missingCostProducts.reduce(
+      (total, product) =>
+        total +
+        product.soldQuantity,
+      0,
+    ) ?? 0;
 
   return (
     <div
@@ -648,6 +842,30 @@ export default function GrossProfitReportPage() {
             </section>
           )}
 
+          {report.missingCostProducts.length >
+            0 && (
+            <button
+              type="button"
+              className="gross-profit-missing-cost-card"
+              onClick={() => {
+                setCostActionError("");
+                setMissingCostsOpen(true);
+              }}
+            >
+              <span>
+                أصناف مباعة بدون تكلفة
+              </span>
+
+              <strong>
+                {report.missingCostProducts.length}
+              </strong>
+
+              <small>
+                {missingSoldQuantity} قطعة ضمن الفترة — اضغط لإدخال التكلفة الافتتاحية
+              </small>
+            </button>
+          )}
+
           <ChannelCard
             title="الإجمالي"
             data={
@@ -702,6 +920,185 @@ export default function GrossProfitReportPage() {
             </p>
           </section>
         </>
+      )}
+
+      {missingCostsOpen &&
+        report && (
+        <div
+          className="gross-profit-cost-modal-backdrop"
+          role="presentation"
+          onMouseDown={() =>
+            setMissingCostsOpen(
+              false,
+            )
+          }
+        >
+          <section
+            className="gross-profit-cost-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="أصناف مباعة بدون تكلفة"
+            onMouseDown={(
+              event,
+            ) =>
+              event.stopPropagation()
+            }
+          >
+            <header className="gross-profit-cost-modal-head">
+              <div>
+                <h2>
+                  أصناف مباعة بدون تكلفة
+                </h2>
+
+                <p>
+                  أدخل تكلفة القطعة صنفًا صنفًا. بعد الحفظ يتم تحديث التكلفة التاريخية وإعادة حساب التقرير تلقائيًا.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  setMissingCostsOpen(
+                    false,
+                  )
+                }
+              >
+                إغلاق ×
+              </button>
+            </header>
+
+            {costActionError && (
+              <div className="alert error-alert gross-profit-cost-modal-error">
+                {costActionError}
+              </div>
+            )}
+
+            {report.unresolvedMissingCostLines >
+              0 && (
+              <div className="gross-profit-cost-modal-note">
+                يوجد أيضًا {report.unresolvedMissingCostLines} سطر بيع قديم غير مربوط برقم صنف، لذلك يحتاج مراجعة منفصلة.
+              </div>
+            )}
+
+            <div className="gross-profit-cost-list">
+              {report.missingCostProducts.map(
+                (product) => (
+                  <article
+                    className="gross-profit-cost-row"
+                    key={
+                      product.productId
+                    }
+                  >
+                    <img
+                      src={
+                        product.image
+                      }
+                      alt=""
+                    />
+
+                    <div className="gross-profit-cost-product">
+                      <strong>
+                        {product.nameAr}
+                      </strong>
+
+                      <b>
+                        كود الصنف:{" "}
+                        {product.productCode ??
+                          "غير متوفر"}
+                      </b>
+
+                      {product.barcode && (
+                        <small dir="ltr">
+                          Barcode:{" "}
+                          {product.barcode}
+                        </small>
+                      )}
+
+                      <div className="gross-profit-cost-badges">
+                        {product.channels.map(
+                          (channel) => (
+                            <span
+                              key={
+                                channel
+                              }
+                            >
+                              {missingCostChannelLabel(
+                                channel,
+                              )}
+                            </span>
+                          ),
+                        )}
+
+                        <span>
+                          الكمية المباعة:{" "}
+                          {product.soldQuantity}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="gross-profit-cost-action">
+                      {product.canSetOpeningCost ? (
+                        <>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={
+                              openingCostInputs[
+                                product.productId
+                              ] ?? ""
+                            }
+                            onChange={(
+                              event,
+                            ) =>
+                              setOpeningCostInputs(
+                                (
+                                  current,
+                                ) => ({
+                                  ...current,
+                                  [product.productId]:
+                                    event
+                                      .target
+                                      .value,
+                                }),
+                              )
+                            }
+                            placeholder="تكلفة القطعة بالشيكل"
+                          />
+
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={
+                              savingCostProductId ===
+                              product.productId
+                            }
+                            onClick={() =>
+                              void handleOpeningCost(
+                                product,
+                              )
+                            }
+                          >
+                            {savingCostProductId ===
+                            product.productId
+                              ? "جارٍ الحفظ..."
+                              : "إضافة التكلفة الافتتاحية"}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="gross-profit-cost-review">
+                          لهذا الصنف سجل تكلفة موجود مسبقًا؛ النقص يحتاج مراجعة حركة التكلفة بدل إدخال افتتاحية جديدة.
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ),
+              )}
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );
