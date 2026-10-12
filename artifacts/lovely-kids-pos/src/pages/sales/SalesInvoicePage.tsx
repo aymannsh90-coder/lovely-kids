@@ -134,6 +134,41 @@ function getSizes(product: PosProductLookup, color: string | null) {
   return product.sizes;
 }
 
+function getBarcodeForSelection(
+  product: PosProductLookup,
+  color: string | null,
+  size: string | null,
+) {
+  const exactMapping =
+    product.barcodes.find(
+      (entry) =>
+        entry.color === color &&
+        entry.size === size,
+    );
+
+  if (exactMapping) {
+    return exactMapping.barcode;
+  }
+
+  const partialMapping =
+    product.barcodes.find(
+      (entry) =>
+        entry.color === color &&
+        entry.size === null,
+    ) ??
+    product.barcodes.find(
+      (entry) =>
+        entry.color === null &&
+        entry.size === size,
+    );
+
+  if (partialMapping) {
+    return partialMapping.barcode;
+  }
+
+  return product.primaryBarcode ?? "";
+}
+
 function getLineStock(line: InvoiceLine) {
   if (line.product.colorVariants.length > 0 && line.color) {
     const variant = line.product.colorVariants.find(
@@ -194,6 +229,8 @@ function toStoredInvoiceLine(
   const product: PosProductLookup = {
     productId: item.productId ?? `stored-${item.id}`,
     barcode: item.barcode ?? "",
+    primaryBarcode: item.barcode ?? null,
+    barcodes: [],
     productCode: item.productCode,
     nameAr: item.productNameAr,
     image: item.productImage ?? "",
@@ -488,6 +525,30 @@ export default function SalesInvoicePage() {
     updateLine(line.id, {
       color,
       size,
+      barcode:
+        getBarcodeForSelection(
+          line.product,
+          color,
+          size,
+        ),
+    });
+  }
+
+  function changeSize(
+    line: InvoiceLine,
+    sizeValue: string,
+  ) {
+    const size =
+      sizeValue || null;
+
+    updateLine(line.id, {
+      size,
+      barcode:
+        getBarcodeForSelection(
+          line.product,
+          line.color,
+          size,
+        ),
     });
   }
 
@@ -2086,6 +2147,7 @@ export default function SalesInvoicePage() {
                       <td>
                         {colors.length > 0 ? (
                           <select
+                            data-invoice-field="color"
                             value={line.color ?? ""}
                             onChange={(event) =>
                               changeColor(line, event.target.value)
@@ -2107,11 +2169,13 @@ export default function SalesInvoicePage() {
                       <td>
                         {sizes.length > 0 ? (
                           <select
+                            data-invoice-field="size"
                             value={line.size ?? ""}
                             onChange={(event) =>
-                              updateLine(line.id, {
-                                size: event.target.value || null,
-                              })
+                              changeSize(
+                                line,
+                                event.target.value,
+                              )
                             }
                           >
                             <option value="">اختر المقاس</option>
@@ -2131,6 +2195,7 @@ export default function SalesInvoicePage() {
 
                       <td>
                         <input
+                          data-invoice-field="quantity"
                           dir="ltr"
                           type="number"
                           min="1"
