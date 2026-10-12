@@ -3,29 +3,10 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 
 import { API_BASE } from "@/constants/api";
-
-const VISITOR_ID_KEY =
-  "lovely_kids_analytics_visitor_id";
+import { getOrCreateAnalyticsVisitorId } from "@/utils/analyticsVisitor";
 
 const LAST_SENT_DAY_KEY =
   "lovely_kids_analytics_last_sent_day";
-
-function createVisitorId() {
-  const cryptoObject = globalThis.crypto as
-    | { randomUUID?: () => string }
-    | undefined;
-
-  if (cryptoObject?.randomUUID) {
-    return cryptoObject.randomUUID().replace(/-/g, "_");
-  }
-
-  return [
-    "lk",
-    Date.now().toString(36),
-    Math.random().toString(36).slice(2),
-    Math.random().toString(36).slice(2),
-  ].join("_");
-}
 
 function currentDayKey() {
   try {
@@ -57,17 +38,8 @@ export function useVisitorAnalytics() {
           return;
         }
 
-        let visitorId =
-          await AsyncStorage.getItem(VISITOR_ID_KEY);
-
-        if (!visitorId) {
-          visitorId = createVisitorId();
-
-          await AsyncStorage.setItem(
-            VISITOR_ID_KEY,
-            visitorId,
-          );
-        }
+        const visitorId =
+          await getOrCreateAnalyticsVisitorId();
 
         if (cancelled) return;
 
