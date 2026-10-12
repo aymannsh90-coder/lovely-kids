@@ -1026,7 +1026,7 @@ export default function BankingPage() {
                         ) ||
                           null,
                       );
-                    }
+                    }}
                     disabled={
                       transferSaving
                     }
@@ -1094,7 +1094,7 @@ export default function BankingPage() {
                         ) ||
                           null,
                       );
-                    }
+                    }}
                     disabled={
                       transferSaving ||
                       destinationOptions.length ===
@@ -1156,7 +1156,7 @@ export default function BankingPage() {
                           .target
                           .value,
                       );
-                    }
+                    }}
                     placeholder="0.00"
                     disabled={
                       transferSaving
@@ -1187,7 +1187,7 @@ export default function BankingPage() {
                           .target
                           .value,
                       );
-                    }
+                    }}
                     placeholder="مثال: إيداع نقدية اليوم في البنك"
                     disabled={
                       transferSaving
