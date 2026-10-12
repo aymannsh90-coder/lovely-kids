@@ -3,6 +3,7 @@ import {
   banksTable,
   cashSessionsTable,
   expenseCategoriesTable,
+  exchangeDocumentsTable,
   financeAccountsTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
@@ -396,6 +397,7 @@ async function handleCashStatement(
     sessions,
     sales,
     returns,
+    exchanges,
   ] =
     await Promise.all([
       db
@@ -486,6 +488,18 @@ async function handleCashStatement(
             registerKey,
           ),
         ),
+
+      db
+        .select()
+        .from(
+          exchangeDocumentsTable,
+        )
+        .where(
+          eq(
+            exchangeDocumentsTable.registerKey,
+            registerKey,
+          ),
+        ),
     ]);
 
   const events:
@@ -501,6 +515,12 @@ async function handleCashStatement(
     new Set<string>();
 
   const returnVoidPosted =
+    new Set<string>();
+
+  const exchangePosted =
+    new Set<string>();
+
+  const exchangeVoidPosted =
     new Set<string>();
 
   for (
@@ -547,6 +567,29 @@ async function handleCashStatement(
         "cash_refund_void"
       ) {
         returnVoidPosted.add(
+          row.sourceId,
+        );
+      }
+    }
+
+    if (
+      row.sourceType ===
+      "exchange"
+    ) {
+      if (
+        row.sourceEvent ===
+        "cash_settlement"
+      ) {
+        exchangePosted.add(
+          row.sourceId,
+        );
+      }
+
+      if (
+        row.sourceEvent ===
+        "cash_settlement_void"
+      ) {
+        exchangeVoidPosted.add(
           row.sourceId,
         );
       }
@@ -736,6 +779,105 @@ async function handleCashStatement(
         debitMinor:
           saleReturn.refundAmountMinor,
         creditMinor: 0,
+      });
+    }
+  }
+
+  for (
+    const exchange of exchanges
+  ) {
+    if (
+      exchange.settlementType !==
+        "cash" ||
+      exchange.settlementAmountMinor ===
+        0
+    ) {
+      continue;
+    }
+
+    const sourceId =
+      String(
+        exchange.id,
+      );
+
+    const amountMinor =
+      Math.abs(
+        exchange.settlementAmountMinor,
+      );
+
+    if (
+      !exchangePosted.has(
+        sourceId,
+      )
+    ) {
+      events.push({
+        key:
+          `legacy-exchange:${exchange.id}`,
+        at:
+          exchange.createdAt,
+        priority: 1,
+        publicId:
+          exchange.publicId,
+        sourceType:
+          "exchange",
+        sourceId,
+        sourceEvent:
+          "legacy_cash_settlement",
+        status:
+          exchange.status,
+        memo:
+          exchange.settlementAmountMinor >
+          0
+            ? `تحصيل فرق تبديل نقدي — ${exchange.publicId}`
+            : `رد فرق تبديل نقدي — ${exchange.publicId}`,
+        debitMinor:
+          exchange.settlementAmountMinor >
+          0
+            ? amountMinor
+            : 0,
+        creditMinor:
+          exchange.settlementAmountMinor <
+          0
+            ? amountMinor
+            : 0,
+      });
+    }
+
+    if (
+      exchange.status ===
+        "voided" &&
+      exchange.voidedAt &&
+      !exchangeVoidPosted.has(
+        sourceId,
+      )
+    ) {
+      events.push({
+        key:
+          `legacy-exchange-void:${exchange.id}`,
+        at:
+          exchange.voidedAt,
+        priority: 1,
+        publicId:
+          `VOID-${exchange.publicId}`,
+        sourceType:
+          "exchange",
+        sourceId,
+        sourceEvent:
+          "legacy_cash_settlement_void",
+        status:
+          "posted",
+        memo:
+          `إلغاء فرق تبديل نقدي — ${exchange.publicId}`,
+        debitMinor:
+          exchange.settlementAmountMinor <
+          0
+            ? amountMinor
+            : 0,
+        creditMinor:
+          exchange.settlementAmountMinor >
+          0
+            ? amountMinor
+            : 0,
       });
     }
   }
