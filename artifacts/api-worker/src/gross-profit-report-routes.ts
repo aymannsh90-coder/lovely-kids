@@ -13,6 +13,8 @@ import {
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
+  productCostStateTable,
+  productsTable,
 } from "@workspace/db/schema";
 import {
   and,
@@ -334,6 +336,51 @@ async function handleGrossProfit(
     );
   }
 
+  type MissingCostChannel =
+    | "pos"
+    | "exchange"
+    | "online";
+
+  const missingCostByProduct =
+    new Map<
+      number,
+      {
+        soldQuantity: number;
+        channels: Set<MissingCostChannel>;
+      }
+    >();
+
+  let unresolvedMissingCostLines = 0;
+
+  const addMissingSoldCost = (
+    productId: number | null,
+    quantity: number,
+    channel: MissingCostChannel,
+  ) => {
+    if (
+      productId === null ||
+      !Number.isSafeInteger(productId) ||
+      productId <= 0
+    ) {
+      unresolvedMissingCostLines += 1;
+      return;
+    }
+
+    const current =
+      missingCostByProduct.get(productId) ?? {
+        soldQuantity: 0,
+        channels: new Set<MissingCostChannel>(),
+      };
+
+    current.soldQuantity += quantity;
+    current.channels.add(channel);
+
+    missingCostByProduct.set(
+      productId,
+      current,
+    );
+  };
+
   // ==========================================================
   // POS SALES
   // ==========================================================
@@ -368,6 +415,8 @@ async function handleGrossProfit(
           .select({
             id:
               posSaleItemsTable.id,
+            productId:
+              posSaleItemsTable.productId,
             quantity:
               posSaleItemsTable.quantity,
           })
@@ -450,6 +499,13 @@ async function handleGrossProfit(
     ) {
       posSaleCoverageComplete =
         false;
+
+      addMissingSoldCost(
+        item.productId,
+        item.quantity,
+        "pos",
+      );
+
       continue;
     }
 
@@ -681,6 +737,8 @@ async function handleGrossProfit(
             .select({
               id:
                 exchangeSaleItemsTable.id,
+              productId:
+                exchangeSaleItemsTable.productId,
               quantity:
                 exchangeSaleItemsTable.quantity,
             })
@@ -839,6 +897,13 @@ async function handleGrossProfit(
     ) {
       exchangeCoverageComplete =
         false;
+
+      addMissingSoldCost(
+        item.productId,
+        item.quantity,
+        "exchange",
+      );
+
       continue;
     }
 
@@ -1189,6 +1254,7 @@ async function handleGrossProfit(
 
     const items =
       order.items as Array<{
+        id?: unknown;
         quantity?: unknown;
       }>;
 
@@ -1233,6 +1299,19 @@ async function handleGrossProfit(
         ) {
           onlineCoverageComplete =
             false;
+
+          const productId =
+            Number(item.id);
+
+          addMissingSoldCost(
+            Number.isSafeInteger(productId) &&
+              productId > 0
+              ? productId
+              : null,
+            quantity,
+            "online",
+          );
+
           return;
         }
 
@@ -1407,6 +1486,94 @@ async function handleGrossProfit(
       ),
   };
 
+  const missingCostProductIds =
+    [...missingCostByProduct.keys()];
+
+  const missingCostProductRows =
+    missingCostProductIds.length > 0
+      ? await db
+          .select({
+            id: productsTable.id,
+            nameAr:
+              productsTable.nameAr,
+            productCode:
+              productsTable.productCode,
+            barcode:
+              productsTable.barcode,
+            image:
+              productsTable.image,
+            deletedAt:
+              productsTable.deletedAt,
+            costProductId:
+              productCostStateTable.productId,
+          })
+          .from(productsTable)
+          .leftJoin(
+            productCostStateTable,
+            eq(
+              productCostStateTable.productId,
+              productsTable.id,
+            ),
+          )
+          .where(
+            inArray(
+              productsTable.id,
+              missingCostProductIds,
+            ),
+          )
+      : [];
+
+  const missingCostProducts =
+    missingCostProductRows
+      .map((product) => {
+        const aggregate =
+          missingCostByProduct.get(
+            product.id,
+          );
+
+        if (!aggregate) {
+          return null;
+        }
+
+        return {
+          productId:
+            String(product.id),
+          nameAr:
+            product.nameAr,
+          productCode:
+            product.productCode ??
+            null,
+          barcode:
+            product.barcode ??
+            null,
+          image:
+            product.image,
+          soldQuantity:
+            aggregate.soldQuantity,
+          channels:
+            [...aggregate.channels],
+          canSetOpeningCost:
+            product.costProductId ===
+              null &&
+            product.deletedAt ===
+              null,
+        };
+      })
+      .filter(
+        (
+          product,
+        ): product is NonNullable<
+          typeof product
+        > => product !== null,
+      )
+      .sort(
+        (left, right) =>
+          right.soldQuantity -
+            left.soldQuantity ||
+          Number(left.productId) -
+            Number(right.productId),
+      );
+
   const warnings: string[] =
     [];
 
@@ -1467,6 +1634,9 @@ async function handleGrossProfit(
     },
 
     warnings,
+
+    missingCostProducts,
+    unresolvedMissingCostLines,
 
     methodology: {
       posDateBasis:
