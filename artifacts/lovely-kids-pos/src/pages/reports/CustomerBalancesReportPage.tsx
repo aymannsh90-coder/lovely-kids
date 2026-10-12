@@ -286,12 +286,17 @@ export default function CustomerBalancesReportPage() {
 
   return (
     <section
-      className="work-panel"
+      className="work-panel customer-balances-page"
       dir="rtl"
     >
       <style>{`
         .customer-balances-print {
           background: #fff;
+        }
+
+        .customer-balances-page {
+          display: grid;
+          gap: 16px;
         }
 
         .customer-balances-heading {
@@ -300,16 +305,22 @@ export default function CustomerBalancesReportPage() {
           align-items: center;
           gap: 14px;
           flex-wrap: wrap;
-          margin-bottom: 18px;
+          margin-bottom: 0;
+          padding: 16px 18px;
+          border: 1px solid #e6edf3;
+          border-radius: 14px;
+          background: #fff;
         }
 
         .customer-balances-heading h2 {
           margin: 0 0 5px;
+          font-size: 20px;
         }
 
         .customer-balances-heading p {
           margin: 0;
-          color: #67757d;
+          color: #667085;
+          font-size: 12px;
         }
 
         .customer-balances-summary {
@@ -349,6 +360,10 @@ export default function CustomerBalancesReportPage() {
             minmax(180px, 1fr);
           gap: 12px;
           margin-bottom: 18px;
+          padding: 14px;
+          border: 1px solid #e6edf3;
+          border-radius: 14px;
+          background: #fff;
         }
 
         .customer-balances-filters label span {
@@ -360,8 +375,14 @@ export default function CustomerBalancesReportPage() {
         .customer-balances-filters input,
         .customer-balances-filters select {
           width: 100%;
-          min-height: 42px;
+          min-height: 40px;
           box-sizing: border-box;
+          padding: 0 10px;
+          border: 1px solid #cfd9df;
+          border-radius: 7px;
+          background: #fff;
+          color: #344054;
+          font-size: 13px;
         }
 
         .customer-balances-table {
@@ -389,13 +410,21 @@ export default function CustomerBalancesReportPage() {
         }
 
         .customer-balances-name-button {
-          border: 0;
-          background: transparent;
-          padding: 0;
+          min-height: 30px;
+          padding: 4px 10px;
+          border: 1px solid #efbfd7;
+          border-radius: 7px;
+          background: #fff5fa;
+          color: #ad1463;
           font: inherit;
-          font-weight: 800;
-          color: #b31469;
+          font-size: 12px;
+          font-weight: 850;
           cursor: pointer;
+        }
+
+        .customer-balances-name-button:hover {
+          border-color: #e91e8c;
+          background: #fff0f8;
         }
 
         .customer-balances-debit {
