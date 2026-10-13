@@ -13487,7 +13487,7 @@ textarea:disabled {
 
 .inventory-intelligence-table-wrap {
   width: 100%;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .inventory-intelligence-table {
@@ -13512,14 +13512,14 @@ textarea:disabled {
   background: #f8fafc;
   box-shadow: 0 1px 0 #dfe5ec, 0 4px 10px rgba(16, 24, 40, 0.08);
   color: #344054;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   white-space: nowrap;
 }
 
 .inventory-intelligence-table td {
   color: #344054;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -13559,7 +13559,7 @@ textarea:disabled {
 .inventory-intelligence-product strong {
   max-width: 360px;
   overflow: hidden;
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -13568,17 +13568,17 @@ textarea:disabled {
 .inventory-intelligence-table td > small {
   margin-top: 4px;
   color: #7f8a9a;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .inventory-intelligence-badge,
 .inventory-intelligence-action {
   display: inline-flex;
   align-items: center;
-  min-height: 27px;
-  padding: 4px 9px;
+  min-height: 28px;
+  padding: 4px 10px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -13615,7 +13615,7 @@ textarea:disabled {
 .inventory-intelligence-stock {
   display: block;
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -13683,6 +13683,27 @@ textarea:disabled {
   margin: 0 0 14px;
 }
 
+@media (max-width: 1180px) {
+  .inventory-intelligence-table-card {
+    overflow: hidden;
+  }
+
+  .inventory-intelligence-table-wrap {
+    overflow-x: auto;
+  }
+
+  .inventory-intelligence-table th {
+    position: static;
+    box-shadow: none;
+  }
+}
+
+@media screen and (min-width: 1181px) and (max-width: 1400px) {
+  .inventory-intelligence-table th {
+    top: 144px;
+  }
+}
+
 @media (max-width: 1250px) {
   .inventory-intelligence-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -13717,8 +13738,5 @@ textarea:disabled {
     grid-column: auto;
   }
 
-  .inventory-intelligence-table th {
-    top: 0;
-  }
 }
 /* INVENTORY INTELLIGENCE END */
