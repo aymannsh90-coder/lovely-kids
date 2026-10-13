@@ -493,6 +493,15 @@ export default function InventoryIntelligenceReportPage() {
           ) {
             if (
               left.sellThrough30Percent ===
+                null &&
+              right.sellThrough30Percent ===
+                null
+            ) {
+              return 0;
+            }
+
+            if (
+              left.sellThrough30Percent ===
               null
             ) {
               return 1;
@@ -515,6 +524,15 @@ export default function InventoryIntelligenceReportPage() {
             sortMode ===
             "days_of_supply"
           ) {
+            if (
+              left.daysOfSupply ===
+                null &&
+              right.daysOfSupply ===
+                null
+            ) {
+              return 0;
+            }
+
             if (
               left.daysOfSupply ===
               null
@@ -805,12 +823,22 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
-          label="بلا سرعة بيع 90 يوم"
+          label={
+            report.history
+              .hasNinetyDayHistory
+              ? "بلا سرعة بيع 90 يوم"
+              : "بلا سرعة بيع مسجلة"
+          }
           value={formatNumber(
             report.summary
               .noVelocityInStock,
           )}
-          hint="مخزون موجود ولا توجد مبيعات خلال 90 يوم"
+          hint={
+            report.history
+              .hasNinetyDayHistory
+              ? "مخزون موجود ولا توجد مبيعات خلال 90 يوم"
+              : "مخزون موجود ولا توجد مبيعات ضمن تاريخ البيع المتاح"
+          }
         />
       </div>
 
