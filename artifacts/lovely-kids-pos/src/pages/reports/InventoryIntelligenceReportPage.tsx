@@ -12,6 +12,7 @@ import {
   getOwnerInventoryIntelligenceReport,
   type InventoryCoverageSignal,
   type InventoryMovementClass,
+  type InventoryRiskSignal,
   type InventoryStockState,
   type OwnerInventoryIntelligenceProduct,
   type OwnerInventoryIntelligenceReport,
@@ -24,6 +25,7 @@ type SortMode =
   | "sell_through_30"
   | "velocity"
   | "days_of_supply"
+  | "inventory_risk"
   | "oldest"
   | "last_sale";
 
@@ -68,6 +70,22 @@ const coverageLabels:
     low: "نفد قريبًا",
     healthy: "تغطية جيدة",
     high: "تغطية عالية",
+  };
+
+const riskLabels:
+  Record<
+    InventoryRiskSignal,
+    string
+  > = {
+    untracked: "غير متتبع",
+    insufficient_history:
+      "بيانات غير كافية",
+    balanced: "متوازن",
+    stockout_now: "نفد مع طلب حديث",
+    stockout_high: "خطر نفاد مرتفع",
+    stockout_watch: "مراقبة نفاد",
+    overstock_high: "فائض مرتفع",
+    overstock_watch: "مراقبة فائض",
   };
 
 function formatNumber(
@@ -209,10 +227,69 @@ function movementHint(
   return "حركة طبيعية";
 }
 
+function riskPriority(
+  signal: InventoryRiskSignal,
+) {
+  switch (signal) {
+    case "stockout_now":
+      return 0;
+    case "stockout_high":
+      return 1;
+    case "overstock_high":
+      return 2;
+    case "stockout_watch":
+      return 3;
+    case "overstock_watch":
+      return 4;
+    case "balanced":
+      return 5;
+    case "insufficient_history":
+      return 6;
+    case "untracked":
+      return 7;
+  }
+}
+
+function inventoryRiskAction(
+  product:
+    OwnerInventoryIntelligenceProduct,
+) {
+  switch (
+    product.inventoryRiskSignal
+  ) {
+    case "stockout_now":
+      return "إعادة طلب عاجلة";
+    case "stockout_high":
+      return "راجع إعادة الطلب اليوم";
+    case "stockout_watch":
+      return "جهّز إعادة الطلب";
+    case "overstock_high":
+      return "خفف الشراء وابدأ تصريف";
+    case "overstock_watch":
+      return "خفف الشراء وراقب الحركة";
+    case "untracked":
+      return "أكمل تتبع المخزون";
+    case "insufficient_history":
+      return "انتظر بيانات حركة موثوقة";
+    case "balanced":
+      return movementHint(
+        product,
+      );
+  }
+}
+
 function attentionRank(
   product:
     OwnerInventoryIntelligenceProduct,
 ) {
+  const inventoryRiskRank =
+    riskPriority(
+      product.inventoryRiskSignal,
+    );
+
+  if (inventoryRiskRank < 5) {
+    return inventoryRiskRank;
+  }
   if (
     isUrgentReorder(product)
   ) {
@@ -345,6 +422,14 @@ export default function InventoryIntelligenceReportPage() {
   ] =
     useState<
       InventoryCoverageSignal | "all"
+    >("all");
+
+  const [
+    riskFilter,
+    setRiskFilter,
+  ] =
+    useState<
+      InventoryRiskSignal | "all"
     >("all");
 
   const [
@@ -486,6 +571,15 @@ export default function InventoryIntelligenceReportPage() {
             }
 
             if (
+              riskFilter !==
+                "all" &&
+              product.inventoryRiskSignal !==
+                riskFilter
+            ) {
+              return false;
+            }
+
+            if (
               normalizedQuery
             ) {
               const haystack =
@@ -618,6 +712,28 @@ export default function InventoryIntelligenceReportPage() {
 
           if (
             sortMode ===
+            "inventory_risk"
+          ) {
+            const riskRank =
+              riskPriority(
+                left.inventoryRiskSignal,
+              ) -
+              riskPriority(
+                right.inventoryRiskSignal,
+              );
+
+            if (riskRank !== 0) {
+              return riskRank;
+            }
+
+            return (
+              right.sold30 -
+              left.sold30
+            );
+          }
+
+          if (
+            sortMode ===
             "oldest"
           ) {
             return (
@@ -684,6 +800,7 @@ export default function InventoryIntelligenceReportPage() {
       stockFilter,
       categoryFilter,
       coverageFilter,
+      riskFilter,
       sortMode,
     ]);
 
@@ -730,13 +847,13 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1–5.2 · Inventory Intelligence
+            Stage 5.1–5.4 · Inventory Intelligence
           </span>
           <h1>
             عمر وحركة وتغطية المخزون
           </h1>
           <p>
-            يحدد الأصناف السريعة والبطيئة والميتة، ويضيف نسبة التصريف وأيام تغطية المخزون حتى تعرف أين المخزون ناقص وأين رأس المال متوقف.
+            يحدد الحركة والتصريف والتغطية، ثم يحولها إلى إنذارات عملية لخطر النفاد أو فائض المخزون حتى تعرف أين تعيد الطلب وأين تخفف الشراء.
           </p>
         </div>
 
@@ -913,6 +1030,81 @@ export default function InventoryIntelligenceReportPage() {
         />
       </div>
 
+      <div className="inventory-intelligence-metrics">
+        <Metric
+          label="نفد مع طلب حديث"
+          value={formatNumber(
+            report.summary
+              .stockoutNow,
+          )}
+          hint={`مخزون صفر مع بيع خلال آخر ${formatNumber(
+            report.thresholds
+              .lowCoverageDays,
+          )} يوم`}
+          emphasis
+        />
+
+        <Metric
+          label="خطر نفاد مرتفع"
+          value={formatNumber(
+            report.summary
+              .stockoutHighRisk,
+          )}
+          hint={`متوفر لكن التغطية ${formatNumber(
+            report.thresholds
+              .stockoutHighDays,
+          )} أيام أو أقل`}
+        />
+
+        <Metric
+          label="مراقبة نفاد"
+          value={formatNumber(
+            report.summary
+              .stockoutWatch,
+          )}
+          hint={`فوق ${formatNumber(
+            report.thresholds
+              .stockoutHighDays,
+          )} وحتى ${formatNumber(
+            report.thresholds
+              .lowCoverageDays,
+          )} يوم`}
+        />
+
+        <Metric
+          label="فائض مرتفع"
+          value={formatNumber(
+            report.summary
+              .overstockHighRisk,
+          )}
+          hint={`بعد عمر ${formatNumber(
+            report.thresholds
+              .minimumOverstockAgeDays,
+          )} يوم وبإشارة فائض قوية`}
+        />
+
+        <Metric
+          label="مراقبة فائض"
+          value={formatNumber(
+            report.summary
+              .overstockWatch,
+          )}
+          hint={`بطيء، بلا طلب صافي، أو تغطية فوق ${formatNumber(
+            report.thresholds
+              .highCoverageDays,
+          )} يوم`}
+        />
+
+        <Metric
+          label="بيانات مخاطرة غير كافية"
+          value={formatNumber(
+            report.summary
+              .insufficientRiskData,
+          )}
+          hint="لا يصدر إنذار نفاد/فائض قبل توفر بيانات موثوقة"
+        />
+      </div>
+
       <div className="inventory-intelligence-filters">
         <label className="inventory-intelligence-search">
           <span>
@@ -1072,6 +1264,47 @@ export default function InventoryIntelligenceReportPage() {
 
         <label>
           <span>
+            مخاطر المخزون
+          </span>
+          <select
+            value={
+              riskFilter
+            }
+            onChange={(event) =>
+              setRiskFilter(
+                event.target
+                  .value as
+                  | InventoryRiskSignal
+                  | "all",
+              )
+            }
+          >
+            <option value="all">
+              كل المخاطر
+            </option>
+            {(
+              Object.keys(
+                riskLabels,
+              ) as InventoryRiskSignal[]
+            ).map(
+              (signal) => (
+                <option
+                  key={signal}
+                  value={signal}
+                >
+                  {
+                    riskLabels[
+                      signal
+                    ]
+                  }
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+
+        <label>
+          <span>
             الترتيب
           </span>
           <select
@@ -1086,6 +1319,9 @@ export default function InventoryIntelligenceReportPage() {
           >
             <option value="attention">
               أولوية القرار
+            </option>
+            <option value="inventory_risk">
+              أعلى مخاطر المخزون
             </option>
             <option value="sold30">
               الأكثر بيعًا 30 يوم
@@ -1129,7 +1365,7 @@ export default function InventoryIntelligenceReportPage() {
               تفاصيل الأصناف
             </h2>
             <p>
-              بيع 30/90 للتصنيف هو البيع المكتمل؛ Sell-through والسرعة والتغطية تعتمد صافي حركة المخزون بعد المرتجعات والإلغاءات.
+              بيع 30/90 للتصنيف هو البيع المكتمل؛ Sell-through والسرعة والتغطية تعتمد صافي حركة المخزون، وStage 5.4 يحول التغطية والحركة إلى خطر نفاد أو فائض بدون تخمين عند نقص البيانات.
             </p>
           </div>
 
@@ -1182,7 +1418,10 @@ export default function InventoryIntelligenceReportPage() {
                   عمر الصنف
                 </th>
                 <th>
-                  الإشارة
+                  مخاطر المخزون
+                </th>
+                <th>
+                  الإجراء
                 </th>
               </tr>
             </thead>
@@ -1434,9 +1673,22 @@ export default function InventoryIntelligenceReportPage() {
 
                     <td>
                       <span
-                        className={`inventory-intelligence-action movement-${product.movementClass}`}
+                        className={`inventory-intelligence-badge risk-${product.inventoryRiskSignal}`}
                       >
-                        {movementHint(
+                        {
+                          riskLabels[
+                            product
+                              .inventoryRiskSignal
+                          ]
+                        }
+                      </span>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`inventory-intelligence-action risk-${product.inventoryRiskSignal}`}
+                      >
+                        {inventoryRiskAction(
                           product,
                         )}
                       </span>
@@ -1449,7 +1701,7 @@ export default function InventoryIntelligenceReportPage() {
                 0 && (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={14}
                     className="inventory-intelligence-empty"
                   >
                     لا توجد أصناف مطابقة للفلاتر الحالية.
@@ -1519,6 +1771,15 @@ export default function InventoryIntelligenceReportPage() {
             {
               report.methodology
                 .daysOfSupply
+            }
+          </p>
+          <p>
+            <strong>
+              مخاطر المخزون:
+            </strong>{" "}
+            {
+              report.methodology
+                .inventoryRisk
             }
           </p>
           <p>
