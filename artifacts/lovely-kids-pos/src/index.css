@@ -13276,6 +13276,7 @@ textarea:disabled {
 .inventory-intelligence-hero,
 .inventory-intelligence-warning,
 .inventory-intelligence-filters,
+.inventory-intelligence-active-metric-filter,
 .inventory-intelligence-table-card,
 .inventory-intelligence-methodology,
 .inventory-intelligence-state {
@@ -13379,6 +13380,55 @@ textarea:disabled {
   background: #fff;
 }
 
+button.inventory-intelligence-metric {
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  text-align: right;
+}
+
+.inventory-intelligence-metric.is-clickable {
+  position: relative;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.inventory-intelligence-metric.is-clickable::after {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  content: "عرض الأصناف";
+  color: #98a2b3;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.inventory-intelligence-metric.is-clickable:hover {
+  transform: translateY(-2px);
+  border-color: #e8a9cc;
+  box-shadow: 0 10px 24px rgba(200, 20, 116, 0.09);
+}
+
+.inventory-intelligence-metric.is-clickable:focus-visible {
+  outline: 3px solid rgba(217, 20, 119, 0.18);
+  outline-offset: 2px;
+}
+
+.inventory-intelligence-metric.is-active {
+  border-color: #d91477;
+  background: linear-gradient(145deg, #fff0f8, #fff);
+  box-shadow: 0 0 0 2px rgba(217, 20, 119, 0.08);
+}
+
+.inventory-intelligence-metric.is-active::after {
+  content: "يعرض الآن";
+  color: #c81474;
+}
+
 .inventory-intelligence-metric.is-emphasis {
   border-color: #efc9df;
   background: linear-gradient(145deg, #fff7fb, #fff);
@@ -13452,8 +13502,63 @@ textarea:disabled {
   white-space: nowrap;
 }
 
+.inventory-intelligence-active-metric-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  border-color: #efc9df;
+  background: linear-gradient(145deg, #fff7fb, #fff);
+}
+
+.inventory-intelligence-active-metric-filter div {
+  min-width: 0;
+}
+
+.inventory-intelligence-active-metric-filter span,
+.inventory-intelligence-active-metric-filter strong,
+.inventory-intelligence-active-metric-filter small {
+  display: block;
+}
+
+.inventory-intelligence-active-metric-filter span {
+  color: #8a5872;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.inventory-intelligence-active-metric-filter strong {
+  margin-top: 2px;
+  color: #b41469;
+  font-size: 15px;
+}
+
+.inventory-intelligence-active-metric-filter small {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 11px;
+}
+
+.inventory-intelligence-active-metric-filter button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid #e8a9cc;
+  border-radius: 10px;
+  background: #fff;
+  color: #b41469;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inventory-intelligence-active-metric-filter button:hover {
+  background: #fff0f8;
+}
+
 .inventory-intelligence-table-card {
   overflow: visible;
+  scroll-margin-top: 165px;
 }
 
 .inventory-intelligence-table-head {
@@ -13805,7 +13910,8 @@ textarea:disabled {
 
 @media (max-width: 760px) {
   .inventory-intelligence-hero,
-  .inventory-intelligence-table-head {
+  .inventory-intelligence-table-head,
+  .inventory-intelligence-active-metric-filter {
     align-items: stretch;
     flex-direction: column;
   }
