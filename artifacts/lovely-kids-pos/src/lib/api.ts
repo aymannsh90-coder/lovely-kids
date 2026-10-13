@@ -2803,6 +2803,15 @@ export type InventoryStockState =
   | "out_of_stock"
   | "untracked";
 
+export type InventoryCoverageSignal =
+  | "untracked"
+  | "insufficient_history"
+  | "no_net_demand"
+  | "out_of_stock"
+  | "low"
+  | "healthy"
+  | "high";
+
 export interface OwnerInventoryIntelligenceProduct {
   productId: string;
   nameAr: string;
@@ -2830,10 +2839,20 @@ export interface OwnerInventoryIntelligenceProduct {
 
   sellThrough30Percent: number | null;
   sellThrough90Percent: number | null;
-  salesWindow30Days: number;
-  salesWindow90Days: number;
+  sellThrough30Reliable: boolean;
+  sellThrough90Reliable: boolean;
+  sellThrough30WindowDays: number;
+  sellThrough90WindowDays: number;
+  sellThrough30NetDemand: number;
+  sellThrough90NetDemand: number;
+  sellThrough30AvailableUnits: number | null;
+  sellThrough90AvailableUnits: number | null;
+
+  velocityWindowDays: number;
+  velocityNetDemand: number;
+  averageDailyNetDemand: number | null;
   daysOfSupply: number | null;
-  daysOfSupplyBasisDays: 30 | 90 | null;
+  coverageSignal: InventoryCoverageSignal;
 
   movementClass: InventoryMovementClass;
   neverSold: boolean;
@@ -2848,6 +2867,8 @@ export interface OwnerInventoryIntelligenceReport {
     coverageDays: number;
     hasThirtyDayHistory: boolean;
     hasNinetyDayHistory: boolean;
+    earliestInventoryMovementDate: string | null;
+    inventoryMovementCoverageDays: number;
   };
 
   thresholds: {
@@ -2857,6 +2878,9 @@ export interface OwnerInventoryIntelligenceReport {
     slow90Max: number;
     newProductDays: number;
     deadProductDays: number;
+    minimumVelocityHistoryDays: number;
+    lowCoverageDays: number;
+    highCoverageDays: number;
   };
 
   summary: {
@@ -2872,10 +2896,13 @@ export interface OwnerInventoryIntelligenceReport {
     untrackedStock: number;
     sellThrough30Percent: number | null;
     sellThrough90Percent: number | null;
+    sellThrough30ReliableProducts: number;
+    sellThrough90ReliableProducts: number;
     coverUnder14Days: number;
-    cover15To30Days: number;
+    cover15To60Days: number;
     coverOver60Days: number;
     noVelocityInStock: number;
+    insufficientCoverageData: number;
   };
 
   warnings: string[];
