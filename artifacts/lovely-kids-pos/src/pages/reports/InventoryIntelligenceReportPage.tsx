@@ -40,6 +40,311 @@ type ProductPreview = {
   name: string;
 };
 
+type MetricFilterKey =
+  | "fast_movers"
+  | "slow_movers"
+  | "dead_movers"
+  | "fast_out_of_stock"
+  | "never_sold_in_stock"
+  | "in_stock"
+  | "sell_through_30"
+  | "sell_through_90"
+  | "coverage_low"
+  | "coverage_healthy"
+  | "coverage_high"
+  | "coverage_insufficient"
+  | "stockout_now"
+  | "stockout_high"
+  | "stockout_watch"
+  | "overstock_high"
+  | "overstock_watch"
+  | "risk_insufficient"
+  | "reorder_products"
+  | "reorder_units"
+  | "excess_products"
+  | "excess_units"
+  | "no_demand_review"
+  | "action_insufficient"
+  | "reorder_budget_known"
+  | "excess_value_known"
+  | "slow_dead_capital_known"
+  | "reorder_budget_missing"
+  | "excess_value_missing"
+  | "cost_quantity_mismatch";
+
+const metricFilterLabels: Record<
+  MetricFilterKey,
+  string
+> = {
+  fast_movers: "أصناف سريعة",
+  slow_movers: "أصناف بطيئة",
+  dead_movers: "مخزون ميت",
+  fast_out_of_stock: "سريع ونفد",
+  never_sold_in_stock: "لم يُبع بعد",
+  in_stock: "أصناف متوفرة",
+  sell_through_30: "تصريف 30 يوم",
+  sell_through_90: "تصريف 90 يوم",
+  coverage_low: "تغطية حتى 14 يوم",
+  coverage_healthy: "تغطية 15–60 يوم",
+  coverage_high: "تغطية فوق 60 يوم",
+  coverage_insufficient:
+    "بيانات تغطية غير كافية",
+  stockout_now: "نفد مع طلب حديث",
+  stockout_high: "خطر نفاد مرتفع",
+  stockout_watch: "مراقبة نفاد",
+  overstock_high: "فائض مرتفع",
+  overstock_watch: "مراقبة فائض",
+  risk_insufficient:
+    "بيانات مخاطرة غير كافية",
+  reorder_products: "أصناف شراء مقترح",
+  reorder_units: "إجمالي وحدات شراء",
+  excess_products: "أصناف فائض محتمل",
+  excess_units: "إجمالي وحدات فائض",
+  no_demand_review:
+    "بلا طلب صافي للمراجعة",
+  action_insufficient:
+    "بيانات قرار غير كافية",
+  reorder_budget_known:
+    "ميزانية شراء تقديرية",
+  excess_value_known:
+    "قيمة فائض محتملة",
+  slow_dead_capital_known:
+    "رأس مال بطيء / ميت",
+  reorder_budget_missing:
+    "شراء ناقص التكلفة",
+  excess_value_missing:
+    "فائض ناقص القيمة",
+  cost_quantity_mismatch:
+    "فروق كمية التكلفة",
+};
+
+function matchesMetricFilter(
+  product:
+    OwnerInventoryIntelligenceProduct,
+  filter: MetricFilterKey,
+) {
+  switch (filter) {
+    case "fast_movers":
+      return (
+        product.movementClass ===
+        "fast"
+      );
+    case "slow_movers":
+      return (
+        product.movementClass ===
+        "slow"
+      );
+    case "dead_movers":
+      return (
+        product.movementClass ===
+        "dead"
+      );
+    case "fast_out_of_stock":
+      return (
+        product.movementClass ===
+          "fast" &&
+        product.currentQuantity === 0
+      );
+    case "never_sold_in_stock":
+      return (
+        product.neverSold &&
+        product.currentQuantity !==
+          null &&
+        product.currentQuantity > 0
+      );
+    case "in_stock":
+      return (
+        product.currentQuantity !==
+          null &&
+        product.currentQuantity > 0
+      );
+    case "sell_through_30":
+      return product.sellThrough30Reliable;
+    case "sell_through_90":
+      return product.sellThrough90Reliable;
+    case "coverage_low":
+      return (
+        product.coverageSignal ===
+        "low"
+      );
+    case "coverage_healthy":
+      return (
+        product.coverageSignal ===
+        "healthy"
+      );
+    case "coverage_high":
+      return (
+        product.coverageSignal ===
+        "high"
+      );
+    case "coverage_insufficient":
+      return (
+        product.coverageSignal ===
+          "insufficient_history" ||
+        product.coverageSignal ===
+          "untracked"
+      );
+    case "stockout_now":
+      return (
+        product.inventoryRiskSignal ===
+        "stockout_now"
+      );
+    case "stockout_high":
+      return (
+        product.inventoryRiskSignal ===
+        "stockout_high"
+      );
+    case "stockout_watch":
+      return (
+        product.inventoryRiskSignal ===
+        "stockout_watch"
+      );
+    case "overstock_high":
+      return (
+        product.inventoryRiskSignal ===
+        "overstock_high"
+      );
+    case "overstock_watch":
+      return (
+        product.inventoryRiskSignal ===
+        "overstock_watch"
+      );
+    case "risk_insufficient":
+      return (
+        product.inventoryRiskSignal ===
+          "insufficient_history" ||
+        product.inventoryRiskSignal ===
+          "untracked"
+      );
+    case "reorder_products":
+      return (
+        product.inventoryActionSignal ===
+        "reorder"
+      );
+    case "reorder_units":
+      return (
+        (
+          product
+            .suggestedReorderQuantity ??
+          0
+        ) > 0
+      );
+    case "excess_products":
+      return (
+        product.inventoryActionSignal ===
+          "reduce" ||
+        product.inventoryActionSignal ===
+          "review_no_demand"
+      );
+    case "excess_units":
+      return (
+        (product.excessUnits ?? 0) > 0
+      );
+    case "no_demand_review":
+      return (
+        product.inventoryActionSignal ===
+        "review_no_demand"
+      );
+    case "action_insufficient":
+      return !product.actionPlanReliable;
+    case "reorder_budget_known":
+      return (
+        (
+          product
+            .suggestedReorderQuantity ??
+          0
+        ) > 0 &&
+        product
+          .suggestedReorderBudgetMinor !==
+          null
+      );
+    case "excess_value_known":
+      return (
+        (product.excessUnits ?? 0) > 0 &&
+        product
+          .excessInventoryValueMinor !==
+          null
+      );
+    case "slow_dead_capital_known":
+      return (
+        (
+          product.movementClass ===
+            "slow" ||
+          product.movementClass ===
+            "dead"
+        ) &&
+        (product.currentQuantity ?? 0) >
+          0 &&
+        product.slowDeadCapitalMinor !==
+          null
+      );
+    case "reorder_budget_missing":
+      return (
+        (
+          product
+            .suggestedReorderQuantity ??
+          0
+        ) > 0 &&
+        product
+          .suggestedReorderBudgetMinor ===
+          null
+      );
+    case "excess_value_missing":
+      return (
+        (product.excessUnits ?? 0) > 0 &&
+        product
+          .excessInventoryValueMinor ===
+          null
+      );
+    case "cost_quantity_mismatch":
+      return (
+        product.costInitialized &&
+        !product
+          .costStockMatchesAccounting
+      );
+  }
+}
+
+function metricFilterSortMode(
+  filter: MetricFilterKey,
+): SortMode {
+  switch (filter) {
+    case "sell_through_30":
+      return "sell_through_30";
+    case "sell_through_90":
+      return "sold90";
+    case "coverage_low":
+    case "coverage_healthy":
+    case "coverage_high":
+      return "days_of_supply";
+    case "stockout_now":
+    case "stockout_high":
+    case "stockout_watch":
+    case "overstock_high":
+    case "overstock_watch":
+    case "risk_insufficient":
+      return "inventory_risk";
+    case "reorder_products":
+    case "reorder_units":
+    case "reorder_budget_missing":
+      return "reorder_quantity";
+    case "excess_products":
+    case "excess_units":
+    case "no_demand_review":
+    case "excess_value_missing":
+      return "excess_units";
+    case "reorder_budget_known":
+      return "reorder_budget";
+    case "excess_value_known":
+      return "excess_value";
+    case "slow_dead_capital_known":
+    case "cost_quantity_mismatch":
+      return "slow_dead_capital";
+    default:
+      return "attention";
+  }
+}
+
 const movementLabels:
   Record<
     InventoryMovementClass,
@@ -415,24 +720,56 @@ function Metric({
   value,
   hint,
   emphasis = false,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: string;
   hint: string;
   emphasis?: boolean;
+  active?: boolean;
+  onClick?: () => void;
 }) {
+  const classNames = [
+    "inventory-intelligence-metric",
+  ];
+
+  if (emphasis) {
+    classNames.push("is-emphasis");
+  }
+
+  if (onClick) {
+    classNames.push("is-clickable");
+  }
+
+  if (active) {
+    classNames.push("is-active");
+  }
+
+  if (!onClick) {
+    return (
+      <article
+        className={classNames.join(" ")}
+      >
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{hint}</small>
+      </article>
+    );
+  }
+
   return (
-    <article
-      className={
-        emphasis
-          ? "inventory-intelligence-metric is-emphasis"
-          : "inventory-intelligence-metric"
-      }
+    <button
+      type="button"
+      className={classNames.join(" ")}
+      onClick={onClick}
+      aria-pressed={active}
+      title="اضغط لعرض الأصناف الداخلة في هذا المؤشر"
     >
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
-    </article>
+    </button>
   );
 }
 
@@ -531,6 +868,61 @@ export default function InventoryIntelligenceReportPage() {
       "attention",
     );
 
+  const [
+    metricFilter,
+    setMetricFilter,
+  ] =
+    useState<
+      MetricFilterKey | null
+    >(null);
+
+  function resetManualFilters() {
+    setQuery("");
+    setMovementFilter("all");
+    setStockFilter("all");
+    setCategoryFilter("all");
+    setCoverageFilter("all");
+    setRiskFilter("all");
+    setActionFilter("all");
+  }
+
+  function handleMetricFilter(
+    filter: MetricFilterKey,
+  ) {
+    if (metricFilter === filter) {
+      setMetricFilter(null);
+      return;
+    }
+
+    resetManualFilters();
+    setMetricFilter(filter);
+    setSortMode(
+      metricFilterSortMode(filter),
+    );
+
+    window.setTimeout(() => {
+      document
+        .getElementById(
+          "inventory-intelligence-products",
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 0);
+  }
+
+  function metricProps(
+    filter: MetricFilterKey,
+  ) {
+    return {
+      active:
+        metricFilter === filter,
+      onClick: () =>
+        handleMetricFilter(filter),
+    };
+  }
+
   async function loadData() {
     setLoading(true);
     setError("");
@@ -625,6 +1017,16 @@ export default function InventoryIntelligenceReportPage() {
       const rows =
         report?.products.filter(
           (product) => {
+            if (
+              metricFilter &&
+              !matchesMetricFilter(
+                product,
+                metricFilter,
+              )
+            ) {
+              return false;
+            }
+
             if (
               movementFilter !==
                 "all" &&
@@ -956,6 +1358,7 @@ export default function InventoryIntelligenceReportPage() {
     }, [
       report,
       query,
+      metricFilter,
       movementFilter,
       stockFilter,
       categoryFilter,
@@ -1008,7 +1411,7 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1–5.6 · Inventory Intelligence
+            Stage 5.1–5.6.1 · Inventory Intelligence
           </span>
           <h1>
             عمر وحركة وتغطية المخزون
@@ -1059,6 +1462,7 @@ export default function InventoryIntelligenceReportPage() {
 
       <div className="inventory-intelligence-metrics">
         <Metric
+          {...metricProps("fast_movers")}
           label="أصناف سريعة"
           value={formatNumber(
             report.summary
@@ -1069,6 +1473,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("slow_movers")}
           label="أصناف بطيئة"
           value={formatNumber(
             report.summary
@@ -1078,6 +1483,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("dead_movers")}
           label="مخزون ميت"
           value={formatNumber(
             report.summary
@@ -1092,6 +1498,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("fast_out_of_stock")}
           label="سريع ونفد"
           value={formatNumber(
             report.summary
@@ -1101,6 +1508,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("never_sold_in_stock")}
           label="لم يُبع بعد"
           value={formatNumber(
             report.summary
@@ -1110,6 +1518,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("in_stock")}
           label="أصناف متوفرة"
           value={formatNumber(
             report.summary
@@ -1124,6 +1533,7 @@ export default function InventoryIntelligenceReportPage() {
 
       <div className="inventory-intelligence-metrics">
         <Metric
+          {...metricProps("sell_through_30")}
           label="تصريف 30 يوم"
           value={formatPercent(
             report.summary
@@ -1137,6 +1547,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("sell_through_90")}
           label="تصريف 90 يوم"
           value={formatPercent(
             report.summary
@@ -1149,6 +1560,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("coverage_low")}
           label="تغطية حتى 14 يوم"
           value={formatNumber(
             report.summary
@@ -1158,6 +1570,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("coverage_healthy")}
           label="تغطية 15–60 يوم"
           value={formatNumber(
             report.summary
@@ -1167,6 +1580,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("coverage_high")}
           label="تغطية فوق 60 يوم"
           value={formatNumber(
             report.summary
@@ -1176,6 +1590,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("coverage_insufficient")}
           label="بيانات تغطية غير كافية"
           value={formatNumber(
             report.summary
@@ -1193,6 +1608,7 @@ export default function InventoryIntelligenceReportPage() {
 
       <div className="inventory-intelligence-metrics">
         <Metric
+          {...metricProps("stockout_now")}
           label="نفد مع طلب حديث"
           value={formatNumber(
             report.summary
@@ -1206,6 +1622,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("stockout_high")}
           label="خطر نفاد مرتفع"
           value={formatNumber(
             report.summary
@@ -1218,6 +1635,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("stockout_watch")}
           label="مراقبة نفاد"
           value={formatNumber(
             report.summary
@@ -1233,6 +1651,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("overstock_high")}
           label="فائض مرتفع"
           value={formatNumber(
             report.summary
@@ -1245,6 +1664,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("overstock_watch")}
           label="مراقبة فائض"
           value={formatNumber(
             report.summary
@@ -1257,6 +1677,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("risk_insufficient")}
           label="بيانات مخاطرة غير كافية"
           value={formatNumber(
             report.summary
@@ -1268,6 +1689,7 @@ export default function InventoryIntelligenceReportPage() {
 
       <div className="inventory-intelligence-metrics">
         <Metric
+          {...metricProps("reorder_products")}
           label="أصناف شراء مقترح"
           value={formatNumber(
             report.summary
@@ -1281,6 +1703,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("reorder_units")}
           label="إجمالي وحدات شراء"
           value={formatNumber(
             report.summary
@@ -1290,6 +1713,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("excess_products")}
           label="أصناف فائض محتمل"
           value={formatNumber(
             report.summary
@@ -1302,6 +1726,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("excess_units")}
           label="إجمالي وحدات فائض"
           value={formatNumber(
             report.summary
@@ -1311,6 +1736,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("no_demand_review")}
           label="بلا طلب صافي للمراجعة"
           value={formatNumber(
             report.summary
@@ -1320,6 +1746,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("action_insufficient")}
           label="بيانات قرار غير كافية"
           value={formatNumber(
             report.summary
@@ -1331,6 +1758,7 @@ export default function InventoryIntelligenceReportPage() {
 
       <div className="inventory-intelligence-metrics">
         <Metric
+          {...metricProps("reorder_budget_known")}
           label="ميزانية شراء تقديرية"
           value={formatMoney(
             report.summary
@@ -1348,6 +1776,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("excess_value_known")}
           label="قيمة فائض محتملة"
           value={formatMoney(
             report.summary
@@ -1364,6 +1793,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("slow_dead_capital_known")}
           label="رأس مال بطيء / ميت"
           value={formatMoney(
             report.summary
@@ -1380,6 +1810,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("reorder_budget_missing")}
           label="شراء ناقص التكلفة"
           value={formatNumber(
             report.summary
@@ -1389,6 +1820,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("excess_value_missing")}
           label="فائض ناقص القيمة"
           value={formatNumber(
             report.summary
@@ -1398,6 +1830,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
+          {...metricProps("cost_quantity_mismatch")}
           label="فروق كمية التكلفة"
           value={formatNumber(
             report.summary
@@ -1716,7 +2149,46 @@ export default function InventoryIntelligenceReportPage() {
         </button>
       </div>
 
-      <div className="inventory-intelligence-table-card">
+      {metricFilter && (
+        <div
+          className="inventory-intelligence-active-metric-filter"
+          role="status"
+        >
+          <div>
+            <span>
+              الفلتر الحالي من المربع
+            </span>
+            <strong>
+              {
+                metricFilterLabels[
+                  metricFilter
+                ]
+              }
+            </strong>
+            <small>
+              يعرض الآن{" "}
+              {formatNumber(
+                filtered.length,
+              )}{" "}
+              صنف مطابق. يمكنك تضييق النتائج أكثر من الفلاتر أدناه.
+            </small>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setMetricFilter(null)
+            }
+          >
+            إزالة فلتر المربع ×
+          </button>
+        </div>
+      )}
+
+      <div
+        id="inventory-intelligence-products"
+        className="inventory-intelligence-table-card"
+      >
         <div className="inventory-intelligence-table-head">
           <div>
             <h2>
