@@ -23,6 +23,11 @@ type SortMode =
   | "oldest"
   | "last_sale";
 
+type ProductPreview = {
+  image: string;
+  name: string;
+};
+
 const movementLabels:
   Record<
     InventoryMovementClass,
@@ -224,6 +229,14 @@ export default function InventoryIntelligenceReportPage() {
     usePosRuntime();
 
   const [
+    preview,
+    setPreview,
+  ] =
+    useState<
+      ProductPreview | null
+    >(null);
+
+  const [
     report,
     setReport,
   ] =
@@ -315,6 +328,33 @@ export default function InventoryIntelligenceReportPage() {
     // Initial load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (
+        event.key === "Escape"
+      ) {
+        setPreview(null);
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+  }, [preview]);
 
   const categories =
     useMemo(
@@ -875,12 +915,28 @@ export default function InventoryIntelligenceReportPage() {
                   >
                     <td>
                       <div className="inventory-intelligence-product">
-                        <img
-                          src={
-                            product.image
+                        <button
+                          type="button"
+                          className="product-analytics-image-button inventory-intelligence-image-button"
+                          onClick={() =>
+                            setPreview({
+                              image:
+                                product.image,
+                              name:
+                                product.nameAr,
+                            })
                           }
-                          alt=""
-                        />
+                          aria-label={`معاينة صورة ${product.nameAr}`}
+                        >
+                          <img
+                            src={
+                              product.image
+                            }
+                            alt={
+                              product.nameAr
+                            }
+                          />
+                        </button>
                         <div>
                           <strong>
                             {
@@ -1087,6 +1143,63 @@ export default function InventoryIntelligenceReportPage() {
           </p>
         </div>
       </section>
+
+      {preview && (
+        <div
+          className="product-analytics-preview-backdrop"
+          role="presentation"
+          onMouseDown={(
+            event,
+          ) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setPreview(null);
+            }
+          }}
+        >
+          <section
+            className="product-analytics-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`معاينة صورة ${preview.name}`}
+          >
+            <div className="product-analytics-preview-head">
+              <div>
+                <span>
+                  معاينة المنتج
+                </span>
+                <strong>
+                  {preview.name}
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                className="product-analytics-preview-close"
+                onClick={() =>
+                  setPreview(null)
+                }
+                aria-label="إغلاق المعاينة"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="product-analytics-preview-image">
+              <img
+                src={
+                  preview.image
+                }
+                alt={
+                  preview.name
+                }
+              />
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
