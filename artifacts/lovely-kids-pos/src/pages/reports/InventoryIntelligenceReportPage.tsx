@@ -29,6 +29,9 @@ type SortMode =
   | "inventory_risk"
   | "reorder_quantity"
   | "excess_units"
+  | "reorder_budget"
+  | "excess_value"
+  | "slow_dead_capital"
   | "oldest"
   | "last_sale";
 
@@ -114,6 +117,22 @@ function formatNumber(
   ).format(value);
 }
 
+function formatMoney(
+  valueMinor: number | null,
+) {
+  if (valueMinor === null) {
+    return "N/A";
+  }
+
+  return `${new Intl.NumberFormat(
+    "en-US",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+  ).format(valueMinor / 100)} ₪`;
+}
+
 function formatDecimal(
   value: number,
 ) {
@@ -157,6 +176,45 @@ function formatDate(
   }
 
   return value;
+}
+
+function costStatusLabel(
+  product:
+    OwnerInventoryIntelligenceProduct,
+) {
+  if (!product.costInitialized) {
+    return "تكلفة غير مدخلة";
+  }
+
+  if (
+    !product
+      .costStockMatchesAccounting
+  ) {
+    return "فرق كمية بين المخزون والتكلفة";
+  }
+
+  if (
+    product.costQuality ===
+    "confirmed"
+  ) {
+    return "تكلفة مؤكدة";
+  }
+
+  if (
+    product.costQuality ===
+    "estimated"
+  ) {
+    return "تكلفة تقديرية";
+  }
+
+  if (
+    product.costQuality ===
+    "mixed"
+  ) {
+    return "تكلفة مختلطة";
+  }
+
+  return "تكلفة غير مكتملة";
 }
 
 const URGENT_REORDER_RECENCY_DAYS =
@@ -800,6 +858,42 @@ export default function InventoryIntelligenceReportPage() {
 
           if (
             sortMode ===
+            "reorder_budget"
+          ) {
+            return (
+              (right.suggestedReorderBudgetMinor ??
+                -1) -
+              (left.suggestedReorderBudgetMinor ??
+                -1)
+            );
+          }
+
+          if (
+            sortMode ===
+            "excess_value"
+          ) {
+            return (
+              (right.excessInventoryValueMinor ??
+                -1) -
+              (left.excessInventoryValueMinor ??
+                -1)
+            );
+          }
+
+          if (
+            sortMode ===
+            "slow_dead_capital"
+          ) {
+            return (
+              (right.slowDeadCapitalMinor ??
+                -1) -
+              (left.slowDeadCapitalMinor ??
+                -1)
+            );
+          }
+
+          if (
+            sortMode ===
             "oldest"
           ) {
             return (
@@ -914,13 +1008,13 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1–5.5 · Inventory Intelligence
+            Stage 5.1–5.6 · Inventory Intelligence
           </span>
           <h1>
             عمر وحركة وتغطية المخزون
           </h1>
           <p>
-            يحدد الحركة والتصريف والتغطية والمخاطر، ثم يحولها إلى خطة كمية: كم تشتري للوصول إلى هدف 30 يوم، وكم وحدة تعتبر فائضًا محتملًا فوق التغطية الصحية.
+            يحدد الحركة والتغطية والمخاطر وخطة الكمية، ثم يحولها إلى أثر مالي: ميزانية شراء تقديرية، قيمة فائض قابلة للتحرير، ورأس مال محبوس في الأصناف البطيئة والميتة.
           </p>
         </div>
 
@@ -1235,6 +1329,84 @@ export default function InventoryIntelligenceReportPage() {
         />
       </div>
 
+      <div className="inventory-intelligence-metrics">
+        <Metric
+          label="ميزانية شراء تقديرية"
+          value={formatMoney(
+            report.summary
+              .suggestedReorderBudgetKnownMinor,
+          )}
+          hint={report.summary
+            .reorderBudgetMissingCostProducts >
+          0
+            ? `${formatNumber(
+                report.summary
+                  .reorderBudgetMissingCostProducts,
+              )} صنف شراء مقترح بدون تكلفة مرجعية`
+            : "كل كميات الشراء المقترحة لها تكلفة مرجعية"}
+          emphasis
+        />
+
+        <Metric
+          label="قيمة فائض محتملة"
+          value={formatMoney(
+            report.summary
+              .excessInventoryValueKnownMinor,
+          )}
+          hint={report.summary
+            .excessValueMissingCostProducts >
+          0
+            ? `${formatNumber(
+                report.summary
+                  .excessValueMissingCostProducts,
+              )} صنف فائض بدون قيمة تكلفة موثوقة`
+            : "قيمة الفائض المعروفة حسب تكلفة المخزون الحالية"}
+        />
+
+        <Metric
+          label="رأس مال بطيء / ميت"
+          value={formatMoney(
+            report.summary
+              .slowDeadCapitalKnownMinor,
+          )}
+          hint={report.summary
+            .slowDeadCapitalMissingCostProducts >
+          0
+            ? `${formatNumber(
+                report.summary
+                  .slowDeadCapitalMissingCostProducts,
+              )} صنف بطيء/ميت ناقص تكلفة موثوقة`
+            : "قيمة المخزون الحالية في الأصناف البطيئة والميتة"}
+        />
+
+        <Metric
+          label="شراء ناقص التكلفة"
+          value={formatNumber(
+            report.summary
+              .reorderBudgetMissingCostProducts,
+          )}
+          hint="لا يدخل في إجمالي ميزانية الشراء حتى تتوفر تكلفة مرجعية"
+        />
+
+        <Metric
+          label="فائض ناقص القيمة"
+          value={formatNumber(
+            report.summary
+              .excessValueMissingCostProducts,
+          )}
+          hint="لا يدخل في قيمة رأس المال القابل للتحرير"
+        />
+
+        <Metric
+          label="فروق كمية التكلفة"
+          value={formatNumber(
+            report.summary
+              .costQuantityMismatchProducts,
+          )}
+          hint="قيمة المخزون لا تعتمد ماليًا حتى تتطابق كمية التكلفة مع المخزون"
+        />
+      </div>
+
       <div className="inventory-intelligence-filters">
         <label className="inventory-intelligence-search">
           <span>
@@ -1500,6 +1672,15 @@ export default function InventoryIntelligenceReportPage() {
             <option value="excess_units">
               أكبر كمية فائض محتمل
             </option>
+            <option value="reorder_budget">
+              أكبر ميزانية شراء
+            </option>
+            <option value="excess_value">
+              أكبر قيمة فائض
+            </option>
+            <option value="slow_dead_capital">
+              أكبر رأس مال بطيء/ميت
+            </option>
             <option value="sold30">
               الأكثر بيعًا 30 يوم
             </option>
@@ -1542,7 +1723,7 @@ export default function InventoryIntelligenceReportPage() {
               تفاصيل الأصناف
             </h2>
             <p>
-              Stage 5.5 يستخدم سرعة الطلب الموثوقة ليقترح كمية شراء حتى هدف 30 يوم، أو فائضًا محتملًا فوق حد 60 يوم؛ وإذا البيانات غير كافية يعرض N/A بدل قرار وهمي.
+              Stage 5.6 يضيف الأثر المالي فوق خطة الكمية: الشراء يستخدم التكلفة المرجعية كتقدير، والفائض ورأس المال البطيء/الميت يستخدمان قيمة المخزون الدفترية فقط عندما تتطابق كمية التكلفة مع المخزون.
             </p>
           </div>
 
@@ -1599,6 +1780,9 @@ export default function InventoryIntelligenceReportPage() {
                 </th>
                 <th>
                   خطة 5.5
+                </th>
+                <th>
+                  الأثر المالي 5.6
                 </th>
               </tr>
             </thead>
@@ -1922,6 +2106,60 @@ export default function InventoryIntelligenceReportPage() {
                         )}
                       </small>
                     </td>
+
+                    <td>
+                      <strong>
+                        {(
+                          product
+                            .suggestedReorderQuantity ??
+                          0
+                        ) > 0
+                          ? `ميزانية شراء: ${formatMoney(
+                              product.suggestedReorderBudgetMinor,
+                            )}`
+                          : (
+                                product.excessUnits ??
+                                0
+                              ) > 0
+                            ? `قيمة فائض: ${formatMoney(
+                                product.excessInventoryValueMinor,
+                              )}`
+                            : product.movementClass ===
+                                  "slow" ||
+                                product.movementClass ===
+                                  "dead"
+                              ? `رأس مال: ${formatMoney(
+                                  product.slowDeadCapitalMinor,
+                                )}`
+                              : "لا أثر مالي عاجل"}
+                      </strong>
+                      <small>
+                        {product.referenceUnitCostMinor ===
+                        null
+                          ? "تكلفة مرجعية: N/A"
+                          : `تكلفة مرجعية: ${formatMoney(
+                              product.referenceUnitCostMinor,
+                            )} / قطعة`}
+                      </small>
+                      {(
+                        product.movementClass ===
+                          "slow" ||
+                        product.movementClass ===
+                          "dead"
+                      ) && (
+                        <small>
+                          رأس مال بطيء/ميت:{" "}
+                          {formatMoney(
+                            product.slowDeadCapitalMinor,
+                          )}
+                        </small>
+                      )}
+                      <small>
+                        {costStatusLabel(
+                          product,
+                        )}
+                      </small>
+                    </td>
                   </tr>
                 ),
               )}
@@ -1930,7 +2168,7 @@ export default function InventoryIntelligenceReportPage() {
                 0 && (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     className="inventory-intelligence-empty"
                   >
                     لا توجد أصناف مطابقة للفلاتر الحالية.
@@ -2018,6 +2256,15 @@ export default function InventoryIntelligenceReportPage() {
             {
               report.methodology
                 .inventoryAction
+            }
+          </p>
+          <p>
+            <strong>
+              الأثر المالي:
+            </strong>{" "}
+            {
+              report.methodology
+                .financialImpact
             }
           </p>
           <p>

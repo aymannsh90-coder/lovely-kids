@@ -8,6 +8,7 @@ import {
   posPurchasesTable,
   posSaleItemsTable,
   posSalesTable,
+  productCostStateTable,
   productsTable,
 } from "@workspace/db/schema";
 import {
@@ -906,8 +907,26 @@ async function handleReport(
           productsTable.colorVariants,
         createdAt:
           productsTable.createdAt,
+
+        costProductId:
+          productCostStateTable.productId,
+        costQuantityOnHand:
+          productCostStateTable.quantityOnHand,
+        inventoryValueMinor:
+          productCostStateTable.inventoryValueMinor,
+        referenceUnitCostMinor:
+          productCostStateTable.referenceUnitCostMinor,
+        costQuality:
+          productCostStateTable.costQuality,
       })
       .from(productsTable)
+      .leftJoin(
+        productCostStateTable,
+        eq(
+          productCostStateTable.productId,
+          productsTable.id,
+        ),
+      )
       .where(
         isNull(
           productsTable.deletedAt,
@@ -1591,6 +1610,116 @@ async function handleReport(
             ageDays,
           });
 
+        const costInitialized =
+          product.costProductId !==
+          null;
+
+        const accountingQuantity =
+          costInitialized
+            ? (
+                product
+                  .costQuantityOnHand ??
+                0
+              )
+            : null;
+
+        const inventoryValueMinor =
+          costInitialized
+            ? (
+                product
+                  .inventoryValueMinor ??
+                0
+              )
+            : null;
+
+        const referenceUnitCostMinor =
+          costInitialized
+            ? (
+                product
+                  .referenceUnitCostMinor ??
+                0
+              )
+            : null;
+
+        const costStockMatchesAccounting =
+          !costInitialized ||
+          currentQuantity === null ||
+          accountingQuantity ===
+            currentQuantity;
+
+        const averageUnitCostMinor =
+          costInitialized &&
+          accountingQuantity !== null &&
+          accountingQuantity > 0 &&
+          inventoryValueMinor !== null
+            ? inventoryValueMinor /
+              accountingQuantity
+            : null;
+
+        const exactInventoryCostAvailable =
+          costInitialized &&
+          currentQuantity !== null &&
+          accountingQuantity !== null &&
+          inventoryValueMinor !== null &&
+          costStockMatchesAccounting &&
+          accountingQuantity ===
+            currentQuantity;
+
+        const currentInventoryValueMinor =
+          exactInventoryCostAvailable
+            ? inventoryValueMinor
+            : null;
+
+        const suggestedReorderBudgetMinor =
+          actionPlan
+            .suggestedReorderQuantity ===
+          null
+            ? null
+            : actionPlan
+                  .suggestedReorderQuantity ===
+                0
+              ? 0
+              : referenceUnitCostMinor !==
+                  null
+                ? Math.round(
+                    actionPlan
+                      .suggestedReorderQuantity *
+                      referenceUnitCostMinor,
+                  )
+                : null;
+
+        const excessInventoryValueMinor =
+          actionPlan.excessUnits ===
+          null
+            ? null
+            : actionPlan.excessUnits ===
+                0
+              ? 0
+              : exactInventoryCostAvailable &&
+                  accountingQuantity !==
+                    null &&
+                  accountingQuantity > 0 &&
+                  inventoryValueMinor !==
+                    null
+                ? Math.round(
+                    (
+                      inventoryValueMinor /
+                      accountingQuantity
+                    ) *
+                      actionPlan
+                        .excessUnits,
+                  )
+                : null;
+
+        const isSlowDeadCapital =
+          movementClass === "slow" ||
+          movementClass === "dead";
+
+        const slowDeadCapitalMinor =
+          isSlowDeadCapital
+            ? currentInventoryValueMinor
+            : 0;
+
         return {
           productId:
             String(product.id),
@@ -1674,6 +1803,21 @@ async function handleReport(
             actionPlan.suggestedReorderQuantity,
           excessUnits:
             actionPlan.excessUnits,
+
+          costInitialized,
+          costQuality:
+            costInitialized
+              ? product.costQuality
+              : null,
+          costStockMatchesAccounting,
+          accountingQuantity,
+          inventoryValueMinor,
+          referenceUnitCostMinor,
+          averageUnitCostMinor,
+          currentInventoryValueMinor,
+          suggestedReorderBudgetMinor,
+          excessInventoryValueMinor,
+          slowDeadCapitalMinor,
 
           movementClass,
           neverSold:
@@ -1970,6 +2114,92 @@ async function handleReport(
         (product) =>
           !product.actionPlanReliable,
       ).length,
+
+    suggestedReorderBudgetKnownMinor:
+      reportProducts.reduce(
+        (sum, product) =>
+          sum +
+          (
+            product
+              .suggestedReorderBudgetMinor ??
+            0
+          ),
+        0,
+      ),
+
+    reorderBudgetMissingCostProducts:
+      reportProducts.filter(
+        (product) =>
+          (
+            product
+              .suggestedReorderQuantity ??
+            0
+          ) > 0 &&
+          product
+            .suggestedReorderBudgetMinor ===
+            null,
+      ).length,
+
+    excessInventoryValueKnownMinor:
+      reportProducts.reduce(
+        (sum, product) =>
+          sum +
+          (
+            product
+              .excessInventoryValueMinor ??
+            0
+          ),
+        0,
+      ),
+
+    excessValueMissingCostProducts:
+      reportProducts.filter(
+        (product) =>
+          (
+            product.excessUnits ??
+            0
+          ) > 0 &&
+          product
+            .excessInventoryValueMinor ===
+            null,
+      ).length,
+
+    slowDeadCapitalKnownMinor:
+      reportProducts.reduce(
+        (sum, product) =>
+          sum +
+          (
+            product
+              .slowDeadCapitalMinor ??
+            0
+          ),
+        0,
+      ),
+
+    slowDeadCapitalMissingCostProducts:
+      reportProducts.filter(
+        (product) =>
+          (
+            product.movementClass ===
+              "slow" ||
+            product.movementClass ===
+              "dead"
+          ) &&
+          (
+            product.currentQuantity ??
+            0
+          ) > 0 &&
+          product.slowDeadCapitalMinor ===
+            null,
+      ).length,
+
+    costQuantityMismatchProducts:
+      reportProducts.filter(
+        (product) =>
+          product.costInitialized &&
+          !product
+            .costStockMatchesAccounting,
+      ).length,
   };
 
   const warnings: string[] =
@@ -2009,6 +2239,33 @@ async function handleReport(
   ) {
     warnings.push(
       `سجل حركة المخزون يغطي ${movementHistoryCoverageDays} يوم. Sell-through 30 متاح عند اكتمال نافذة الصنف، بينما 90 يوم يبقى غير متاح للأصناف الأقدم حتى تكتمل التغطية.`,
+    );
+  }
+
+  if (
+    summary.reorderBudgetMissingCostProducts >
+    0
+  ) {
+    warnings.push(
+      `يوجد ${summary.reorderBudgetMissingCostProducts} صنف لديه كمية شراء مقترحة لكن تكلفة مرجعية غير متاحة؛ هذه الأصناف لا تدخل في إجمالي ميزانية الشراء.`,
+    );
+  }
+
+  if (
+    summary.excessValueMissingCostProducts >
+    0
+  ) {
+    warnings.push(
+      `يوجد ${summary.excessValueMissingCostProducts} صنف لديه فائض محتمل لكن قيمة تكلفته الحالية غير موثوقة أو كمية التكلفة لا تطابق المخزون؛ هذه الأصناف لا تدخل في إجمالي قيمة الفائض.`,
+    );
+  }
+
+  if (
+    summary.costQuantityMismatchProducts >
+    0
+  ) {
+    warnings.push(
+      `يوجد ${summary.costQuantityMismatchProducts} صنف فيه فرق بين كمية المخزون وكمية محاسبة التكلفة؛ الأثر المالي المعتمد على قيمة المخزون يعرض N/A حتى تتم مطابقة الكمية.`,
     );
   }
 
@@ -2090,6 +2347,8 @@ async function handleReport(
         `مخاطر النفاد: نفاد فعلي مع بيع خلال آخر ${LOW_COVERAGE_DAYS} يوم، أو تغطية ≤${STOCKOUT_HIGH_DAYS} أيام (مرتفع)، أو ≤${LOW_COVERAGE_DAYS} يوم (مراقبة). مخاطر الفائض لا تبدأ قبل عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم؛ مرتفعة للصنف الميت/بلا طلب صافي بعمر 90 يوم أو تغطية >${OVERSTOCK_HIGH_DAYS} يوم، وتحت المراقبة للصنف البطيء/بلا طلب صافي أو تغطية >${HIGH_COVERAGE_DAYS} يوم. البيانات غير الكافية لا تُحوّل إلى إنذار وهمي.`,
       inventoryAction:
         `خطة الكمية تستخدم متوسط صافي الطلب اليومي الموثوق. هدف إعادة الطلب هو ${TARGET_COVERAGE_DAYS} يوم: الكمية المقترحة = مخزون الهدف − المخزون الحالي، بحد أدنى صفر. الفائض المحتمل يُحسب فوق حد ${HIGH_COVERAGE_DAYS} يوم ولا يُفعّل قبل عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم. إذا كان صافي الطلب صفرًا، لا يُقترح شراء؛ وبعد عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم تظهر الكمية الحالية كفائض محتمل للمراجعة. التاريخ غير الكافي يعرض N/A بدل رقم وهمي.`,
+      financialImpact:
+        "ميزانية إعادة الطلب = الكمية المقترحة × التكلفة المرجعية الحالية للصنف، لذلك هي تقدير شراء وليست فاتورة مورد. قيمة الفائض ورأس المال في البطيء/الميت تعتمد قيمة المخزون الدفترية الحالية ولا تُحسب إلا عندما كمية محاسبة التكلفة تطابق المخزون. قد تتداخل قيمة الفائض مع رأس المال البطيء/الميت لنفس الصنف، لذلك لا يُفترض جمع المؤشرين معًا. التكلفة الناقصة أو فرق الكمية يعرض N/A ولا يدخل بصمت في الإجماليات.",
     },
 
     products:
