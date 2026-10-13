@@ -186,6 +186,66 @@ function daysBetween(
   );
 }
 
+function roundOneDecimal(
+  value: number,
+) {
+  return Math.round(
+    value * 10,
+  ) / 10;
+}
+
+function sellThroughPercent(
+  soldQuantity: number,
+  currentQuantity: number | null,
+) {
+  if (
+    currentQuantity === null
+  ) {
+    return null;
+  }
+
+  const denominator =
+    soldQuantity +
+    Math.max(
+      0,
+      currentQuantity,
+    );
+
+  if (
+    denominator <= 0
+  ) {
+    return null;
+  }
+
+  return roundOneDecimal(
+    (
+      soldQuantity /
+      denominator
+    ) * 100,
+  );
+}
+
+function effectiveSalesWindowDays(
+  maximumDays: number,
+  ageDays: number,
+  historyCoverageDays: number,
+) {
+  if (
+    historyCoverageDays <= 0
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    1,
+    Math.min(
+      maximumDays,
+      ageDays + 1,
+      historyCoverageDays,
+    ),
+  );
+}
+
 function validPositiveInteger(
   value: unknown,
 ) {
@@ -897,6 +957,73 @@ async function handleReport(
               )
             : null;
 
+        const sellThrough30Percent =
+          sellThroughPercent(
+            sale.sold30,
+            currentQuantity,
+          );
+
+        const sellThrough90Percent =
+          sellThroughPercent(
+            sale.sold90,
+            currentQuantity,
+          );
+
+        const salesWindow30Days =
+          effectiveSalesWindowDays(
+            30,
+            ageDays,
+            historyCoverageDays,
+          );
+
+        const salesWindow90Days =
+          effectiveSalesWindowDays(
+            90,
+            ageDays,
+            historyCoverageDays,
+          );
+
+        let dailySalesRate:
+          number | null = null;
+
+        let daysOfSupplyBasisDays:
+          30 | 90 | null = null;
+
+        if (
+          sale.sold30 > 0 &&
+          salesWindow30Days > 0
+        ) {
+          dailySalesRate =
+            sale.sold30 /
+            salesWindow30Days;
+
+          daysOfSupplyBasisDays =
+            30;
+        } else if (
+          sale.sold90 > 0 &&
+          salesWindow90Days > 0
+        ) {
+          dailySalesRate =
+            sale.sold90 /
+            salesWindow90Days;
+
+          daysOfSupplyBasisDays =
+            90;
+        }
+
+        const daysOfSupply =
+          currentQuantity !== null &&
+          dailySalesRate !== null &&
+          dailySalesRate > 0
+            ? roundOneDecimal(
+                Math.max(
+                  0,
+                  currentQuantity,
+                ) /
+                  dailySalesRate,
+              )
+            : null;
+
         return {
           productId:
             String(product.id),
@@ -941,11 +1068,64 @@ async function handleReport(
           totalSold:
             sale.totalSold,
 
+          sellThrough30Percent,
+          sellThrough90Percent,
+          salesWindow30Days,
+          salesWindow90Days,
+          daysOfSupply,
+          daysOfSupplyBasisDays,
+
           movementClass,
           neverSold:
             sale.totalSold === 0,
         };
       },
+    );
+
+  const trackedSellThrough30 =
+    reportProducts.filter(
+      (product) =>
+        product.currentQuantity !==
+          null &&
+        (
+          product.sold30 > 0 ||
+          product.currentQuantity > 0
+        ),
+    );
+
+  const trackedSellThrough90 =
+    reportProducts.filter(
+      (product) =>
+        product.currentQuantity !==
+          null &&
+        (
+          product.sold90 > 0 ||
+          product.currentQuantity > 0
+        ),
+    );
+
+  const aggregateSellThrough30Denominator =
+    trackedSellThrough30.reduce(
+      (sum, product) =>
+        sum +
+        product.sold30 +
+        Math.max(
+          0,
+          product.currentQuantity ?? 0,
+        ),
+      0,
+    );
+
+  const aggregateSellThrough90Denominator =
+    trackedSellThrough90.reduce(
+      (sum, product) =>
+        sum +
+        product.sold90 +
+        Math.max(
+          0,
+          product.currentQuantity ?? 0,
+        ),
+      0,
     );
 
   const summary = {
@@ -1019,6 +1199,81 @@ async function handleReport(
           product.stockState ===
           "untracked",
       ).length,
+
+    sellThrough30Percent:
+      aggregateSellThrough30Denominator >
+      0
+        ? roundOneDecimal(
+            (
+              trackedSellThrough30.reduce(
+                (sum, product) =>
+                  sum +
+                  product.sold30,
+                0,
+              ) /
+              aggregateSellThrough30Denominator
+            ) * 100,
+          )
+        : null,
+
+    sellThrough90Percent:
+      aggregateSellThrough90Denominator >
+      0
+        ? roundOneDecimal(
+            (
+              trackedSellThrough90.reduce(
+                (sum, product) =>
+                  sum +
+                  product.sold90,
+                0,
+              ) /
+              aggregateSellThrough90Denominator
+            ) * 100,
+          )
+        : null,
+
+    coverUnder14Days:
+      reportProducts.filter(
+        (product) =>
+          product.currentQuantity !==
+            null &&
+          product.currentQuantity > 0 &&
+          product.daysOfSupply !==
+            null &&
+          product.daysOfSupply <= 14,
+      ).length,
+
+    cover15To30Days:
+      reportProducts.filter(
+        (product) =>
+          product.currentQuantity !==
+            null &&
+          product.currentQuantity > 0 &&
+          product.daysOfSupply !==
+            null &&
+          product.daysOfSupply > 14 &&
+          product.daysOfSupply <= 30,
+      ).length,
+
+    coverOver60Days:
+      reportProducts.filter(
+        (product) =>
+          product.currentQuantity !==
+            null &&
+          product.currentQuantity > 0 &&
+          product.daysOfSupply !==
+            null &&
+          product.daysOfSupply > 60,
+      ).length,
+
+    noVelocityInStock:
+      reportProducts.filter(
+        (product) =>
+          product.currentQuantity !==
+            null &&
+          product.currentQuantity > 0 &&
+          product.sold90 === 0,
+      ).length,
   };
 
   const warnings: string[] =
@@ -1090,6 +1345,10 @@ async function handleReport(
         "ميت: لديه مخزون، عمره 90 يوم أو أكثر، ولم يبع أي قطعة خلال آخر 90 يوم، ولا يُفعّل هذا التصنيف قبل توفر 90 يوم من تاريخ البيع المسجل.",
       new:
         "جديد: عمره أقل من 30 يوم ولم يصل إلى حد التصنيف السريع.",
+      sellThrough:
+        "Sell-through تقديري = الوحدات المباعة خلال الفترة ÷ (الوحدات المباعة خلال الفترة + المخزون الحالي). يفيد كمؤشر تصريف، لكنه ليس Snapshot تاريخي دقيق لبداية المخزون أو كل الاستلامات داخل الفترة.",
+      daysOfSupply:
+        "أيام التغطية = المخزون الحالي ÷ متوسط البيع اليومي. نستخدم سرعة آخر 30 يوم عند وجود بيع فيها، وإلا نرجع لسرعة 90 يوم. للصنف الجديد أو عند قِصر تاريخ البيانات، يتم تقصير نافذة المتوسط إلى الأيام المتاحة فعليًا.",
     },
 
     products:
