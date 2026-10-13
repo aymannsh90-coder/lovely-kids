@@ -10,6 +10,7 @@ import {
 import {
   ApiError,
   getOwnerInventoryIntelligenceReport,
+  type InventoryCoverageSignal,
   type InventoryMovementClass,
   type InventoryStockState,
   type OwnerInventoryIntelligenceProduct,
@@ -20,6 +21,9 @@ type SortMode =
   | "attention"
   | "sold30"
   | "sold90"
+  | "sell_through_30"
+  | "velocity"
+  | "days_of_supply"
   | "oldest"
   | "last_sale";
 
@@ -50,11 +54,62 @@ const stockLabels:
     untracked: "كمية غير مكتملة",
   };
 
+const coverageLabels:
+  Record<
+    InventoryCoverageSignal,
+    string
+  > = {
+    untracked: "مخزون غير متتبع",
+    insufficient_history:
+      "تاريخ غير كافٍ",
+    no_net_demand:
+      "لا يوجد طلب صافي",
+    out_of_stock: "نفد",
+    low: "نفد قريبًا",
+    healthy: "تغطية جيدة",
+    high: "تغطية عالية",
+  };
+
 function formatNumber(
   value: number,
 ) {
   return new Intl.NumberFormat(
     "en-US",
+  ).format(value);
+}
+
+function formatDecimal(
+  value: number,
+) {
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      maximumFractionDigits: 1,
+    },
+  ).format(value);
+}
+
+function formatPercent(
+  value: number | null,
+) {
+  return value === null
+    ? "N/A"
+    : `${formatDecimal(value)}%`;
+}
+
+function formatRate(
+  value: number | null,
+) {
+  if (value === null) {
+    return "N/A";
+  }
+
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    },
   ).format(value);
 }
 
@@ -285,6 +340,14 @@ export default function InventoryIntelligenceReportPage() {
     useState("all");
 
   const [
+    coverageFilter,
+    setCoverageFilter,
+  ] =
+    useState<
+      InventoryCoverageSignal | "all"
+    >("all");
+
+  const [
     sortMode,
     setSortMode,
   ] =
@@ -414,6 +477,15 @@ export default function InventoryIntelligenceReportPage() {
             }
 
             if (
+              coverageFilter !==
+                "all" &&
+              product.coverageSignal !==
+                coverageFilter
+            ) {
+              return false;
+            }
+
+            if (
               normalizedQuery
             ) {
               const haystack =
@@ -463,6 +535,84 @@ export default function InventoryIntelligenceReportPage() {
             return (
               right.sold90 -
               left.sold90
+            );
+          }
+
+          if (
+            sortMode ===
+            "sell_through_30"
+          ) {
+            if (
+              left.sellThrough30Percent ===
+                null &&
+              right.sellThrough30Percent ===
+                null
+            ) {
+              return 0;
+            }
+
+            if (
+              left.sellThrough30Percent ===
+              null
+            ) {
+              return 1;
+            }
+
+            if (
+              right.sellThrough30Percent ===
+              null
+            ) {
+              return -1;
+            }
+
+            return (
+              right.sellThrough30Percent -
+              left.sellThrough30Percent
+            );
+          }
+
+          if (
+            sortMode ===
+            "velocity"
+          ) {
+            return (
+              (right.averageDailyNetDemand ??
+                -1) -
+              (left.averageDailyNetDemand ??
+                -1)
+            );
+          }
+
+          if (
+            sortMode ===
+            "days_of_supply"
+          ) {
+            if (
+              left.daysOfSupply ===
+                null &&
+              right.daysOfSupply ===
+                null
+            ) {
+              return 0;
+            }
+
+            if (
+              left.daysOfSupply ===
+              null
+            ) {
+              return 1;
+            }
+
+            if (
+              right.daysOfSupply ===
+              null
+            ) {
+              return -1;
+            }
+
+            return (
+              left.daysOfSupply -
+              right.daysOfSupply
             );
           }
 
@@ -533,6 +683,7 @@ export default function InventoryIntelligenceReportPage() {
       movementFilter,
       stockFilter,
       categoryFilter,
+      coverageFilter,
       sortMode,
     ]);
 
@@ -579,13 +730,13 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1 · Inventory Intelligence
+            Stage 5.1–5.2 · Inventory Intelligence
           </span>
           <h1>
-            عمر وحركة المخزون
+            عمر وحركة وتغطية المخزون
           </h1>
           <p>
-            يحدد الأصناف السريعة والبطيئة والميتة من تاريخ البيع الفعلي، ويعرض آخر بيع وآخر شراء وعمر الصنف لاتخاذ قرار الطلب أو التصريف.
+            يحدد الأصناف السريعة والبطيئة والميتة، ويضيف نسبة التصريف وأيام تغطية المخزون حتى تعرف أين المخزون ناقص وأين رأس المال متوقف.
           </p>
         </div>
 
@@ -597,10 +748,15 @@ export default function InventoryIntelligenceReportPage() {
             {report.asOfDate}
           </strong>
           <small>
-            تاريخ بيع مسجل:{" "}
+            بيع مكتمل:{" "}
             {formatNumber(
               report.history
                 .coverageDays,
+            )}{" "}
+            يوم · حركات مخزون:{" "}
+            {formatNumber(
+              report.history
+                .inventoryMovementCoverageDays,
             )}{" "}
             يوم
           </small>
@@ -685,6 +841,75 @@ export default function InventoryIntelligenceReportPage() {
             report.summary
               .totalProducts,
           )} صنف فعّال في التقرير`}
+        />
+      </div>
+
+      <div className="inventory-intelligence-metrics">
+        <Metric
+          label="تصريف 30 يوم"
+          value={formatPercent(
+            report.summary
+              .sellThrough30Percent,
+          )}
+          hint={`${formatNumber(
+            report.summary
+              .sellThrough30ReliableProducts,
+          )} صنف بنافذة حركة موثوقة كاملة`}
+          emphasis
+        />
+
+        <Metric
+          label="تصريف 90 يوم"
+          value={formatPercent(
+            report.summary
+              .sellThrough90Percent,
+          )}
+          hint={`${formatNumber(
+            report.summary
+              .sellThrough90ReliableProducts,
+          )} صنف بنافذة حركة موثوقة كاملة`}
+        />
+
+        <Metric
+          label="تغطية حتى 14 يوم"
+          value={formatNumber(
+            report.summary
+              .coverUnder14Days,
+          )}
+          hint="مخزون متوفر لكن سرعته الحالية قد تنفده قريبًا"
+        />
+
+        <Metric
+          label="تغطية 15–60 يوم"
+          value={formatNumber(
+            report.summary
+              .cover15To60Days,
+          )}
+          hint="تغطية جيدة حسب صافي الطلب الحالي"
+        />
+
+        <Metric
+          label="تغطية فوق 60 يوم"
+          value={formatNumber(
+            report.summary
+              .coverOver60Days,
+          )}
+          hint="مرشح للمراجعة إذا استمرت نفس سرعة البيع"
+        />
+
+        <Metric
+          label="بيانات تغطية غير كافية"
+          value={formatNumber(
+            report.summary
+              .insufficientCoverageData,
+          )}
+          hint={`يلزم ${formatNumber(
+            report.thresholds
+              .minimumVelocityHistoryDays,
+          )} أيام حركة موثوقة على الأقل؛ بلا طلب صافي: ${formatNumber(
+            report.summary
+              .noVelocityInStock,
+          )}`}
         />
       </div>
 
@@ -806,6 +1031,47 @@ export default function InventoryIntelligenceReportPage() {
 
         <label>
           <span>
+            التغطية
+          </span>
+          <select
+            value={
+              coverageFilter
+            }
+            onChange={(event) =>
+              setCoverageFilter(
+                event.target
+                  .value as
+                  | InventoryCoverageSignal
+                  | "all",
+              )
+            }
+          >
+            <option value="all">
+              كل الإشارات
+            </option>
+            {(
+              Object.keys(
+                coverageLabels,
+              ) as InventoryCoverageSignal[]
+            ).map(
+              (signal) => (
+                <option
+                  key={signal}
+                  value={signal}
+                >
+                  {
+                    coverageLabels[
+                      signal
+                    ]
+                  }
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+
+        <label>
+          <span>
             الترتيب
           </span>
           <select
@@ -826,6 +1092,15 @@ export default function InventoryIntelligenceReportPage() {
             </option>
             <option value="sold90">
               الأكثر بيعًا 90 يوم
+            </option>
+            <option value="sell_through_30">
+              أعلى تصريف 30 يوم
+            </option>
+            <option value="velocity">
+              أعلى سرعة طلب صافية
+            </option>
+            <option value="days_of_supply">
+              أقل أيام تغطية
             </option>
             <option value="oldest">
               الأقدم
@@ -854,7 +1129,7 @@ export default function InventoryIntelligenceReportPage() {
               تفاصيل الأصناف
             </h2>
             <p>
-              البيع هنا عدد القطع المكتملة، وليس قيمة المبيعات.
+              بيع 30/90 للتصنيف هو البيع المكتمل؛ Sell-through والسرعة والتغطية تعتمد صافي حركة المخزون بعد المرتجعات والإلغاءات.
             </p>
           </div>
 
@@ -884,6 +1159,18 @@ export default function InventoryIntelligenceReportPage() {
                 </th>
                 <th>
                   بيع 90 يوم
+                </th>
+                <th>
+                  Sell-through
+                </th>
+                <th>
+                  سرعة صافية
+                </th>
+                <th>
+                  أيام التغطية
+                </th>
+                <th>
+                  حالة التغطية
                 </th>
                 <th>
                   آخر بيع
@@ -1010,6 +1297,99 @@ export default function InventoryIntelligenceReportPage() {
 
                     <td>
                       <strong>
+                        30d{" "}
+                        {formatPercent(
+                          product.sellThrough30Percent,
+                        )}
+                      </strong>
+                      <small>
+                        {product.sellThrough30Reliable
+                          ? `صافي ${formatNumber(
+                              product.sellThrough30NetDemand,
+                            )} من ${formatNumber(
+                              product.sellThrough30AvailableUnits ??
+                                0,
+                            )} · ${formatNumber(
+                              product.sellThrough30WindowDays,
+                            )} يوم`
+                          : "30d: سجل الحركات لا يغطي النافذة كاملة"}
+                      </small>
+                      <small>
+                        90d{" "}
+                        {formatPercent(
+                          product.sellThrough90Percent,
+                        )}
+                        {product.sellThrough90Reliable
+                          ? ` · صافي ${formatNumber(
+                              product.sellThrough90NetDemand,
+                            )}`
+                          : " · N/A"}
+                      </small>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {formatRate(
+                          product.averageDailyNetDemand,
+                        )}{" "}
+                        {product.averageDailyNetDemand ===
+                        null
+                          ? ""
+                          : "قطعة/يوم"}
+                      </strong>
+                      <small>
+                        صافي{" "}
+                        {formatNumber(
+                          product.velocityNetDemand,
+                        )}{" "}
+                        خلال{" "}
+                        {formatNumber(
+                          product.velocityWindowDays,
+                        )}{" "}
+                        يوم
+                      </small>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {product.daysOfSupply ===
+                        null
+                          ? "N/A"
+                          : `${formatDecimal(
+                              product.daysOfSupply,
+                            )} يوم`}
+                      </strong>
+                      <small>
+                        {product.coverageSignal ===
+                        "no_net_demand"
+                          ? "لا توجد حركة طلب صافية"
+                          : product.coverageSignal ===
+                              "insufficient_history"
+                            ? "تاريخ الحركة غير كافٍ"
+                            : product.coverageSignal ===
+                                "untracked"
+                              ? "المخزون غير متتبع"
+                              : `نافذة السرعة ${formatNumber(
+                                  product.velocityWindowDays,
+                                )} يوم`}
+                      </small>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`inventory-intelligence-badge coverage-${product.coverageSignal}`}
+                      >
+                        {
+                          coverageLabels[
+                            product
+                              .coverageSignal
+                          ]
+                        }
+                      </span>
+                    </td>
+
+                    <td>
+                      <strong>
                         {formatDate(
                           product.lastSaleDate,
                         )}
@@ -1069,7 +1449,7 @@ export default function InventoryIntelligenceReportPage() {
                 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={13}
                     className="inventory-intelligence-empty"
                   >
                     لا توجد أصناف مطابقة للفلاتر الحالية.
@@ -1121,6 +1501,24 @@ export default function InventoryIntelligenceReportPage() {
             {
               report.methodology
                 .new
+            }
+          </p>
+          <p>
+            <strong>
+              Sell-through:
+            </strong>{" "}
+            {
+              report.methodology
+                .sellThrough
+            }
+          </p>
+          <p>
+            <strong>
+              أيام التغطية:
+            </strong>{" "}
+            {
+              report.methodology
+                .daysOfSupply
             }
           </p>
           <p>

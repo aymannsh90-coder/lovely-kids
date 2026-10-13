@@ -2,6 +2,7 @@ import {
   exchangeDocumentsTable,
   exchangeSaleItemsTable,
   financeTransactionsTable,
+  inventoryMovementsTable,
   ordersTable,
   posPurchaseItemsTable,
   posPurchasesTable,
@@ -11,7 +12,9 @@ import {
 } from "@workspace/db/schema";
 import {
   and,
+  asc,
   eq,
+  gte,
   inArray,
   isNull,
 } from "drizzle-orm";
@@ -35,6 +38,30 @@ type StockState =
   | "out_of_stock"
   | "untracked";
 
+type CoverageSignal =
+  | "untracked"
+  | "insufficient_history"
+  | "no_net_demand"
+  | "out_of_stock"
+  | "low"
+  | "healthy"
+  | "high";
+
+type ProductInventoryMovement = {
+  movementType: string;
+  quantityDelta: number;
+  movementDate: string;
+};
+
+type SellThroughWindow = {
+  reliable: boolean;
+  observationStartDate: string;
+  observationDays: number;
+  netDemandQuantity: number;
+  availableUnits: number | null;
+  percent: number | null;
+};
+
 type ProductSales = {
   sold30: number;
   sold90: number;
@@ -53,6 +80,26 @@ const SLOW_30_MAX = 1;
 const SLOW_90_MAX = 3;
 const NEW_PRODUCT_DAYS = 30;
 const DEAD_PRODUCT_DAYS = 90;
+const MIN_VELOCITY_HISTORY_DAYS = 7;
+const LOW_COVERAGE_DAYS = 14;
+const HIGH_COVERAGE_DAYS = 60;
+
+const DEMAND_MOVEMENT_TYPES =
+  new Set([
+    "pos_sale",
+    "pos_sale_void",
+    "pos_sale_edit",
+    "pos_sale_return",
+    "pos_sale_return_void",
+    "online_order",
+    "online_order_cancel",
+    "online_order_restore",
+    "online_order_edit",
+    "exchange_return",
+    "exchange_sale",
+    "exchange_return_void",
+    "exchange_sale_void",
+  ]);
 
 const json = (
   data: unknown,
@@ -184,6 +231,175 @@ function daysBetween(
         86_400_000,
     ),
   );
+}
+
+function roundOneDecimal(
+  value: number,
+) {
+  return Math.round(
+    value * 10,
+  ) / 10;
+}
+
+function latestDateKey(
+  first: string,
+  ...rest: string[]
+) {
+  return rest.reduce(
+    (latest, current) =>
+      current > latest
+        ? current
+        : latest,
+    first,
+  );
+}
+
+function netDemandContribution(
+  movementType: string,
+  quantityDelta: number,
+) {
+  return DEMAND_MOVEMENT_TYPES.has(
+    movementType,
+  )
+    ? -quantityDelta
+    : 0;
+}
+
+function calculateSellThroughWindow(
+  input: {
+    currentQuantity: number | null;
+    inventoryStartDate: string;
+    trackingStartDate: string | null;
+    today: string;
+    maximumDays: number;
+    movements: ProductInventoryMovement[];
+  },
+): SellThroughWindow {
+  const requestedStartDate =
+    addDays(
+      input.today,
+      -(input.maximumDays - 1),
+    );
+
+  const observationStartDate =
+    latestDateKey(
+      requestedStartDate,
+      input.inventoryStartDate,
+    );
+
+  const observationDays =
+    daysBetween(
+      observationStartDate,
+      input.today,
+    ) + 1;
+
+  const reliable =
+    input.currentQuantity !== null &&
+    input.trackingStartDate !== null &&
+    input.trackingStartDate <=
+      observationStartDate;
+
+  if (!reliable) {
+    return {
+      reliable: false,
+      observationStartDate,
+      observationDays,
+      netDemandQuantity: 0,
+      availableUnits: null,
+      percent: null,
+    };
+  }
+
+  const windowMovements =
+    input.movements.filter(
+      (movement) =>
+        movement.movementDate >=
+          observationStartDate &&
+        movement.movementDate <=
+          input.today,
+    );
+
+  const totalInventoryDelta =
+    windowMovements.reduce(
+      (sum, movement) =>
+        sum +
+        movement.quantityDelta,
+      0,
+    );
+
+  const rawNetDemand =
+    windowMovements.reduce(
+      (sum, movement) =>
+        sum +
+        netDemandContribution(
+          movement.movementType,
+          movement.quantityDelta,
+        ),
+      0,
+    );
+
+  const nonDemandInventoryDelta =
+    windowMovements.reduce(
+      (sum, movement) =>
+        DEMAND_MOVEMENT_TYPES.has(
+          movement.movementType,
+        )
+          ? sum
+          : sum +
+            movement.quantityDelta,
+      0,
+    );
+
+  const beginningInventory =
+    Math.max(
+      0,
+      input.currentQuantity ?? 0,
+    ) -
+    totalInventoryDelta;
+
+  const availableUnits =
+    beginningInventory +
+    nonDemandInventoryDelta;
+
+  if (
+    beginningInventory < 0 ||
+    availableUnits < 0
+  ) {
+    return {
+      reliable: false,
+      observationStartDate,
+      observationDays,
+      netDemandQuantity: 0,
+      availableUnits: null,
+      percent: null,
+    };
+  }
+
+  const netDemandQuantity =
+    Math.max(
+      0,
+      rawNetDemand,
+    );
+
+  return {
+    reliable: true,
+    observationStartDate,
+    observationDays,
+    netDemandQuantity,
+    availableUnits,
+    percent:
+      availableUnits > 0
+        ? roundOneDecimal(
+            Math.min(
+              100,
+              (
+                netDemandQuantity /
+                availableUnits
+              ) * 100,
+            ),
+          )
+        : null,
+  };
 }
 
 function validPositiveInteger(
@@ -444,6 +660,8 @@ async function handleReport(
     onlineDoneTransactions,
     exchangeSaleRows,
     purchaseRows,
+    earliestMovementRows,
+    recentMovementRows,
   ] = await Promise.all([
     db
       .select({
@@ -596,6 +814,47 @@ async function handleReport(
         eq(
           posPurchasesTable.status,
           "completed",
+        ),
+      ),
+
+    db
+      .select({
+        occurredAt:
+          inventoryMovementsTable.occurredAt,
+      })
+      .from(
+        inventoryMovementsTable,
+      )
+      .orderBy(
+        asc(
+          inventoryMovementsTable.occurredAt,
+        ),
+      )
+      .limit(1),
+
+    db
+      .select({
+        productId:
+          inventoryMovementsTable.productId,
+        movementType:
+          inventoryMovementsTable.movementType,
+        quantityDelta:
+          inventoryMovementsTable.quantityDelta,
+        occurredAt:
+          inventoryMovementsTable.occurredAt,
+      })
+      .from(
+        inventoryMovementsTable,
+      )
+      .where(
+        gte(
+          inventoryMovementsTable.occurredAt,
+          new Date(
+            `${addDays(
+              cutoff90,
+              -1,
+            )}T00:00:00Z`,
+          ),
         ),
       ),
   ]);
@@ -826,6 +1085,66 @@ async function handleReport(
     historyCoverageDays >=
     DEAD_PRODUCT_DAYS;
 
+  const movementHistoryStartDate =
+    earliestMovementRows[0]
+      ? dateKeyFromUnknown(
+          earliestMovementRows[0]
+            .occurredAt,
+        )
+      : null;
+
+  const movementHistoryCoverageDays =
+    movementHistoryStartDate
+      ? daysBetween(
+          movementHistoryStartDate,
+          today,
+        ) + 1
+      : 0;
+
+  const movementsByProduct =
+    new Map<
+      number,
+      ProductInventoryMovement[]
+    >();
+
+  for (
+    const movement of
+      recentMovementRows
+  ) {
+    if (
+      movement.productId === null
+    ) {
+      continue;
+    }
+
+    const movementDate =
+      dateKeyFromUnknown(
+        movement.occurredAt,
+      );
+
+    if (!movementDate) {
+      continue;
+    }
+
+    const productMovements =
+      movementsByProduct.get(
+        movement.productId,
+      ) ?? [];
+
+    productMovements.push({
+      movementType:
+        movement.movementType,
+      quantityDelta:
+        movement.quantityDelta,
+      movementDate,
+    });
+
+    movementsByProduct.set(
+      movement.productId,
+      productMovements,
+    );
+  }
+
   const reportProducts =
     products.map(
       (product) => {
@@ -897,6 +1216,141 @@ async function handleReport(
               )
             : null;
 
+        const productMovements =
+          movementsByProduct.get(
+            product.id,
+          ) ?? [];
+
+        const sellThrough30 =
+          calculateSellThroughWindow({
+            currentQuantity,
+            inventoryStartDate,
+            trackingStartDate:
+              movementHistoryStartDate,
+            today,
+            maximumDays: 30,
+            movements:
+              productMovements,
+          });
+
+        const sellThrough90 =
+          calculateSellThroughWindow({
+            currentQuantity,
+            inventoryStartDate,
+            trackingStartDate:
+              movementHistoryStartDate,
+            today,
+            maximumDays: 90,
+            movements:
+              productMovements,
+          });
+
+        const velocityStartDate =
+          movementHistoryStartDate
+            ? latestDateKey(
+                cutoff30,
+                inventoryStartDate,
+                movementHistoryStartDate,
+              )
+            : null;
+
+        const velocityWindowDays =
+          velocityStartDate
+            ? daysBetween(
+                velocityStartDate,
+                today,
+              ) + 1
+            : 0;
+
+        const velocityRawNetDemand =
+          velocityStartDate
+            ? productMovements
+                .filter(
+                  (movement) =>
+                    movement.movementDate >=
+                      velocityStartDate &&
+                    movement.movementDate <=
+                      today,
+                )
+                .reduce(
+                  (
+                    sum,
+                    movement,
+                  ) =>
+                    sum +
+                    netDemandContribution(
+                      movement.movementType,
+                      movement.quantityDelta,
+                    ),
+                  0,
+                )
+            : 0;
+
+        const velocityNetDemand =
+          Math.max(
+            0,
+            velocityRawNetDemand,
+          );
+
+        const velocityHistoryReliable =
+          currentQuantity !== null &&
+          velocityStartDate !==
+            null &&
+          velocityWindowDays >=
+            MIN_VELOCITY_HISTORY_DAYS;
+
+        const averageDailyNetDemand =
+          velocityHistoryReliable
+            ? velocityNetDemand /
+              velocityWindowDays
+            : null;
+
+        let daysOfSupply:
+          number | null = null;
+
+        let coverageSignal:
+          CoverageSignal;
+
+        if (
+          currentQuantity === null
+        ) {
+          coverageSignal =
+            "untracked";
+        } else if (
+          !velocityHistoryReliable
+        ) {
+          coverageSignal =
+            "insufficient_history";
+        } else if (
+          currentQuantity <= 0
+        ) {
+          daysOfSupply = 0;
+          coverageSignal =
+            "out_of_stock";
+        } else if (
+          averageDailyNetDemand ===
+            null ||
+          averageDailyNetDemand <= 0
+        ) {
+          coverageSignal =
+            "no_net_demand";
+        } else {
+          daysOfSupply =
+            roundOneDecimal(
+              currentQuantity /
+                averageDailyNetDemand,
+            );
+
+          coverageSignal =
+            daysOfSupply <=
+            LOW_COVERAGE_DAYS
+              ? "low"
+              : daysOfSupply <=
+                  HIGH_COVERAGE_DAYS
+                ? "healthy"
+                : "high";
+        }
+
         return {
           productId:
             String(product.id),
@@ -941,12 +1395,99 @@ async function handleReport(
           totalSold:
             sale.totalSold,
 
+          sellThrough30Percent:
+            sellThrough30.percent,
+          sellThrough90Percent:
+            sellThrough90.percent,
+          sellThrough30Reliable:
+            sellThrough30.reliable,
+          sellThrough90Reliable:
+            sellThrough90.reliable,
+          sellThrough30WindowDays:
+            sellThrough30.observationDays,
+          sellThrough90WindowDays:
+            sellThrough90.observationDays,
+          sellThrough30NetDemand:
+            sellThrough30.netDemandQuantity,
+          sellThrough90NetDemand:
+            sellThrough90.netDemandQuantity,
+          sellThrough30AvailableUnits:
+            sellThrough30.availableUnits,
+          sellThrough90AvailableUnits:
+            sellThrough90.availableUnits,
+          velocityWindowDays,
+          velocityNetDemand,
+          averageDailyNetDemand,
+          daysOfSupply,
+          coverageSignal,
+
           movementClass,
           neverSold:
             sale.totalSold === 0,
         };
       },
     );
+
+  const aggregateSellThrough = (
+    days: 30 | 90,
+  ) => {
+    const reliableProducts =
+      reportProducts.filter(
+        (product) =>
+          days === 30
+            ? product.sellThrough30Reliable
+            : product.sellThrough90Reliable,
+      );
+
+    const netDemand =
+      reliableProducts.reduce(
+        (sum, product) =>
+          sum +
+          (
+            days === 30
+              ? product.sellThrough30NetDemand
+              : product.sellThrough90NetDemand
+          ),
+        0,
+      );
+
+    const availableUnits =
+      reliableProducts.reduce(
+        (sum, product) =>
+          sum +
+          (
+            (
+              days === 30
+                ? product.sellThrough30AvailableUnits
+                : product.sellThrough90AvailableUnits
+            ) ?? 0
+          ),
+        0,
+      );
+
+    return {
+      reliableProducts:
+        reliableProducts.length,
+      percent:
+        availableUnits > 0
+          ? roundOneDecimal(
+              Math.min(
+                100,
+                (
+                  netDemand /
+                  availableUnits
+                ) * 100,
+              ),
+            )
+          : null,
+    };
+  };
+
+  const aggregateSellThrough30 =
+    aggregateSellThrough(30);
+
+  const aggregateSellThrough90 =
+    aggregateSellThrough(90);
 
   const summary = {
     totalProducts:
@@ -1019,6 +1560,59 @@ async function handleReport(
           product.stockState ===
           "untracked",
       ).length,
+
+    sellThrough30Percent:
+      aggregateSellThrough30.percent,
+
+    sellThrough90Percent:
+      aggregateSellThrough90.percent,
+
+    sellThrough30ReliableProducts:
+      aggregateSellThrough30
+        .reliableProducts,
+
+    sellThrough90ReliableProducts:
+      aggregateSellThrough90
+        .reliableProducts,
+
+    coverUnder14Days:
+      reportProducts.filter(
+        (product) =>
+          product.coverageSignal ===
+          "low",
+      ).length,
+
+    cover15To60Days:
+      reportProducts.filter(
+        (product) =>
+          product.coverageSignal ===
+          "healthy",
+      ).length,
+
+    coverOver60Days:
+      reportProducts.filter(
+        (product) =>
+          product.coverageSignal ===
+          "high",
+      ).length,
+
+    noVelocityInStock:
+      reportProducts.filter(
+        (product) =>
+          product.stockState ===
+            "in_stock" &&
+          product.coverageSignal ===
+            "no_net_demand",
+      ).length,
+
+    insufficientCoverageData:
+      reportProducts.filter(
+        (product) =>
+          product.coverageSignal ===
+            "insufficient_history" ||
+          product.coverageSignal ===
+            "untracked",
+      ).length,
   };
 
   const warnings: string[] =
@@ -1035,6 +1629,29 @@ async function handleReport(
   ) {
     warnings.push(
       `تاريخ المبيعات المسجل يغطي ${historyCoverageDays} يوم؛ تصنيف البطيء متاح، لكن لا يتم تصنيف أي صنف كميت قبل اكتمال 90 يوم من البيانات المسجلة.`,
+    );
+  }
+
+  if (
+    movementHistoryStartDate ===
+    null
+  ) {
+    warnings.push(
+      "لا توجد حركات مخزون مسجلة يمكن الاعتماد عليها بعد؛ Sell-through وأيام التغطية ستظهر غير متاحة حتى يبدأ سجل الحركة الموثوق.",
+    );
+  } else if (
+    movementHistoryCoverageDays <
+    30
+  ) {
+    warnings.push(
+      `سجل حركة المخزون الموثوق يبدأ من ${movementHistoryStartDate} ويغطي ${movementHistoryCoverageDays} يوم. Sell-through 30/90 يظهر فقط للصنف الذي تغطي الحركات كامل نافذته؛ أيام التغطية تستخدم نافذة متكيفة موثوقة لا تتجاوز 30 يوم.`,
+    );
+  } else if (
+    movementHistoryCoverageDays <
+    90
+  ) {
+    warnings.push(
+      `سجل حركة المخزون يغطي ${movementHistoryCoverageDays} يوم. Sell-through 30 متاح عند اكتمال نافذة الصنف، بينما 90 يوم يبقى غير متاح للأصناف الأقدم حتى تكتمل التغطية.`,
     );
   }
 
@@ -1057,6 +1674,10 @@ async function handleReport(
         historyCoverageDays,
       hasThirtyDayHistory,
       hasNinetyDayHistory,
+      earliestInventoryMovementDate:
+        movementHistoryStartDate,
+      inventoryMovementCoverageDays:
+        movementHistoryCoverageDays,
     },
 
     thresholds: {
@@ -1072,6 +1693,12 @@ async function handleReport(
         NEW_PRODUCT_DAYS,
       deadProductDays:
         DEAD_PRODUCT_DAYS,
+      minimumVelocityHistoryDays:
+        MIN_VELOCITY_HISTORY_DAYS,
+      lowCoverageDays:
+        LOW_COVERAGE_DAYS,
+      highCoverageDays:
+        HIGH_COVERAGE_DAYS,
     },
 
     summary,
@@ -1090,6 +1717,10 @@ async function handleReport(
         "ميت: لديه مخزون، عمره 90 يوم أو أكثر، ولم يبع أي قطعة خلال آخر 90 يوم، ولا يُفعّل هذا التصنيف قبل توفر 90 يوم من تاريخ البيع المسجل.",
       new:
         "جديد: عمره أقل من 30 يوم ولم يصل إلى حد التصنيف السريع.",
+      sellThrough:
+        "Sell-through يعتمد على سجل حركة المخزون: صافي الطلب خلال النافذة ÷ الوحدات المتاحة (مخزون بداية النافذة + صافي الحركات غير البيعية مثل الشراء والتسويات). لا يظهر الرقم إلا إذا كان سجل الحركات يغطي كامل نافذة الصنف، وتُعكس المرتجعات والإلغاءات والـvoids تلقائيًا من quantityDelta.",
+      daysOfSupply:
+        `أيام التغطية = المخزون الحالي ÷ متوسط صافي الطلب اليومي من inventory_movements. نافذة السرعة متكيفة حتى 30 يوم وتبدأ من أحدث تاريخ بين بداية الصنف وبداية التتبع ونافذة 30 يوم، مع حد أدنى ${MIN_VELOCITY_HISTORY_DAYS} أيام موثوقة. المرتجعات والإلغاءات تقلل الطلب؛ المخزون غير المتتبع أو التاريخ الأقصر يعرض N/A بدل رقم وهمي.`,
     },
 
     products:
