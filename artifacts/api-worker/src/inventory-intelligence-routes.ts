@@ -1297,10 +1297,8 @@ async function handleReport(
 
         const averageDailyNetDemand =
           velocityHistoryReliable
-            ? roundOneDecimal(
-                velocityNetDemand /
-                  velocityWindowDays,
-              )
+            ? velocityNetDemand /
+              velocityWindowDays
             : null;
 
         let daysOfSupply:
@@ -1457,7 +1455,7 @@ async function handleReport(
             days === 30
               ? product.sellThrough30AvailableUnits
               : product.sellThrough90AvailableUnits
-          ),
+          ) ?? 0,
         0,
       );
 
