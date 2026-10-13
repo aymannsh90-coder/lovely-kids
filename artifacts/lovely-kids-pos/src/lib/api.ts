@@ -2830,6 +2830,11 @@ export type InventoryActionSignal =
   | "review_no_demand"
   | "balanced";
 
+export type InventoryFinancialCostQuality =
+  | "confirmed"
+  | "estimated"
+  | "mixed";
+
 export interface OwnerInventoryIntelligenceProduct {
   productId: string;
   nameAr: string;
@@ -2879,6 +2884,18 @@ export interface OwnerInventoryIntelligenceProduct {
   maxHealthyStockUnits: number | null;
   suggestedReorderQuantity: number | null;
   excessUnits: number | null;
+
+  costInitialized: boolean;
+  costQuality: InventoryFinancialCostQuality | null;
+  costStockMatchesAccounting: boolean;
+  accountingQuantity: number | null;
+  inventoryValueMinor: number | null;
+  referenceUnitCostMinor: number | null;
+  averageUnitCostMinor: number | null;
+  currentInventoryValueMinor: number | null;
+  suggestedReorderBudgetMinor: number | null;
+  excessInventoryValueMinor: number | null;
+  slowDeadCapitalMinor: number | null;
 
   movementClass: InventoryMovementClass;
   neverSold: boolean;
@@ -2946,6 +2963,13 @@ export interface OwnerInventoryIntelligenceReport {
     excessUnits: number;
     noDemandReviewProducts: number;
     insufficientActionData: number;
+    suggestedReorderBudgetKnownMinor: number;
+    reorderBudgetMissingCostProducts: number;
+    excessInventoryValueKnownMinor: number;
+    excessValueMissingCostProducts: number;
+    slowDeadCapitalKnownMinor: number;
+    slowDeadCapitalMissingCostProducts: number;
+    costQuantityMismatchProducts: number;
   };
 
   warnings: string[];
@@ -2961,6 +2985,7 @@ export interface OwnerInventoryIntelligenceReport {
     daysOfSupply: string;
     inventoryRisk: string;
     inventoryAction: string;
+    financialImpact: string;
   };
 
   products: OwnerInventoryIntelligenceProduct[];
