@@ -1331,7 +1331,7 @@ export default function InventoryIntelligenceReportPage() {
 
       <div className="inventory-intelligence-metrics">
         <Metric
-          label="ميزانية شراء معروفة"
+          label="ميزانية شراء تقديرية"
           value={formatMoney(
             report.summary
               .suggestedReorderBudgetKnownMinor,
@@ -1348,7 +1348,7 @@ export default function InventoryIntelligenceReportPage() {
         />
 
         <Metric
-          label="قيمة فائض قابلة للتحرير"
+          label="قيمة فائض محتملة"
           value={formatMoney(
             report.summary
               .excessInventoryValueKnownMinor,
