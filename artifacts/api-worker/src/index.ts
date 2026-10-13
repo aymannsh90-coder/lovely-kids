@@ -24,6 +24,7 @@ import { handleVisitorAnalyticsRequest } from "./visitor-analytics-routes";
 import { handleProductAnalyticsRequest } from "./product-analytics-routes";
 import { handleOwnerCostRequest } from "./owner-cost-routes";
 import { handleOwnerReportRequest } from "./gross-profit-report-routes";
+import { handleInventoryIntelligenceRequest } from "./inventory-intelligence-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
 import { handlePosSaleRequest } from "./pos-sale-routes";
 import { handlePosSaleReturnRequest } from "./pos-sale-return-routes";
@@ -618,6 +619,17 @@ export default {
 
       if (ownerReportResponse) {
         return ownerReportResponse;
+      }
+
+      const inventoryIntelligenceResponse =
+        await handleInventoryIntelligenceRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (inventoryIntelligenceResponse) {
+        return inventoryIntelligenceResponse;
       }
 
       const productAnalyticsResponse =

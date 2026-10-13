@@ -292,6 +292,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "inventory-intelligence",
+    group: "reports",
+    path: "/reports/inventory-intelligence",
+    title: "ذكاء المخزون",
+    description: "عمر المخزون والأصناف السريعة والبطيئة والميتة وآخر بيع وشراء.",
+    icon: "🧠",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "product-analytics",
     group: "reports",
     path: "/reports/product-analytics",
