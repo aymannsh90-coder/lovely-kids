@@ -736,8 +736,8 @@ function calculateInventoryActionPlan(input: {
       signal: reviewNoDemand
         ? "review_no_demand"
         : "balanced",
-      targetStockUnits: 0,
-      maxHealthyStockUnits: 0,
+      targetStockUnits: null,
+      maxHealthyStockUnits: null,
       suggestedReorderQuantity: 0,
       excessUnits: reviewNoDemand
         ? currentQuantity
