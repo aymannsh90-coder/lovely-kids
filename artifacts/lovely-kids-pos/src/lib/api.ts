@@ -2812,6 +2812,16 @@ export type InventoryCoverageSignal =
   | "healthy"
   | "high";
 
+export type InventoryRiskSignal =
+  | "untracked"
+  | "insufficient_history"
+  | "balanced"
+  | "stockout_now"
+  | "stockout_high"
+  | "stockout_watch"
+  | "overstock_high"
+  | "overstock_watch";
+
 export interface OwnerInventoryIntelligenceProduct {
   productId: string;
   nameAr: string;
@@ -2853,6 +2863,7 @@ export interface OwnerInventoryIntelligenceProduct {
   averageDailyNetDemand: number | null;
   daysOfSupply: number | null;
   coverageSignal: InventoryCoverageSignal;
+  inventoryRiskSignal: InventoryRiskSignal;
 
   movementClass: InventoryMovementClass;
   neverSold: boolean;
@@ -2879,8 +2890,11 @@ export interface OwnerInventoryIntelligenceReport {
     newProductDays: number;
     deadProductDays: number;
     minimumVelocityHistoryDays: number;
+    stockoutHighDays: number;
     lowCoverageDays: number;
     highCoverageDays: number;
+    overstockHighDays: number;
+    minimumOverstockAgeDays: number;
   };
 
   summary: {
@@ -2903,6 +2917,13 @@ export interface OwnerInventoryIntelligenceReport {
     coverOver60Days: number;
     noVelocityInStock: number;
     insufficientCoverageData: number;
+    stockoutNow: number;
+    stockoutHighRisk: number;
+    stockoutWatch: number;
+    overstockHighRisk: number;
+    overstockWatch: number;
+    balancedInventoryRisk: number;
+    insufficientRiskData: number;
   };
 
   warnings: string[];
@@ -2916,6 +2937,7 @@ export interface OwnerInventoryIntelligenceReport {
     new: string;
     sellThrough: string;
     daysOfSupply: string;
+    inventoryRisk: string;
   };
 
   products: OwnerInventoryIntelligenceProduct[];
