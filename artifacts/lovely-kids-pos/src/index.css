@@ -13420,7 +13420,7 @@ textarea:disabled {
 
 .inventory-intelligence-filters {
   display: grid;
-  grid-template-columns: minmax(230px, 1.5fr) repeat(4, minmax(135px, 0.8fr)) auto;
+  grid-template-columns: minmax(230px, 1.5fr) repeat(5, minmax(135px, 0.8fr)) auto;
   align-items: end;
   gap: 10px;
   padding: 15px 18px;
@@ -13492,7 +13492,7 @@ textarea:disabled {
 
 .inventory-intelligence-table {
   width: 100%;
-  min-width: 1640px;
+  min-width: 1900px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -13610,6 +13610,29 @@ textarea:disabled {
 .inventory-intelligence-action.movement-new {
   background: #eef4ff;
   color: #3538cd;
+}
+
+.inventory-intelligence-badge.coverage-low,
+.inventory-intelligence-badge.coverage-out_of_stock {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.inventory-intelligence-badge.coverage-healthy {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.inventory-intelligence-badge.coverage-high,
+.inventory-intelligence-badge.coverage-no_net_demand {
+  background: #fff4e5;
+  color: #b54708;
+}
+
+.inventory-intelligence-badge.coverage-insufficient_history,
+.inventory-intelligence-badge.coverage-untracked {
+  background: #f2f4f7;
+  color: #475467;
 }
 
 .inventory-intelligence-stock {
