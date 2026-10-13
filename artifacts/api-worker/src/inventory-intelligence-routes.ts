@@ -204,24 +204,6 @@ function validPositiveInteger(
     : null;
 }
 
-function validNonNegativeInteger(
-  value: unknown,
-) {
-  const numeric =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : NaN;
-
-  return Number.isSafeInteger(
-    numeric,
-  ) &&
-    numeric >= 0
-    ? numeric
-    : null;
-}
-
 function recordSale(
   map: Map<number, ProductSales>,
   input: {
@@ -321,6 +303,7 @@ function movementClassFor(input: {
   ageDays: number;
   sold30: number;
   sold90: number;
+  hasThirtyDayHistory: boolean;
   hasNinetyDayHistory: boolean;
 }): MovementClass {
   if (
@@ -353,6 +336,7 @@ function movementClassFor(input: {
   if (
     input.currentQuantity !== null &&
     input.currentQuantity > 0 &&
+    input.hasThirtyDayHistory &&
     input.sold30 <=
       SLOW_30_MAX &&
     input.sold90 <=
@@ -831,6 +815,10 @@ async function handleReport(
         ) + 1
       : 0;
 
+  const hasThirtyDayHistory =
+    historyCoverageDays >=
+    NEW_PRODUCT_DAYS;
+
   const hasNinetyDayHistory =
     historyCoverageDays >=
     DEAD_PRODUCT_DAYS;
@@ -894,6 +882,7 @@ async function handleReport(
               sale.sold30,
             sold90:
               sale.sold90,
+            hasThirtyDayHistory,
             hasNinetyDayHistory,
           });
 
@@ -1033,10 +1022,16 @@ async function handleReport(
     [];
 
   if (
+    !hasThirtyDayHistory
+  ) {
+    warnings.push(
+      `تاريخ المبيعات المسجل يغطي ${historyCoverageDays} يوم فقط، لذلك لا يتم تصنيف أي صنف كبطيء أو ميت قبل اكتمال 30 يوم من البيانات المسجلة.`,
+    );
+  } else if (
     !hasNinetyDayHistory
   ) {
     warnings.push(
-      `تاريخ المبيعات المسجل يغطي ${historyCoverageDays} يوم فقط، لذلك لا يتم تصنيف أي صنف كميت قبل اكتمال 90 يوم من البيانات المسجلة.`,
+      `تاريخ المبيعات المسجل يغطي ${historyCoverageDays} يوم؛ تصنيف البطيء متاح، لكن لا يتم تصنيف أي صنف كميت قبل اكتمال 90 يوم من البيانات المسجلة.`,
     );
   }
 
@@ -1057,6 +1052,7 @@ async function handleReport(
       earliestSaleDate,
       coverageDays:
         historyCoverageDays,
+      hasThirtyDayHistory,
       hasNinetyDayHistory,
     },
 
