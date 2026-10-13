@@ -339,8 +339,11 @@ function movementClassFor(input: {
     input.hasThirtyDayHistory &&
     input.sold30 <=
       SLOW_30_MAX &&
-    input.sold90 <=
-      SLOW_90_MAX
+    (
+      !input.hasNinetyDayHistory ||
+      input.sold90 <=
+        SLOW_90_MAX
+    )
   ) {
     return "slow";
   }
@@ -1082,7 +1085,7 @@ async function handleReport(
       fast:
         `سريع: بيع ${FAST_30_THRESHOLD} قطع أو أكثر خلال آخر 30 يوم، أو ${FAST_90_THRESHOLD} قطع أو أكثر خلال آخر 90 يوم.`,
       slow:
-        `بطيء: عمره 30 يوم أو أكثر، لديه مخزون، وباع بحد أقصى ${SLOW_30_MAX} خلال 30 يوم و${SLOW_90_MAX} خلال 90 يوم.`,
+        `بطيء: عمره 30 يوم أو أكثر، لديه مخزون، وباع بحد أقصى ${SLOW_30_MAX} خلال آخر 30 يوم، وعند توفر 90 يوم من التاريخ لا يزيد عن ${SLOW_90_MAX} خلال 90 يوم.`,
       dead:
         "ميت: لديه مخزون، عمره 90 يوم أو أكثر، ولم يبع أي قطعة خلال آخر 90 يوم، ولا يُفعّل هذا التصنيف قبل توفر 90 يوم من تاريخ البيع المسجل.",
       new:
