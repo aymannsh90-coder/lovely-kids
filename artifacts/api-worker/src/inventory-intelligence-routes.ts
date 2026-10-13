@@ -958,16 +958,20 @@ async function handleReport(
             : null;
 
         const sellThrough30Percent =
-          sellThroughPercent(
-            sale.sold30,
-            currentQuantity,
-          );
+          historyCoverageDays > 0
+            ? sellThroughPercent(
+                sale.sold30,
+                currentQuantity,
+              )
+            : null;
 
         const sellThrough90Percent =
-          sellThroughPercent(
-            sale.sold90,
-            currentQuantity,
-          );
+          historyCoverageDays > 0
+            ? sellThroughPercent(
+                sale.sold90,
+                currentQuantity,
+              )
+            : null;
 
         const salesWindow30Days =
           effectiveSalesWindowDays(
@@ -1201,6 +1205,7 @@ async function handleReport(
       ).length,
 
     sellThrough30Percent:
+      historyCoverageDays > 0 &&
       aggregateSellThrough30Denominator >
       0
         ? roundOneDecimal(
@@ -1217,6 +1222,7 @@ async function handleReport(
         : null,
 
     sellThrough90Percent:
+      historyCoverageDays > 0 &&
       aggregateSellThrough90Denominator >
       0
         ? roundOneDecimal(
