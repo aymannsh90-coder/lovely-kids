@@ -2828,6 +2828,13 @@ export interface OwnerInventoryIntelligenceProduct {
   sold90: number;
   totalSold: number;
 
+  sellThrough30Percent: number | null;
+  sellThrough90Percent: number | null;
+  salesWindow30Days: number;
+  salesWindow90Days: number;
+  daysOfSupply: number | null;
+  daysOfSupplyBasisDays: 30 | 90 | null;
+
   movementClass: InventoryMovementClass;
   neverSold: boolean;
 }
@@ -2863,6 +2870,12 @@ export interface OwnerInventoryIntelligenceReport {
     neverSoldInStock: number;
     fastOutOfStock: number;
     untrackedStock: number;
+    sellThrough30Percent: number | null;
+    sellThrough90Percent: number | null;
+    coverUnder14Days: number;
+    cover15To30Days: number;
+    coverOver60Days: number;
+    noVelocityInStock: number;
   };
 
   warnings: string[];
@@ -2874,6 +2887,8 @@ export interface OwnerInventoryIntelligenceReport {
     slow: string;
     dead: string;
     new: string;
+    sellThrough: string;
+    daysOfSupply: string;
   };
 
   products: OwnerInventoryIntelligenceProduct[];
