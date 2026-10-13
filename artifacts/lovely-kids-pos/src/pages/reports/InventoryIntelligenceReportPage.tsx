@@ -1905,13 +1905,15 @@ export default function InventoryIntelligenceReportPage() {
                                 )} · لا يوجد طلب صافي`
                               : product.inventoryActionSignal ===
                                   "balanced"
-                                ? `هدف ${formatNumber(
-                                    report.thresholds
-                                      .targetCoverageDays,
-                                  )} يوم: ${formatNumber(
-                                    product.targetStockUnits ??
-                                      0,
-                                  )} قطعة`
+                                ? product.targetStockUnits ===
+                                    null
+                                  ? "لا شراء حاليًا · لا يوجد طلب صافي بعد"
+                                  : `هدف ${formatNumber(
+                                      report.thresholds
+                                        .targetCoverageDays,
+                                    )} يوم: ${formatNumber(
+                                      product.targetStockUnits,
+                                    )} قطعة`
                                 : "N/A"}
                       </small>
                       <small>
