@@ -48,7 +48,7 @@ type ProductPurchases = {
 };
 
 const FAST_30_THRESHOLD = 6;
-const FAST_90_THRESHOLD = 12;
+const FAST_90_THRESHOLD = 15;
 const SLOW_30_MAX = 1;
 const SLOW_90_MAX = 3;
 const NEW_PRODUCT_DAYS = 30;
