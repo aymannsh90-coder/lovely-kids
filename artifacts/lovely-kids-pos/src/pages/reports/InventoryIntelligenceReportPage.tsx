@@ -80,7 +80,7 @@ const riskLabels:
     untracked: "غير متتبع",
     insufficient_history:
       "بيانات غير كافية",
-    balanced: "متوازن",
+    balanced: "لا خطر مؤكد",
     stockout_now: "نفد مع طلب حديث",
     stockout_high: "خطر نفاد مرتفع",
     stockout_watch: "مراقبة نفاد",
@@ -248,6 +248,8 @@ function riskPriority(
     case "untracked":
       return 7;
   }
+
+  return 8;
 }
 
 function inventoryRiskAction(
@@ -272,10 +274,15 @@ function inventoryRiskAction(
     case "insufficient_history":
       return "انتظر بيانات حركة موثوقة";
     case "balanced":
-      return movementHint(
-        product,
-      );
+      return product.stockState ===
+        "out_of_stock"
+        ? "لا طلب حديث — راقب الحاجة"
+        : movementHint(
+            product,
+          );
   }
+
+  return "راجع المخزون";
 }
 
 function attentionRank(
