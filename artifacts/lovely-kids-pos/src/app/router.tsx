@@ -30,6 +30,7 @@ import CustomerBalancesReportPage from "../pages/reports/CustomerBalancesReportP
 import CustomerStatementReportPage from "../pages/reports/CustomerStatementReportPage";
 import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
 import InventoryValuationReportPage from "../pages/reports/InventoryValuationReportPage";
+import InventoryIntelligenceReportPage from "../pages/reports/InventoryIntelligenceReportPage";
 import ProductAnalyticsReportPage from "../pages/reports/ProductAnalyticsReportPage";
 import SalesAnalyticsPage from "../pages/reports/SalesAnalyticsPage";
 import StatementsPage from "../pages/reports/StatementsPage";
@@ -271,6 +272,15 @@ export default function AppRouter() {
           element={
             <RequireOwner>
               <InventoryValuationReportPage />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="reports/inventory-intelligence"
+          element={
+            <RequireOwner>
+              <InventoryIntelligenceReportPage />
             </RequireOwner>
           }
         />
