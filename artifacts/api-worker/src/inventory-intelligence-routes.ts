@@ -57,6 +57,23 @@ type InventoryRiskSignal =
   | "overstock_high"
   | "overstock_watch";
 
+type InventoryActionSignal =
+  | "untracked"
+  | "insufficient_history"
+  | "reorder"
+  | "reduce"
+  | "review_no_demand"
+  | "balanced";
+
+type InventoryActionPlan = {
+  reliable: boolean;
+  signal: InventoryActionSignal;
+  targetStockUnits: number | null;
+  maxHealthyStockUnits: number | null;
+  suggestedReorderQuantity: number | null;
+  excessUnits: number | null;
+};
+
 type ProductInventoryMovement = {
   movementType: string;
   quantityDelta: number;
@@ -94,6 +111,7 @@ const MIN_VELOCITY_HISTORY_DAYS = 7;
 const STOCKOUT_HIGH_DAYS = 7;
 const LOW_COVERAGE_DAYS = 14;
 const HIGH_COVERAGE_DAYS = 60;
+const TARGET_COVERAGE_DAYS = 30;
 const OVERSTOCK_HIGH_DAYS = 120;
 const MIN_OVERSTOCK_AGE_DAYS = 30;
 
@@ -666,6 +684,109 @@ function inventoryRiskSignalFor(input: {
   }
 
   return "balanced";
+}
+
+function calculateInventoryActionPlan(input: {
+  currentQuantity: number | null;
+  averageDailyNetDemand: number | null;
+  velocityHistoryReliable: boolean;
+  ageDays: number;
+}): InventoryActionPlan {
+  if (input.currentQuantity === null) {
+    return {
+      reliable: false,
+      signal: "untracked",
+      targetStockUnits: null,
+      maxHealthyStockUnits: null,
+      suggestedReorderQuantity: null,
+      excessUnits: null,
+    };
+  }
+
+  if (
+    !input.velocityHistoryReliable ||
+    input.averageDailyNetDemand === null
+  ) {
+    return {
+      reliable: false,
+      signal: "insufficient_history",
+      targetStockUnits: null,
+      maxHealthyStockUnits: null,
+      suggestedReorderQuantity: null,
+      excessUnits: null,
+    };
+  }
+
+  const currentQuantity =
+    Math.max(
+      0,
+      input.currentQuantity,
+    );
+
+  if (
+    input.averageDailyNetDemand <= 0
+  ) {
+    const reviewNoDemand =
+      input.ageDays >=
+        MIN_OVERSTOCK_AGE_DAYS &&
+      currentQuantity > 0;
+
+    return {
+      reliable: true,
+      signal: reviewNoDemand
+        ? "review_no_demand"
+        : "balanced",
+      targetStockUnits: 0,
+      maxHealthyStockUnits: 0,
+      suggestedReorderQuantity: 0,
+      excessUnits: reviewNoDemand
+        ? currentQuantity
+        : 0,
+    };
+  }
+
+  const targetStockUnits =
+    Math.ceil(
+      input.averageDailyNetDemand *
+        TARGET_COVERAGE_DAYS,
+    );
+
+  const maxHealthyStockUnits =
+    Math.ceil(
+      input.averageDailyNetDemand *
+        HIGH_COVERAGE_DAYS,
+    );
+
+  const suggestedReorderQuantity =
+    Math.max(
+      0,
+      targetStockUnits -
+        currentQuantity,
+    );
+
+  const excessUnits =
+    input.ageDays >=
+    MIN_OVERSTOCK_AGE_DAYS
+      ? Math.max(
+          0,
+          currentQuantity -
+            maxHealthyStockUnits,
+        )
+      : 0;
+
+  return {
+    reliable: true,
+    signal:
+      excessUnits > 0
+        ? "reduce"
+        : suggestedReorderQuantity > 0
+          ? "reorder"
+          : "balanced",
+    targetStockUnits,
+    maxHealthyStockUnits,
+    suggestedReorderQuantity,
+    excessUnits,
+  };
 }
 
 function orderItems(
@@ -1462,6 +1583,14 @@ async function handleReport(
             movementClass,
           });
 
+        const actionPlan =
+          calculateInventoryActionPlan({
+            currentQuantity,
+            averageDailyNetDemand,
+            velocityHistoryReliable,
+            ageDays,
+          });
+
         return {
           productId:
             String(product.id),
@@ -1532,6 +1661,19 @@ async function handleReport(
           daysOfSupply,
           coverageSignal,
           inventoryRiskSignal,
+
+          actionPlanReliable:
+            actionPlan.reliable,
+          inventoryActionSignal:
+            actionPlan.signal,
+          targetStockUnits:
+            actionPlan.targetStockUnits,
+          maxHealthyStockUnits:
+            actionPlan.maxHealthyStockUnits,
+          suggestedReorderQuantity:
+            actionPlan.suggestedReorderQuantity,
+          excessUnits:
+            actionPlan.excessUnits,
 
           movementClass,
           neverSold:
@@ -1776,6 +1918,58 @@ async function handleReport(
           product.inventoryRiskSignal ===
             "untracked",
       ).length,
+
+    reorderSuggestedProducts:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryActionSignal ===
+          "reorder",
+      ).length,
+
+    suggestedReorderUnits:
+      reportProducts.reduce(
+        (sum, product) =>
+          sum +
+          (
+            product
+              .suggestedReorderQuantity ??
+            0
+          ),
+        0,
+      ),
+
+    excessSuggestedProducts:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryActionSignal ===
+            "reduce" ||
+          product.inventoryActionSignal ===
+            "review_no_demand",
+      ).length,
+
+    excessUnits:
+      reportProducts.reduce(
+        (sum, product) =>
+          sum +
+          (
+            product.excessUnits ??
+            0
+          ),
+        0,
+      ),
+
+    noDemandReviewProducts:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryActionSignal ===
+          "review_no_demand",
+      ).length,
+
+    insufficientActionData:
+      reportProducts.filter(
+        (product) =>
+          !product.actionPlanReliable,
+      ).length,
   };
 
   const warnings: string[] =
@@ -1864,6 +2058,8 @@ async function handleReport(
         LOW_COVERAGE_DAYS,
       highCoverageDays:
         HIGH_COVERAGE_DAYS,
+      targetCoverageDays:
+        TARGET_COVERAGE_DAYS,
       overstockHighDays:
         OVERSTOCK_HIGH_DAYS,
       minimumOverstockAgeDays:
@@ -1892,6 +2088,8 @@ async function handleReport(
         `أيام التغطية = المخزون الحالي ÷ متوسط صافي الطلب اليومي من inventory_movements. نافذة السرعة متكيفة حتى 30 يوم وتبدأ من أحدث تاريخ بين بداية الصنف وبداية التتبع ونافذة 30 يوم، مع حد أدنى ${MIN_VELOCITY_HISTORY_DAYS} أيام موثوقة. المرتجعات والإلغاءات تقلل الطلب؛ المخزون غير المتتبع أو التاريخ الأقصر يعرض N/A بدل رقم وهمي.`,
       inventoryRisk:
         `مخاطر النفاد: نفاد فعلي مع بيع خلال آخر ${LOW_COVERAGE_DAYS} يوم، أو تغطية ≤${STOCKOUT_HIGH_DAYS} أيام (مرتفع)، أو ≤${LOW_COVERAGE_DAYS} يوم (مراقبة). مخاطر الفائض لا تبدأ قبل عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم؛ مرتفعة للصنف الميت/بلا طلب صافي بعمر 90 يوم أو تغطية >${OVERSTOCK_HIGH_DAYS} يوم، وتحت المراقبة للصنف البطيء/بلا طلب صافي أو تغطية >${HIGH_COVERAGE_DAYS} يوم. البيانات غير الكافية لا تُحوّل إلى إنذار وهمي.`,
+      inventoryAction:
+        `خطة الكمية تستخدم متوسط صافي الطلب اليومي الموثوق. هدف إعادة الطلب هو ${TARGET_COVERAGE_DAYS} يوم: الكمية المقترحة = مخزون الهدف − المخزون الحالي، بحد أدنى صفر. الفائض المحتمل يُحسب فوق حد ${HIGH_COVERAGE_DAYS} يوم ولا يُفعّل قبل عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم. إذا كان صافي الطلب صفرًا، لا يُقترح شراء؛ وبعد عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم تظهر الكمية الحالية كفائض محتمل للمراجعة. التاريخ غير الكافي يعرض N/A بدل رقم وهمي.`,
     },
 
     products:
