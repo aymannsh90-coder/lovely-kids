@@ -13420,7 +13420,7 @@ textarea:disabled {
 
 .inventory-intelligence-filters {
   display: grid;
-  grid-template-columns: minmax(230px, 1.5fr) repeat(6, minmax(135px, 0.8fr)) auto;
+  grid-template-columns: minmax(230px, 1.5fr) repeat(7, minmax(135px, 0.8fr)) auto;
   align-items: end;
   gap: 10px;
   padding: 15px 18px;
@@ -13492,7 +13492,7 @@ textarea:disabled {
 
 .inventory-intelligence-table {
   width: 100%;
-  min-width: 2050px;
+  min-width: 2200px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -13671,6 +13671,28 @@ textarea:disabled {
 .inventory-intelligence-badge.risk-untracked,
 .inventory-intelligence-action.risk-insufficient_history,
 .inventory-intelligence-action.risk-untracked {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.inventory-intelligence-badge.action-reorder {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.inventory-intelligence-badge.action-reduce,
+.inventory-intelligence-badge.action-review_no_demand {
+  background: #f4f3ff;
+  color: #5925dc;
+}
+
+.inventory-intelligence-badge.action-balanced {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.inventory-intelligence-badge.action-insufficient_history,
+.inventory-intelligence-badge.action-untracked {
   background: #f2f4f7;
   color: #475467;
 }
