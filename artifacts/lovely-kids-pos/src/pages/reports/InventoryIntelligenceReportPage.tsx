@@ -10,6 +10,7 @@ import {
 import {
   ApiError,
   getOwnerInventoryIntelligenceReport,
+  type InventoryActionSignal,
   type InventoryCoverageSignal,
   type InventoryMovementClass,
   type InventoryRiskSignal,
@@ -26,6 +27,8 @@ type SortMode =
   | "velocity"
   | "days_of_supply"
   | "inventory_risk"
+  | "reorder_quantity"
+  | "excess_units"
   | "oldest"
   | "last_sale";
 
@@ -86,6 +89,21 @@ const riskLabels:
     stockout_watch: "مراقبة نفاد",
     overstock_high: "فائض مرتفع",
     overstock_watch: "مراقبة فائض",
+  };
+
+const actionLabels:
+  Record<
+    InventoryActionSignal,
+    string
+  > = {
+    untracked: "مخزون غير متتبع",
+    insufficient_history:
+      "بيانات غير كافية",
+    reorder: "شراء مقترح",
+    reduce: "فائض قابل للتخفيف",
+    review_no_demand:
+      "فائض محتمل بلا طلب",
+    balanced: "ضمن الخطة",
   };
 
 function formatNumber(
@@ -440,6 +458,14 @@ export default function InventoryIntelligenceReportPage() {
     >("all");
 
   const [
+    actionFilter,
+    setActionFilter,
+  ] =
+    useState<
+      InventoryActionSignal | "all"
+    >("all");
+
+  const [
     sortMode,
     setSortMode,
   ] =
@@ -582,6 +608,15 @@ export default function InventoryIntelligenceReportPage() {
                 "all" &&
               product.inventoryRiskSignal !==
                 riskFilter
+            ) {
+              return false;
+            }
+
+            if (
+              actionFilter !==
+                "all" &&
+              product.inventoryActionSignal !==
+                actionFilter
             ) {
               return false;
             }
@@ -741,6 +776,30 @@ export default function InventoryIntelligenceReportPage() {
 
           if (
             sortMode ===
+            "reorder_quantity"
+          ) {
+            return (
+              (right.suggestedReorderQuantity ??
+                -1) -
+              (left.suggestedReorderQuantity ??
+                -1)
+            );
+          }
+
+          if (
+            sortMode ===
+            "excess_units"
+          ) {
+            return (
+              (right.excessUnits ??
+                -1) -
+              (left.excessUnits ??
+                -1)
+            );
+          }
+
+          if (
+            sortMode ===
             "oldest"
           ) {
             return (
@@ -808,6 +867,7 @@ export default function InventoryIntelligenceReportPage() {
       categoryFilter,
       coverageFilter,
       riskFilter,
+      actionFilter,
       sortMode,
     ]);
 
@@ -854,13 +914,13 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1–5.4 · Inventory Intelligence
+            Stage 5.1–5.5 · Inventory Intelligence
           </span>
           <h1>
             عمر وحركة وتغطية المخزون
           </h1>
           <p>
-            يحدد الحركة والتصريف والتغطية، ثم يحولها إلى إنذارات عملية لخطر النفاد أو فائض المخزون حتى تعرف أين تعيد الطلب وأين تخفف الشراء.
+            يحدد الحركة والتصريف والتغطية والمخاطر، ثم يحولها إلى خطة كمية: كم تشتري للوصول إلى هدف 30 يوم، وكم وحدة تعتبر فائضًا محتملًا فوق التغطية الصحية.
           </p>
         </div>
 
@@ -1112,6 +1172,69 @@ export default function InventoryIntelligenceReportPage() {
         />
       </div>
 
+      <div className="inventory-intelligence-metrics">
+        <Metric
+          label="أصناف شراء مقترح"
+          value={formatNumber(
+            report.summary
+              .reorderSuggestedProducts,
+          )}
+          hint={`تحتاج رفع المخزون إلى هدف ${formatNumber(
+            report.thresholds
+              .targetCoverageDays,
+          )} يوم`}
+          emphasis
+        />
+
+        <Metric
+          label="إجمالي وحدات شراء"
+          value={formatNumber(
+            report.summary
+              .suggestedReorderUnits,
+          )}
+          hint="إجمالي الكمية المقترحة من الأصناف ذات الطلب الصافي الموثوق"
+        />
+
+        <Metric
+          label="أصناف فائض محتمل"
+          value={formatNumber(
+            report.summary
+              .excessSuggestedProducts,
+          )}
+          hint={`فوق حد ${formatNumber(
+            report.thresholds
+              .highCoverageDays,
+          )} يوم أو بلا طلب صافي بعد عمر كافٍ`}
+        />
+
+        <Metric
+          label="إجمالي وحدات فائض"
+          value={formatNumber(
+            report.summary
+              .excessUnits,
+          )}
+          hint="كمية محتملة للتخفيف أو التصريف، وليست أمر بيع تلقائي"
+        />
+
+        <Metric
+          label="بلا طلب صافي للمراجعة"
+          value={formatNumber(
+            report.summary
+              .noDemandReviewProducts,
+          )}
+          hint="أصناف ناضجة بمخزون لكن سرعة الطلب الصافية صفر"
+        />
+
+        <Metric
+          label="بيانات قرار غير كافية"
+          value={formatNumber(
+            report.summary
+              .insufficientActionData,
+          )}
+          hint="لا نعطي كمية شراء أو فائض عندما تاريخ الحركة غير موثوق"
+        />
+      </div>
+
       <div className="inventory-intelligence-filters">
         <label className="inventory-intelligence-search">
           <span>
@@ -1312,6 +1435,47 @@ export default function InventoryIntelligenceReportPage() {
 
         <label>
           <span>
+            قرار الكمية
+          </span>
+          <select
+            value={
+              actionFilter
+            }
+            onChange={(event) =>
+              setActionFilter(
+                event.target
+                  .value as
+                  | InventoryActionSignal
+                  | "all",
+              )
+            }
+          >
+            <option value="all">
+              كل القرارات
+            </option>
+            {(
+              Object.keys(
+                actionLabels,
+              ) as InventoryActionSignal[]
+            ).map(
+              (signal) => (
+                <option
+                  key={signal}
+                  value={signal}
+                >
+                  {
+                    actionLabels[
+                      signal
+                    ]
+                  }
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+
+        <label>
+          <span>
             الترتيب
           </span>
           <select
@@ -1329,6 +1493,12 @@ export default function InventoryIntelligenceReportPage() {
             </option>
             <option value="inventory_risk">
               أعلى مخاطر المخزون
+            </option>
+            <option value="reorder_quantity">
+              أكبر كمية شراء مقترحة
+            </option>
+            <option value="excess_units">
+              أكبر كمية فائض محتمل
             </option>
             <option value="sold30">
               الأكثر بيعًا 30 يوم
@@ -1372,7 +1542,7 @@ export default function InventoryIntelligenceReportPage() {
               تفاصيل الأصناف
             </h2>
             <p>
-              بيع 30/90 للتصنيف هو البيع المكتمل؛ Sell-through والسرعة والتغطية تعتمد صافي حركة المخزون، وStage 5.4 يحول التغطية والحركة إلى خطر نفاد أو فائض بدون تخمين عند نقص البيانات.
+              Stage 5.5 يستخدم سرعة الطلب الموثوقة ليقترح كمية شراء حتى هدف 30 يوم، أو فائضًا محتملًا فوق حد 60 يوم؛ وإذا البيانات غير كافية يعرض N/A بدل قرار وهمي.
             </p>
           </div>
 
@@ -1428,7 +1598,7 @@ export default function InventoryIntelligenceReportPage() {
                   مخاطر المخزون
                 </th>
                 <th>
-                  الإجراء
+                  خطة 5.5
                 </th>
               </tr>
             </thead>
@@ -1693,12 +1863,62 @@ export default function InventoryIntelligenceReportPage() {
 
                     <td>
                       <span
-                        className={`inventory-intelligence-action risk-${product.inventoryRiskSignal}`}
+                        className={`inventory-intelligence-badge action-${product.inventoryActionSignal}`}
                       >
+                        {
+                          actionLabels[
+                            product
+                              .inventoryActionSignal
+                          ]
+                        }
+                      </span>
+                      <small>
+                        {product.inventoryActionSignal ===
+                        "reorder"
+                          ? `شراء +${formatNumber(
+                              product.suggestedReorderQuantity ??
+                                0,
+                            )} · هدف ${formatNumber(
+                              report.thresholds
+                                .targetCoverageDays,
+                            )} يوم = ${formatNumber(
+                              product.targetStockUnits ??
+                                0,
+                            )} قطعة`
+                          : product.inventoryActionSignal ===
+                              "reduce"
+                            ? `فائض ${formatNumber(
+                                product.excessUnits ??
+                                  0,
+                              )} · حد ${formatNumber(
+                                report.thresholds
+                                  .highCoverageDays,
+                              )} يوم = ${formatNumber(
+                                product.maxHealthyStockUnits ??
+                                  0,
+                              )} قطعة`
+                            : product.inventoryActionSignal ===
+                                "review_no_demand"
+                              ? `فائض محتمل ${formatNumber(
+                                  product.excessUnits ??
+                                    0,
+                                )} · لا يوجد طلب صافي`
+                              : product.inventoryActionSignal ===
+                                  "balanced"
+                                ? `هدف ${formatNumber(
+                                    report.thresholds
+                                      .targetCoverageDays,
+                                  )} يوم: ${formatNumber(
+                                    product.targetStockUnits ??
+                                      0,
+                                  )} قطعة`
+                                : "N/A"}
+                      </small>
+                      <small>
                         {inventoryRiskAction(
                           product,
                         )}
-                      </span>
+                      </small>
                     </td>
                   </tr>
                 ),
@@ -1787,6 +2007,15 @@ export default function InventoryIntelligenceReportPage() {
             {
               report.methodology
                 .inventoryRisk
+            }
+          </p>
+          <p>
+            <strong>
+              خطة الكمية:
+            </strong>{" "}
+            {
+              report.methodology
+                .inventoryAction
             }
           </p>
           <p>
