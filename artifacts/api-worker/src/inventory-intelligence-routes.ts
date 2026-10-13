@@ -242,12 +242,16 @@ function roundOneDecimal(
 }
 
 function latestDateKey(
-  ...values: string[]
+  first: string,
+  ...rest: string[]
 ) {
-  return [...values].sort(
-    (left, right) =>
-      right.localeCompare(left),
-  )[0];
+  return rest.reduce(
+    (latest, current) =>
+      current > latest
+        ? current
+        : latest,
+    first,
+  );
 }
 
 function netDemandContribution(
@@ -1452,10 +1456,12 @@ async function handleReport(
         (sum, product) =>
           sum +
           (
-            days === 30
-              ? product.sellThrough30AvailableUnits
-              : product.sellThrough90AvailableUnits
-          ) ?? 0,
+            (
+              days === 30
+                ? product.sellThrough30AvailableUnits
+                : product.sellThrough90AvailableUnits
+            ) ?? 0
+          ),
         0,
       );
 
