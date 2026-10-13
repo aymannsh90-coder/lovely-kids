@@ -226,6 +226,66 @@ export async function printOrderThermalReceipt(
       0,
     ) / 100;
 
+  const hasExchangeLink =
+    Number.isSafeInteger(order.exchangeOriginalOrderId) &&
+    Number(order.exchangeOriginalOrderId) > 0;
+
+  const exchangeAmounts = [
+    order.exchangeReturnNetMinor,
+    order.exchangeNewNetMinor,
+    order.exchangeDifferenceMinor,
+    order.exchangeDeliveryChargeMinor,
+    order.exchangeSettlementAmountMinor,
+  ];
+
+  if (
+    hasExchangeLink &&
+    exchangeAmounts.some(
+      (value) => !Number.isSafeInteger(value),
+    )
+  ) {
+    throw new Error(
+      "بيانات تبديل الطلب غير مكتملة. حدّث صفحة الطلبات قبل طباعة الإيصال.",
+    );
+  }
+
+  const isOnlineExchange = hasExchangeLink;
+
+  const exchangeReturnValue =
+    isOnlineExchange
+      ? Number(order.exchangeReturnNetMinor) / 100
+      : 0;
+
+  const exchangeNewValue =
+    isOnlineExchange
+      ? Number(order.exchangeNewNetMinor) / 100
+      : 0;
+
+  const exchangeDifferenceValue =
+    isOnlineExchange
+      ? Number(order.exchangeDifferenceMinor) / 100
+      : 0;
+
+  const exchangeDeliveryValue =
+    isOnlineExchange
+      ? Number(order.exchangeDeliveryChargeMinor) / 100
+      : shippingCost;
+
+  const exchangeSettlementValue =
+    isOnlineExchange
+      ? Number(order.exchangeSettlementAmountMinor) / 100
+      : order.totalPrice;
+
+  const exchangeSettlementLabel =
+    exchangeSettlementValue > 0
+      ? "المطلوب من الزبون"
+      : exchangeSettlementValue < 0
+        ? "مستحق للزبون"
+        : "صافي التبديل";
+
+  const exchangeSettlementDisplay =
+    Math.abs(exchangeSettlementValue);
+
   const itemRows = order.items
     .map((item, index) => {
       const mainProductCode =
@@ -322,6 +382,16 @@ export async function printOrderThermalReceipt(
     .lk-order-thermal-capture .receipt-info b,
     .lk-order-thermal-capture .receipt-totals strong {
       font-weight: 700;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-title {
+      display: block;
+      margin: 2px 0 4px;
+      padding: 5px 8px;
+      border: 2px solid #000;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 900;
     }
 
     .lk-order-thermal-capture .receipt-items-table {
@@ -486,6 +556,19 @@ export async function printOrderThermalReceipt(
 
       <div class="receipt-info">
         <span>رقم الطلب: <b dir="ltr">#${escapeHtml(order.id)}</b></span>
+        ${
+          isOnlineExchange
+            ? `
+              <b class="receipt-exchange-title">طلب تبديل أونلاين</b>
+              <span>الطلب الأصلي: <b dir="ltr">#${escapeHtml(order.exchangeOriginalOrderId)}</b></span>
+              ${
+                order.exchangePublicId
+                  ? `<span>رقم عملية التبديل: <b dir="ltr">${escapeHtml(order.exchangePublicId)}</b></span>`
+                  : ""
+              }
+            `
+            : ""
+        }
         <span>التاريخ والوقت: ${escapeHtml(formatDateTime(order.createdAt))}</span>
         <span>الزبون: ${escapeHtml(order.customerName || "زبون")}</span>
         <span>الهاتف: <b dir="ltr">${escapeHtml(order.customerPhone)}</b></span>
@@ -527,37 +610,64 @@ export async function printOrderThermalReceipt(
       <div class="receipt-divider"></div>
 
       <div class="receipt-totals">
-        <div>
-          <span>مجموع الأصناف</span>
-          <strong>${money(productsSubtotal)}</strong>
-        </div>
-
         ${
-          invoiceDiscount > 0
+          isOnlineExchange
             ? `
               <div>
-                <span>الخصم العام</span>
-                <strong>-${money(invoiceDiscount)}</strong>
+                <span>قيمة أصناف الطلب البديل</span>
+                <strong>${money(exchangeNewValue)}</strong>
               </div>
-            `
-            : ""
-        }
-
-        ${
-          shippingCost > 0
-            ? `
+              <div>
+                <span>قيمة المرتجع</span>
+                <strong>-${money(exchangeReturnValue)}</strong>
+              </div>
+              <div>
+                <span>فرق البضاعة</span>
+                <strong>${money(exchangeDifferenceValue)}</strong>
+              </div>
               <div>
                 <span>التوصيل</span>
-                <strong>${money(shippingCost)}</strong>
+                <strong>${money(exchangeDeliveryValue)}</strong>
+              </div>
+              <div class="receipt-total">
+                <span>${exchangeSettlementLabel}</span>
+                <strong>${money(exchangeSettlementDisplay)}</strong>
               </div>
             `
-            : ""
-        }
+            : `
+              <div>
+                <span>مجموع الأصناف</span>
+                <strong>${money(productsSubtotal)}</strong>
+              </div>
 
-        <div class="receipt-total">
-          <span>الإجمالي النهائي</span>
-          <strong>${money(order.totalPrice)}</strong>
-        </div>
+              ${
+                invoiceDiscount > 0
+                  ? `
+                    <div>
+                      <span>الخصم العام</span>
+                      <strong>-${money(invoiceDiscount)}</strong>
+                    </div>
+                  `
+                  : ""
+              }
+
+              ${
+                shippingCost > 0
+                  ? `
+                    <div>
+                      <span>التوصيل</span>
+                      <strong>${money(shippingCost)}</strong>
+                    </div>
+                  `
+                  : ""
+              }
+
+              <div class="receipt-total">
+                <span>الإجمالي النهائي</span>
+                <strong>${money(order.totalPrice)}</strong>
+              </div>
+            `
+        }
       </div>
 
       ${
