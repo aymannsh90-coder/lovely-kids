@@ -303,6 +303,8 @@ function matchesMetricFilter(
           .costStockMatchesAccounting
       );
   }
+
+  return false;
 }
 
 function metricFilterSortMode(
