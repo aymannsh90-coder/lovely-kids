@@ -63,17 +63,42 @@ function formatDate(
   return value;
 }
 
+const URGENT_REORDER_RECENCY_DAYS =
+  14;
+
+function isUrgentReorder(
+  product:
+    OwnerInventoryIntelligenceProduct,
+) {
+  return (
+    product.movementClass ===
+      "fast" &&
+    product.stockState ===
+      "out_of_stock" &&
+    product.daysSinceLastSale !==
+      null &&
+    product.daysSinceLastSale <=
+      URGENT_REORDER_RECENCY_DAYS
+  );
+}
+
 function movementHint(
   product:
     OwnerInventoryIntelligenceProduct,
 ) {
+  if (
+    isUrgentReorder(product)
+  ) {
+    return "إعادة طلب عاجلة";
+  }
+
   if (
     product.movementClass ===
       "fast" &&
     product.stockState ===
       "out_of_stock"
   ) {
-    return "إعادة طلب عاجلة";
+    return "راجع إعادة الطلب";
   }
 
   if (
@@ -99,9 +124,26 @@ function movementHint(
 
   if (
     product.movementClass ===
+      "new" &&
+    product.stockState ===
+      "out_of_stock"
+  ) {
+    return "نفد مبكرًا — راقب الطلب";
+  }
+
+  if (
+    product.movementClass ===
     "new"
   ) {
     return "أعطه وقتًا للحركة";
+  }
+
+  if (
+    product.stockState ===
+      "out_of_stock" &&
+    product.sold30 > 0
+  ) {
+    return "نفد — راجع الحاجة";
   }
 
   return "حركة طبيعية";
@@ -112,10 +154,7 @@ function attentionRank(
     OwnerInventoryIntelligenceProduct,
 ) {
   if (
-    product.movementClass ===
-      "fast" &&
-    product.stockState ===
-      "out_of_stock"
+    isUrgentReorder(product)
   ) {
     return 0;
   }
@@ -584,7 +623,7 @@ export default function InventoryIntelligenceReportPage() {
             report.summary
               .fastOutOfStock,
           )}
-          hint="أولوية للمراجعة وإعادة الطلب"
+          hint="السريع الذي نفد؛ العاجل فقط إذا كان آخر بيع خلال 14 يوم"
         />
 
         <Metric
