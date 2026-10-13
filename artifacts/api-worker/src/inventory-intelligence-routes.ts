@@ -47,6 +47,16 @@ type CoverageSignal =
   | "healthy"
   | "high";
 
+type InventoryRiskSignal =
+  | "untracked"
+  | "insufficient_history"
+  | "balanced"
+  | "stockout_now"
+  | "stockout_high"
+  | "stockout_watch"
+  | "overstock_high"
+  | "overstock_watch";
+
 type ProductInventoryMovement = {
   movementType: string;
   quantityDelta: number;
@@ -81,8 +91,11 @@ const SLOW_90_MAX = 3;
 const NEW_PRODUCT_DAYS = 30;
 const DEAD_PRODUCT_DAYS = 90;
 const MIN_VELOCITY_HISTORY_DAYS = 7;
+const STOCKOUT_HIGH_DAYS = 7;
 const LOW_COVERAGE_DAYS = 14;
 const HIGH_COVERAGE_DAYS = 60;
+const OVERSTOCK_HIGH_DAYS = 120;
+const MIN_OVERSTOCK_AGE_DAYS = 30;
 
 const DEMAND_MOVEMENT_TYPES =
   new Set([
@@ -565,6 +578,94 @@ function movementClassFor(input: {
   }
 
   return "normal";
+}
+
+function inventoryRiskSignalFor(input: {
+  currentQuantity: number | null;
+  ageDays: number;
+  daysSinceLastSale: number | null;
+  daysOfSupply: number | null;
+  coverageSignal: CoverageSignal;
+  movementClass: MovementClass;
+}): InventoryRiskSignal {
+  if (input.currentQuantity === null) {
+    return "untracked";
+  }
+
+  if (input.currentQuantity <= 0) {
+    return input.daysSinceLastSale !== null &&
+      input.daysSinceLastSale <=
+        LOW_COVERAGE_DAYS
+      ? "stockout_now"
+      : input.coverageSignal ===
+          "insufficient_history"
+        ? "insufficient_history"
+        : "balanced";
+  }
+
+  if (
+    input.coverageSignal ===
+    "insufficient_history"
+  ) {
+    return "insufficient_history";
+  }
+
+  if (
+    input.daysOfSupply !== null &&
+    input.daysOfSupply <=
+      STOCKOUT_HIGH_DAYS
+  ) {
+    return "stockout_high";
+  }
+
+  if (
+    input.daysOfSupply !== null &&
+    input.daysOfSupply <=
+      LOW_COVERAGE_DAYS
+  ) {
+    return "stockout_watch";
+  }
+
+  if (
+    input.ageDays >=
+    MIN_OVERSTOCK_AGE_DAYS
+  ) {
+    if (
+      input.movementClass ===
+        "dead" ||
+      (
+        input.coverageSignal ===
+          "no_net_demand" &&
+        input.ageDays >=
+          DEAD_PRODUCT_DAYS
+      ) ||
+      (
+        input.daysOfSupply !==
+          null &&
+        input.daysOfSupply >
+          OVERSTOCK_HIGH_DAYS
+      )
+    ) {
+      return "overstock_high";
+    }
+
+    if (
+      input.movementClass ===
+        "slow" ||
+      input.coverageSignal ===
+        "no_net_demand" ||
+      (
+        input.daysOfSupply !==
+          null &&
+        input.daysOfSupply >
+          HIGH_COVERAGE_DAYS
+      )
+    ) {
+      return "overstock_watch";
+    }
+  }
+
+  return "balanced";
 }
 
 function orderItems(
@@ -1351,6 +1452,16 @@ async function handleReport(
                 : "high";
         }
 
+        const inventoryRiskSignal =
+          inventoryRiskSignalFor({
+            currentQuantity,
+            ageDays,
+            daysSinceLastSale,
+            daysOfSupply,
+            coverageSignal,
+            movementClass,
+          });
+
         return {
           productId:
             String(product.id),
@@ -1420,6 +1531,7 @@ async function handleReport(
           averageDailyNetDemand,
           daysOfSupply,
           coverageSignal,
+          inventoryRiskSignal,
 
           movementClass,
           neverSold:
@@ -1613,6 +1725,57 @@ async function handleReport(
           product.coverageSignal ===
             "untracked",
       ).length,
+
+    stockoutNow:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryRiskSignal ===
+          "stockout_now",
+      ).length,
+
+    stockoutHighRisk:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryRiskSignal ===
+          "stockout_high",
+      ).length,
+
+    stockoutWatch:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryRiskSignal ===
+          "stockout_watch",
+      ).length,
+
+    overstockHighRisk:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryRiskSignal ===
+          "overstock_high",
+      ).length,
+
+    overstockWatch:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryRiskSignal ===
+          "overstock_watch",
+      ).length,
+
+    balancedInventoryRisk:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryRiskSignal ===
+          "balanced",
+      ).length,
+
+    insufficientRiskData:
+      reportProducts.filter(
+        (product) =>
+          product.inventoryRiskSignal ===
+            "insufficient_history" ||
+          product.inventoryRiskSignal ===
+            "untracked",
+      ).length,
   };
 
   const warnings: string[] =
@@ -1695,10 +1858,16 @@ async function handleReport(
         DEAD_PRODUCT_DAYS,
       minimumVelocityHistoryDays:
         MIN_VELOCITY_HISTORY_DAYS,
+      stockoutHighDays:
+        STOCKOUT_HIGH_DAYS,
       lowCoverageDays:
         LOW_COVERAGE_DAYS,
       highCoverageDays:
         HIGH_COVERAGE_DAYS,
+      overstockHighDays:
+        OVERSTOCK_HIGH_DAYS,
+      minimumOverstockAgeDays:
+        MIN_OVERSTOCK_AGE_DAYS,
     },
 
     summary,
@@ -1721,6 +1890,8 @@ async function handleReport(
         "Sell-through يعتمد على سجل حركة المخزون: صافي الطلب خلال النافذة ÷ الوحدات المتاحة (مخزون بداية النافذة + صافي الحركات غير البيعية مثل الشراء والتسويات). لا يظهر الرقم إلا إذا كان سجل الحركات يغطي كامل نافذة الصنف، وتُعكس المرتجعات والإلغاءات والـvoids تلقائيًا من quantityDelta.",
       daysOfSupply:
         `أيام التغطية = المخزون الحالي ÷ متوسط صافي الطلب اليومي من inventory_movements. نافذة السرعة متكيفة حتى 30 يوم وتبدأ من أحدث تاريخ بين بداية الصنف وبداية التتبع ونافذة 30 يوم، مع حد أدنى ${MIN_VELOCITY_HISTORY_DAYS} أيام موثوقة. المرتجعات والإلغاءات تقلل الطلب؛ المخزون غير المتتبع أو التاريخ الأقصر يعرض N/A بدل رقم وهمي.`,
+      inventoryRisk:
+        `مخاطر النفاد: نفاد فعلي مع بيع خلال آخر ${LOW_COVERAGE_DAYS} يوم، أو تغطية ≤${STOCKOUT_HIGH_DAYS} أيام (مرتفع)، أو ≤${LOW_COVERAGE_DAYS} يوم (مراقبة). مخاطر الفائض لا تبدأ قبل عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم؛ مرتفعة للصنف الميت/بلا طلب صافي بعمر 90 يوم أو تغطية >${OVERSTOCK_HIGH_DAYS} يوم، وتحت المراقبة للصنف البطيء/بلا طلب صافي أو تغطية >${HIGH_COVERAGE_DAYS} يوم. البيانات غير الكافية لا تُحوّل إلى إنذار وهمي.`,
     },
 
     products:
