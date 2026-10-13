@@ -448,6 +448,18 @@ async function handleGetOrders(
           exchangeDocumentsTable.replacementOrderId,
         originalOrderId:
           exchangeDocumentsTable.originalOrderId,
+        publicId:
+          exchangeDocumentsTable.publicId,
+        returnNetMinor:
+          exchangeDocumentsTable.returnNetMinor,
+        newNetMinor:
+          exchangeDocumentsTable.newNetMinor,
+        differenceMinor:
+          exchangeDocumentsTable.differenceMinor,
+        deliveryChargeMinor:
+          exchangeDocumentsTable.deliveryChargeMinor,
+        settlementAmountMinor:
+          exchangeDocumentsTable.settlementAmountMinor,
       })
       .from(exchangeDocumentsTable)
       .where(
@@ -463,7 +475,7 @@ async function handleGetOrders(
         ),
       );
 
-  const originalByReplacement =
+  const exchangeByReplacement =
     new Map(
       exchangeLinks
         .filter(
@@ -473,16 +485,33 @@ async function handleGetOrders(
         )
         .map((row) => [
           row.replacementOrderId!,
-          row.originalOrderId!,
+          row,
         ]),
     );
 
   return json(
-    orders.map((order) => ({
-      ...order,
-      exchangeOriginalOrderId:
-        originalByReplacement.get(order.id) ?? null,
-    })),
+    orders.map((order) => {
+      const linkedExchange =
+        exchangeByReplacement.get(order.id);
+
+      return {
+        ...order,
+        exchangeOriginalOrderId:
+          linkedExchange?.originalOrderId ?? null,
+        exchangePublicId:
+          linkedExchange?.publicId ?? null,
+        exchangeReturnNetMinor:
+          linkedExchange?.returnNetMinor ?? null,
+        exchangeNewNetMinor:
+          linkedExchange?.newNetMinor ?? null,
+        exchangeDifferenceMinor:
+          linkedExchange?.differenceMinor ?? null,
+        exchangeDeliveryChargeMinor:
+          linkedExchange?.deliveryChargeMinor ?? null,
+        exchangeSettlementAmountMinor:
+          linkedExchange?.settlementAmountMinor ?? null,
+      };
+    }),
   );
 }
 
