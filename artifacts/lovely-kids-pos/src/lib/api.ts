@@ -2839,6 +2839,7 @@ export interface OwnerInventoryIntelligenceReport {
   history: {
     earliestSaleDate: string | null;
     coverageDays: number;
+    hasThirtyDayHistory: boolean;
     hasNinetyDayHistory: boolean;
   };
 
