@@ -2791,6 +2791,104 @@ export function setOwnerHistoricalCostRepair(
 }
 
 
+export type InventoryMovementClass =
+  | "fast"
+  | "normal"
+  | "slow"
+  | "dead"
+  | "new";
+
+export type InventoryStockState =
+  | "in_stock"
+  | "out_of_stock"
+  | "untracked";
+
+export interface OwnerInventoryIntelligenceProduct {
+  productId: string;
+  nameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  image: string;
+  category: string;
+  isHidden: boolean;
+
+  currentQuantity: number | null;
+  stockState: InventoryStockState;
+
+  createdDate: string;
+  inventoryStartDate: string;
+  firstPurchaseDate: string | null;
+  lastPurchaseDate: string | null;
+  ageDays: number;
+
+  lastSaleDate: string | null;
+  daysSinceLastSale: number | null;
+
+  sold30: number;
+  sold90: number;
+  totalSold: number;
+
+  movementClass: InventoryMovementClass;
+  neverSold: boolean;
+}
+
+export interface OwnerInventoryIntelligenceReport {
+  generatedAt: string;
+  asOfDate: string;
+
+  history: {
+    earliestSaleDate: string | null;
+    coverageDays: number;
+    hasNinetyDayHistory: boolean;
+  };
+
+  thresholds: {
+    fast30: number;
+    fast90: number;
+    slow30Max: number;
+    slow90Max: number;
+    newProductDays: number;
+    deadProductDays: number;
+  };
+
+  summary: {
+    totalProducts: number;
+    trackedProducts: number;
+    inStockProducts: number;
+    fastMovers: number;
+    slowMovers: number;
+    deadMovers: number;
+    newProducts: number;
+    neverSoldInStock: number;
+    fastOutOfStock: number;
+    untrackedStock: number;
+  };
+
+  warnings: string[];
+
+  methodology: {
+    sales: string;
+    purchase: string;
+    fast: string;
+    slow: string;
+    dead: string;
+    new: string;
+  };
+
+  products: OwnerInventoryIntelligenceProduct[];
+}
+
+export function getOwnerInventoryIntelligenceReport(
+  token: string,
+) {
+  return apiRequest<OwnerInventoryIntelligenceReport>(
+    "/api/owner/reports/inventory-intelligence",
+    {},
+    token,
+  );
+}
+
+
 export interface GrossProfitChannelSummary {
   documents: number;
   returnDocuments: number;
