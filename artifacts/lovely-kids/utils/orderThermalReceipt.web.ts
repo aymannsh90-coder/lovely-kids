@@ -17,6 +17,13 @@ export interface ThermalOrderItem {
 
 export interface ThermalOrder {
   id: number;
+  exchangeOriginalOrderId?: number | null;
+  exchangePublicId?: string | null;
+  exchangeReturnNetMinor?: number | null;
+  exchangeNewNetMinor?: number | null;
+  exchangeDifferenceMinor?: number | null;
+  exchangeDeliveryChargeMinor?: number | null;
+  exchangeSettlementAmountMinor?: number | null;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
