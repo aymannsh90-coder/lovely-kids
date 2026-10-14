@@ -6,11 +6,14 @@ import {
   employeesTable,
   expenseCategoriesTable,
   financeAccountsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   financeVouchersTable,
   suppliersTable,
 } from "@workspace/db/schema";
 import {
   and,
+  asc,
   desc,
   eq,
 } from "drizzle-orm";
@@ -2277,6 +2280,789 @@ async function handleJournalVoucher(
   }
 }
 
+async function handleReplaceUnifiedVoucher(
+  request: Request,
+  db: Db,
+  env: Env,
+  voucherId: number,
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    (await request
+      .json()
+      .catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+
+  if (!body) {
+    return json(
+      {
+        error:
+          "بيانات تعديل السند غير صالحة",
+      },
+      400,
+    );
+  }
+
+  try {
+    const amountMinor =
+      moneyMinor(
+        body.amount,
+      );
+
+    const key =
+      idempotencyKey(
+        body.idempotencyKey,
+      );
+
+    const replacementNotes =
+      body.notes === undefined
+        ? undefined
+        : textValue(
+            body.notes,
+            1000,
+          );
+
+    const businessDate =
+      currentPalestineDate();
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const duplicate =
+            await existingVoucher(
+              tx,
+              key,
+            );
+
+          if (duplicate) {
+            if (
+              duplicate.replacesVoucherId !==
+              voucherId
+            ) {
+              throw new VoucherError(
+                "مفتاح التعديل مستخدم لسند آخر",
+                409,
+              );
+            }
+
+            return {
+              alreadyReplaced: true,
+              originalVoucher:
+                null,
+              replacementVoucher:
+                duplicate,
+              reversalTransaction:
+                null,
+              financeTransaction:
+                null,
+              expectedCashBeforeMinor:
+                null,
+              expectedCashAfterMinor:
+                null,
+            };
+          }
+
+          const voucherRows =
+            await tx
+              .select()
+              .from(
+                financeVouchersTable,
+              )
+              .where(
+                eq(
+                  financeVouchersTable.id,
+                  voucherId,
+                ),
+              )
+              .limit(1)
+              .for("update");
+
+          const voucher =
+            voucherRows[0];
+
+          if (!voucher) {
+            throw new VoucherError(
+              "السند غير موجود",
+              404,
+            );
+          }
+
+          if (
+            voucher.status !==
+              "posted"
+          ) {
+            throw new VoucherError(
+              "لا يمكن تعديل سند ملغى",
+              409,
+            );
+          }
+
+          if (
+            voucher.voucherType !==
+              "receipt" &&
+            voucher.voucherType !==
+              "payment" &&
+            voucher.voucherType !==
+              "journal"
+          ) {
+            throw new VoucherError(
+              "التعديل الذري متاح للسندات الجديدة فقط",
+              409,
+            );
+          }
+
+          if (
+            !voucher.financeTransactionId
+          ) {
+            throw new VoucherError(
+              "السند لا يحتوي على قيد محاسبي",
+              409,
+            );
+          }
+
+          const financeRows =
+            await tx
+              .select()
+              .from(
+                financeTransactionsTable,
+              )
+              .where(
+                eq(
+                  financeTransactionsTable.id,
+                  voucher.financeTransactionId,
+                ),
+              )
+              .limit(1)
+              .for("update");
+
+          const originalFinance =
+            financeRows[0];
+
+          if (
+            !originalFinance ||
+            originalFinance.status !==
+              "posted"
+          ) {
+            throw new VoucherError(
+              "القيد المحاسبي للسند غير متاح للتعديل",
+              409,
+            );
+          }
+
+          const originalLines =
+            await tx
+              .select()
+              .from(
+                financeTransactionLinesTable,
+              )
+              .where(
+                eq(
+                  financeTransactionLinesTable.transactionId,
+                  originalFinance.id,
+                ),
+              )
+              .orderBy(
+                asc(
+                  financeTransactionLinesTable.lineNumber,
+                ),
+              );
+
+          if (
+            originalLines.length !==
+              2
+          ) {
+            throw new VoucherError(
+              "هذا السند لا يطابق بنية التعديل الآمن",
+              409,
+            );
+          }
+
+          for (
+            const line of
+              originalLines
+          ) {
+            const lineAmount =
+              line.debitMinor >
+              0
+                ? line.debitMinor
+                : line.creditMinor;
+
+            if (
+              lineAmount !==
+              voucher.amountMinor
+            ) {
+              throw new VoucherError(
+                "مبلغ السند لا يطابق قيده المحاسبي",
+                409,
+              );
+            }
+          }
+
+          let cashSession:
+            | typeof cashSessionsTable.$inferSelect
+            | null =
+            null;
+
+          let expectedBefore:
+            | number
+            | null =
+            null;
+
+          let expectedAfterReverse:
+            | number
+            | null =
+            null;
+
+          let replacementCashDelta =
+            0;
+
+          if (
+            voucher.paymentMethod ===
+              "cash"
+          ) {
+            if (
+              !voucher.cashSessionId
+            ) {
+              throw new Error(
+                "UNIFIED_REPLACE_CASH_SESSION_MISSING",
+              );
+            }
+
+            const sessionRows =
+              await tx
+                .select()
+                .from(
+                  cashSessionsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      cashSessionsTable.id,
+                      voucher.cashSessionId,
+                    ),
+                    eq(
+                      cashSessionsTable.status,
+                      "open",
+                    ),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+
+            cashSession =
+              sessionRows[0] ??
+              null;
+
+            if (!cashSession) {
+              throw new VoucherError(
+                "لا يمكن تعديل حركة نقدية بعد إغلاق جلسة الصندوق",
+                409,
+              );
+            }
+
+            expectedBefore =
+              cashSession.expectedBalanceMinor ??
+              cashSession.openingBalanceMinor;
+
+            const cashCode =
+              `CASH_${cashSession.registerKey.toUpperCase()}`;
+
+            const cashRows =
+              await tx
+                .select()
+                .from(
+                  financeAccountsTable,
+                )
+                .where(
+                  eq(
+                    financeAccountsTable.code,
+                    cashCode,
+                  ),
+                )
+                .limit(1);
+
+            const cashAccount =
+              cashRows[0];
+
+            if (!cashAccount) {
+              throw new Error(
+                "UNIFIED_REPLACE_CASH_ACCOUNT_MISSING",
+              );
+            }
+
+            const cashLine =
+              originalLines.find(
+                (line) =>
+                  line.accountId ===
+                  cashAccount.id,
+              );
+
+            if (!cashLine) {
+              throw new Error(
+                "UNIFIED_REPLACE_CASH_LINE_MISSING",
+              );
+            }
+
+            const originalCashDelta =
+              cashLine.debitMinor -
+              cashLine.creditMinor;
+
+            if (
+              originalCashDelta !==
+                voucher.amountMinor &&
+              originalCashDelta !==
+                -voucher.amountMinor
+            ) {
+              throw new Error(
+                "UNIFIED_REPLACE_CASH_LINE_INVALID",
+              );
+            }
+
+            expectedAfterReverse =
+              expectedBefore -
+              originalCashDelta;
+
+            replacementCashDelta =
+              originalCashDelta >
+              0
+                ? amountMinor
+                : -amountMinor;
+
+            const finalExpected =
+              expectedAfterReverse +
+              replacementCashDelta;
+
+            if (
+              !Number.isSafeInteger(
+                finalExpected,
+              ) ||
+              expectedAfterReverse <
+                0 ||
+              finalExpected <
+                0 ||
+              finalExpected >
+                MAX_MINOR
+            ) {
+              throw new VoucherError(
+                "رصيد الصندوق لا يسمح بتعديل السند لهذه القيمة",
+                409,
+              );
+            }
+          }
+
+          const reversalPosting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey:
+                  `voucher:${voucher.id}:replace:void`,
+                businessDate,
+                transactionType:
+                  "reversal",
+                sourceType:
+                  "finance_voucher",
+                sourceId:
+                  String(
+                    voucher.id,
+                  ),
+                sourceEvent:
+                  "replaced",
+                cashSessionId:
+                  cashSession?.id ??
+                  null,
+                notes:
+                  `عكس للتعديل: ${voucher.publicId}`,
+                createdByUserId:
+                  Number(
+                    auth.user.id,
+                  ),
+                lines:
+                  originalLines.map(
+                    (line) => ({
+                      accountId:
+                        line.accountId,
+                      customerId:
+                        line.customerId,
+                      employeeId:
+                        line.employeeId,
+                      supplierId:
+                        line.supplierId,
+                      debitMinor:
+                        line.creditMinor,
+                      creditMinor:
+                        line.debitMinor,
+                      memo:
+                        `عكس للتعديل: ${line.memo ?? voucher.publicId}`,
+                    }),
+                  ),
+              },
+            );
+
+          await tx
+            .update(
+              financeTransactionsTable,
+            )
+            .set({
+              status:
+                "reversed",
+              updatedAt:
+                new Date(),
+            })
+            .where(
+              eq(
+                financeTransactionsTable.id,
+                originalFinance.id,
+              ),
+            );
+
+          if (
+            voucher.voucherPurpose ===
+              "employee_repayment" &&
+            voucher.partyId
+          ) {
+            const balance =
+              await employeeAdvanceBalanceMinor(
+                tx,
+                voucher.partyId,
+              );
+
+            if (
+              amountMinor >
+              balance
+            ) {
+              throw new VoucherError(
+                "المبلغ الجديد أكبر من رصيد السلفة على الموظف",
+                409,
+              );
+            }
+          }
+
+          if (
+            voucher.voucherPurpose ===
+              "employee_payment" &&
+            voucher.partyId
+          ) {
+            const balance =
+              await employeePayableBalanceMinor(
+                tx,
+                voucher.partyId,
+              );
+
+            if (
+              amountMinor >
+              balance
+            ) {
+              throw new VoucherError(
+                "المبلغ الجديد أكبر من مستحقات الموظف",
+                409,
+              );
+            }
+          }
+
+          if (
+            voucher.voucherPurpose ===
+              "supplier_refund" &&
+            voucher.partyId
+          ) {
+            const balance =
+              await supplierPayableBalanceMinor(
+                tx,
+                voucher.partyId,
+              );
+
+            if (
+              balance >= 0 ||
+              amountMinor >
+                -balance
+            ) {
+              throw new VoucherError(
+                "المبلغ الجديد أكبر من الرصيد الدائن لنا على المورد",
+                409,
+              );
+            }
+          }
+
+          const prefix =
+            voucher.voucherType ===
+              "receipt"
+              ? "REC"
+              : voucher.voucherType ===
+                    "payment"
+                ? "PAY"
+                : "JRN";
+
+          const replacementRows =
+            await tx
+              .insert(
+                financeVouchersTable,
+              )
+              .values({
+                publicId:
+                  `${prefix}-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey:
+                  key,
+                voucherType:
+                  voucher.voucherType,
+                voucherPurpose:
+                  voucher.voucherPurpose,
+                partyType:
+                  voucher.partyType,
+                partyId:
+                  voucher.partyId,
+                expenseCategoryId:
+                  voucher.expenseCategoryId,
+                paymentMethod:
+                  voucher.paymentMethod,
+                amountMinor,
+                currencyCode:
+                  voucher.currencyCode,
+                transactionAmountMinor:
+                  amountMinor,
+                exchangeRateMicros:
+                  voucher.exchangeRateMicros,
+                bankAccountId:
+                  voucher.bankAccountId,
+                businessDate,
+                referencePeriod:
+                  voucher.referencePeriod,
+                cashSessionId:
+                  cashSession?.id ??
+                  null,
+                financeTransactionId:
+                  null,
+                replacesVoucherId:
+                  voucher.id,
+                status:
+                  "posted",
+                notes:
+                  replacementNotes ===
+                    undefined
+                    ? voucher.notes
+                    : replacementNotes,
+                createdByUserId:
+                  Number(
+                    auth.user.id,
+                  ),
+              })
+              .returning();
+
+          const replacement =
+            replacementRows[0];
+
+          if (!replacement) {
+            throw new Error(
+              "UNIFIED_REPLACEMENT_INSERT_FAILED",
+            );
+          }
+
+          const replacementPosting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey:
+                  `voucher:${replacement.id}:posted`,
+                businessDate,
+                transactionType:
+                  voucher.voucherType ===
+                    "receipt"
+                    ? "receipt"
+                    : voucher.voucherType ===
+                          "payment"
+                      ? "payment"
+                      : "adjustment",
+                sourceType:
+                  "finance_voucher",
+                sourceId:
+                  String(
+                    replacement.id,
+                  ),
+                sourceEvent:
+                  voucher.voucherType,
+                cashSessionId:
+                  cashSession?.id ??
+                  null,
+                notes:
+                  replacement.notes ??
+                  replacement.publicId,
+                createdByUserId:
+                  Number(
+                    auth.user.id,
+                  ),
+                lines:
+                  originalLines.map(
+                    (line) => ({
+                      accountId:
+                        line.accountId,
+                      customerId:
+                        line.customerId,
+                      employeeId:
+                        line.employeeId,
+                      supplierId:
+                        line.supplierId,
+                      debitMinor:
+                        line.debitMinor >
+                        0
+                          ? amountMinor
+                          : 0,
+                      creditMinor:
+                        line.creditMinor >
+                        0
+                          ? amountMinor
+                          : 0,
+                      memo:
+                        `بديل ${voucher.publicId}: ${line.memo ?? replacement.publicId}`,
+                    }),
+                  ),
+              },
+            );
+
+          const updatedReplacementRows =
+            await tx
+              .update(
+                financeVouchersTable,
+              )
+              .set({
+                financeTransactionId:
+                  replacementPosting.transaction.id,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                eq(
+                  financeVouchersTable.id,
+                  replacement.id,
+                ),
+              )
+              .returning();
+
+          const updatedOriginalRows =
+            await tx
+              .update(
+                financeVouchersTable,
+              )
+              .set({
+                status:
+                  "voided",
+                voidedAt:
+                  new Date(),
+                voidedByUserId:
+                  Number(
+                    auth.user.id,
+                  ),
+                voidReason:
+                  `تم تعديله بالسند ${replacement.publicId}`,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                eq(
+                  financeVouchersTable.id,
+                  voucher.id,
+                ),
+              )
+              .returning();
+
+          let expectedAfter:
+            | number
+            | null =
+            null;
+
+          if (
+            cashSession &&
+            expectedAfterReverse !==
+              null
+          ) {
+            expectedAfter =
+              expectedAfterReverse +
+              replacementCashDelta;
+
+            await tx
+              .update(
+                cashSessionsTable,
+              )
+              .set({
+                expectedBalanceMinor:
+                  expectedAfter,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                and(
+                  eq(
+                    cashSessionsTable.id,
+                    cashSession.id,
+                  ),
+                  eq(
+                    cashSessionsTable.status,
+                    "open",
+                  ),
+                ),
+              );
+          }
+
+          return {
+            alreadyReplaced: false,
+            originalVoucher:
+              updatedOriginalRows[0],
+            replacementVoucher:
+              updatedReplacementRows[0],
+            reversalTransaction:
+              reversalPosting.transaction,
+            financeTransaction:
+              replacementPosting.transaction,
+            expectedCashBeforeMinor:
+              expectedBefore,
+            expectedCashAfterMinor:
+              expectedAfter,
+          };
+        },
+      );
+
+    return json(result);
+  } catch (caught) {
+    if (
+      caught instanceof
+      VoucherError
+    ) {
+      return json(
+        {
+          error:
+            caught.message,
+        },
+        caught.status,
+      );
+    }
+
+    console.error(
+      "UNIFIED_VOUCHER_REPLACE_FAILED",
+      caught,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر تعديل السند بأمان",
+      },
+      500,
+    );
+  }
+}
+
 export async function handleUnifiedVoucherRequest(
   request: Request,
   db: Db,
@@ -2322,6 +3108,26 @@ export async function handleUnifiedVoucherRequest(
       request,
       db,
       env,
+    );
+  }
+
+  const replaceMatch =
+    path.match(
+      /^\/api\/pos\/finance\/vouchers\/(\d+)\/replace$/,
+    );
+
+  if (
+    request.method === "POST" &&
+    replaceMatch
+  ) {
+    return handleReplaceUnifiedVoucher(
+      request,
+      db,
+      env,
+      positiveId(
+        replaceMatch[1],
+        "السند",
+      ),
     );
   }
 
