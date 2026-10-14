@@ -559,7 +559,7 @@ export function createPosCustomerReceipt(
       status: string;
     };
   }>(
-    `/api/pos/customers/${customerId}/receipt`,
+    `/api/pos/customers/${customerId}/receipts`,
     {
       method: "POST",
       body: JSON.stringify(
