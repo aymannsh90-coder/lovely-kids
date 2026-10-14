@@ -38,8 +38,44 @@ function errorText(error: unknown) {
     : "حدث خطأ غير متوقع";
 }
 
-function voucherLabel(type: PosFinanceVoucher["voucherType"]) {
-  switch (type) {
+function voucherLabel(voucher: PosFinanceVoucher) {
+  if (voucher.voucherPurpose === "customer_receipt") {
+    return "سند قبض / دفعة زبون";
+  }
+
+  if (voucher.voucherPurpose === "employee_repayment") {
+    return "سند قبض / تسديد سلفة موظف";
+  }
+
+  if (voucher.voucherPurpose === "supplier_refund") {
+    return "سند قبض / إرجاع من مورد";
+  }
+
+  if (voucher.voucherPurpose === "delivery_company_settlement") {
+    return "سند قبض / شركة توصيل";
+  }
+
+  if (voucher.voucherPurpose === "customer_cash_loan") {
+    return "سند صرف / زبون على الحساب";
+  }
+
+  if (voucher.voucherPurpose === "employee_advance") {
+    return "سند صرف / سلفة موظف";
+  }
+
+  if (voucher.voucherPurpose === "employee_payment") {
+    return "سند صرف / مستحقات موظف";
+  }
+
+  if (voucher.voucherPurpose === "supplier_payment") {
+    return "سند صرف / مورد";
+  }
+
+  if (voucher.voucherPurpose === "account_transfer") {
+    return "سند قيد / نقل بين حسابات";
+  }
+
+  switch (voucher.voucherType) {
     case "customer_receipt":
       return "سند قبض زبون";
     case "expense":
@@ -63,7 +99,7 @@ function voucherLabel(type: PosFinanceVoucher["voucherType"]) {
     case "journal":
       return "سند قيد";
     default:
-      return type;
+      return voucher.voucherType;
   }
 }
 
@@ -355,7 +391,7 @@ export default function VoucherRegisterPage() {
         voucher.publicId,
         voucher.businessDate,
         voucher.notes ?? "",
-        voucherLabel(voucher.voucherType),
+        voucherLabel(voucher),
         partyLabel(voucher),
         String(voucher.amountMinor / 100),
       ].some((value) =>
@@ -699,7 +735,7 @@ export default function VoucherRegisterPage() {
 
                     <td>
                       {voucherLabel(
-                        voucher.voucherType,
+                        voucher,
                       )}
                     </td>
 
