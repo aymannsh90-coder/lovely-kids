@@ -656,10 +656,15 @@ export interface PosFinanceVoucher {
     | "salary_accrual"
     | "employee_payment"
     | "owner_withdrawal"
-    | "adjustment";
+    | "adjustment"
+    | "receipt"
+    | "payment"
+    | "journal";
   partyType:
     | "customer"
     | "employee"
+    | "supplier"
+    | "delivery_company"
     | "owner"
     | null;
   partyId: number | null;
