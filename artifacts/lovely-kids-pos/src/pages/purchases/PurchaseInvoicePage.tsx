@@ -428,11 +428,11 @@ export default function PurchaseInvoicePage() {
                     barcode ||
                   candidate.primaryBarcode ===
                     barcode ||
-                  candidate.barcodes.some(
+                  (candidate.barcodes?.some(
                     (entry) =>
                       entry.barcode ===
                       barcode,
-                  )
+                  ) ?? false)
                 ),
             ) ??
             (result.results.length === 1
