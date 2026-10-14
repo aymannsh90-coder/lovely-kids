@@ -1,0 +1,2289 @@
+import {
+  bankAccountsTable,
+  cashSessionsTable,
+  customersTable,
+  deliveryCompaniesTable,
+  employeesTable,
+  expenseCategoriesTable,
+  financeAccountsTable,
+  financeVouchersTable,
+  suppliersTable,
+} from "@workspace/db/schema";
+import {
+  and,
+  desc,
+  eq,
+} from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+
+import { getCurrentUser } from "./auth";
+import { openDb, type Env } from "./db";
+import {
+  ensureCustomerReceivableControlAccount,
+} from "./finance-customer-ledger";
+import {
+  employeeAdvanceBalanceMinor,
+  employeePayableBalanceMinor,
+  ensureEmployeeAdvanceControlAccount,
+  ensureEmployeePayableControlAccount,
+} from "./finance-employee-ledger";
+import {
+  postFinanceTransaction,
+  type FinancePostingLineInput,
+} from "./finance-posting";
+import {
+  ensureSupplierPayableControlAccount,
+  supplierPayableBalanceMinor,
+} from "./finance-supplier-ledger";
+
+type Db =
+  Awaited<ReturnType<typeof openDb>>["db"];
+
+const MAX_MINOR = 2_147_483_647;
+
+const headers = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+};
+
+const json = (
+  data: unknown,
+  status = 200,
+) =>
+  new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers,
+    },
+  );
+
+class VoucherError extends Error {
+  constructor(
+    message: string,
+    readonly status = 400,
+  ) {
+    super(message);
+  }
+}
+
+type PosUser = NonNullable<
+  Awaited<
+    ReturnType<typeof getCurrentUser>
+  >
+>;
+
+type PartyType =
+  | "customer"
+  | "employee"
+  | "supplier"
+  | "delivery_company";
+
+type SettlementMethod =
+  | "cash"
+  | "bank";
+
+type AccountRef =
+  | {
+      kind: "cash";
+      registerKey: string;
+    }
+  | {
+      kind: "bank";
+      bankAccountId: number;
+    }
+  | {
+      kind: "customer";
+      customerId: number;
+    }
+  | {
+      kind:
+        | "employee_advance"
+        | "employee_payable";
+      employeeId: number;
+    }
+  | {
+      kind: "supplier";
+      supplierId: number;
+    }
+  | {
+      kind: "delivery_company";
+      deliveryCompanyId: number;
+    }
+  | {
+      kind: "expense";
+      expenseCategoryId: number;
+    }
+  | {
+      kind: "finance_account";
+      financeAccountId: number;
+    };
+
+type ResolvedAccount = {
+  account: typeof financeAccountsTable.$inferSelect;
+  lineDimensions: Pick<
+    FinancePostingLineInput,
+    | "customerId"
+    | "employeeId"
+    | "supplierId"
+  >;
+  label: string;
+  cashSession:
+    | typeof cashSessionsTable.$inferSelect
+    | null;
+  bankAccountId: number | null;
+  settlementKind:
+    | "cash"
+    | "bank"
+    | null;
+};
+
+async function requireOwner(
+  request: Request,
+  db: Db,
+  env: Env,
+): Promise<
+  | {
+      ok: true;
+      user: PosUser;
+    }
+  | {
+      ok: false;
+      response: Response;
+    }
+> {
+  const user =
+    await getCurrentUser(
+      db,
+      request,
+      env,
+    );
+
+  if (!user) {
+    return {
+      ok: false,
+      response: json(
+        {
+          error:
+            "يجب تسجيل الدخول",
+        },
+        401,
+      ),
+    };
+  }
+
+  if (!user.isOwner) {
+    return {
+      ok: false,
+      response: json(
+        {
+          error:
+            "إنشاء السندات العامة متاح للمالك فقط",
+        },
+        403,
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    user,
+  };
+}
+
+function currentPalestineDate() {
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone: "Asia/Hebron",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    },
+  ).format(new Date());
+}
+
+function textValue(
+  value: unknown,
+  maxLength: number,
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new VoucherError(
+      "قيمة نصية غير صالحة",
+    );
+  }
+
+  const normalized =
+    value.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (
+    normalized.length >
+    maxLength
+  ) {
+    throw new VoucherError(
+      "القيمة النصية طويلة جدًا",
+    );
+  }
+
+  return normalized;
+}
+
+function positiveId(
+  value: unknown,
+  label: string,
+) {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" &&
+          value.trim()
+        ? Number(value)
+        : NaN;
+
+  if (
+    !Number.isSafeInteger(numeric) ||
+    numeric <= 0
+  ) {
+    throw new VoucherError(
+      `${label} غير صالح`,
+    );
+  }
+
+  return numeric;
+}
+
+function moneyMinor(
+  value: unknown,
+) {
+  const normalized =
+    typeof value === "number"
+      ? String(value)
+      : typeof value === "string"
+        ? value
+            .trim()
+            .replace(",", ".")
+        : "";
+
+  const match =
+    /^(\d+)(?:\.(\d{1,2}))?$/.exec(
+      normalized,
+    );
+
+  if (!match) {
+    throw new VoucherError(
+      "المبلغ غير صالح",
+    );
+  }
+
+  const minor =
+    Number(match[1]) * 100 +
+    Number(
+      (match[2] ?? "")
+        .padEnd(2, "0"),
+    );
+
+  if (
+    !Number.isSafeInteger(minor) ||
+    minor <= 0 ||
+    minor > MAX_MINOR
+  ) {
+    throw new VoucherError(
+      "المبلغ خارج الحد المسموح",
+    );
+  }
+
+  return minor;
+}
+
+function registerKey(
+  value: unknown,
+) {
+  const normalized =
+    typeof value === "string" &&
+    value.trim()
+      ? value.trim().toLowerCase()
+      : "main";
+
+  if (
+    !/^[a-z0-9_-]{1,50}$/.test(
+      normalized,
+    )
+  ) {
+    throw new VoucherError(
+      "رمز الصندوق غير صالح",
+    );
+  }
+
+  return normalized;
+}
+
+function idempotencyKey(
+  value: unknown,
+) {
+  const normalized =
+    textValue(
+      value,
+      160,
+    ) ??
+    `voucher:${randomUUID()}`;
+
+  if (
+    normalized.length < 8
+  ) {
+    throw new VoucherError(
+      "مفتاح منع التكرار غير صالح",
+    );
+  }
+
+  return normalized;
+}
+
+async function ensureFinanceAccount(
+  tx: any,
+  input: {
+    code: string;
+    name: string;
+    accountType:
+      | "asset"
+      | "liability"
+      | "income"
+      | "expense"
+      | "equity";
+  },
+) {
+  const existing =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        eq(
+          financeAccountsTable.code,
+          input.code,
+        ),
+      )
+      .limit(1);
+
+  if (existing[0]) {
+    if (
+      existing[0].accountType !==
+      input.accountType
+    ) {
+      throw new Error(
+        "FINANCE_ACCOUNT_TYPE_MISMATCH",
+      );
+    }
+
+    return existing[0];
+  }
+
+  const inserted =
+    await tx
+      .insert(
+        financeAccountsTable,
+      )
+      .values({
+        code:
+          input.code,
+        name:
+          input.name,
+        accountType:
+          input.accountType,
+        currencyCode:
+          "ILS",
+        status:
+          "active",
+      })
+      .onConflictDoNothing()
+      .returning();
+
+  if (inserted[0]) {
+    return inserted[0];
+  }
+
+  const retry =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        eq(
+          financeAccountsTable.code,
+          input.code,
+        ),
+      )
+      .limit(1);
+
+  if (!retry[0]) {
+    throw new Error(
+      "FINANCE_ACCOUNT_CREATE_FAILED",
+    );
+  }
+
+  return retry[0];
+}
+
+async function loadCashSession(
+  tx: any,
+  register: string,
+) {
+  const rows =
+    await tx
+      .select()
+      .from(
+        cashSessionsTable,
+      )
+      .where(
+        and(
+          eq(
+            cashSessionsTable.registerKey,
+            register,
+          ),
+          eq(
+            cashSessionsTable.status,
+            "open",
+          ),
+        ),
+      )
+      .orderBy(
+        desc(
+          cashSessionsTable.openedAt,
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+  const session =
+    rows[0] ?? null;
+
+  if (!session) {
+    throw new VoucherError(
+      "يجب فتح الصندوق أولًا للحركة النقدية",
+      409,
+    );
+  }
+
+  if (
+    session.currencyCode !==
+    "ILS"
+  ) {
+    throw new VoucherError(
+      "السندات العامة تدعم حاليًا صندوق الشيكل فقط",
+      409,
+    );
+  }
+
+  return session;
+}
+
+async function cashAccount(
+  tx: any,
+  register: string,
+) {
+  return ensureFinanceAccount(
+    tx,
+    {
+      code:
+        `CASH_${register.toUpperCase()}`,
+      name:
+        register === "main"
+          ? "الصندوق الرئيسي"
+          : `الصندوق ${register}`,
+      accountType:
+        "asset",
+    },
+  );
+}
+
+async function bankAccount(
+  tx: any,
+  bankAccountId: number,
+) {
+  const rows =
+    await tx
+      .select({
+        bank:
+          bankAccountsTable,
+        finance:
+          financeAccountsTable,
+      })
+      .from(
+        bankAccountsTable,
+      )
+      .innerJoin(
+        financeAccountsTable,
+        eq(
+          financeAccountsTable.id,
+          bankAccountsTable.financeAccountId,
+        ),
+      )
+      .where(
+        and(
+          eq(
+            bankAccountsTable.id,
+            bankAccountId,
+          ),
+          eq(
+            bankAccountsTable.status,
+            "active",
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  const item =
+    rows[0];
+
+  if (!item) {
+    throw new VoucherError(
+      "الحساب البنكي غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  if (
+    item.bank.currencyCode !==
+    "ILS" ||
+    item.finance.currencyCode !==
+    "ILS"
+  ) {
+    throw new VoucherError(
+      "السندات العامة تدعم حاليًا الحسابات البنكية بالشيكل فقط",
+      409,
+    );
+  }
+
+  return item;
+}
+
+async function settlementAccount(
+  tx: any,
+  input: {
+    method: SettlementMethod;
+    register: string;
+    bankAccountId:
+      | number
+      | null;
+  },
+): Promise<ResolvedAccount> {
+  if (
+    input.method === "cash"
+  ) {
+    const session =
+      await loadCashSession(
+        tx,
+        input.register,
+      );
+
+    const account =
+      await cashAccount(
+        tx,
+        input.register,
+      );
+
+    return {
+      account,
+      lineDimensions: {},
+      label: account.name,
+      cashSession: session,
+      bankAccountId: null,
+      settlementKind:
+        "cash",
+    };
+  }
+
+  if (!input.bankAccountId) {
+    throw new VoucherError(
+      "اختر الحساب البنكي",
+    );
+  }
+
+  const item =
+    await bankAccount(
+      tx,
+      input.bankAccountId,
+    );
+
+  return {
+    account:
+      item.finance,
+    lineDimensions: {},
+    label:
+      item.finance.name,
+    cashSession: null,
+    bankAccountId:
+      item.bank.id,
+    settlementKind:
+      "bank",
+  };
+}
+
+async function loadActiveCustomer(
+  tx: any,
+  id: number,
+) {
+  const rows =
+    await tx
+      .select()
+      .from(customersTable)
+      .where(
+        and(
+          eq(
+            customersTable.id,
+            id,
+          ),
+          eq(
+            customersTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  if (!rows[0]) {
+    throw new VoucherError(
+      "الزبون غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  return rows[0];
+}
+
+async function loadActiveEmployee(
+  tx: any,
+  id: number,
+) {
+  const rows =
+    await tx
+      .select()
+      .from(employeesTable)
+      .where(
+        and(
+          eq(
+            employeesTable.id,
+            id,
+          ),
+          eq(
+            employeesTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  if (!rows[0]) {
+    throw new VoucherError(
+      "الموظف غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  return rows[0];
+}
+
+async function loadActiveSupplier(
+  tx: any,
+  id: number,
+) {
+  const rows =
+    await tx
+      .select()
+      .from(suppliersTable)
+      .where(
+        and(
+          eq(
+            suppliersTable.id,
+            id,
+          ),
+          eq(
+            suppliersTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  if (!rows[0]) {
+    throw new VoucherError(
+      "المورد غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  return rows[0];
+}
+
+async function loadActiveDeliveryCompany(
+  tx: any,
+  id: number,
+) {
+  const rows =
+    await tx
+      .select()
+      .from(
+        deliveryCompaniesTable,
+      )
+      .where(
+        and(
+          eq(
+            deliveryCompaniesTable.id,
+            id,
+          ),
+          eq(
+            deliveryCompaniesTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  if (!rows[0]) {
+    throw new VoucherError(
+      "شركة التوصيل غير موجودة أو غير فعالة",
+      404,
+    );
+  }
+
+  return rows[0];
+}
+
+async function deliveryAccount(
+  tx: any,
+  companyId: number,
+) {
+  await loadActiveDeliveryCompany(
+    tx,
+    companyId,
+  );
+
+  const rows =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.linkedEntityType,
+            "delivery_company_receivable",
+          ),
+          eq(
+            financeAccountsTable.linkedEntityId,
+            companyId,
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  if (!rows[0]) {
+    throw new VoucherError(
+      "لا يوجد حساب ذمة مالي فعال لشركة التوصيل",
+      409,
+    );
+  }
+
+  return rows[0];
+}
+
+async function resolveAccountRef(
+  tx: any,
+  ref: AccountRef,
+): Promise<ResolvedAccount> {
+  if (
+    ref.kind === "cash"
+  ) {
+    const register =
+      registerKey(
+        ref.registerKey,
+      );
+
+    return settlementAccount(
+      tx,
+      {
+        method: "cash",
+        register,
+        bankAccountId:
+          null,
+      },
+    );
+  }
+
+  if (
+    ref.kind === "bank"
+  ) {
+    return settlementAccount(
+      tx,
+      {
+        method: "bank",
+        register: "main",
+        bankAccountId:
+          ref.bankAccountId,
+      },
+    );
+  }
+
+  if (
+    ref.kind === "customer"
+  ) {
+    const customer =
+      await loadActiveCustomer(
+        tx,
+        ref.customerId,
+      );
+
+    const account =
+      await ensureCustomerReceivableControlAccount(
+        tx,
+      );
+
+    return {
+      account,
+      lineDimensions: {
+        customerId:
+          customer.id,
+      },
+      label:
+        `ذمة الزبون ${customer.name}`,
+      cashSession: null,
+      bankAccountId: null,
+      settlementKind: null,
+    };
+  }
+
+  if (
+    ref.kind ===
+      "employee_advance"
+  ) {
+    const employee =
+      await loadActiveEmployee(
+        tx,
+        ref.employeeId,
+      );
+
+    const account =
+      await ensureEmployeeAdvanceControlAccount(
+        tx,
+      );
+
+    return {
+      account,
+      lineDimensions: {
+        employeeId:
+          employee.id,
+      },
+      label:
+        `سلفة الموظف ${employee.name}`,
+      cashSession: null,
+      bankAccountId: null,
+      settlementKind: null,
+    };
+  }
+
+  if (
+    ref.kind ===
+      "employee_payable"
+  ) {
+    const employee =
+      await loadActiveEmployee(
+        tx,
+        ref.employeeId,
+      );
+
+    const account =
+      await ensureEmployeePayableControlAccount(
+        tx,
+      );
+
+    return {
+      account,
+      lineDimensions: {
+        employeeId:
+          employee.id,
+      },
+      label:
+        `مستحقات الموظف ${employee.name}`,
+      cashSession: null,
+      bankAccountId: null,
+      settlementKind: null,
+    };
+  }
+
+  if (
+    ref.kind === "supplier"
+  ) {
+    const supplier =
+      await loadActiveSupplier(
+        tx,
+        ref.supplierId,
+      );
+
+    const account =
+      await ensureSupplierPayableControlAccount(
+        tx,
+      );
+
+    return {
+      account,
+      lineDimensions: {
+        supplierId:
+          supplier.id,
+      },
+      label:
+        `ذمة المورد ${supplier.name}`,
+      cashSession: null,
+      bankAccountId: null,
+      settlementKind: null,
+    };
+  }
+
+  if (
+    ref.kind ===
+      "delivery_company"
+  ) {
+    const company =
+      await loadActiveDeliveryCompany(
+        tx,
+        ref.deliveryCompanyId,
+      );
+
+    const account =
+      await deliveryAccount(
+        tx,
+        company.id,
+      );
+
+    return {
+      account,
+      lineDimensions: {},
+      label:
+        `ذمة شركة التوصيل ${company.name}`,
+      cashSession: null,
+      bankAccountId: null,
+      settlementKind: null,
+    };
+  }
+
+  if (
+    ref.kind === "expense"
+  ) {
+    const rows =
+      await tx
+        .select({
+          category:
+            expenseCategoriesTable,
+          account:
+            financeAccountsTable,
+        })
+        .from(
+          expenseCategoriesTable,
+        )
+        .innerJoin(
+          financeAccountsTable,
+          eq(
+            financeAccountsTable.id,
+            expenseCategoriesTable.financeAccountId,
+          ),
+        )
+        .where(
+          and(
+            eq(
+              expenseCategoriesTable.id,
+              ref.expenseCategoryId,
+            ),
+            eq(
+              expenseCategoriesTable.status,
+              "active",
+            ),
+            eq(
+              financeAccountsTable.status,
+              "active",
+            ),
+          ),
+        )
+        .limit(1);
+
+    const item =
+      rows[0];
+
+    if (!item) {
+      throw new VoucherError(
+        "تصنيف المصروف غير موجود أو غير فعال",
+        404,
+      );
+    }
+
+    return {
+      account:
+        item.account,
+      lineDimensions: {},
+      label:
+        `مصروف ${item.category.name}`,
+      cashSession: null,
+      bankAccountId: null,
+      settlementKind: null,
+    };
+  }
+
+  const rows =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.id,
+            ref.financeAccountId,
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  const account =
+    rows[0];
+
+  if (!account) {
+    throw new VoucherError(
+      "الحساب المحاسبي غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  if (
+    account.currencyCode !==
+    "ILS"
+  ) {
+    throw new VoucherError(
+      "سند القيد العام يدعم حاليًا حسابات الشيكل فقط",
+      409,
+    );
+  }
+
+  return {
+    account,
+    lineDimensions: {},
+    label: account.name,
+    cashSession: null,
+    bankAccountId: null,
+    settlementKind: null,
+  };
+}
+
+function parseAccountRef(
+  value: unknown,
+  label: string,
+): AccountRef {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    throw new VoucherError(
+      `${label} غير صالح`,
+    );
+  }
+
+  const raw =
+    value as Record<
+      string,
+      unknown
+    >;
+
+  const kind =
+    typeof raw.kind ===
+      "string"
+      ? raw.kind
+      : "";
+
+  if (
+    kind === "cash"
+  ) {
+    return {
+      kind,
+      registerKey:
+        registerKey(
+          raw.registerKey,
+        ),
+    };
+  }
+
+  if (
+    kind === "bank"
+  ) {
+    return {
+      kind,
+      bankAccountId:
+        positiveId(
+          raw.bankAccountId,
+          "الحساب البنكي",
+        ),
+    };
+  }
+
+  if (
+    kind === "customer"
+  ) {
+    return {
+      kind,
+      customerId:
+        positiveId(
+          raw.customerId,
+          "الزبون",
+        ),
+    };
+  }
+
+  if (
+    kind ===
+      "employee_advance" ||
+    kind ===
+      "employee_payable"
+  ) {
+    return {
+      kind,
+      employeeId:
+        positiveId(
+          raw.employeeId,
+          "الموظف",
+        ),
+    };
+  }
+
+  if (
+    kind === "supplier"
+  ) {
+    return {
+      kind,
+      supplierId:
+        positiveId(
+          raw.supplierId,
+          "المورد",
+        ),
+    };
+  }
+
+  if (
+    kind ===
+      "delivery_company"
+  ) {
+    return {
+      kind,
+      deliveryCompanyId:
+        positiveId(
+          raw.deliveryCompanyId,
+          "شركة التوصيل",
+        ),
+    };
+  }
+
+  if (
+    kind === "expense"
+  ) {
+    return {
+      kind,
+      expenseCategoryId:
+        positiveId(
+          raw.expenseCategoryId,
+          "تصنيف المصروف",
+        ),
+    };
+  }
+
+  if (
+    kind ===
+      "finance_account"
+  ) {
+    return {
+      kind,
+      financeAccountId:
+        positiveId(
+          raw.financeAccountId,
+          "الحساب المحاسبي",
+        ),
+    };
+  }
+
+  throw new VoucherError(
+    `${label} غير مدعوم`,
+  );
+}
+
+async function updateCashExpected(
+  tx: any,
+  session:
+    typeof cashSessionsTable.$inferSelect,
+  deltaMinor: number,
+) {
+  const expectedBefore =
+    session.expectedBalanceMinor ??
+    session.openingBalanceMinor;
+
+  const expectedAfter =
+    expectedBefore +
+    deltaMinor;
+
+  if (
+    !Number.isSafeInteger(
+      expectedAfter,
+    ) ||
+    expectedAfter < 0 ||
+    expectedAfter > MAX_MINOR
+  ) {
+    throw new VoucherError(
+      "رصيد الصندوق لا يسمح بهذه الحركة",
+      409,
+    );
+  }
+
+  const rows =
+    await tx
+      .update(
+        cashSessionsTable,
+      )
+      .set({
+        expectedBalanceMinor:
+          expectedAfter,
+        updatedAt:
+          new Date(),
+      })
+      .where(
+        and(
+          eq(
+            cashSessionsTable.id,
+            session.id,
+          ),
+          eq(
+            cashSessionsTable.status,
+            "open",
+          ),
+        ),
+      )
+      .returning();
+
+  if (!rows[0]) {
+    throw new VoucherError(
+      "تغيرت حالة الصندوق أثناء حفظ السند، أعد المحاولة",
+      409,
+    );
+  }
+
+  return {
+    before:
+      expectedBefore,
+    after:
+      expectedAfter,
+  };
+}
+
+async function existingVoucher(
+  tx: any,
+  key: string,
+) {
+  const rows =
+    await tx
+      .select()
+      .from(
+        financeVouchersTable,
+      )
+      .where(
+        eq(
+          financeVouchersTable.idempotencyKey,
+          key,
+        ),
+      )
+      .limit(1);
+
+  return rows[0] ?? null;
+}
+
+async function insertVoucher(
+  tx: any,
+  input: {
+    publicPrefix:
+      | "REC"
+      | "PAY"
+      | "JRN";
+    key: string;
+    voucherType:
+      | "receipt"
+      | "payment"
+      | "journal";
+    partyType:
+      | PartyType
+      | null;
+    partyId:
+      | number
+      | null;
+    paymentMethod:
+      | "cash"
+      | "bank"
+      | "non_cash";
+    amountMinor: number;
+    bankAccountId:
+      | number
+      | null;
+    cashSessionId:
+      | number
+      | null;
+    notes:
+      | string
+      | null;
+    userId: number;
+    businessDate: string;
+  },
+) {
+  const publicId =
+    `${input.publicPrefix}-${input.businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
+
+  const rows =
+    await tx
+      .insert(
+        financeVouchersTable,
+      )
+      .values({
+        publicId,
+        idempotencyKey:
+          input.key,
+        voucherType:
+          input.voucherType,
+        partyType:
+          input.partyType,
+        partyId:
+          input.partyId,
+        expenseCategoryId:
+          null,
+        paymentMethod:
+          input.paymentMethod,
+        amountMinor:
+          input.amountMinor,
+        currencyCode:
+          "ILS",
+        transactionAmountMinor:
+          input.amountMinor,
+        exchangeRateMicros:
+          1_000_000,
+        bankAccountId:
+          input.bankAccountId,
+        businessDate:
+          input.businessDate,
+        referencePeriod:
+          null,
+        cashSessionId:
+          input.cashSessionId,
+        financeTransactionId:
+          null,
+        status:
+          "posted",
+        notes:
+          input.notes,
+        createdByUserId:
+          input.userId,
+      })
+      .returning();
+
+  if (!rows[0]) {
+    throw new Error(
+      "UNIFIED_VOUCHER_INSERT_FAILED",
+    );
+  }
+
+  return rows[0];
+}
+
+async function handlePartyVoucher(
+  request: Request,
+  db: Db,
+  env: Env,
+  voucherType:
+    | "receipt"
+    | "payment",
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    (await request
+      .json()
+      .catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+
+  if (!body) {
+    return json(
+      {
+        error:
+          "بيانات السند غير صالحة",
+      },
+      400,
+    );
+  }
+
+  try {
+    const amountMinor =
+      moneyMinor(
+        body.amount,
+      );
+
+    const key =
+      idempotencyKey(
+        body.idempotencyKey,
+      );
+
+    const partyType =
+      body.partyType as
+        | PartyType
+        | undefined;
+
+    if (
+      partyType !== "customer" &&
+      partyType !== "employee" &&
+      partyType !== "supplier" &&
+      partyType !==
+        "delivery_company"
+    ) {
+      throw new VoucherError(
+        "نوع الطرف غير صالح",
+      );
+    }
+
+    const partyId =
+      positiveId(
+        body.partyId,
+        "الطرف",
+      );
+
+    const method =
+      body.paymentMethod;
+
+    if (
+      method !== "cash" &&
+      method !== "bank"
+    ) {
+      throw new VoucherError(
+        "طريقة الحركة يجب أن تكون صندوق أو بنك",
+      );
+    }
+
+    const register =
+      registerKey(
+        body.registerKey,
+      );
+
+    const requestedBankId =
+      method === "bank"
+        ? positiveId(
+            body.bankAccountId,
+            "الحساب البنكي",
+          )
+        : null;
+
+    const notes =
+      textValue(
+        body.notes,
+        1000,
+      );
+
+    const businessDate =
+      currentPalestineDate();
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const duplicate =
+            await existingVoucher(
+              tx,
+              key,
+            );
+
+          if (duplicate) {
+            return {
+              alreadyCreated: true,
+              voucher:
+                duplicate,
+              financeTransaction:
+                null,
+            };
+          }
+
+          const settlement =
+            await settlementAccount(
+              tx,
+              {
+                method,
+                register,
+                bankAccountId:
+                  requestedBankId,
+              },
+            );
+
+          let party:
+            ResolvedAccount;
+
+          if (
+            partyType ===
+              "customer"
+          ) {
+            party =
+              await resolveAccountRef(
+                tx,
+                {
+                  kind:
+                    "customer",
+                  customerId:
+                    partyId,
+                },
+              );
+          } else if (
+            partyType ===
+              "employee"
+          ) {
+            if (
+              voucherType ===
+                "receipt"
+            ) {
+              const balance =
+                await employeeAdvanceBalanceMinor(
+                  tx,
+                  partyId,
+                );
+
+              if (
+                amountMinor >
+                balance
+              ) {
+                throw new VoucherError(
+                  "المبلغ أكبر من رصيد السلفة على الموظف",
+                  409,
+                );
+              }
+
+              party =
+                await resolveAccountRef(
+                  tx,
+                  {
+                    kind:
+                      "employee_advance",
+                    employeeId:
+                      partyId,
+                  },
+                );
+            } else {
+              const employeePaymentType =
+                body.employeePaymentType ===
+                  "payable"
+                  ? "payable"
+                  : "advance";
+
+              if (
+                employeePaymentType ===
+                  "payable"
+              ) {
+                const balance =
+                  await employeePayableBalanceMinor(
+                    tx,
+                    partyId,
+                  );
+
+                if (
+                  amountMinor >
+                  balance
+                ) {
+                  throw new VoucherError(
+                    "المبلغ أكبر من مستحقات الموظف",
+                    409,
+                  );
+                }
+
+                party =
+                  await resolveAccountRef(
+                    tx,
+                    {
+                      kind:
+                        "employee_payable",
+                      employeeId:
+                        partyId,
+                    },
+                  );
+              } else {
+                party =
+                  await resolveAccountRef(
+                    tx,
+                    {
+                      kind:
+                        "employee_advance",
+                      employeeId:
+                        partyId,
+                    },
+                  );
+              }
+            }
+          } else if (
+            partyType ===
+              "supplier"
+          ) {
+            if (
+              voucherType ===
+                "receipt"
+            ) {
+              const balance =
+                await supplierPayableBalanceMinor(
+                  tx,
+                  partyId,
+                );
+
+              if (
+                balance >= 0
+              ) {
+                throw new VoucherError(
+                  "لا يوجد رصيد دائن لنا على هذا المورد لتسجيل قبض منه",
+                  409,
+                );
+              }
+
+              if (
+                amountMinor >
+                -balance
+              ) {
+                throw new VoucherError(
+                  "مبلغ القبض أكبر من الرصيد الدائن لنا على المورد",
+                  409,
+                );
+              }
+            }
+
+            party =
+              await resolveAccountRef(
+                tx,
+                {
+                  kind:
+                    "supplier",
+                  supplierId:
+                    partyId,
+                },
+              );
+          } else {
+            if (
+              voucherType ===
+                "receipt"
+            ) {
+              throw new VoucherError(
+                "قبض شركة التوصيل يجب أن يتم من شاشة تسوية شركة التوصيل حتى تُربط الطلبات بالحركة",
+                409,
+              );
+            }
+
+            throw new VoucherError(
+              "الصرف لشركة التوصيل غير متاح من سند الصرف العام حاليًا",
+              409,
+            );
+          }
+
+          const cashSession =
+            settlement.cashSession;
+
+          const cashState =
+            cashSession
+              ? await updateCashExpected(
+                  tx,
+                  cashSession,
+                  voucherType ===
+                    "receipt"
+                    ? amountMinor
+                    : -amountMinor,
+                )
+              : null;
+
+          const voucher =
+            await insertVoucher(
+              tx,
+              {
+                publicPrefix:
+                  voucherType ===
+                    "receipt"
+                    ? "REC"
+                    : "PAY",
+                key,
+                voucherType,
+                partyType,
+                partyId,
+                paymentMethod:
+                  method,
+                amountMinor,
+                bankAccountId:
+                  settlement.bankAccountId,
+                cashSessionId:
+                  cashSession?.id ??
+                  null,
+                notes,
+                userId:
+                  Number(
+                    auth.user.id,
+                  ),
+                businessDate,
+              },
+            );
+
+          const settlementLine:
+            FinancePostingLineInput =
+            {
+              accountId:
+                settlement.account.id,
+              memo:
+                voucherType ===
+                  "receipt"
+                  ? `قبض إلى ${settlement.label}`
+                  : `صرف من ${settlement.label}`,
+              ...(voucherType ===
+              "receipt"
+                ? {
+                    debitMinor:
+                      amountMinor,
+                  }
+                : {
+                    creditMinor:
+                      amountMinor,
+                  }),
+            };
+
+          const partyLine:
+            FinancePostingLineInput =
+            {
+              accountId:
+                party.account.id,
+              ...party.lineDimensions,
+              memo:
+                voucherType ===
+                  "receipt"
+                  ? `قبض من ${party.label}`
+                  : `صرف إلى ${party.label}`,
+              ...(voucherType ===
+              "receipt"
+                ? {
+                    creditMinor:
+                      amountMinor,
+                  }
+                : {
+                    debitMinor:
+                      amountMinor,
+                  }),
+            };
+
+          const posting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey:
+                  `voucher:${voucher.id}:posted`,
+                businessDate,
+                transactionType:
+                  voucherType,
+                sourceType:
+                  "finance_voucher",
+                sourceId:
+                  String(
+                    voucher.id,
+                  ),
+                sourceEvent:
+                  voucherType,
+                cashSessionId:
+                  cashSession?.id ??
+                  null,
+                notes:
+                  notes ??
+                  voucher.publicId,
+                createdByUserId:
+                  Number(
+                    auth.user.id,
+                  ),
+                lines: [
+                  settlementLine,
+                  partyLine,
+                ],
+              },
+            );
+
+          const updatedRows =
+            await tx
+              .update(
+                financeVouchersTable,
+              )
+              .set({
+                financeTransactionId:
+                  posting.transaction.id,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                eq(
+                  financeVouchersTable.id,
+                  voucher.id,
+                ),
+              )
+              .returning();
+
+          return {
+            alreadyCreated: false,
+            voucher:
+              updatedRows[0],
+            financeTransaction:
+              posting.transaction,
+            expectedCashBeforeMinor:
+              cashState?.before ??
+              null,
+            expectedCashAfterMinor:
+              cashState?.after ??
+              null,
+          };
+        },
+      );
+
+    return json(
+      result,
+      result.alreadyCreated
+        ? 200
+        : 201,
+    );
+  } catch (caught) {
+    if (
+      caught instanceof
+      VoucherError
+    ) {
+      return json(
+        {
+          error:
+            caught.message,
+        },
+        caught.status,
+      );
+    }
+
+    console.error(
+      "UNIFIED_PARTY_VOUCHER_FAILED",
+      caught,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر حفظ السند",
+      },
+      500,
+    );
+  }
+}
+
+async function handleJournalVoucher(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    (await request
+      .json()
+      .catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+
+  if (!body) {
+    return json(
+      {
+        error:
+          "بيانات سند القيد غير صالحة",
+      },
+      400,
+    );
+  }
+
+  try {
+    const amountMinor =
+      moneyMinor(
+        body.amount,
+      );
+
+    const key =
+      idempotencyKey(
+        body.idempotencyKey,
+      );
+
+    const fromRef =
+      parseAccountRef(
+        body.from,
+        "الحساب المصدر",
+      );
+
+    const toRef =
+      parseAccountRef(
+        body.to,
+        "الحساب المستفيد",
+      );
+
+    const notes =
+      textValue(
+        body.notes,
+        1000,
+      );
+
+    const businessDate =
+      currentPalestineDate();
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const duplicate =
+            await existingVoucher(
+              tx,
+              key,
+            );
+
+          if (duplicate) {
+            return {
+              alreadyCreated: true,
+              voucher:
+                duplicate,
+              financeTransaction:
+                null,
+            };
+          }
+
+          const from =
+            await resolveAccountRef(
+              tx,
+              fromRef,
+            );
+
+          const to =
+            await resolveAccountRef(
+              tx,
+              toRef,
+            );
+
+          const sameDimensions =
+            JSON.stringify(
+              from.lineDimensions,
+            ) ===
+            JSON.stringify(
+              to.lineDimensions,
+            );
+
+          if (
+            from.account.id ===
+              to.account.id &&
+            sameDimensions
+          ) {
+            throw new VoucherError(
+              "لا يمكن إنشاء قيد من الحساب إلى نفسه",
+            );
+          }
+
+          if (
+            from.settlementKind &&
+            to.settlementKind
+          ) {
+            throw new VoucherError(
+              "التحويل بين صندوق وبنك أو بين حسابين نقديين يتم من شاشة التحويلات المالية",
+              409,
+            );
+          }
+
+          const cashSide =
+            from.settlementKind ===
+              "cash"
+              ? {
+                  account:
+                    from,
+                  delta:
+                    -amountMinor,
+                }
+              : to.settlementKind ===
+                    "cash"
+                ? {
+                    account:
+                      to,
+                    delta:
+                      amountMinor,
+                  }
+                : null;
+
+          const cashState =
+            cashSide?.account
+              .cashSession
+              ? await updateCashExpected(
+                  tx,
+                  cashSide.account
+                    .cashSession,
+                  cashSide.delta,
+                )
+              : null;
+
+          const bankSide =
+            from.settlementKind ===
+              "bank"
+              ? from
+              : to.settlementKind ===
+                    "bank"
+                ? to
+                : null;
+
+          const paymentMethod =
+            cashSide
+              ? "cash"
+              : bankSide
+                ? "bank"
+                : "non_cash";
+
+          const voucher =
+            await insertVoucher(
+              tx,
+              {
+                publicPrefix:
+                  "JRN",
+                key,
+                voucherType:
+                  "journal",
+                partyType:
+                  null,
+                partyId:
+                  null,
+                paymentMethod,
+                amountMinor,
+                bankAccountId:
+                  bankSide
+                    ?.bankAccountId ??
+                  null,
+                cashSessionId:
+                  cashSide?.account
+                    .cashSession?.id ??
+                  null,
+                notes:
+                  notes ??
+                  `من ${from.label} إلى ${to.label}`,
+                userId:
+                  Number(
+                    auth.user.id,
+                  ),
+                businessDate,
+              },
+            );
+
+          const posting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey:
+                  `voucher:${voucher.id}:posted`,
+                businessDate,
+                transactionType:
+                  "adjustment",
+                sourceType:
+                  "finance_voucher",
+                sourceId:
+                  String(
+                    voucher.id,
+                  ),
+                sourceEvent:
+                  "journal",
+                cashSessionId:
+                  cashSide?.account
+                    .cashSession?.id ??
+                  null,
+                notes:
+                  voucher.notes ??
+                  voucher.publicId,
+                createdByUserId:
+                  Number(
+                    auth.user.id,
+                  ),
+                lines: [
+                  {
+                    accountId:
+                      to.account.id,
+                    ...to.lineDimensions,
+                    debitMinor:
+                      amountMinor,
+                    memo:
+                      `إلى: ${to.label}`,
+                  },
+                  {
+                    accountId:
+                      from.account.id,
+                    ...from.lineDimensions,
+                    creditMinor:
+                      amountMinor,
+                    memo:
+                      `من: ${from.label}`,
+                  },
+                ],
+              },
+            );
+
+          const updatedRows =
+            await tx
+              .update(
+                financeVouchersTable,
+              )
+              .set({
+                financeTransactionId:
+                  posting.transaction.id,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                eq(
+                  financeVouchersTable.id,
+                  voucher.id,
+                ),
+              )
+              .returning();
+
+          return {
+            alreadyCreated: false,
+            voucher:
+              updatedRows[0],
+            financeTransaction:
+              posting.transaction,
+            expectedCashBeforeMinor:
+              cashState?.before ??
+              null,
+            expectedCashAfterMinor:
+              cashState?.after ??
+              null,
+          };
+        },
+      );
+
+    return json(
+      result,
+      result.alreadyCreated
+        ? 200
+        : 201,
+    );
+  } catch (caught) {
+    if (
+      caught instanceof
+      VoucherError
+    ) {
+      return json(
+        {
+          error:
+            caught.message,
+        },
+        caught.status,
+      );
+    }
+
+    console.error(
+      "UNIFIED_JOURNAL_VOUCHER_FAILED",
+      caught,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر حفظ سند القيد",
+      },
+      500,
+    );
+  }
+}
+
+export async function handleUnifiedVoucherRequest(
+  request: Request,
+  db: Db,
+  env: Env,
+): Promise<Response | null> {
+  const path =
+    new URL(
+      request.url,
+    ).pathname;
+
+  if (
+    request.method === "POST" &&
+    path ===
+      "/api/pos/finance/vouchers/receipt"
+  ) {
+    return handlePartyVoucher(
+      request,
+      db,
+      env,
+      "receipt",
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path ===
+      "/api/pos/finance/vouchers/payment"
+  ) {
+    return handlePartyVoucher(
+      request,
+      db,
+      env,
+      "payment",
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path ===
+      "/api/pos/finance/vouchers/journal"
+  ) {
+    return handleJournalVoucher(
+      request,
+      db,
+      env,
+    );
+  }
+
+  return null;
+}
