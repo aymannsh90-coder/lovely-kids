@@ -212,6 +212,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "customer-receipts",
+    group: "finance",
+    path: "/finance/receipts",
+    title: "سندات القبض",
+    description: "مراجعة سندات قبض الزبائن وإلغاؤها أو تعديلها بأثر محاسبي واضح.",
+    icon: "💵",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "expenses",
     group: "finance",
     path: "/finance/expenses",
