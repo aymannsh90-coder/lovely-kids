@@ -495,8 +495,7 @@ export default function VoucherRegisterPage() {
             amount:
               numericAmount.toFixed(2),
             notes:
-              notes.trim() ||
-              undefined,
+              notes.trim(),
             idempotencyKey:
               `voucher_replace:${voucher.id}:${crypto.randomUUID()}`,
           },
