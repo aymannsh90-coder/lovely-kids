@@ -847,6 +847,9 @@ type OwnerExecutionState = Record<
 const OWNER_EXECUTION_STORAGE_KEY =
   "lovely_kids_inventory_action_execution_v1";
 
+const INVENTORY_PURCHASE_HANDOFF_KEY =
+  "lovely_kids_inventory_purchase_handoff_v1";
+
 const ownerExecutionLabels: Record<
   OwnerExecutionStatus,
   string
@@ -1330,30 +1333,60 @@ export default function InventoryIntelligenceReportPage() {
       "in_progress",
     );
 
+    const unitCost =
+      item.product.referenceUnitCostMinor !==
+      null
+        ? (
+            item.product
+              .referenceUnitCostMinor / 100
+          ).toFixed(2)
+        : "";
+
+    const handoff = {
+      productId:
+        item.product.productId,
+      productCode:
+        item.product.productCode ?? "",
+      barcode:
+        item.product.barcode ?? "",
+      quantity,
+      unitCost,
+    };
+
+    try {
+      window.sessionStorage.setItem(
+        INVENTORY_PURCHASE_HANDOFF_KEY,
+        JSON.stringify(handoff),
+      );
+    } catch {
+      // URL parameters remain as a fallback.
+    }
+
     const params = new URLSearchParams({
       source: "inventory-intelligence",
       productId:
-        item.product.productId,
+        handoff.productId,
       quantity: String(quantity),
     });
 
-    if (item.product.productCode) {
+    if (handoff.productCode) {
       params.set(
         "productCode",
-        item.product.productCode,
+        handoff.productCode,
       );
     }
 
-    if (
-      item.product.referenceUnitCostMinor !==
-      null
-    ) {
+    if (handoff.barcode) {
+      params.set(
+        "barcode",
+        handoff.barcode,
+      );
+    }
+
+    if (unitCost) {
       params.set(
         "unitCost",
-        (
-          item.product.referenceUnitCostMinor /
-          100
-        ).toFixed(2),
+        unitCost,
       );
     }
 
