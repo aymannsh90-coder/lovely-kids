@@ -82,6 +82,8 @@ function parseInventoryPurchaseHandoff(
       typeof parsed.handoffId !==
         "string" ||
       !parsed.handoffId ||
+      typeof parsed.createdAt !==
+        "string" ||
       !Number.isFinite(createdAtMs) ||
       age < -60_000 ||
       age >
