@@ -13268,9 +13268,17 @@ textarea:disabled {
 
 /* INVENTORY INTELLIGENCE START */
 .inventory-intelligence-page {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   gap: 16px;
   padding-bottom: 34px;
+}
+
+.inventory-intelligence-page > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .inventory-intelligence-hero,
@@ -13559,7 +13567,9 @@ button.inventory-intelligence-metric {
 }
 
 .inventory-intelligence-table-card {
-  overflow: visible;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   scroll-margin-top: 165px;
 }
 
@@ -13594,7 +13604,9 @@ button.inventory-intelligence-metric {
 
 .inventory-intelligence-table-wrap {
   width: 100%;
-  overflow: visible;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 .inventory-intelligence-table {
@@ -13877,14 +13889,6 @@ button.inventory-intelligence-metric {
 }
 
 @media (max-width: 1180px) {
-  .inventory-intelligence-table-card {
-    overflow: hidden;
-  }
-
-  .inventory-intelligence-table-wrap {
-    overflow-x: auto;
-  }
-
   .inventory-intelligence-table th {
     position: static;
     box-shadow: none;
