@@ -113,7 +113,8 @@ export default function DashboardLayout() {
           activeSection.groups.includes(item.group) &&
           (item.group !== "purchases" || user?.isOwner === true) &&
           (item.group !== "reports" || user?.isOwner === true) &&
-          (item.group !== "statements" || user?.isOwner === true),
+          (item.group !== "statements" || user?.isOwner === true) &&
+          (item.group !== "vouchers" || user?.isOwner === true),
       ),
     [activeSection, user?.isOwner],
   );
