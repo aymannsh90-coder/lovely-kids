@@ -692,6 +692,7 @@ export interface PosFinanceVoucher {
   referencePeriod: string | null;
   cashSessionId: number | null;
   financeTransactionId: number | null;
+  replacesVoucherId: number | null;
   status: "posted" | "voided";
   notes: string | null;
   createdByUserId: number;
@@ -1138,6 +1139,34 @@ export function createPosUnifiedJournalVoucher(
 ) {
   return apiRequest<PosUnifiedVoucherResult>(
     "/api/pos/finance/vouchers/journal",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+
+export function replacePosUnifiedVoucher(
+  token: string,
+  voucherId: number,
+  input: {
+    amount: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyReplaced: boolean;
+    originalVoucher: PosFinanceVoucher | null;
+    replacementVoucher: PosFinanceVoucher;
+    reversalTransaction: unknown | null;
+    financeTransaction: unknown | null;
+    expectedCashBeforeMinor: number | null;
+    expectedCashAfterMinor: number | null;
+  }>(
+    `/api/pos/finance/vouchers/${voucherId}/replace`,
     {
       method: "POST",
       body: JSON.stringify(input),
