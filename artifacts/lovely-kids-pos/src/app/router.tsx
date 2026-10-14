@@ -9,6 +9,7 @@ import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import BankingPage from "../pages/finance/BankingPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import ChecksPage from "../pages/finance/ChecksPage";
+import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
@@ -203,6 +204,11 @@ export default function AppRouter() {
               <EmployeesPage />
             </RequireOwner>
           }
+        />
+
+        <Route
+          path="finance/receipts"
+          element={<CustomerReceiptsPage />}
         />
 
         <Route
