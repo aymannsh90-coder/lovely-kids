@@ -1,0 +1,691 @@
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useNavigate } from "react-router-dom";
+
+import { usePosRuntime } from "../../app/pos-context";
+import {
+  ApiError,
+  getCurrentCashSession,
+  getPosCustomers,
+  getPosEmployees,
+  getPosFinanceVouchers,
+  POS_REGISTER_KEY,
+  voidPosFinanceVoucher,
+  type PosCustomer,
+  type PosEmployee,
+  type PosFinanceVoucher,
+} from "../../lib/api";
+
+function formatMinor(value: number) {
+  return `${new Intl.NumberFormat("ar", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value / 100)} ₪`;
+}
+
+function errorText(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "حدث خطأ غير متوقع";
+}
+
+function voucherLabel(type: PosFinanceVoucher["voucherType"]) {
+  switch (type) {
+    case "customer_receipt":
+      return "سند قبض زبون";
+    case "expense":
+      return "سند صرف / مصروف";
+    case "employee_advance":
+      return "سند صرف / سلفة موظف";
+    case "employee_repayment":
+      return "سند قبض / تسديد موظف";
+    case "salary_accrual":
+      return "قيد استحقاق راتب";
+    case "employee_payment":
+      return "سند صرف / مستحقات موظف";
+    case "owner_withdrawal":
+      return "سند صرف / سحب مالك";
+    case "adjustment":
+      return "سند قيد / تسوية";
+    case "receipt":
+      return "سند قبض";
+    case "payment":
+      return "سند صرف";
+    case "journal":
+      return "سند قيد";
+    default:
+      return type;
+  }
+}
+
+function paymentLabel(method: PosFinanceVoucher["paymentMethod"]) {
+  if (method === "cash") {
+    return "كاش";
+  }
+
+  if (method === "card") {
+    return "بطاقة";
+  }
+
+  if (method === "bank") {
+    return "بنك";
+  }
+
+  return "قيد داخلي";
+}
+
+export default function VoucherRegisterPage() {
+  const navigate = useNavigate();
+
+  const {
+    token,
+    user,
+    setSession,
+    clearAuthentication,
+  } = usePosRuntime();
+
+  const [vouchers, setVouchers] =
+    useState<PosFinanceVoucher[]>([]);
+  const [customers, setCustomers] =
+    useState<PosCustomer[]>([]);
+  const [employees, setEmployees] =
+    useState<PosEmployee[]>([]);
+
+  const [query, setQuery] = useState("");
+  const [kind, setKind] =
+    useState<"all" | "receipt" | "payment" | "journal">("all");
+  const [status, setStatus] =
+    useState<"all" | "posted" | "voided">("all");
+
+  const [loading, setLoading] =
+    useState(true);
+  const [voidingId, setVoidingId] =
+    useState<number | null>(null);
+  const [error, setError] =
+    useState("");
+  const [message, setMessage] =
+    useState("");
+
+  async function load() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [voucherResult, customerResult, employeeResult] =
+        await Promise.all([
+          getPosFinanceVouchers(token),
+          getPosCustomers(token),
+          getPosEmployees(token),
+        ]);
+
+      setVouchers(voucherResult.results);
+      setCustomers(customerResult.results);
+      setEmployees(employeeResult.results);
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorText(caught));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const customerById = useMemo(
+    () =>
+      new Map(
+        customers.map((customer) => [
+          customer.id,
+          customer,
+        ]),
+      ),
+    [customers],
+  );
+
+  const employeeById = useMemo(
+    () =>
+      new Map(
+        employees.map((employee) => [
+          employee.id,
+          employee,
+        ]),
+      ),
+    [employees],
+  );
+
+  function partyLabel(voucher: PosFinanceVoucher) {
+    if (
+      voucher.partyType === "customer" &&
+      voucher.partyId !== null
+    ) {
+      return (
+        customerById.get(voucher.partyId)?.name ??
+        `زبون #${voucher.partyId}`
+      );
+    }
+
+    if (
+      voucher.partyType === "employee" &&
+      voucher.partyId !== null
+    ) {
+      return (
+        employeeById.get(voucher.partyId)?.name ??
+        `موظف #${voucher.partyId}`
+      );
+    }
+
+    if (
+      voucher.partyType === "supplier" &&
+      voucher.partyId !== null
+    ) {
+      return `مورد #${voucher.partyId}`;
+    }
+
+    if (
+      voucher.partyType === "delivery_company" &&
+      voucher.partyId !== null
+    ) {
+      return `شركة توصيل #${voucher.partyId}`;
+    }
+
+    if (
+      voucher.partyType === "owner"
+    ) {
+      return "المالك";
+    }
+
+    return "—";
+  }
+
+  function normalizedKind(
+    voucher: PosFinanceVoucher,
+  ) {
+    if (
+      voucher.voucherType === "customer_receipt" ||
+      voucher.voucherType === "employee_repayment" ||
+      voucher.voucherType === "receipt"
+    ) {
+      return "receipt";
+    }
+
+    if (
+      voucher.voucherType === "expense" ||
+      voucher.voucherType === "employee_advance" ||
+      voucher.voucherType === "employee_payment" ||
+      voucher.voucherType === "owner_withdrawal" ||
+      voucher.voucherType === "payment"
+    ) {
+      return "payment";
+    }
+
+    return "journal";
+  }
+
+  const visible = useMemo(() => {
+    const normalized =
+      query.trim().toLowerCase();
+
+    return vouchers.filter((voucher) => {
+      if (
+        status !== "all" &&
+        voucher.status !== status
+      ) {
+        return false;
+      }
+
+      if (
+        kind !== "all" &&
+        normalizedKind(voucher) !== kind
+      ) {
+        return false;
+      }
+
+      if (!normalized) {
+        return true;
+      }
+
+      return [
+        voucher.publicId,
+        voucher.businessDate,
+        voucher.notes ?? "",
+        voucherLabel(voucher.voucherType),
+        partyLabel(voucher),
+        String(voucher.amountMinor / 100),
+      ].some((value) =>
+        value
+          .toLowerCase()
+          .includes(normalized),
+      );
+    });
+  }, [
+    vouchers,
+    query,
+    kind,
+    status,
+    customerById,
+    employeeById,
+  ]);
+
+  async function handleVoid(
+    voucher: PosFinanceVoucher,
+  ) {
+    if (!user?.isOwner) {
+      setError(
+        "إلغاء السندات متاح للمالك فقط.",
+      );
+      return;
+    }
+
+    if (voucher.status !== "posted") {
+      return;
+    }
+
+    const reason =
+      window.prompt(
+        `سبب إلغاء السند ${voucher.publicId}:`,
+        "إلغاء سند مسجل بالخطأ",
+      );
+
+    if (!reason?.trim()) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "سيتم إنشاء عكس محاسبي للسند ولن يُحذف من السجل. متابعة؟",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setVoidingId(voucher.id);
+    setError("");
+    setMessage("");
+
+    try {
+      await voidPosFinanceVoucher(
+        token,
+        voucher.id,
+        reason.trim(),
+      );
+
+      const sessionResult =
+        await getCurrentCashSession(
+          token,
+          POS_REGISTER_KEY,
+        ).catch(() => null);
+
+      if (sessionResult) {
+        setSession(
+          sessionResult.session,
+        );
+      }
+
+      await load();
+
+      setMessage(
+        `تم إلغاء السند ${voucher.publicId} بعكس محاسبي.`,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorText(caught));
+    } finally {
+      setVoidingId(null);
+    }
+  }
+
+  return (
+    <section
+      className="work-panel"
+      dir="rtl"
+    >
+      <div
+        className="panel-heading"
+        style={{
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <h2>🗂️ سجل السندات</h2>
+          <p>
+            سجل موحد لسندات القبض
+            والصرف والقيود مع الاحتفاظ
+            الكامل بأثر التدقيق.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() =>
+              navigate(
+                "/vouchers/receipt",
+              )
+            }
+          >
+            + سند قبض
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() =>
+              navigate(
+                "/vouchers/payment",
+              )
+            }
+          >
+            + سند صرف
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() =>
+              navigate(
+                "/vouchers/journal",
+              )
+            }
+          >
+            + سند قيد
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          className="error-message"
+          style={{
+            marginBottom: 12,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {message && (
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 12,
+            borderRadius: 10,
+            background:
+              "rgba(16,185,129,.12)",
+          }}
+        >
+          {message}
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "minmax(240px,1fr) 180px 180px auto",
+          gap: 10,
+          marginBottom: 16,
+          alignItems: "end",
+        }}
+      >
+        <label>
+          <span>بحث</span>
+          <input
+            value={query}
+            onChange={(event) =>
+              setQuery(
+                event.target.value,
+              )
+            }
+            placeholder="رقم السند، الطرف، المبلغ..."
+          />
+        </label>
+
+        <label>
+          <span>نوع السند</span>
+          <select
+            value={kind}
+            onChange={(event) =>
+              setKind(
+                event.target.value as
+                  | "all"
+                  | "receipt"
+                  | "payment"
+                  | "journal",
+              )
+            }
+          >
+            <option value="all">
+              كل السندات
+            </option>
+            <option value="receipt">
+              سندات قبض
+            </option>
+            <option value="payment">
+              سندات صرف
+            </option>
+            <option value="journal">
+              سندات قيد
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>الحالة</span>
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(
+                event.target.value as
+                  | "all"
+                  | "posted"
+                  | "voided",
+              )
+            }
+          >
+            <option value="all">
+              الكل
+            </option>
+            <option value="posted">
+              فعال
+            </option>
+            <option value="voided">
+              ملغى
+            </option>
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={loading}
+          onClick={() =>
+            void load()
+          }
+        >
+          تحديث
+        </button>
+      </div>
+
+      <div
+        style={{
+          overflowX: "auto",
+          border:
+            "1px solid var(--border-color, #ddd)",
+          borderRadius: 12,
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse:
+              "collapse",
+          }}
+        >
+          <thead>
+            <tr>
+              <th>رقم السند</th>
+              <th>النوع</th>
+              <th>التاريخ</th>
+              <th>الطرف</th>
+              <th>المبلغ</th>
+              <th>الطريقة</th>
+              <th>الحالة</th>
+              <th>البيان</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {loading ? (
+              <tr>
+                <td
+                  colSpan={9}
+                  style={{
+                    padding: 20,
+                    textAlign:
+                      "center",
+                  }}
+                >
+                  جاري تحميل السندات...
+                </td>
+              </tr>
+            ) : visible.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={9}
+                  style={{
+                    padding: 20,
+                    textAlign:
+                      "center",
+                  }}
+                >
+                  لا توجد سندات مطابقة.
+                </td>
+              </tr>
+            ) : (
+              visible.map(
+                (voucher) => (
+                  <tr
+                    key={voucher.id}
+                  >
+                    <td dir="ltr">
+                      {voucher.publicId}
+                    </td>
+
+                    <td>
+                      {voucherLabel(
+                        voucher.voucherType,
+                      )}
+                    </td>
+
+                    <td>
+                      {voucher.businessDate}
+                    </td>
+
+                    <td>
+                      {partyLabel(
+                        voucher,
+                      )}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {formatMinor(
+                          voucher.amountMinor,
+                        )}
+                      </strong>
+                    </td>
+
+                    <td>
+                      {paymentLabel(
+                        voucher.paymentMethod,
+                      )}
+                    </td>
+
+                    <td>
+                      {voucher.status ===
+                      "posted"
+                        ? "فعال"
+                        : "ملغى"}
+                    </td>
+
+                    <td>
+                      {voucher.notes ??
+                        "—"}
+                    </td>
+
+                    <td>
+                      {voucher.status ===
+                        "posted" &&
+                      user?.isOwner ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={
+                            voidingId ===
+                            voucher.id
+                          }
+                          onClick={() =>
+                            void handleVoid(
+                              voucher,
+                            )
+                          }
+                        >
+                          {voidingId ===
+                          voucher.id
+                            ? "جاري الإلغاء..."
+                            : "إلغاء"}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ),
+              )
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <p
+        style={{
+          marginTop: 12,
+          fontSize: 13,
+          opacity: 0.8,
+        }}
+      >
+        السند المالي لا يُحذف نهائيًا.
+        الإلغاء ينشئ عكسًا محاسبيًا
+        ويحافظ على السجل التاريخي.
+      </p>
+    </section>
+  );
+}
