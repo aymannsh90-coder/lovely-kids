@@ -1047,6 +1047,16 @@ async function resolveAccountRef(
     };
   }
 
+  if (
+    ref.kind !==
+      "finance_account"
+  ) {
+    throw new VoucherError(
+      "نوع الحساب المحاسبي غير مدعوم",
+      400,
+    );
+  }
+
   const rows =
     await tx
       .select()
