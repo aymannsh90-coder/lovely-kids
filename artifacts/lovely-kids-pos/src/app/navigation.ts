@@ -3,6 +3,7 @@ export type NavigationGroup =
   | "purchases"
   | "inventory"
   | "parties"
+  | "vouchers"
   | "finance"
   | "statements"
   | "reports";
@@ -42,6 +43,11 @@ export const navigationGroups: Array<{
     key: "parties",
     title: "الزبائن والموردون والموظفون",
     description: "إدارة بيانات الزبائن والموردين والموظفين وحساباتهم.",
+  },
+  {
+    key: "vouchers",
+    title: "السندات",
+    description: "سندات القبض والصرف والقيد وسجل السندات.",
   },
   {
     key: "finance",
@@ -212,12 +218,42 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
-    key: "customer-receipts",
-    group: "finance",
-    path: "/finance/receipts",
-    title: "سندات القبض",
-    description: "مراجعة سندات قبض الزبائن وإلغاؤها أو تعديلها بأثر محاسبي واضح.",
+    key: "voucher-receipt",
+    group: "vouchers",
+    path: "/vouchers/receipt",
+    title: "سند قبض",
+    description: "قبض مبالغ وتسجيلها على حساب الطرف والصندوق أو البنك.",
     icon: "💵",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
+    key: "voucher-payment",
+    group: "vouchers",
+    path: "/vouchers/payment",
+    title: "سند صرف",
+    description: "صرف لموظف أو مورد أو زبون أو مصروف من الصندوق أو البنك.",
+    icon: "💸",
+    requiresOpenSession: false,
+    status: "planned",
+  },
+  {
+    key: "voucher-journal",
+    group: "vouchers",
+    path: "/vouchers/journal",
+    title: "سند قيد",
+    description: "قيد محاسبي بين حسابين مع مدين ودائن وأثر واضح.",
+    icon: "📒",
+    requiresOpenSession: false,
+    status: "planned",
+  },
+  {
+    key: "voucher-register",
+    group: "vouchers",
+    path: "/vouchers/register",
+    title: "سجل السندات",
+    description: "مراجعة كل السندات وحالتها والرجوع إليها.",
+    icon: "🗂️",
     requiresOpenSession: false,
     status: "ready",
   },
