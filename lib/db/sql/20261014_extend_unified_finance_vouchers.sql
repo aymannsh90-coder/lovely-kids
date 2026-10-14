@@ -8,6 +8,48 @@ ALTER TABLE public.finance_vouchers
   ADD COLUMN IF NOT EXISTS voucher_purpose text;
 
 ALTER TABLE public.finance_vouchers
+  ADD COLUMN IF NOT EXISTS replaces_voucher_id integer;
+
+DO $replacement_fk$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'finance_vouchers_replaces_voucher_id_fkey'
+      AND conrelid = 'public.finance_vouchers'::regclass
+  ) THEN
+    ALTER TABLE public.finance_vouchers
+      ADD CONSTRAINT finance_vouchers_replaces_voucher_id_fkey
+      FOREIGN KEY (replaces_voucher_id)
+      REFERENCES public.finance_vouchers(id)
+      ON DELETE RESTRICT;
+  END IF;
+END
+$replacement_fk$;
+
+DO $replacement_check$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'finance_vouchers_replaces_not_self'
+      AND conrelid = 'public.finance_vouchers'::regclass
+  ) THEN
+    ALTER TABLE public.finance_vouchers
+      ADD CONSTRAINT finance_vouchers_replaces_not_self
+      CHECK (
+        replaces_voucher_id IS NULL
+        OR replaces_voucher_id <> id
+      );
+  END IF;
+END
+$replacement_check$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS finance_vouchers_replaces_idx
+  ON public.finance_vouchers(replaces_voucher_id)
+  WHERE replaces_voucher_id IS NOT NULL;
+
+ALTER TABLE public.finance_vouchers
   DROP CONSTRAINT IF EXISTS finance_vouchers_type_valid;
 
 ALTER TABLE public.finance_vouchers
