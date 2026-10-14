@@ -130,14 +130,19 @@ export default function VoucherRegisterPage() {
         voucherResult,
         customerResult,
         employeeResult,
-        supplierResult,
-        deliveryResult,
-        expenseResult,
       ] =
         await Promise.all([
           getPosFinanceVouchers(token),
           getPosCustomers(token),
           getPosEmployees(token),
+        ]);
+
+      const [
+        supplierResult,
+        deliveryResult,
+        expenseResult,
+      ] =
+        await Promise.allSettled([
           getPosSuppliers(token),
           getDeliveryCompanies(token),
           getPosExpenseCategories(token),
@@ -146,9 +151,24 @@ export default function VoucherRegisterPage() {
       setVouchers(voucherResult.results);
       setCustomers(customerResult.results);
       setEmployees(employeeResult.results);
-      setSuppliers(supplierResult.results);
-      setDeliveryCompanies(deliveryResult);
-      setExpenseCategories(expenseResult.results);
+
+      setSuppliers(
+        supplierResult.status === "fulfilled"
+          ? supplierResult.value.results
+          : [],
+      );
+
+      setDeliveryCompanies(
+        deliveryResult.status === "fulfilled"
+          ? deliveryResult.value
+          : [],
+      );
+
+      setExpenseCategories(
+        expenseResult.status === "fulfilled"
+          ? expenseResult.value.results
+          : [],
+      );
     } catch (caught) {
       if (
         caught instanceof ApiError &&
