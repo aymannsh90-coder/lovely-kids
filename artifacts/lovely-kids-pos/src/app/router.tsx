@@ -12,6 +12,7 @@ import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
+import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import CustomersPage from "../pages/parties/CustomersPage";
@@ -208,7 +209,59 @@ export default function AppRouter() {
 
         <Route
           path="finance/receipts"
+          element={<Navigate to="/vouchers/receipt" replace />}
+        />
+
+        <Route
+          path="vouchers/receipt"
           element={<CustomerReceiptsPage />}
+        />
+
+        <Route
+          path="vouchers/payment"
+          element={
+            <RequireOwner>
+              <ComingSoonPage
+                icon="💸"
+                title="سند صرف"
+                description="صرف من الصندوق أو البنك إلى زبون أو موظف أو مورد أو مصروف."
+                points={[
+                  "سداد مورد أو فاتورة ومصاريف تشغيلية.",
+                  "سلفة أو مستحقات موظف.",
+                  "إقراض أو سحب نقدي لزبون على حسابه.",
+                  "تسجيل الأثر على الصندوق أو البنك آليًا.",
+                ]}
+              />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="vouchers/journal"
+          element={
+            <RequireOwner>
+              <ComingSoonPage
+                icon="📒"
+                title="سند قيد"
+                description="قيد مزدوج من حساب إلى حساب مع مدين ودائن متوازنين."
+                points={[
+                  "نقل رصيد من زبون إلى زبون.",
+                  "الصندوق أو البنك مقابل ذمة زبون.",
+                  "قيود الموظفين والموردين والحسابات الأخرى.",
+                  "إلغاء بعكس محاسبي مع سجل تدقيق كامل.",
+                ]}
+              />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="vouchers/register"
+          element={
+            <RequireOwner>
+              <VoucherRegisterPage />
+            </RequireOwner>
+          }
         />
 
         <Route
