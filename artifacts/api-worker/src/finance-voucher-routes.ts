@@ -1346,6 +1346,16 @@ async function insertVoucher(
       | "receipt"
       | "payment"
       | "journal";
+    voucherPurpose:
+      | "customer_receipt"
+      | "employee_repayment"
+      | "supplier_refund"
+      | "delivery_company_settlement"
+      | "customer_cash_loan"
+      | "employee_advance"
+      | "employee_payment"
+      | "supplier_payment"
+      | "account_transfer";
     partyType:
       | PartyType
       | null;
@@ -1384,6 +1394,8 @@ async function insertVoucher(
           input.key,
         voucherType:
           input.voucherType,
+        voucherPurpose:
+          input.voucherPurpose,
         partyType:
           input.partyType,
         partyId:
@@ -1724,6 +1736,21 @@ async function handlePartyVoucher(
             );
           }
 
+          const voucherPurpose =
+            voucherType === "receipt"
+              ? partyType === "customer"
+                ? "customer_receipt"
+                : partyType === "employee"
+                  ? "employee_repayment"
+                  : "supplier_refund"
+              : partyType === "customer"
+                ? "customer_cash_loan"
+                : partyType === "employee"
+                  ? body.employeePaymentType === "payable"
+                    ? "employee_payment"
+                    : "employee_advance"
+                  : "supplier_payment";
+
           const cashSession =
             settlement.cashSession;
 
@@ -1750,6 +1777,7 @@ async function handlePartyVoucher(
                     : "PAY",
                 key,
                 voucherType,
+                voucherPurpose,
                 partyType,
                 partyId,
                 paymentMethod:
@@ -2099,6 +2127,8 @@ async function handleJournalVoucher(
                 key,
                 voucherType:
                   "journal",
+                voucherPurpose:
+                  "account_transfer",
                 partyType:
                   null,
                 partyId:
