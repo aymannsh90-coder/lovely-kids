@@ -35,6 +35,108 @@ const PURCHASE_WRITES_ENABLED =
 const INVENTORY_PURCHASE_HANDOFF_KEY =
   "lovely_kids_inventory_purchase_handoff_v1";
 
+const INVENTORY_PURCHASE_HANDOFF_VERSION =
+  2;
+
+const INVENTORY_PURCHASE_HANDOFF_MAX_AGE_MS =
+  10 * 60 * 1000;
+
+type InventoryPurchaseHandoff = {
+  version: number;
+  handoffId: string;
+  createdAt: string;
+  mode: "product" | "variant";
+  productId: string;
+  productCode: string;
+  barcode: string;
+  color: string;
+  size: string;
+  quantity: number;
+  unitCost: string;
+};
+
+function parseInventoryPurchaseHandoff(
+  raw: string | null,
+): InventoryPurchaseHandoff | null {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      raw,
+    ) as Partial<InventoryPurchaseHandoff>;
+
+    const createdAtMs =
+      typeof parsed.createdAt ===
+      "string"
+        ? Date.parse(parsed.createdAt)
+        : NaN;
+
+    const age =
+      Date.now() - createdAtMs;
+
+    if (
+      parsed.version !==
+        INVENTORY_PURCHASE_HANDOFF_VERSION ||
+      typeof parsed.handoffId !==
+        "string" ||
+      !parsed.handoffId ||
+      typeof parsed.createdAt !==
+        "string" ||
+      !Number.isFinite(createdAtMs) ||
+      age < -60_000 ||
+      age >
+        INVENTORY_PURCHASE_HANDOFF_MAX_AGE_MS ||
+      (
+        parsed.mode !== "product" &&
+        parsed.mode !== "variant"
+      ) ||
+      typeof parsed.productId !==
+        "string" ||
+      typeof parsed.productCode !==
+        "string" ||
+      typeof parsed.barcode !==
+        "string" ||
+      typeof parsed.color !==
+        "string" ||
+      typeof parsed.size !==
+        "string" ||
+      typeof parsed.quantity !==
+        "number" ||
+      typeof parsed.unitCost !==
+        "string"
+    ) {
+      return null;
+    }
+
+    return {
+      version: parsed.version,
+      handoffId:
+        parsed.handoffId,
+      createdAt:
+        parsed.createdAt,
+      mode: parsed.mode,
+      productId:
+        parsed.productId,
+      productCode:
+        parsed.productCode,
+      barcode:
+        parsed.barcode,
+      color:
+        parsed.color,
+      size:
+        parsed.size,
+      quantity:
+        parsed.quantity,
+      unitCost:
+        parsed.unitCost,
+    };
+  } catch {
+    return null;
+  }
+}
+
 type PaymentMethod = "cash" | "credit" | "mixed";
 
 interface PurchaseLine {
@@ -280,15 +382,42 @@ export default function PurchaseInvoicePage() {
       window.location.href,
     );
 
-    let stored:
-      | {
-          productId?: string;
-          productCode?: string;
-          barcode?: string;
-          quantity?: number;
-          unitCost?: string;
+    const fromInventoryUrl =
+      url.searchParams.get("source") ===
+      "inventory-intelligence";
+
+    if (!fromInventoryUrl) {
+      try {
+        const raw =
+          window.sessionStorage.getItem(
+            INVENTORY_PURCHASE_HANDOFF_KEY,
+          );
+
+        if (
+          raw &&
+          !parseInventoryPurchaseHandoff(
+            raw,
+          )
+        ) {
+          window.sessionStorage.removeItem(
+            INVENTORY_PURCHASE_HANDOFF_KEY,
+          );
         }
-      | null = null;
+      } catch {
+        // Ignore storage cleanup failures.
+      }
+
+      return;
+    }
+
+    const urlHandoffId =
+      url.searchParams.get(
+        "handoffId",
+      ) ?? "";
+
+    let stored:
+      InventoryPurchaseHandoff | null =
+      null;
 
     try {
       const raw =
@@ -296,23 +425,41 @@ export default function PurchaseInvoicePage() {
           INVENTORY_PURCHASE_HANDOFF_KEY,
         );
 
-      if (raw) {
-        stored = JSON.parse(raw);
+      const parsed =
+        parseInventoryPurchaseHandoff(
+          raw,
+        );
+
+      if (
+        parsed &&
+        urlHandoffId &&
+        parsed.handoffId ===
+          urlHandoffId
+      ) {
+        stored = parsed;
+      } else if (raw) {
+        window.sessionStorage.removeItem(
+          INVENTORY_PURCHASE_HANDOFF_KEY,
+        );
       }
     } catch {
       stored = null;
     }
 
-    const fromInventoryUrl =
-      url.searchParams.get("source") ===
-      "inventory-intelligence";
-
-    if (!fromInventoryUrl && !stored) {
-      return;
-    }
+    const handoffMode =
+      url.searchParams.get(
+        "handoffMode",
+      ) === "variant"
+        ? "variant"
+        : (
+            stored?.mode ??
+            "product"
+          );
 
     const productId =
-      url.searchParams.get("productId") ??
+      url.searchParams.get(
+        "productId",
+      ) ??
       stored?.productId ??
       "";
 
@@ -324,29 +471,56 @@ export default function PurchaseInvoicePage() {
       "";
 
     const barcode =
-      url.searchParams.get("barcode") ??
+      url.searchParams.get(
+        "barcode",
+      ) ??
       stored?.barcode ??
       "";
 
+    const expectedColor =
+      url.searchParams.get(
+        "color",
+      ) ??
+      stored?.color ??
+      "";
+
+    const expectedSize =
+      url.searchParams.get(
+        "size",
+      ) ??
+      stored?.size ??
+      "";
+
     const rawQuantity = Number(
-      url.searchParams.get("quantity") ??
+      url.searchParams.get(
+        "quantity",
+      ) ??
         stored?.quantity ??
         1,
     );
 
     const quantity =
-      Number.isSafeInteger(rawQuantity) &&
+      Number.isSafeInteger(
+        rawQuantity,
+      ) &&
       rawQuantity > 0
-        ? Math.min(rawQuantity, 99_999)
+        ? Math.min(
+            rawQuantity,
+            99_999,
+          )
         : 1;
 
     const rawUnitCost =
-      url.searchParams.get("unitCost") ??
+      url.searchParams.get(
+        "unitCost",
+      ) ??
       stored?.unitCost ??
       "";
 
     const unitCost =
-      moneyToMinor(rawUnitCost) === null
+      moneyToMinor(
+        rawUnitCost,
+      ) === null
         ? "0.00"
         : rawUnitCost;
 
@@ -359,6 +533,22 @@ export default function PurchaseInvoicePage() {
     ) {
       setError(
         "اقتراح الشراء لا يحتوي على معرّف صالح للصنف.",
+      );
+      return;
+    }
+
+    if (
+      handoffMode ===
+        "variant" &&
+      (
+        !productId ||
+        !barcode ||
+        !expectedColor ||
+        !expectedSize
+      )
+    ) {
+      setError(
+        "تم إيقاف تجهيز الشراء: بيانات اللون/المقاس غير مكتملة.",
       );
       return;
     }
@@ -376,87 +566,153 @@ export default function PurchaseInvoicePage() {
           | PosProductLookup
           | null = null;
 
-        if (barcode) {
-          try {
-            const direct =
-              await lookupPosProductByBarcode(
-                token,
-                barcode,
-              );
+        if (
+          handoffMode ===
+          "variant"
+        ) {
+          const direct =
+            await lookupPosProductByBarcode(
+              token,
+              barcode,
+            );
 
-            if (
-              !productId ||
-              direct.productId === productId
-            ) {
-              product = direct;
-            }
-          } catch (caught) {
-            if (
-              caught instanceof ApiError &&
-              caught.status === 401
-            ) {
-              throw caught;
+          const exactMatch =
+            direct.productId ===
+              productId &&
+            direct.mappedColor ===
+              expectedColor &&
+            direct.mappedSize ===
+              expectedSize &&
+            (
+              direct.barcode ===
+                barcode ||
+              direct.primaryBarcode ===
+                barcode ||
+              (
+                direct.barcodes?.some(
+                  (entry) =>
+                    entry.barcode ===
+                    barcode &&
+                    entry.color ===
+                    expectedColor &&
+                    entry.size ===
+                    expectedSize,
+                ) ?? false
+              )
+            );
+
+          if (!exactMatch) {
+            setError(
+              `تم إيقاف تجهيز الشراء لأن الباركود لا يطابق الـVariant المطلوب: ${expectedColor} / ${expectedSize}. لم تتم إضافة أي صنف.`,
+            );
+            return;
+          }
+
+          product = direct;
+        } else {
+          if (barcode) {
+            try {
+              const direct =
+                await lookupPosProductByBarcode(
+                  token,
+                  barcode,
+                );
+
+              if (
+                !productId ||
+                direct.productId ===
+                  productId
+              ) {
+                product =
+                  direct;
+              }
+            } catch (caught) {
+              if (
+                caught instanceof
+                  ApiError &&
+                caught.status ===
+                  401
+              ) {
+                throw caught;
+              }
             }
           }
-        }
 
-        if (!product && searchValue) {
-          const result =
-            await searchPosProducts(
-              token,
-              searchValue,
-              25,
-            );
+          if (
+            !product &&
+            searchValue
+          ) {
+            const result =
+              await searchPosProducts(
+                token,
+                searchValue,
+                25,
+              );
 
-          product =
-            result.results.find(
-              (candidate) =>
-                candidate.productId ===
-                productId,
-            ) ??
-            result.results.find(
-              (candidate) =>
-                Boolean(productCode) &&
-                candidate.productCode ===
-                  productCode,
-            ) ??
-            result.results.find(
-              (candidate) =>
-                Boolean(barcode) &&
-                (
-                  candidate.barcode ===
-                    barcode ||
-                  candidate.primaryBarcode ===
-                    barcode ||
-                  (candidate.barcodes?.some(
-                    (entry) =>
-                      entry.barcode ===
-                      barcode,
-                  ) ?? false)
-                ),
-            ) ??
-            (result.results.length === 1
-              ? result.results[0]
-              : null);
+            product =
+              result.results.find(
+                (candidate) =>
+                  candidate.productId ===
+                  productId,
+              ) ??
+              result.results.find(
+                (candidate) =>
+                  Boolean(
+                    productCode,
+                  ) &&
+                  candidate.productCode ===
+                    productCode,
+              ) ??
+              result.results.find(
+                (candidate) =>
+                  Boolean(
+                    barcode,
+                  ) &&
+                  (
+                    candidate.barcode ===
+                      barcode ||
+                    candidate.primaryBarcode ===
+                      barcode ||
+                    (
+                      candidate.barcodes?.some(
+                        (entry) =>
+                          entry.barcode ===
+                          barcode,
+                      ) ?? false
+                    )
+                  ),
+              ) ??
+              (
+                result.results
+                  .length === 1
+                  ? result
+                      .results[0]
+                  : null
+              );
 
-          if (!product) {
-            setQuery(searchValue);
-            setSearchResults(
-              result.results,
-            );
-            setSearchOpen(
-              result.results.length > 0,
-            );
+            if (!product) {
+              setQuery(
+                searchValue,
+              );
+              setSearchResults(
+                result.results,
+              );
+              setSearchOpen(
+                result.results
+                  .length > 0,
+              );
 
-            setError(
-              result.results.length > 0
-                ? "وجدنا أكثر من صنف. اختر الصنف الصحيح لإكمال اقتراح الشراء."
-                : "تعذر العثور على الصنف المقترح من ذكاء المخزون.",
-            );
+              setError(
+                result.results
+                  .length > 0
+                  ? "وجدنا أكثر من صنف. اختر الصنف الصحيح لإكمال اقتراح الشراء."
+                  : "تعذر العثور على الصنف المقترح من ذكاء المخزون.",
+              );
 
-            inventoryPrefillHandled.current =
-              false;
-            return;
+              inventoryPrefillHandled.current =
+                false;
+              return;
+            }
           }
         }
 
@@ -473,6 +729,16 @@ export default function PurchaseInvoicePage() {
           product,
           quantity,
           unitCost,
+          handoffMode ===
+            "variant"
+            ? {
+                barcode,
+                color:
+                  expectedColor,
+                size:
+                  expectedSize,
+              }
+            : undefined,
         );
 
         setNotes((current) =>
@@ -482,7 +748,10 @@ export default function PurchaseInvoicePage() {
         );
 
         setMessage(
-          `تم تجهيز ${product.nameAr} بكمية ${quantity}. راجع المورد والتكلفة ثم احفظ الفاتورة فقط عند الاعتماد.`,
+          handoffMode ===
+            "variant"
+            ? `تم تجهيز ${product.nameAr} — ${expectedColor} / ${expectedSize} — بكمية ${quantity}. راجع المورد والتكلفة ثم احفظ الفاتورة فقط عند الاعتماد.`
+            : `تم تجهيز ${product.nameAr} بكمية ${quantity}. راجع المورد والتكلفة ثم احفظ الفاتورة فقط عند الاعتماد.`,
         );
 
         try {
@@ -495,13 +764,20 @@ export default function PurchaseInvoicePage() {
 
         [
           "source",
+          "handoffVersion",
+          "handoffId",
+          "handoffMode",
           "productId",
           "productCode",
           "barcode",
+          "color",
+          "size",
           "quantity",
           "unitCost",
         ].forEach((key) =>
-          url.searchParams.delete(key),
+          url.searchParams.delete(
+            key,
+          ),
         );
 
         window.history.replaceState(
@@ -513,7 +789,8 @@ export default function PurchaseInvoicePage() {
         );
       } catch (caught) {
         if (
-          caught instanceof ApiError &&
+          caught instanceof
+            ApiError &&
           caught.status === 401
         ) {
           clearAuthentication();
@@ -603,16 +880,23 @@ export default function PurchaseInvoicePage() {
     product: PosProductLookup,
     initialQuantity = 1,
     initialUnitCost = "0.00",
+    forcedVariant?: {
+      barcode: string;
+      color: string;
+      size: string;
+    },
   ) {
     const colors = getColors(product);
 
     const color =
+      forcedVariant?.color ??
       product.mappedColor ??
       (colors.length === 1 ? colors[0] : null);
 
     const sizes = getSizes(product, color);
 
     const size =
+      forcedVariant?.size ??
       product.mappedSize ??
       (sizes.length === 1 ? sizes[0] : null);
 
@@ -620,7 +904,10 @@ export default function PurchaseInvoicePage() {
       ...current,
       {
         id: createKey(),
-        barcode: product.barcode ?? "",
+        barcode:
+          forcedVariant?.barcode ??
+          product.barcode ??
+          "",
         product,
         color,
         size,
