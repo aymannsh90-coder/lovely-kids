@@ -2647,8 +2647,6 @@ async function handleReplaceUnifiedVoucher(
               !Number.isSafeInteger(
                 finalExpected,
               ) ||
-              expectedAfterReverse <
-                0 ||
               finalExpected <
                 0 ||
               finalExpected >
