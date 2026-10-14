@@ -13933,4 +13933,230 @@ button.inventory-intelligence-metric {
   }
 
 }
+
+/* OWNER ACTION DASHBOARD START */
+.inventory-owner-dashboard {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d9e5ec;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #f9fcfe, #fff);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.05);
+}
+
+.inventory-owner-dashboard-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.inventory-owner-dashboard-head > div {
+  min-width: 0;
+}
+
+.inventory-owner-dashboard-head span {
+  color: #c81474;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.inventory-owner-dashboard-head h2 {
+  margin: 4px 0 5px;
+  color: #101828;
+  font-size: 22px;
+}
+
+.inventory-owner-dashboard-head p {
+  max-width: 880px;
+  margin: 0;
+  color: #596579;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.inventory-owner-dashboard-head > small {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border: 1px solid #dbe6ec;
+  border-radius: 999px;
+  background: #fff;
+  color: #475467;
+  font-size: 11.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.inventory-owner-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.inventory-owner-action-card {
+  min-width: 0;
+  min-height: 172px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  padding: 15px;
+  appearance: none;
+  border: 1px solid #dfe7ed;
+  border-radius: 16px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.inventory-owner-action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(16, 24, 40, 0.08);
+}
+
+.inventory-owner-action-card:focus-visible {
+  outline: 3px solid rgba(217, 20, 119, 0.18);
+  outline-offset: 2px;
+}
+
+.inventory-owner-action-card > span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.inventory-owner-action-card > strong {
+  color: #101828;
+  font-size: clamp(23px, 2.2vw, 30px);
+  font-weight: 950;
+}
+
+.inventory-owner-action-card > b {
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.inventory-owner-action-card > small {
+  color: #596579;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.65;
+}
+
+.inventory-owner-action-card.tone-buy {
+  border-color: #b7e4cd;
+  background: linear-gradient(145deg, #f1fcf6, #fff);
+}
+
+.inventory-owner-action-card.tone-buy > span {
+  color: #067647;
+}
+
+.inventory-owner-action-card.tone-stop {
+  border-color: #f2d29b;
+  background: linear-gradient(145deg, #fff9ed, #fff);
+}
+
+.inventory-owner-action-card.tone-stop > span {
+  color: #a15c07;
+}
+
+.inventory-owner-action-card.tone-liquidate {
+  border-color: #e5c9f8;
+  background: linear-gradient(145deg, #faf5ff, #fff);
+}
+
+.inventory-owner-action-card.tone-liquidate > span {
+  color: #6941c6;
+}
+
+.inventory-owner-action-card.tone-watch {
+  border-color: #bed8ef;
+  background: linear-gradient(145deg, #f2f8fd, #fff);
+}
+
+.inventory-owner-action-card.tone-watch > span {
+  color: #175cd3;
+}
+
+.inventory-owner-action-card.is-active {
+  border-color: #d91477;
+  background: linear-gradient(145deg, #fff0f8, #fff);
+  box-shadow: 0 0 0 2px rgba(217, 20, 119, 0.08);
+}
+
+.inventory-owner-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inventory-owner-finance-grid article {
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid #e5ebf0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.inventory-owner-finance-grid span,
+.inventory-owner-finance-grid strong,
+.inventory-owner-finance-grid small {
+  display: block;
+}
+
+.inventory-owner-finance-grid span {
+  color: #667085;
+  font-size: 11.5px;
+  font-weight: 850;
+}
+
+.inventory-owner-finance-grid strong {
+  margin-top: 4px;
+  color: #101828;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.inventory-owner-finance-grid small {
+  margin-top: 5px;
+  color: #667085;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.65;
+}
+
+@media (max-width: 1250px) {
+  .inventory-owner-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .inventory-owner-dashboard-head {
+    flex-direction: column;
+  }
+
+  .inventory-owner-dashboard-head > small {
+    white-space: normal;
+  }
+
+  .inventory-owner-action-grid,
+  .inventory-owner-finance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-owner-action-card {
+    min-height: 0;
+  }
+}
+/* OWNER ACTION DASHBOARD END */
+
 /* INVENTORY INTELLIGENCE END */
