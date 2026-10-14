@@ -13641,6 +13641,63 @@ button.inventory-intelligence-metric {
   white-space: nowrap;
 }
 
+@media screen and (min-width: 1500px) {
+  .inventory-intelligence-table {
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  .inventory-intelligence-table th,
+  .inventory-intelligence-table td {
+    padding: 10px 6px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .inventory-intelligence-table th {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .inventory-intelligence-table td {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .inventory-intelligence-table th:first-child,
+  .inventory-intelligence-table td:first-child {
+    width: 20%;
+  }
+
+  .inventory-intelligence-product {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .inventory-intelligence-product img {
+    width: 42px;
+    height: 42px;
+  }
+
+  .inventory-intelligence-product strong {
+    max-width: none;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: normal;
+  }
+
+  .inventory-intelligence-product small,
+  .inventory-intelligence-table td > small {
+    font-size: 10px;
+  }
+
+  .inventory-intelligence-badge,
+  .inventory-intelligence-action {
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+}
+
 .inventory-intelligence-table tbody tr:hover td {
   background: #fffafd;
 }
