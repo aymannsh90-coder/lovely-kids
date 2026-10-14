@@ -826,6 +826,91 @@ type OwnerPriorityItem = {
   reason: string;
 };
 
+type OwnerExecutionStatus =
+  | "new"
+  | "in_progress"
+  | "done"
+  | "deferred";
+
+type OwnerExecutionEntry = {
+  status: OwnerExecutionStatus;
+  updatedAt: string;
+  action: string;
+  reason: string;
+};
+
+type OwnerExecutionState = Record<
+  string,
+  OwnerExecutionEntry
+>;
+
+const OWNER_EXECUTION_STORAGE_KEY =
+  "lovely_kids_inventory_action_execution_v1";
+
+const ownerExecutionLabels: Record<
+  OwnerExecutionStatus,
+  string
+> = {
+  new: "جديد",
+  in_progress: "قيد التنفيذ",
+  done: "تم",
+  deferred: "مؤجل",
+};
+
+function readOwnerExecutionState(): OwnerExecutionState {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(
+      OWNER_EXECUTION_STORAGE_KEY,
+    );
+
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as Record<
+      string,
+      Partial<OwnerExecutionEntry>
+    >;
+
+    const result: OwnerExecutionState = {};
+
+    Object.entries(parsed).forEach(
+      ([productId, entry]) => {
+        if (
+          entry.status === "new" ||
+          entry.status === "in_progress" ||
+          entry.status === "done" ||
+          entry.status === "deferred"
+        ) {
+          result[productId] = {
+            status: entry.status,
+            updatedAt:
+              typeof entry.updatedAt === "string"
+                ? entry.updatedAt
+                : new Date().toISOString(),
+            action:
+              typeof entry.action === "string"
+                ? entry.action
+                : "",
+            reason:
+              typeof entry.reason === "string"
+                ? entry.reason
+                : "",
+          };
+        }
+      },
+    );
+
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 function ownerPriorityItem(
   product:
     OwnerInventoryIntelligenceProduct,
@@ -1131,6 +1216,20 @@ export default function InventoryIntelligenceReportPage() {
       MetricFilterKey | null
     >(null);
 
+  const [
+    executionState,
+    setExecutionState,
+  ] = useState<OwnerExecutionState>(
+    readOwnerExecutionState,
+  );
+
+  const [
+    executionFilter,
+    setExecutionFilter,
+  ] = useState<
+    OwnerExecutionStatus | "all"
+  >("all");
+
   function resetManualFilters() {
     setQuery("");
     setMovementFilter("all");
@@ -1202,6 +1301,67 @@ export default function InventoryIntelligenceReportPage() {
     }, 0);
   }
 
+  function updateExecutionStatus(
+    item: OwnerPriorityItem,
+    status: OwnerExecutionStatus,
+  ) {
+    setExecutionState((current) => ({
+      ...current,
+      [item.product.productId]: {
+        status,
+        updatedAt: new Date().toISOString(),
+        action: item.action,
+        reason: item.reason,
+      },
+    }));
+  }
+
+  function preparePurchase(
+    item: OwnerPriorityItem,
+  ) {
+    const quantity = Math.max(
+      1,
+      item.product
+        .suggestedReorderQuantity ?? 1,
+    );
+
+    updateExecutionStatus(
+      item,
+      "in_progress",
+    );
+
+    const params = new URLSearchParams({
+      source: "inventory-intelligence",
+      productId:
+        item.product.productId,
+      quantity: String(quantity),
+    });
+
+    if (item.product.productCode) {
+      params.set(
+        "productCode",
+        item.product.productCode,
+      );
+    }
+
+    if (
+      item.product.referenceUnitCostMinor !==
+      null
+    ) {
+      params.set(
+        "unitCost",
+        (
+          item.product.referenceUnitCostMinor /
+          100
+        ).toFixed(2),
+      );
+    }
+
+    window.location.assign(
+      `/purchases/new?${params.toString()}`,
+    );
+  }
+
   async function loadData() {
     setLoading(true);
     setError("");
@@ -1238,6 +1398,17 @@ export default function InventoryIntelligenceReportPage() {
     // Initial load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        OWNER_EXECUTION_STORAGE_KEY,
+        JSON.stringify(executionState),
+      );
+    } catch {
+      // Local execution tracking is best-effort only.
+    }
+  }, [executionState]);
 
   useEffect(() => {
     if (!preview) {
@@ -1326,6 +1497,51 @@ export default function InventoryIntelligenceReportPage() {
         })
         .slice(0, 10);
     }, [report]);
+
+  const ownerExecutionSummary =
+    useMemo(() => {
+      const counts: Record<
+        OwnerExecutionStatus,
+        number
+      > = {
+        new: 0,
+        in_progress: 0,
+        done: 0,
+        deferred: 0,
+      };
+
+      ownerPriorities.forEach((item) => {
+        const status =
+          executionState[
+            item.product.productId
+          ]?.status ?? "new";
+
+        counts[status] += 1;
+      });
+
+      return counts;
+    }, [ownerPriorities, executionState]);
+
+  const displayedOwnerPriorities =
+    useMemo(
+      () =>
+        ownerPriorities.filter((item) => {
+          if (executionFilter === "all") {
+            return true;
+          }
+
+          return (
+            executionState[
+              item.product.productId
+            ]?.status ?? "new"
+          ) === executionFilter;
+        }),
+      [
+        ownerPriorities,
+        executionFilter,
+        executionState,
+      ],
+    );
 
   const ownerActionSummary =
     useMemo(() => {
@@ -1760,7 +1976,7 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1–5.8 · Inventory Intelligence
+            Stage 5.1–5.9 · Inventory Intelligence
           </span>
           <h1>
             عمر وحركة وتغطية المخزون
@@ -1813,7 +2029,7 @@ export default function InventoryIntelligenceReportPage() {
         <div className="inventory-owner-dashboard-head">
           <div>
             <span>
-              Stage 5.7–5.8 · Owner Action Dashboard
+              Stage 5.7–5.9 · Owner Action Dashboard
             </span>
             <h2>
               ماذا أعمل اليوم؟
@@ -1915,115 +2131,296 @@ export default function InventoryIntelligenceReportPage() {
           <div className="inventory-owner-priority-head">
             <div>
               <span>
-                Stage 5.8 · Daily Priority Queue
+                Stage 5.8–5.9 · Daily Priority & Execution
               </span>
               <h3>
                 أول 10 أصناف أتعامل معها اليوم
               </h3>
               <p>
-                مرتبة حسب خطر النفاد أولًا، ثم الشراء، ثم التصريف والمراقبة. هذه قائمة عمل وليست أمر تنفيذ تلقائي.
+                مرتبة حسب الخطر والشراء والتصريف. Stage 5.9 يضيف متابعة التنفيذ وربط الشراء بفاتورة المشتريات بدون اعتماد تلقائي.
               </p>
             </div>
             <strong>
               {formatNumber(
                 ownerPriorities.length,
               )}{" "}
-              أولوية معروضة
+              أولوية حالية
             </strong>
           </div>
 
+          <div className="inventory-owner-execution-summary">
+            {(
+              [
+                ["new", "جديد"],
+                [
+                  "in_progress",
+                  "قيد التنفيذ",
+                ],
+                ["done", "تم"],
+                ["deferred", "مؤجل"],
+              ] as const
+            ).map(([status, label]) => (
+              <button
+                type="button"
+                key={status}
+                className={
+                  executionFilter === status
+                    ? "is-active"
+                    : undefined
+                }
+                onClick={() =>
+                  setExecutionFilter(
+                    executionFilter === status
+                      ? "all"
+                      : status,
+                  )
+                }
+              >
+                <span>{label}</span>
+                <strong>
+                  {formatNumber(
+                    ownerExecutionSummary[
+                      status
+                    ],
+                  )}
+                </strong>
+              </button>
+            ))}
+
+            <button
+              type="button"
+              className={
+                executionFilter === "all"
+                  ? "is-active"
+                  : undefined
+              }
+              onClick={() =>
+                setExecutionFilter("all")
+              }
+            >
+              <span>الكل</span>
+              <strong>
+                {formatNumber(
+                  ownerPriorities.length,
+                )}
+              </strong>
+            </button>
+
+            <small>
+              حالة التنفيذ محفوظة على هذا الجهاز فقط حاليًا.
+            </small>
+          </div>
+
           <div className="inventory-owner-priority-list">
-            {ownerPriorities.map(
-              (item, index) => (
-                <button
-                  type="button"
-                  key={
-                    item.product
-                      .productId
-                  }
-                  className={`inventory-owner-priority-row tone-${item.tone}`}
-                  onClick={() =>
-                    handlePriorityProduct(
-                      item.product,
-                    )
-                  }
-                >
-                  <span className="inventory-owner-priority-index">
-                    {index + 1}
-                  </span>
+            {displayedOwnerPriorities.map(
+              (item) => {
+                const originalIndex =
+                  ownerPriorities.findIndex(
+                    (candidate) =>
+                      candidate.product
+                        .productId ===
+                      item.product.productId,
+                  );
 
-                  <img
-                    src={
-                      item.product.image
+                const execution =
+                  executionState[
+                    item.product.productId
+                  ];
+
+                const status =
+                  execution?.status ??
+                  "new";
+
+                return (
+                  <article
+                    key={
+                      item.product
+                        .productId
                     }
-                    alt=""
-                  />
+                    className={`inventory-owner-priority-row tone-${item.tone} status-${status}`}
+                  >
+                    <span className="inventory-owner-priority-index">
+                      {originalIndex + 1}
+                    </span>
 
-                  <span className="inventory-owner-priority-product">
-                    <strong>
-                      {
-                        item.product
-                          .nameAr
+                    <img
+                      src={
+                        item.product.image
                       }
-                    </strong>
-                    <small>
-                      كود:{" "}
-                      {item.product
-                        .productCode ||
-                        "—"}{" "}
-                      ·{" "}
-                      {
-                        item.product
-                          .category
-                      }
-                    </small>
-                  </span>
+                      alt=""
+                    />
 
-                  <span className="inventory-owner-priority-action">
-                    <b>
-                      {item.action}
-                    </b>
-                    <small>
-                      {item.reason}
-                    </small>
-                  </span>
+                    <span className="inventory-owner-priority-product">
+                      <strong>
+                        {
+                          item.product
+                            .nameAr
+                        }
+                      </strong>
+                      <small>
+                        كود:{" "}
+                        {item.product
+                          .productCode ||
+                          "—"}{" "}
+                        ·{" "}
+                        {
+                          item.product
+                            .category
+                        }
+                      </small>
+                    </span>
 
-                  <span className="inventory-owner-priority-quantity">
-                    <b>
-                      {ownerPriorityQuantity(
-                        item.product,
+                    <span className="inventory-owner-priority-action">
+                      <b>
+                        {item.action}
+                      </b>
+                      <small>
+                        {item.reason}
+                      </small>
+                    </span>
+
+                    <span className="inventory-owner-priority-quantity">
+                      <b>
+                        {ownerPriorityQuantity(
+                          item.product,
+                        )}
+                      </b>
+                      <small>
+                        {item.product
+                          .daysOfSupply ===
+                        null
+                          ? "تغطية N/A"
+                          : `${formatDecimal(
+                              item.product
+                                .daysOfSupply,
+                            )} يوم تغطية`}
+                      </small>
+                    </span>
+
+                    <span className="inventory-owner-priority-money">
+                      <b>
+                        {ownerPriorityMoney(
+                          item.product,
+                        )}
+                      </b>
+                      <small>
+                        حالة التنفيذ:{" "}
+                        {
+                          ownerExecutionLabels[
+                            status
+                          ]
+                        }
+                      </small>
+                    </span>
+
+                    <div className="inventory-owner-priority-controls">
+                      <span
+                        className={`inventory-owner-execution-status status-${status}`}
+                      >
+                        {
+                          ownerExecutionLabels[
+                            status
+                          ]
+                        }
+                      </span>
+
+                      {status !==
+                        "in_progress" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateExecutionStatus(
+                              item,
+                              "in_progress",
+                            )
+                          }
+                        >
+                          ابدأ
+                        </button>
                       )}
-                    </b>
-                    <small>
-                      {item.product
-                        .daysOfSupply ===
-                      null
-                        ? "تغطية N/A"
-                        : `${formatDecimal(
-                            item.product
-                              .daysOfSupply,
-                          )} يوم تغطية`}
-                    </small>
-                  </span>
 
-                  <span className="inventory-owner-priority-money">
-                    <b>
-                      {ownerPriorityMoney(
-                        item.product,
+                      {status !== "done" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateExecutionStatus(
+                              item,
+                              "done",
+                            )
+                          }
+                        >
+                          تم
+                        </button>
                       )}
-                    </b>
-                    <small>
-                      عرض التفاصيل ←
-                    </small>
-                  </span>
-                </button>
-              ),
+
+                      {status !==
+                        "deferred" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateExecutionStatus(
+                              item,
+                              "deferred",
+                            )
+                          }
+                        >
+                          تأجيل
+                        </button>
+                      )}
+
+                      {(status === "done" ||
+                        status ===
+                          "deferred") && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateExecutionStatus(
+                              item,
+                              "new",
+                            )
+                          }
+                        >
+                          إعادة فتح
+                        </button>
+                      )}
+
+                      {item.tone === "buy" &&
+                        (item.product
+                          .suggestedReorderQuantity ??
+                          0) > 0 && (
+                          <button
+                            type="button"
+                            className="is-purchase"
+                            onClick={() =>
+                              preparePurchase(
+                                item,
+                              )
+                            }
+                          >
+                            جهّز فاتورة شراء
+                          </button>
+                        )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handlePriorityProduct(
+                            item.product,
+                          )
+                        }
+                      >
+                        عرض التفاصيل
+                      </button>
+                    </div>
+                  </article>
+                );
+              },
             )}
 
-            {ownerPriorities.length ===
+            {displayedOwnerPriorities.length ===
               0 && (
               <div className="inventory-owner-priority-empty">
-                لا توجد أولويات تشغيلية واضحة حاليًا.
+                لا توجد أولويات بهذه الحالة حاليًا.
               </div>
             )}
           </div>
@@ -2822,7 +3219,7 @@ export default function InventoryIntelligenceReportPage() {
               تفاصيل الأصناف
             </h2>
             <p>
-              Stage 5.7 يضيف طبقة قرار يومية فوق Stage 5.6: بطاقات الشراء والتخفيف والتصريف والمراقبة تستخدم نفس قواعد التقرير، بينما تبقى الأرقام المالية مقيدة بجودة بيانات التكلفة.
+              Stage 5.9 يضيف طبقة تنفيذ يومية فوق Stage 5.8: قرارات الشراء والتخفيف والتصريف والمراقبة تبقى مبنية على نفس قواعد التقرير، مع متابعة حالة التنفيذ وربط الشراء بفاتورة المشتريات الحالية دون اعتماد تلقائي.
             </p>
           </div>
 
