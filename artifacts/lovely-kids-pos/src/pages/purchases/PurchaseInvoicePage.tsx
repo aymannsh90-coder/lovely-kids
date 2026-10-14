@@ -155,6 +155,8 @@ export default function PurchaseInvoicePage() {
 
   const searchInput = useRef<HTMLInputElement>(null);
   const requestKey = useRef<string | null>(null);
+  const inventoryPrefillHandled =
+    useRef(false);
 
   const [suppliers, setSuppliers] = useState<PosSupplier[]>([]);
   const [supplierId, setSupplierId] = useState("");
@@ -263,6 +265,159 @@ export default function PurchaseInvoicePage() {
     }
   }, [paymentMethod, totalMinor]);
 
+  useEffect(() => {
+    if (
+      inventoryPrefillHandled.current ||
+      !PURCHASE_API_ENABLED
+    ) {
+      return;
+    }
+
+    const url = new URL(
+      window.location.href,
+    );
+
+    if (
+      url.searchParams.get("source") !==
+      "inventory-intelligence"
+    ) {
+      return;
+    }
+
+    const productId =
+      url.searchParams.get("productId") ??
+      "";
+    const productCode =
+      url.searchParams.get(
+        "productCode",
+      ) ?? "";
+    const searchValue =
+      productCode || productId;
+
+    if (!searchValue) {
+      return;
+    }
+
+    inventoryPrefillHandled.current =
+      true;
+
+    const rawQuantity = Number(
+      url.searchParams.get("quantity") ??
+        "1",
+    );
+    const quantity =
+      Number.isSafeInteger(rawQuantity) &&
+      rawQuantity > 0
+        ? Math.min(rawQuantity, 99_999)
+        : 1;
+
+    const rawUnitCost =
+      url.searchParams.get("unitCost") ??
+      "";
+    const unitCost =
+      moneyToMinor(rawUnitCost) === null
+        ? "0.00"
+        : rawUnitCost;
+
+    void (async () => {
+      setLookupBusy(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const result =
+          await searchPosProducts(
+            token,
+            searchValue,
+            20,
+          );
+
+        const product =
+          result.results.find(
+            (candidate) =>
+              candidate.productId ===
+              productId,
+          ) ??
+          result.results.find(
+            (candidate) =>
+              candidate.productCode ===
+              productCode,
+          ) ??
+          (result.results.length === 1
+            ? result.results[0]
+            : null);
+
+        if (!product) {
+          setQuery(searchValue);
+          setSearchResults(
+            result.results,
+          );
+          setSearchOpen(
+            result.results.length > 0,
+          );
+          setError(
+            result.results.length > 0
+              ? "وجدنا أكثر من صنف. اختر الصنف الصحيح لإكمال اقتراح الشراء."
+              : "تعذر العثور على الصنف المقترح من ذكاء المخزون.",
+          );
+          return;
+        }
+
+        addProduct(
+          product,
+          quantity,
+          unitCost,
+        );
+
+        setNotes((current) =>
+          current.trim()
+            ? current
+            : "اقتراح شراء من ذكاء المخزون — راجع المورد والكمية والتكلفة قبل حفظ الفاتورة.",
+        );
+
+        setMessage(
+          `تم تجهيز ${product.nameAr} بكمية ${quantity}. راجع المورد والتكلفة ثم احفظ الفاتورة فقط عند الاعتماد.`,
+        );
+
+        [
+          "source",
+          "productId",
+          "productCode",
+          "quantity",
+          "unitCost",
+        ].forEach((key) =>
+          url.searchParams.delete(key),
+        );
+
+        window.history.replaceState(
+          {},
+          "",
+          `${url.pathname}${
+            url.search
+          }${url.hash}`,
+        );
+      } catch (caught) {
+        if (
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+          return;
+        }
+
+        setError(
+          `تعذر تجهيز اقتراح الشراء: ${errorMessage(
+            caught,
+          )}`,
+        );
+      } finally {
+        setLookupBusy(false);
+      }
+    })();
+    // One-time URL handoff from Inventory Intelligence.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   async function loadSuppliers() {
     setSuppliersBusy(true);
     setError("");
@@ -326,7 +481,11 @@ export default function PurchaseInvoicePage() {
     });
   }
 
-  function addProduct(product: PosProductLookup) {
+  function addProduct(
+    product: PosProductLookup,
+    initialQuantity = 1,
+    initialUnitCost = "0.00",
+  ) {
     const colors = getColors(product);
 
     const color =
@@ -347,9 +506,15 @@ export default function PurchaseInvoicePage() {
         product,
         color,
         size,
-        quantity: 1,
+        quantity: Math.max(
+          1,
+          Math.min(
+            99_999,
+            Math.trunc(initialQuantity),
+          ),
+        ),
         freeQuantity: 0,
-        unitCost: "0.00",
+        unitCost: initialUnitCost,
         lineDiscount: "0.00",
       },
     ]);
