@@ -5,6 +5,9 @@ BEGIN;
 -- Existing voucher rows and finance transaction history remain untouched.
 
 ALTER TABLE public.finance_vouchers
+  ADD COLUMN IF NOT EXISTS voucher_purpose text;
+
+ALTER TABLE public.finance_vouchers
   DROP CONSTRAINT IF EXISTS finance_vouchers_type_valid;
 
 ALTER TABLE public.finance_vouchers
@@ -22,6 +25,47 @@ ALTER TABLE public.finance_vouchers
       'receipt',
       'payment',
       'journal'
+    )
+  );
+
+ALTER TABLE public.finance_vouchers
+  DROP CONSTRAINT IF EXISTS finance_vouchers_purpose_valid;
+
+ALTER TABLE public.finance_vouchers
+  ADD CONSTRAINT finance_vouchers_purpose_valid
+  CHECK (
+    (
+      voucher_type = 'receipt'
+      AND voucher_purpose IN (
+        'customer_receipt',
+        'employee_repayment',
+        'supplier_refund',
+        'delivery_company_settlement'
+      )
+    )
+    OR
+    (
+      voucher_type = 'payment'
+      AND voucher_purpose IN (
+        'customer_cash_loan',
+        'employee_advance',
+        'employee_payment',
+        'supplier_payment'
+      )
+    )
+    OR
+    (
+      voucher_type = 'journal'
+      AND voucher_purpose = 'account_transfer'
+    )
+    OR
+    (
+      voucher_type NOT IN (
+        'receipt',
+        'payment',
+        'journal'
+      )
+      AND voucher_purpose IS NULL
     )
   );
 
