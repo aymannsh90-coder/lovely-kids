@@ -30,6 +30,8 @@ export const financeVouchersTable = pgTable(
 
     voucherType: text("voucher_type").notNull(),
 
+    voucherPurpose: text("voucher_purpose"),
+
     partyType: text("party_type"),
     partyId: integer("party_id"),
 
@@ -151,6 +153,45 @@ export const financeVouchersTable = pgTable(
         'payment',
         'journal'
       )`,
+    ),
+
+    check(
+      "finance_vouchers_purpose_valid",
+      sql`
+        (
+          ${table.voucherType} = 'receipt'
+          and ${table.voucherPurpose} in (
+            'customer_receipt',
+            'employee_repayment',
+            'supplier_refund',
+            'delivery_company_settlement'
+          )
+        )
+        or
+        (
+          ${table.voucherType} = 'payment'
+          and ${table.voucherPurpose} in (
+            'customer_cash_loan',
+            'employee_advance',
+            'employee_payment',
+            'supplier_payment'
+          )
+        )
+        or
+        (
+          ${table.voucherType} = 'journal'
+          and ${table.voucherPurpose} = 'account_transfer'
+        )
+        or
+        (
+          ${table.voucherType} not in (
+            'receipt',
+            'payment',
+            'journal'
+          )
+          and ${table.voucherPurpose} is null
+        )
+      `,
     ),
 
     check(
