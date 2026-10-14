@@ -91,6 +91,10 @@ export const financeVouchersTable = pgTable(
       onDelete: "restrict",
     }),
 
+    replacesVoucherId: integer(
+      "replaces_voucher_id",
+    ),
+
     status: text("status")
       .notNull()
       .default("posted"),
@@ -382,6 +386,12 @@ export const financeVouchersTable = pgTable(
     index("finance_vouchers_bank_account_idx")
       .on(table.bankAccountId)
       .where(sql`${table.bankAccountId} is not null`),
+
+    uniqueIndex("finance_vouchers_replaces_idx")
+      .on(table.replacesVoucherId)
+      .where(
+        sql`${table.replacesVoucherId} is not null`,
+      ),
   ],
 ).enableRLS();
 
