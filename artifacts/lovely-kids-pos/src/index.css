@@ -14424,6 +14424,155 @@ button.inventory-intelligence-metric {
   }
 }
 
+
+.inventory-owner-execution-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e8edf3;
+  border-radius: 13px;
+  background: #f9fbfd;
+}
+
+.inventory-owner-execution-summary > button {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid #dfe5ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #475467;
+  font: inherit;
+  cursor: pointer;
+}
+
+.inventory-owner-execution-summary > button:hover {
+  border-color: #d7b2c8;
+  background: #fffafd;
+}
+
+.inventory-owner-execution-summary > button.is-active {
+  border-color: #d91477;
+  box-shadow: 0 0 0 2px rgba(217, 20, 119, 0.08);
+  color: #b31263;
+}
+
+.inventory-owner-execution-summary > button span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.inventory-owner-execution-summary > button strong {
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.inventory-owner-execution-summary > small {
+  grid-column: 1 / -1;
+  color: #667085;
+  font-size: 10.5px;
+}
+
+.inventory-owner-priority-row {
+  cursor: default;
+}
+
+.inventory-owner-priority-row.status-done {
+  background: #fbfffc;
+}
+
+.inventory-owner-priority-row.status-deferred {
+  background: #fffdf8;
+}
+
+.inventory-owner-priority-controls {
+  grid-column: 3 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px dashed #e4e9ef;
+}
+
+.inventory-owner-priority-controls > button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid #dfe5ec;
+  border-radius: 9px;
+  background: #fff;
+  color: #475467;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.inventory-owner-priority-controls > button:hover {
+  border-color: #d7b2c8;
+  background: #fffafd;
+}
+
+.inventory-owner-priority-controls > button.is-purchase {
+  border-color: #a6e6c7;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.inventory-owner-execution-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.inventory-owner-execution-status.status-new {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.inventory-owner-execution-status.status-in_progress {
+  background: #eef4ff;
+  color: #3538cd;
+}
+
+.inventory-owner-execution-status.status-done {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.inventory-owner-execution-status.status-deferred {
+  background: #fff4e5;
+  color: #b54708;
+}
+
+@media (max-width: 900px) {
+  .inventory-owner-execution-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .inventory-owner-priority-controls {
+    grid-column: 1 / -1;
+  }
+
+  .inventory-owner-execution-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-owner-execution-summary > small {
+    grid-column: auto;
+  }
+}
+
 /* OWNER ACTION DASHBOARD END */
 
 /* INVENTORY INTELLIGENCE END */
