@@ -32,6 +32,9 @@ const PURCHASE_WRITES_ENABLED =
   PURCHASE_API_ENABLED &&
   import.meta.env.VITE_PURCHASE_WRITES === "true";
 
+const INVENTORY_PURCHASE_HANDOFF_KEY =
+  "lovely_kids_inventory_purchase_handoff_v1";
+
 type PaymentMethod = "cash" | "credit" | "mixed";
 
 interface PurchaseLine {
@@ -277,34 +280,60 @@ export default function PurchaseInvoicePage() {
       window.location.href,
     );
 
-    if (
-      url.searchParams.get("source") !==
-      "inventory-intelligence"
-    ) {
+    let stored:
+      | {
+          productId?: string;
+          productCode?: string;
+          barcode?: string;
+          quantity?: number;
+          unitCost?: string;
+        }
+      | null = null;
+
+    try {
+      const raw =
+        window.sessionStorage.getItem(
+          INVENTORY_PURCHASE_HANDOFF_KEY,
+        );
+
+      if (raw) {
+        stored = JSON.parse(raw);
+      }
+    } catch {
+      stored = null;
+    }
+
+    const fromInventoryUrl =
+      url.searchParams.get("source") ===
+      "inventory-intelligence";
+
+    if (!fromInventoryUrl && !stored) {
       return;
     }
 
     const productId =
       url.searchParams.get("productId") ??
+      stored?.productId ??
       "";
+
     const productCode =
       url.searchParams.get(
         "productCode",
-      ) ?? "";
-    const searchValue =
-      productCode || productId;
+      ) ??
+      stored?.productCode ??
+      "";
 
-    if (!searchValue) {
-      return;
-    }
-
-    inventoryPrefillHandled.current =
-      true;
+    const barcode =
+      url.searchParams.get("barcode") ??
+      stored?.barcode ??
+      "";
 
     const rawQuantity = Number(
       url.searchParams.get("quantity") ??
-        "1",
+        stored?.quantity ??
+        1,
     );
+
     const quantity =
       Number.isSafeInteger(rawQuantity) &&
       rawQuantity > 0
@@ -313,11 +342,29 @@ export default function PurchaseInvoicePage() {
 
     const rawUnitCost =
       url.searchParams.get("unitCost") ??
+      stored?.unitCost ??
       "";
+
     const unitCost =
       moneyToMinor(rawUnitCost) === null
         ? "0.00"
         : rawUnitCost;
+
+    const searchValue =
+      productCode || barcode;
+
+    if (
+      !productId &&
+      !searchValue
+    ) {
+      setError(
+        "اقتراح الشراء لا يحتوي على معرّف صالح للصنف.",
+      );
+      return;
+    }
+
+    inventoryPrefillHandled.current =
+      true;
 
     void (async () => {
       setLookupBusy(true);
@@ -325,41 +372,100 @@ export default function PurchaseInvoicePage() {
       setMessage("");
 
       try {
-        const result =
-          await searchPosProducts(
-            token,
-            searchValue,
-            20,
-          );
+        let product:
+          | PosProductLookup
+          | null = null;
 
-        const product =
-          result.results.find(
-            (candidate) =>
-              candidate.productId ===
-              productId,
-          ) ??
-          result.results.find(
-            (candidate) =>
-              candidate.productCode ===
-              productCode,
-          ) ??
-          (result.results.length === 1
-            ? result.results[0]
-            : null);
+        if (barcode) {
+          try {
+            const direct =
+              await lookupPosProductByBarcode(
+                token,
+                barcode,
+              );
+
+            if (
+              !productId ||
+              direct.productId === productId
+            ) {
+              product = direct;
+            }
+          } catch (caught) {
+            if (
+              caught instanceof ApiError &&
+              caught.status === 401
+            ) {
+              throw caught;
+            }
+          }
+        }
+
+        if (!product && searchValue) {
+          const result =
+            await searchPosProducts(
+              token,
+              searchValue,
+              25,
+            );
+
+          product =
+            result.results.find(
+              (candidate) =>
+                candidate.productId ===
+                productId,
+            ) ??
+            result.results.find(
+              (candidate) =>
+                Boolean(productCode) &&
+                candidate.productCode ===
+                  productCode,
+            ) ??
+            result.results.find(
+              (candidate) =>
+                Boolean(barcode) &&
+                (
+                  candidate.barcode ===
+                    barcode ||
+                  candidate.primaryBarcode ===
+                    barcode ||
+                  candidate.barcodes.some(
+                    (entry) =>
+                      entry.barcode ===
+                      barcode,
+                  )
+                ),
+            ) ??
+            (result.results.length === 1
+              ? result.results[0]
+              : null);
+
+          if (!product) {
+            setQuery(searchValue);
+            setSearchResults(
+              result.results,
+            );
+            setSearchOpen(
+              result.results.length > 0,
+            );
+
+            setError(
+              result.results.length > 0
+                ? "وجدنا أكثر من صنف. اختر الصنف الصحيح لإكمال اقتراح الشراء."
+                : "تعذر العثور على الصنف المقترح من ذكاء المخزون.",
+            );
+
+            inventoryPrefillHandled.current =
+              false;
+            return;
+          }
+        }
 
         if (!product) {
-          setQuery(searchValue);
-          setSearchResults(
-            result.results,
-          );
-          setSearchOpen(
-            result.results.length > 0,
-          );
           setError(
-            result.results.length > 0
-              ? "وجدنا أكثر من صنف. اختر الصنف الصحيح لإكمال اقتراح الشراء."
-              : "تعذر العثور على الصنف المقترح من ذكاء المخزون.",
+            "تعذر تحميل الصنف المقترح من ذكاء المخزون.",
           );
+          inventoryPrefillHandled.current =
+            false;
           return;
         }
 
@@ -379,10 +485,19 @@ export default function PurchaseInvoicePage() {
           `تم تجهيز ${product.nameAr} بكمية ${quantity}. راجع المورد والتكلفة ثم احفظ الفاتورة فقط عند الاعتماد.`,
         );
 
+        try {
+          window.sessionStorage.removeItem(
+            INVENTORY_PURCHASE_HANDOFF_KEY,
+          );
+        } catch {
+          // The successful URL cleanup below is enough.
+        }
+
         [
           "source",
           "productId",
           "productCode",
+          "barcode",
           "quantity",
           "unitCost",
         ].forEach((key) =>
@@ -405,6 +520,9 @@ export default function PurchaseInvoicePage() {
           return;
         }
 
+        inventoryPrefillHandled.current =
+          false;
+
         setError(
           `تعذر تجهيز اقتراح الشراء: ${errorMessage(
             caught,
@@ -414,7 +532,7 @@ export default function PurchaseInvoicePage() {
         setLookupBusy(false);
       }
     })();
-    // One-time URL handoff from Inventory Intelligence.
+    // One-time handoff from Inventory Intelligence.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
