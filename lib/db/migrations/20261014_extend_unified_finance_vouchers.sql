@@ -1,8 +1,8 @@
 BEGIN;
 
 -- Unified vouchers foundation.
--- This migration only broadens finance_vouchers document metadata.
--- Existing voucher rows and finance transaction history remain untouched.
+-- Broaden finance_vouchers metadata for unified voucher purposes and safe replacement chains.
+-- Existing voucher rows and finance transaction history remain untouched; new columns are nullable.
 
 ALTER TABLE public.finance_vouchers
   ADD COLUMN IF NOT EXISTS voucher_purpose text;
