@@ -70,7 +70,11 @@ type MetricFilterKey =
   | "slow_dead_capital_known"
   | "reorder_budget_missing"
   | "excess_value_missing"
-  | "cost_quantity_mismatch";
+  | "cost_quantity_mismatch"
+  | "owner_buy"
+  | "owner_stop_buying"
+  | "owner_liquidate"
+  | "owner_watch";
 
 const metricFilterLabels: Record<
   MetricFilterKey,
@@ -116,6 +120,10 @@ const metricFilterLabels: Record<
     "فائض ناقص القيمة",
   cost_quantity_mismatch:
     "فروق كمية التكلفة",
+  owner_buy: "اشترِ الآن",
+  owner_stop_buying: "أوقف / خفف الشراء",
+  owner_liquidate: "ابدأ التصريف",
+  owner_watch: "راقب اليوم",
 };
 
 function matchesMetricFilter(
@@ -302,6 +310,32 @@ function matchesMetricFilter(
         !product
           .costStockMatchesAccounting
       );
+    case "owner_buy":
+      return (
+        product.inventoryActionSignal ===
+        "reorder"
+      );
+    case "owner_stop_buying":
+      return (
+        product.inventoryActionSignal ===
+          "reduce" ||
+        product.inventoryActionSignal ===
+          "review_no_demand"
+      );
+    case "owner_liquidate":
+      return (
+        product.inventoryRiskSignal ===
+          "overstock_high" ||
+        product.movementClass ===
+          "dead"
+      );
+    case "owner_watch":
+      return (
+        product.inventoryRiskSignal ===
+          "stockout_watch" ||
+        product.inventoryRiskSignal ===
+          "overstock_watch"
+      );
   }
 
   return false;
@@ -325,15 +359,19 @@ function metricFilterSortMode(
     case "overstock_high":
     case "overstock_watch":
     case "risk_insufficient":
+    case "owner_watch":
       return "inventory_risk";
     case "reorder_products":
     case "reorder_units":
     case "reorder_budget_missing":
+    case "owner_buy":
       return "reorder_quantity";
     case "excess_products":
     case "excess_units":
     case "no_demand_review":
     case "excess_value_missing":
+    case "owner_stop_buying":
+    case "owner_liquidate":
       return "excess_units";
     case "reorder_budget_known":
       return "reorder_budget";
@@ -773,6 +811,44 @@ function Metric({
       <small>{hint}</small>
     </button>
   );
+} 
+
+function OwnerActionCard({
+  label,
+  count,
+  primary,
+  secondary,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  primary: string;
+  secondary: string;
+  tone:
+    | "buy"
+    | "stop"
+    | "liquidate"
+    | "watch";
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`inventory-owner-action-card tone-${tone}${active ? " is-active" : ""}`}
+      onClick={onClick}
+      aria-pressed={active}
+    >
+      <span>{label}</span>
+      <strong>
+        {formatNumber(count)} صنف
+      </strong>
+      <b>{primary}</b>
+      <small>{secondary}</small>
+    </button>
+  );
 }
 
 export default function InventoryIntelligenceReportPage() {
@@ -1008,6 +1084,35 @@ export default function InventoryIntelligenceReportPage() {
         ),
       [report],
     );
+
+  const ownerActionSummary =
+    useMemo(() => {
+      const products =
+        report?.products ?? [];
+
+      const liquidateProducts =
+        products.filter((product) =>
+          matchesMetricFilter(
+            product,
+            "owner_liquidate",
+          ),
+        );
+
+      const watchProducts =
+        products.filter((product) =>
+          matchesMetricFilter(
+            product,
+            "owner_watch",
+          ),
+        );
+
+      return {
+        liquidateProducts:
+          liquidateProducts.length,
+        watchProducts:
+          watchProducts.length,
+      };
+    }, [report]);
 
   const filtered =
     useMemo(() => {
@@ -1413,13 +1518,13 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1–5.6.1 · Inventory Intelligence
+            Stage 5.1–5.7 · Inventory Intelligence
           </span>
           <h1>
             عمر وحركة وتغطية المخزون
           </h1>
           <p>
-            يحدد الحركة والتغطية والمخاطر وخطة الكمية، ثم يحولها إلى أثر مالي: ميزانية شراء تقديرية، قيمة فائض قابلة للتحرير، ورأس مال محبوس في الأصناف البطيئة والميتة.
+            يحول ذكاء المخزون إلى قرارات يومية مباشرة لصاحب المتجر: ماذا تشتري، ماذا توقف شراءه، ماذا تبدأ بتصريفه، وما الذي يحتاج مراقبة اليوم — مع الأثر المالي لكل قرار.
           </p>
         </div>
 
@@ -1461,6 +1566,166 @@ export default function InventoryIntelligenceReportPage() {
           )}
         </div>
       )}
+
+      <section className="inventory-owner-dashboard">
+        <div className="inventory-owner-dashboard-head">
+          <div>
+            <span>
+              Stage 5.7 · Owner Action Dashboard
+            </span>
+            <h2>
+              ماذا أعمل اليوم؟
+            </h2>
+            <p>
+              ملخص تنفيذي مبني على نفس إشارات الحركة والتغطية والمخاطر وخطة الكمية. اضغط أي قرار لعرض أصنافه مباشرة.
+            </p>
+          </div>
+          <small>
+            هدف الشراء:{" "}
+            {formatNumber(
+              report.thresholds
+                .targetCoverageDays,
+            )}{" "}
+            يوم · حد الفائض:{" "}
+            {formatNumber(
+              report.thresholds
+                .highCoverageDays,
+            )}{" "}
+            يوم
+          </small>
+        </div>
+
+        <div className="inventory-owner-action-grid">
+          <OwnerActionCard
+            label="اشترِ الآن"
+            count={
+              report.summary
+                .reorderSuggestedProducts
+            }
+            primary={`${formatNumber(
+              report.summary
+                .suggestedReorderUnits,
+            )} وحدة شراء مقترحة`}
+            secondary={`ميزانية معروفة: ${formatMoney(
+              report.summary
+                .suggestedReorderBudgetKnownMinor,
+            )}${
+              report.summary
+                .reorderBudgetMissingCostProducts >
+              0
+                ? ` · ${formatNumber(
+                    report.summary
+                      .reorderBudgetMissingCostProducts,
+                  )} صنف ناقص تكلفة`
+                : ""
+            }`}
+            tone="buy"
+            {...metricProps("owner_buy")}
+          />
+
+          <OwnerActionCard
+            label="أوقف / خفف الشراء"
+            count={
+              report.summary
+                .excessSuggestedProducts
+            }
+            primary={`${formatNumber(
+              report.summary
+                .excessUnits,
+            )} وحدة فائض محتمل`}
+            secondary="هذه الأصناف فوق الخطة أو بلا طلب صافي؛ لا تضف لها مخزونًا قبل المراجعة."
+            tone="stop"
+            {...metricProps(
+              "owner_stop_buying",
+            )}
+          />
+
+          <OwnerActionCard
+            label="ابدأ التصريف"
+            count={
+              ownerActionSummary
+                .liquidateProducts
+            }
+            primary="أولوية: فائض مرتفع أو مخزون ميت"
+            secondary="ابدأ بالسعر، العرض أو البكجات قبل شراء كمية إضافية."
+            tone="liquidate"
+            {...metricProps(
+              "owner_liquidate",
+            )}
+          />
+
+          <OwnerActionCard
+            label="راقب اليوم"
+            count={
+              ownerActionSummary
+                .watchProducts
+            }
+            primary="قريب من قرار شراء أو تخفيف"
+            secondary="مراقبة نفاد أو فائض قبل انتقال الصنف إلى مستوى خطر أعلى."
+            tone="watch"
+            {...metricProps(
+              "owner_watch",
+            )}
+          />
+        </div>
+
+        <div className="inventory-owner-finance-grid">
+          <article>
+            <span>
+              المبلغ المطلوب للشراء
+            </span>
+            <strong>
+              {formatMoney(
+                report.summary
+                  .suggestedReorderBudgetKnownMinor,
+              )}
+            </strong>
+            <small>
+              معروف حاليًا؛{" "}
+              {formatNumber(
+                report.summary
+                  .reorderBudgetMissingCostProducts,
+              )}{" "}
+              صنف شراء ناقص تكلفة مرجعية.
+            </small>
+          </article>
+
+          <article>
+            <span>
+              قيمة فائض قابلة للتحرير
+            </span>
+            <strong>
+              {formatMoney(
+                report.summary
+                  .excessInventoryValueKnownMinor,
+              )}
+            </strong>
+            <small>
+              قيمة معروفة فقط؛{" "}
+              {formatNumber(
+                report.summary
+                  .excessValueMissingCostProducts,
+              )}{" "}
+              صنف فائض ناقص قيمة موثوقة.
+            </small>
+          </article>
+
+          <article>
+            <span>
+              رأس مال بطيء / ميت
+            </span>
+            <strong>
+              {formatMoney(
+                report.summary
+                  .slowDeadCapitalKnownMinor,
+              )}
+            </strong>
+            <small>
+              لا يُجمع تلقائيًا مع قيمة الفائض لأن بعض الأصناف قد تدخل في الرقمين.
+            </small>
+          </article>
+        </div>
+      </section>
 
       <div className="inventory-intelligence-metrics">
         <Metric
@@ -2158,7 +2423,7 @@ export default function InventoryIntelligenceReportPage() {
         >
           <div>
             <span>
-              الفلتر الحالي من المربع
+              الفلتر الحالي من لوحة القرار / المؤشر
             </span>
             <strong>
               {
@@ -2197,7 +2462,7 @@ export default function InventoryIntelligenceReportPage() {
               تفاصيل الأصناف
             </h2>
             <p>
-              Stage 5.6 يضيف الأثر المالي فوق خطة الكمية: الشراء يستخدم التكلفة المرجعية كتقدير، والفائض ورأس المال البطيء/الميت يستخدمان قيمة المخزون الدفترية فقط عندما تتطابق كمية التكلفة مع المخزون.
+              Stage 5.7 يضيف طبقة قرار يومية فوق Stage 5.6: بطاقات الشراء والتخفيف والتصريف والمراقبة تستخدم نفس قواعد التقرير، بينما تبقى الأرقام المالية مقيدة بجودة بيانات التكلفة.
             </p>
           </div>
 
