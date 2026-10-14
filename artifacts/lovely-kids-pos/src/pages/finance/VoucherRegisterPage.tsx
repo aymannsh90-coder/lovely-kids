@@ -16,6 +16,7 @@ import {
   getPosFinanceVouchers,
   getPosSuppliers,
   POS_REGISTER_KEY,
+  replacePosUnifiedVoucher,
   voidPosFinanceVoucher,
   type PosCustomer,
   type PosDeliveryCompany,
@@ -151,6 +152,8 @@ export default function VoucherRegisterPage() {
   const [loading, setLoading] =
     useState(true);
   const [voidingId, setVoidingId] =
+    useState<number | null>(null);
+  const [editingId, setEditingId] =
     useState<number | null>(null);
   const [error, setError] =
     useState("");
@@ -411,6 +414,127 @@ export default function VoucherRegisterPage() {
     deliveryCompanyById,
     expenseCategoryById,
   ]);
+
+  async function handleEdit(
+    voucher: PosFinanceVoucher,
+  ) {
+    if (!user?.isOwner) {
+      setError(
+        "تعديل السندات متاح للمالك فقط.",
+      );
+      return;
+    }
+
+    if (
+      voucher.status !== "posted" ||
+      (
+        voucher.voucherType !== "receipt" &&
+        voucher.voucherType !== "payment" &&
+        voucher.voucherType !== "journal"
+      )
+    ) {
+      return;
+    }
+
+    const amount =
+      window.prompt(
+        `المبلغ الجديد للسند ${voucher.publicId}:`,
+        (voucher.amountMinor / 100).toFixed(2),
+      );
+
+    if (amount === null) {
+      return;
+    }
+
+    const numericAmount =
+      Number(
+        amount
+          .trim()
+          .replace(",", "."),
+      );
+
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
+      setError(
+        "أدخل مبلغًا صحيحًا أكبر من صفر.",
+      );
+      return;
+    }
+
+    const notes =
+      window.prompt(
+        "البيان / الملاحظات الجديدة:",
+        voucher.notes ?? "",
+      );
+
+    if (notes === null) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "سيبقى نفس الطرف ونفس الصندوق/البنك ونفس نوع الحركة. سيتم إلغاء السند الحالي وإنشاء سند بديل داخل عملية محاسبية واحدة. متابعة؟",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setEditingId(voucher.id);
+    setError("");
+    setMessage("");
+
+    try {
+      const result =
+        await replacePosUnifiedVoucher(
+          token,
+          voucher.id,
+          {
+            amount:
+              numericAmount.toFixed(2),
+            notes:
+              notes.trim() ||
+              undefined,
+            idempotencyKey:
+              `voucher_replace:${voucher.id}:${crypto.randomUUID()}`,
+          },
+        );
+
+      const sessionResult =
+        await getCurrentCashSession(
+          token,
+          POS_REGISTER_KEY,
+        ).catch(() => null);
+
+      if (sessionResult) {
+        setSession(
+          sessionResult.session,
+        );
+      }
+
+      await load();
+
+      setMessage(
+        `تم تعديل ${voucher.publicId} بأمان وإصدار السند البديل ${result.replacementVoucher.publicId}.`,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setEditingId(null);
+    }
+  }
 
   async function handleVoid(
     voucher: PosFinanceVoucher,
@@ -779,24 +903,57 @@ export default function VoucherRegisterPage() {
                       {voucher.status ===
                         "posted" &&
                       user?.isOwner ? (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          disabled={
-                            voidingId ===
-                            voucher.id
-                          }
-                          onClick={() =>
-                            void handleVoid(
-                              voucher,
-                            )
-                          }
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            flexWrap: "wrap",
+                          }}
                         >
-                          {voidingId ===
-                          voucher.id
-                            ? "جاري الإلغاء..."
-                            : "إلغاء"}
-                        </button>
+                          {(
+                            voucher.voucherType === "receipt" ||
+                            voucher.voucherType === "payment" ||
+                            voucher.voucherType === "journal"
+                          ) && (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              disabled={
+                                editingId === voucher.id ||
+                                voidingId === voucher.id
+                              }
+                              onClick={() =>
+                                void handleEdit(
+                                  voucher,
+                                )
+                              }
+                            >
+                              {editingId ===
+                              voucher.id
+                                ? "جاري التعديل..."
+                                : "تعديل"}
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={
+                              voidingId === voucher.id ||
+                              editingId === voucher.id
+                            }
+                            onClick={() =>
+                              void handleVoid(
+                                voucher,
+                              )
+                            }
+                          >
+                            {voidingId ===
+                            voucher.id
+                              ? "جاري الإلغاء..."
+                              : "إلغاء"}
+                          </button>
+                        </div>
                       ) : (
                         "—"
                       )}
