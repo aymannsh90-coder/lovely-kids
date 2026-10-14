@@ -13625,11 +13625,9 @@ button.inventory-intelligence-metric {
 }
 
 .inventory-intelligence-table th {
-  position: sticky;
-  top: 146px;
-  z-index: 30;
+  position: static;
   background: #f8fafc;
-  box-shadow: 0 1px 0 #dfe5ec, 0 4px 10px rgba(16, 24, 40, 0.08);
+  box-shadow: none;
   color: #344054;
   font-size: 14px;
   font-weight: 900;
@@ -13886,19 +13884,6 @@ button.inventory-intelligence-metric {
 
 .inventory-intelligence-state.is-error p {
   margin: 0 0 14px;
-}
-
-@media (max-width: 1180px) {
-  .inventory-intelligence-table th {
-    position: static;
-    box-shadow: none;
-  }
-}
-
-@media screen and (min-width: 1181px) and (max-width: 1400px) {
-  .inventory-intelligence-table th {
-    top: 144px;
-  }
 }
 
 @media (max-width: 1250px) {
