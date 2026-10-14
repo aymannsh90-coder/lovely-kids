@@ -17,6 +17,7 @@ import {
   type InventoryStockState,
   type OwnerInventoryIntelligenceProduct,
   type OwnerInventoryIntelligenceReport,
+  type OwnerInventoryIntelligenceVariant,
 } from "../../lib/api";
 
 type SortMode =
@@ -39,6 +40,14 @@ type ProductPreview = {
   image: string;
   name: string;
 };
+
+type VariantFilter =
+  | "attention"
+  | "all"
+  | "reorder"
+  | "stockout"
+  | "excess"
+  | "slow";
 
 type MetricFilterKey =
   | "fast_movers"
@@ -648,6 +657,163 @@ function movementHint(
   return "حركة طبيعية";
 }
 
+
+function variantMatchesFilter(
+  variant:
+    OwnerInventoryIntelligenceVariant,
+  filter: VariantFilter,
+) {
+  switch (filter) {
+    case "all":
+      return true;
+    case "reorder":
+      return (
+        variant.inventoryActionSignal ===
+        "reorder"
+      );
+    case "stockout":
+      return (
+        variant.inventoryRiskSignal ===
+          "stockout_now" ||
+        variant.inventoryRiskSignal ===
+          "stockout_high" ||
+        variant.inventoryRiskSignal ===
+          "stockout_watch"
+      );
+    case "excess":
+      return (
+        variant.inventoryRiskSignal ===
+          "overstock_high" ||
+        variant.inventoryRiskSignal ===
+          "overstock_watch" ||
+        variant.inventoryActionSignal ===
+          "reduce" ||
+        variant.inventoryActionSignal ===
+          "review_no_demand"
+      );
+    case "slow":
+      return (
+        variant.movementClass ===
+          "slow" ||
+        variant.movementClass ===
+          "dead"
+      );
+    case "attention":
+      return (
+        variant.inventoryRiskSignal !==
+          "balanced" ||
+        variant.inventoryActionSignal !==
+          "balanced"
+      );
+  }
+}
+
+function variantPriority(
+  variant:
+    OwnerInventoryIntelligenceVariant,
+) {
+  const risk =
+    riskPriority(
+      variant.inventoryRiskSignal,
+    );
+
+  if (risk < 5) {
+    return risk;
+  }
+
+  if (
+    variant.inventoryActionSignal ===
+    "reorder"
+  ) {
+    return 2;
+  }
+
+  if (
+    variant.inventoryActionSignal ===
+      "reduce" ||
+    variant.inventoryActionSignal ===
+      "review_no_demand"
+  ) {
+    return 4;
+  }
+
+  if (
+    variant.movementClass ===
+      "slow" ||
+    variant.movementClass ===
+      "dead"
+  ) {
+    return 4;
+  }
+
+  if (
+    !variant.actionPlanReliable
+  ) {
+    return 6;
+  }
+
+  return 5;
+}
+
+function variantDecision(
+  variant:
+    OwnerInventoryIntelligenceVariant,
+) {
+  if (
+    variant.inventoryRiskSignal ===
+    "stockout_now"
+  ) {
+    return "شراء عاجل";
+  }
+
+  if (
+    variant.inventoryRiskSignal ===
+    "stockout_high"
+  ) {
+    return "خطر نفاد مرتفع";
+  }
+
+  if (
+    variant.inventoryActionSignal ===
+    "reorder"
+  ) {
+    return "شراء مقترح";
+  }
+
+  if (
+    variant.inventoryRiskSignal ===
+      "overstock_high" ||
+    variant.movementClass ===
+      "dead"
+  ) {
+    return "خفف الشراء / صرّف";
+  }
+
+  if (
+    variant.inventoryActionSignal ===
+    "review_no_demand"
+  ) {
+    return "راجع الراكد";
+  }
+
+  if (
+    variant.inventoryRiskSignal ===
+      "stockout_watch" ||
+    variant.inventoryRiskSignal ===
+      "overstock_watch"
+  ) {
+    return "مراقبة";
+  }
+
+  if (
+    !variant.actionPlanReliable
+  ) {
+    return "بيانات غير كافية";
+  }
+
+  return "متوازن";
+}
+
 function riskPriority(
   signal: InventoryRiskSignal,
 ) {
@@ -1233,6 +1399,20 @@ export default function InventoryIntelligenceReportPage() {
     OwnerExecutionStatus | "all"
   >("all");
 
+  const [
+    variantFilter,
+    setVariantFilter,
+  ] =
+    useState<VariantFilter>(
+      "attention",
+    );
+
+  const [
+    variantQuery,
+    setVariantQuery,
+  ] =
+    useState("");
+
   function resetManualFilters() {
     setQuery("");
     setMovementFilter("all");
@@ -1380,6 +1560,84 @@ export default function InventoryIntelligenceReportPage() {
       params.set(
         "barcode",
         handoff.barcode,
+      );
+    }
+
+    if (unitCost) {
+      params.set(
+        "unitCost",
+        unitCost,
+      );
+    }
+
+    window.location.assign(
+      `/purchases/new?${params.toString()}`,
+    );
+  }
+
+
+  function prepareVariantPurchase(
+    variant:
+      OwnerInventoryIntelligenceVariant,
+  ) {
+    const quantity =
+      Math.max(
+        1,
+        variant
+          .suggestedReorderQuantity ??
+          1,
+      );
+
+    if (!variant.barcode) {
+      return;
+    }
+
+    const unitCost =
+      variant.referenceUnitCostMinor !==
+      null
+        ? (
+            variant
+              .referenceUnitCostMinor /
+            100
+          ).toFixed(2)
+        : "";
+
+    const handoff = {
+      productId:
+        variant.productId,
+      productCode:
+        variant.productCode ?? "",
+      barcode:
+        variant.barcode,
+      quantity,
+      unitCost,
+    };
+
+    try {
+      window.sessionStorage.setItem(
+        INVENTORY_PURCHASE_HANDOFF_KEY,
+        JSON.stringify(handoff),
+      );
+    } catch {
+      // URL parameters remain as a fallback.
+    }
+
+    const params =
+      new URLSearchParams({
+        source:
+          "inventory-intelligence",
+        productId:
+          handoff.productId,
+        barcode:
+          handoff.barcode,
+        quantity:
+          String(quantity),
+      });
+
+    if (handoff.productCode) {
+      params.set(
+        "productCode",
+        handoff.productCode,
       );
     }
 
@@ -1604,6 +1862,85 @@ export default function InventoryIntelligenceReportPage() {
           watchProducts.length,
       };
     }, [report]);
+
+
+  const filteredVariants =
+    useMemo(() => {
+      const normalizedQuery =
+        variantQuery
+          .trim()
+          .toLowerCase();
+
+      return [
+        ...(report?.variants ?? []),
+      ]
+        .filter((variant) => {
+          if (
+            !variantMatchesFilter(
+              variant,
+              variantFilter,
+            )
+          ) {
+            return false;
+          }
+
+          if (!normalizedQuery) {
+            return true;
+          }
+
+          const haystack = [
+            variant.nameAr,
+            variant.productId,
+            variant.productCode ?? "",
+            variant.barcode ?? "",
+            variant.category,
+            variant.color,
+            variant.size,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          return haystack.includes(
+            normalizedQuery,
+          );
+        })
+        .sort(
+          (left, right) => {
+            const priority =
+              variantPriority(left) -
+              variantPriority(right);
+
+            if (priority !== 0) {
+              return priority;
+            }
+
+            const reorder =
+              (
+                right
+                  .suggestedReorderQuantity ??
+                -1
+              ) -
+              (
+                left
+                  .suggestedReorderQuantity ??
+                -1
+              );
+
+            if (reorder !== 0) {
+              return reorder;
+            }
+
+            return (
+              right.netDemand30 -
+              left.netDemand30
+            );
+          },
+        );
+    }, [
+      report,
+      variantFilter,
+      variantQuery,
+    ]);
 
   const filtered =
     useMemo(() => {
@@ -2515,6 +2852,461 @@ export default function InventoryIntelligenceReportPage() {
             </small>
           </article>
         </div>
+      </section>
+
+
+      <section
+        className="inventory-variant-intelligence"
+        id="inventory-variant-intelligence"
+      >
+        <div className="inventory-variant-head">
+          <div>
+            <span>
+              Stage 5.3 · Variant Intelligence
+            </span>
+            <h2>
+              ذكاء اللون والمقاس
+            </h2>
+            <p>
+              القرار هنا على مستوى اللون + المقاس نفسه، وليس المنتج كاملًا: ما الذي نفد، ما الذي يتحرك، ما الذي يركد، وما الكمية المقترحة للشراء.
+            </p>
+          </div>
+
+          <small>
+            {formatNumber(
+              report.variantSummary
+                .trackedVariants,
+            )}{" "}
+            Variant بكمية متتبعة من أصل{" "}
+            {formatNumber(
+              report.variantSummary
+                .totalVariants,
+            )}
+          </small>
+        </div>
+
+        <div className="inventory-variant-summary">
+          <button
+            type="button"
+            className={
+              variantFilter ===
+              "reorder"
+                ? "is-active"
+                : ""
+            }
+            onClick={() =>
+              setVariantFilter(
+                "reorder",
+              )
+            }
+          >
+            <span>
+              شراء مقترح
+            </span>
+            <strong>
+              {formatNumber(
+                report.variantSummary
+                  .reorderSuggestedVariants,
+              )}
+            </strong>
+            <small>
+              {formatNumber(
+                report.variantSummary
+                  .suggestedReorderUnits,
+              )}{" "}
+              وحدة
+            </small>
+          </button>
+
+          <button
+            type="button"
+            className={
+              variantFilter ===
+              "stockout"
+                ? "is-active"
+                : ""
+            }
+            onClick={() =>
+              setVariantFilter(
+                "stockout",
+              )
+            }
+          >
+            <span>
+              نفاد / خطر نفاد
+            </span>
+            <strong>
+              {formatNumber(
+                report.variantSummary
+                  .stockoutNowVariants +
+                  report.variantSummary
+                    .stockoutHighRiskVariants +
+                  report.variantSummary
+                    .stockoutWatchVariants,
+              )}
+            </strong>
+            <small>
+              نفد مع طلب:{" "}
+              {formatNumber(
+                report.variantSummary
+                  .stockoutNowVariants,
+              )}
+            </small>
+          </button>
+
+          <button
+            type="button"
+            className={
+              variantFilter ===
+              "excess"
+                ? "is-active"
+                : ""
+            }
+            onClick={() =>
+              setVariantFilter(
+                "excess",
+              )
+            }
+          >
+            <span>
+              فائض / بلا طلب
+            </span>
+            <strong>
+              {formatNumber(
+                report.variantSummary
+                  .excessSuggestedVariants,
+              )}
+            </strong>
+            <small>
+              {formatNumber(
+                report.variantSummary
+                  .excessUnits,
+              )}{" "}
+              وحدة محتملة
+            </small>
+          </button>
+
+          <button
+            type="button"
+            className={
+              variantFilter ===
+              "slow"
+                ? "is-active"
+                : ""
+            }
+            onClick={() =>
+              setVariantFilter(
+                "slow",
+              )
+            }
+          >
+            <span>
+              بطيء / ميت
+            </span>
+            <strong>
+              {formatNumber(
+                report.variantSummary
+                  .slowVariants +
+                  report.variantSummary
+                    .deadVariants,
+              )}
+            </strong>
+            <small>
+              حركة ضعيفة على اللون والمقاس
+            </small>
+          </button>
+
+          <article>
+            <span>
+              ميزانية شراء معروفة
+            </span>
+            <strong>
+              {formatMoney(
+                report.variantSummary
+                  .suggestedReorderBudgetKnownMinor,
+              )}
+            </strong>
+            <small>
+              {formatNumber(
+                report.variantSummary
+                  .reorderBudgetMissingCostVariants,
+              )}{" "}
+              Variant ناقص تكلفة
+            </small>
+          </article>
+
+          <article>
+            <span>
+              طلب غير منسوب
+            </span>
+            <strong>
+              {formatNumber(
+                report.variantSummary
+                  .unattributedDemand30,
+              )}
+            </strong>
+            <small>
+              وحدة خلال 30 يوم بلا لون/مقاس كامل
+            </small>
+          </article>
+        </div>
+
+        <div className="inventory-variant-toolbar">
+          <div className="inventory-variant-filter-buttons">
+            {(
+              [
+                [
+                  "attention",
+                  "يحتاج انتباه",
+                ],
+                ["all", "الكل"],
+                ["reorder", "شراء"],
+                ["stockout", "نفاد"],
+                ["excess", "فائض"],
+                ["slow", "بطيء"],
+              ] as const
+            ).map(
+              ([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={
+                    variantFilter ===
+                    value
+                      ? "is-active"
+                      : ""
+                  }
+                  onClick={() =>
+                    setVariantFilter(
+                      value,
+                    )
+                  }
+                >
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
+
+          <input
+            value={variantQuery}
+            onChange={(event) =>
+              setVariantQuery(
+                event.target.value,
+              )
+            }
+            placeholder="ابحث بالمنتج، الكود، الباركود، اللون أو المقاس"
+          />
+        </div>
+
+        <div className="inventory-variant-table-wrap">
+          <table className="inventory-variant-table">
+            <thead>
+              <tr>
+                <th>المنتج</th>
+                <th>اللون</th>
+                <th>المقاس</th>
+                <th>المخزون</th>
+                <th>طلب 30</th>
+                <th>طلب 90</th>
+                <th>التغطية</th>
+                <th>الحالة</th>
+                <th>القرار</th>
+                <th>اقتراح الشراء</th>
+                <th>آخر طلب</th>
+                <th>إجراء</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredVariants.map(
+                (variant) => (
+                  <tr
+                    key={
+                      variant.variantKey
+                    }
+                  >
+                    <td>
+                      <div className="inventory-variant-product">
+                        <button
+                          type="button"
+                          className="inventory-variant-image"
+                          onClick={() =>
+                            setPreview({
+                              image:
+                                variant.image,
+                              name:
+                                variant.nameAr,
+                            })
+                          }
+                        >
+                          <img
+                            src={
+                              variant.image
+                            }
+                            alt=""
+                          />
+                        </button>
+                        <span>
+                          <strong>
+                            {
+                              variant.nameAr
+                            }
+                          </strong>
+                          <small>
+                            كود:{" "}
+                            {variant.productCode ||
+                              "—"}
+                          </small>
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <strong>
+                        {variant.color}
+                      </strong>
+                    </td>
+                    <td>
+                      <strong>
+                        {variant.size}
+                      </strong>
+                    </td>
+                    <td>
+                      {variant.currentQuantity ===
+                      null
+                        ? "N/A"
+                        : formatNumber(
+                            variant.currentQuantity,
+                          )}
+                    </td>
+                    <td>
+                      {variant.sellThrough30Reliable
+                        ? formatNumber(
+                            variant.netDemand30,
+                          )
+                        : "N/A"}
+                    </td>
+                    <td>
+                      {variant.sellThrough90Reliable
+                        ? formatNumber(
+                            variant.netDemand90,
+                          )
+                        : "N/A"}
+                    </td>
+                    <td>
+                      {variant.daysOfSupply ===
+                      null
+                        ? coverageLabels[
+                            variant
+                              .coverageSignal
+                          ]
+                        : `${formatDecimal(
+                            variant.daysOfSupply,
+                          )} يوم`}
+                    </td>
+                    <td>
+                      <span
+                        className={`inventory-variant-risk risk-${variant.inventoryRiskSignal}`}
+                      >
+                        {
+                          riskLabels[
+                            variant
+                              .inventoryRiskSignal
+                          ]
+                        }
+                      </span>
+                    </td>
+                    <td>
+                      <strong>
+                        {variantDecision(
+                          variant,
+                        )}
+                      </strong>
+                      <small className="inventory-variant-action-label">
+                        {
+                          actionLabels[
+                            variant
+                              .inventoryActionSignal
+                          ]
+                        }
+                      </small>
+                    </td>
+                    <td>
+                      {(variant
+                        .suggestedReorderQuantity ??
+                        0) > 0 ? (
+                        <>
+                          <strong>
+                            +
+                            {formatNumber(
+                              variant
+                                .suggestedReorderQuantity ??
+                                0,
+                            )}
+                          </strong>
+                          <small className="inventory-variant-action-label">
+                            {formatMoney(
+                              variant
+                                .suggestedReorderBudgetMinor,
+                            )}
+                          </small>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      {formatDate(
+                        variant.lastDemandDate,
+                      )}
+                    </td>
+                    <td>
+                      {(variant
+                        .suggestedReorderQuantity ??
+                        0) > 0 ? (
+                        variant.barcode ? (
+                          <button
+                            type="button"
+                            className="inventory-variant-purchase"
+                            onClick={() =>
+                              prepareVariantPurchase(
+                                variant,
+                              )
+                            }
+                          >
+                            جهّز شراء
+                          </button>
+                        ) : (
+                          <small className="inventory-variant-barcode-warning">
+                            اربط باركود اللون/المقاس أولًا
+                          </small>
+                        )
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ),
+              )}
+
+              {filteredVariants.length ===
+                0 && (
+                <tr>
+                  <td
+                    colSpan={12}
+                    className="inventory-variant-empty"
+                  >
+                    لا توجد Variants مطابقة لهذا الفلتر حاليًا.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="inventory-variant-methodology">
+          {report.methodology
+            .variantIntelligence}
+        </p>
       </section>
 
       <div className="inventory-intelligence-metrics">

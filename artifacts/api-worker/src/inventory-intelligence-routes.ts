@@ -8,8 +8,10 @@ import {
   posPurchasesTable,
   posSaleItemsTable,
   posSalesTable,
+  productBarcodesTable,
   productCostStateTable,
   productsTable,
+  type ColorVariant,
 } from "@workspace/db/schema";
 import {
   and,
@@ -79,6 +81,8 @@ type ProductInventoryMovement = {
   movementType: string;
   quantityDelta: number;
   movementDate: string;
+  color: string | null;
+  size: string | null;
 };
 
 type SellThroughWindow = {
@@ -284,6 +288,18 @@ function latestDateKey(
         : latest,
     first,
   );
+}
+
+function variantKey(
+  productId: number,
+  color: string,
+  size: string,
+) {
+  return JSON.stringify([
+    productId,
+    color.trim(),
+    size.trim(),
+  ]);
 }
 
 function netDemandContribution(
@@ -883,6 +899,7 @@ async function handleReport(
     onlineDoneTransactions,
     exchangeSaleRows,
     purchaseRows,
+    productBarcodeRows,
     earliestMovementRows,
     recentMovementRows,
   ] = await Promise.all([
@@ -1060,6 +1077,21 @@ async function handleReport(
 
     db
       .select({
+        productId:
+          productBarcodesTable.productId,
+        barcode:
+          productBarcodesTable.barcode,
+        color:
+          productBarcodesTable.color,
+        size:
+          productBarcodesTable.size,
+      })
+      .from(
+        productBarcodesTable,
+      ),
+
+    db
+      .select({
         occurredAt:
           inventoryMovementsTable.occurredAt,
       })
@@ -1081,6 +1113,10 @@ async function handleReport(
           inventoryMovementsTable.movementType,
         quantityDelta:
           inventoryMovementsTable.quantityDelta,
+        color:
+          inventoryMovementsTable.color,
+        size:
+          inventoryMovementsTable.size,
         occurredAt:
           inventoryMovementsTable.occurredAt,
       })
@@ -1378,11 +1414,97 @@ async function handleReport(
       quantityDelta:
         movement.quantityDelta,
       movementDate,
+      color:
+        movement.color?.trim() ||
+        null,
+      size:
+        movement.size?.trim() ||
+        null,
     });
 
     movementsByProduct.set(
       movement.productId,
       productMovements,
+    );
+  }
+
+
+  const variantBarcodeByKey =
+    new Map<string, string>();
+
+  for (const row of productBarcodeRows) {
+    const color =
+      row.color?.trim();
+    const size =
+      row.size?.trim();
+
+    if (!color || !size) {
+      continue;
+    }
+
+    variantBarcodeByKey.set(
+      variantKey(
+        row.productId,
+        color,
+        size,
+      ),
+      row.barcode,
+    );
+  }
+
+  const movementsByVariant =
+    new Map<
+      string,
+      ProductInventoryMovement[]
+    >();
+
+  for (
+    const movement of
+      recentMovementRows
+  ) {
+    if (
+      movement.productId === null ||
+      !movement.color?.trim() ||
+      !movement.size?.trim()
+    ) {
+      continue;
+    }
+
+    const movementDate =
+      dateKeyFromUnknown(
+        movement.occurredAt,
+      );
+
+    if (!movementDate) {
+      continue;
+    }
+
+    const key =
+      variantKey(
+        movement.productId,
+        movement.color,
+        movement.size,
+      );
+
+    const current =
+      movementsByVariant.get(key) ??
+      [];
+
+    current.push({
+      movementType:
+        movement.movementType,
+      quantityDelta:
+        movement.quantityDelta,
+      movementDate,
+      color:
+        movement.color.trim(),
+      size:
+        movement.size.trim(),
+    });
+
+    movementsByVariant.set(
+      key,
+      current,
     );
   }
 
@@ -1825,6 +1947,566 @@ async function handleReport(
         };
       },
     );
+
+
+  const reportVariants =
+    products.flatMap(
+      (product) => {
+        const createdDate =
+          hebronDateKey(
+            product.createdAt,
+          );
+
+        const purchase =
+          purchases.get(
+            product.id,
+          );
+
+        const inventoryStartDate =
+          purchase
+            ?.firstPurchaseDate ??
+          createdDate;
+
+        const ageDays =
+          daysBetween(
+            inventoryStartDate,
+            today,
+          );
+
+        const colorVariants =
+          (
+            product.colorVariants as
+              | ColorVariant[]
+              | null
+          ) ?? [];
+
+        return colorVariants.flatMap(
+          (variant) =>
+            (variant.sizes ?? []).map(
+              (sizeEntry) => {
+                const color =
+                  variant.color.trim();
+                const size =
+                  sizeEntry.size.trim();
+                const key =
+                  variantKey(
+                    product.id,
+                    color,
+                    size,
+                  );
+
+                const currentQuantity =
+                  typeof sizeEntry.stock ===
+                  "number"
+                    ? sizeEntry.stock
+                    : sizeEntry.outOfStock
+                      ? 0
+                      : null;
+
+                const stockState:
+                  StockState =
+                  currentQuantity ===
+                  null
+                    ? "untracked"
+                    : currentQuantity <=
+                        0
+                      ? "out_of_stock"
+                      : "in_stock";
+
+                const movements =
+                  movementsByVariant.get(
+                    key,
+                  ) ?? [];
+
+                const sellThrough30 =
+                  calculateSellThroughWindow({
+                    currentQuantity,
+                    inventoryStartDate,
+                    trackingStartDate:
+                      movementHistoryStartDate,
+                    today,
+                    maximumDays: 30,
+                    movements,
+                  });
+
+                const sellThrough90 =
+                  calculateSellThroughWindow({
+                    currentQuantity,
+                    inventoryStartDate,
+                    trackingStartDate:
+                      movementHistoryStartDate,
+                    today,
+                    maximumDays: 90,
+                    movements,
+                  });
+
+                const velocityStartDate =
+                  movementHistoryStartDate
+                    ? latestDateKey(
+                        cutoff30,
+                        inventoryStartDate,
+                        movementHistoryStartDate,
+                      )
+                    : null;
+
+                const velocityWindowDays =
+                  velocityStartDate
+                    ? daysBetween(
+                        velocityStartDate,
+                        today,
+                      ) + 1
+                    : 0;
+
+                const velocityRawNetDemand =
+                  velocityStartDate
+                    ? movements
+                        .filter(
+                          (movement) =>
+                            movement.movementDate >=
+                              velocityStartDate &&
+                            movement.movementDate <=
+                              today,
+                        )
+                        .reduce(
+                          (
+                            sum,
+                            movement,
+                          ) =>
+                            sum +
+                            netDemandContribution(
+                              movement.movementType,
+                              movement.quantityDelta,
+                            ),
+                          0,
+                        )
+                    : 0;
+
+                const velocityNetDemand =
+                  Math.max(
+                    0,
+                    velocityRawNetDemand,
+                  );
+
+                const velocityHistoryReliable =
+                  currentQuantity !==
+                    null &&
+                  velocityStartDate !==
+                    null &&
+                  velocityWindowDays >=
+                    MIN_VELOCITY_HISTORY_DAYS;
+
+                const averageDailyNetDemand =
+                  velocityHistoryReliable
+                    ? velocityNetDemand /
+                      velocityWindowDays
+                    : null;
+
+                let daysOfSupply:
+                  number | null = null;
+
+                let coverageSignal:
+                  CoverageSignal;
+
+                if (
+                  currentQuantity ===
+                  null
+                ) {
+                  coverageSignal =
+                    "untracked";
+                } else if (
+                  !velocityHistoryReliable
+                ) {
+                  coverageSignal =
+                    "insufficient_history";
+                } else if (
+                  currentQuantity <= 0
+                ) {
+                  daysOfSupply = 0;
+                  coverageSignal =
+                    "out_of_stock";
+                } else if (
+                  averageDailyNetDemand ===
+                    null ||
+                  averageDailyNetDemand <= 0
+                ) {
+                  coverageSignal =
+                    "no_net_demand";
+                } else {
+                  daysOfSupply =
+                    roundOneDecimal(
+                      currentQuantity /
+                        averageDailyNetDemand,
+                    );
+
+                  coverageSignal =
+                    daysOfSupply <=
+                    LOW_COVERAGE_DAYS
+                      ? "low"
+                      : daysOfSupply <=
+                          HIGH_COVERAGE_DAYS
+                        ? "healthy"
+                        : "high";
+                }
+
+                const movementClass =
+                  movementClassFor({
+                    currentQuantity,
+                    ageDays,
+                    sold30:
+                      sellThrough30
+                        .netDemandQuantity,
+                    sold90:
+                      sellThrough90
+                        .netDemandQuantity,
+                    hasThirtyDayHistory:
+                      sellThrough30.reliable,
+                    hasNinetyDayHistory:
+                      sellThrough90.reliable,
+                  });
+
+                const lastDemandDate =
+                  movements
+                    .filter(
+                      (movement) =>
+                        netDemandContribution(
+                          movement.movementType,
+                          movement.quantityDelta,
+                        ) > 0,
+                    )
+                    .map(
+                      (movement) =>
+                        movement.movementDate,
+                    )
+                    .sort()
+                    .at(-1) ??
+                  null;
+
+                const daysSinceLastDemand =
+                  lastDemandDate
+                    ? daysBetween(
+                        lastDemandDate,
+                        today,
+                      )
+                    : null;
+
+                const inventoryRiskSignal =
+                  inventoryRiskSignalFor({
+                    currentQuantity,
+                    ageDays,
+                    daysSinceLastSale:
+                      daysSinceLastDemand,
+                    daysOfSupply,
+                    coverageSignal,
+                    movementClass,
+                  });
+
+                const actionPlan =
+                  calculateInventoryActionPlan({
+                    currentQuantity,
+                    averageDailyNetDemand,
+                    velocityHistoryReliable,
+                    ageDays,
+                  });
+
+                const referenceUnitCostMinor =
+                  product.costProductId !==
+                  null
+                    ? (
+                        product.referenceUnitCostMinor ??
+                        null
+                      )
+                    : null;
+
+                const suggestedReorderBudgetMinor =
+                  actionPlan
+                    .suggestedReorderQuantity !==
+                    null &&
+                  actionPlan
+                    .suggestedReorderQuantity >
+                    0 &&
+                  referenceUnitCostMinor !==
+                    null
+                    ? actionPlan
+                        .suggestedReorderQuantity *
+                      referenceUnitCostMinor
+                    : null;
+
+                return {
+                  variantKey: key,
+                  productId:
+                    String(
+                      product.id,
+                    ),
+                  nameAr:
+                    product.nameAr,
+                  productCode:
+                    product.productCode ??
+                    null,
+                  image:
+                    variant.image ||
+                    product.image,
+                  category:
+                    product.category,
+                  color,
+                  size,
+                  barcode:
+                    variantBarcodeByKey.get(
+                      key,
+                    ) ?? null,
+                  currentQuantity,
+                  stockState,
+                  ageDays,
+                  lastDemandDate,
+                  daysSinceLastDemand,
+                  netDemand30:
+                    sellThrough30
+                      .netDemandQuantity,
+                  netDemand90:
+                    sellThrough90
+                      .netDemandQuantity,
+                  sellThrough30Percent:
+                    sellThrough30.percent,
+                  sellThrough90Percent:
+                    sellThrough90.percent,
+                  sellThrough30Reliable:
+                    sellThrough30.reliable,
+                  sellThrough90Reliable:
+                    sellThrough90.reliable,
+                  velocityWindowDays,
+                  velocityNetDemand,
+                  averageDailyNetDemand,
+                  daysOfSupply,
+                  coverageSignal,
+                  inventoryRiskSignal,
+                  actionPlanReliable:
+                    actionPlan.reliable,
+                  inventoryActionSignal:
+                    actionPlan.signal,
+                  targetStockUnits:
+                    actionPlan.targetStockUnits,
+                  maxHealthyStockUnits:
+                    actionPlan.maxHealthyStockUnits,
+                  suggestedReorderQuantity:
+                    actionPlan
+                      .suggestedReorderQuantity,
+                  excessUnits:
+                    actionPlan.excessUnits,
+                  referenceUnitCostMinor,
+                  suggestedReorderBudgetMinor,
+                  movementClass,
+                };
+              },
+            ),
+        );
+      },
+    );
+
+  const productsWithVariants =
+    new Set(
+      reportVariants.map(
+        (variant) =>
+          Number(
+            variant.productId,
+          ),
+      ),
+    );
+
+  const unattributedVariantDemand = (
+    startDate: string,
+  ) =>
+    recentMovementRows.reduce(
+      (sum, movement) => {
+        if (
+          movement.productId ===
+            null ||
+          !productsWithVariants.has(
+            movement.productId,
+          ) ||
+          (
+            movement.color?.trim() &&
+            movement.size?.trim()
+          )
+        ) {
+          return sum;
+        }
+
+        const movementDate =
+          dateKeyFromUnknown(
+            movement.occurredAt,
+          );
+
+        if (
+          !movementDate ||
+          movementDate < startDate ||
+          movementDate > today
+        ) {
+          return sum;
+        }
+
+        return (
+          sum +
+          netDemandContribution(
+            movement.movementType,
+            movement.quantityDelta,
+          )
+        );
+      },
+      0,
+    );
+
+  const variantSummary = {
+    totalVariants:
+      reportVariants.length,
+    trackedVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.currentQuantity !==
+          null,
+      ).length,
+    inStockVariants:
+      reportVariants.filter(
+        (variant) =>
+          (variant.currentQuantity ??
+            0) > 0,
+      ).length,
+    outOfStockVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.currentQuantity ===
+          0,
+      ).length,
+    fastVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.movementClass ===
+          "fast",
+      ).length,
+    slowVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.movementClass ===
+          "slow",
+      ).length,
+    deadVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.movementClass ===
+          "dead",
+      ).length,
+    stockoutNowVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryRiskSignal ===
+          "stockout_now",
+      ).length,
+    stockoutHighRiskVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryRiskSignal ===
+          "stockout_high",
+      ).length,
+    stockoutWatchVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryRiskSignal ===
+          "stockout_watch",
+      ).length,
+    overstockHighRiskVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryRiskSignal ===
+          "overstock_high",
+      ).length,
+    overstockWatchVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryRiskSignal ===
+          "overstock_watch",
+      ).length,
+    reorderSuggestedVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryActionSignal ===
+          "reorder",
+      ).length,
+    suggestedReorderUnits:
+      reportVariants.reduce(
+        (sum, variant) =>
+          sum +
+          (
+            variant
+              .suggestedReorderQuantity ??
+            0
+          ),
+        0,
+      ),
+    excessSuggestedVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryActionSignal ===
+            "reduce" ||
+          variant.inventoryActionSignal ===
+            "review_no_demand",
+      ).length,
+    excessUnits:
+      reportVariants.reduce(
+        (sum, variant) =>
+          sum +
+          (
+            variant.excessUnits ??
+            0
+          ),
+        0,
+      ),
+    noDemandReviewVariants:
+      reportVariants.filter(
+        (variant) =>
+          variant.inventoryActionSignal ===
+          "review_no_demand",
+      ).length,
+    insufficientDataVariants:
+      reportVariants.filter(
+        (variant) =>
+          !variant.actionPlanReliable,
+      ).length,
+    suggestedReorderBudgetKnownMinor:
+      reportVariants.reduce(
+        (sum, variant) =>
+          sum +
+          (
+            variant
+              .suggestedReorderBudgetMinor ??
+            0
+          ),
+        0,
+      ),
+    reorderBudgetMissingCostVariants:
+      reportVariants.filter(
+        (variant) =>
+          (
+            variant
+              .suggestedReorderQuantity ??
+            0
+          ) > 0 &&
+          variant
+            .suggestedReorderBudgetMinor ===
+            null,
+      ).length,
+    unattributedDemand30:
+      Math.max(
+        0,
+        unattributedVariantDemand(
+          cutoff30,
+        ),
+      ),
+    unattributedDemand90:
+      Math.max(
+        0,
+        unattributedVariantDemand(
+          cutoff90,
+        ),
+      ),
+  };
 
   const aggregateSellThrough = (
     days: 30 | 90,
@@ -2270,6 +2952,15 @@ async function handleReport(
   }
 
   if (
+    variantSummary.unattributedDemand30 >
+    0
+  ) {
+    warnings.push(
+      `يوجد ${variantSummary.unattributedDemand30} وحدة طلب صافي خلال آخر 30 يوم لأصناف لديها ألوان/مقاسات لكن حركة المخزون لم تحمل لونًا ومقاسًا كاملين؛ تحليل Variant يعرض الأرقام المربوطة فقط ولا يوزع هذه الوحدات تخمينًا.`,
+    );
+  }
+
+  if (
     summary.untrackedStock > 0
   ) {
     warnings.push(
@@ -2349,7 +3040,13 @@ async function handleReport(
         `خطة الكمية تستخدم متوسط صافي الطلب اليومي الموثوق. هدف إعادة الطلب هو ${TARGET_COVERAGE_DAYS} يوم: الكمية المقترحة = مخزون الهدف − المخزون الحالي، بحد أدنى صفر. الفائض المحتمل يُحسب فوق حد ${HIGH_COVERAGE_DAYS} يوم ولا يُفعّل قبل عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم. إذا كان صافي الطلب صفرًا، لا يُقترح شراء؛ وبعد عمر ${MIN_OVERSTOCK_AGE_DAYS} يوم تظهر الكمية الحالية كفائض محتمل للمراجعة. التاريخ غير الكافي يعرض N/A بدل رقم وهمي.`,
       financialImpact:
         "ميزانية إعادة الطلب = الكمية المقترحة × التكلفة المرجعية الحالية للصنف، لذلك هي تقدير شراء وليست فاتورة مورد. قيمة الفائض ورأس المال في البطيء/الميت تعتمد قيمة المخزون الدفترية الحالية ولا تُحسب إلا عندما كمية محاسبة التكلفة تطابق المخزون. قد تتداخل قيمة الفائض مع رأس المال البطيء/الميت لنفس الصنف، لذلك لا يُفترض جمع المؤشرين معًا. التكلفة الناقصة أو فرق الكمية يعرض N/A ولا يدخل بصمت في الإجماليات.",
+      variantIntelligence:
+        `Variant Intelligence يحلل اللون + المقاس من مخزون colorVariants وحركات inventory_movements المرتبطة بنفس اللون والمقاس. يستخدم نفس حدود التغطية وخطة ${TARGET_COVERAGE_DAYS} يوم، ولا يوزع الحركات التي بلا لون/مقاس على Variants بالتخمين. تكلفة الشراء المقترحة على مستوى Variant تستخدم التكلفة المرجعية الحالية للمنتج كتقدير فقط.`,
     },
+
+    variantSummary,
+    variants:
+      reportVariants,
 
     products:
       reportProducts,

@@ -14576,3 +14576,323 @@ button.inventory-intelligence-metric {
 /* OWNER ACTION DASHBOARD END */
 
 /* INVENTORY INTELLIGENCE END */
+
+
+/* Stage 5.3 — Variant Intelligence */
+.inventory-variant-intelligence {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #dbe5ee);
+  border-radius: 18px;
+  background: #fff;
+  padding: 18px;
+  margin: 18px 0;
+}
+
+.inventory-variant-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.inventory-variant-head > div {
+  min-width: 0;
+}
+
+.inventory-variant-head span {
+  display: inline-block;
+  font-weight: 800;
+  color: #d81b7d;
+  margin-bottom: 4px;
+}
+
+.inventory-variant-head h2 {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+}
+
+.inventory-variant-head p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.inventory-variant-head > small {
+  flex: 0 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.inventory-variant-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.inventory-variant-summary > button,
+.inventory-variant-summary > article {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  text-align: right;
+}
+
+.inventory-variant-summary > button {
+  cursor: pointer;
+}
+
+.inventory-variant-summary > button:hover,
+.inventory-variant-summary > button.is-active {
+  border-color: #e91e8c;
+  box-shadow: 0 0 0 2px rgb(233 30 140 / 8%);
+}
+
+.inventory-variant-summary span,
+.inventory-variant-summary small {
+  display: block;
+  color: #64748b;
+}
+
+.inventory-variant-summary strong {
+  display: block;
+  margin: 5px 0;
+  font-size: 1.3rem;
+}
+
+.inventory-variant-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.inventory-variant-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.inventory-variant-filter-buttons button {
+  border: 1px solid #d7e0e8;
+  border-radius: 999px;
+  background: #fff;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.inventory-variant-filter-buttons button.is-active {
+  border-color: #e91e8c;
+  color: #c21875;
+  background: #fff5fb;
+  font-weight: 800;
+}
+
+.inventory-variant-toolbar input {
+  width: min(420px, 100%);
+  border: 1px solid #d7e0e8;
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: #fff;
+}
+
+.inventory-variant-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.inventory-variant-table {
+  width: 100%;
+  min-width: 1220px;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.inventory-variant-table th,
+.inventory-variant-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #edf2f7;
+  vertical-align: middle;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.inventory-variant-table th {
+  background: #f7fafc;
+  color: #475569;
+  font-size: 0.78rem;
+}
+
+.inventory-variant-table tbody tr:hover {
+  background: #fcfcfd;
+}
+
+.inventory-variant-product {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 250px;
+  white-space: normal;
+}
+
+.inventory-variant-product > span {
+  min-width: 0;
+}
+
+.inventory-variant-product strong,
+.inventory-variant-product small,
+.inventory-variant-action-label {
+  display: block;
+}
+
+.inventory-variant-product small,
+.inventory-variant-action-label {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 0.74rem;
+}
+
+.inventory-variant-image {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+}
+
+.inventory-variant-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inventory-variant-risk {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 4px 8px;
+  border: 1px solid #dbe5ee;
+  background: #f8fafc;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.inventory-variant-risk.risk-stockout_now,
+.inventory-variant-risk.risk-stockout_high {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.inventory-variant-risk.risk-stockout_watch {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.inventory-variant-risk.risk-overstock_high,
+.inventory-variant-risk.risk-overstock_watch {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.inventory-variant-purchase {
+  border: 1px solid #86efac;
+  border-radius: 9px;
+  background: #f0fdf4;
+  color: #166534;
+  padding: 7px 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.inventory-variant-purchase:hover {
+  background: #dcfce7;
+}
+
+.inventory-variant-barcode-warning {
+  display: block;
+  max-width: 155px;
+  color: #b45309;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.inventory-variant-empty {
+  text-align: center !important;
+  color: #64748b;
+  padding: 22px !important;
+}
+
+.inventory-variant-methodology {
+  margin: 11px 2px 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+@media (min-width: 1500px) {
+  .inventory-variant-table {
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  .inventory-variant-table th,
+  .inventory-variant-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding: 8px 7px;
+  }
+
+  .inventory-variant-table th:first-child,
+  .inventory-variant-table td:first-child {
+    width: 19%;
+  }
+
+  .inventory-variant-product {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .inventory-variant-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .inventory-variant-toolbar,
+  .inventory-variant-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inventory-variant-toolbar input {
+    width: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .inventory-variant-intelligence {
+    padding: 12px;
+  }
+
+  .inventory-variant-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
