@@ -15,6 +15,7 @@ type MenuSectionKey =
   | "documents"
   | "inventory"
   | "parties"
+  | "vouchers"
   | "finance"
   | "statements"
   | "reports";
@@ -44,6 +45,12 @@ const menuSections: MenuSection[] = [
     title: "العملاء والموردون",
     icon: "👥",
     groups: ["parties"],
+  },
+  {
+    key: "vouchers",
+    title: "السندات",
+    icon: "📑",
+    groups: ["vouchers"],
   },
   {
     key: "finance",
