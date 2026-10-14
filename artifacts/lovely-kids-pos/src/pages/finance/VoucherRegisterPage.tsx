@@ -9,14 +9,20 @@ import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
   getCurrentCashSession,
+  getDeliveryCompanies,
   getPosCustomers,
   getPosEmployees,
+  getPosExpenseCategories,
   getPosFinanceVouchers,
+  getPosSuppliers,
   POS_REGISTER_KEY,
   voidPosFinanceVoucher,
   type PosCustomer,
+  type PosDeliveryCompany,
   type PosEmployee,
+  type PosExpenseCategory,
   type PosFinanceVoucher,
+  type PosSupplier,
 } from "../../lib/api";
 
 function formatMinor(value: number) {
@@ -93,6 +99,12 @@ export default function VoucherRegisterPage() {
     useState<PosCustomer[]>([]);
   const [employees, setEmployees] =
     useState<PosEmployee[]>([]);
+  const [suppliers, setSuppliers] =
+    useState<PosSupplier[]>([]);
+  const [deliveryCompanies, setDeliveryCompanies] =
+    useState<PosDeliveryCompany[]>([]);
+  const [expenseCategories, setExpenseCategories] =
+    useState<PosExpenseCategory[]>([]);
 
   const [query, setQuery] = useState("");
   const [kind, setKind] =
@@ -114,16 +126,29 @@ export default function VoucherRegisterPage() {
     setError("");
 
     try {
-      const [voucherResult, customerResult, employeeResult] =
+      const [
+        voucherResult,
+        customerResult,
+        employeeResult,
+        supplierResult,
+        deliveryResult,
+        expenseResult,
+      ] =
         await Promise.all([
           getPosFinanceVouchers(token),
           getPosCustomers(token),
           getPosEmployees(token),
+          getPosSuppliers(token),
+          getDeliveryCompanies(token),
+          getPosExpenseCategories(token),
         ]);
 
       setVouchers(voucherResult.results);
       setCustomers(customerResult.results);
       setEmployees(employeeResult.results);
+      setSuppliers(supplierResult.results);
+      setDeliveryCompanies(deliveryResult);
+      setExpenseCategories(expenseResult.results);
     } catch (caught) {
       if (
         caught instanceof ApiError &&
@@ -165,6 +190,40 @@ export default function VoucherRegisterPage() {
     [employees],
   );
 
+
+  const supplierById = useMemo(
+    () =>
+      new Map(
+        suppliers.map((supplier) => [
+          Number(supplier.id),
+          supplier,
+        ]),
+      ),
+    [suppliers],
+  );
+
+  const deliveryCompanyById = useMemo(
+    () =>
+      new Map(
+        deliveryCompanies.map((company) => [
+          company.id,
+          company,
+        ]),
+      ),
+    [deliveryCompanies],
+  );
+
+  const expenseCategoryById = useMemo(
+    () =>
+      new Map(
+        expenseCategories.map((category) => [
+          category.id,
+          category,
+        ]),
+      ),
+    [expenseCategories],
+  );
+
   function partyLabel(voucher: PosFinanceVoucher) {
     if (
       voucher.partyType === "customer" &&
@@ -190,20 +249,36 @@ export default function VoucherRegisterPage() {
       voucher.partyType === "supplier" &&
       voucher.partyId !== null
     ) {
-      return `مورد #${voucher.partyId}`;
+      return (
+        supplierById.get(voucher.partyId)?.name ??
+        `مورد #${voucher.partyId}`
+      );
     }
 
     if (
       voucher.partyType === "delivery_company" &&
       voucher.partyId !== null
     ) {
-      return `شركة توصيل #${voucher.partyId}`;
+      return (
+        deliveryCompanyById.get(voucher.partyId)?.name ??
+        `شركة توصيل #${voucher.partyId}`
+      );
     }
 
     if (
       voucher.partyType === "owner"
     ) {
       return "المالك";
+    }
+
+    if (
+      voucher.expenseCategoryId !== null
+    ) {
+      return (
+        expenseCategoryById.get(
+          voucher.expenseCategoryId,
+        )?.name ?? "مصروف"
+      );
     }
 
     return "—";
@@ -276,6 +351,9 @@ export default function VoucherRegisterPage() {
     status,
     customerById,
     employeeById,
+    supplierById,
+    deliveryCompanyById,
+    expenseCategoryById,
   ]);
 
   async function handleVoid(
