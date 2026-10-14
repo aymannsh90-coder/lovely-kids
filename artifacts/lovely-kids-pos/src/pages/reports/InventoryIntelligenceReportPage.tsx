@@ -1016,6 +1016,18 @@ const OWNER_EXECUTION_STORAGE_KEY =
 const INVENTORY_PURCHASE_HANDOFF_KEY =
   "lovely_kids_inventory_purchase_handoff_v1";
 
+const INVENTORY_PURCHASE_HANDOFF_VERSION =
+  2;
+
+function createInventoryPurchaseHandoffId() {
+  return typeof crypto.randomUUID ===
+    "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}_${Math.random()
+        .toString(16)
+        .slice(2)}`;
+}
+
 const ownerExecutionLabels: Record<
   OwnerExecutionStatus,
   string
@@ -1523,12 +1535,21 @@ export default function InventoryIntelligenceReportPage() {
         : "";
 
     const handoff = {
+      version:
+        INVENTORY_PURCHASE_HANDOFF_VERSION,
+      handoffId:
+        createInventoryPurchaseHandoffId(),
+      createdAt:
+        new Date().toISOString(),
+      mode: "product" as const,
       productId:
         item.product.productId,
       productCode:
         item.product.productCode ?? "",
       barcode:
         item.product.barcode ?? "",
+      color: "",
+      size: "",
       quantity,
       unitCost,
     };
@@ -1544,6 +1565,12 @@ export default function InventoryIntelligenceReportPage() {
 
     const params = new URLSearchParams({
       source: "inventory-intelligence",
+      handoffVersion:
+        String(handoff.version),
+      handoffId:
+        handoff.handoffId,
+      handoffMode:
+        handoff.mode,
       productId:
         handoff.productId,
       quantity: String(quantity),
@@ -1603,12 +1630,23 @@ export default function InventoryIntelligenceReportPage() {
         : "";
 
     const handoff = {
+      version:
+        INVENTORY_PURCHASE_HANDOFF_VERSION,
+      handoffId:
+        createInventoryPurchaseHandoffId(),
+      createdAt:
+        new Date().toISOString(),
+      mode: "variant" as const,
       productId:
         variant.productId,
       productCode:
         variant.productCode ?? "",
       barcode:
         variant.barcode,
+      color:
+        variant.color,
+      size:
+        variant.size,
       quantity,
       unitCost,
     };
@@ -1626,10 +1664,20 @@ export default function InventoryIntelligenceReportPage() {
       new URLSearchParams({
         source:
           "inventory-intelligence",
+        handoffVersion:
+          String(handoff.version),
+        handoffId:
+          handoff.handoffId,
+        handoffMode:
+          handoff.mode,
         productId:
           handoff.productId,
         barcode:
           handoff.barcode,
+        color:
+          handoff.color,
+        size:
+          handoff.size,
         quantity:
           String(quantity),
       });
