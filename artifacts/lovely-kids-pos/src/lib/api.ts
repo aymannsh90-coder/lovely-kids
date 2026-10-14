@@ -660,6 +660,17 @@ export interface PosFinanceVoucher {
     | "receipt"
     | "payment"
     | "journal";
+  voucherPurpose:
+    | "customer_receipt"
+    | "employee_repayment"
+    | "supplier_refund"
+    | "delivery_company_settlement"
+    | "customer_cash_loan"
+    | "employee_advance"
+    | "employee_payment"
+    | "supplier_payment"
+    | "account_transfer"
+    | null;
   partyType:
     | "customer"
     | "employee"
