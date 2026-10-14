@@ -146,7 +146,10 @@ export const financeVouchersTable = pgTable(
         'salary_accrual',
         'employee_payment',
         'owner_withdrawal',
-        'adjustment'
+        'adjustment',
+        'receipt',
+        'payment',
+        'journal'
       )`,
     ),
 
@@ -162,6 +165,8 @@ export const financeVouchersTable = pgTable(
           ${table.partyType} in (
             'customer',
             'employee',
+            'supplier',
+            'delivery_company',
             'owner'
           )
           and ${table.partyId} is not null
@@ -193,6 +198,26 @@ export const financeVouchersTable = pgTable(
           ${table.voucherType} = 'owner_withdrawal'
           and ${table.partyType} = 'owner'
           and ${table.partyId} is not null
+        )
+        or
+        (
+          ${table.voucherType} in (
+            'receipt',
+            'payment'
+          )
+          and ${table.partyType} in (
+            'customer',
+            'employee',
+            'supplier',
+            'delivery_company'
+          )
+          and ${table.partyId} is not null
+        )
+        or
+        (
+          ${table.voucherType} = 'journal'
+          and ${table.partyType} is null
+          and ${table.partyId} is null
         )
         or
         (
