@@ -235,7 +235,7 @@ export const posNavigation: PosNavigationItem[] = [
     description: "صرف لموظف أو مورد أو زبون أو مصروف من الصندوق أو البنك.",
     icon: "💸",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "voucher-journal",
@@ -245,7 +245,7 @@ export const posNavigation: PosNavigationItem[] = [
     description: "قيد محاسبي بين حسابين مع مدين ودائن وأثر واضح.",
     icon: "📒",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "voucher-register",
