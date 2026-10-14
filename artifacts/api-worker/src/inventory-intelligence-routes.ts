@@ -2252,9 +2252,7 @@ async function handleReport(
                   barcode:
                     variantBarcodeByKey.get(
                       key,
-                    ) ??
-                    product.barcode ??
-                    null,
+                    ) ?? null,
                   currentQuantity,
                   stockState,
                   ageDays,
