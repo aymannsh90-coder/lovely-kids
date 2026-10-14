@@ -2901,6 +2901,51 @@ export interface OwnerInventoryIntelligenceProduct {
   neverSold: boolean;
 }
 
+export interface OwnerInventoryIntelligenceVariant {
+  variantKey: string;
+  productId: string;
+  nameAr: string;
+  productCode: string | null;
+  image: string;
+  category: string;
+  color: string;
+  size: string;
+  barcode: string | null;
+
+  currentQuantity: number | null;
+  stockState: InventoryStockState;
+  ageDays: number;
+
+  lastDemandDate: string | null;
+  daysSinceLastDemand: number | null;
+
+  netDemand30: number;
+  netDemand90: number;
+  sellThrough30Percent: number | null;
+  sellThrough90Percent: number | null;
+  sellThrough30Reliable: boolean;
+  sellThrough90Reliable: boolean;
+
+  velocityWindowDays: number;
+  velocityNetDemand: number;
+  averageDailyNetDemand: number | null;
+  daysOfSupply: number | null;
+  coverageSignal: InventoryCoverageSignal;
+  inventoryRiskSignal: InventoryRiskSignal;
+
+  actionPlanReliable: boolean;
+  inventoryActionSignal: InventoryActionSignal;
+  targetStockUnits: number | null;
+  maxHealthyStockUnits: number | null;
+  suggestedReorderQuantity: number | null;
+  excessUnits: number | null;
+
+  referenceUnitCostMinor: number | null;
+  suggestedReorderBudgetMinor: number | null;
+
+  movementClass: InventoryMovementClass;
+}
+
 export interface OwnerInventoryIntelligenceReport {
   generatedAt: string;
   asOfDate: string;
@@ -2986,8 +3031,35 @@ export interface OwnerInventoryIntelligenceReport {
     inventoryRisk: string;
     inventoryAction: string;
     financialImpact: string;
+    variantIntelligence: string;
   };
 
+  variantSummary: {
+    totalVariants: number;
+    trackedVariants: number;
+    inStockVariants: number;
+    outOfStockVariants: number;
+    fastVariants: number;
+    slowVariants: number;
+    deadVariants: number;
+    stockoutNowVariants: number;
+    stockoutHighRiskVariants: number;
+    stockoutWatchVariants: number;
+    overstockHighRiskVariants: number;
+    overstockWatchVariants: number;
+    reorderSuggestedVariants: number;
+    suggestedReorderUnits: number;
+    excessSuggestedVariants: number;
+    excessUnits: number;
+    noDemandReviewVariants: number;
+    insufficientDataVariants: number;
+    suggestedReorderBudgetKnownMinor: number;
+    reorderBudgetMissingCostVariants: number;
+    unattributedDemand30: number;
+    unattributedDemand90: number;
+  };
+
+  variants: OwnerInventoryIntelligenceVariant[];
   products: OwnerInventoryIntelligenceProduct[];
 }
 
