@@ -9,6 +9,7 @@ import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import BankingPage from "../pages/finance/BankingPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import ChecksPage from "../pages/finance/ChecksPage";
+import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
 import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
@@ -210,7 +211,7 @@ export default function AppRouter() {
 
         <Route
           path="finance/receipts"
-          element={<Navigate to="/vouchers/receipt" replace />}
+          element={<CustomerReceiptsPage />}
         />
 
         <Route
