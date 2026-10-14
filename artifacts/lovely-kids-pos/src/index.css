@@ -14161,6 +14161,227 @@ button.inventory-intelligence-metric {
     min-height: 0;
   }
 }
+
+.inventory-owner-priority {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.inventory-owner-priority-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.inventory-owner-priority-head > div {
+  min-width: 0;
+}
+
+.inventory-owner-priority-head span {
+  color: #c81474;
+  font-size: 11.5px;
+  font-weight: 900;
+}
+
+.inventory-owner-priority-head h3 {
+  margin: 3px 0 4px;
+  color: #101828;
+  font-size: 18px;
+}
+
+.inventory-owner-priority-head p {
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.inventory-owner-priority-head > strong {
+  flex: 0 0 auto;
+  color: #475467;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.inventory-owner-priority-list {
+  display: grid;
+  gap: 8px;
+}
+
+.inventory-owner-priority-row {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns:
+    34px
+    50px
+    minmax(220px, 1.7fr)
+    minmax(130px, 0.85fr)
+    minmax(130px, 0.8fr)
+    minmax(150px, 0.95fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  appearance: none;
+  border: 1px solid #e4e9ef;
+  border-radius: 13px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.inventory-owner-priority-row:hover {
+  transform: translateY(-1px);
+  border-color: #d7b2c8;
+  box-shadow: 0 7px 18px rgba(16, 24, 40, 0.06);
+}
+
+.inventory-owner-priority-row:focus-visible {
+  outline: 3px solid rgba(217, 20, 119, 0.16);
+  outline-offset: 2px;
+}
+
+.inventory-owner-priority-index {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.inventory-owner-priority-row > img {
+  width: 48px;
+  height: 48px;
+  border: 1px solid #edf1f5;
+  border-radius: 10px;
+  background: #f8fafc;
+  object-fit: contain;
+}
+
+.inventory-owner-priority-product,
+.inventory-owner-priority-action,
+.inventory-owner-priority-quantity,
+.inventory-owner-priority-money {
+  min-width: 0;
+}
+
+.inventory-owner-priority-product strong,
+.inventory-owner-priority-product small,
+.inventory-owner-priority-action b,
+.inventory-owner-priority-action small,
+.inventory-owner-priority-quantity b,
+.inventory-owner-priority-quantity small,
+.inventory-owner-priority-money b,
+.inventory-owner-priority-money small {
+  display: block;
+}
+
+.inventory-owner-priority-product strong {
+  overflow: hidden;
+  color: #101828;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-owner-priority-product small,
+.inventory-owner-priority-action small,
+.inventory-owner-priority-quantity small,
+.inventory-owner-priority-money small {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.inventory-owner-priority-action b,
+.inventory-owner-priority-quantity b,
+.inventory-owner-priority-money b {
+  color: #344054;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.inventory-owner-priority-row.tone-buy {
+  border-inline-start: 4px solid #12b76a;
+}
+
+.inventory-owner-priority-row.tone-liquidate {
+  border-inline-start: 4px solid #7f56d9;
+}
+
+.inventory-owner-priority-row.tone-watch {
+  border-inline-start: 4px solid #2e90fa;
+}
+
+.inventory-owner-priority-row.tone-reduce {
+  border-inline-start: 4px solid #f79009;
+}
+
+.inventory-owner-priority-empty {
+  padding: 18px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 12px;
+  color: #667085;
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .inventory-owner-priority-row {
+    grid-template-columns:
+      32px
+      46px
+      minmax(190px, 1fr)
+      minmax(120px, 0.7fr)
+      minmax(120px, 0.7fr);
+  }
+
+  .inventory-owner-priority-money {
+    grid-column: 3 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .inventory-owner-priority-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inventory-owner-priority-head > strong {
+    white-space: normal;
+  }
+
+  .inventory-owner-priority-row {
+    grid-template-columns: 30px 44px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .inventory-owner-priority-row > img {
+    width: 42px;
+    height: 42px;
+  }
+
+  .inventory-owner-priority-action,
+  .inventory-owner-priority-quantity,
+  .inventory-owner-priority-money {
+    grid-column: 3 / -1;
+  }
+}
+
 /* OWNER ACTION DASHBOARD END */
 
 /* INVENTORY INTELLIGENCE END */

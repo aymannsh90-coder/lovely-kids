@@ -813,6 +813,183 @@ function Metric({
   );
 } 
 
+type OwnerPriorityItem = {
+  product:
+    OwnerInventoryIntelligenceProduct;
+  rank: number;
+  tone:
+    | "buy"
+    | "liquidate"
+    | "watch"
+    | "reduce";
+  action: string;
+  reason: string;
+};
+
+function ownerPriorityItem(
+  product:
+    OwnerInventoryIntelligenceProduct,
+): OwnerPriorityItem | null {
+  if (
+    product.inventoryRiskSignal ===
+    "stockout_now"
+  ) {
+    return {
+      product,
+      rank: 0,
+      tone: "buy",
+      action: "شراء عاجل",
+      reason: "نفد مع طلب حديث",
+    };
+  }
+
+  if (
+    product.inventoryRiskSignal ===
+    "stockout_high"
+  ) {
+    return {
+      product,
+      rank: 1,
+      tone: "buy",
+      action: "جهّز الشراء",
+      reason: "خطر نفاد مرتفع",
+    };
+  }
+
+  if (
+    product.inventoryActionSignal ===
+    "reorder"
+  ) {
+    return {
+      product,
+      rank: 2,
+      tone: "buy",
+      action: "شراء مقترح",
+      reason: "تحت هدف التغطية",
+    };
+  }
+
+  if (
+    product.inventoryRiskSignal ===
+      "overstock_high" ||
+    product.movementClass === "dead"
+  ) {
+    return {
+      product,
+      rank: 3,
+      tone: "liquidate",
+      action: "ابدأ التصريف",
+      reason:
+        product.movementClass === "dead"
+          ? "مخزون ميت"
+          : "فائض مرتفع",
+    };
+  }
+
+  if (
+    product.inventoryRiskSignal ===
+      "stockout_watch" ||
+    product.inventoryRiskSignal ===
+      "overstock_watch"
+  ) {
+    return {
+      product,
+      rank: 4,
+      tone: "watch",
+      action: "راقب اليوم",
+      reason:
+        product.inventoryRiskSignal ===
+        "stockout_watch"
+          ? "قريب من خطر النفاد"
+          : "قريب من فائض أعلى",
+    };
+  }
+
+  if (
+    product.inventoryActionSignal ===
+      "reduce" ||
+    product.inventoryActionSignal ===
+      "review_no_demand"
+  ) {
+    return {
+      product,
+      rank: 5,
+      tone: "reduce",
+      action: "خفف الشراء",
+      reason:
+        product.inventoryActionSignal ===
+        "review_no_demand"
+          ? "بلا طلب صافي"
+          : "فوق الخطة",
+    };
+  }
+
+  return null;
+}
+
+function ownerPriorityQuantity(
+  product:
+    OwnerInventoryIntelligenceProduct,
+) {
+  if (
+    (product.suggestedReorderQuantity ??
+      0) > 0
+  ) {
+    return `شراء +${formatNumber(
+      product.suggestedReorderQuantity ??
+        0,
+    )}`;
+  }
+
+  if (
+    (product.excessUnits ?? 0) > 0
+  ) {
+    return `فائض ${formatNumber(
+      product.excessUnits ?? 0,
+    )}`;
+  }
+
+  return product.currentQuantity === null
+    ? "كمية غير مكتملة"
+    : `مخزون ${formatNumber(
+        product.currentQuantity,
+      )}`;
+}
+
+function ownerPriorityMoney(
+  product:
+    OwnerInventoryIntelligenceProduct,
+) {
+  if (
+    product.suggestedReorderBudgetMinor !==
+    null
+  ) {
+    return `شراء ${formatMoney(
+      product.suggestedReorderBudgetMinor,
+    )}`;
+  }
+
+  if (
+    product.excessInventoryValueMinor !==
+    null
+  ) {
+    return `فائض ${formatMoney(
+      product.excessInventoryValueMinor,
+    )}`;
+  }
+
+  if (
+    product.slowDeadCapitalMinor !==
+    null
+  ) {
+    return `رأس مال ${formatMoney(
+      product.slowDeadCapitalMinor,
+    )}`;
+  }
+
+  return "الأثر المالي غير مكتمل";
+}
+
 function OwnerActionCard({
   label,
   count,
@@ -1001,6 +1178,30 @@ export default function InventoryIntelligenceReportPage() {
     };
   }
 
+  function handlePriorityProduct(
+    product:
+      OwnerInventoryIntelligenceProduct,
+  ) {
+    resetManualFilters();
+    setMetricFilter(null);
+    setSortMode("attention");
+    setQuery(
+      product.productCode ||
+        product.productId,
+    );
+
+    window.setTimeout(() => {
+      document
+        .getElementById(
+          "inventory-intelligence-products",
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 0);
+  }
+
   async function loadData() {
     setLoading(true);
     setError("");
@@ -1084,6 +1285,47 @@ export default function InventoryIntelligenceReportPage() {
         ),
       [report],
     );
+
+  const ownerPriorities =
+    useMemo(() => {
+      const priorities =
+        (report?.products ?? [])
+          .map(ownerPriorityItem)
+          .filter(
+            (
+              item,
+            ): item is OwnerPriorityItem =>
+              item !== null,
+          );
+
+      return priorities
+        .sort((left, right) => {
+          if (left.rank !== right.rank) {
+            return left.rank - right.rank;
+          }
+
+          const leftUnits =
+            left.product
+              .suggestedReorderQuantity ??
+            left.product.excessUnits ??
+            0;
+          const rightUnits =
+            right.product
+              .suggestedReorderQuantity ??
+            right.product.excessUnits ??
+            0;
+
+          if (leftUnits !== rightUnits) {
+            return rightUnits - leftUnits;
+          }
+
+          return (
+            right.product.sold30 -
+            left.product.sold30
+          );
+        })
+        .slice(0, 10);
+    }, [report]);
 
   const ownerActionSummary =
     useMemo(() => {
@@ -1518,7 +1760,7 @@ export default function InventoryIntelligenceReportPage() {
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
-            Stage 5.1–5.7 · Inventory Intelligence
+            Stage 5.1–5.8 · Inventory Intelligence
           </span>
           <h1>
             عمر وحركة وتغطية المخزون
@@ -1571,7 +1813,7 @@ export default function InventoryIntelligenceReportPage() {
         <div className="inventory-owner-dashboard-head">
           <div>
             <span>
-              Stage 5.7 · Owner Action Dashboard
+              Stage 5.7–5.8 · Owner Action Dashboard
             </span>
             <h2>
               ماذا أعمل اليوم؟
@@ -1668,6 +1910,124 @@ export default function InventoryIntelligenceReportPage() {
             )}
           />
         </div>
+
+        <section className="inventory-owner-priority">
+          <div className="inventory-owner-priority-head">
+            <div>
+              <span>
+                Stage 5.8 · Daily Priority Queue
+              </span>
+              <h3>
+                أول 10 أصناف أتعامل معها اليوم
+              </h3>
+              <p>
+                مرتبة حسب خطر النفاد أولًا، ثم الشراء، ثم التصريف والمراقبة. هذه قائمة عمل وليست أمر تنفيذ تلقائي.
+              </p>
+            </div>
+            <strong>
+              {formatNumber(
+                ownerPriorities.length,
+              )}{" "}
+              أولوية معروضة
+            </strong>
+          </div>
+
+          <div className="inventory-owner-priority-list">
+            {ownerPriorities.map(
+              (item, index) => (
+                <button
+                  type="button"
+                  key={
+                    item.product
+                      .productId
+                  }
+                  className={`inventory-owner-priority-row tone-${item.tone}`}
+                  onClick={() =>
+                    handlePriorityProduct(
+                      item.product,
+                    )
+                  }
+                >
+                  <span className="inventory-owner-priority-index">
+                    {index + 1}
+                  </span>
+
+                  <img
+                    src={
+                      item.product.image
+                    }
+                    alt=""
+                  />
+
+                  <span className="inventory-owner-priority-product">
+                    <strong>
+                      {
+                        item.product
+                          .nameAr
+                      }
+                    </strong>
+                    <small>
+                      كود:{" "}
+                      {item.product
+                        .productCode ||
+                        "—"}{" "}
+                      ·{" "}
+                      {
+                        item.product
+                          .category
+                      }
+                    </small>
+                  </span>
+
+                  <span className="inventory-owner-priority-action">
+                    <b>
+                      {item.action}
+                    </b>
+                    <small>
+                      {item.reason}
+                    </small>
+                  </span>
+
+                  <span className="inventory-owner-priority-quantity">
+                    <b>
+                      {ownerPriorityQuantity(
+                        item.product,
+                      )}
+                    </b>
+                    <small>
+                      {item.product
+                        .daysOfSupply ===
+                      null
+                        ? "تغطية N/A"
+                        : `${formatDecimal(
+                            item.product
+                              .daysOfSupply,
+                          )} يوم تغطية`}
+                    </small>
+                  </span>
+
+                  <span className="inventory-owner-priority-money">
+                    <b>
+                      {ownerPriorityMoney(
+                        item.product,
+                      )}
+                    </b>
+                    <small>
+                      عرض التفاصيل ←
+                    </small>
+                  </span>
+                </button>
+              ),
+            )}
+
+            {ownerPriorities.length ===
+              0 && (
+              <div className="inventory-owner-priority-empty">
+                لا توجد أولويات تشغيلية واضحة حاليًا.
+              </div>
+            )}
+          </div>
+        </section>
 
         <div className="inventory-owner-finance-grid">
           <article>
