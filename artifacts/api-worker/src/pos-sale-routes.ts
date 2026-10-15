@@ -120,6 +120,117 @@ function getCurrentPosBusinessDate(): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+
+type PosCardProcessor =
+  | "arab"
+  | "bop";
+
+const CARD_PROCESSOR_CONFIG: Record<
+  PosCardProcessor,
+  {
+    clearingCode: string;
+    clearingName: string;
+    label: string;
+    sourceEvent: string;
+  }
+> = {
+  arab: {
+    clearingCode:
+      "CARD_CLEARING_ARAB",
+    clearingName:
+      "فيزا البنك العربي قيد التحصيل",
+    label:
+      "فيزا البنك العربي",
+    sourceEvent:
+      "card_settlement_arab",
+  },
+  bop: {
+    clearingCode:
+      "CARD_CLEARING_BOP",
+    clearingName:
+      "فيزا بنك فلسطين قيد التحصيل",
+    label:
+      "فيزا بنك فلسطين",
+    sourceEvent:
+      "card_settlement_bop",
+  },
+};
+
+function normalizeCardProcessor(
+  value: unknown,
+): PosCardProcessor | null {
+  return value === "arab" ||
+    value === "bop"
+    ? value
+    : null;
+}
+
+function cardProcessorFromSourceEvent(
+  sourceEvent: string,
+): PosCardProcessor | null {
+  if (
+    sourceEvent ===
+    CARD_PROCESSOR_CONFIG.arab
+      .sourceEvent
+  ) {
+    return "arab";
+  }
+
+  if (
+    sourceEvent ===
+    CARD_PROCESSOR_CONFIG.bop
+      .sourceEvent
+  ) {
+    return "bop";
+  }
+
+  return null;
+}
+
+async function getCardProcessorForSale(
+  db: Db,
+  saleId: number,
+): Promise<PosCardProcessor | null> {
+  const rows = await db
+    .select({
+      sourceEvent:
+        financeTransactionsTable.sourceEvent,
+    })
+    .from(financeTransactionsTable)
+    .where(
+      and(
+        eq(
+          financeTransactionsTable.sourceType,
+          "pos_sale",
+        ),
+        eq(
+          financeTransactionsTable.sourceId,
+          String(saleId),
+        ),
+        eq(
+          financeTransactionsTable.status,
+          "posted",
+        ),
+        inArray(
+          financeTransactionsTable.sourceEvent,
+          [
+            CARD_PROCESSOR_CONFIG.arab
+              .sourceEvent,
+            CARD_PROCESSOR_CONFIG.bop
+              .sourceEvent,
+          ],
+        ),
+      ),
+    )
+    .limit(1);
+
+  return rows[0]
+    ? cardProcessorFromSourceEvent(
+        rows[0].sourceEvent,
+      )
+    : null;
+}
+
 function normalizeBarcode(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -467,6 +578,7 @@ function toSaleResponse(
     nextPublicId: null,
   },
   customerBalanceMinor: number | null = null,
+  cardProcessor: PosCardProcessor | null = null,
 ) {
   return {
     alreadyCreated,
@@ -481,6 +593,7 @@ function toSaleResponse(
       cashierUserId: String(sale.cashierUserId),
       status: sale.status,
       paymentMethod: sale.paymentMethod,
+      cardProcessor,
 
       customerId:
         sale.customerId === null
@@ -1088,6 +1201,31 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       throw new PosSaleError("طريقة الدفع غير صالحة");
     }
 
+    const cardProcessor =
+      normalizeCardProcessor(
+        payload.cardProcessor,
+      );
+
+    if (
+      paymentMethod === "card" &&
+      !cardProcessor
+    ) {
+      throw new PosSaleError(
+        "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
+      );
+    }
+
+    if (
+      paymentMethod !== "card" &&
+      payload.cardProcessor !== undefined &&
+      payload.cardProcessor !== null &&
+      payload.cardProcessor !== ""
+    ) {
+      throw new PosSaleError(
+        "ماكينة الفيزا متاحة فقط عند الدفع بالفيزا",
+      );
+    }
+
     const rawCustomerId =
       (payload as Record<string, unknown>)
         .customerId;
@@ -1693,6 +1831,95 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         typeof financeAccountsTable.$inferSelect |
         null = null;
 
+      if (
+        paymentMethod === "card"
+      ) {
+        if (!cardProcessor) {
+          throw new Error(
+            "POS_CARD_PROCESSOR_MISSING",
+          );
+        }
+
+        const processor =
+          CARD_PROCESSOR_CONFIG[
+            cardProcessor
+          ];
+
+        const clearingAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                processor.clearingCode,
+              name:
+                processor.clearingName,
+              accountType:
+                "asset",
+            },
+          );
+
+        const cardSalesAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                "POS_SALES_CARD",
+              name:
+                "مبيعات نقطة البيع فيزا",
+              accountType:
+                "income",
+            },
+          );
+
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-CARD-${cardProcessor.toUpperCase()}-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:${processor.sourceEvent}`,
+            businessDate:
+              sale.businessDate,
+            transactionType:
+              "sale",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              processor.sourceEvent,
+            cashSessionId:
+              null,
+            notes:
+              `${processor.label} ${sale.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines: [
+              {
+                accountId:
+                  clearingAccount.id,
+                debitMinor:
+                  totalMinor,
+                creditMinor:
+                  0,
+                memo:
+                  `تحصيل ${processor.label} ${sale.publicId}`,
+              },
+              {
+                accountId:
+                  cardSalesAccount.id,
+                debitMinor:
+                  0,
+                creditMinor:
+                  totalMinor,
+                memo:
+                  `مبيعات فيزا ${sale.publicId}`,
+              },
+            ],
+          },
+        );
+      }
+
       if (accountDueMinor > 0) {
         if (!customer) {
           throw new PosSaleError(
@@ -2095,6 +2322,28 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
             result.sale.customerId,
           );
 
+    const savedCardProcessor =
+      result.sale.paymentMethod ===
+      "card"
+        ? await getCardProcessorForSale(
+            db,
+            result.sale.id,
+          )
+        : null;
+
+    if (
+      result.alreadyCreated &&
+      paymentMethod === "card" &&
+      savedCardProcessor &&
+      savedCardProcessor !==
+        cardProcessor
+    ) {
+      throw new PosSaleError(
+        "مفتاح الفاتورة مستخدم مسبقًا على ماكينة فيزا مختلفة",
+        409,
+      );
+    }
+
     return json(
       toSaleResponse(
         result.sale,
@@ -2102,6 +2351,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         result.alreadyCreated,
         undefined,
         customerBalanceMinor,
+        savedCardProcessor,
       ),
       result.alreadyCreated ? 200 : 201,
     );
@@ -2131,6 +2381,15 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
                   existing.sale.customerId,
                 );
 
+          const savedCardProcessor =
+            existing.sale.paymentMethod ===
+            "card"
+              ? await getCardProcessorForSale(
+                  db,
+                  existing.sale.id,
+                )
+              : null;
+
           return json(
             toSaleResponse(
               existing.sale,
@@ -2138,6 +2397,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
               true,
               undefined,
               customerBalanceMinor,
+              savedCardProcessor,
             ),
           );
         }
@@ -2718,6 +2978,143 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           );
       }
 
+      if (
+        sale.paymentMethod === "card"
+      ) {
+        const cardFinanceRows =
+          await tx
+            .select()
+            .from(
+              financeTransactionsTable,
+            )
+            .where(
+              and(
+                eq(
+                  financeTransactionsTable.sourceType,
+                  "pos_sale",
+                ),
+                eq(
+                  financeTransactionsTable.sourceId,
+                  String(sale.id),
+                ),
+                eq(
+                  financeTransactionsTable.status,
+                  "posted",
+                ),
+                inArray(
+                  financeTransactionsTable.sourceEvent,
+                  [
+                    CARD_PROCESSOR_CONFIG.arab
+                      .sourceEvent,
+                    CARD_PROCESSOR_CONFIG.bop
+                      .sourceEvent,
+                  ],
+                ),
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+        const cardFinance =
+          cardFinanceRows[0] ?? null;
+
+        if (!cardFinance) {
+          throw new PosSaleError(
+            "قيد الفيزا غير موجود ولا يمكن إلغاء الفاتورة بأمان",
+            409,
+          );
+        }
+
+        const originalCardLines =
+          await tx
+            .select()
+            .from(
+              financeTransactionLinesTable,
+            )
+            .where(
+              eq(
+                financeTransactionLinesTable.transactionId,
+                cardFinance.id,
+              ),
+            )
+            .orderBy(
+              asc(
+                financeTransactionLinesTable.lineNumber,
+              ),
+            );
+
+        if (
+          originalCardLines.length <
+          2
+        ) {
+          throw new Error(
+            "POS_SALE_CARD_FINANCE_LINES_MISSING",
+          );
+        }
+
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-CARD-VOID-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:card-settlement:void`,
+            businessDate:
+              session.businessDate,
+            transactionType:
+              "reversal",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              "card_settlement_void",
+            cashSessionId:
+              null,
+            notes:
+              `عكس بيع فيزا ${sale.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines:
+              originalCardLines.map(
+                (line) => ({
+                  accountId:
+                    line.accountId,
+                  customerId:
+                    line.customerId,
+                  employeeId:
+                    line.employeeId,
+                  supplierId:
+                    line.supplierId,
+                  debitMinor:
+                    line.creditMinor,
+                  creditMinor:
+                    line.debitMinor,
+                  memo:
+                    `عكس ${sale.publicId}`,
+                }),
+              ),
+          },
+        );
+
+        await tx
+          .update(
+            financeTransactionsTable,
+          )
+          .set({
+            status:
+              "reversed",
+            updatedAt:
+              new Date(),
+          })
+          .where(
+            eq(
+              financeTransactionsTable.id,
+              cardFinance.id,
+            ),
+          );
+      }
+
       const accountFinanceRows =
         sale.accountDueMinor > 0
           ? await tx
@@ -3033,6 +3430,70 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     );
   }
 
+  const cardFinanceRows =
+    saleIds.length > 0
+      ? await db
+          .select({
+            sourceId:
+              financeTransactionsTable.sourceId,
+            sourceEvent:
+              financeTransactionsTable.sourceEvent,
+          })
+          .from(
+            financeTransactionsTable,
+          )
+          .where(
+            and(
+              eq(
+                financeTransactionsTable.sourceType,
+                "pos_sale",
+              ),
+              eq(
+                financeTransactionsTable.status,
+                "posted",
+              ),
+              inArray(
+                financeTransactionsTable.sourceId,
+                saleIds.map(String),
+              ),
+              inArray(
+                financeTransactionsTable.sourceEvent,
+                [
+                  CARD_PROCESSOR_CONFIG.arab
+                    .sourceEvent,
+                  CARD_PROCESSOR_CONFIG.bop
+                    .sourceEvent,
+                ],
+              ),
+            ),
+          )
+      : [];
+
+  const cardProcessorBySaleId =
+    new Map<number, PosCardProcessor>();
+
+  for (
+    const row of cardFinanceRows
+  ) {
+    const saleId =
+      Number(row.sourceId);
+
+    const processor =
+      cardProcessorFromSourceEvent(
+        row.sourceEvent,
+      );
+
+    if (
+      Number.isSafeInteger(saleId) &&
+      processor
+    ) {
+      cardProcessorBySaleId.set(
+        saleId,
+        processor,
+      );
+    }
+  }
+
   const items =
     saleIds.length > 0
       ? await db
@@ -3171,6 +3632,11 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
           sale,
           itemsBySale.get(sale.id) ?? [],
           false,
+          undefined,
+          null,
+          cardProcessorBySaleId.get(
+            sale.id,
+          ) ?? null,
         ),
 
         returnSummary: {
@@ -3402,6 +3868,14 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
           sale.customerId,
         );
 
+  const cardProcessor =
+    sale.paymentMethod === "card"
+      ? await getCardProcessorForSale(
+          db,
+          sale.id,
+        )
+      : null;
+
   return json(
     toSaleResponse(
       sale,
@@ -3409,6 +3883,7 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       false,
       navigation,
       customerBalanceMinor,
+      cardProcessor,
     ),
   );
 }
