@@ -338,6 +338,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "financial-statements",
+    group: "reports",
+    path: "/reports/financial-statements",
+    title: "القوائم المالية",
+    description: "قائمة الدخل والميزانية العمومية مع تغطية تكلفة تدريجية وشفافة.",
+    icon: "📊",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "sales-analytics",
     group: "reports",
     path: "/reports/sales",
