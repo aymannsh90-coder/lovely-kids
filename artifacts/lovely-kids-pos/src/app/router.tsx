@@ -16,6 +16,7 @@ import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
 import UnifiedPartyVoucherPage from "../pages/finance/UnifiedPartyVoucherPage";
 import JournalVoucherPage from "../pages/finance/JournalVoucherPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
+import InventoryStockPage from "../pages/inventory/InventoryStockPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import CustomersPage from "../pages/parties/CustomersPage";
 import EmployeesPage from "../pages/parties/EmployeesPage";
@@ -176,17 +177,9 @@ export default function AppRouter() {
         <Route
           path="inventory/stock"
           element={
-            <ComingSoonPage
-              icon="🏬"
-              title="المخزون"
-              description="عرض الكميات وحركات المخزون والتسويات."
-              points={[
-                "رصيد كل صنف ومتغير.",
-                "حركات البيع والشراء والمردودات.",
-                "تسويات الجرد.",
-                "تنبيهات انخفاض المخزون.",
-              ]}
-            />
+            <RequireOwner>
+              <InventoryStockPage />
+            </RequireOwner>
           }
         />
 
