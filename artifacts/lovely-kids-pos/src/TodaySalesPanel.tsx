@@ -52,8 +52,26 @@ function formatMinor(value: number) {
   }).format(value / 100);
 }
 
-function paymentMethodLabel(value: string) {
+function paymentMethodLabel(
+  value: string,
+  cardProcessor:
+    | "arab"
+    | "bop"
+    | null = null,
+) {
   if (value === "card") {
+    if (
+      cardProcessor === "arab"
+    ) {
+      return "فيزا البنك العربي";
+    }
+
+    if (
+      cardProcessor === "bop"
+    ) {
+      return "فيزا بنك فلسطين";
+    }
+
     return "فيزا";
   }
 
@@ -70,9 +88,17 @@ function paymentMethodLabel(value: string) {
 
 function defaultCustomerLabel(
   paymentMethod: string,
+  cardProcessor:
+    | "arab"
+    | "bop"
+    | null = null,
 ) {
   if (paymentMethod === "card") {
-    return "زبون فيزا";
+    return cardProcessor === "arab"
+      ? "زبون فيزا البنك العربي"
+      : cardProcessor === "bop"
+        ? "زبون فيزا بنك فلسطين"
+        : "زبون فيزا";
   }
 
   if (
@@ -838,9 +864,13 @@ export default function TodaySalesPanel({
                       {row.sale.customerName ||
                         defaultCustomerLabel(
                           row.sale.paymentMethod,
+                          row.sale.cardProcessor,
                         )}
                       <small>
-                        الدفع: {paymentMethodLabel(row.sale.paymentMethod)}
+                        الدفع: {paymentMethodLabel(
+                          row.sale.paymentMethod,
+                          row.sale.cardProcessor,
+                        )}
                       </small>
                     </td>
 
@@ -1339,9 +1369,13 @@ export default function TodaySalesPanel({
                   {row.sale.customerName ||
                     defaultCustomerLabel(
                       row.sale.paymentMethod,
+                      row.sale.cardProcessor,
                     )}
                   {" — "}
-                  {paymentMethodLabel(row.sale.paymentMethod)}
+                  {paymentMethodLabel(
+                    row.sale.paymentMethod,
+                    row.sale.cardProcessor,
+                  )}
                 </td>
 
                 <td>{row.sale.notes || "—"}</td>
