@@ -301,6 +301,24 @@ export default function InventoryStockPage() {
     void loadData();
   }, []);
 
+  useEffect(() => {
+    if (!selectedProductId) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      document
+        .getElementById(
+          "inventory-selected-product",
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    });
+  }, [selectedProductId]);
+
+
   async function loadData() {
     setLoading(true);
     setError("");
@@ -953,194 +971,8 @@ export default function InventoryStockPage() {
         )}
       </article>
 
-      <article className="sales-return-items-panel">
-        <div className="sales-return-section-title">
-          <div>
-            <h3>
-              رصيد المخزون
-            </h3>
-            <p>
-              {loading
-                ? "جاري تحميل المخزون…"
-                : `${displayedProducts.length} صنف ظاهر`}
-            </p>
-          </div>
-        </div>
-
-        {!loading && (
-          <div className="sales-return-table-wrap">
-            <table className="sales-return-table">
-              <thead>
-                <tr>
-                  <th>الصنف</th>
-                  <th>الكود</th>
-                  <th>الرصيد الفعلي</th>
-                  <th>الحالة</th>
-                  <th>اقتراح الشراء</th>
-                  <th>التكلفة</th>
-                  <th>إدارة</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {displayedProducts.map(
-                  (product) => {
-                    const intel =
-                      intelligenceByProduct.get(
-                        product.id,
-                      );
-
-                    const cost =
-                      valuationByProduct.get(
-                        product.id,
-                      );
-
-                    const quantity =
-                      intel?.currentQuantity ??
-                      effectiveQuantity(
-                        product,
-                      );
-
-                    return (
-                      <tr
-                        key={
-                          product.id
-                        }
-                      >
-                        <td>
-                          <div
-                            style={{
-                              display:
-                                "flex",
-                              alignItems:
-                                "center",
-                              gap: 10,
-                              minWidth:
-                                210,
-                            }}
-                          >
-                            {product.image && (
-                              <img
-                                src={
-                                  product.image
-                                }
-                                alt={
-                                  product.nameAr
-                                }
-                                style={{
-                                  width: 48,
-                                  height: 48,
-                                  objectFit:
-                                    "contain",
-                                  borderRadius:
-                                    8,
-                                }}
-                              />
-                            )}
-
-                            <span>
-                              <strong>
-                                {
-                                  product.nameAr
-                                }
-                              </strong>
-                              <br />
-                              <small>
-                                {
-                                  product.category
-                                }
-                                {product.isHidden
-                                  ? " · مخفي"
-                                  : ""}
-                              </small>
-                            </span>
-                          </div>
-                        </td>
-
-                        <td dir="ltr">
-                          {product.productCode ??
-                            "—"}
-                        </td>
-
-                        <td>
-                          <strong>
-                            {quantity ??
-                              "N/A"}
-                          </strong>
-                        </td>
-
-                        <td>
-                          {riskLabel(
-                            intel,
-                          )}
-                        </td>
-
-                        <td>
-                          {(
-                            intel
-                              ?.suggestedReorderQuantity ??
-                            0
-                          ) > 0
-                            ? `+${intel?.suggestedReorderQuantity} وحدة`
-                            : "—"}
-                        </td>
-
-                        <td>
-                          {!cost
-                            ?.initialized
-                            ? "غير مهيأة"
-                            : cost
-                                .stockMatchesAccounting
-                              ? "متطابقة"
-                              : "تحتاج مطابقة"}
-                        </td>
-
-                        <td>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedProductId(
-                                product.id,
-                              );
-                              setAdjustment(
-                                null,
-                              );
-                              setMessage(
-                                "",
-                              );
-                            }}
-                          >
-                            فتح
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  },
-                )}
-
-                {displayedProducts.length ===
-                  0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      style={{
-                        textAlign:
-                          "center",
-                        padding: 24,
-                      }}
-                    >
-                      لا توجد أصناف مطابقة.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </article>
-
       {selectedProduct && (
-        <article className="sales-return-invoice">
+        <article id="inventory-selected-product" className="sales-return-invoice">
           <div className="sales-return-section-title">
             <div>
               <h3>
@@ -1376,6 +1208,193 @@ export default function InventoryStockPage() {
           )}
         </article>
       )}
+
+
+      <article className="sales-return-items-panel">
+        <div className="sales-return-section-title">
+          <div>
+            <h3>
+              رصيد المخزون
+            </h3>
+            <p>
+              {loading
+                ? "جاري تحميل المخزون…"
+                : `${displayedProducts.length} صنف ظاهر`}
+            </p>
+          </div>
+        </div>
+
+        {!loading && (
+          <div className="sales-return-table-wrap">
+            <table className="sales-return-table">
+              <thead>
+                <tr>
+                  <th>الصنف</th>
+                  <th>الكود</th>
+                  <th>الرصيد الفعلي</th>
+                  <th>الحالة</th>
+                  <th>اقتراح الشراء</th>
+                  <th>التكلفة</th>
+                  <th>إدارة</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {displayedProducts.map(
+                  (product) => {
+                    const intel =
+                      intelligenceByProduct.get(
+                        product.id,
+                      );
+
+                    const cost =
+                      valuationByProduct.get(
+                        product.id,
+                      );
+
+                    const quantity =
+                      intel?.currentQuantity ??
+                      effectiveQuantity(
+                        product,
+                      );
+
+                    return (
+                      <tr
+                        key={
+                          product.id
+                        }
+                      >
+                        <td>
+                          <div
+                            style={{
+                              display:
+                                "flex",
+                              alignItems:
+                                "center",
+                              gap: 10,
+                              minWidth:
+                                210,
+                            }}
+                          >
+                            {product.image && (
+                              <img
+                                src={
+                                  product.image
+                                }
+                                alt={
+                                  product.nameAr
+                                }
+                                style={{
+                                  width: 48,
+                                  height: 48,
+                                  objectFit:
+                                    "contain",
+                                  borderRadius:
+                                    8,
+                                }}
+                              />
+                            )}
+
+                            <span>
+                              <strong>
+                                {
+                                  product.nameAr
+                                }
+                              </strong>
+                              <br />
+                              <small>
+                                {
+                                  product.category
+                                }
+                                {product.isHidden
+                                  ? " · مخفي"
+                                  : ""}
+                              </small>
+                            </span>
+                          </div>
+                        </td>
+
+                        <td dir="ltr">
+                          {product.productCode ??
+                            "—"}
+                        </td>
+
+                        <td>
+                          <strong>
+                            {quantity ??
+                              "N/A"}
+                          </strong>
+                        </td>
+
+                        <td>
+                          {riskLabel(
+                            intel,
+                          )}
+                        </td>
+
+                        <td>
+                          {(
+                            intel
+                              ?.suggestedReorderQuantity ??
+                            0
+                          ) > 0
+                            ? `+${intel?.suggestedReorderQuantity} وحدة`
+                            : "—"}
+                        </td>
+
+                        <td>
+                          {!cost
+                            ?.initialized
+                            ? "غير مهيأة"
+                            : cost
+                                .stockMatchesAccounting
+                              ? "متطابقة"
+                              : "تحتاج مطابقة"}
+                        </td>
+
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProductId(
+                                product.id,
+                              );
+                              setAdjustment(
+                                null,
+                              );
+                              setMessage(
+                                "",
+                              );
+                            }}
+                          >
+                            فتح
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  },
+                )}
+
+                {displayedProducts.length ===
+                  0 && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      style={{
+                        textAlign:
+                          "center",
+                        padding: 24,
+                      }}
+                    >
+                      لا توجد أصناف مطابقة.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </article>
 
       {adjustment &&
         selectedProduct && (
