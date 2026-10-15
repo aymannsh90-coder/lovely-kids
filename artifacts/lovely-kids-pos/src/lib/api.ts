@@ -632,6 +632,9 @@ export function createPosCustomerReceipt(
     paymentMethod:
       | "cash"
       | "card";
+    cardProcessor?:
+      | "arab"
+      | "bop";
     registerKey: string;
     notes?: string;
     idempotencyKey: string;
@@ -773,6 +776,10 @@ export interface PosFinanceVoucher {
   paymentMethod:
     | PosFinancePaymentMethod
     | "non_cash";
+  cardProcessor?:
+    | "arab"
+    | "bop"
+    | null;
   amountMinor: number;
   currencyCode: string;
   transactionAmountMinor: number | null;
@@ -948,6 +955,9 @@ export function createPosExpense(
 export interface PosEmployeeSettlementInput {
   amount: string;
   paymentMethod: PosFinancePaymentMethod;
+  cardProcessor?:
+    | "arab"
+    | "bop";
   registerKey: string;
   bankAccountId?: number;
   exchangeRate?: string;
