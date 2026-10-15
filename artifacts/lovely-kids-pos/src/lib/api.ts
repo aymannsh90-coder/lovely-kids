@@ -2815,6 +2815,9 @@ export interface CreatePosMobileReturnInput {
   registerKey: string;
   idempotencyKey: string;
   refundMethod?: "cash" | "card" | "customer";
+  cardProcessor?:
+    | "arab"
+    | "bop";
   customerId?: number;
   reason?: string;
   notes?: string;
