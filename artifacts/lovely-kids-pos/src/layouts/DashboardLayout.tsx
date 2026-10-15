@@ -15,6 +15,7 @@ type MenuSectionKey =
   | "documents"
   | "inventory"
   | "parties"
+  | "vouchers"
   | "finance"
   | "statements"
   | "reports";
@@ -44,6 +45,12 @@ const menuSections: MenuSection[] = [
     title: "العملاء والموردون",
     icon: "👥",
     groups: ["parties"],
+  },
+  {
+    key: "vouchers",
+    title: "السندات",
+    icon: "📑",
+    groups: ["vouchers"],
   },
   {
     key: "finance",
@@ -106,7 +113,8 @@ export default function DashboardLayout() {
           activeSection.groups.includes(item.group) &&
           (item.group !== "purchases" || user?.isOwner === true) &&
           (item.group !== "reports" || user?.isOwner === true) &&
-          (item.group !== "statements" || user?.isOwner === true),
+          (item.group !== "statements" || user?.isOwner === true) &&
+          (item.group !== "vouchers" || user?.isOwner === true),
       ),
     [activeSection, user?.isOwner],
   );

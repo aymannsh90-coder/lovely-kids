@@ -12,6 +12,9 @@ import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
+import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
+import UnifiedPartyVoucherPage from "../pages/finance/UnifiedPartyVoucherPage";
+import JournalVoucherPage from "../pages/finance/JournalVoucherPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import CustomersPage from "../pages/parties/CustomersPage";
@@ -209,6 +212,42 @@ export default function AppRouter() {
         <Route
           path="finance/receipts"
           element={<CustomerReceiptsPage />}
+        />
+
+        <Route
+          path="vouchers/receipt"
+          element={
+            <RequireOwner>
+              <UnifiedPartyVoucherPage mode="receipt" />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="vouchers/payment"
+          element={
+            <RequireOwner>
+              <UnifiedPartyVoucherPage mode="payment" />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="vouchers/journal"
+          element={
+            <RequireOwner>
+              <JournalVoucherPage />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="vouchers/register"
+          element={
+            <RequireOwner>
+              <VoucherRegisterPage />
+            </RequireOwner>
+          }
         />
 
         <Route

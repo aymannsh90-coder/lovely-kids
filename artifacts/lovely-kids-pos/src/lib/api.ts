@@ -656,10 +656,26 @@ export interface PosFinanceVoucher {
     | "salary_accrual"
     | "employee_payment"
     | "owner_withdrawal"
-    | "adjustment";
+    | "adjustment"
+    | "receipt"
+    | "payment"
+    | "journal";
+  voucherPurpose:
+    | "customer_receipt"
+    | "employee_repayment"
+    | "supplier_refund"
+    | "delivery_company_settlement"
+    | "customer_cash_loan"
+    | "employee_advance"
+    | "employee_payment"
+    | "supplier_payment"
+    | "account_transfer"
+    | null;
   partyType:
     | "customer"
     | "employee"
+    | "supplier"
+    | "delivery_company"
     | "owner"
     | null;
   partyId: number | null;
@@ -676,6 +692,7 @@ export interface PosFinanceVoucher {
   referencePeriod: string | null;
   cashSessionId: number | null;
   financeTransactionId: number | null;
+  replacesVoucherId: number | null;
   status: "posted" | "voided";
   notes: string | null;
   createdByUserId: number;
@@ -1005,6 +1022,154 @@ export function voidPosFinanceVoucher(
       body: JSON.stringify({
         reason,
       }),
+    },
+    token,
+  );
+}
+
+
+export type PosUnifiedVoucherPartyType =
+  | "customer"
+  | "employee"
+  | "supplier"
+  | "delivery_company";
+
+export type PosUnifiedVoucherAccountRef =
+  | {
+      kind: "cash";
+      registerKey: string;
+    }
+  | {
+      kind: "bank";
+      bankAccountId: number;
+    }
+  | {
+      kind: "customer";
+      customerId: number;
+    }
+  | {
+      kind:
+        | "employee_advance"
+        | "employee_payable";
+      employeeId: number;
+    }
+  | {
+      kind: "supplier";
+      supplierId: number;
+    }
+  | {
+      kind: "delivery_company";
+      deliveryCompanyId: number;
+    }
+  | {
+      kind: "expense";
+      expenseCategoryId: number;
+    };
+
+export interface PosUnifiedVoucherResult {
+  alreadyCreated: boolean;
+  voucher: PosFinanceVoucher;
+  financeTransaction: unknown | null;
+  expectedCashBeforeMinor?: number | null;
+  expectedCashAfterMinor?: number | null;
+}
+
+export function createPosUnifiedReceiptVoucher(
+  token: string,
+  input: {
+    partyType: PosUnifiedVoucherPartyType;
+    partyId: number;
+    amount: string;
+    paymentMethod:
+      | "cash"
+      | "bank";
+    registerKey: string;
+    bankAccountId?: number;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<PosUnifiedVoucherResult>(
+    "/api/pos/finance/vouchers/receipt",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosUnifiedPaymentVoucher(
+  token: string,
+  input: {
+    partyType: PosUnifiedVoucherPartyType;
+    partyId: number;
+    amount: string;
+    paymentMethod:
+      | "cash"
+      | "bank";
+    registerKey: string;
+    bankAccountId?: number;
+    employeePaymentType?:
+      | "advance"
+      | "payable";
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<PosUnifiedVoucherResult>(
+    "/api/pos/finance/vouchers/payment",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function createPosUnifiedJournalVoucher(
+  token: string,
+  input: {
+    from: PosUnifiedVoucherAccountRef;
+    to: PosUnifiedVoucherAccountRef;
+    amount: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<PosUnifiedVoucherResult>(
+    "/api/pos/finance/vouchers/journal",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+
+export function replacePosUnifiedVoucher(
+  token: string,
+  voucherId: number,
+  input: {
+    amount: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyReplaced: boolean;
+    originalVoucher: PosFinanceVoucher | null;
+    replacementVoucher: PosFinanceVoucher;
+    reversalTransaction: unknown | null;
+    financeTransaction: unknown | null;
+    expectedCashBeforeMinor: number | null;
+    expectedCashAfterMinor: number | null;
+  }>(
+    `/api/pos/finance/vouchers/${voucherId}/replace`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
     },
     token,
   );

@@ -3579,15 +3579,61 @@ async function handleVoidVoucher(
               session.expectedBalanceMinor ??
               session.openingBalanceMinor;
 
-            const originalIncoming =
-              isIncomingCash(
-                voucher.voucherType as VoucherType,
+            const cashAccountCode =
+              `CASH_${session.registerKey.toUpperCase()}`;
+
+            const cashAccountRows =
+              await tx
+                .select()
+                .from(
+                  financeAccountsTable,
+                )
+                .where(
+                  eq(
+                    financeAccountsTable.code,
+                    cashAccountCode,
+                  ),
+                )
+                .limit(1);
+
+            const cashAccount =
+              cashAccountRows[0];
+
+            if (!cashAccount) {
+              throw new Error(
+                "VOUCHER_CASH_ACCOUNT_MISSING",
+              );
+            }
+
+            const cashLine =
+              originalLines.find(
+                (line) =>
+                  line.accountId ===
+                  cashAccount.id,
               );
 
+            if (!cashLine) {
+              throw new Error(
+                "VOUCHER_CASH_LINE_MISSING",
+              );
+            }
+
+            const originalCashDelta =
+              cashLine.debitMinor -
+              cashLine.creditMinor;
+
             if (
-              originalIncoming &&
+              originalCashDelta === 0
+            ) {
+              throw new Error(
+                "VOUCHER_CASH_LINE_INVALID",
+              );
+            }
+
+            if (
+              originalCashDelta > 0 &&
               expectedBefore <
-                voucher.amountMinor
+                originalCashDelta
             ) {
               throw new PartyFinanceError(
                 "رصيد الصندوق لا يكفي لعكس سند القبض",
@@ -3596,11 +3642,8 @@ async function handleVoidVoucher(
             }
 
             expectedAfter =
-              originalIncoming
-                ? expectedBefore -
-                  voucher.amountMinor
-                : expectedBefore +
-                  voucher.amountMinor;
+              expectedBefore -
+              originalCashDelta;
 
             if (
               !Number.isSafeInteger(

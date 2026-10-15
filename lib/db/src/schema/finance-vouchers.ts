@@ -30,6 +30,8 @@ export const financeVouchersTable = pgTable(
 
     voucherType: text("voucher_type").notNull(),
 
+    voucherPurpose: text("voucher_purpose"),
+
     partyType: text("party_type"),
     partyId: integer("party_id"),
 
@@ -89,6 +91,10 @@ export const financeVouchersTable = pgTable(
       onDelete: "restrict",
     }),
 
+    replacesVoucherId: integer(
+      "replaces_voucher_id",
+    ),
+
     status: text("status")
       .notNull()
       .default("posted"),
@@ -146,8 +152,50 @@ export const financeVouchersTable = pgTable(
         'salary_accrual',
         'employee_payment',
         'owner_withdrawal',
-        'adjustment'
+        'adjustment',
+        'receipt',
+        'payment',
+        'journal'
       )`,
+    ),
+
+    check(
+      "finance_vouchers_purpose_valid",
+      sql`
+        (
+          ${table.voucherType} = 'receipt'
+          and ${table.voucherPurpose} in (
+            'customer_receipt',
+            'employee_repayment',
+            'supplier_refund',
+            'delivery_company_settlement'
+          )
+        )
+        or
+        (
+          ${table.voucherType} = 'payment'
+          and ${table.voucherPurpose} in (
+            'customer_cash_loan',
+            'employee_advance',
+            'employee_payment',
+            'supplier_payment'
+          )
+        )
+        or
+        (
+          ${table.voucherType} = 'journal'
+          and ${table.voucherPurpose} = 'account_transfer'
+        )
+        or
+        (
+          ${table.voucherType} not in (
+            'receipt',
+            'payment',
+            'journal'
+          )
+          and ${table.voucherPurpose} is null
+        )
+      `,
     ),
 
     check(
@@ -162,6 +210,8 @@ export const financeVouchersTable = pgTable(
           ${table.partyType} in (
             'customer',
             'employee',
+            'supplier',
+            'delivery_company',
             'owner'
           )
           and ${table.partyId} is not null
@@ -193,6 +243,26 @@ export const financeVouchersTable = pgTable(
           ${table.voucherType} = 'owner_withdrawal'
           and ${table.partyType} = 'owner'
           and ${table.partyId} is not null
+        )
+        or
+        (
+          ${table.voucherType} in (
+            'receipt',
+            'payment'
+          )
+          and ${table.partyType} in (
+            'customer',
+            'employee',
+            'supplier',
+            'delivery_company'
+          )
+          and ${table.partyId} is not null
+        )
+        or
+        (
+          ${table.voucherType} = 'journal'
+          and ${table.partyType} is null
+          and ${table.partyId} is null
         )
         or
         (
@@ -316,6 +386,12 @@ export const financeVouchersTable = pgTable(
     index("finance_vouchers_bank_account_idx")
       .on(table.bankAccountId)
       .where(sql`${table.bankAccountId} is not null`),
+
+    uniqueIndex("finance_vouchers_replaces_idx")
+      .on(table.replacesVoucherId)
+      .where(
+        sql`${table.replacesVoucherId} is not null`,
+      ),
   ],
 ).enableRLS();
 
