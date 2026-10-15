@@ -14896,3 +14896,342 @@ button.inventory-intelligence-metric {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* Trial balance + finance integrity gate */
+.trial-balance-page {
+  display: grid;
+  gap: 18px;
+}
+
+.trial-balance-heading,
+.trial-balance-filters,
+.trial-balance-table-card,
+.trial-balance-problems {
+  border: 1px solid #dce9ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(29, 71, 93, 0.06);
+}
+
+.trial-balance-heading {
+  padding: 22px;
+}
+
+.trial-balance-heading span {
+  color: #e91e8c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.trial-balance-heading h1 {
+  margin: 6px 0 8px;
+  font-size: clamp(26px, 4vw, 38px);
+}
+
+.trial-balance-heading p {
+  max-width: 850px;
+  margin: 0;
+  color: #617081;
+  line-height: 1.8;
+}
+
+.trial-balance-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(170px, 1fr)) auto minmax(220px, auto);
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+}
+
+.trial-balance-filters label:not(.trial-balance-zero-toggle) {
+  display: grid;
+  gap: 7px;
+  color: #344554;
+  font-weight: 800;
+}
+
+.trial-balance-filters input[type="date"] {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #cfdee5;
+  border-radius: 11px;
+  background: #fff;
+  color: #172033;
+}
+
+.trial-balance-filters .primary-button {
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.trial-balance-zero-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: #526474;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trial-balance-zero-toggle input {
+  width: 18px;
+  height: 18px;
+}
+
+.trial-balance-integrity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid;
+  border-radius: 18px;
+}
+
+.trial-balance-integrity.is-pass {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.trial-balance-integrity.is-fail {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.trial-balance-integrity-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 24px;
+  font-weight: 1000;
+}
+
+.trial-balance-integrity.is-pass .trial-balance-integrity-icon,
+.trial-balance-integrity.is-pass strong {
+  color: #15803d;
+}
+
+.trial-balance-integrity.is-fail .trial-balance-integrity-icon,
+.trial-balance-integrity.is-fail strong {
+  color: #b91c1c;
+}
+
+.trial-balance-integrity p {
+  margin: 5px 0 0;
+  color: #526474;
+  line-height: 1.6;
+}
+
+.trial-balance-integrity-difference {
+  display: grid;
+  gap: 4px;
+  min-width: 130px;
+  text-align: center;
+}
+
+.trial-balance-integrity-difference span {
+  color: #687788;
+  font-size: 12px;
+}
+
+.trial-balance-integrity-difference b {
+  font-size: 18px;
+}
+
+.trial-balance-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.trial-balance-metric {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #dce9ef;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.trial-balance-metric span,
+.trial-balance-metric small {
+  color: #6b7b89;
+}
+
+.trial-balance-metric span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trial-balance-metric strong {
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+
+.trial-balance-metric small {
+  font-size: 11px;
+}
+
+.trial-balance-problems {
+  padding: 18px;
+}
+
+.trial-balance-problems h2 {
+  margin: 0 0 12px;
+  color: #b91c1c;
+  font-size: 18px;
+}
+
+.trial-balance-problem-list {
+  display: grid;
+  gap: 9px;
+}
+
+.trial-balance-problem-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff7f7;
+}
+
+.trial-balance-problem-list article > div {
+  display: grid;
+  gap: 4px;
+}
+
+.trial-balance-problem-list span {
+  color: #687788;
+  font-size: 12px;
+}
+
+.trial-balance-table-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.trial-balance-table-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-bottom: 1px solid #e5edf1;
+}
+
+.trial-balance-table-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.trial-balance-table-heading p {
+  margin: 5px 0 0;
+  color: #71808e;
+  font-size: 12px;
+}
+
+.trial-balance-table-heading > strong {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #f4f8fb;
+  color: #445566;
+  font-size: 12px;
+}
+
+.trial-balance-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.trial-balance-table {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+}
+
+.trial-balance-table th,
+.trial-balance-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #edf2f4;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.trial-balance-table thead th,
+.trial-balance-table tfoot th {
+  background: #f6fafc;
+  color: #425466;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.trial-balance-table tbody td {
+  font-size: 13px;
+}
+
+.trial-balance-table td:first-child {
+  white-space: normal;
+  min-width: 220px;
+}
+
+.trial-balance-table td:first-child strong,
+.trial-balance-table td:first-child small {
+  display: block;
+}
+
+.trial-balance-table td:first-child small {
+  margin-top: 3px;
+  color: #82909c;
+  direction: ltr;
+  text-align: right;
+}
+
+.trial-balance-closing {
+  font-weight: 900;
+}
+
+.trial-balance-empty {
+  padding: 28px !important;
+  color: #71808e;
+  text-align: center !important;
+}
+
+@media (max-width: 1180px) {
+  .trial-balance-metrics {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .trial-balance-filters {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .trial-balance-filters,
+  .trial-balance-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .trial-balance-integrity {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .trial-balance-integrity-difference {
+    grid-column: 1 / -1;
+    text-align: right;
+  }
+
+  .trial-balance-problem-list article,
+  .trial-balance-table-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

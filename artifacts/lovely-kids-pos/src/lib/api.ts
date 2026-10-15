@@ -1663,6 +1663,83 @@ export function getPosFinanceCashStatement(
 }
 
 
+export interface PosTrialBalanceRow {
+  account: {
+    id: number;
+    code: string;
+    name: string;
+    accountType: string;
+    currencyCode: string;
+    status: string;
+  };
+  openingDebitMinor: number;
+  openingCreditMinor: number;
+  periodDebitMinor: number;
+  periodCreditMinor: number;
+  closingDebitMinor: number;
+  closingCreditMinor: number;
+}
+
+export interface PosTrialBalanceResult {
+  range: {
+    from: string;
+    to: string;
+  };
+  totals: {
+    openingDebitMinor: number;
+    openingCreditMinor: number;
+    periodDebitMinor: number;
+    periodCreditMinor: number;
+    closingDebitMinor: number;
+    closingCreditMinor: number;
+  };
+  integrity: {
+    passed: boolean;
+    transactionsChecked: number;
+    unbalancedTransactionCount: number;
+    ledgerDebitMinor: number;
+    ledgerCreditMinor: number;
+    ledgerDifferenceMinor: number;
+    openingDifferenceMinor: number;
+    periodDifferenceMinor: number;
+    closingDifferenceMinor: number;
+    unbalancedTransactions: Array<{
+      transactionId: number;
+      publicId: string;
+      businessDate: string;
+      status: string;
+      lineCount: number;
+      debitMinor: number;
+      creditMinor: number;
+      differenceMinor: number;
+    }>;
+  };
+  rows: PosTrialBalanceRow[];
+}
+
+export function getPosFinanceTrialBalance(
+  token: string,
+  input: {
+    from: string;
+    to: string;
+  },
+) {
+  const params =
+    new URLSearchParams({
+      from:
+        input.from,
+      to:
+        input.to,
+    });
+
+  return apiRequest<PosTrialBalanceResult>(
+    `/api/pos/finance/statements/trial-balance?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+
 export function savePosExchangeRate(
   token: string,
   input: {

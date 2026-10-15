@@ -1404,6 +1404,491 @@ async function handleAccountStatement(
   });
 }
 
+
+async function handleTrialBalance(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const from =
+    url.searchParams.get(
+      "from",
+    );
+
+  const to =
+    url.searchParams.get(
+      "to",
+    );
+
+  if (
+    !validDate(from) ||
+    !validDate(to) ||
+    from > to
+  ) {
+    return json(
+      {
+        error:
+          "الفترة الزمنية غير صالحة",
+      },
+      400,
+    );
+  }
+
+  const [
+    accounts,
+    transactions,
+    ledgerRows,
+  ] =
+    await Promise.all([
+      db
+        .select({
+          id:
+            financeAccountsTable.id,
+          code:
+            financeAccountsTable.code,
+          name:
+            financeAccountsTable.name,
+          accountType:
+            financeAccountsTable.accountType,
+          currencyCode:
+            financeAccountsTable.currencyCode,
+          status:
+            financeAccountsTable.status,
+        })
+        .from(
+          financeAccountsTable,
+        )
+        .orderBy(
+          asc(
+            financeAccountsTable.code,
+          ),
+        ),
+
+      db
+        .select({
+          id:
+            financeTransactionsTable.id,
+          publicId:
+            financeTransactionsTable.publicId,
+          businessDate:
+            financeTransactionsTable.businessDate,
+          status:
+            financeTransactionsTable.status,
+        })
+        .from(
+          financeTransactionsTable,
+        )
+        .where(
+          lte(
+            financeTransactionsTable.businessDate,
+            to,
+          ),
+        )
+        .orderBy(
+          asc(
+            financeTransactionsTable.id,
+          ),
+        ),
+
+      db
+        .select({
+          transactionId:
+            financeTransactionsTable.id,
+          publicId:
+            financeTransactionsTable.publicId,
+          businessDate:
+            financeTransactionsTable.businessDate,
+          transactionStatus:
+            financeTransactionsTable.status,
+          accountId:
+            financeTransactionLinesTable.accountId,
+          debitMinor:
+            financeTransactionLinesTable.debitMinor,
+          creditMinor:
+            financeTransactionLinesTable.creditMinor,
+        })
+        .from(
+          financeTransactionLinesTable,
+        )
+        .innerJoin(
+          financeTransactionsTable,
+          eq(
+            financeTransactionLinesTable.transactionId,
+            financeTransactionsTable.id,
+          ),
+        )
+        .where(
+          lte(
+            financeTransactionsTable.businessDate,
+            to,
+          ),
+        )
+        .orderBy(
+          asc(
+            financeTransactionsTable.id,
+          ),
+          asc(
+            financeTransactionLinesTable.lineNumber,
+          ),
+        ),
+    ]);
+
+  const byAccount =
+    new Map<
+      number,
+      {
+        openingDebitMinor: number;
+        openingCreditMinor: number;
+        periodDebitMinor: number;
+        periodCreditMinor: number;
+      }
+    >();
+
+  const byTransaction =
+    new Map<
+      number,
+      {
+        publicId: string;
+        businessDate: string;
+        status: string;
+        lineCount: number;
+        debitMinor: number;
+        creditMinor: number;
+      }
+    >(
+      transactions.map(
+        (transaction) => [
+          transaction.id,
+          {
+            publicId:
+              transaction.publicId,
+            businessDate:
+              transaction.businessDate,
+            status:
+              transaction.status,
+            lineCount: 0,
+            debitMinor: 0,
+            creditMinor: 0,
+          },
+        ],
+      ),
+    );
+
+  let ledgerDebitMinor = 0;
+  let ledgerCreditMinor = 0;
+
+  let periodDebitMinor = 0;
+  let periodCreditMinor = 0;
+
+  for (
+    const row of ledgerRows
+  ) {
+    const accountTotals =
+      byAccount.get(
+        row.accountId,
+      ) ?? {
+        openingDebitMinor: 0,
+        openingCreditMinor: 0,
+        periodDebitMinor: 0,
+        periodCreditMinor: 0,
+      };
+
+    if (
+      row.businessDate <
+      from
+    ) {
+      accountTotals.openingDebitMinor +=
+        row.debitMinor;
+
+      accountTotals.openingCreditMinor +=
+        row.creditMinor;
+    } else {
+      accountTotals.periodDebitMinor +=
+        row.debitMinor;
+
+      accountTotals.periodCreditMinor +=
+        row.creditMinor;
+
+      periodDebitMinor +=
+        row.debitMinor;
+
+      periodCreditMinor +=
+        row.creditMinor;
+    }
+
+    byAccount.set(
+      row.accountId,
+      accountTotals,
+    );
+
+    ledgerDebitMinor +=
+      row.debitMinor;
+
+    ledgerCreditMinor +=
+      row.creditMinor;
+
+    const transactionTotals =
+      byTransaction.get(
+        row.transactionId,
+      );
+
+    if (!transactionTotals) {
+      throw new Error(
+        "FINANCE_TRIAL_BALANCE_TRANSACTION_MISSING",
+      );
+    }
+
+    transactionTotals.lineCount +=
+      1;
+
+    transactionTotals.debitMinor +=
+      row.debitMinor;
+
+    transactionTotals.creditMinor +=
+      row.creditMinor;
+
+    byTransaction.set(
+      row.transactionId,
+      transactionTotals,
+    );
+  }
+
+  let openingDebitMinor = 0;
+  let openingCreditMinor = 0;
+
+  let closingDebitMinor = 0;
+  let closingCreditMinor = 0;
+
+  const rows =
+    accounts
+      .map(
+        (account) => {
+          const totals =
+            byAccount.get(
+              account.id,
+            ) ?? {
+              openingDebitMinor: 0,
+              openingCreditMinor: 0,
+              periodDebitMinor: 0,
+              periodCreditMinor: 0,
+            };
+
+          const openingNetMinor =
+            totals.openingDebitMinor -
+            totals.openingCreditMinor;
+
+          const closingNetMinor =
+            openingNetMinor +
+            totals.periodDebitMinor -
+            totals.periodCreditMinor;
+
+          const rowOpeningDebitMinor =
+            openingNetMinor > 0
+              ? openingNetMinor
+              : 0;
+
+          const rowOpeningCreditMinor =
+            openingNetMinor < 0
+              ? -openingNetMinor
+              : 0;
+
+          const rowClosingDebitMinor =
+            closingNetMinor > 0
+              ? closingNetMinor
+              : 0;
+
+          const rowClosingCreditMinor =
+            closingNetMinor < 0
+              ? -closingNetMinor
+              : 0;
+
+          openingDebitMinor +=
+            rowOpeningDebitMinor;
+
+          openingCreditMinor +=
+            rowOpeningCreditMinor;
+
+          closingDebitMinor +=
+            rowClosingDebitMinor;
+
+          closingCreditMinor +=
+            rowClosingCreditMinor;
+
+          return {
+            account: {
+              id:
+                account.id,
+              code:
+                account.code,
+              name:
+                account.name,
+              accountType:
+                account.accountType,
+              currencyCode:
+                account.currencyCode,
+              status:
+                account.status,
+            },
+
+            openingDebitMinor:
+              rowOpeningDebitMinor,
+
+            openingCreditMinor:
+              rowOpeningCreditMinor,
+
+            periodDebitMinor:
+              totals.periodDebitMinor,
+
+            periodCreditMinor:
+              totals.periodCreditMinor,
+
+            closingDebitMinor:
+              rowClosingDebitMinor,
+
+            closingCreditMinor:
+              rowClosingCreditMinor,
+          };
+        },
+      )
+      .filter(
+        (row) =>
+          row.account.status ===
+            "active" ||
+          row.openingDebitMinor !==
+            0 ||
+          row.openingCreditMinor !==
+            0 ||
+          row.periodDebitMinor !==
+            0 ||
+          row.periodCreditMinor !==
+            0 ||
+          row.closingDebitMinor !==
+            0 ||
+          row.closingCreditMinor !==
+            0,
+      );
+
+  const unbalancedTransactions =
+    [...byTransaction.entries()]
+      .filter(
+        (
+          [
+            ,
+            transaction,
+          ],
+        ) =>
+          transaction.lineCount <
+            2 ||
+          transaction.debitMinor !==
+            transaction.creditMinor,
+      )
+      .map(
+        (
+          [
+            transactionId,
+            transaction,
+          ],
+        ) => ({
+          transactionId,
+          publicId:
+            transaction.publicId,
+          businessDate:
+            transaction.businessDate,
+          status:
+            transaction.status,
+          lineCount:
+            transaction.lineCount,
+          debitMinor:
+            transaction.debitMinor,
+          creditMinor:
+            transaction.creditMinor,
+          differenceMinor:
+            transaction.debitMinor -
+            transaction.creditMinor,
+        }),
+      );
+
+  const openingDifferenceMinor =
+    openingDebitMinor -
+    openingCreditMinor;
+
+  const periodDifferenceMinor =
+    periodDebitMinor -
+    periodCreditMinor;
+
+  const closingDifferenceMinor =
+    closingDebitMinor -
+    closingCreditMinor;
+
+  const ledgerDifferenceMinor =
+    ledgerDebitMinor -
+    ledgerCreditMinor;
+
+  const integrityPassed =
+    unbalancedTransactions.length ===
+      0 &&
+    openingDifferenceMinor ===
+      0 &&
+    periodDifferenceMinor ===
+      0 &&
+    closingDifferenceMinor ===
+      0 &&
+    ledgerDifferenceMinor ===
+      0;
+
+  return json({
+    range: {
+      from,
+      to,
+    },
+
+    totals: {
+      openingDebitMinor,
+      openingCreditMinor,
+      periodDebitMinor,
+      periodCreditMinor,
+      closingDebitMinor,
+      closingCreditMinor,
+    },
+
+    integrity: {
+      passed:
+        integrityPassed,
+      transactionsChecked:
+        byTransaction.size,
+      unbalancedTransactionCount:
+        unbalancedTransactions.length,
+      ledgerDebitMinor,
+      ledgerCreditMinor,
+      ledgerDifferenceMinor,
+      openingDifferenceMinor,
+      periodDifferenceMinor,
+      closingDifferenceMinor,
+      unbalancedTransactions:
+        unbalancedTransactions.slice(
+          0,
+          25,
+        ),
+    },
+
+    rows,
+  });
+}
+
 export async function handleFinanceStatementRequest(
   request: Request,
   db: Db,
@@ -1442,6 +1927,18 @@ export async function handleFinanceStatementRequest(
       "/api/pos/finance/statements/account"
   ) {
     return handleAccountStatement(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname ===
+      "/api/pos/finance/statements/trial-balance"
+  ) {
+    return handleTrialBalance(
       request,
       db,
       env,

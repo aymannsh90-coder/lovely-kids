@@ -318,6 +318,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "trial-balance",
+    group: "reports",
+    path: "/reports/trial-balance",
+    title: "ميزان المراجعة",
+    description: "الأرصدة الافتتاحية والحركة والرصيد الختامي مع فحص سلامة القيود.",
+    icon: "⚖️",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "sales-analytics",
     group: "reports",
     path: "/reports/sales",
