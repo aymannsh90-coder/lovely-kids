@@ -354,6 +354,10 @@ export interface PosSaleResult {
     cashierUserId: string;
     status: string;
     paymentMethod: string;
+    cardProcessor:
+      | "arab"
+      | "bop"
+      | null;
 
     customerId: string | null;
     customerBalanceMinor: number | null;
@@ -2185,6 +2189,9 @@ export function createPosSale(
       | "card"
       | "credit"
       | "mixed";
+    cardProcessor?:
+      | "arab"
+      | "bop";
     discountAmount: string;
     paidAmount: string;
     customerId?: number;
