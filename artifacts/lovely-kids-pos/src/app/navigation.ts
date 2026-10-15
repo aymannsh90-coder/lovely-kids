@@ -278,6 +278,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "card-settlements",
+    group: "finance",
+    path: "/finance/card-settlements",
+    title: "تسويات الفيزا",
+    description: "تسوية ماكينات البنك العربي وبنك فلسطين وتسجيل العمولة.",
+    icon: "💳",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "checks",
     group: "finance",
     path: "/finance/checks",
