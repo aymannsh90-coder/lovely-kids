@@ -306,17 +306,46 @@ export default function InventoryStockPage() {
       return;
     }
 
-    requestAnimationFrame(() => {
-      document
-        .getElementById(
-          "inventory-selected-product",
-        )
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    });
-  }, [selectedProductId]);
+    const previousOverflow =
+      document.body.style.overflow;
+
+    document.body.style.overflow =
+      "hidden";
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (
+        event.key === "Escape" &&
+        !saving
+      ) {
+        if (adjustment) {
+          closeAdjustment();
+        } else {
+          setSelectedProductId("");
+        }
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      document.body.style.overflow =
+        previousOverflow;
+
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [
+    selectedProductId,
+    adjustment,
+    saving,
+  ]);
 
 
   async function loadData() {
@@ -972,7 +1001,47 @@ export default function InventoryStockPage() {
       </article>
 
       {selectedProduct && (
-        <article id="inventory-selected-product" className="sales-return-invoice">
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget &&
+              !adjustment &&
+              !saving
+            ) {
+              setSelectedProductId("");
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background:
+              "rgba(15, 23, 42, .55)",
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+          }}
+        >
+          <article
+            role="dialog"
+            aria-modal="true"
+            aria-label="تفاصيل الصنف"
+            className="sales-return-invoice"
+            style={{
+              width:
+                "min(1100px, 96vw)",
+              maxHeight: "88vh",
+              overflowY: "auto",
+              margin: 0,
+              background:
+                "var(--panel, #fff)",
+              borderRadius: 18,
+              boxShadow:
+                "0 24px 80px rgba(15,23,42,.35)",
+            }}
+          >
           <div className="sales-return-section-title">
             <div>
               <h3>
@@ -984,11 +1053,30 @@ export default function InventoryStockPage() {
               </p>
             </div>
 
-            <a
-              href="/inventory/product-card"
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
             >
-              فتح بطاقة الصنف
-            </a>
+              <a
+                href="/inventory/product-card"
+              >
+                فتح بطاقة الصنف
+              </a>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAdjustment(null);
+                  setSelectedProductId("");
+                }}
+              >
+                إغلاق ✕
+              </button>
+            </div>
           </div>
 
           <div className="sales-return-summary-grid">
@@ -1206,7 +1294,8 @@ export default function InventoryStockPage() {
               </table>
             </div>
           )}
-        </article>
+          </article>
+        </div>
       )}
 
 
@@ -1398,7 +1487,37 @@ export default function InventoryStockPage() {
 
       {adjustment &&
         selectedProduct && (
-        <article className="sales-return-invoice">
+        <div
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1100,
+            background:
+              "rgba(15, 23, 42, .65)",
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+          }}
+        >
+          <article
+            role="dialog"
+            aria-modal="true"
+            aria-label="تسوية جرد"
+            className="sales-return-invoice"
+            style={{
+              width:
+                "min(760px, 96vw)",
+              maxHeight: "88vh",
+              overflowY: "auto",
+              margin: 0,
+              background:
+                "var(--panel, #fff)",
+              borderRadius: 18,
+              boxShadow:
+                "0 24px 80px rgba(15,23,42,.4)",
+            }}
+          >
           <div className="sales-return-section-title">
             <div>
               <h3>
@@ -1638,7 +1757,8 @@ export default function InventoryStockPage() {
               </button>
             </div>
           </form>
-        </article>
+          </article>
+        </div>
       )}
     </section>
   );
