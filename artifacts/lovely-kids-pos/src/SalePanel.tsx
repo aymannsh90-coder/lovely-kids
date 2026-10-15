@@ -2002,7 +2002,13 @@ export default function SalePanel({
               }).format(new Date(lastSale.sale.createdAt))}
             </span>
 
-            <span>الزبون: {lastSale.sale.customerName || "زبون نقدي"}</span>
+            <span>الزبون: {lastSale.sale.customerName ||
+                (lastSale.sale.paymentMethod === "card"
+                  ? "زبون فيزا"
+                  : lastSale.sale.paymentMethod === "credit" ||
+                      lastSale.sale.paymentMethod === "mixed"
+                    ? "زبون على الحساب"
+                    : "زبون نقدي")}</span>
 
             <span>
               طريقة الدفع: {
