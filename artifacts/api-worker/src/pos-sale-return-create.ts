@@ -22,7 +22,9 @@ import {
 } from "./finance-customer-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import {
+  CARD_PROCESSOR_CONFIG,
   ensureSaleFinanceAccount,
+  getCardProcessorForSale,
 } from "./pos-sale-routes";
 import {
   addProductCostAtCurrentAverage,
@@ -1653,6 +1655,115 @@ export async function handleCreatePosSaleReturn(
                   refundAmountMinor,
                 memo:
                   `دفع مردود نقدي ${saleReturn.publicId}`,
+              },
+            ],
+          },
+        );
+      }
+
+      if (
+        refundMethod === "card" &&
+        refundAmountMinor > 0
+      ) {
+        if (
+          sale.paymentMethod !==
+          "card"
+        ) {
+          throw new PosSaleReturnError(
+            "الاسترداد على الفيزا متاح فقط لفاتورة مدفوعة بالفيزا",
+            409,
+          );
+        }
+
+        const cardProcessor =
+          await getCardProcessorForSale(
+            tx,
+            sale.id,
+          );
+
+        if (!cardProcessor) {
+          throw new PosSaleReturnError(
+            "هذه فاتورة فيزا قديمة ولم يتم تحديد الماكينة لها بعد",
+            409,
+          );
+        }
+
+        const processor =
+          CARD_PROCESSOR_CONFIG[
+            cardProcessor
+          ];
+
+        const clearingAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                processor.clearingCode,
+              name:
+                processor.clearingName,
+              accountType:
+                "asset",
+            },
+          );
+
+        const cardSalesAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                "POS_SALES_CARD",
+              name:
+                "مبيعات نقطة البيع فيزا",
+              accountType:
+                "income",
+            },
+          );
+
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-RET-CARD-${cardProcessor.toUpperCase()}-${saleReturn.publicId}`,
+            idempotencyKey:
+              `pos-sale-return:${saleReturn.id}:card-refund:${cardProcessor}`,
+            businessDate:
+              saleReturn.businessDate,
+            transactionType:
+              "refund",
+            sourceType:
+              "pos_sale_return",
+            sourceId:
+              String(
+                saleReturn.id,
+              ),
+            sourceEvent:
+              `card_refund_${cardProcessor}`,
+            cashSessionId:
+              null,
+            notes:
+              `مردود ${processor.label} ${saleReturn.publicId}`,
+            createdByUserId:
+              auth.user.id,
+            lines: [
+              {
+                accountId:
+                  cardSalesAccount.id,
+                debitMinor:
+                  refundAmountMinor,
+                creditMinor:
+                  0,
+                memo:
+                  `مردود مبيعات فيزا ${saleReturn.publicId}`,
+              },
+              {
+                accountId:
+                  clearingAccount.id,
+                debitMinor:
+                  0,
+                creditMinor:
+                  refundAmountMinor,
+                memo:
+                  `استرداد ${processor.label} ${saleReturn.publicId}`,
               },
             ],
           },
