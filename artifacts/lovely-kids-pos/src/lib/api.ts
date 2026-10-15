@@ -1740,6 +1740,132 @@ export function getPosFinanceTrialBalance(
 }
 
 
+export interface PosFinanceAgingRow {
+  id: number;
+  code: string;
+  name: string;
+  status: string;
+  currentMinor: number;
+  days31To60Minor: number;
+  days61To90Minor: number;
+  daysOver90Minor: number;
+  balanceMinor: number;
+  oppositeBalanceMinor: number;
+}
+
+export interface PosFinanceLiquidityReport {
+  asOf: string;
+  summary: {
+    cashOperationalBaseMinor: number;
+    bankBaseMinor: number;
+    currentLiquidityMinor: number;
+    customerReceivableMinor: number;
+    customerCreditMinor: number;
+    supplierPayableMinor: number;
+    supplierDebitMinor: number;
+    incomingChecksMinor: number;
+    outgoingChecksMinor: number;
+    expectedCollectionsMinor: number;
+    expectedPaymentsMinor: number;
+    projectedLiquidityMinor: number;
+    cashBaseComplete: boolean;
+  };
+  customerAging: {
+    totals: {
+      currentMinor: number;
+      days31To60Minor: number;
+      days61To90Minor: number;
+      daysOver90Minor: number;
+      balanceMinor: number;
+      oppositeBalanceMinor: number;
+    };
+    rows: PosFinanceAgingRow[];
+  };
+  supplierAging: {
+    totals: {
+      currentMinor: number;
+      days31To60Minor: number;
+      days61To90Minor: number;
+      daysOver90Minor: number;
+      balanceMinor: number;
+      oppositeBalanceMinor: number;
+    };
+    rows: PosFinanceAgingRow[];
+  };
+  checks: {
+    totals: {
+      incomingMinor: number;
+      outgoingMinor: number;
+      incomingOverdueMinor: number;
+      outgoingOverdueMinor: number;
+      incomingNext7Minor: number;
+      outgoingNext7Minor: number;
+      incomingNext30Minor: number;
+      outgoingNext30Minor: number;
+    };
+    rows: Array<{
+      id: number;
+      publicId: string;
+      checkNumber: string;
+      direction: "received" | "issued";
+      status: string;
+      dueDate: string;
+      daysUntilDue: number;
+      dueBucket:
+        | "overdue"
+        | "next_7"
+        | "next_30"
+        | "later";
+      currencyCode: string;
+      amountMinor: number;
+      baseAmountMinor: number;
+      partyName: string;
+    }>;
+  };
+  liquidity: {
+    cash: Array<{
+      id: number;
+      code: string;
+      name: string;
+      currencyCode: string;
+      bookBaseMinor: number;
+      bookCurrencyMinor: number;
+      operationalMinor: number;
+      operationalBaseMinor: number | null;
+      rateMicros: number | null;
+      balanceSource: "cash_session" | "ledger";
+      cashSessionId: number | null;
+    }>;
+    banks: Array<{
+      id: number;
+      code: string;
+      name: string;
+      bankName: string;
+      currencyCode: string;
+      financeAccountId: number;
+      baseBalanceMinor: number;
+      currencyBalanceMinor: number;
+    }>;
+  };
+  diagnostics: {
+    missingCustomerPartyMinor: number;
+    missingSupplierPartyMinor: number;
+    agingSourceMovements: number;
+    cashBaseComplete: boolean;
+  };
+}
+
+export function getPosFinanceLiquidityReport(
+  token: string,
+) {
+  return apiRequest<PosFinanceLiquidityReport>(
+    "/api/pos/finance/reports/liquidity",
+    {},
+    token,
+  );
+}
+
+
 export function savePosExchangeRate(
   token: string,
   input: {
