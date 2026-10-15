@@ -188,7 +188,7 @@ export function cardProcessorFromSourceEvent(
 }
 
 export async function getCardProcessorForSale(
-  db: Db,
+  db: any,
   saleId: number,
 ): Promise<PosCardProcessor | null> {
   const rows = await db
@@ -206,10 +206,6 @@ export async function getCardProcessorForSale(
         eq(
           financeTransactionsTable.sourceId,
           String(saleId),
-        ),
-        eq(
-          financeTransactionsTable.status,
-          "posted",
         ),
         inArray(
           financeTransactionsTable.sourceEvent,
