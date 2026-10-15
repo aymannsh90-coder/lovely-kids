@@ -40,6 +40,7 @@ import ProductAnalyticsReportPage from "../pages/reports/ProductAnalyticsReportP
 import SalesAnalyticsPage from "../pages/reports/SalesAnalyticsPage";
 import StatementsPage from "../pages/reports/StatementsPage";
 import TrialBalanceReportPage from "../pages/reports/TrialBalanceReportPage";
+import ReceivablesLiquidityReportPage from "../pages/reports/ReceivablesLiquidityReportPage";
 
 export default function AppRouter() {
   return (
@@ -292,6 +293,15 @@ export default function AppRouter() {
           element={
             <RequireOwner>
               <TrialBalanceReportPage />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="reports/receivables-liquidity"
+          element={
+            <RequireOwner>
+              <ReceivablesLiquidityReportPage />
             </RequireOwner>
           }
         />

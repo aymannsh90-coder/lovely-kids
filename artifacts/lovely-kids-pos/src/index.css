@@ -15235,3 +15235,399 @@ button.inventory-intelligence-metric {
     flex-direction: column;
   }
 }
+
+
+/* Stage 6.2 receivables, payables and liquidity */
+.liquidity-report-page {
+  display: grid;
+  gap: 18px;
+}
+
+.liquidity-report-heading,
+.liquidity-summary-card,
+.liquidity-aging-card,
+.liquidity-checks-card,
+.liquidity-breakdown-card {
+  border: 1px solid #dce9ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(29, 71, 93, 0.06);
+}
+
+.liquidity-report-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+}
+
+.liquidity-report-heading span {
+  color: #e91e8c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.liquidity-report-heading h1 {
+  margin: 6px 0 8px;
+  font-size: clamp(26px, 4vw, 38px);
+}
+
+.liquidity-report-heading p {
+  max-width: 850px;
+  margin: 0;
+  color: #617081;
+  line-height: 1.8;
+}
+
+.liquidity-report-heading .primary-button {
+  min-width: 115px;
+  padding: 0 18px;
+}
+
+.liquidity-summary-card {
+  padding: 18px;
+}
+
+.liquidity-summary-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e8eef2;
+}
+
+.liquidity-summary-title > div {
+  display: grid;
+  gap: 4px;
+}
+
+.liquidity-summary-title span {
+  color: #6b7b89;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.liquidity-summary-title strong {
+  font-size: 20px;
+}
+
+.liquidity-summary-title .is-negative {
+  color: #b91c1c;
+}
+
+.liquidity-primary-metrics,
+.liquidity-secondary-metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.liquidity-primary-metrics {
+  grid-template-columns: repeat(6, minmax(145px, 1fr));
+  margin-top: 14px;
+}
+
+.liquidity-secondary-metrics {
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  margin-top: 10px;
+}
+
+.liquidity-metric {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e2ebef;
+  border-radius: 14px;
+  background: #f9fcfd;
+}
+
+.liquidity-metric.is-emphasis {
+  border-color: #b9dfe8;
+  background: #eefafd;
+}
+
+.liquidity-metric span,
+.liquidity-metric small {
+  color: #6b7b89;
+}
+
+.liquidity-metric span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.liquidity-metric strong {
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+
+.liquidity-metric small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.liquidity-aging-grid,
+.liquidity-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.liquidity-aging-card,
+.liquidity-checks-card,
+.liquidity-breakdown-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.liquidity-aging-card > header,
+.liquidity-checks-card > header,
+.liquidity-breakdown-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-bottom: 1px solid #e8eef2;
+}
+
+.liquidity-aging-card h2,
+.liquidity-checks-card h2,
+.liquidity-breakdown-card h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.liquidity-aging-card header p,
+.liquidity-checks-card header p {
+  margin: 5px 0 0;
+  color: #71808e;
+  font-size: 12px;
+}
+
+.liquidity-aging-card header > strong,
+.liquidity-breakdown-card header > strong {
+  font-size: 19px;
+}
+
+.liquidity-aging-buckets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 8px;
+  padding: 14px;
+}
+
+.liquidity-aging-buckets > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid #edf2f4;
+  border-radius: 11px;
+  background: #fafcfd;
+}
+
+.liquidity-aging-buckets span {
+  color: #71808e;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.liquidity-aging-buckets b {
+  font-size: 14px;
+}
+
+.liquidity-opposite-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 14px 14px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #fff7ed;
+}
+
+.liquidity-opposite-balance span {
+  color: #9a5b14;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.liquidity-opposite-balance strong {
+  color: #8a4b08;
+}
+
+.liquidity-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.liquidity-aging-table,
+.liquidity-checks-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.liquidity-aging-table {
+  min-width: 720px;
+}
+
+.liquidity-checks-table {
+  min-width: 900px;
+}
+
+.liquidity-aging-table th,
+.liquidity-aging-table td,
+.liquidity-checks-table th,
+.liquidity-checks-table td {
+  padding: 10px 9px;
+  border-top: 1px solid #edf2f4;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.liquidity-aging-table th,
+.liquidity-checks-table th {
+  background: #f6fafc;
+  color: #425466;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.liquidity-aging-table td,
+.liquidity-checks-table td {
+  font-size: 12px;
+}
+
+.liquidity-aging-table td:first-child {
+  min-width: 170px;
+  white-space: normal;
+}
+
+.liquidity-aging-table td:first-child strong,
+.liquidity-aging-table td:first-child small {
+  display: block;
+}
+
+.liquidity-aging-table td:first-child small {
+  margin-top: 3px;
+  color: #82909c;
+  direction: ltr;
+}
+
+.liquidity-empty {
+  padding: 22px !important;
+  color: #71808e;
+  text-align: center !important;
+}
+
+.liquidity-check-totals {
+  display: flex;
+  gap: 10px;
+}
+
+.liquidity-check-totals span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f4f8fb;
+  color: #536474;
+  font-size: 12px;
+}
+
+.liquidity-check-direction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.liquidity-check-direction.is-in {
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.liquidity-check-direction.is-out {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.liquidity-checks-table .is-overdue {
+  color: #b91c1c;
+  font-weight: 900;
+}
+
+.liquidity-breakdown-list {
+  display: grid;
+}
+
+.liquidity-breakdown-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 18px;
+  border-top: 1px solid #edf2f4;
+}
+
+.liquidity-breakdown-list article:first-child {
+  border-top: 0;
+}
+
+.liquidity-breakdown-list article > div {
+  display: grid;
+  gap: 3px;
+}
+
+.liquidity-breakdown-list article > div:last-child {
+  text-align: left;
+}
+
+.liquidity-breakdown-list span,
+.liquidity-breakdown-list small {
+  color: #71808e;
+  font-size: 11px;
+}
+
+@media (max-width: 1250px) {
+  .liquidity-primary-metrics {
+    grid-template-columns: repeat(3, minmax(145px, 1fr));
+  }
+
+  .liquidity-secondary-metrics {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .liquidity-aging-grid,
+  .liquidity-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .liquidity-report-heading,
+  .liquidity-summary-title,
+  .liquidity-aging-card > header,
+  .liquidity-checks-card > header,
+  .liquidity-breakdown-card > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .liquidity-primary-metrics,
+  .liquidity-secondary-metrics,
+  .liquidity-aging-buckets {
+    grid-template-columns: 1fr;
+  }
+
+  .liquidity-report-heading .primary-button {
+    width: 100%;
+  }
+}
