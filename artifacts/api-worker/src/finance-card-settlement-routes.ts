@@ -471,9 +471,20 @@ async function settlementHistory(
         financeTransactionsTable,
       )
       .where(
-        eq(
-          financeTransactionsTable.sourceType,
-          "card_terminal_settlement",
+        and(
+          eq(
+            financeTransactionsTable.sourceType,
+            "card_terminal_settlement",
+          ),
+          inArray(
+            financeTransactionsTable.sourceEvent,
+            [
+              CARD_PROCESSORS.arab
+                .sourceEvent,
+              CARD_PROCESSORS.bop
+                .sourceEvent,
+            ],
+          ),
         ),
       )
       .orderBy(
