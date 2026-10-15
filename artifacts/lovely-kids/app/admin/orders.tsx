@@ -97,6 +97,8 @@ interface Order {
   exchangeDifferenceMinor?: number | null;
   exchangeDeliveryChargeMinor?: number | null;
   exchangeSettlementAmountMinor?: number | null;
+  exchangeFinancialCompletedAt?: string | null;
+  exchangeReturnReceivedAt?: string | null;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -112,6 +114,39 @@ interface Order {
   printedAt?: string | null;
   printCount?: number;
   createdAt: string;
+}
+
+interface OnlineExchangeReturnItem {
+  id?: string;
+  productId?: string | null;
+  productNameAr: string;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+}
+
+interface OnlineExchangeStatusPayload {
+  exchange: {
+    publicId: string;
+    financialCompletedAt: string | null;
+    returnReceivedAt: string | null;
+  };
+  returnItems: OnlineExchangeReturnItem[];
+}
+
+interface OnlineExchangeReceivePayload {
+  alreadyReceived: boolean;
+  exchange: {
+    publicId: string;
+    returnReceivedAt: string | null;
+  };
+  items?: OnlineExchangeReturnItem[];
+}
+
+interface ExchangeReturnConfirmation {
+  orderId: number;
+  publicId: string;
+  items: OnlineExchangeReturnItem[];
 }
 
 const ADMIN_STORE_PICKUP_LABEL = "استلام من المحل";
@@ -295,6 +330,10 @@ export default function AdminOrdersScreen() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [pickupConfirmOrder, setPickupConfirmOrder] = useState<Order | null>(null);
   const [pickupConvertingId, setPickupConvertingId] = useState<number | null>(null);
+  const [exchangeReturnConfirm, setExchangeReturnConfirm] =
+    useState<ExchangeReturnConfirmation | null>(null);
+  const [exchangeReturnBusyId, setExchangeReturnBusyId] =
+    useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
   const [printingId, setPrintingId] = useState<number | null>(null);
   const [thermalPrintingId, setThermalPrintingId] =
@@ -411,6 +450,203 @@ export default function AdminOrdersScreen() {
     const interval = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchOnlineExchangeStatus = useCallback(
+    async (publicId: string): Promise<OnlineExchangeStatusPayload> => {
+      const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("انتهت جلسة تسجيل الدخول");
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/pos/exchanges/online/status?publicId=${encodeURIComponent(publicId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const body = (await res.json().catch(() => null)) as
+        | OnlineExchangeStatusPayload
+        | { error?: string }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(
+          body && "error" in body && body.error
+            ? body.error
+            : "تعذر تحميل حالة طرد التبديل",
+        );
+      }
+
+      if (
+        !body ||
+        !("exchange" in body) ||
+        !Array.isArray(body.returnItems)
+      ) {
+        throw new Error("بيانات عملية التبديل غير مكتملة");
+      }
+
+      return body;
+    },
+    [getAuthToken],
+  );
+
+  const openExchangeReturnReceipt = async (order: Order) => {
+    const publicId = order.exchangePublicId?.trim();
+
+    if (!publicId || exchangeReturnBusyId !== null) {
+      return;
+    }
+
+    setExchangeReturnBusyId(order.id);
+
+    try {
+      const status = await fetchOnlineExchangeStatus(publicId);
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item.id === order.id
+            ? {
+                ...item,
+                exchangeFinancialCompletedAt:
+                  status.exchange.financialCompletedAt,
+                exchangeReturnReceivedAt:
+                  status.exchange.returnReceivedAt,
+              }
+            : item,
+        ),
+      );
+
+      if (status.exchange.returnReceivedAt) {
+        if (Platform.OS !== "web") {
+          Alert.alert(
+            "تم الاستلام مسبقًا",
+            "هذا الطرد المرتجع تم استلامه وإرجاع أصنافه إلى المخزون مسبقًا.",
+          );
+        }
+        return;
+      }
+
+      if (!status.exchange.financialCompletedAt) {
+        throw new Error(
+          "يجب تسجيل تسليم الطلب البديل أولًا قبل استلام الطرد المرتجع",
+        );
+      }
+
+      if (status.returnItems.length === 0) {
+        throw new Error("لا توجد أصناف مرتجعة مرتبطة بعملية التبديل");
+      }
+
+      setExchangeReturnConfirm({
+        orderId: order.id,
+        publicId,
+        items: status.returnItems,
+      });
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "تعذر تحميل حالة طرد التبديل";
+
+      showError(msg);
+
+      if (Platform.OS !== "web") {
+        Alert.alert("تعذر استلام التبديل", msg);
+      }
+    } finally {
+      setExchangeReturnBusyId(null);
+    }
+  };
+
+  const confirmReceiveOnlineExchangeReturn = async () => {
+    const confirmation = exchangeReturnConfirm;
+
+    if (!confirmation || exchangeReturnBusyId !== null) {
+      return;
+    }
+
+    setExchangeReturnBusyId(confirmation.orderId);
+
+    try {
+      const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("انتهت جلسة تسجيل الدخول");
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/pos/exchanges/online/receive-return`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            publicId: confirmation.publicId,
+          }),
+        },
+      );
+
+      const body = (await res.json().catch(() => null)) as
+        | OnlineExchangeReceivePayload
+        | { error?: string }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(
+          body && "error" in body && body.error
+            ? body.error
+            : "تعذر تسجيل استلام طرد التبديل",
+        );
+      }
+
+      if (
+        !body ||
+        !("exchange" in body) ||
+        !body.exchange.returnReceivedAt
+      ) {
+        throw new Error("تعذر تأكيد حالة استلام الطرد المرتجع");
+      }
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item.id === confirmation.orderId
+            ? {
+                ...item,
+                exchangeReturnReceivedAt:
+                  body.exchange.returnReceivedAt,
+              }
+            : item,
+        ),
+      );
+
+      setExchangeReturnConfirm(null);
+
+      if (Platform.OS !== "web") {
+        Alert.alert(
+          "تم استلام التبديل",
+          "تم إرجاع الأصناف القديمة إلى المخزون وتحديث تكلفة المخزون بنجاح.",
+        );
+      }
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "تعذر تسجيل استلام طرد التبديل";
+
+      showError(msg);
+
+      if (Platform.OS !== "web") {
+        Alert.alert("تعذر استلام التبديل", msg);
+      }
+    } finally {
+      setExchangeReturnBusyId(null);
+    }
+  };
 
   const updateStatus = async (id: number, status: string) => {
     if (pendingOrderIdsRef.current.has(id)) return;
@@ -2443,6 +2679,128 @@ export default function AdminOrdersScreen() {
                       </Pressable>
                     )}
 
+                    {item.exchangePublicId && (
+                      <View
+                        style={{
+                          borderWidth: 1,
+                          borderColor: "#7C3AED33",
+                          backgroundColor: "#7C3AED0D",
+                          borderRadius: 12,
+                          padding: 12,
+                          gap: 9,
+                          marginTop: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#6D28D9",
+                            fontWeight: "900",
+                            textAlign: "right",
+                          }}
+                        >
+                          🔄 متابعة طلب التبديل
+                        </Text>
+
+                        {item.status === "delivering" && (
+                          <Pressable
+                            disabled={pendingOrderIds.has(item.id)}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              void updateStatus(item.id, "done");
+                            }}
+                            style={[
+                              styles.editOrderBtn,
+                              {
+                                backgroundColor: "#22c55e18",
+                                borderColor: "#22c55e",
+                                opacity: pendingOrderIds.has(item.id) ? 0.55 : 1,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name="bag-check-outline"
+                              size={18}
+                              color="#16A34A"
+                            />
+                            <Text
+                              style={[
+                                styles.editOrderBtnText,
+                                { color: "#16A34A" },
+                              ]}
+                            >
+                              ✅ تم تسليم الطرد
+                            </Text>
+                          </Pressable>
+                        )}
+
+                        {item.status === "done" &&
+                          !item.exchangeReturnReceivedAt && (
+                            <Pressable
+                              disabled={exchangeReturnBusyId === item.id}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                void openExchangeReturnReceipt(item);
+                              }}
+                              style={[
+                                styles.editOrderBtn,
+                                {
+                                  backgroundColor: "#F59E0B18",
+                                  borderColor: "#F59E0B",
+                                  opacity:
+                                    exchangeReturnBusyId === item.id
+                                      ? 0.55
+                                      : 1,
+                                },
+                              ]}
+                            >
+                              {exchangeReturnBusyId === item.id ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#B45309"
+                                />
+                              ) : (
+                                <Ionicons
+                                  name="cube-outline"
+                                  size={18}
+                                  color="#B45309"
+                                />
+                              )}
+                              <Text
+                                style={[
+                                  styles.editOrderBtnText,
+                                  { color: "#B45309" },
+                                ]}
+                              >
+                                📦 تم استلام الطرد المرتجع
+                              </Text>
+                            </Pressable>
+                          )}
+
+                        {item.exchangeReturnReceivedAt && (
+                          <View
+                            style={{
+                              borderRadius: 10,
+                              paddingVertical: 10,
+                              paddingHorizontal: 12,
+                              backgroundColor: "#22c55e18",
+                              borderWidth: 1,
+                              borderColor: "#22c55e55",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: "#15803D",
+                                fontWeight: "900",
+                                textAlign: "center",
+                              }}
+                            >
+                              ✅ تم استلام الطرد المرتجع وإرجاعه للمخزون
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
                     {/* Status Change */}
                     <Text style={[styles.sectionLabel, { color: colors.foreground }]}>تغيير الحالة:</Text>
                     <View style={styles.statusBtns}>
@@ -2481,6 +2839,156 @@ export default function AdminOrdersScreen() {
           }}
         />
       )}
+
+      <Modal
+        visible={exchangeReturnConfirm !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (exchangeReturnBusyId === null) {
+            setExchangeReturnConfirm(null);
+          }
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            if (exchangeReturnBusyId === null) {
+              setExchangeReturnConfirm(null);
+            }
+          }}
+        >
+          <Pressable
+            onPress={() => {}}
+            style={[
+              styles.deleteConfirmCard,
+              {
+                width: 440,
+                maxWidth: "92%",
+                maxHeight: "82%",
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                alignItems: "stretch",
+              },
+            ]}
+          >
+            <View style={{ alignItems: "center", gap: 8 }}>
+              <View
+                style={[
+                  styles.deleteConfirmIcon,
+                  { backgroundColor: "#F59E0B18" },
+                ]}
+              >
+                <Ionicons
+                  name="cube-outline"
+                  size={34}
+                  color="#B45309"
+                />
+              </View>
+
+              <Text
+                style={[
+                  styles.deleteConfirmTitle,
+                  { color: colors.foreground },
+                ]}
+              >
+                تأكيد استلام الطرد المرتجع
+              </Text>
+
+              <Text
+                style={[
+                  styles.deleteConfirmSub,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                سيتم إرجاع الأصناف التالية إلى المخزون بنفس اللون والمقاس
+                والكمية، وتحديث تكلفة المخزون حسب البيانات المحاسبية المسجلة.
+              </Text>
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: 300, width: "100%" }}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {exchangeReturnConfirm?.items.map((returnItem, index) => (
+                <View
+                  key={
+                    returnItem.id ??
+                    `${returnItem.productId ?? "item"}-${index}`
+                  }
+                  style={{
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 10,
+                    padding: 10,
+                    gap: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontWeight: "900",
+                      textAlign: "right",
+                    }}
+                  >
+                    {returnItem.productNameAr}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.mutedForeground,
+                      textAlign: "right",
+                    }}
+                  >
+                    اللون: {returnItem.color || "—"} · المقاس:{" "}
+                    {returnItem.size || "—"} · الكمية:{" "}
+                    {returnItem.quantity}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            <Pressable
+              disabled={exchangeReturnBusyId !== null}
+              onPress={() => {
+                void confirmReceiveOnlineExchangeReturn();
+              }}
+              style={[
+                styles.deleteConfirmBtn,
+                {
+                  backgroundColor: "#F59E0B",
+                  opacity: exchangeReturnBusyId !== null ? 0.55 : 1,
+                },
+              ]}
+            >
+              {exchangeReturnBusyId !== null ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.deleteConfirmBtnText}>
+                  تأكيد الاستلام وإرجاع المخزون
+                </Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              disabled={exchangeReturnBusyId !== null}
+              style={[
+                styles.deleteCancelBtn,
+                { borderColor: colors.border },
+              ]}
+              onPress={() => setExchangeReturnConfirm(null)}
+            >
+              <Text
+                style={[
+                  styles.deleteCancelBtnText,
+                  { color: colors.foreground },
+                ]}
+              >
+                رجوع
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Print Confirmation Modal */}
       <Modal
