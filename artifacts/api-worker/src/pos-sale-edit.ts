@@ -81,6 +81,21 @@ function normalizeRegisterKey(value: unknown): string | null {
   return /^[a-z0-9_-]{1,50}$/.test(key) ? key : null;
 }
 
+function getCurrentPosBusinessDate(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Hebron",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function normalizeBarcode(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -471,6 +486,7 @@ function toSaleResponse(
       cashierUserId: String(sale.cashierUserId),
       status: sale.status,
       paymentMethod: sale.paymentMethod,
+      cardProcessor: null,
 
       subtotalMinor: sale.subtotalMinor,
       subtotal: sale.subtotalMinor / 100,
@@ -1053,6 +1069,16 @@ export async function handleUpdatePosSale(
         );
       }
 
+      if (
+        sale.paymentMethod ===
+        "card"
+      ) {
+        throw new PosSaleEditError(
+          "تعديل فاتورة فيزا غير متاح حاليًا حتى لا يختلف حساب الفيزا الوسيط عن قيمة الفاتورة. ألغِ الفاتورة وأعد إصدارها بالطريقة الصحيحة.",
+          409,
+        );
+      }
+
       const sessionRows = await tx
         .select()
         .from(cashSessionsTable)
@@ -1069,6 +1095,19 @@ export async function handleUpdatePosSale(
       if (!session) {
         throw new PosSaleEditError(
           "لا يمكن تعديل الفاتورة بعد إغلاق يوم الصندوق",
+          409,
+        );
+      }
+
+      const currentBusinessDate =
+        getCurrentPosBusinessDate();
+
+      if (
+        session.businessDate !==
+        currentBusinessDate
+      ) {
+        throw new PosSaleEditError(
+          `جلسة الصندوق المفتوحة تخص ${session.businessDate}. أغلق يوم الصندوق وافتح يوم ${currentBusinessDate} قبل تعديل الفاتورة`,
           409,
         );
       }
