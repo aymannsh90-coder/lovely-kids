@@ -36,8 +36,26 @@ function customerBalanceValue(balanceMinor: number) {
 
 function paymentMethodLabel(
   value: string,
+  cardProcessor:
+    | "arab"
+    | "bop"
+    | null,
 ) {
   if (value === "card") {
+    if (
+      cardProcessor ===
+      "arab"
+    ) {
+      return "فيزا البنك العربي";
+    }
+
+    if (
+      cardProcessor ===
+      "bop"
+    ) {
+      return "فيزا بنك فلسطين";
+    }
+
     return "فيزا";
   }
 
@@ -81,7 +99,10 @@ export default function SaleReceipt({
         <span>الزبون: {result.sale.customerName || "زبون نقدي"}</span>
 
         <span>
-          طريقة الدفع: {paymentMethodLabel(result.sale.paymentMethod)}
+          طريقة الدفع: {paymentMethodLabel(
+            result.sale.paymentMethod,
+            result.sale.cardProcessor,
+          )}
         </span>
       </div>
 
