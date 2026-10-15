@@ -460,6 +460,10 @@ async function handleGetOrders(
           exchangeDocumentsTable.deliveryChargeMinor,
         settlementAmountMinor:
           exchangeDocumentsTable.settlementAmountMinor,
+        financialCompletedAt:
+          exchangeDocumentsTable.financialCompletedAt,
+        returnReceivedAt:
+          exchangeDocumentsTable.returnReceivedAt,
       })
       .from(exchangeDocumentsTable)
       .where(
@@ -510,6 +514,10 @@ async function handleGetOrders(
           linkedExchange?.deliveryChargeMinor ?? null,
         exchangeSettlementAmountMinor:
           linkedExchange?.settlementAmountMinor ?? null,
+        exchangeFinancialCompletedAt:
+          linkedExchange?.financialCompletedAt?.toISOString() ?? null,
+        exchangeReturnReceivedAt:
+          linkedExchange?.returnReceivedAt?.toISOString() ?? null,
       };
     }),
   );
