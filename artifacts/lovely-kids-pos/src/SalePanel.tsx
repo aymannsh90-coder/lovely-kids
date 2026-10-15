@@ -297,6 +297,15 @@ export default function SalePanel({
     | "card"
   >("cash");
 
+  const [
+    settlementCardProcessor,
+    setSettlementCardProcessor,
+  ] = useState<
+    | "arab"
+    | "bop"
+    | null
+  >(null);
+
   const [notes, setNotes] = useState("");
 
   const [lookupBusy, setLookupBusy] = useState(false);
@@ -1011,6 +1020,17 @@ export default function SalePanel({
         );
         return;
       }
+
+      if (
+        settlement.method ===
+          "card" &&
+        !settlementCardProcessor
+      ) {
+        setError(
+          "اختر ماكينة الفيزا لتسديد حساب الزبون",
+        );
+        return;
+      }
     }
 
     const confirmed = window.confirm(
@@ -1086,6 +1106,13 @@ export default function SalePanel({
             paymentMethod:
               settlement.method,
 
+            cardProcessor:
+              settlement.method ===
+                "card"
+                ? settlementCardProcessor ??
+                  undefined
+                : undefined,
+
             registerKey:
               session.registerKey,
 
@@ -1111,6 +1138,9 @@ export default function SalePanel({
       setSelectedCustomerId("");
       setSettlementAmount("0.00");
       setSettlementMethod("cash");
+      setSettlementCardProcessor(
+        null,
+      );
       setCustomerName("");
       setCustomerPhone("");
       setNotes("");
@@ -1771,11 +1801,14 @@ export default function SalePanel({
                           ? "primary-button"
                           : "secondary-button"
                       }
-                      onClick={() =>
+                      onClick={() => {
                         setSettlementMethod(
                           "cash",
-                        )
-                      }
+                        );
+                        setSettlementCardProcessor(
+                          null,
+                        );
+                      }}
                     >
                       💵 كاش
                     </button>
@@ -1784,17 +1817,44 @@ export default function SalePanel({
                       type="button"
                       className={
                         settlementMethod ===
-                        "card"
+                          "card" &&
+                        settlementCardProcessor ===
+                          "arab"
                           ? "primary-button"
                           : "secondary-button"
                       }
-                      onClick={() =>
+                      onClick={() => {
                         setSettlementMethod(
                           "card",
-                        )
-                      }
+                        );
+                        setSettlementCardProcessor(
+                          "arab",
+                        );
+                      }}
                     >
-                      💳 فيزا
+                      💳 فيزا البنك العربي
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        settlementMethod ===
+                          "card" &&
+                        settlementCardProcessor ===
+                          "bop"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={() => {
+                        setSettlementMethod(
+                          "card",
+                        );
+                        setSettlementCardProcessor(
+                          "bop",
+                        );
+                      }}
+                    >
+                      💳 فيزا بنك فلسطين
                     </button>
                   </div>
                 </div>
@@ -1835,6 +1895,11 @@ export default function SalePanel({
                         settlementMethod ===
                           "cash" &&
                         !session
+                      ) ||
+                      (
+                        settlementMethod ===
+                          "card" &&
+                        !settlementCardProcessor
                       )
                     }
                     onClick={() =>
