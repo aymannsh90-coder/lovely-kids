@@ -934,6 +934,16 @@ export default function SalesInvoicePage() {
       return;
     }
 
+    if (
+      sale.paymentMethod ===
+      "card"
+    ) {
+      setError(
+        "تعديل فاتورة فيزا غير متاح حاليًا حتى لا يختلف حساب الفيزا الوسيط عن قيمة الفاتورة. ألغِ الفاتورة وأعد إصدارها بالطريقة الصحيحة.",
+      );
+      return;
+    }
+
     setInvoiceBusy(true);
     setError("");
     setMessage("");
@@ -1455,7 +1465,9 @@ export default function SalesInvoicePage() {
       [
         `سيتم إلغاء الفاتورة ${sale.publicId}.`,
         `القيمة: ${formatMinor(sale.totalMinor)}`,
-        "سيُعاد المخزون ويُطرح صافي الفاتورة من المبيعات والصندوق.",
+        sale.paymentMethod === "card"
+          ? "سيُعاد المخزون ويُعكس قيد مبيعات الفيزا من حساب ماكينة الفيزا الأصلية."
+          : "سيُعاد المخزون ويُطرح صافي الفاتورة من المبيعات والصندوق.",
         "ستبقى الفاتورة محفوظة وتحمل حالة ملغاة.",
         "",
         "هل تريد المتابعة؟",
@@ -1820,7 +1832,8 @@ export default function SalesInvoicePage() {
             invoiceBusy ||
             editMode ||
             !loadedSale ||
-            loadedSale.sale.status !== "completed"
+            loadedSale.sale.status !== "completed" ||
+            loadedSale.sale.paymentMethod === "card"
           }
           onClick={() => {
             void handleEditInvoice();
@@ -2359,7 +2372,13 @@ export default function SalesInvoicePage() {
                     value="card"
                     disabled
                   >
-                    بطاقة — قريبًا
+                    {loadedSale?.sale.cardProcessor ===
+                    "arab"
+                      ? "فيزا البنك العربي — تعديل غير متاح"
+                      : loadedSale?.sale.cardProcessor ===
+                          "bop"
+                        ? "فيزا بنك فلسطين — تعديل غير متاح"
+                        : "فيزا — تعديل غير متاح"}
                   </option>
 
                   <option
