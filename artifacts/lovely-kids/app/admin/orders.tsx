@@ -232,6 +232,12 @@ const STATUS_OPTIONS = [
 
 const ORDER_FILTER_OPTIONS = [
   { key: "all", label: "الكل", color: "#64748B", icon: "apps-outline" as const },
+  {
+    key: "exchange",
+    label: "طلبات التبديل",
+    color: "#7C3AED",
+    icon: "swap-horizontal-outline" as const,
+  },
   ...STATUS_OPTIONS,
 ];
 
@@ -1392,13 +1398,20 @@ export default function AdminOrdersScreen() {
   };
 
   const orderStatusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: orders.length };
+    const counts: Record<string, number> = {
+      all: orders.length,
+      exchange: 0,
+    };
 
     for (const option of STATUS_OPTIONS) {
       counts[option.key] = 0;
     }
 
     for (const order of orders) {
+      if (order.exchangePublicId) {
+        counts.exchange += 1;
+      }
+
       if (typeof counts[order.status] === "number") {
         counts[order.status] += 1;
       }
@@ -1414,7 +1427,15 @@ export default function AdminOrdersScreen() {
 
     return orders.filter((order) => {
       if (
+        orderStatusFilter === "exchange" &&
+        !order.exchangePublicId
+      ) {
+        return false;
+      }
+
+      if (
         orderStatusFilter !== "all" &&
+        orderStatusFilter !== "exchange" &&
         order.status !== orderStatusFilter
       ) {
         return false;
