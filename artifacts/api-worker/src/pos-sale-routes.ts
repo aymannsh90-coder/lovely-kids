@@ -451,6 +451,7 @@ function toSaleResponse(
     previousPublicId: null,
     nextPublicId: null,
   },
+  customerBalanceMinor: number | null = null,
 ) {
   return {
     alreadyCreated,
@@ -470,6 +471,12 @@ function toSaleResponse(
         sale.customerId === null
           ? null
           : String(sale.customerId),
+
+      customerBalanceMinor,
+      customerBalance:
+        customerBalanceMinor === null
+          ? null
+          : customerBalanceMinor / 100,
 
       accountDueMinor:
         sale.accountDueMinor,
@@ -2052,8 +2059,22 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       };
     });
 
+    const customerBalanceMinor =
+      result.sale.customerId === null
+        ? null
+        : await customerReceivableBalanceMinor(
+            db,
+            result.sale.customerId,
+          );
+
     return json(
-      toSaleResponse(result.sale, result.items, result.alreadyCreated),
+      toSaleResponse(
+        result.sale,
+        result.items,
+        result.alreadyCreated,
+        undefined,
+        customerBalanceMinor,
+      ),
       result.alreadyCreated ? 200 : 201,
     );
   } catch (error) {
@@ -2074,7 +2095,23 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         const existing = await getExistingSale(db, idempotencyKey);
 
         if (existing && existing.sale.registerKey === registerKey) {
-          return json(toSaleResponse(existing.sale, existing.items, true));
+          const customerBalanceMinor =
+            existing.sale.customerId === null
+              ? null
+              : await customerReceivableBalanceMinor(
+                  db,
+                  existing.sale.customerId,
+                );
+
+          return json(
+            toSaleResponse(
+              existing.sale,
+              existing.items,
+              true,
+              undefined,
+              customerBalanceMinor,
+            ),
+          );
         }
       }
     }
@@ -3329,7 +3366,23 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
 
   const navigation = await getSaleNavigation(db, sale);
 
-  return json(toSaleResponse(sale, items, false, navigation));
+  const customerBalanceMinor =
+    sale.customerId === null
+      ? null
+      : await customerReceivableBalanceMinor(
+          db,
+          sale.customerId,
+        );
+
+  return json(
+    toSaleResponse(
+      sale,
+      items,
+      false,
+      navigation,
+      customerBalanceMinor,
+    ),
+  );
 }
 
 export async function handlePosSaleRequest(
