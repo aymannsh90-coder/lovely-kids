@@ -42,13 +42,24 @@ function key(prefix: string) {
   return `${prefix}_${suffix}`;
 }
 
-function paymentLabel(method: PosFinanceVoucher["paymentMethod"]) {
+function paymentLabel(
+  method: PosFinanceVoucher["paymentMethod"],
+  cardProcessor:
+    | "arab"
+    | "bop"
+    | null
+    | undefined,
+) {
   if (method === "cash") {
     return "كاش";
   }
 
   if (method === "card") {
-    return "فيزا / بطاقة";
+    return cardProcessor === "arab"
+      ? "فيزا البنك العربي"
+      : cardProcessor === "bop"
+        ? "فيزا بنك فلسطين"
+        : "فيزا / بطاقة قديمة";
   }
 
   if (method === "bank") {
@@ -83,6 +94,14 @@ export default function CustomerReceiptsPage() {
   const [editAmount, setEditAmount] = useState("");
   const [editMethod, setEditMethod] =
     useState<"cash" | "card">("cash");
+  const [
+    editCardProcessor,
+    setEditCardProcessor,
+  ] = useState<
+    | "arab"
+    | "bop"
+    | null
+  >(null);
   const [editNotes, setEditNotes] = useState("");
 
   async function refresh() {
@@ -287,6 +306,10 @@ export default function CustomerReceiptsPage() {
       (voucher.amountMinor / 100).toFixed(2),
     );
     setEditMethod(voucher.paymentMethod);
+    setEditCardProcessor(
+      voucher.cardProcessor ??
+      null,
+    );
     setEditNotes(voucher.notes ?? "");
     setError("");
     setMessage("");
@@ -322,6 +345,16 @@ export default function CustomerReceiptsPage() {
     ) {
       setError(
         "يجب فتح الصندوق لإصدار سند قبض نقدي بديل.",
+      );
+      return;
+    }
+
+    if (
+      editMethod === "card" &&
+      !editCardProcessor
+    ) {
+      setError(
+        "اختر ماكينة الفيزا للسند البديل.",
       );
       return;
     }
@@ -365,6 +398,11 @@ export default function CustomerReceiptsPage() {
                 amount.toFixed(2),
               paymentMethod:
                 editMethod,
+              cardProcessor:
+                editMethod === "card"
+                  ? editCardProcessor ??
+                    undefined
+                  : undefined,
               registerKey:
                 session?.registerKey ??
                 POS_REGISTER_KEY,
@@ -396,6 +434,9 @@ export default function CustomerReceiptsPage() {
       ]);
 
       setEditing(null);
+      setEditCardProcessor(
+        null,
+      );
       setMessage(
         `تم تعديل السند بأمان: أُلغي ${oldPublicId} وصدر السند البديل ${replacement.voucher.publicId}.`,
       );
@@ -657,6 +698,7 @@ export default function CustomerReceiptsPage() {
                       <td>
                         {paymentLabel(
                           voucher.paymentMethod,
+                          voucher.cardProcessor,
                         )}
                       </td>
 
@@ -831,13 +873,24 @@ export default function CustomerReceiptsPage() {
               <span>طريقة القبض</span>
               <select
                 value={editMethod}
-                onChange={(event) =>
-                  setEditMethod(
+                onChange={(event) => {
+                  const value =
                     event.target.value as
                       | "cash"
-                      | "card",
-                  )
-                }
+                      | "card";
+
+                  setEditMethod(
+                    value,
+                  );
+
+                  if (
+                    value !== "card"
+                  ) {
+                    setEditCardProcessor(
+                      null,
+                    );
+                  }
+                }}
                 disabled={
                   busyId !== null
                 }
@@ -850,6 +903,46 @@ export default function CustomerReceiptsPage() {
                 </option>
               </select>
             </label>
+
+            {editMethod ===
+              "card" && (
+              <label>
+                <span>
+                  ماكينة الفيزا
+                </span>
+                <select
+                  value={
+                    editCardProcessor ??
+                    ""
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setEditCardProcessor(
+                      event.target.value ===
+                        "arab" ||
+                      event.target.value ===
+                        "bop"
+                        ? event.target.value
+                        : null,
+                    )
+                  }
+                  disabled={
+                    busyId !== null
+                  }
+                >
+                  <option value="">
+                    اختر الماكينة
+                  </option>
+                  <option value="arab">
+                    البنك العربي
+                  </option>
+                  <option value="bop">
+                    بنك فلسطين
+                  </option>
+                </select>
+              </label>
+            )}
 
             <label>
               <span>ملاحظات</span>
