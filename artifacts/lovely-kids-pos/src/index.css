@@ -15631,3 +15631,433 @@ button.inventory-intelligence-metric {
     width: 100%;
   }
 }
+
+
+/* =========================================================
+   Stage 7 — financial statements with progressive cost coverage
+   ========================================================= */
+
+.financial-statements-page {
+  display: grid;
+  gap: 18px;
+}
+
+.financial-statements-heading,
+.financial-statements-filters,
+.financial-cost-coverage-card,
+.financial-statement-card,
+.financial-inventory-memo,
+.financial-missing-cost-card {
+  border: 1px solid #dce9ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(29, 71, 93, 0.06);
+}
+
+.financial-statements-heading {
+  padding: 22px;
+}
+
+.financial-statements-heading span,
+.financial-statement-card > header span,
+.financial-inventory-memo > header span,
+.financial-missing-cost-card > header span,
+.financial-cost-coverage-head span {
+  color: #e91e8c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.financial-statements-heading h1 {
+  margin: 6px 0 8px;
+  font-size: clamp(26px, 4vw, 38px);
+}
+
+.financial-statements-heading p {
+  max-width: 980px;
+  margin: 0;
+  color: #617081;
+  line-height: 1.8;
+}
+
+.financial-statements-filters {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+}
+
+.financial-statements-filters label {
+  display: grid;
+  gap: 7px;
+  min-width: 180px;
+}
+
+.financial-statements-filters label span {
+  color: #526171;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.financial-statements-filters input {
+  min-height: 42px;
+  border: 1px solid #d9e2e8;
+  border-radius: 11px;
+  padding: 0 11px;
+  background: #fff;
+}
+
+.financial-statements-gate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid;
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+
+.financial-statements-gate.is-pass {
+  border-color: #b9e7cc;
+  background: #f1fbf5;
+}
+
+.financial-statements-gate.is-fail {
+  border-color: #f2b8b5;
+  background: #fff4f3;
+}
+
+.financial-statements-gate strong {
+  font-size: 16px;
+}
+
+.financial-statements-gate p {
+  margin: 5px 0 0;
+  color: #5f6b76;
+}
+
+.financial-statements-gate > b {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 24px;
+}
+
+.financial-statements-gate.is-pass > b {
+  background: #dff5e7;
+  color: #177245;
+}
+
+.financial-statements-gate.is-fail > b {
+  background: #fde1df;
+  color: #b42318;
+}
+
+.financial-cost-coverage-card {
+  padding: 18px;
+}
+
+.financial-cost-coverage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.financial-cost-coverage-head > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.financial-cost-coverage-head strong {
+  font-size: 28px;
+}
+
+.financial-cost-status {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.financial-cost-status.is-complete {
+  background: #e7f7ed;
+  color: #166b42;
+}
+
+.financial-cost-status.is-partial {
+  background: #fff4db;
+  color: #8b5a00;
+}
+
+.financial-cost-progress {
+  height: 12px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f5;
+}
+
+.financial-cost-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e91e8c, #96dfec);
+}
+
+.financial-cost-coverage-card > p {
+  margin: 12px 0 0;
+  color: #5f6b76;
+  line-height: 1.7;
+}
+
+.financial-statement-card,
+.financial-inventory-memo,
+.financial-missing-cost-card {
+  padding: 18px;
+}
+
+.financial-statement-card > header,
+.financial-inventory-memo > header,
+.financial-missing-cost-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.financial-statement-card > header h2,
+.financial-inventory-memo > header h2,
+.financial-missing-cost-card > header h2 {
+  margin: 5px 0 0;
+  font-size: 23px;
+}
+
+.financial-statement-card > header > strong,
+.financial-inventory-memo > header > strong {
+  font-size: 24px;
+}
+
+.financial-statement-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.financial-statement-metric {
+  display: grid;
+  gap: 7px;
+  min-height: 112px;
+  align-content: center;
+  border: 1px solid #e3ebef;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fbfdfe;
+}
+
+.financial-statement-metric > span {
+  color: #667786;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.financial-statement-metric > strong {
+  font-size: 20px;
+}
+
+.financial-statement-metric > small {
+  color: #748391;
+  line-height: 1.5;
+}
+
+.financial-statement-metric.is-positive {
+  border-color: #bce7ce;
+  background: #f2fbf6;
+}
+
+.financial-statement-metric.is-negative {
+  border-color: #f0c1bd;
+  background: #fff5f4;
+}
+
+.financial-statement-metric.is-warning {
+  border-color: #f1d698;
+  background: #fffaf0;
+}
+
+.is-positive-text {
+  color: #157347;
+}
+
+.is-negative-text {
+  color: #b42318;
+}
+
+.financial-statement-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.financial-statement-columns > article {
+  overflow: hidden;
+  border: 1px solid #e3ebef;
+  border-radius: 14px;
+}
+
+.financial-statement-columns > article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  background: #f7fafb;
+}
+
+.financial-statement-columns h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.financial-statement-account-list {
+  display: grid;
+}
+
+.financial-statement-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-top: 1px solid #edf1f4;
+}
+
+.financial-statement-account-row > div {
+  display: grid;
+  gap: 2px;
+}
+
+.financial-statement-account-row small {
+  color: #7b8792;
+}
+
+.financial-statement-empty {
+  padding: 20px 14px;
+  color: #7a8791;
+  text-align: center;
+}
+
+.financial-equation {
+  display: grid;
+  grid-template-columns: auto auto 34px minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  border-radius: 14px;
+  padding: 15px;
+  background: #f5f9fb;
+}
+
+.financial-equation i {
+  color: #e91e8c;
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
+}
+
+.financial-disclosure {
+  margin-top: 14px;
+  border-inline-start: 4px solid #96dfec;
+  border-radius: 10px;
+  padding: 13px 15px;
+  background: #f6fcfd;
+}
+
+.financial-disclosure p {
+  margin: 5px 0 0;
+  color: #5e6c78;
+  line-height: 1.75;
+}
+
+.financial-history-warning {
+  margin-bottom: 14px;
+  border: 1px solid #f1d698;
+  border-radius: 12px;
+  padding: 11px 13px;
+  background: #fffaf0;
+  color: #79520b;
+  line-height: 1.6;
+}
+
+.financial-missing-cost-card > header > b {
+  display: grid;
+  min-width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff0f7;
+  color: #c21875;
+  font-size: 18px;
+}
+
+.financial-missing-cost-table-wrap {
+  overflow-x: auto;
+}
+
+.financial-missing-cost-card table {
+  width: 100%;
+  min-width: 650px;
+  border-collapse: collapse;
+}
+
+.financial-missing-cost-card th,
+.financial-missing-cost-card td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #edf1f4;
+  text-align: right;
+}
+
+.financial-missing-cost-card th {
+  background: #f7fafb;
+  color: #5c6a75;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .financial-statement-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .financial-statements-filters,
+  .financial-cost-coverage-head,
+  .financial-statement-card > header,
+  .financial-inventory-memo > header,
+  .financial-missing-cost-card > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .financial-statements-filters label {
+    min-width: 0;
+  }
+
+  .financial-statement-metrics,
+  .financial-statement-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-equation {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-equation i {
+    transform: rotate(90deg);
+  }
+}

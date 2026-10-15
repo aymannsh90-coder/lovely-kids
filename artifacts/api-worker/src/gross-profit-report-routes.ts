@@ -22,7 +22,6 @@ import {
   gte,
   inArray,
   lte,
-  sql,
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
@@ -399,8 +398,14 @@ async function handleGrossProfit(
             posSalesTable.status,
             "completed",
           ),
-          sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
-          sql`(${posSalesTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+          gte(
+            posSalesTable.businessDate,
+            from,
+          ),
+          lte(
+            posSalesTable.businessDate,
+            to,
+          ),
         ),
       );
 
@@ -549,8 +554,14 @@ async function handleGrossProfit(
             posSaleReturnsTable.status,
             "completed",
           ),
-          sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
-          sql`(${posSaleReturnsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+          gte(
+            posSaleReturnsTable.businessDate,
+            from,
+          ),
+          lte(
+            posSaleReturnsTable.businessDate,
+            to,
+          ),
         ),
       );
 
@@ -701,8 +712,14 @@ async function handleGrossProfit(
               "pos_no_receipt",
             ],
           ),
-          sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
-          sql`(${exchangeDocumentsTable.createdAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+          gte(
+            exchangeDocumentsTable.businessDate,
+            from,
+          ),
+          lte(
+            exchangeDocumentsTable.businessDate,
+            to,
+          ),
         ),
       );
 
@@ -1641,7 +1658,7 @@ async function handleGrossProfit(
 
     methodology: {
       posDateBasis:
-        "POS sale/return/exchange actual creation date in Asia/Hebron",
+        "POS sale/return/exchange business date",
 
       onlineDateBasis:
         "Finance business date when web order becomes done",
