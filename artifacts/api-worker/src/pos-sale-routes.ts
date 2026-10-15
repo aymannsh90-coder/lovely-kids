@@ -3308,7 +3308,25 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
 
     const navigation = await getSaleNavigation(db, result.sale);
 
-    return json(toSaleResponse(result.sale, result.items, false, navigation));
+    const cardProcessor =
+      result.sale.paymentMethod ===
+      "card"
+        ? await getCardProcessorForSale(
+            db,
+            result.sale.id,
+          )
+        : null;
+
+    return json(
+      toSaleResponse(
+        result.sale,
+        result.items,
+        false,
+        navigation,
+        null,
+        cardProcessor,
+      ),
+    );
   } catch (error) {
     if (error instanceof PosSaleError) {
       return json({ error: error.message }, error.status);
