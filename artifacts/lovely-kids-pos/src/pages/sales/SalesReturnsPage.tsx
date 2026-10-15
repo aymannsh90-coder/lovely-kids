@@ -119,6 +119,15 @@ export default function SalesReturnsPage() {
   >("cash");
 
   const [
+    cardProcessor,
+    setCardProcessor,
+  ] = useState<
+    | "arab"
+    | "bop"
+    | null
+  >(null);
+
+  const [
     refundCustomerId,
     setRefundCustomerId,
   ] = useState<number | null>(
@@ -254,6 +263,7 @@ export default function SalesReturnsPage() {
     setReason("");
     setNotes("");
     setRefundMethod("cash");
+    setCardProcessor(null);
     setRefundCustomerId(null);
     setError("");
     setCompletedReturn(null);
@@ -636,6 +646,16 @@ export default function SalesReturnsPage() {
       return;
     }
 
+    if (
+      refundMethod === "card" &&
+      !cardProcessor
+    ) {
+      setError(
+        "اختر ماكينة الفيزا للمرتجع: البنك العربي أو بنك فلسطين",
+      );
+      return;
+    }
+
     const refundDescription =
       refundMethod === "cash"
         ? "سيتم إرجاع المخزون وخصم مبلغ الاسترداد من الصندوق."
@@ -668,6 +688,11 @@ export default function SalesReturnsPage() {
         registerKey,
         idempotencyKey,
         refundMethod,
+        cardProcessor:
+          refundMethod === "card"
+            ? cardProcessor ??
+              undefined
+            : undefined,
         customerId:
           refundCustomerId ??
           undefined,
@@ -1297,6 +1322,15 @@ export default function SalesReturnsPage() {
                           method,
                         );
 
+                        if (
+                          method !==
+                          "card"
+                        ) {
+                          setCardProcessor(
+                            null,
+                          );
+                        }
+
                         setCompletedBarcodeReturn(
                           null,
                         );
@@ -1311,6 +1345,54 @@ export default function SalesReturnsPage() {
                   </label>
                 ))}
               </div>
+
+              {refundMethod ===
+                "card" && (
+                <div
+                  style={{
+                    display:
+                      "flex",
+                    gap: 8,
+                    flexWrap:
+                      "wrap",
+                    marginTop: 12,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className={
+                      cardProcessor ===
+                      "arab"
+                        ? "primary-button"
+                        : "secondary-button"
+                    }
+                    onClick={() =>
+                      setCardProcessor(
+                        "arab",
+                      )
+                    }
+                  >
+                    فيزا البنك العربي
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      cardProcessor ===
+                      "bop"
+                        ? "primary-button"
+                        : "secondary-button"
+                    }
+                    onClick={() =>
+                      setCardProcessor(
+                        "bop",
+                      )
+                    }
+                  >
+                    فيزا بنك فلسطين
+                  </button>
+                </div>
+              )}
 
               <small
                 style={{
@@ -1724,7 +1806,10 @@ export default function SalesReturnsPage() {
                     marginTop: 10,
                   }}
                 >
-                  اختيار الزبون مستقل عن طريقة الاسترداد. عند اختيار حساب الزبون فقط، مبلغ المرتجع ينزل رصيدًا له بدون إخراج نقدي من الصندوق.
+                  {refundMethod ===
+                  "card"
+                    ? "الاسترداد بالفيزا يُسجل تلقائيًا على نفس ماكينة الفاتورة الأصلية."
+                    : "اختيار الزبون مستقل عن طريقة الاسترداد. عند اختيار حساب الزبون فقط، مبلغ المرتجع ينزل رصيدًا له بدون إخراج نقدي من الصندوق."}
                 </small>
               </div>
 
