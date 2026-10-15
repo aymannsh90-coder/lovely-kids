@@ -53,7 +53,36 @@ function formatMinor(value: number) {
 }
 
 function paymentMethodLabel(value: string) {
-  return value === "card" ? "فيزا" : "نقدي";
+  if (value === "card") {
+    return "فيزا";
+  }
+
+  if (value === "credit") {
+    return "على الحساب";
+  }
+
+  if (value === "mixed") {
+    return "مختلط: نقدي + حساب";
+  }
+
+  return "نقدي";
+}
+
+function defaultCustomerLabel(
+  paymentMethod: string,
+) {
+  if (paymentMethod === "card") {
+    return "زبون فيزا";
+  }
+
+  if (
+    paymentMethod === "credit" ||
+    paymentMethod === "mixed"
+  ) {
+    return "زبون على الحساب";
+  }
+
+  return "زبون نقدي";
 }
 
 function refundMethodLabel(
@@ -288,10 +317,33 @@ export default function TodaySalesPanel({
   const cashSalesMinor = useMemo(
     () =>
       activeSales.reduce(
-        (total, result) =>
-          result.sale.paymentMethod === "card"
-            ? total
-            : total + result.sale.totalMinor,
+        (total, result) => {
+          if (
+            result.sale.paymentMethod ===
+            "cash"
+          ) {
+            return (
+              total +
+              result.sale.totalMinor
+            );
+          }
+
+          if (
+            result.sale.paymentMethod ===
+            "mixed"
+          ) {
+            return (
+              total +
+              Math.max(
+                0,
+                result.sale.paidMinor -
+                  result.sale.changeMinor,
+              )
+            );
+          }
+
+          return total;
+        },
         0,
       ),
     [activeSales],
@@ -304,6 +356,20 @@ export default function TodaySalesPanel({
           result.sale.paymentMethod === "card"
             ? total + result.sale.totalMinor
             : total,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const accountSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          total +
+          Math.max(
+            0,
+            result.sale.accountDueMinor,
+          ),
         0,
       ),
     [activeSales],
@@ -665,6 +731,11 @@ export default function TodaySalesPanel({
           </div>
 
           <div>
+            <span>مبيعات على الحساب</span>
+            <strong>{formatMinor(accountSalesMinor)}</strong>
+          </div>
+
+          <div>
             <span>المردودات</span>
             <strong>{formatMinor(returnedMinor)}</strong>
           </div>
@@ -765,9 +836,9 @@ export default function TodaySalesPanel({
 
                     <td>
                       {row.sale.customerName ||
-                        (row.sale.paymentMethod === "card"
-                          ? "زبون فيزا"
-                          : "زبون نقدي")}
+                        defaultCustomerLabel(
+                          row.sale.paymentMethod,
+                        )}
                       <small>
                         الدفع: {paymentMethodLabel(row.sale.paymentMethod)}
                       </small>
@@ -1266,9 +1337,9 @@ export default function TodaySalesPanel({
 
                 <td>
                   {row.sale.customerName ||
-                    (row.sale.paymentMethod === "card"
-                      ? "زبون فيزا"
-                      : "زبون نقدي")}
+                    defaultCustomerLabel(
+                      row.sale.paymentMethod,
+                    )}
                   {" — "}
                   {paymentMethodLabel(row.sale.paymentMethod)}
                 </td>
