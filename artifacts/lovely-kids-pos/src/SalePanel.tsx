@@ -253,6 +253,15 @@ export default function SalePanel({
       | "mixed"
     >("cash");
 
+  const [
+    cardProcessor,
+    setCardProcessor,
+  ] = useState<
+    | "arab"
+    | "bop"
+    | null
+  >(null);
+
   const [customers, setCustomers] =
     useState<PosCustomer[]>([]);
 
@@ -835,6 +844,9 @@ export default function SalePanel({
     setPaymentMethod(
       "credit",
     );
+    setCardProcessor(
+      null,
+    );
   }, [
     selectedCustomerId,
     customers,
@@ -915,6 +927,16 @@ export default function SalePanel({
     ) {
       setError(
         "المبلغ المدفوع أقل من قيمة الفاتورة",
+      );
+      return;
+    }
+
+    if (
+      paymentMethod === "card" &&
+      !cardProcessor
+    ) {
+      setError(
+        "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
       );
       return;
     }
@@ -1008,6 +1030,11 @@ export default function SalePanel({
 
         idempotencyKey: requestKey,
         paymentMethod,
+        cardProcessor:
+          paymentMethod === "card"
+            ? cardProcessor ??
+              undefined
+            : undefined,
 
         discountAmount: discountAmount.trim(),
 
@@ -1080,6 +1107,7 @@ export default function SalePanel({
       setCart([]);
       setDiscountAmount("0.00");
       setPaymentMethod("cash");
+      setCardProcessor(null);
       setSelectedCustomerId("");
       setSettlementAmount("0.00");
       setSettlementMethod("cash");
@@ -1536,11 +1564,14 @@ export default function SalePanel({
                       ? "primary-button"
                       : "secondary-button"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setPaymentMethod(
                       "cash",
-                    )
-                  }
+                    );
+                    setCardProcessor(
+                      null,
+                    );
+                  }}
                 >
                   💵 نقدي
                 </button>
@@ -1549,17 +1580,44 @@ export default function SalePanel({
                   type="button"
                   className={
                     paymentMethod ===
-                    "card"
+                      "card" &&
+                    cardProcessor ===
+                      "arab"
                       ? "primary-button"
                       : "secondary-button"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setPaymentMethod(
                       "card",
-                    )
-                  }
+                    );
+                    setCardProcessor(
+                      "arab",
+                    );
+                  }}
                 >
-                  💳 فيزا
+                  💳 فيزا البنك العربي
+                </button>
+
+                <button
+                  type="button"
+                  className={
+                    paymentMethod ===
+                      "card" &&
+                    cardProcessor ===
+                      "bop"
+                      ? "primary-button"
+                      : "secondary-button"
+                  }
+                  onClick={() => {
+                    setPaymentMethod(
+                      "card",
+                    );
+                    setCardProcessor(
+                      "bop",
+                    );
+                  }}
+                >
+                  💳 فيزا بنك فلسطين
                 </button>
 
                 <button
@@ -1570,11 +1628,14 @@ export default function SalePanel({
                       ? "primary-button"
                       : "secondary-button"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setPaymentMethod(
                       "credit",
-                    )
-                  }
+                    );
+                    setCardProcessor(
+                      null,
+                    );
+                  }}
                 >
                   🧾 آجل
                 </button>
@@ -1881,7 +1942,11 @@ export default function SalePanel({
             <span>
               طريقة الدفع: {
                 lastSale.sale.paymentMethod === "card"
-                  ? "فيزا"
+                  ? lastSale.sale.cardProcessor === "arab"
+                    ? "فيزا البنك العربي"
+                    : lastSale.sale.cardProcessor === "bop"
+                      ? "فيزا بنك فلسطين"
+                      : "فيزا"
                   : lastSale.sale.paymentMethod === "credit"
                     ? "آجل"
                     : lastSale.sale.paymentMethod === "mixed"
