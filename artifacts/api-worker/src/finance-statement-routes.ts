@@ -1450,6 +1450,7 @@ async function handleTrialBalance(
 
   const [
     accounts,
+    transactions,
     ledgerRows,
   ] =
     await Promise.all([
@@ -1474,6 +1475,32 @@ async function handleTrialBalance(
         .orderBy(
           asc(
             financeAccountsTable.code,
+          ),
+        ),
+
+      db
+        .select({
+          id:
+            financeTransactionsTable.id,
+          publicId:
+            financeTransactionsTable.publicId,
+          businessDate:
+            financeTransactionsTable.businessDate,
+          status:
+            financeTransactionsTable.status,
+        })
+        .from(
+          financeTransactionsTable,
+        )
+        .where(
+          lte(
+            financeTransactionsTable.businessDate,
+            to,
+          ),
+        )
+        .orderBy(
+          asc(
+            financeTransactionsTable.id,
           ),
         ),
 
@@ -1542,7 +1569,24 @@ async function handleTrialBalance(
         debitMinor: number;
         creditMinor: number;
       }
-    >();
+    >(
+      transactions.map(
+        (transaction) => [
+          transaction.id,
+          {
+            publicId:
+              transaction.publicId,
+            businessDate:
+              transaction.businessDate,
+            status:
+              transaction.status,
+            lineCount: 0,
+            debitMinor: 0,
+            creditMinor: 0,
+          },
+        ],
+      ),
+    );
 
   let ledgerDebitMinor = 0;
   let ledgerCreditMinor = 0;
@@ -1600,17 +1644,13 @@ async function handleTrialBalance(
     const transactionTotals =
       byTransaction.get(
         row.transactionId,
-      ) ?? {
-        publicId:
-          row.publicId,
-        businessDate:
-          row.businessDate,
-        status:
-          row.transactionStatus,
-        lineCount: 0,
-        debitMinor: 0,
-        creditMinor: 0,
-      };
+      );
+
+    if (!transactionTotals) {
+      throw new Error(
+        "FINANCE_TRIAL_BALANCE_TRANSACTION_MISSING",
+      );
+    }
 
     transactionTotals.lineCount +=
       1;
