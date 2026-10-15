@@ -142,7 +142,7 @@ export const CARD_PROCESSOR_CONFIG: Record<
     label:
       "فيزا البنك العربي",
     sourceEvent:
-      "card_settlement_arab",
+      "card_sale_arab",
   },
   bop: {
     clearingCode:
@@ -152,7 +152,7 @@ export const CARD_PROCESSOR_CONFIG: Record<
     label:
       "فيزا بنك فلسطين",
     sourceEvent:
-      "card_settlement_bop",
+      "card_sale_bop",
   },
 };
 
