@@ -3,6 +3,7 @@ import { handleFinanceBankingRequest } from "./finance-banking-routes";
 import { handleFinanceTransferRequest } from "./finance-transfer-routes";
 import { handleFinanceCheckRequest } from "./finance-check-routes";
 import { handleFinanceStatementRequest } from "./finance-statement-routes";
+import { handleFinanceLiquidityReportRequest } from "./finance-liquidity-report-routes";
 import { handleUnifiedVoucherRequest } from "./finance-voucher-routes";
 import { appSettingsTable, productsTable } from "@workspace/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -447,6 +448,17 @@ export default {
 
       if (financeStatementResponse) {
         return financeStatementResponse;
+      }
+
+      const financeLiquidityReportResponse =
+        await handleFinanceLiquidityReportRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (financeLiquidityReportResponse) {
+        return financeLiquidityReportResponse;
       }
 
       const unifiedVoucherResponse =
