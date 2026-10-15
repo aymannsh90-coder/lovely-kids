@@ -105,6 +105,21 @@ function normalizeRegisterKey(value: unknown): string | null {
   return /^[a-z0-9_-]{1,50}$/.test(key) ? key : null;
 }
 
+function getCurrentPosBusinessDate(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Hebron",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function normalizeBarcode(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -1292,6 +1307,19 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
       if (!session) {
         throw new PosSaleError("يجب فتح يوم الصندوق قبل البيع", 409);
+      }
+
+      const currentBusinessDate =
+        getCurrentPosBusinessDate();
+
+      if (
+        session.businessDate !==
+        currentBusinessDate
+      ) {
+        throw new PosSaleError(
+          `جلسة الصندوق المفتوحة تخص ${session.businessDate}. أغلق يوم الصندوق وافتح يوم ${currentBusinessDate} قبل تسجيل بيع جديد`,
+          409,
+        );
       }
 
       let customer:
