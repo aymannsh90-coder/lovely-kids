@@ -134,6 +134,15 @@ export default function CustomersPage() {
     | "card"
   >("cash");
 
+  const [
+    receiptCardProcessor,
+    setReceiptCardProcessor,
+  ] = useState<
+    | "arab"
+    | "bop"
+    | null
+  >(null);
+
   const [receiptNotes, setReceiptNotes] =
     useState("");
 
@@ -393,6 +402,16 @@ export default function CustomersPage() {
       return;
     }
 
+    if (
+      receiptMethod === "card" &&
+      !receiptCardProcessor
+    ) {
+      setError(
+        "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
+      );
+      return;
+    }
+
     setReceiptBusy(true);
     setError("");
     setMessage("");
@@ -408,6 +427,12 @@ export default function CustomersPage() {
 
             paymentMethod:
               receiptMethod,
+
+            cardProcessor:
+              receiptMethod === "card"
+                ? receiptCardProcessor ??
+                  undefined
+                : undefined,
 
             registerKey:
               session?.registerKey ??
@@ -426,6 +451,9 @@ export default function CustomersPage() {
 
       setReceiptAmount("");
       setReceiptNotes("");
+      setReceiptCardProcessor(
+        null,
+      );
 
       await Promise.all([
         loadCustomers(true),
@@ -916,11 +944,14 @@ export default function CustomersPage() {
                             ? "primary-button"
                             : "secondary-button"
                         }
-                        onClick={() =>
+                        onClick={() => {
                           setReceiptMethod(
                             "cash",
-                          )
-                        }
+                          );
+                          setReceiptCardProcessor(
+                            null,
+                          );
+                        }}
                       >
                         💵 كاش
                       </button>
@@ -929,17 +960,44 @@ export default function CustomersPage() {
                         type="button"
                         className={
                           receiptMethod ===
-                          "card"
+                            "card" &&
+                          receiptCardProcessor ===
+                            "arab"
                             ? "primary-button"
                             : "secondary-button"
                         }
-                        onClick={() =>
+                        onClick={() => {
                           setReceiptMethod(
                             "card",
-                          )
-                        }
+                          );
+                          setReceiptCardProcessor(
+                            "arab",
+                          );
+                        }}
                       >
-                        💳 فيزا
+                        💳 فيزا البنك العربي
+                      </button>
+
+                      <button
+                        type="button"
+                        className={
+                          receiptMethod ===
+                            "card" &&
+                          receiptCardProcessor ===
+                            "bop"
+                            ? "primary-button"
+                            : "secondary-button"
+                        }
+                        onClick={() => {
+                          setReceiptMethod(
+                            "card",
+                          );
+                          setReceiptCardProcessor(
+                            "bop",
+                          );
+                        }}
+                      >
+                        💳 فيزا بنك فلسطين
                       </button>
                     </div>
                   </div>
@@ -972,6 +1030,11 @@ export default function CustomersPage() {
                         receiptMethod ===
                           "cash" &&
                         !session
+                      ) ||
+                      (
+                        receiptMethod ===
+                          "card" &&
+                        !receiptCardProcessor
                       )
                     }
                   >
