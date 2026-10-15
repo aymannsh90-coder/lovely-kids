@@ -22,6 +22,18 @@ function shortProductName(value: string) {
 }
 
 
+function customerBalanceValue(balanceMinor: number) {
+  if (balanceMinor > 0) {
+    return `${(balanceMinor / 100).toFixed(2)} ₪ عليك`;
+  }
+
+  if (balanceMinor < 0) {
+    return `${(Math.abs(balanceMinor) / 100).toFixed(2)} ₪ لك`;
+  }
+
+  return "0.00 ₪";
+}
+
 function paymentMethodLabel(
   value: string,
 ) {
@@ -145,6 +157,16 @@ export default function SaleReceipt({
           <span>الباقي</span>
           <strong>{result.sale.change.toFixed(2)} ₪</strong>
         </div>
+
+        {result.sale.customerId &&
+          typeof result.sale.customerBalanceMinor === "number" && (
+            <div className="receipt-total">
+              <span>رصيدك الحالي حتى لحظة طباعة الفاتورة</span>
+              <strong>
+                {customerBalanceValue(result.sale.customerBalanceMinor)}
+              </strong>
+            </div>
+          )}
       </div>
 
       <div className="receipt-invoice-barcode">
