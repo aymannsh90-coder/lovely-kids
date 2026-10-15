@@ -39,6 +39,7 @@ import InventoryIntelligenceReportPage from "../pages/reports/InventoryIntellige
 import ProductAnalyticsReportPage from "../pages/reports/ProductAnalyticsReportPage";
 import SalesAnalyticsPage from "../pages/reports/SalesAnalyticsPage";
 import StatementsPage from "../pages/reports/StatementsPage";
+import TrialBalanceReportPage from "../pages/reports/TrialBalanceReportPage";
 
 export default function AppRouter() {
   return (
@@ -282,6 +283,15 @@ export default function AppRouter() {
           element={
             <RequireOwner>
               <StatementsPage />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="reports/trial-balance"
+          element={
+            <RequireOwner>
+              <TrialBalanceReportPage />
             </RequireOwner>
           }
         />
