@@ -38,6 +38,22 @@ type PosUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
 const MAX_MINOR = 2_000_000_000;
 const MAX_STOCK = 2_000_000_000;
 
+function getCurrentPosBusinessDate(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Hebron",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+
 const headers = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -615,6 +631,19 @@ export async function handleCreatePosSaleReturn(
       if (!session) {
         throw new PosSaleReturnError(
           "يجب فتح يوم الصندوق قبل تنفيذ المرتجع",
+          409,
+        );
+      }
+
+      const currentBusinessDate =
+        getCurrentPosBusinessDate();
+
+      if (
+        session.businessDate !==
+        currentBusinessDate
+      ) {
+        throw new PosSaleReturnError(
+          `جلسة الصندوق المفتوحة تخص ${session.businessDate}. أغلق يوم الصندوق وافتح يوم ${currentBusinessDate} قبل تنفيذ المرتجع`,
           409,
         );
       }
