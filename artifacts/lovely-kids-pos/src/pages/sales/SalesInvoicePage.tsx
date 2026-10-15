@@ -1327,17 +1327,39 @@ export default function SalesInvoicePage() {
   }, [loadedSale]);
 
   async function printLoadedSaleDirect() {
-    const source = receiptRef.current;
-
-    if (!loadedSale || !source) {
+    if (!loadedSale) {
       setError("لا توجد فاتورة جاهزة للطباعة.");
       return;
     }
 
     try {
       setError("");
+
+      let receiptSale = loadedSale;
+
+      if (loadedSale.sale.customerId) {
+        receiptSale = await getPosSaleByPublicId(
+          token,
+          loadedSale.sale.publicId,
+        );
+
+        setLoadedSale(receiptSale);
+
+        await new Promise<void>((resolve) =>
+          window.requestAnimationFrame(() =>
+            window.requestAnimationFrame(() => resolve()),
+          ),
+        );
+      }
+
+      const source = receiptRef.current;
+
+      if (!source) {
+        throw new Error("لا توجد فاتورة جاهزة للطباعة.");
+      }
+
       await printReceiptElementDirect(source);
-      setMessage(`تم إرسال الفاتورة ${loadedSale.sale.publicId} إلى الطابعة.`);
+      setMessage(`تم إرسال الفاتورة ${receiptSale.sale.publicId} إلى الطابعة.`);
     } catch (caught) {
       setError(
         caught instanceof Error
