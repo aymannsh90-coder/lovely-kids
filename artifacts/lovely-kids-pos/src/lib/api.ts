@@ -356,6 +356,8 @@ export interface PosSaleResult {
     paymentMethod: string;
 
     customerId: string | null;
+    customerBalanceMinor: number | null;
+    customerBalance: number | null;
 
     accountDueMinor: number;
     accountDue: number;
