@@ -744,9 +744,17 @@ export default function ReceivablesLiquidityReportPage() {
                             .operationalBaseMinor ===
                           null
                             ? "قيمة ILS غير متاحة"
-                            : money(
-                                account.operationalBaseMinor,
-                              )}
+                            : account.balanceSource ===
+                                "cash_session"
+                              ? `دفتر الأستاذ: ${money(
+                                  account.bookBaseMinor,
+                                )} · الفرق التشغيلي: ${money(
+                                  account.operationalBaseMinor -
+                                    account.bookBaseMinor,
+                                )}`
+                              : `دفتر الأستاذ: ${money(
+                                  account.bookBaseMinor,
+                                )}`}
                         </small>
                       </div>
                     </article>
