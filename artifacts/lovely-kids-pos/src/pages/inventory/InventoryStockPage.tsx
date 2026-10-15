@@ -4,6 +4,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
 import {
@@ -1000,7 +1001,8 @@ export default function InventoryStockPage() {
         )}
       </article>
 
-      {selectedProduct && (
+      {selectedProduct &&
+        createPortal(
         <div
           role="presentation"
           onMouseDown={(event) => {
@@ -1317,7 +1319,8 @@ export default function InventoryStockPage() {
             </div>
           )}
           </article>
-        </div>
+        </div>,
+        document.body,
       )}
 
 
@@ -1508,7 +1511,8 @@ export default function InventoryStockPage() {
       </article>
 
       {adjustment &&
-        selectedProduct && (
+        selectedProduct &&
+        createPortal(
         <div
           role="presentation"
           style={{
@@ -1782,7 +1786,8 @@ export default function InventoryStockPage() {
             </div>
           </form>
           </article>
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );
