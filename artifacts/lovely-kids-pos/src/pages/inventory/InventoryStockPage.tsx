@@ -1016,12 +1016,12 @@ export default function InventoryStockPage() {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 1000,
+            zIndex: 10000,
             background:
-              "rgba(15, 23, 42, .55)",
+              "rgba(15, 23, 42, .72)",
             display: "grid",
             placeItems: "center",
-            padding: 20,
+            padding: "76px 24px 24px",
           }}
         >
           <article
@@ -1031,18 +1031,32 @@ export default function InventoryStockPage() {
             className="sales-return-invoice"
             style={{
               width:
-                "min(1100px, 96vw)",
-              maxHeight: "88vh",
+                "min(980px, 92vw)",
+              maxHeight: "78vh",
               overflowY: "auto",
               margin: 0,
               background:
                 "var(--panel, #fff)",
-              borderRadius: 18,
+              borderRadius: 20,
+              border:
+                "1px solid rgba(148,163,184,.35)",
               boxShadow:
-                "0 24px 80px rgba(15,23,42,.35)",
+                "0 28px 90px rgba(15,23,42,.48)",
             }}
           >
-          <div className="sales-return-section-title">
+          <div
+            className="sales-return-section-title"
+            style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 2,
+              background:
+                "var(--panel, #fff)",
+              paddingBottom: 12,
+              borderBottom:
+                "1px solid rgba(148,163,184,.25)",
+            }}
+          >
             <div>
               <h3>
                 {selectedProduct.nameAr}
@@ -1063,15 +1077,23 @@ export default function InventoryStockPage() {
             >
               <a
                 href="/inventory/product-card"
+                style={{
+                  whiteSpace: "nowrap",
+                }}
               >
                 فتح بطاقة الصنف
               </a>
 
               <button
                 type="button"
+                className="primary-button"
                 onClick={() => {
                   setAdjustment(null);
                   setSelectedProductId("");
+                }}
+                style={{
+                  minWidth: 96,
+                  whiteSpace: "nowrap",
                 }}
               >
                 إغلاق ✕
@@ -1492,12 +1514,12 @@ export default function InventoryStockPage() {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 1100,
+            zIndex: 11000,
             background:
-              "rgba(15, 23, 42, .65)",
+              "rgba(15, 23, 42, .78)",
             display: "grid",
             placeItems: "center",
-            padding: 20,
+            padding: "76px 24px 24px",
           }}
         >
           <article
@@ -1507,15 +1529,17 @@ export default function InventoryStockPage() {
             className="sales-return-invoice"
             style={{
               width:
-                "min(760px, 96vw)",
-              maxHeight: "88vh",
+                "min(700px, 92vw)",
+              maxHeight: "78vh",
               overflowY: "auto",
               margin: 0,
               background:
                 "var(--panel, #fff)",
-              borderRadius: 18,
+              borderRadius: 20,
+              border:
+                "1px solid rgba(148,163,184,.35)",
               boxShadow:
-                "0 24px 80px rgba(15,23,42,.4)",
+                "0 28px 90px rgba(15,23,42,.5)",
             }}
           >
           <div className="sales-return-section-title">
