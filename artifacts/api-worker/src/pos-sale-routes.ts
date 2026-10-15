@@ -2519,6 +2519,19 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         );
       }
 
+      const currentBusinessDate =
+        getCurrentPosBusinessDate();
+
+      if (
+        session.businessDate !==
+        currentBusinessDate
+      ) {
+        throw new PosSaleError(
+          `جلسة الصندوق المفتوحة تخص ${session.businessDate}. أغلق يوم الصندوق وافتح يوم ${currentBusinessDate} قبل إلغاء الفاتورة`,
+          409,
+        );
+      }
+
       const expectedBefore =
         session.expectedBalanceMinor ??
         session.openingBalanceMinor;
