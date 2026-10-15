@@ -234,6 +234,90 @@ export interface PosProductLookup {
   outOfStock: boolean;
 }
 
+export interface PosAdminInventoryProduct {
+  id: string;
+  nameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  price: number;
+  image: string;
+  category: string;
+  colorVariants: PosColorVariant[];
+  stock: number | null;
+  isHidden: boolean;
+  deletedAt: string | null;
+}
+
+export type PosManualStockCostMode =
+  | "same"
+  | "new";
+
+export interface PosManualStockCostInput {
+  costMode?: PosManualStockCostMode;
+  unitCostMinor?: number;
+}
+
+export function getPosAdminInventoryProducts(
+  token: string,
+) {
+  return apiRequest<PosAdminInventoryProduct[]>(
+    "/api/products/admin",
+    {},
+    token,
+  );
+}
+
+export function setPosGeneralStock(
+  token: string,
+  productId: string | number,
+  input: {
+    amount: number;
+  } & PosManualStockCostInput,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}/stock`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "set",
+        amount: input.amount,
+        costMode: input.costMode,
+        unitCostMinor:
+          input.unitCostMinor,
+      }),
+    },
+    token,
+  );
+}
+
+export function setPosVariantStock(
+  token: string,
+  productId: string | number,
+  input: {
+    color: string;
+    size: string;
+    amount: number;
+  } & PosManualStockCostInput,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}/variant-stock`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        color: input.color,
+        size: input.size,
+        action: "set",
+        amount: input.amount,
+        costMode: input.costMode,
+        unitCostMinor:
+          input.unitCostMinor,
+      }),
+    },
+    token,
+  );
+}
+
+
 export interface PosSaleItemResult {
   id: string;
   productId: string | null;
