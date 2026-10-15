@@ -16061,3 +16061,74 @@ button.inventory-intelligence-metric {
     transform: rotate(90deg);
   }
 }
+
+
+/* Stage 7 inline cost completion */
+.financial-missing-cost-help {
+  margin: -2px 0 14px;
+  color: #667786;
+  line-height: 1.75;
+}
+
+.financial-cost-action-alert {
+  margin-bottom: 12px;
+}
+
+.financial-product-code {
+  display: inline-block;
+  min-width: 68px;
+  border: 1px solid #e1e8ed;
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: #f8fafb;
+  color: #273746;
+  direction: ltr;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.financial-cost-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 145px;
+}
+
+.financial-cost-input-wrap input {
+  width: 118px;
+  min-height: 38px;
+  border: 1px solid #d8e2e8;
+  border-radius: 9px;
+  padding: 0 9px;
+  direction: ltr;
+  text-align: center;
+  background: #fff;
+  font-weight: 800;
+}
+
+.financial-cost-input-wrap input:focus {
+  border-color: #e91e8c;
+  outline: 2px solid rgb(233 30 140 / 12%);
+}
+
+.financial-cost-input-wrap span {
+  font-weight: 900;
+}
+
+.financial-cost-save-button {
+  min-width: 126px;
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .financial-cost-input-wrap {
+    min-width: 130px;
+  }
+
+  .financial-cost-input-wrap input {
+    width: 105px;
+  }
+}
