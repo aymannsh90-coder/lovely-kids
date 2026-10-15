@@ -328,6 +328,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "receivables-liquidity",
+    group: "reports",
+    path: "/reports/receivables-liquidity",
+    title: "الذمم والسيولة",
+    description: "أعمار الذمم والشيكات القادمة والسيولة الحالية والمتوقعة.",
+    icon: "💧",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "sales-analytics",
     group: "reports",
     path: "/reports/sales",
