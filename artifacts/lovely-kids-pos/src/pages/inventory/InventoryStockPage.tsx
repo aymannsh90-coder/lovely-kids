@@ -1,8 +1,8 @@
 import {
-  FormEvent,
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
 } from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
@@ -1252,22 +1252,40 @@ export default function InventoryStockPage() {
               marginTop: 16,
             }}
           >
-            <button
-              type="button"
-              onClick={() =>
-                openAdjustment({
-                  productId:
-                    selectedProduct.id,
-                  kind:
-                    "general",
-                  currentStock:
-                    selectedProduct.stock ??
-                    0,
-                })
-              }
-            >
-              تسوية الرصيد العام
-            </button>
+            {(
+              selectedProduct.stock !==
+                null ||
+              selectedProduct
+                .colorVariants.length ===
+                0
+            ) && (
+              <button
+                type="button"
+                onClick={() =>
+                  openAdjustment({
+                    productId:
+                      selectedProduct.id,
+                    kind:
+                      "general",
+                    currentStock:
+                      selectedProduct.stock ??
+                      0,
+                  })
+                }
+              >
+                تسوية الرصيد العام
+              </button>
+            )}
+
+            {selectedProduct.stock ===
+              null &&
+              selectedProduct
+                .colorVariants.length >
+                0 && (
+                <small>
+                  هذا الموديل يعتمد مخزون اللون/المقاس؛ التسوية تتم من الجدول أدناه.
+                </small>
+              )}
           </div>
 
           {selectedProduct
