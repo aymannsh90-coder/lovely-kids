@@ -121,11 +121,11 @@ function getCurrentPosBusinessDate(): string {
 }
 
 
-type PosCardProcessor =
+export type PosCardProcessor =
   | "arab"
   | "bop";
 
-const CARD_PROCESSOR_CONFIG: Record<
+export const CARD_PROCESSOR_CONFIG: Record<
   PosCardProcessor,
   {
     clearingCode: string;
@@ -165,7 +165,7 @@ function normalizeCardProcessor(
     : null;
 }
 
-function cardProcessorFromSourceEvent(
+export function cardProcessorFromSourceEvent(
   sourceEvent: string,
 ): PosCardProcessor | null {
   if (
@@ -187,7 +187,7 @@ function cardProcessorFromSourceEvent(
   return null;
 }
 
-async function getCardProcessorForSale(
+export async function getCardProcessorForSale(
   db: Db,
   saleId: number,
 ): Promise<PosCardProcessor | null> {
