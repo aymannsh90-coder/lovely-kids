@@ -1239,9 +1239,17 @@ export default function InventoryStockPage() {
               className="sales-return-table-wrap"
               style={{
                 marginTop: 18,
+                overflowX: "hidden",
               }}
             >
-              <table className="sales-return-table">
+              <table
+                className="sales-return-table"
+                style={{
+                  minWidth: 0,
+                  width: "100%",
+                  tableLayout: "fixed",
+                }}
+              >
                 <thead>
                   <tr>
                     <th>اللون</th>
