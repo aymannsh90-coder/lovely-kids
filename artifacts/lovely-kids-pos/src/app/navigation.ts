@@ -182,10 +182,10 @@ export const posNavigation: PosNavigationItem[] = [
     group: "inventory",
     path: "/inventory/stock",
     title: "المخزون",
-    description: "فحص الكميات وحركات الإدخال والإخراج والتسويات.",
+    description: "فحص الكميات والتنبيهات وتنفيذ تسويات الجرد الآمنة.",
     icon: "🏬",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "customers",
