@@ -1258,6 +1258,9 @@ async function handleUpdateOrderStatus(
             id,
             current[0].customerPhone,
             "done",
+            isPickup
+              ? "pickup"
+              : "delivery",
           );
         } catch (error) {
           console.error(
