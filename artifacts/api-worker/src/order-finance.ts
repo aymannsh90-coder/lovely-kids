@@ -124,7 +124,10 @@ export async function completeOrderWithFinance(
 
     if (
       pickupByOrder
-        ? order.status !== "confirmed"
+        ? (
+            order.status !== "confirmed" &&
+            order.status !== "delivering"
+          )
         : order.status !== "delivering"
     ) {
       throw new OrderFinanceError(
