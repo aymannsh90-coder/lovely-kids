@@ -949,10 +949,13 @@ async function handleCreateSettlement(
       if (
         existingRows[0]
           .sourceType !==
-        "card_terminal_settlement"
+          "card_terminal_settlement" ||
+        existingRows[0]
+          .sourceEvent !==
+          config.sourceEvent
       ) {
         throw new CardSettlementError(
-          "مفتاح منع التكرار مستخدم لحركة أخرى",
+          "مفتاح منع التكرار مستخدم لحركة مختلفة",
           409,
         );
       }
