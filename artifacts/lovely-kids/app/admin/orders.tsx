@@ -297,6 +297,21 @@ function statusInfo(
     };
   }
 
+  if (
+    isPickup &&
+    s === "delivering"
+  ) {
+    return {
+      ...found,
+      label:
+        "مؤكد",
+      color:
+        "#2196F3",
+      icon:
+        "checkmark-circle-outline" as const,
+    };
+  }
+
   return found;
 }
 
@@ -932,7 +947,9 @@ export default function AdminOrdersScreen() {
   ) => {
     if (
       order.status !==
-      "confirmed"
+        "confirmed" &&
+      order.status !==
+        "delivering"
     ) {
       showError(
         "يجب تأكيد الطلب أولًا قبل تسجيل الاستلام من المحل",
