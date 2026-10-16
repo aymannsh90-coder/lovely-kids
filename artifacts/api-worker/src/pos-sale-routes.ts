@@ -1827,6 +1827,78 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         typeof financeAccountsTable.$inferSelect |
         null = null;
 
+      if (accountDueMinor > 0) {
+        if (!customer) {
+          throw new PosSaleError(
+            "تعذر تحميل حساب الزبون",
+            409,
+          );
+        }
+
+        customerAccount =
+          await ensureCustomerReceivableControlAccount(
+            tx,
+          );
+
+        const currentBalanceMinor =
+          await customerReceivableBalanceMinor(
+            tx,
+            customer.id,
+          );
+
+        if (
+          customer.creditLimitMinor !== null &&
+          currentBalanceMinor +
+            accountDueMinor >
+            customer.creditLimitMinor
+        ) {
+          throw new PosSaleError(
+            "قيمة الفاتورة تتجاوز الحد الائتماني للزبون",
+            409,
+          );
+        }
+      }
+
+      const saleRows = await tx
+        .insert(posSalesTable)
+        .values({
+          publicId: getPublicId(session.businessDate),
+          idempotencyKey,
+          cashSessionId: session.id,
+          registerKey,
+          businessDate: session.businessDate,
+          cashierUserId: auth.user.id,
+          status: "completed",
+          paymentMethod,
+          subtotalMinor,
+          discountMinor,
+          itemDiscountMinor,
+          invoiceDiscountMinor,
+          totalMinor,
+          paidMinor,
+          changeMinor,
+
+          customerId:
+            customer?.id ?? null,
+
+          accountDueMinor,
+
+          customerName:
+            effectiveCustomerName,
+
+          customerPhone:
+            effectiveCustomerPhone,
+
+          notes,
+        })
+        .returning();
+
+      const sale = saleRows[0];
+
+      if (!sale) {
+        throw new Error("POS_SALE_INSERT_FAILED");
+      }
+
       if (
         paymentMethod === "card"
       ) {
@@ -1914,78 +1986,6 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
             ],
           },
         );
-      }
-
-      if (accountDueMinor > 0) {
-        if (!customer) {
-          throw new PosSaleError(
-            "تعذر تحميل حساب الزبون",
-            409,
-          );
-        }
-
-        customerAccount =
-          await ensureCustomerReceivableControlAccount(
-            tx,
-          );
-
-        const currentBalanceMinor =
-          await customerReceivableBalanceMinor(
-            tx,
-            customer.id,
-          );
-
-        if (
-          customer.creditLimitMinor !== null &&
-          currentBalanceMinor +
-            accountDueMinor >
-            customer.creditLimitMinor
-        ) {
-          throw new PosSaleError(
-            "قيمة الفاتورة تتجاوز الحد الائتماني للزبون",
-            409,
-          );
-        }
-      }
-
-      const saleRows = await tx
-        .insert(posSalesTable)
-        .values({
-          publicId: getPublicId(session.businessDate),
-          idempotencyKey,
-          cashSessionId: session.id,
-          registerKey,
-          businessDate: session.businessDate,
-          cashierUserId: auth.user.id,
-          status: "completed",
-          paymentMethod,
-          subtotalMinor,
-          discountMinor,
-          itemDiscountMinor,
-          invoiceDiscountMinor,
-          totalMinor,
-          paidMinor,
-          changeMinor,
-
-          customerId:
-            customer?.id ?? null,
-
-          accountDueMinor,
-
-          customerName:
-            effectiveCustomerName,
-
-          customerPhone:
-            effectiveCustomerPhone,
-
-          notes,
-        })
-        .returning();
-
-      const sale = saleRows[0];
-
-      if (!sale) {
-        throw new Error("POS_SALE_INSERT_FAILED");
       }
 
       if (cashReceivedMinor > 0) {
