@@ -354,6 +354,10 @@ export interface PosSaleResult {
     cashierUserId: string;
     status: string;
     paymentMethod: string;
+    cardProcessor:
+      | "arab"
+      | "bop"
+      | null;
 
     customerId: string | null;
     customerBalanceMinor: number | null;
@@ -628,6 +632,9 @@ export function createPosCustomerReceipt(
     paymentMethod:
       | "cash"
       | "card";
+    cardProcessor?:
+      | "arab"
+      | "bop";
     registerKey: string;
     notes?: string;
     idempotencyKey: string;
@@ -769,6 +776,10 @@ export interface PosFinanceVoucher {
   paymentMethod:
     | PosFinancePaymentMethod
     | "non_cash";
+  cardProcessor?:
+    | "arab"
+    | "bop"
+    | null;
   amountMinor: number;
   currencyCode: string;
   transactionAmountMinor: number | null;
@@ -944,6 +955,9 @@ export function createPosExpense(
 export interface PosEmployeeSettlementInput {
   amount: string;
   paymentMethod: PosFinancePaymentMethod;
+  cardProcessor?:
+    | "arab"
+    | "bop";
   registerKey: string;
   bankAccountId?: number;
   exchangeRate?: string;
@@ -1366,6 +1380,127 @@ export function createPosBankAccount(
     };
   }>(
     "/api/pos/finance/bank-accounts",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export type PosCardProcessor =
+  | "arab"
+  | "bop";
+
+export interface PosCardSettlementTransaction {
+  id: number;
+  publicId: string;
+  idempotencyKey: string;
+  businessDate: string;
+  transactionType: string;
+  sourceType: string;
+  sourceId: string;
+  sourceEvent: string;
+  cashSessionId: number | null;
+  status:
+    | "posted"
+    | "reversed";
+  notes: string | null;
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PosCardSettlementSummary {
+  terminals: Array<{
+    processor:
+      PosCardProcessor;
+    label: string;
+    financeAccountId:
+      number | null;
+    balanceMinor: number;
+  }>;
+  bankAccounts: Array<{
+    id: number;
+    bankName: string;
+    name: string;
+    code: string;
+    financeAccountId: number;
+  }>;
+  settlements: Array<{
+    transaction:
+      PosCardSettlementTransaction;
+    processor:
+      PosCardProcessor | null;
+    grossMinor: number;
+    netMinor: number;
+    feeMinor: number;
+    bankAccountName:
+      string | null;
+  }>;
+}
+
+export function getPosCardSettlements(
+  token: string,
+) {
+  return apiRequest<
+    PosCardSettlementSummary
+  >(
+    "/api/pos/finance/card-settlements",
+    {},
+    token,
+  );
+}
+
+export function createPosCardSettlement(
+  token: string,
+  input: {
+    processor:
+      PosCardProcessor;
+    bankAccountId: number;
+    grossAmount: string;
+    netAmount: string;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    transaction:
+      PosCardSettlementTransaction;
+    processor?:
+      PosCardProcessor;
+    grossMinor?: number;
+    netMinor?: number;
+    feeMinor?: number;
+    balanceBeforeMinor?: number;
+    balanceAfterMinor?: number;
+  }>(
+    "/api/pos/finance/card-settlements",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function reversePosCardSettlement(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<{
+    alreadyReversed: boolean;
+    transaction:
+      PosCardSettlementTransaction;
+    reversal:
+      PosCardSettlementTransaction |
+      null;
+  }>(
+    "/api/pos/finance/card-settlements/reverse",
     {
       method: "POST",
       body: JSON.stringify(input),
@@ -2185,6 +2320,9 @@ export function createPosSale(
       | "card"
       | "credit"
       | "mixed";
+    cardProcessor?:
+      | "arab"
+      | "bop";
     discountAmount: string;
     paidAmount: string;
     customerId?: number;
@@ -2808,6 +2946,9 @@ export interface CreatePosMobileReturnInput {
   registerKey: string;
   idempotencyKey: string;
   refundMethod?: "cash" | "card" | "customer";
+  cardProcessor?:
+    | "arab"
+    | "bop";
   customerId?: number;
   reason?: string;
   notes?: string;
@@ -3942,6 +4083,8 @@ interface PosExchangeCreateBaseInput {
   idempotencyKey: string;
 
   settlementType: PosExchangeSettlementType;
+  cardProcessor?:
+    PosCardProcessor;
 
   customerId?: number;
 
@@ -4102,6 +4245,8 @@ export interface PosExchangeQuoteResult {
 
   settlementType:
     PosExchangeSettlementType;
+  cardProcessor?:
+    PosCardProcessor | null;
 
   returnGrossMinor: number;
   returnDiscountMinor: number;
@@ -4147,6 +4292,8 @@ export interface PosExchangeCreateResult {
 
     settlementType:
       PosExchangeSettlementType;
+    cardProcessor?:
+      PosCardProcessor | null;
 
     returnGrossMinor: number;
     returnDiscountMinor: number;
@@ -4190,6 +4337,8 @@ export interface PosExchangeSummary {
     | "voided";
 
   settlementType: string;
+  cardProcessor?:
+    PosCardProcessor | null;
 
   returnNetMinor: number;
   newNetMinor: number;

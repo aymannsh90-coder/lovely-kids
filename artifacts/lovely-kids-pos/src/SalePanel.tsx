@@ -253,6 +253,15 @@ export default function SalePanel({
       | "mixed"
     >("cash");
 
+  const [
+    cardProcessor,
+    setCardProcessor,
+  ] = useState<
+    | "arab"
+    | "bop"
+    | null
+  >(null);
+
   const [customers, setCustomers] =
     useState<PosCustomer[]>([]);
 
@@ -287,6 +296,15 @@ export default function SalePanel({
     | "cash"
     | "card"
   >("cash");
+
+  const [
+    settlementCardProcessor,
+    setSettlementCardProcessor,
+  ] = useState<
+    | "arab"
+    | "bop"
+    | null
+  >(null);
 
   const [notes, setNotes] = useState("");
 
@@ -835,6 +853,9 @@ export default function SalePanel({
     setPaymentMethod(
       "credit",
     );
+    setCardProcessor(
+      null,
+    );
   }, [
     selectedCustomerId,
     customers,
@@ -921,6 +942,16 @@ export default function SalePanel({
 
     if (
       paymentMethod === "card" &&
+      !cardProcessor
+    ) {
+      setError(
+        "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
+      );
+      return;
+    }
+
+    if (
+      paymentMethod === "card" &&
       paidMinor !== totalMinor
     ) {
       setError(
@@ -989,6 +1020,17 @@ export default function SalePanel({
         );
         return;
       }
+
+      if (
+        settlement.method ===
+          "card" &&
+        !settlementCardProcessor
+      ) {
+        setError(
+          "اختر ماكينة الفيزا لتسديد حساب الزبون",
+        );
+        return;
+      }
     }
 
     const confirmed = window.confirm(
@@ -1008,6 +1050,11 @@ export default function SalePanel({
 
         idempotencyKey: requestKey,
         paymentMethod,
+        cardProcessor:
+          paymentMethod === "card"
+            ? cardProcessor ??
+              undefined
+            : undefined,
 
         discountAmount: discountAmount.trim(),
 
@@ -1059,6 +1106,13 @@ export default function SalePanel({
             paymentMethod:
               settlement.method,
 
+            cardProcessor:
+              settlement.method ===
+                "card"
+                ? settlementCardProcessor ??
+                  undefined
+                : undefined,
+
             registerKey:
               session.registerKey,
 
@@ -1080,9 +1134,13 @@ export default function SalePanel({
       setCart([]);
       setDiscountAmount("0.00");
       setPaymentMethod("cash");
+      setCardProcessor(null);
       setSelectedCustomerId("");
       setSettlementAmount("0.00");
       setSettlementMethod("cash");
+      setSettlementCardProcessor(
+        null,
+      );
       setCustomerName("");
       setCustomerPhone("");
       setNotes("");
@@ -1536,11 +1594,14 @@ export default function SalePanel({
                       ? "primary-button"
                       : "secondary-button"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setPaymentMethod(
                       "cash",
-                    )
-                  }
+                    );
+                    setCardProcessor(
+                      null,
+                    );
+                  }}
                 >
                   💵 نقدي
                 </button>
@@ -1549,17 +1610,44 @@ export default function SalePanel({
                   type="button"
                   className={
                     paymentMethod ===
-                    "card"
+                      "card" &&
+                    cardProcessor ===
+                      "arab"
                       ? "primary-button"
                       : "secondary-button"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setPaymentMethod(
                       "card",
-                    )
-                  }
+                    );
+                    setCardProcessor(
+                      "arab",
+                    );
+                  }}
                 >
-                  💳 فيزا
+                  💳 فيزا البنك العربي
+                </button>
+
+                <button
+                  type="button"
+                  className={
+                    paymentMethod ===
+                      "card" &&
+                    cardProcessor ===
+                      "bop"
+                      ? "primary-button"
+                      : "secondary-button"
+                  }
+                  onClick={() => {
+                    setPaymentMethod(
+                      "card",
+                    );
+                    setCardProcessor(
+                      "bop",
+                    );
+                  }}
+                >
+                  💳 فيزا بنك فلسطين
                 </button>
 
                 <button
@@ -1570,11 +1658,14 @@ export default function SalePanel({
                       ? "primary-button"
                       : "secondary-button"
                   }
-                  onClick={() =>
+                  onClick={() => {
                     setPaymentMethod(
                       "credit",
-                    )
-                  }
+                    );
+                    setCardProcessor(
+                      null,
+                    );
+                  }}
                 >
                   🧾 آجل
                 </button>
@@ -1710,11 +1801,14 @@ export default function SalePanel({
                           ? "primary-button"
                           : "secondary-button"
                       }
-                      onClick={() =>
+                      onClick={() => {
                         setSettlementMethod(
                           "cash",
-                        )
-                      }
+                        );
+                        setSettlementCardProcessor(
+                          null,
+                        );
+                      }}
                     >
                       💵 كاش
                     </button>
@@ -1723,17 +1817,44 @@ export default function SalePanel({
                       type="button"
                       className={
                         settlementMethod ===
-                        "card"
+                          "card" &&
+                        settlementCardProcessor ===
+                          "arab"
                           ? "primary-button"
                           : "secondary-button"
                       }
-                      onClick={() =>
+                      onClick={() => {
                         setSettlementMethod(
                           "card",
-                        )
-                      }
+                        );
+                        setSettlementCardProcessor(
+                          "arab",
+                        );
+                      }}
                     >
-                      💳 فيزا
+                      💳 فيزا البنك العربي
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        settlementMethod ===
+                          "card" &&
+                        settlementCardProcessor ===
+                          "bop"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={() => {
+                        setSettlementMethod(
+                          "card",
+                        );
+                        setSettlementCardProcessor(
+                          "bop",
+                        );
+                      }}
+                    >
+                      💳 فيزا بنك فلسطين
                     </button>
                   </div>
                 </div>
@@ -1774,6 +1895,11 @@ export default function SalePanel({
                         settlementMethod ===
                           "cash" &&
                         !session
+                      ) ||
+                      (
+                        settlementMethod ===
+                          "card" &&
+                        !settlementCardProcessor
                       )
                     }
                     onClick={() =>
@@ -1876,12 +2002,22 @@ export default function SalePanel({
               }).format(new Date(lastSale.sale.createdAt))}
             </span>
 
-            <span>الزبون: {lastSale.sale.customerName || "زبون نقدي"}</span>
+            <span>الزبون: {lastSale.sale.customerName ||
+                (lastSale.sale.paymentMethod === "card"
+                  ? "زبون فيزا"
+                  : lastSale.sale.paymentMethod === "credit" ||
+                      lastSale.sale.paymentMethod === "mixed"
+                    ? "زبون على الحساب"
+                    : "زبون نقدي")}</span>
 
             <span>
               طريقة الدفع: {
                 lastSale.sale.paymentMethod === "card"
-                  ? "فيزا"
+                  ? lastSale.sale.cardProcessor === "arab"
+                    ? "فيزا البنك العربي"
+                    : lastSale.sale.cardProcessor === "bop"
+                      ? "فيزا بنك فلسطين"
+                      : "فيزا"
                   : lastSale.sale.paymentMethod === "credit"
                     ? "آجل"
                     : lastSale.sale.paymentMethod === "mixed"

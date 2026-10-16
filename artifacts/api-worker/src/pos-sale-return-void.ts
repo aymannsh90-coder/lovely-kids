@@ -48,6 +48,21 @@ class PosSaleReturnVoidError extends Error {
   }
 }
 
+function getCurrentPosBusinessDate(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Hebron",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function parsePublicId(value: unknown) {
   const publicId =
     typeof value === "string"
@@ -247,6 +262,19 @@ export async function handleVoidPosSaleReturn(
           if (!session) {
             throw new PosSaleReturnVoidError(
               "لا يمكن إلغاء المرتجع بعد إغلاق يوم الصندوق",
+              409,
+            );
+          }
+
+          const currentBusinessDate =
+            getCurrentPosBusinessDate();
+
+          if (
+            session.businessDate !==
+            currentBusinessDate
+          ) {
+            throw new PosSaleReturnVoidError(
+              `جلسة الصندوق المفتوحة تخص ${session.businessDate}. أغلق يوم الصندوق وافتح يوم ${currentBusinessDate} قبل إلغاء المرتجع`,
               409,
             );
           }
@@ -890,6 +918,148 @@ export async function handleVoidPosSaleReturn(
                   eq(
                     financeTransactionsTable.id,
                     cashFinance.id,
+                  ),
+                );
+            }
+          }
+
+          if (
+            saleReturn.refundMethod ===
+              "card" &&
+            saleReturn.refundAmountMinor >
+              0
+          ) {
+            const cardFinanceRows =
+              await tx
+                .select()
+                .from(
+                  financeTransactionsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      financeTransactionsTable.sourceType,
+                      "pos_sale_return",
+                    ),
+                    eq(
+                      financeTransactionsTable.sourceId,
+                      String(
+                        saleReturn.id,
+                      ),
+                    ),
+                    inArray(
+                      financeTransactionsTable.sourceEvent,
+                      [
+                        "card_refund_arab",
+                        "card_refund_bop",
+                      ],
+                    ),
+                    eq(
+                      financeTransactionsTable.status,
+                      "posted",
+                    ),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+
+            const cardFinance =
+              cardFinanceRows[0] ??
+              null;
+
+            // Legacy card returns created before terminal-specific
+            // accounting legitimately have no finance transaction.
+            if (cardFinance) {
+              const originalCardLines =
+                await tx
+                  .select()
+                  .from(
+                    financeTransactionLinesTable,
+                  )
+                  .where(
+                    eq(
+                      financeTransactionLinesTable
+                        .transactionId,
+                      cardFinance.id,
+                    ),
+                  )
+                  .orderBy(
+                    asc(
+                      financeTransactionLinesTable
+                        .lineNumber,
+                    ),
+                  );
+
+              if (
+                originalCardLines.length <
+                2
+              ) {
+                throw new Error(
+                  "POS_RETURN_CARD_FINANCE_LINES_MISSING",
+                );
+              }
+
+              await postFinanceTransaction(
+                tx,
+                {
+                  publicId:
+                    `FIN-RET-CARD-VOID-${saleReturn.publicId}`,
+                  idempotencyKey:
+                    `pos-sale-return:${saleReturn.id}:card-refund:void`,
+                  businessDate:
+                    saleReturn.businessDate,
+                  transactionType:
+                    "reversal",
+                  sourceType:
+                    "pos_sale_return",
+                  sourceId:
+                    String(
+                      saleReturn.id,
+                    ),
+                  sourceEvent:
+                    "card_refund_void",
+                  cashSessionId:
+                    null,
+                  notes:
+                    `عكس مردود فيزا ${saleReturn.publicId}`,
+                  createdByUserId:
+                    user.id,
+                  lines:
+                    originalCardLines.map(
+                      (line) => ({
+                        accountId:
+                          line.accountId,
+                        customerId:
+                          line.customerId,
+                        employeeId:
+                          line.employeeId,
+                        supplierId:
+                          line.supplierId,
+                        debitMinor:
+                          line.creditMinor,
+                        creditMinor:
+                          line.debitMinor,
+                        memo:
+                          `عكس ${saleReturn.publicId}`,
+                      }),
+                    ),
+                },
+              );
+
+              await tx
+                .update(
+                  financeTransactionsTable,
+                )
+                .set({
+                  status:
+                    "reversed",
+                  updatedAt:
+                    voidedAt,
+                })
+                .where(
+                  eq(
+                    financeTransactionsTable.id,
+                    cardFinance.id,
                   ),
                 );
             }

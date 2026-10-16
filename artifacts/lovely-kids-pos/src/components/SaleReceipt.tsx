@@ -36,8 +36,26 @@ function customerBalanceValue(balanceMinor: number) {
 
 function paymentMethodLabel(
   value: string,
+  cardProcessor:
+    | "arab"
+    | "bop"
+    | null,
 ) {
   if (value === "card") {
+    if (
+      cardProcessor ===
+      "arab"
+    ) {
+      return "فيزا البنك العربي";
+    }
+
+    if (
+      cardProcessor ===
+      "bop"
+    ) {
+      return "فيزا بنك فلسطين";
+    }
+
     return "فيزا";
   }
 
@@ -78,10 +96,19 @@ export default function SaleReceipt({
 
         <span>التاريخ والوقت: {formatDateTime(result.sale.createdAt)}</span>
 
-        <span>الزبون: {result.sale.customerName || "زبون نقدي"}</span>
+        <span>الزبون: {result.sale.customerName ||
+              (result.sale.paymentMethod === "card"
+                ? "زبون فيزا"
+                : result.sale.paymentMethod === "credit" ||
+                    result.sale.paymentMethod === "mixed"
+                  ? "زبون على الحساب"
+                  : "زبون نقدي")}</span>
 
         <span>
-          طريقة الدفع: {paymentMethodLabel(result.sale.paymentMethod)}
+          طريقة الدفع: {paymentMethodLabel(
+            result.sale.paymentMethod,
+            result.sale.cardProcessor,
+          )}
         </span>
       </div>
 

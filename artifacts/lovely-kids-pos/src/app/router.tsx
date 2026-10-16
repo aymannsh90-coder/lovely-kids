@@ -7,6 +7,7 @@ import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import BankingPage from "../pages/finance/BankingPage";
+import CardSettlementsPage from "../pages/finance/CardSettlementsPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
@@ -260,6 +261,15 @@ export default function AppRouter() {
           element={
             <RequireOwner>
               <BankingPage />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="finance/card-settlements"
+          element={
+            <RequireOwner>
+              <CardSettlementsPage />
             </RequireOwner>
           }
         />

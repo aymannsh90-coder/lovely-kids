@@ -52,8 +52,26 @@ function formatMinor(value: number) {
   }).format(value / 100);
 }
 
-function paymentMethodLabel(value: string) {
+function paymentMethodLabel(
+  value: string,
+  cardProcessor:
+    | "arab"
+    | "bop"
+    | null = null,
+) {
   if (value === "card") {
+    if (
+      cardProcessor === "arab"
+    ) {
+      return "فيزا البنك العربي";
+    }
+
+    if (
+      cardProcessor === "bop"
+    ) {
+      return "فيزا بنك فلسطين";
+    }
+
     return "فيزا";
   }
 
@@ -70,9 +88,17 @@ function paymentMethodLabel(value: string) {
 
 function defaultCustomerLabel(
   paymentMethod: string,
+  cardProcessor:
+    | "arab"
+    | "bop"
+    | null = null,
 ) {
   if (paymentMethod === "card") {
-    return "زبون فيزا";
+    return cardProcessor === "arab"
+      ? "زبون فيزا البنك العربي"
+      : cardProcessor === "bop"
+        ? "زبون فيزا بنك فلسطين"
+        : "زبون فيزا";
   }
 
   if (
@@ -105,9 +131,17 @@ function refundMethodLabel(
 
 function exchangeSettlementLabel(
   value: string,
+  cardProcessor?:
+    | "arab"
+    | "bop"
+    | null,
 ) {
   if (value === "card") {
-    return "فيزا";
+    return cardProcessor === "arab"
+      ? "فيزا البنك العربي"
+      : cardProcessor === "bop"
+        ? "فيزا بنك فلسطين"
+        : "فيزا";
   }
 
   if (value === "cash") {
@@ -354,6 +388,45 @@ export default function TodaySalesPanel({
       activeSales.reduce(
         (total, result) =>
           result.sale.paymentMethod === "card"
+            ? total + result.sale.totalMinor
+            : total,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const arabCardSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card" &&
+          result.sale.cardProcessor === "arab"
+            ? total + result.sale.totalMinor
+            : total,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const bopCardSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card" &&
+          result.sale.cardProcessor === "bop"
+            ? total + result.sale.totalMinor
+            : total,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const unassignedCardSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card" &&
+          result.sale.cardProcessor === null
             ? total + result.sale.totalMinor
             : total,
         0,
@@ -731,6 +804,23 @@ export default function TodaySalesPanel({
           </div>
 
           <div>
+            <span>فيزا البنك العربي</span>
+            <strong>{formatMinor(arabCardSalesMinor)}</strong>
+          </div>
+
+          <div>
+            <span>فيزا بنك فلسطين</span>
+            <strong>{formatMinor(bopCardSalesMinor)}</strong>
+          </div>
+
+          {unassignedCardSalesMinor > 0 && (
+            <div>
+              <span>فيزا قديمة — الماكينة غير محددة</span>
+              <strong>{formatMinor(unassignedCardSalesMinor)}</strong>
+            </div>
+          )}
+
+          <div>
             <span>مبيعات على الحساب</span>
             <strong>{formatMinor(accountSalesMinor)}</strong>
           </div>
@@ -838,9 +928,13 @@ export default function TodaySalesPanel({
                       {row.sale.customerName ||
                         defaultCustomerLabel(
                           row.sale.paymentMethod,
+                          row.sale.cardProcessor,
                         )}
                       <small>
-                        الدفع: {paymentMethodLabel(row.sale.paymentMethod)}
+                        الدفع: {paymentMethodLabel(
+                          row.sale.paymentMethod,
+                          row.sale.cardProcessor,
+                        )}
                       </small>
                     </td>
 
@@ -1122,6 +1216,7 @@ export default function TodaySalesPanel({
                         <td>
                           {exchangeSettlementLabel(
                             exchange.settlementType,
+                            exchange.cardProcessor,
                           )}
                         </td>
 
@@ -1285,6 +1380,16 @@ export default function TodaySalesPanel({
 
           <span>فيزا: {formatMinor(cardSalesMinor)}</span>
 
+          <span>فيزا العربي: {formatMinor(arabCardSalesMinor)}</span>
+
+          <span>فيزا بنك فلسطين: {formatMinor(bopCardSalesMinor)}</span>
+
+          {unassignedCardSalesMinor > 0 && (
+            <span>
+              فيزا قديمة غير محددة: {formatMinor(unassignedCardSalesMinor)}
+            </span>
+          )}
+
           <span>إجمالي المردودات: {formatMinor(returnedMinor)}</span>
 
           <span>مردود نقدي: {formatMinor(cashReturnedMinor)}</span>
@@ -1339,9 +1444,13 @@ export default function TodaySalesPanel({
                   {row.sale.customerName ||
                     defaultCustomerLabel(
                       row.sale.paymentMethod,
+                      row.sale.cardProcessor,
                     )}
                   {" — "}
-                  {paymentMethodLabel(row.sale.paymentMethod)}
+                  {paymentMethodLabel(
+                    row.sale.paymentMethod,
+                    row.sale.cardProcessor,
+                  )}
                 </td>
 
                 <td>{row.sale.notes || "—"}</td>

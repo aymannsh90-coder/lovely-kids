@@ -32,6 +32,7 @@ import {
   type OnlineOrderExchangePreviewResult,
   type OnlineOrderExchangeResult,
   type PosCustomer,
+  type PosCardProcessor,
   type PosExchangeCreateInput,
   type PosExchangeCreateResult,
   type PosExchangePreviewResult,
@@ -480,6 +481,13 @@ export default function ExchangePage() {
     "cash",
   );
 
+  const [
+    cardProcessor,
+    setCardProcessor,
+  ] = useState<
+    PosCardProcessor | null
+  >(null);
+
   const [quote, setQuote] =
     useState<PosExchangeQuoteResult | null>(
       null,
@@ -711,6 +719,7 @@ export default function ExchangePage() {
 
           newInvoiceDiscount,
           settlementType,
+          cardProcessor,
         }),
       [
         mode,
@@ -721,6 +730,7 @@ export default function ExchangePage() {
         newCart,
         newInvoiceDiscount,
         settlementType,
+        cardProcessor,
       ],
     );
 
@@ -751,6 +761,16 @@ export default function ExchangePage() {
     ) {
       throw new Error(
         "اختر الزبون لتسوية فرق التبديل على حسابه",
+      );
+    }
+
+    if (
+      settlementType ===
+        "card" &&
+      !cardProcessor
+    ) {
+      throw new Error(
+        "اختر ماكينة الفيزا للتبديل: البنك العربي أو بنك فلسطين",
       );
     }
 
@@ -826,6 +846,13 @@ export default function ExchangePage() {
       idempotencyKey,
 
       settlementType,
+
+      cardProcessor:
+        settlementType ===
+          "card"
+          ? cardProcessor ??
+            undefined
+          : undefined,
 
       customerId:
         settlementType ===
@@ -2369,6 +2396,7 @@ export default function ExchangePage() {
 
     setNewInvoiceDiscount("0.00");
     setSettlementType("cash");
+    setCardProcessor(null);
     setSelectedCustomerId(null);
 
     setQuote(null);
@@ -5849,6 +5877,9 @@ export default function ExchangePage() {
                     setSettlementType(
                       "cash",
                     );
+                    setCardProcessor(
+                      null,
+                    );
 
                     setQuoteError("");
                   }}
@@ -5917,6 +5948,9 @@ export default function ExchangePage() {
                     setSettlementType(
                       "customer",
                     );
+                    setCardProcessor(
+                      null,
+                    );
 
                     setQuote(null);
                     setQuoteSignature("");
@@ -5927,6 +5961,58 @@ export default function ExchangePage() {
                 حساب الزبون
               </label>
             </div>
+
+            {settlementType ===
+              "card" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginTop: 12,
+                }}
+              >
+                <button
+                  type="button"
+                  className={
+                    cardProcessor ===
+                    "arab"
+                      ? "primary-button"
+                      : "secondary-button"
+                  }
+                  onClick={() => {
+                    setCardProcessor(
+                      "arab",
+                    );
+                    setQuote(null);
+                    setQuoteSignature("");
+                    setQuoteError("");
+                  }}
+                >
+                  💳 فيزا البنك العربي
+                </button>
+
+                <button
+                  type="button"
+                  className={
+                    cardProcessor ===
+                    "bop"
+                      ? "primary-button"
+                      : "secondary-button"
+                  }
+                  onClick={() => {
+                    setCardProcessor(
+                      "bop",
+                    );
+                    setQuote(null);
+                    setQuoteSignature("");
+                    setQuoteError("");
+                  }}
+                >
+                  💳 فيزا بنك فلسطين
+                </button>
+              </div>
+            )}
 
             {settlementType ===
               "customer" && (
@@ -5966,8 +6052,8 @@ export default function ExchangePage() {
             )}
 
             <small>
-              البطاقة مسموحة فقط إذا كان
-              هناك مبلغ إضافي على الزبون.
+              الفيزا مسموحة فقط إذا كان
+              هناك مبلغ إضافي على الزبون، ويجب اختيار ماكينة البنك العربي أو بنك فلسطين.
               حساب الزبون يسجل فرق التبديل
               عليه إذا كان الفرق موجبًا،
               أو له إذا كان الفرق سالبًا.
@@ -6154,7 +6240,13 @@ export default function ExchangePage() {
                         .settlementType ===
                       "customer"
                     ? "حساب الزبون"
-                    : "بطاقة Card"}
+                    : activeQuote.cardProcessor ===
+                        "arab"
+                      ? "فيزا البنك العربي"
+                      : activeQuote.cardProcessor ===
+                          "bop"
+                        ? "فيزا بنك فلسطين"
+                        : "فيزا"}
               </strong>
             </div>
 

@@ -1,5 +1,6 @@
 import { handlePartyFinanceRequest } from "./party-finance-routes";
 import { handleFinanceBankingRequest } from "./finance-banking-routes";
+import { handleCardSettlementRequest } from "./finance-card-settlement-routes";
 import { handleFinanceTransferRequest } from "./finance-transfer-routes";
 import { handleFinanceCheckRequest } from "./finance-check-routes";
 import { handleFinanceStatementRequest } from "./finance-statement-routes";
@@ -415,6 +416,17 @@ export default {
 
       if (financeBankingResponse) {
         return financeBankingResponse;
+      }
+
+      const cardSettlementResponse =
+        await handleCardSettlementRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (cardSettlementResponse) {
+        return cardSettlementResponse;
       }
 
       const financeTransferResponse =

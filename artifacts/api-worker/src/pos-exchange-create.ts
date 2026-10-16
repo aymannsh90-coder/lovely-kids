@@ -6,6 +6,7 @@ import {
   exchangeReturnItemsTable,
   exchangeSaleItemCostsTable,
   exchangeSaleItemsTable,
+  financeTransactionsTable,
   inventoryMovementsTable,
   posSaleItemCostsTable,
   posSaleItemsTable,
@@ -27,7 +28,9 @@ import {
 } from "./finance-customer-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import {
+  CARD_PROCESSOR_CONFIG,
   ensureSaleFinanceAccount,
+  type PosCardProcessor,
 } from "./pos-sale-routes";
 import {
   addProductCostAtCurrentAverage,
@@ -129,6 +132,7 @@ export interface ParsedPosExchangePayload {
   sourceType: PosExchangeSourceType;
   originalSalePublicId: string | null;
   settlementType: ExchangeSettlementType;
+  cardProcessor: PosCardProcessor | null;
   customerId: number | null;
   returnItems: ParsedExchangeReturnItem[];
   noReceiptReturnItems: ParsedNoReceiptReturnItem[];
@@ -846,6 +850,32 @@ export function parsePosExchangePayload(
     );
   }
 
+  const cardProcessor =
+    payload.cardProcessor === "arab" ||
+    payload.cardProcessor === "bop"
+      ? payload.cardProcessor
+      : null;
+
+  if (
+    settlementType === "card" &&
+    !cardProcessor
+  ) {
+    throw new PosExchangeError(
+      "اختر ماكينة الفيزا للتبديل: البنك العربي أو بنك فلسطين",
+    );
+  }
+
+  if (
+    settlementType !== "card" &&
+    payload.cardProcessor !== undefined &&
+    payload.cardProcessor !== null &&
+    payload.cardProcessor !== ""
+  ) {
+    throw new PosExchangeError(
+      "ماكينة الفيزا متاحة فقط عند تسوية التبديل بالفيزا",
+    );
+  }
+
   const rawCustomerId =
     payload.customerId;
 
@@ -915,6 +945,7 @@ export function parsePosExchangePayload(
     sourceType,
     originalSalePublicId,
     settlementType,
+    cardProcessor,
     customerId,
     returnItems,
     noReceiptReturnItems,
@@ -1074,6 +1105,87 @@ export async function handleCreatePosExchange(
               );
             }
 
+            if (
+              existing.settlementType !==
+              payload.settlementType
+            ) {
+              throw new PosExchangeError(
+                "مفتاح فاتورة التبديل مستخدم بطريقة تسوية مختلفة",
+                409,
+              );
+            }
+
+            let existingCardProcessor:
+              PosCardProcessor | null =
+              null;
+
+            if (
+              existing.settlementType ===
+              "card"
+            ) {
+              const financeRows =
+                await tx
+                  .select({
+                    sourceEvent:
+                      financeTransactionsTable.sourceEvent,
+                  })
+                  .from(
+                    financeTransactionsTable,
+                  )
+                  .where(
+                    and(
+                      eq(
+                        financeTransactionsTable.sourceType,
+                        "exchange",
+                      ),
+                      eq(
+                        financeTransactionsTable.sourceId,
+                        String(
+                          existing.id,
+                        ),
+                      ),
+                      inArray(
+                        financeTransactionsTable.sourceEvent,
+                        [
+                          "card_settlement_arab",
+                          "card_settlement_bop",
+                        ],
+                      ),
+                    ),
+                  )
+                  .limit(1);
+
+              existingCardProcessor =
+                financeRows[0]
+                  ?.sourceEvent ===
+                "card_settlement_arab"
+                  ? "arab"
+                  : financeRows[0]
+                        ?.sourceEvent ===
+                      "card_settlement_bop"
+                    ? "bop"
+                    : null;
+
+              if (
+                !existingCardProcessor
+              ) {
+                throw new PosExchangeError(
+                  "فاتورة تبديل الفيزا قديمة ولم يتم تحديد الماكينة لها",
+                  409,
+                );
+              }
+
+              if (
+                existingCardProcessor !==
+                payload.cardProcessor
+              ) {
+                throw new PosExchangeError(
+                  "مفتاح فاتورة التبديل مستخدم على ماكينة فيزا مختلفة",
+                  409,
+                );
+              }
+            }
+
             const existingItems =
               await tx
                 .select()
@@ -1113,7 +1225,11 @@ export async function handleCreatePosExchange(
             return {
               validationOnly: false,
               quote: null,
-              exchange: existing,
+              exchange: {
+                ...existing,
+                cardProcessor:
+                  existingCardProcessor,
+              },
               returnItems:
                 existingItems,
               saleItems:
@@ -3366,6 +3482,9 @@ export async function handleCreatePosExchange(
                 settlementType:
                   payload.settlementType,
 
+                cardProcessor:
+                  payload.cardProcessor,
+
                 returnGrossMinor,
                 returnDiscountMinor,
                 returnNetMinor,
@@ -4712,6 +4831,107 @@ export async function handleCreatePosExchange(
           }
 
           // -------------------------------------------------
+          // Visa settlement difference.
+          // Card never touches the cash drawer; it first lands
+          // in the selected terminal clearing account.
+          // -------------------------------------------------
+
+          if (
+            payload.settlementType ===
+              "card" &&
+            settlementAmountMinor > 0
+          ) {
+            if (
+              !payload.cardProcessor
+            ) {
+              throw new Error(
+                "POS_EXCHANGE_CARD_PROCESSOR_MISSING",
+              );
+            }
+
+            const processor =
+              CARD_PROCESSOR_CONFIG[
+                payload.cardProcessor
+              ];
+
+            const clearingAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    processor.clearingCode,
+                  name:
+                    processor.clearingName,
+                  accountType:
+                    "asset",
+                },
+              );
+
+            const cardSalesAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    "POS_SALES_CARD",
+                  name:
+                    "مبيعات نقطة البيع فيزا",
+                  accountType:
+                    "income",
+                },
+              );
+
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-EXC-CARD-${payload.cardProcessor.toUpperCase()}-${exchange.publicId}`,
+                idempotencyKey:
+                  `pos-exchange:${exchange.id}:card-settlement:${payload.cardProcessor}`,
+                businessDate:
+                  exchange.businessDate,
+                transactionType:
+                  "adjustment",
+                sourceType:
+                  "exchange",
+                sourceId:
+                  String(
+                    exchange.id,
+                  ),
+                sourceEvent:
+                  `card_settlement_${payload.cardProcessor}`,
+                cashSessionId:
+                  null,
+                notes:
+                  `فرق تبديل ${processor.label} ${exchange.publicId}`,
+                createdByUserId:
+                  user.id,
+                lines: [
+                  {
+                    accountId:
+                      clearingAccount.id,
+                    debitMinor:
+                      settlementAmountMinor,
+                    creditMinor:
+                      0,
+                    memo:
+                      `تحصيل فرق تبديل ${exchange.publicId}`,
+                  },
+                  {
+                    accountId:
+                      cardSalesAccount.id,
+                    debitMinor:
+                      0,
+                    creditMinor:
+                      settlementAmountMinor,
+                    memo:
+                      `فرق تبديل فيزا ${exchange.publicId}`,
+                  },
+                ],
+              },
+            );
+          }
+
+          // -------------------------------------------------
           // Cash settlement.
           // Card does not touch the drawer.
           // -------------------------------------------------
@@ -4872,6 +5092,9 @@ export async function handleCreatePosExchange(
 
             exchange: {
               ...exchange,
+
+              cardProcessor:
+                payload.cardProcessor,
 
               expectedCashBeforeMinor,
               expectedCashAfterMinor,

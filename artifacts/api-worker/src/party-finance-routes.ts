@@ -398,6 +398,40 @@ function convertedBaseMinor(
   return Number(result);
 }
 
+type IncomingCardProcessor =
+  | "arab"
+  | "bop";
+
+const INCOMING_CARD_PROCESSORS: Record<
+  IncomingCardProcessor,
+  {
+    code: string;
+    name: string;
+  }
+> = {
+  arab: {
+    code:
+      "CARD_CLEARING_ARAB",
+    name:
+      "فيزا البنك العربي قيد التحصيل",
+  },
+  bop: {
+    code:
+      "CARD_CLEARING_BOP",
+    name:
+      "فيزا بنك فلسطين قيد التحصيل",
+  },
+};
+
+function incomingCardProcessor(
+  value: unknown,
+): IncomingCardProcessor | null {
+  return value === "arab" ||
+    value === "bop"
+    ? value
+    : null;
+}
+
 function paymentMethod(
   value: unknown,
   defaultValue:
@@ -649,6 +683,9 @@ async function settlementAccount(
   register: string,
   bankAccountId:
     number | null,
+  cardProcessor:
+    IncomingCardProcessor | null =
+      null,
 ) {
   if (method === "cash") {
     return ensureAccount(
@@ -667,6 +704,28 @@ async function settlementAccount(
   }
 
   if (method === "card") {
+    if (cardProcessor) {
+      const processor =
+        INCOMING_CARD_PROCESSORS[
+          cardProcessor
+        ];
+
+      return ensureAccount(
+        tx,
+        {
+          code:
+            processor.code,
+          name:
+            processor.name,
+          accountType:
+            "asset",
+        },
+      );
+    }
+
+    // Generic business-card settlement account remains for outgoing
+    // expenses/employee payments. Incoming Visa receipts must always
+    // choose one of the two POS terminals.
     return ensureAccount(
       tx,
       {
@@ -2201,6 +2260,43 @@ async function createVoucher(
       );
     }
 
+    const cardProcessor =
+      incomingCardProcessor(
+        body.cardProcessor,
+      );
+
+    const incomingCard =
+      method === "card" &&
+      (
+        input.voucherType ===
+          "customer_receipt" ||
+        input.voucherType ===
+          "employee_repayment"
+      );
+
+    if (
+      incomingCard &&
+      !cardProcessor
+    ) {
+      throw new PartyFinanceError(
+        "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
+      );
+    }
+
+    if (
+      method !== "card" &&
+      body.cardProcessor !==
+        undefined &&
+      body.cardProcessor !==
+        null &&
+      body.cardProcessor !==
+        ""
+    ) {
+      throw new PartyFinanceError(
+        "ماكينة الفيزا متاحة فقط عند الدفع بالفيزا",
+      );
+    }
+
     let bankAccountId:
       number | null =
       null;
@@ -2719,6 +2815,7 @@ async function createVoucher(
                   | "bank",
                 register,
                 bankAccountId,
+                cardProcessor,
               );
 
             const customerAccount =
@@ -2836,6 +2933,7 @@ async function createVoucher(
                   | "bank",
                 register,
                 bankAccountId,
+                cardProcessor,
               );
 
             debitAccountId =
@@ -3362,16 +3460,103 @@ async function handleListVouchers(
       )
       .limit(500);
 
+  const filtered =
+    rows.filter(
+      (row) =>
+        (!type ||
+          row.voucherType ===
+            type) &&
+        (!date ||
+          row.businessDate ===
+            date),
+    );
+
+  const financeTransactionIds =
+    filtered
+      .filter(
+        (row) =>
+          row.paymentMethod ===
+            "card" &&
+          row.financeTransactionId !==
+            null,
+      )
+      .map(
+        (row) =>
+          row.financeTransactionId!,
+      );
+
+  const terminalLines =
+    financeTransactionIds.length >
+    0
+      ? await db
+          .select({
+            transactionId:
+              financeTransactionLinesTable
+                .transactionId,
+            accountCode:
+              financeAccountsTable.code,
+          })
+          .from(
+            financeTransactionLinesTable,
+          )
+          .innerJoin(
+            financeAccountsTable,
+            eq(
+              financeAccountsTable.id,
+              financeTransactionLinesTable
+                .accountId,
+            ),
+          )
+          .where(
+            inArray(
+              financeTransactionLinesTable
+                .transactionId,
+              financeTransactionIds,
+            ),
+          )
+      : [];
+
+  const cardProcessorByTransactionId =
+    new Map<
+      number,
+      IncomingCardProcessor
+    >();
+
+  for (
+    const line of terminalLines
+  ) {
+    if (
+      line.accountCode ===
+      "CARD_CLEARING_ARAB"
+    ) {
+      cardProcessorByTransactionId.set(
+        line.transactionId,
+        "arab",
+      );
+    } else if (
+      line.accountCode ===
+      "CARD_CLEARING_BOP"
+    ) {
+      cardProcessorByTransactionId.set(
+        line.transactionId,
+        "bop",
+      );
+    }
+  }
+
   return json({
     results:
-      rows.filter(
-        (row) =>
-          (!type ||
-            row.voucherType ===
-              type) &&
-          (!date ||
-            row.businessDate ===
-              date),
+      filtered.map(
+        (row) => ({
+          ...row,
+          cardProcessor:
+            row.financeTransactionId ===
+            null
+              ? null
+              : cardProcessorByTransactionId.get(
+                  row.financeTransactionId,
+                ) ?? null,
+        }),
       ),
   });
 }

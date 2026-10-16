@@ -19,6 +19,7 @@ import {
 } from "./finance-customer-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import {
+  CARD_PROCESSOR_CONFIG,
   ensureSaleFinanceAccount,
 } from "./pos-sale-routes";
 import {
@@ -586,6 +587,21 @@ export async function handleCreateMobileEmergencyReturn(
     if (!refundMethod) {
       throw new MobileReturnError(
         "طريقة الاسترداد غير صالحة",
+      );
+    }
+
+    const cardProcessor =
+      payload.cardProcessor === "arab" ||
+      payload.cardProcessor === "bop"
+        ? payload.cardProcessor
+        : null;
+
+    if (
+      refundMethod === "card" &&
+      !cardProcessor
+    ) {
+      throw new MobileReturnError(
+        "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
       );
     }
 
@@ -1482,6 +1498,98 @@ export async function handleCreateMobileEmergencyReturn(
                       grossAmountMinor,
                     memo:
                       `دفع مردود نقدي ${saleReturn.publicId}`,
+                  },
+                ],
+              },
+            );
+          }
+
+          if (
+            refundMethod === "card" &&
+            grossAmountMinor > 0
+          ) {
+            if (!cardProcessor) {
+              throw new Error(
+                "MOBILE_POS_CARD_PROCESSOR_MISSING",
+              );
+            }
+
+            const processor =
+              CARD_PROCESSOR_CONFIG[
+                cardProcessor
+              ];
+
+            const clearingAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    processor.clearingCode,
+                  name:
+                    processor.clearingName,
+                  accountType:
+                    "asset",
+                },
+              );
+
+            const cardSalesAccount =
+              await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    "POS_SALES_CARD",
+                  name:
+                    "مبيعات نقطة البيع فيزا",
+                  accountType:
+                    "income",
+                },
+              );
+
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-RET-CARD-${cardProcessor.toUpperCase()}-${saleReturn.publicId}`,
+                idempotencyKey:
+                  `pos-sale-return:${saleReturn.id}:card-refund:${cardProcessor}`,
+                businessDate:
+                  saleReturn.businessDate,
+                transactionType:
+                  "refund",
+                sourceType:
+                  "pos_sale_return",
+                sourceId:
+                  String(
+                    saleReturn.id,
+                  ),
+                sourceEvent:
+                  `card_refund_${cardProcessor}`,
+                cashSessionId:
+                  null,
+                notes:
+                  `مردود ${processor.label} ${saleReturn.publicId}`,
+                createdByUserId:
+                  auth.user.id,
+                lines: [
+                  {
+                    accountId:
+                      cardSalesAccount.id,
+                    debitMinor:
+                      grossAmountMinor,
+                    creditMinor:
+                      0,
+                    memo:
+                      `مردود مبيعات فيزا ${saleReturn.publicId}`,
+                  },
+                  {
+                    accountId:
+                      clearingAccount.id,
+                    debitMinor:
+                      0,
+                    creditMinor:
+                      grossAmountMinor,
+                    memo:
+                      `استرداد ${processor.label} ${saleReturn.publicId}`,
                   },
                 ],
               },

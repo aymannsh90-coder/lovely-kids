@@ -327,6 +327,16 @@ export default function EmployeesPage() {
     >("cash");
 
   const [
+    actionCardProcessor,
+    setActionCardProcessor,
+  ] =
+    useState<
+      | "arab"
+      | "bop"
+      | null
+    >(null);
+
+  const [
     actionBankAccountId,
     setActionBankAccountId,
   ] =
@@ -808,6 +818,17 @@ export default function EmployeesPage() {
     }
 
     if (
+      action === "repayment" &&
+      actionMethod === "card" &&
+      !actionCardProcessor
+    ) {
+      setError(
+        "اختر ماكينة الفيزا لتسديد السلفة: البنك العربي أو بنك فلسطين",
+      );
+      return;
+    }
+
+    if (
       action !== "salary" &&
       actionMethod === "bank" &&
       !selectedBankAccount
@@ -914,6 +935,12 @@ export default function EmployeesPage() {
               ...base,
               paymentMethod:
                 actionMethod,
+              cardProcessor:
+                actionMethod ===
+                  "card"
+                  ? actionCardProcessor ??
+                    undefined
+                  : undefined,
               bankAccountId:
                 actionMethod ===
                   "bank"
@@ -972,6 +999,9 @@ export default function EmployeesPage() {
       }
 
       setActionAmount("");
+      setActionCardProcessor(
+        null,
+      );
       setActionBankAccountId("");
       setActionExchangeRate("");
       setReferencePeriod("");
@@ -1589,6 +1619,14 @@ export default function EmployeesPage() {
                           setAction(
                             item,
                           );
+                          if (
+                            item !==
+                            "repayment"
+                          ) {
+                            setActionCardProcessor(
+                              null,
+                            );
+                          }
 
                           setActionAmount(
                             item ===
@@ -1661,6 +1699,15 @@ export default function EmployeesPage() {
 
                           if (
                             value !==
+                            "card"
+                          ) {
+                            setActionCardProcessor(
+                              null,
+                            );
+                          }
+
+                          if (
+                            value !==
                             "bank"
                           ) {
                             setActionBankAccountId(
@@ -1684,6 +1731,45 @@ export default function EmployeesPage() {
                       </select>
                     </label>
                   )}
+
+                  {action ===
+                    "repayment" &&
+                    actionMethod ===
+                      "card" && (
+                      <label>
+                        <span>
+                          ماكينة الفيزا
+                        </span>
+                        <select
+                          value={
+                            actionCardProcessor ??
+                            ""
+                          }
+                          onChange={(
+                            event,
+                          ) =>
+                            setActionCardProcessor(
+                              event.target.value ===
+                                "arab" ||
+                              event.target.value ===
+                                "bop"
+                                ? event.target.value
+                                : null,
+                            )
+                          }
+                        >
+                          <option value="">
+                            اختر الماكينة
+                          </option>
+                          <option value="arab">
+                            البنك العربي
+                          </option>
+                          <option value="bop">
+                            بنك فلسطين
+                          </option>
+                        </select>
+                      </label>
+                    )}
 
                   {action !==
                     "salary" &&

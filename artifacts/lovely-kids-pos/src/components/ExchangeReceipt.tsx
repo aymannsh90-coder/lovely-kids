@@ -28,9 +28,17 @@ function formatMinor(value: number) {
 
 function settlementTypeLabel(
   value: string,
+  cardProcessor?:
+    | "arab"
+    | "bop"
+    | null,
 ) {
   if (value === "card") {
-    return "بطاقة";
+    return cardProcessor === "arab"
+      ? "فيزا البنك العربي"
+      : cardProcessor === "bop"
+        ? "فيزا بنك فلسطين"
+        : "فيزا";
   }
 
   if (value === "cash") {
@@ -166,6 +174,7 @@ export default function ExchangeReceipt({
           {" "}
           {settlementTypeLabel(
             exchange.settlementType,
+            exchange.cardProcessor,
           )}
         </span>
       </div>
@@ -373,6 +382,7 @@ export default function ExchangeReceipt({
           <strong>
             {settlementTypeLabel(
               exchange.settlementType,
+              exchange.cardProcessor,
             )}
           </strong>
         </div>
