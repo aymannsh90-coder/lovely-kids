@@ -132,7 +132,17 @@ const DEFAULT_EXPENSE_PRESETS:
   ];
 
 const PIN_STORAGE_KEY =
+  "lovely-kids-pos.finance-expense-pins.v4";
+
+const LEGACY_PIN_STORAGE_KEY =
   "lovely-kids-pos.finance-expense-pins.v3";
+
+const LEGACY_PIN_MIGRATION_KEYS = [
+  "preset:fuel",
+  "preset:ai",
+  "preset:phone-internet",
+  "preset:ads",
+] as const;
 
 function errorText(error: unknown) {
   return error instanceof Error
@@ -964,10 +974,21 @@ export default function ExpensesPage() {
         ),
       );
 
-    const raw =
+    const currentRaw =
       localStorage.getItem(
         PIN_STORAGE_KEY,
       );
+
+    const legacyRaw =
+      currentRaw
+        ? null
+        : localStorage.getItem(
+            LEGACY_PIN_STORAGE_KEY,
+          );
+
+    const raw =
+      currentRaw ??
+      legacyRaw;
 
     if (raw) {
       try {
@@ -993,21 +1014,24 @@ export default function ExpensesPage() {
             saved.length >
             0
           ) {
-            const withFuel =
-              saved.includes(
-                "preset:fuel",
-              ) ||
-              !validKeys.has(
-                "preset:fuel",
-              )
-                ? saved
-                : [
+            const migrated =
+              legacyRaw
+                ? [
                     ...saved,
-                    "preset:fuel",
-                  ];
+                    ...LEGACY_PIN_MIGRATION_KEYS.filter(
+                      (key) =>
+                        validKeys.has(
+                          key,
+                        ) &&
+                        !saved.includes(
+                          key,
+                        ),
+                    ),
+                  ]
+                : saved;
 
             setPinOrder(
-              withFuel,
+              migrated,
             );
             return;
           }
