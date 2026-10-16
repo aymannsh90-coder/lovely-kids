@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -171,6 +172,14 @@ export default function CardSettlementsPage() {
     setError,
   ] =
     useState("");
+
+  const settlementRequestRef =
+    useRef<{
+      key: string;
+      signature: string;
+    } | null>(
+      null,
+    );
 
   const [
     message,
@@ -414,6 +423,30 @@ export default function CardSettlementsPage() {
       return;
     }
 
+    const signature =
+      [
+        processor,
+        bankId,
+        grossAmount.trim(),
+        netAmount.trim(),
+        notes.trim(),
+      ].join("|");
+
+    const request =
+      settlementRequestRef.current &&
+      settlementRequestRef.current
+        .signature ===
+        signature
+        ? settlementRequestRef.current
+        : {
+            key:
+              createKey(),
+            signature,
+          };
+
+    settlementRequestRef.current =
+      request;
+
     setSaving(true);
     setError("");
     setMessage("");
@@ -434,9 +467,12 @@ export default function CardSettlementsPage() {
               notes.trim() ||
               undefined,
             idempotencyKey:
-              createKey(),
+              request.key,
           },
         );
+
+      settlementRequestRef.current =
+        null;
 
       setGrossAmount("");
       setNetAmount("");
