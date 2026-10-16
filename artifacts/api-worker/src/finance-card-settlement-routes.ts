@@ -143,6 +143,24 @@ function processorValue(
   );
 }
 
+function bankMatchesProcessor(
+  processor: CardProcessor,
+  bankName: string,
+) {
+  const normalized =
+    bankName
+      .trim()
+      .toLowerCase();
+
+  return processor === "arab"
+    ? /العربي|arab/.test(
+        normalized,
+      )
+    : /فلسطين|palestine/.test(
+        normalized,
+      );
+}
+
 function positiveId(
   value: unknown,
   label: string,
@@ -985,6 +1003,20 @@ async function handleCreateSettlement(
               tx,
               bankAccountId,
             );
+
+          if (
+            !bankMatchesProcessor(
+              processor,
+              bank.bank.nameAr,
+            )
+          ) {
+            throw new CardSettlementError(
+              processor === "arab"
+                ? "تسوية ماكينة البنك العربي يجب أن تذهب إلى حساب البنك العربي"
+                : "تسوية ماكينة بنك فلسطين يجب أن تذهب إلى حساب بنك فلسطين",
+              409,
+            );
+          }
 
           const feeAccount =
             feeMinor > 0
