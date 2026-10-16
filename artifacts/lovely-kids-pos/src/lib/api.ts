@@ -4083,6 +4083,8 @@ interface PosExchangeCreateBaseInput {
   idempotencyKey: string;
 
   settlementType: PosExchangeSettlementType;
+  cardProcessor?:
+    PosCardProcessor;
 
   customerId?: number;
 
@@ -4243,6 +4245,8 @@ export interface PosExchangeQuoteResult {
 
   settlementType:
     PosExchangeSettlementType;
+  cardProcessor?:
+    PosCardProcessor | null;
 
   returnGrossMinor: number;
   returnDiscountMinor: number;
@@ -4288,6 +4292,8 @@ export interface PosExchangeCreateResult {
 
     settlementType:
       PosExchangeSettlementType;
+    cardProcessor?:
+      PosCardProcessor | null;
 
     returnGrossMinor: number;
     returnDiscountMinor: number;
