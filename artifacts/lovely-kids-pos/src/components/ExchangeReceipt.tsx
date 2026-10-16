@@ -382,6 +382,7 @@ export default function ExchangeReceipt({
           <strong>
             {settlementTypeLabel(
               exchange.settlementType,
+              exchange.cardProcessor,
             )}
           </strong>
         </div>
