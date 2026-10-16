@@ -1082,6 +1082,12 @@ async function handleUpdateOrderStatus(
 
   const body = await request.json().catch(() => null) as {
     status?: string;
+    pickupSettlementMethod?:
+      | "cash"
+      | "card";
+    cardProcessor?:
+      | "arab"
+      | "bop";
   } | null;
 
   if (!body?.status) {
@@ -1101,6 +1107,7 @@ async function handleUpdateOrderStatus(
       fulfillmentMethod: ordersTable.fulfillmentMethod,
       deliveryCompanyId: ordersTable.deliveryCompanyId,
       deliveryCompanyCost: ordersTable.deliveryCompanyCost,
+      paymentMethod: ordersTable.paymentMethod,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -1110,10 +1117,44 @@ async function handleUpdateOrderStatus(
     return json({ error: "الطلب غير موجود" }, 404);
   }
 
-  const allowed = ORDER_TRANSITIONS[current[0].status] ?? [];
+  const isPickup =
+    current[0].shippingZone === STORE_PICKUP_LABEL ||
+    current[0].fulfillmentMethod === "pickup";
 
-  if (!allowed.includes(body.status)) {
-    return json({ error: "لا يمكن نقل الطلب إلى هذه الحالة" }, 409);
+  if (
+    isPickup &&
+    body.status === "delivering"
+  ) {
+    return json(
+      {
+        error:
+          "طلب الاستلام من المحل لا يمر بحالة قيد التوصيل",
+      },
+      409,
+    );
+  }
+
+  const allowed =
+    ORDER_TRANSITIONS[
+      current[0].status
+    ] ?? [];
+
+  const pickupDirectDone =
+    isPickup &&
+    current[0].status === "confirmed" &&
+    body.status === "done";
+
+  if (
+    !allowed.includes(body.status) &&
+    !pickupDirectDone
+  ) {
+    return json(
+      {
+        error:
+          "لا يمكن نقل الطلب إلى هذه الحالة",
+      },
+      409,
+    );
   }
 
   let fulfillmentUpdate: AutomaticFulfillmentUpdate | null = null;
@@ -1144,12 +1185,69 @@ async function handleUpdateOrderStatus(
     current[0].status !== "done"
   ) {
     try {
+      let pickupSettlement:
+        | {
+            method: "cash";
+          }
+        | {
+            method: "card";
+            cardProcessor:
+              | "arab"
+              | "bop";
+          }
+        | null = null;
+
+      if (
+        isPickup &&
+        current[0].paymentMethod === "cod"
+      ) {
+        if (
+          body.pickupSettlementMethod ===
+          "cash"
+        ) {
+          pickupSettlement = {
+            method: "cash",
+          };
+        } else if (
+          body.pickupSettlementMethod ===
+          "card"
+        ) {
+          if (
+            body.cardProcessor !== "arab" &&
+            body.cardProcessor !== "bop"
+          ) {
+            return json(
+              {
+                error:
+                  "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
+              },
+              400,
+            );
+          }
+
+          pickupSettlement = {
+            method: "card",
+            cardProcessor:
+              body.cardProcessor,
+          };
+        } else {
+          return json(
+            {
+              error:
+                "اختر طريقة الدفع عند الاستلام: نقدي أو فيزا",
+            },
+            400,
+          );
+        }
+      }
+
       const updatedOrder =
         await completeOrderWithFinance(
           db,
           id,
           user.id,
           fulfillmentUpdate,
+          pickupSettlement,
         );
 
       if (current[0].customerPhone) {
@@ -1160,6 +1258,9 @@ async function handleUpdateOrderStatus(
             id,
             current[0].customerPhone,
             "done",
+            isPickup
+              ? "pickup"
+              : "delivery",
           );
         } catch (error) {
           console.error(
@@ -1186,7 +1287,9 @@ async function handleUpdateOrderStatus(
       return json(
         {
           error:
-            "تعذر تسجيل تسليم الطلب محاسبيًا",
+            isPickup
+              ? "تعذر تسجيل استلام الطلب من المحل محاسبيًا"
+              : "تعذر تسجيل تسليم الطلب محاسبيًا",
         },
         500,
       );

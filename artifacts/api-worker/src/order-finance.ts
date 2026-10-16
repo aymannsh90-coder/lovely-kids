@@ -11,6 +11,10 @@ import { randomUUID } from "node:crypto";
 import type { openDb } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 import { STORE_PICKUP_LABEL } from "./order-service";
+import {
+  CARD_PROCESSOR_CONFIG,
+  type PosCardProcessor,
+} from "./pos-sale-routes";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -19,6 +23,16 @@ export type OrderFulfillmentSnapshot = {
   deliveryCompanyId: number | null;
   deliveryCompanyCost: number | null;
 };
+
+export type PickupSettlementInput =
+  | {
+      method: "cash";
+      cardProcessor?: never;
+    }
+  | {
+      method: "card";
+      cardProcessor: PosCardProcessor;
+    };
 
 export class OrderFinanceError extends Error {
   constructor(
@@ -81,6 +95,7 @@ export async function completeOrderWithFinance(
   orderId: number,
   userId: number,
   fulfillmentUpdate: OrderFulfillmentSnapshot | null,
+  pickupSettlement: PickupSettlementInput | null = null,
 ) {
   return db.transaction(async (tx) => {
     const orderRows = await tx
@@ -103,9 +118,22 @@ export async function completeOrderWithFinance(
       return order;
     }
 
-    if (order.status !== "delivering") {
+    const pickupByOrder =
+      order.shippingZone === STORE_PICKUP_LABEL ||
+      order.fulfillmentMethod === "pickup";
+
+    if (
+      pickupByOrder
+        ? (
+            order.status !== "confirmed" &&
+            order.status !== "delivering"
+          )
+        : order.status !== "delivering"
+    ) {
       throw new OrderFinanceError(
-        "يجب أن يكون الطلب قيد التوصيل قبل تسجيله كمُسلّم",
+        pickupByOrder
+          ? "يجب تأكيد طلب الاستلام من المحل قبل تسجيله كمستلم"
+          : "يجب أن يكون الطلب قيد التوصيل قبل تسجيله كمُسلّم",
         409,
       );
     }
@@ -330,6 +358,36 @@ export async function completeOrderWithFinance(
       );
     }
 
+    if (!isPickup && pickupSettlement) {
+      throw new OrderFinanceError(
+        "طريقة استلام الدفع من المحل متاحة فقط لطلبات الاستلام من المحل",
+        409,
+      );
+    }
+
+    if (
+      isPickup &&
+      order.paymentMethod === "cod" &&
+      totalMinor > 0 &&
+      !pickupSettlement
+    ) {
+      throw new OrderFinanceError(
+        "اختر طريقة الدفع عند استلام الطلب من المحل: نقدي أو فيزا",
+        409,
+      );
+    }
+
+    if (
+      isPickup &&
+      order.paymentMethod === "bank_transfer" &&
+      pickupSettlement
+    ) {
+      throw new OrderFinanceError(
+        "هذا الطلب مسدد بتحويل بنكي ولا يحتاج طريقة دفع إضافية عند الاستلام",
+        409,
+      );
+    }
+
     const businessDate = getOrderBusinessDate();
 
     let cashSession:
@@ -342,6 +400,7 @@ export async function completeOrderWithFinance(
     if (
       isPickup &&
       order.paymentMethod === "cod" &&
+      pickupSettlement?.method === "cash" &&
       totalMinor > 0
     ) {
       const sessionRows = await tx
@@ -516,10 +575,33 @@ export async function completeOrderWithFinance(
     const cashAccount =
       isPickup &&
       order.paymentMethod === "cod" &&
+      pickupSettlement?.method === "cash" &&
       totalMinor > 0
         ? await ensureAccount({
             code: "CASH_MAIN",
             name: "الصندوق الرئيسي",
+            accountType: "asset",
+          })
+        : null;
+
+    const cardProcessor =
+      isPickup &&
+      order.paymentMethod === "cod" &&
+      pickupSettlement?.method === "card"
+        ? pickupSettlement.cardProcessor
+        : null;
+
+    const cardClearingAccount =
+      cardProcessor && totalMinor > 0
+        ? await ensureAccount({
+            code:
+              CARD_PROCESSOR_CONFIG[
+                cardProcessor
+              ].clearingCode,
+            name:
+              CARD_PROCESSOR_CONFIG[
+                cardProcessor
+              ].clearingName,
             accountType: "asset",
           })
         : null;
@@ -678,32 +760,53 @@ export async function completeOrderWithFinance(
     if (!linkedOnlineExchange) {
       // الطرف المدين حسب طريقة التحصيل.
       if (isPickup) {
-      if (
-        order.paymentMethod === "cod" &&
-        cashAccount &&
-        totalMinor > 0
-      ) {
-        financeLines.push({
-          accountId: cashAccount.id,
-          debitMinor: totalMinor,
-          creditMinor: 0,
-          memo: `تحصيل نقدي للطلب #${order.id}`,
-        });
-      }
+        if (
+          order.paymentMethod === "cod" &&
+          pickupSettlement?.method === "cash" &&
+          cashAccount &&
+          totalMinor > 0
+        ) {
+          financeLines.push({
+            accountId: cashAccount.id,
+            debitMinor: totalMinor,
+            creditMinor: 0,
+            memo:
+              `تحصيل نقدي لاستلام الطلب #${order.id} من المحل`,
+          });
+        }
 
-      if (
-        order.paymentMethod === "bank_transfer" &&
-        bankAccount &&
-        totalMinor > 0
-      ) {
-        financeLines.push({
-          accountId: bankAccount.id,
-          debitMinor: totalMinor,
-          creditMinor: 0,
-          memo: `تحويل بنكي للطلب #${order.id}`,
-        });
-      }
-    } else {
+        if (
+          order.paymentMethod === "cod" &&
+          pickupSettlement?.method === "card" &&
+          cardProcessor &&
+          cardClearingAccount &&
+          totalMinor > 0
+        ) {
+          financeLines.push({
+            accountId:
+              cardClearingAccount.id,
+            debitMinor:
+              totalMinor,
+            creditMinor:
+              0,
+            memo:
+              `تحصيل ${CARD_PROCESSOR_CONFIG[cardProcessor].label} لاستلام الطلب #${order.id} من المحل`,
+          });
+        }
+
+        if (
+          order.paymentMethod === "bank_transfer" &&
+          bankAccount &&
+          totalMinor > 0
+        ) {
+          financeLines.push({
+            accountId: bankAccount.id,
+            debitMinor: totalMinor,
+            creditMinor: 0,
+            memo: `تحويل بنكي للطلب #${order.id}`,
+          });
+        }
+      } else {
       if (!deliveryCompany) {
         throw new OrderFinanceError(
           "تعذر تحديد شركة التوصيل",
@@ -858,7 +961,14 @@ export async function completeOrderWithFinance(
           cashSessionId:
             cashSession?.id ?? null,
           notes:
-            `تسليم طلب المتجر #${order.id}`,
+            isPickup
+              ? pickupSettlement?.method === "card" &&
+                cardProcessor
+                ? `استلام طلب المتجر #${order.id} من المحل - ${CARD_PROCESSOR_CONFIG[cardProcessor].label}`
+                : pickupSettlement?.method === "cash"
+                  ? `استلام طلب المتجر #${order.id} من المحل - نقدي`
+                  : `استلام طلب المتجر #${order.id} من المحل`
+              : `تسليم طلب المتجر #${order.id}`,
           createdByUserId:
             userId,
           lines: financeLines,
@@ -979,6 +1089,15 @@ export async function completeOrderWithFinance(
         fulfillmentMethod,
         deliveryCompanyId,
         deliveryCompanyCost,
+        ...(
+          isPickup &&
+          order.paymentMethod === "cod"
+            ? {
+                paymentStatus:
+                  "confirmed",
+              }
+            : {}
+        ),
       })
       .where(eq(ordersTable.id, order.id))
       .returning();

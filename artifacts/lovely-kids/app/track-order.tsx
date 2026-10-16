@@ -130,12 +130,42 @@ export default function TrackOrderScreen() {
     void fetchOrder();
   }, [fetchOrder]);
 
+  const isPickup =
+    order?.shippingZone ===
+    STORE_PICKUP_LABEL;
+
   const status = order
-    ? STATUS_MAP[order.status] ?? {
-        label: order.status,
-        color: "#888",
-        icon: "ellipse-outline",
-      }
+    ? isPickup &&
+      order.status === "done"
+      ? {
+          label:
+            "تم استلام الطلب",
+          color:
+            "#22c55e",
+          icon:
+            "storefront-outline",
+        }
+      : isPickup &&
+          order.status ===
+            "delivering"
+        ? {
+            label:
+              "تم تأكيد الطلب",
+            color:
+              "#2196F3",
+            icon:
+              "checkmark-circle-outline",
+          }
+        : STATUS_MAP[
+            order.status
+          ] ?? {
+            label:
+              order.status,
+            color:
+              "#888",
+            icon:
+              "ellipse-outline",
+          }
     : null;
 
   return (
