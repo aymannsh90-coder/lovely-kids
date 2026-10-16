@@ -331,6 +331,10 @@ export async function sendOrderStatusNotification(
   orderId: number,
   phone: string,
   status: string,
+  fulfillmentMethod?:
+    | "delivery"
+    | "pickup"
+    | null,
 ) {
   const messages: Record<string, { title: string; body: string }> = {
     new: {
@@ -355,7 +359,17 @@ export async function sendOrderStatusNotification(
     },
   };
 
-  const message = messages[status];
+  const message =
+    status === "done" &&
+    fulfillmentMethod === "pickup"
+      ? {
+          title:
+            "تم استلام طلبك 🎉",
+          body:
+            `تم استلام الطلب #${orderId} من المحل. شكرًا لتسوقك من Lovely Kids`,
+        }
+      : messages[status];
+
   if (!message) return;
 
   const devices = await db
