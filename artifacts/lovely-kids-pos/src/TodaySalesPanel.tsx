@@ -387,6 +387,45 @@ export default function TodaySalesPanel({
     [activeSales],
   );
 
+  const arabCardSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card" &&
+          result.sale.cardProcessor === "arab"
+            ? total + result.sale.totalMinor
+            : total,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const bopCardSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card" &&
+          result.sale.cardProcessor === "bop"
+            ? total + result.sale.totalMinor
+            : total,
+        0,
+      ),
+    [activeSales],
+  );
+
+  const unassignedCardSalesMinor = useMemo(
+    () =>
+      activeSales.reduce(
+        (total, result) =>
+          result.sale.paymentMethod === "card" &&
+          result.sale.cardProcessor === null
+            ? total + result.sale.totalMinor
+            : total,
+        0,
+      ),
+    [activeSales],
+  );
+
   const accountSalesMinor = useMemo(
     () =>
       activeSales.reduce(
@@ -755,6 +794,23 @@ export default function TodaySalesPanel({
             <span>مبيعات فيزا</span>
             <strong>{formatMinor(cardSalesMinor)}</strong>
           </div>
+
+          <div>
+            <span>فيزا البنك العربي</span>
+            <strong>{formatMinor(arabCardSalesMinor)}</strong>
+          </div>
+
+          <div>
+            <span>فيزا بنك فلسطين</span>
+            <strong>{formatMinor(bopCardSalesMinor)}</strong>
+          </div>
+
+          {unassignedCardSalesMinor > 0 && (
+            <div>
+              <span>فيزا قديمة — الماكينة غير محددة</span>
+              <strong>{formatMinor(unassignedCardSalesMinor)}</strong>
+            </div>
+          )}
 
           <div>
             <span>مبيعات على الحساب</span>
@@ -1314,6 +1370,16 @@ export default function TodaySalesPanel({
           <span>نقدي: {formatMinor(cashSalesMinor)}</span>
 
           <span>فيزا: {formatMinor(cardSalesMinor)}</span>
+
+          <span>فيزا العربي: {formatMinor(arabCardSalesMinor)}</span>
+
+          <span>فيزا بنك فلسطين: {formatMinor(bopCardSalesMinor)}</span>
+
+          {unassignedCardSalesMinor > 0 && (
+            <span>
+              فيزا قديمة غير محددة: {formatMinor(unassignedCardSalesMinor)}
+            </span>
+          )}
 
           <span>إجمالي المردودات: {formatMinor(returnedMinor)}</span>
 
