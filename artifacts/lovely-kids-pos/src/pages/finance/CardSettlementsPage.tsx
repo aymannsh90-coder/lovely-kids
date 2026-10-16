@@ -224,6 +224,34 @@ export default function CardSettlementsPage() {
       ],
     );
 
+  const eligibleBankAccounts =
+    useMemo(
+      () =>
+        (
+          data?.bankAccounts ??
+          []
+        ).filter(
+          (account) => {
+            const name =
+              `${account.bankName} ${account.name}`
+                .toLowerCase();
+
+            return processor ===
+              "arab"
+              ? /العربي|arab/.test(
+                  name,
+                )
+              : /فلسطين|palestine/.test(
+                  name,
+                );
+          },
+        ),
+      [
+        data,
+        processor,
+      ],
+    );
+
   const grossMinor =
     moneyMinor(
       grossAmount,
@@ -248,7 +276,7 @@ export default function CardSettlementsPage() {
     }
 
     const currentBank =
-      data.bankAccounts.find(
+      eligibleBankAccounts.find(
         (account) =>
           String(account.id) ===
           bankAccountId,
@@ -259,22 +287,8 @@ export default function CardSettlementsPage() {
     }
 
     const preferred =
-      data.bankAccounts.find(
-        (account) => {
-          const name =
-            `${account.bankName} ${account.name}`
-              .toLowerCase();
-
-          return processor ===
-            "arab"
-            ? /العربي|arab/.test(
-                name,
-              )
-            : /فلسطين|palestine/.test(
-                name,
-              );
-        },
-      );
+      eligibleBankAccounts[0] ??
+      null;
 
     setBankAccountId(
       preferred
@@ -285,6 +299,7 @@ export default function CardSettlementsPage() {
     data,
     processor,
     bankAccountId,
+    eligibleBankAccounts,
   ]);
 
   function useFullBalance() {
@@ -847,11 +862,7 @@ export default function CardSettlementsPage() {
               <option value="">
                 اختر الحساب
               </option>
-              {(
-                data
-                  ?.bankAccounts ??
-                []
-              ).map(
+              {eligibleBankAccounts.map(
                 (account) => (
                   <option
                     key={
