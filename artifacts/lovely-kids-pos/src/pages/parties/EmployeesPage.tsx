@@ -907,12 +907,6 @@ export default function EmployeesPage() {
               ...base,
               paymentMethod:
                 actionMethod,
-              cardProcessor:
-                actionMethod ===
-                  "card"
-                  ? actionCardProcessor ??
-                    undefined
-                  : undefined,
               bankAccountId:
                 actionMethod ===
                   "bank"
@@ -941,6 +935,12 @@ export default function EmployeesPage() {
               ...base,
               paymentMethod:
                 actionMethod,
+              cardProcessor:
+                actionMethod ===
+                  "card"
+                  ? actionCardProcessor ??
+                    undefined
+                  : undefined,
               bankAccountId:
                 actionMethod ===
                   "bank"
