@@ -58,8 +58,43 @@ const STATUS_MAP: Record<string, { label: string; color: string; icon: string }>
   cancelled:  { label: "ملغي",         color: "#ef4444", icon: "close-circle-outline" },
 };
 
-function statusInfo(s: string) {
-  return STATUS_MAP[s] ?? { label: s, color: "#888", icon: "ellipse-outline" };
+function statusInfo(
+  s: string,
+  isPickup = false,
+) {
+  if (
+    isPickup &&
+    s === "done"
+  ) {
+    return {
+      label:
+        "تم الاستلام",
+      color:
+        "#22c55e",
+      icon:
+        "storefront-outline",
+    };
+  }
+
+  if (
+    isPickup &&
+    s === "delivering"
+  ) {
+    return {
+      label:
+        "مؤكد",
+      color:
+        "#2196F3",
+      icon:
+        "checkmark-circle-outline",
+    };
+  }
+
+  return STATUS_MAP[s] ?? {
+    label: s,
+    color: "#888",
+    icon: "ellipse-outline",
+  };
 }
 
 function canCancel(status: string) {
@@ -307,7 +342,13 @@ export default function MyOrdersScreen() {
 
 
   const renderOrder = ({ item }: { item: Order }) => {
-    const st = statusInfo(item.status);
+    const isPickup =
+      item.shippingZone ===
+      STORE_PICKUP_LABEL;
+    const st = statusInfo(
+      item.status,
+      isPickup,
+    );
     const cancellable = !!user && canCancel(item.status);
     const isCancelling = cancelling === item.id;
     const isProofUploading = proofUploading === item.id;
