@@ -131,9 +131,17 @@ function refundMethodLabel(
 
 function exchangeSettlementLabel(
   value: string,
+  cardProcessor?:
+    | "arab"
+    | "bop"
+    | null,
 ) {
   if (value === "card") {
-    return "فيزا";
+    return cardProcessor === "arab"
+      ? "فيزا البنك العربي"
+      : cardProcessor === "bop"
+        ? "فيزا بنك فلسطين"
+        : "فيزا";
   }
 
   if (value === "cash") {
@@ -1208,6 +1216,7 @@ export default function TodaySalesPanel({
                         <td>
                           {exchangeSettlementLabel(
                             exchange.settlementType,
+                            exchange.cardProcessor,
                           )}
                         </td>
 
