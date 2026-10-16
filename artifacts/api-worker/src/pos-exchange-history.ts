@@ -2,12 +2,14 @@ import {
   exchangeDocumentsTable,
   exchangeReturnItemsTable,
   exchangeSaleItemsTable,
+  financeTransactionsTable,
 } from "@workspace/db/schema";
 import {
   and,
   asc,
   desc,
   eq,
+  inArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -245,6 +247,79 @@ export async function handleListPosExchanges(
         ),
       );
 
+  const exchangeIds =
+    exchanges.map(
+      (exchange) =>
+        String(
+          exchange.id,
+        ),
+    );
+
+  const cardFinanceRows =
+    exchangeIds.length > 0
+      ? await db
+          .select({
+            sourceId:
+              financeTransactionsTable.sourceId,
+            sourceEvent:
+              financeTransactionsTable.sourceEvent,
+          })
+          .from(
+            financeTransactionsTable,
+          )
+          .where(
+            and(
+              eq(
+                financeTransactionsTable.sourceType,
+                "exchange",
+              ),
+              inArray(
+                financeTransactionsTable.sourceId,
+                exchangeIds,
+              ),
+              inArray(
+                financeTransactionsTable.sourceEvent,
+                [
+                  "card_settlement_arab",
+                  "card_settlement_bop",
+                ],
+              ),
+            ),
+          )
+      : [];
+
+  const cardProcessorByExchangeId =
+    new Map<
+      number,
+      "arab" | "bop"
+    >();
+
+  for (
+    const row of
+    cardFinanceRows
+  ) {
+    const exchangeId =
+      Number(
+        row.sourceId,
+      );
+
+    if (
+      !Number.isSafeInteger(
+        exchangeId,
+      )
+    ) {
+      continue;
+    }
+
+    cardProcessorByExchangeId.set(
+      exchangeId,
+      row.sourceEvent ===
+        "card_settlement_arab"
+        ? "arab"
+        : "bop",
+    );
+  }
+
   return json({
     session: null,
     businessDate,
@@ -267,6 +342,10 @@ export async function handleListPosExchanges(
             exchange.status,
           settlementType:
             exchange.settlementType,
+          cardProcessor:
+            cardProcessorByExchangeId.get(
+              exchange.id,
+            ) ?? null,
           returnNetMinor:
             exchange.returnNetMinor,
           newNetMinor:
@@ -398,12 +477,61 @@ export async function handleGetPosExchangeByPublicId(
         ),
     ]);
 
+  const cardFinanceRows =
+    exchange.settlementType ===
+    "card"
+      ? await db
+          .select({
+            sourceEvent:
+              financeTransactionsTable.sourceEvent,
+          })
+          .from(
+            financeTransactionsTable,
+          )
+          .where(
+            and(
+              eq(
+                financeTransactionsTable.sourceType,
+                "exchange",
+              ),
+              eq(
+                financeTransactionsTable.sourceId,
+                String(
+                  exchange.id,
+                ),
+              ),
+              inArray(
+                financeTransactionsTable.sourceEvent,
+                [
+                  "card_settlement_arab",
+                  "card_settlement_bop",
+                ],
+              ),
+            ),
+          )
+          .limit(1)
+      : [];
+
+  const cardProcessor =
+    cardFinanceRows[0]
+      ?.sourceEvent ===
+      "card_settlement_arab"
+      ? "arab"
+      : cardFinanceRows[0]
+            ?.sourceEvent ===
+          "card_settlement_bop"
+        ? "bop"
+        : null;
+
   return json({
     ok: true,
     validationOnly: false,
     alreadyCreated: true,
     quote: null,
-    exchange,
+    exchange: {
+      ...exchange,
+      cardProcessor,
+    },
     returnItems,
     saleItems,
   });
