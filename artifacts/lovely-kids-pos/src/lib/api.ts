@@ -4337,6 +4337,8 @@ export interface PosExchangeSummary {
     | "voided";
 
   settlementType: string;
+  cardProcessor?:
+    PosCardProcessor | null;
 
   returnNetMinor: number;
   newNetMinor: number;
