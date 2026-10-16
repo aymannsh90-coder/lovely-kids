@@ -106,6 +106,7 @@ interface Order {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  fulfillmentMethod?: "delivery" | "pickup" | null;
   status: string;
   notes?: string;
   paymentMethod: string;
@@ -249,8 +250,54 @@ const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
   cancelled: ["confirmed", "delivering", "done"],
 };
 
-function statusInfo(s: string) {
-  return STATUS_OPTIONS.find((o) => o.key === s) ?? STATUS_OPTIONS[0];
+const PICKUP_ORDER_TRANSITIONS: Record<
+  string,
+  readonly string[]
+> = {
+  new: ["confirmed", "cancelled"],
+  confirmed: ["new", "done", "cancelled"],
+  delivering: ["confirmed", "done", "cancelled"],
+  done: [],
+  cancelled: ["confirmed"],
+};
+
+function isStorePickupOrder(
+  order: Pick<
+    Order,
+    "shippingZone" | "fulfillmentMethod"
+  >,
+) {
+  return (
+    order.shippingZone ===
+      ADMIN_STORE_PICKUP_LABEL ||
+    order.fulfillmentMethod ===
+      "pickup"
+  );
+}
+
+function statusInfo(
+  s: string,
+  isPickup = false,
+) {
+  const found =
+    STATUS_OPTIONS.find(
+      (o) => o.key === s,
+    ) ?? STATUS_OPTIONS[0];
+
+  if (
+    isPickup &&
+    s === "done"
+  ) {
+    return {
+      ...found,
+      label:
+        "تم الاستلام",
+      icon:
+        "storefront-outline" as const,
+    };
+  }
+
+  return found;
 }
 
 function paymentMethodLabel(m: string) {
@@ -336,6 +383,20 @@ export default function AdminOrdersScreen() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [pickupConfirmOrder, setPickupConfirmOrder] = useState<Order | null>(null);
   const [pickupConvertingId, setPickupConvertingId] = useState<number | null>(null);
+  const [
+    pickupSettlementOrder,
+    setPickupSettlementOrder,
+  ] = useState<Order | null>(null);
+  const [
+    pickupSettlementMethod,
+    setPickupSettlementMethod,
+  ] = useState<"cash" | "card">("cash");
+  const [
+    pickupCardProcessor,
+    setPickupCardProcessor,
+  ] = useState<
+    "arab" | "bop" | null
+  >(null);
   const [exchangeReturnConfirm, setExchangeReturnConfirm] =
     useState<ExchangeReturnConfirmation | null>(null);
   const [exchangeReturnBusyId, setExchangeReturnBusyId] =
@@ -654,43 +715,297 @@ export default function AdminOrdersScreen() {
     }
   };
 
-  const updateStatus = async (id: number, status: string) => {
-    if (pendingOrderIdsRef.current.has(id)) return;
-    const order = orders.find((o) => o.id === id);
-    const previousStatus = order?.status;
-    if (!previousStatus || previousStatus === status) return;
-    const allowed = ORDER_TRANSITIONS[previousStatus] ?? [];
-    if (!allowed.includes(status)) return;
-    pendingOrderIdsRef.current.add(id);
-    ordersFetchVersionRef.current += 1;
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
-    setPendingOrderIds((prev) => new Set(prev).add(id));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  const updateStatus = async (
+    id: number,
+    status: string,
+    pickupSettlement?: {
+      pickupSettlementMethod:
+        | "cash"
+        | "card";
+      cardProcessor?:
+        | "arab"
+        | "bop";
+    },
+  ) => {
+    if (
+      pendingOrderIdsRef.current.has(
+        id,
+      )
+    ) {
+      return false;
+    }
+
+    const order = orders.find(
+      (o) => o.id === id,
+    );
+
+    const previousStatus =
+      order?.status;
+
+    if (
+      !order ||
+      !previousStatus ||
+      previousStatus === status
+    ) {
+      return false;
+    }
+
+    const isPickup =
+      isStorePickupOrder(order);
+
+    const transitions =
+      isPickup
+        ? PICKUP_ORDER_TRANSITIONS
+        : ORDER_TRANSITIONS;
+
+    const allowed =
+      transitions[
+        previousStatus
+      ] ?? [];
+
+    if (
+      !allowed.includes(
+        status,
+      )
+    ) {
+      return false;
+    }
+
+    pendingOrderIdsRef.current.add(
+      id,
+    );
+    ordersFetchVersionRef.current +=
+      1;
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === id
+          ? {
+              ...o,
+              status,
+              ...(
+                isPickup &&
+                status === "done"
+                  ? {
+                      paymentStatus:
+                        "confirmed",
+                    }
+                  : {}
+              ),
+            }
+          : o,
+      ),
+    );
+
+    setPendingOrderIds(
+      (prev) =>
+        new Set(prev).add(
+          id,
+        ),
+    );
+
+    await new Promise(
+      (resolve) =>
+        setTimeout(
+          resolve,
+          0,
+        ),
+    );
+
     try {
-      const token = await getAuthToken();
-      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
-      const res = await fetch(`${API_BASE}/api/orders/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) {
-        let msg = "تعذر تحديث الحالة";
-        try { const body = await res.json() as { error?: string }; if (body.error) msg = body.error; } catch { /* ignore */ }
-        throw new Error(msg);
+      const token =
+        await getAuthToken();
+
+      if (!token) {
+        throw new Error(
+          "انتهت جلسة تسجيل الدخول",
+        );
       }
-      const updatedOrder = (await res.json()) as Order;
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updatedOrder } : o)));
+
+      const res = await fetch(
+        `${API_BASE}/api/orders/${id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization:
+              `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            status,
+            ...(pickupSettlement ??
+              {}),
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        let msg =
+          "تعذر تحديث الحالة";
+
+        try {
+          const body =
+            (await res.json()) as {
+              error?: string;
+            };
+
+          if (body.error) {
+            msg = body.error;
+          }
+        } catch {
+          // ignore
+        }
+
+        throw new Error(
+          msg,
+        );
+      }
+
+      const updatedOrder =
+        (await res.json()) as Order;
+
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === id
+            ? {
+                ...o,
+                ...updatedOrder,
+              }
+            : o,
+        ),
+      );
+
+      return true;
     } catch (error) {
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: previousStatus } : o)));
-      const msg = error instanceof Error ? error.message : "حدث خطأ غير متوقع";
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === id
+            ? {
+                ...o,
+                status:
+                  previousStatus,
+                paymentStatus:
+                  order.paymentStatus,
+              }
+            : o,
+        ),
+      );
+
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "حدث خطأ غير متوقع";
+
       showError(msg);
-      if (Platform.OS !== "web") Alert.alert("تعذر تحديث الحالة", msg);
+
+      if (
+        Platform.OS !==
+        "web"
+      ) {
+        Alert.alert(
+          "تعذر تحديث الحالة",
+          msg,
+        );
+      }
+
+      return false;
     } finally {
-      pendingOrderIdsRef.current.delete(id);
-      setPendingOrderIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      pendingOrderIdsRef.current.delete(
+        id,
+      );
+
+      setPendingOrderIds(
+        (prev) => {
+          const next =
+            new Set(prev);
+
+          next.delete(id);
+          return next;
+        },
+      );
     }
   };
+
+  const openStorePickupCompletion = (
+    order: Order,
+  ) => {
+    if (
+      order.status !==
+      "confirmed"
+    ) {
+      showError(
+        "يجب تأكيد الطلب أولًا قبل تسجيل الاستلام من المحل",
+      );
+      return;
+    }
+
+    if (
+      order.paymentMethod ===
+      "bank_transfer"
+    ) {
+      void updateStatus(
+        order.id,
+        "done",
+      );
+      return;
+    }
+
+    setPickupSettlementOrder(
+      order,
+    );
+    setPickupSettlementMethod(
+      "cash",
+    );
+    setPickupCardProcessor(
+      null,
+    );
+  };
+
+  const confirmStorePickupCompletion =
+    async () => {
+      const order =
+        pickupSettlementOrder;
+
+      if (!order) {
+        return;
+      }
+
+      if (
+        pickupSettlementMethod ===
+          "card" &&
+        !pickupCardProcessor
+      ) {
+        showError(
+          "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
+        );
+        return;
+      }
+
+      const succeeded =
+        await updateStatus(
+          order.id,
+          "done",
+          {
+            pickupSettlementMethod,
+            cardProcessor:
+              pickupSettlementMethod ===
+                "card"
+                ? pickupCardProcessor ??
+                  undefined
+                : undefined,
+          },
+        );
+
+      if (succeeded) {
+        setPickupSettlementOrder(
+          null,
+        );
+        setPickupCardProcessor(
+          null,
+        );
+      }
+    };
 
   const confirmPayment = async (id: number) => {
     try {
@@ -2223,9 +2538,41 @@ export default function AdminOrdersScreen() {
             </View>
           }
           renderItem={({ item }) => {
-            const st = statusInfo(item.status);
+            const isPickup =
+              isStorePickupOrder(item);
+            const st =
+              statusInfo(
+                item.status,
+                isPickup,
+              );
             const pst = paymentStatusInfo(item.paymentStatus);
             const isOpen = expanded === item.id;
+            const statusOptions =
+              isPickup
+                ? STATUS_OPTIONS
+                    .filter(
+                      (option) =>
+                        option.key !==
+                        "delivering",
+                    )
+                    .map(
+                      (option) =>
+                        option.key ===
+                        "done"
+                          ? {
+                              ...option,
+                              label:
+                                "تم الاستلام",
+                              icon:
+                                "storefront-outline" as const,
+                            }
+                          : option,
+                    )
+                : STATUS_OPTIONS;
+            const orderTransitions =
+              isPickup
+                ? PICKUP_ORDER_TRANSITIONS
+                : ORDER_TRANSITIONS;
             const hasBankTransfer = item.paymentMethod === "bank_transfer";
             const hasProof = !!item.paymentProof;
             const paymentConfirmed = item.paymentStatus === "confirmed";
@@ -2292,7 +2639,9 @@ export default function AdminOrdersScreen() {
                       <Ionicons name={st.icon} size={13} color={st.color} />
                       <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
                     </View>
-                    {hasBankTransfer && (
+                    {(hasBankTransfer ||
+                      (isPickup &&
+                        item.status === "done")) && (
                       <View style={[styles.statusChip, { backgroundColor: pst.color + "20" }]}>
                         <Ionicons name={pst.icon} size={13} color={pst.color} />
                         <Text style={[styles.statusText, { color: pst.color }]}>{pst.label}</Text>
@@ -2823,24 +3172,121 @@ export default function AdminOrdersScreen() {
                     )}
 
                     {/* Status Change */}
-                    <Text style={[styles.sectionLabel, { color: colors.foreground }]}>تغيير الحالة:</Text>
-                    <View style={styles.statusBtns}>
-                      {STATUS_OPTIONS.map((s) => (
-                        <Pressable
-                          key={s.key}
-                            disabled={pendingOrderIds.has(item.id) || item.status === s.key || !(ORDER_TRANSITIONS[item.status] ?? []).includes(s.key)}
-                          onPress={(event) => { event.stopPropagation(); updateStatus(item.id, s.key); }}
-                          style={[
-                            styles.statusBtn,
-                            { backgroundColor: item.status === s.key ? s.color : s.color + "20" },
-                          ]}
-                        >
-                          <Ionicons name={s.icon} size={14} color={item.status === s.key ? "#fff" : s.color} />
-                          <Text style={[styles.statusBtnText, { color: item.status === s.key ? "#fff" : s.color }]}>
-                            {s.label}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <Text
+                      style={[
+                        styles.sectionLabel,
+                        {
+                          color:
+                            colors.foreground,
+                        },
+                      ]}
+                    >
+                      {isPickup
+                        ? "حالة الاستلام:"
+                        : "تغيير الحالة:"}
+                    </Text>
+
+                    <View
+                      style={
+                        styles.statusBtns
+                      }
+                    >
+                      {statusOptions.map(
+                        (s) => {
+                          const canMove =
+                            (
+                              orderTransitions[
+                                item.status
+                              ] ?? []
+                            ).includes(
+                              s.key,
+                            );
+
+                          return (
+                            <Pressable
+                              key={s.key}
+                              disabled={
+                                pendingOrderIds.has(
+                                  item.id,
+                                ) ||
+                                item.status ===
+                                  s.key ||
+                                !canMove
+                              }
+                              onPress={(
+                                event,
+                              ) => {
+                                event.stopPropagation();
+
+                                if (
+                                  isPickup &&
+                                  s.key ===
+                                    "done"
+                                ) {
+                                  openStorePickupCompletion(
+                                    item,
+                                  );
+                                  return;
+                                }
+
+                                void updateStatus(
+                                  item.id,
+                                  s.key,
+                                );
+                              }}
+                              style={[
+                                styles.statusBtn,
+                                {
+                                  backgroundColor:
+                                    item.status ===
+                                    s.key
+                                      ? s.color
+                                      : s.color +
+                                        "20",
+                                  opacity:
+                                    pendingOrderIds.has(
+                                      item.id,
+                                    ) ||
+                                    (
+                                      item.status !==
+                                        s.key &&
+                                      !canMove
+                                    )
+                                      ? 0.45
+                                      : 1,
+                                },
+                              ]}
+                            >
+                              <Ionicons
+                                name={
+                                  s.icon
+                                }
+                                size={14}
+                                color={
+                                  item.status ===
+                                  s.key
+                                    ? "#fff"
+                                    : s.color
+                                }
+                              />
+                              <Text
+                                style={[
+                                  styles.statusBtnText,
+                                  {
+                                    color:
+                                      item.status ===
+                                      s.key
+                                        ? "#fff"
+                                        : s.color,
+                                  },
+                                ]}
+                              >
+                                {s.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        },
+                      )}
                     </View>
 
                     {/* Delete Order */}
@@ -2860,6 +3306,433 @@ export default function AdminOrdersScreen() {
           }}
         />
       )}
+
+      <Modal
+        visible={
+          pickupSettlementOrder !==
+          null
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (
+            !pickupSettlementOrder ||
+            pendingOrderIds.has(
+              pickupSettlementOrder.id,
+            )
+          ) {
+            return;
+          }
+
+          setPickupSettlementOrder(
+            null,
+          );
+          setPickupCardProcessor(
+            null,
+          );
+        }}
+      >
+        <Pressable
+          style={
+            styles.modalOverlay
+          }
+          onPress={() => {
+            if (
+              pickupSettlementOrder &&
+              !pendingOrderIds.has(
+                pickupSettlementOrder.id,
+              )
+            ) {
+              setPickupSettlementOrder(
+                null,
+              );
+              setPickupCardProcessor(
+                null,
+              );
+            }
+          }}
+        >
+          <Pressable
+            onPress={(
+              event,
+            ) =>
+              event.stopPropagation()
+            }
+            style={[
+              styles.editOrderModalCard,
+              {
+                maxWidth: 520,
+                width: "92%",
+                alignSelf:
+                  "center",
+                backgroundColor:
+                  colors.card,
+                borderColor:
+                  colors.border,
+              },
+            ]}
+          >
+            <View
+              style={{
+                padding: 18,
+                gap: 14,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  alignItems:
+                    "center",
+                  gap: 10,
+                }}
+              >
+                <Ionicons
+                  name="storefront-outline"
+                  size={24}
+                  color={
+                    colors.primary
+                  }
+                />
+
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems:
+                      "flex-end",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.foreground,
+                      fontWeight:
+                        "900",
+                      fontSize: 18,
+                    }}
+                  >
+                    تم استلام الطلب من المحل
+                  </Text>
+
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      marginTop: 3,
+                    }}
+                  >
+                    الطلب #{pickupSettlementOrder?.id} — الإجمالي {pickupSettlementOrder?.totalPrice ?? 0}₪
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={{
+                  color:
+                    colors.foreground,
+                  fontWeight:
+                    "800",
+                  textAlign:
+                    "right",
+                }}
+              >
+                اختر طريقة الدفع الفعلية عند الاستلام:
+              </Text>
+
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  gap: 10,
+                }}
+              >
+                <Pressable
+                  onPress={() => {
+                    setPickupSettlementMethod(
+                      "cash",
+                    );
+                    setPickupCardProcessor(
+                      null,
+                    );
+                  }}
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor:
+                      pickupSettlementMethod ===
+                      "cash"
+                        ? "#16A34A"
+                        : colors.border,
+                    backgroundColor:
+                      pickupSettlementMethod ===
+                      "cash"
+                        ? "#16A34A18"
+                        : colors.background,
+                    borderRadius: 12,
+                    padding: 14,
+                    alignItems:
+                      "center",
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons
+                    name="cash-outline"
+                    size={22}
+                    color="#16A34A"
+                  />
+                  <Text
+                    style={{
+                      color:
+                        "#16A34A",
+                      fontWeight:
+                        "900",
+                    }}
+                  >
+                    نقدي
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    setPickupSettlementMethod(
+                      "card",
+                    )
+                  }
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor:
+                      pickupSettlementMethod ===
+                      "card"
+                        ? colors.primary
+                        : colors.border,
+                    backgroundColor:
+                      pickupSettlementMethod ===
+                      "card"
+                        ? colors.primary +
+                          "18"
+                        : colors.background,
+                    borderRadius: 12,
+                    padding: 14,
+                    alignItems:
+                      "center",
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons
+                    name="card-outline"
+                    size={22}
+                    color={
+                      colors.primary
+                    }
+                  />
+                  <Text
+                    style={{
+                      color:
+                        colors.primary,
+                      fontWeight:
+                        "900",
+                    }}
+                  >
+                    فيزا
+                  </Text>
+                </Pressable>
+              </View>
+
+              {pickupSettlementMethod ===
+                "card" && (
+                <View
+                  style={{
+                    gap: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.foreground,
+                      fontWeight:
+                        "800",
+                      textAlign:
+                        "right",
+                    }}
+                  >
+                    ماكينة الفيزا:
+                  </Text>
+
+                  <View
+                    style={{
+                      flexDirection:
+                        "row-reverse",
+                      gap: 10,
+                    }}
+                  >
+                    {[
+                      {
+                        key:
+                          "arab" as const,
+                        label:
+                          "البنك العربي",
+                      },
+                      {
+                        key:
+                          "bop" as const,
+                        label:
+                          "بنك فلسطين",
+                      },
+                    ].map(
+                      (
+                        option,
+                      ) => (
+                        <Pressable
+                          key={
+                            option.key
+                          }
+                          onPress={() =>
+                            setPickupCardProcessor(
+                              option.key,
+                            )
+                          }
+                          style={{
+                            flex: 1,
+                            borderWidth: 1,
+                            borderColor:
+                              pickupCardProcessor ===
+                              option.key
+                                ? colors.primary
+                                : colors.border,
+                            backgroundColor:
+                              pickupCardProcessor ===
+                              option.key
+                                ? colors.primary +
+                                  "12"
+                                : colors.background,
+                            borderRadius: 10,
+                            paddingVertical: 12,
+                            alignItems:
+                              "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                pickupCardProcessor ===
+                                option.key
+                                  ? colors.primary
+                                  : colors.foreground,
+                              fontWeight:
+                                "800",
+                            }}
+                          >
+                            {
+                              option.label
+                            }
+                          </Text>
+                        </Pressable>
+                      ),
+                    )}
+                  </View>
+                </View>
+              )}
+
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  gap: 10,
+                  marginTop: 4,
+                }}
+              >
+                <Pressable
+                  disabled={
+                    !pickupSettlementOrder ||
+                    pendingOrderIds.has(
+                      pickupSettlementOrder.id,
+                    )
+                  }
+                  onPress={() =>
+                    void confirmStorePickupCompletion()
+                  }
+                  style={{
+                    flex: 1,
+                    backgroundColor:
+                      "#16A34A",
+                    borderRadius: 10,
+                    paddingVertical: 13,
+                    alignItems:
+                      "center",
+                    opacity:
+                      pickupSettlementOrder &&
+                      pendingOrderIds.has(
+                        pickupSettlementOrder.id,
+                      )
+                        ? 0.55
+                        : 1,
+                  }}
+                >
+                  {pickupSettlementOrder &&
+                  pendingOrderIds.has(
+                    pickupSettlementOrder.id,
+                  ) ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#fff"
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        color:
+                          "#fff",
+                        fontWeight:
+                          "900",
+                      }}
+                    >
+                      تأكيد الاستلام والدفع
+                    </Text>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  disabled={
+                    Boolean(
+                      pickupSettlementOrder &&
+                      pendingOrderIds.has(
+                        pickupSettlementOrder.id,
+                      ),
+                    )
+                  }
+                  onPress={() => {
+                    setPickupSettlementOrder(
+                      null,
+                    );
+                    setPickupCardProcessor(
+                      null,
+                    );
+                  }}
+                  style={{
+                    paddingHorizontal: 18,
+                    paddingVertical: 13,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.foreground,
+                      fontWeight:
+                        "800",
+                    }}
+                  >
+                    إلغاء
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={exchangeReturnConfirm !== null}
