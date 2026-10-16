@@ -108,6 +108,27 @@ const DEFAULT_EXPENSE_PRESETS:
       icon: "🛍️",
       pattern: /أكياس|اكياس|نايلون|نايلن/,
     },
+    {
+      key: "preset:ai",
+      title: "ذكاء اصطناعي",
+      icon: "🤖",
+      pattern:
+        /ذكاء اصطناعي|شات جي بي تي|chatgpt|openai|claude|gemini|ai اشتراك|اشتراك ai/,
+    },
+    {
+      key: "preset:phone-internet",
+      title: "هاتف وإنترنت",
+      icon: "📶",
+      pattern:
+        /هاتف|انترنت|إنترنت|اتصال|اتصالات|خط خلوي|خلوي|جوال/,
+    },
+    {
+      key: "preset:ads",
+      title: "دعاية وإعلان",
+      icon: "📣",
+      pattern:
+        /دعاي|إعلان|اعلان|إعلانات|اعلانات|تسويق|meta ads|facebook ads|انستغرام|instagram ads/,
+    },
   ];
 
 const PIN_STORAGE_KEY =
@@ -225,9 +246,27 @@ function expenseIcon(name: string) {
   }
 
   if (
-    /انترنت|هاتف|اتصال/.test(value)
+    /ذكاء اصطناعي|شات جي بي تي|chatgpt|openai|claude|gemini|ai اشتراك|اشتراك ai/.test(
+      value,
+    )
+  ) {
+    return "🤖";
+  }
+
+  if (
+    /انترنت|إنترنت|هاتف|اتصال|اتصالات|خط خلوي|خلوي|جوال/.test(
+      value,
+    )
   ) {
     return "📶";
+  }
+
+  if (
+    /دعاي|إعلان|اعلان|إعلانات|اعلانات|تسويق|meta ads|facebook ads|انستغرام|instagram ads/.test(
+      value,
+    )
+  ) {
+    return "📣";
   }
 
   return "💸";
@@ -263,6 +302,9 @@ function categoryPriority(name: string) {
     /صيان|تصليح/,
     /صدق|صدقات|تبرع|تبرعات/,
     /أكياس|اكياس|نايلون|نايلن/,
+    /ذكاء اصطناعي|شات جي بي تي|chatgpt|openai|claude|gemini|ai اشتراك|اشتراك ai/,
+    /انترنت|إنترنت|هاتف|اتصال|اتصالات|خط خلوي|خلوي|جوال/,
+    /دعاي|إعلان|اعلان|إعلانات|اعلانات|تسويق|meta ads|facebook ads|انستغرام|instagram ads/,
   ];
 
   const index =
