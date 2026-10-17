@@ -944,6 +944,17 @@ export default function SalesInvoicePage() {
       return;
     }
 
+    if (
+      sale.cashTender &&
+      sale.cashTender.currencyCode !==
+        "ILS"
+    ) {
+      setError(
+        "تعديل فاتورة مدفوعة بعملة أجنبية غير متاح؛ ألغِ الفاتورة وأعد إصدارها حتى يبقى صندوق العملة وسعر الصرف صحيحين.",
+      );
+      return;
+    }
+
     setInvoiceBusy(true);
     setError("");
     setMessage("");
