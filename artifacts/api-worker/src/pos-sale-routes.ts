@@ -3393,12 +3393,45 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         session.expectedBalanceMinor ??
         session.openingBalanceMinor;
 
-      const cashImpactMinor =
+      const cashTender =
         sale.paymentMethod === "cash"
-          ? sale.totalMinor
-          : sale.paymentMethod === "mixed"
-            ? sale.paidMinor - sale.changeMinor
-            : 0;
+          ? await getCashTenderForSale(
+              tx,
+              sale,
+            )
+          : null;
+
+      const isForeignCashSale =
+        cashTender !== null &&
+        cashTender.currencyCode !==
+          "ILS";
+
+      let foreignVoidSession:
+        | typeof cashSessionsTable.$inferSelect
+        | null =
+        null;
+
+      let foreignExpectedBefore:
+        | number
+        | null =
+        null;
+
+      let foreignExpectedAfter:
+        | number
+        | null =
+        null;
+
+      const cashImpactMinor =
+        isForeignCashSale
+          ? 0
+          : sale.paymentMethod ===
+              "cash"
+            ? sale.totalMinor
+            : sale.paymentMethod ===
+                "mixed"
+              ? sale.paidMinor -
+                sale.changeMinor
+              : 0;
 
       if (
         cashImpactMinor > 0 &&
@@ -3408,6 +3441,100 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           "رصيد الصندوق لا يكفي لإلغاء الفاتورة",
           409,
         );
+      }
+
+      let expectedAfter =
+        isForeignCashSale
+          ? expectedBefore +
+            (cashTender?.changeMinor ??
+              0)
+          : expectedBefore -
+            cashImpactMinor;
+
+      if (
+        !Number.isSafeInteger(
+          expectedAfter,
+        ) ||
+        expectedAfter < 0 ||
+        expectedAfter >
+          MAX_MINOR
+      ) {
+        throw new PosSaleError(
+          "رصيد صندوق الشيكل بعد الإلغاء غير صالح",
+          409,
+        );
+      }
+
+      if (
+        isForeignCashSale &&
+        cashTender
+      ) {
+        if (
+          !cashTender.cashSessionId
+        ) {
+          throw new PosSaleError(
+            "جلسة صندوق العملة الأصلية غير محفوظة ولا يمكن إلغاء الفاتورة بأمان",
+            409,
+          );
+        }
+
+        const foreignSessionRows =
+          await tx
+            .select()
+            .from(
+              cashSessionsTable,
+            )
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  cashTender.cashSessionId,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+        foreignVoidSession =
+          foreignSessionRows[0] ??
+          null;
+
+        if (
+          !foreignVoidSession ||
+          foreignVoidSession.currencyCode !==
+            cashTender.currencyCode ||
+          foreignVoidSession.businessDate !==
+            sale.businessDate
+        ) {
+          throw new PosSaleError(
+            "لا يمكن إلغاء الفاتورة بعد إغلاق أو تغيير جلسة صندوق العملة الأجنبية",
+            409,
+          );
+        }
+
+        foreignExpectedBefore =
+          foreignVoidSession
+            .expectedBalanceMinor ??
+          foreignVoidSession
+            .openingBalanceMinor;
+
+        if (
+          foreignExpectedBefore <
+          cashTender.currencyAmountMinor
+        ) {
+          throw new PosSaleError(
+            "رصيد صندوق العملة الأجنبية لا يكفي لعكس الفاتورة",
+            409,
+          );
+        }
+
+        foreignExpectedAfter =
+          foreignExpectedBefore -
+          cashTender.currencyAmountMinor;
       }
 
       const stockCardVoidOccurredAt = new Date();
@@ -3717,10 +3844,6 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           }
         }
       }
-
-      const expectedAfter =
-        expectedBefore -
-        cashImpactMinor;
 
       const cashFinanceRows =
         cashImpactMinor > 0
