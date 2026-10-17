@@ -1397,6 +1397,115 @@ async function handleInventoryProductCard(
   });
 }
 
+async function loadForeignCashTenderTarget(
+  tx: any,
+  currencyCode: string,
+  businessDate: string,
+) {
+  const cashCode =
+    `CASH_${currencyCode}`;
+
+  const accountRows =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.code,
+            cashCode,
+          ),
+          eq(
+            financeAccountsTable.accountType,
+            "asset",
+          ),
+          eq(
+            financeAccountsTable.currencyCode,
+            currencyCode,
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  const account =
+    accountRows[0] ??
+    null;
+
+  if (!account) {
+    throw new PosSaleError(
+      `صندوق ${currencyCode} غير موجود أو غير فعال`,
+      409,
+    );
+  }
+
+  const registerKey =
+    account.code
+      .slice(
+        "CASH_".length,
+      )
+      .toLowerCase();
+
+  const sessionRows =
+    await tx
+      .select()
+      .from(
+        cashSessionsTable,
+      )
+      .where(
+        and(
+          eq(
+            cashSessionsTable.registerKey,
+            registerKey,
+          ),
+          eq(
+            cashSessionsTable.status,
+            "open",
+          ),
+        ),
+      )
+      .orderBy(
+        desc(
+          cashSessionsTable.openedAt,
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+  const session =
+    sessionRows[0] ??
+    null;
+
+  if (!session) {
+    throw new PosSaleError(
+      `يجب فتح جلسة صندوق ${currencyCode} قبل البيع بهذه العملة`,
+      409,
+    );
+  }
+
+  if (
+    session.currencyCode !==
+      currencyCode ||
+    session.businessDate !==
+      businessDate
+  ) {
+    throw new PosSaleError(
+      `جلسة صندوق ${currencyCode} لا تطابق يوم البيع الحالي`,
+      409,
+    );
+  }
+
+  return {
+    account,
+    session,
+  };
+}
+
 async function handleSaleCashCurrencyReference(
   request: Request,
   db: Db,
