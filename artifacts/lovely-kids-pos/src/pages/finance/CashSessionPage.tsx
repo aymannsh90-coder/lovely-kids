@@ -64,6 +64,7 @@ export default function CashSessionPage() {
                 step="0.01"
                 inputMode="decimal"
                 value={openingBalance}
+                onFocus={(event) => event.currentTarget.select()}
                 onChange={(event) => setOpeningBalance(event.target.value)}
                 disabled={openBusy}
               />
@@ -187,6 +188,7 @@ export default function CashSessionPage() {
                 step="0.01"
                 inputMode="decimal"
                 value={closingBalance}
+                onFocus={(event) => event.currentTarget.select()}
                 onChange={(event) => setClosingBalance(event.target.value)}
                 disabled={closeBusy}
               />
