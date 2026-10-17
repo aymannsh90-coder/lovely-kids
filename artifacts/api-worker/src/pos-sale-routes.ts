@@ -3079,6 +3079,47 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         throw new PosSaleError("تم إغلاق الصندوق قبل إتمام البيع", 409);
       }
 
+      if (
+        foreignCashTarget &&
+        foreignExpectedAfter !==
+          null
+      ) {
+        const updatedForeignRows =
+          await tx
+            .update(
+              cashSessionsTable,
+            )
+            .set({
+              expectedBalanceMinor:
+                foreignExpectedAfter,
+              updatedAt:
+                new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  foreignCashTarget.session.id,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .returning({
+              id:
+                cashSessionsTable.id,
+            });
+
+        if (!updatedForeignRows[0]) {
+          throw new PosSaleError(
+            `تم إغلاق صندوق ${cashCurrencyCode} قبل إتمام البيع`,
+            409,
+          );
+        }
+      }
+
       return {
         sale,
         items: insertedItems.sort(
