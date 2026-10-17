@@ -751,6 +751,179 @@ export interface PosEmployeeInput {
   notes?: string | null;
 }
 
+export type PosAssistantDraftIntent =
+  | "expense"
+  | "employee_advance"
+  | "owner_withdrawal";
+
+export interface PosAssistantDraft {
+  id: number;
+  publicId: string;
+  originalText: string;
+  source: "text" | "voice";
+  intent: PosAssistantDraftIntent | null;
+  amountMinor: number | null;
+  employeeId: number | null;
+  expenseCategoryId: number | null;
+  paymentMethod: "cash";
+  registerKey: string;
+  confidence: number | null;
+  parseMessage: string | null;
+  notes: string | null;
+  status:
+    | "pending"
+    | "approved"
+    | "rejected";
+  financeVoucherId: number | null;
+  createdByUserId: number;
+  reviewedByUserId: number | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  employeeName?: string | null;
+  expenseCategoryName?: string | null;
+}
+
+export function createPosAssistantDraft(
+  token: string,
+  input: {
+    text: string;
+    source:
+      | "text"
+      | "voice";
+    registerKey?: string;
+  },
+) {
+  return apiRequest<{
+    draft: PosAssistantDraft;
+    parsed: {
+      intent:
+        | PosAssistantDraftIntent
+        | null;
+      amountMinor:
+        | number
+        | null;
+      employeeId:
+        | number
+        | null;
+      expenseCategoryId:
+        | number
+        | null;
+      confidence: number;
+      parseMessage: string;
+      employeeName:
+        | string
+        | null;
+      expenseCategoryName:
+        | string
+        | null;
+    };
+  }>(
+    "/api/pos/assistant/drafts",
+    {
+      method: "POST",
+      body: JSON.stringify(
+        input,
+      ),
+    },
+    token,
+  );
+}
+
+export function getPosAssistantDrafts(
+  token: string,
+  status:
+    | "pending"
+    | "approved"
+    | "rejected"
+    | "all" =
+      "pending",
+) {
+  return apiRequest<{
+    results:
+      PosAssistantDraft[];
+  }>(
+    `/api/pos/assistant/drafts?status=${status}`,
+    {},
+    token,
+  );
+}
+
+export function updatePosAssistantDraft(
+  token: string,
+  draftId: number,
+  input: {
+    intent?:
+      | PosAssistantDraftIntent
+      | null;
+    amount?:
+      | string
+      | null;
+    employeeId?:
+      | number
+      | null;
+    expenseCategoryId?:
+      | number
+      | null;
+    registerKey?: string;
+    notes?:
+      | string
+      | null;
+  },
+) {
+  return apiRequest<{
+    draft:
+      PosAssistantDraft;
+  }>(
+    `/api/pos/assistant/drafts/${draftId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(
+        input,
+      ),
+    },
+    token,
+  );
+}
+
+export function approvePosAssistantDraft(
+  token: string,
+  draftId: number,
+) {
+  return apiRequest<{
+    alreadyApproved: boolean;
+    draft:
+      PosAssistantDraft;
+    voucher?: {
+      id: number;
+      publicId: string;
+    };
+  }>(
+    `/api/pos/assistant/drafts/${draftId}/approve`,
+    {
+      method: "POST",
+    },
+    token,
+  );
+}
+
+export function rejectPosAssistantDraft(
+  token: string,
+  draftId: number,
+) {
+  return apiRequest<{
+    draft:
+      PosAssistantDraft;
+  }>(
+    `/api/pos/assistant/drafts/${draftId}/reject`,
+    {
+      method: "POST",
+    },
+    token,
+  );
+}
+
+
 export interface PosFinanceVoucher {
   id: number;
   publicId: string;
