@@ -2075,6 +2075,16 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         );
       }
 
+      const foreignCashTarget =
+        paymentMethod === "cash" &&
+        cashCurrencyCode !== "ILS"
+          ? await loadForeignCashTenderTarget(
+              tx,
+              cashCurrencyCode,
+              currentBusinessDate,
+            )
+          : null;
+
       let customer:
         typeof customersTable.$inferSelect |
         null = null;
