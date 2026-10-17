@@ -137,6 +137,7 @@ export function openCashSession(
   token: string,
   input: {
     registerKey?: string;
+    currencyCode?: string;
     openingBalance: string;
     openingNote?: string;
   },
@@ -150,6 +151,7 @@ export function openCashSession(
       method: "POST",
       body: JSON.stringify({
         registerKey: input.registerKey ?? "main",
+        currencyCode: input.currencyCode || undefined,
         openingBalance: input.openingBalance,
         openingNote: input.openingNote || undefined,
       }),
@@ -1514,6 +1516,7 @@ export interface PosFinanceCashAccount {
   id: number;
   code: string;
   name: string;
+  registerKey: string;
   currencyCode: string;
   bookBalanceMinor: number;
   operationalBalanceMinor: number;

@@ -12,6 +12,8 @@ import {
   createPosBankAccount,
   createPosFinanceCashAccount,
   createPosFinanceTransfer,
+  openCashSession,
+  closeCashSession,
   getPosBankAccounts,
   getPosFinanceBankingReference,
   getPosFinanceCashAccounts,
@@ -187,6 +189,14 @@ export default function BankingPage() {
     transferSaving,
     setTransferSaving,
   ] = useState(false);
+
+  const [
+    cashSessionActionId,
+    setCashSessionActionId,
+  ] = useState<number | null>(
+    null,
+  );
+
 
   const [
     reversingTransferId,
@@ -709,6 +719,230 @@ export default function BankingPage() {
     } finally {
       setCashAccountSaving(
         false,
+      );
+    }
+  }
+
+  async function openCashAccountSession(
+    account:
+      PosFinanceCashAccount,
+  ) {
+    if (
+      !user?.isOwner ||
+      cashSessionActionId !==
+        null ||
+      account.code ===
+        "CASH_MAIN"
+    ) {
+      return;
+    }
+
+    const suggestedBalance =
+      (
+        account.bookBalanceMinor /
+        100
+      ).toFixed(2);
+
+    const rawBalance =
+      window.prompt(
+        `رصيد بداية ${account.name} (${account.currencyCode})`,
+        suggestedBalance,
+      );
+
+    if (rawBalance === null) {
+      return;
+    }
+
+    const normalizedBalance =
+      rawBalance
+        .trim()
+        .replace(",", ".");
+
+    const numericBalance =
+      Number(
+        normalizedBalance,
+      );
+
+    if (
+      !Number.isFinite(
+        numericBalance,
+      ) ||
+      numericBalance < 0
+    ) {
+      setError(
+        "رصيد بداية الصندوق غير صالح.",
+      );
+      return;
+    }
+
+    setCashSessionActionId(
+      account.id,
+    );
+    setError("");
+    setMessage("");
+
+    try {
+      const result =
+        await openCashSession(
+          token,
+          {
+            registerKey:
+              account.registerKey,
+            currencyCode:
+              account.currencyCode,
+            openingBalance:
+              normalizedBalance,
+            openingNote:
+              "جلسة صندوق عملة من صفحة البنوك والصناديق",
+          },
+        );
+
+      setMessage(
+        result.alreadyOpen
+          ? `جلسة ${account.name} كانت مفتوحة مسبقًا وتم تحميلها.`
+          : `تم فتح جلسة ${account.name} بعملة ${account.currencyCode}.`,
+      );
+
+      await loadData();
+    } catch (caught) {
+      if (
+        caught instanceof
+          ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setCashSessionActionId(
+        null,
+      );
+    }
+  }
+
+  async function closeCashAccountSession(
+    account:
+      PosFinanceCashAccount,
+  ) {
+    if (
+      !user?.isOwner ||
+      cashSessionActionId !==
+        null ||
+      account.code ===
+        "CASH_MAIN" ||
+      !account.cashSessionId
+    ) {
+      return;
+    }
+
+    const suggestedBalance =
+      (
+        account.operationalBalanceMinor /
+        100
+      ).toFixed(2);
+
+    const rawBalance =
+      window.prompt(
+        `الرصيد الفعلي عند إغلاق ${account.name} (${account.currencyCode})`,
+        suggestedBalance,
+      );
+
+    if (rawBalance === null) {
+      return;
+    }
+
+    const normalizedBalance =
+      rawBalance
+        .trim()
+        .replace(",", ".");
+
+    const numericBalance =
+      Number(
+        normalizedBalance,
+      );
+
+    if (
+      !Number.isFinite(
+        numericBalance,
+      ) ||
+      numericBalance < 0
+    ) {
+      setError(
+        "رصيد إغلاق الصندوق غير صالح.",
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `تأكيد إغلاق جلسة ${account.name} بعملة ${account.currencyCode}؟`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCashSessionActionId(
+      account.id,
+    );
+    setError("");
+    setMessage("");
+
+    try {
+      const result =
+        await closeCashSession(
+          token,
+          {
+            sessionId:
+              String(
+                account.cashSessionId,
+              ),
+            registerKey:
+              account.registerKey,
+            closingBalance:
+              normalizedBalance,
+            closingNote:
+              "إغلاق جلسة صندوق عملة من صفحة البنوك والصناديق",
+          },
+        );
+
+      const symbol =
+        currencySymbol(
+          account.currencyCode,
+        );
+
+      const varianceText =
+        result.variance === 0
+          ? "الرصيد مطابق."
+          : result.variance > 0
+            ? `زيادة ${formatMinor(result.varianceMinor, symbol)}.`
+            : `نقص ${formatMinor(Math.abs(result.varianceMinor), symbol)}.`;
+
+      setMessage(
+        `تم إغلاق جلسة ${account.name}. ${varianceText}`,
+      );
+
+      await loadData();
+    } catch (caught) {
+      if (
+        caught instanceof
+          ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setCashSessionActionId(
+        null,
       );
     }
   }
@@ -1314,6 +1548,50 @@ export default function BankingPage() {
                           </small>
                         )}
                       </div>
+
+                      {account.code !==
+                        "CASH_MAIN" && (
+                        <div
+                          style={{
+                            display:
+                              "grid",
+                            gap: 8,
+                            marginTop:
+                              12,
+                          }}
+                        >
+                          <small>
+                            {account.cashSessionId
+                              ? `جلسة ${account.currencyCode} مفتوحة — الرصيد التشغيلي يُتابع بهذه العملة.`
+                              : `لا توجد جلسة ${account.currencyCode} مفتوحة — الرصيد المعروض دفتري.`}
+                          </small>
+
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={
+                              cashSessionActionId !==
+                              null
+                            }
+                            onClick={() =>
+                              account.cashSessionId
+                                ? void closeCashAccountSession(
+                                    account,
+                                  )
+                                : void openCashAccountSession(
+                                    account,
+                                  )
+                            }
+                          >
+                            {cashSessionActionId ===
+                            account.id
+                              ? "جاري التنفيذ…"
+                              : account.cashSessionId
+                                ? "إغلاق جلسة الصندوق"
+                                : "فتح جلسة الصندوق"}
+                          </button>
+                        </div>
+                      )}
                     </article>
                   ),
                 )}
