@@ -1844,7 +1844,11 @@ export default function SalesInvoicePage() {
             editMode ||
             !loadedSale ||
             loadedSale.sale.status !== "completed" ||
-            loadedSale.sale.paymentMethod === "card"
+            loadedSale.sale.paymentMethod === "card" ||
+            (
+              loadedSale.sale.cashTender !== null &&
+              loadedSale.sale.cashTender.currencyCode !== "ILS"
+            )
           }
           onClick={() => {
             void handleEditInvoice();
