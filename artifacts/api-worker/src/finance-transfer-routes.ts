@@ -3182,6 +3182,45 @@ export async function handleFinanceTransferRequest(
     request.method ===
       "GET" &&
     path ===
+      "/api/pos/finance/currency-conversions"
+  ) {
+    return handleListCurrencyConversions(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method ===
+      "POST" &&
+    path ===
+      "/api/pos/finance/currency-conversions"
+  ) {
+    return handleCreateCurrencyConversion(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method ===
+      "POST" &&
+    path ===
+      "/api/pos/finance/currency-conversions/reverse"
+  ) {
+    return handleReverseCurrencyConversion(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method ===
+      "GET" &&
+    path ===
       "/api/pos/finance/transfers"
   ) {
     return handleListTransfers(
