@@ -15,6 +15,7 @@ import {
   desc,
   eq,
   inArray,
+  sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
@@ -2057,6 +2058,49 @@ async function handleEmployeeLedger(
       ),
     );
 
+  const voucherPeriods =
+    txIds.length
+      ? await db
+          .select({
+            financeTransactionId:
+              financeVouchersTable.financeTransactionId,
+            referencePeriod:
+              financeVouchersTable.referencePeriod,
+          })
+          .from(
+            financeVouchersTable,
+          )
+          .where(
+            inArray(
+              financeVouchersTable.financeTransactionId,
+              txIds,
+            ),
+          )
+      : [];
+
+  const referencePeriodByTransactionId =
+    new Map(
+      voucherPeriods
+        .filter(
+          (
+            voucher,
+          ): voucher is {
+            financeTransactionId: number;
+            referencePeriod:
+              | string
+              | null;
+          } =>
+            voucher.financeTransactionId !==
+            null,
+        )
+        .map(
+          (voucher) => [
+            voucher.financeTransactionId,
+            voucher.referencePeriod,
+          ],
+        ),
+    );
+
   let advanceMinor = 0;
   let payableMinor = 0;
 
@@ -2110,6 +2154,11 @@ async function handleEmployeeLedger(
           businessDate:
             transaction
               ?.businessDate ??
+            null,
+          referencePeriod:
+            referencePeriodByTransactionId.get(
+              line.transactionId,
+            ) ??
             null,
           createdAt:
             transaction
@@ -2391,6 +2440,21 @@ async function createVoucher(
         30,
       );
 
+    if (
+      input.voucherType ===
+        "salary_accrual" &&
+      (
+        !referencePeriod ||
+        !/^\d{4}-(0[1-9]|1[0-2])$/.test(
+          referencePeriod,
+        )
+      )
+    ) {
+      throw new PartyFinanceError(
+        "اختر شهر استحقاق الراتب بصيغة سنة-شهر",
+      );
+    }
+
     const idempotencyKey =
       textValue(
         body.idempotencyKey,
@@ -2442,6 +2506,8 @@ async function createVoucher(
             | {
                 id: number;
                 name: string;
+                status?:
+                  string;
               }
             | null =
             null;
@@ -2492,6 +2558,8 @@ async function createVoucher(
                     employeesTable.id,
                   name:
                     employeesTable.name,
+                  status:
+                    employeesTable.status,
                 })
                 .from(
                   employeesTable,
@@ -2502,7 +2570,8 @@ async function createVoucher(
                     input.partyId!,
                   ),
                 )
-                .limit(1);
+                .limit(1)
+                .for("update");
 
             party =
               rows[0] ??
@@ -2513,6 +2582,86 @@ async function createVoucher(
                 "الموظف غير موجود",
                 404,
               );
+            }
+
+            if (
+              party.status !==
+                "active" &&
+              (
+                input.voucherType ===
+                  "employee_advance" ||
+                input.voucherType ===
+                  "salary_accrual"
+              )
+            ) {
+              throw new PartyFinanceError(
+                input.voucherType ===
+                  "salary_accrual"
+                  ? "لا يمكن تسجيل استحقاق راتب جديد لموظف غير فعال"
+                  : "لا يمكن تسجيل سلفة جديدة لموظف غير فعال",
+                409,
+              );
+            }
+
+            if (
+              input.voucherType ===
+              "salary_accrual"
+            ) {
+              const salaryLockKey =
+                `employee_salary:${party.id}:${referencePeriod}`;
+
+              await tx.execute(
+                sql`select pg_advisory_xact_lock(hashtext(${salaryLockKey}))`,
+              );
+
+              const existingSalaryRows =
+                await tx
+                  .select({
+                    id:
+                      financeVouchersTable.id,
+                    publicId:
+                      financeVouchersTable.publicId,
+                  })
+                  .from(
+                    financeVouchersTable,
+                  )
+                  .where(
+                    and(
+                      eq(
+                        financeVouchersTable.voucherType,
+                        "salary_accrual",
+                      ),
+                      eq(
+                        financeVouchersTable.partyType,
+                        "employee",
+                      ),
+                      eq(
+                        financeVouchersTable.partyId,
+                        party.id,
+                      ),
+                      eq(
+                        financeVouchersTable.referencePeriod,
+                        referencePeriod!,
+                      ),
+                      eq(
+                        financeVouchersTable.status,
+                        "posted",
+                      ),
+                    ),
+                  )
+                  .limit(1);
+
+              const existingSalary =
+                existingSalaryRows[0];
+
+              if (
+                existingSalary
+              ) {
+                throw new PartyFinanceError(
+                  `تم تسجيل استحقاق راتب ${referencePeriod} لهذا الموظف مسبقًا (${existingSalary.publicId}). اعكس الحركة السابقة أولًا إذا كانت بحاجة لتصحيح.`,
+                  409,
+                );
+              }
             }
           }
 

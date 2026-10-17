@@ -722,6 +722,7 @@ export interface PosEmployeeLedgerEntry {
   sourceEvent: string | null;
   status: string | null;
   businessDate: string | null;
+  referencePeriod: string | null;
   createdAt: string;
   debitMinor: number;
   creditMinor: number;
