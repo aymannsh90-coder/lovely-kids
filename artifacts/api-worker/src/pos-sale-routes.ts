@@ -1861,6 +1861,16 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       );
     }
 
+    if (
+      paymentMethod === "cash" &&
+      cashCurrencyCode !== "ILS" &&
+      tenderPaidMinor <= 0
+    ) {
+      throw new PosSaleError(
+        "المبلغ المستلم بالعملة الأجنبية يجب أن يكون أكبر من صفر",
+      );
+    }
+
     let cashExchangeRateMicros =
       1_000_000;
 
