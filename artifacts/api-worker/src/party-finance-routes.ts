@@ -1397,11 +1397,6 @@ async function handleCustomerLedger(
             transaction
               ?.businessDate ??
             null,
-          referencePeriod:
-            referencePeriodByTransactionId.get(
-              line.transactionId,
-            ) ??
-            null,
           createdAt:
             transaction
               ?.createdAt ??
@@ -2159,6 +2154,11 @@ async function handleEmployeeLedger(
           businessDate:
             transaction
               ?.businessDate ??
+            null,
+          referencePeriod:
+            referencePeriodByTransactionId.get(
+              line.transactionId,
+            ) ??
             null,
           createdAt:
             transaction
