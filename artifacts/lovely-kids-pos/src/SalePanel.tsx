@@ -241,7 +241,7 @@ export default function SalePanel({
 
   const [cart, setCart] = useState<CartLine[]>([]);
 
-  const [discountAmount, setDiscountAmount] = useState("0.00");
+  const [discountAmount, setDiscountAmount] = useState("");
 
   const [paidAmount, setPaidAmount] = useState("0.00");
 
@@ -1533,6 +1533,10 @@ export default function SalePanel({
                   min="0"
                   step="0.01"
                   value={discountAmount}
+                  placeholder="0.00"
+                  onFocus={(event) =>
+                    event.currentTarget.select()
+                  }
                   onChange={(event) => setDiscountAmount(event.target.value)}
                 />
 
