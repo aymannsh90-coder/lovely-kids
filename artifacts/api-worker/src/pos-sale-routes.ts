@@ -815,6 +815,7 @@ function toSaleResponse(
   },
   customerBalanceMinor: number | null = null,
   cardProcessor: PosCardProcessor | null = null,
+  cashTender: PosSaleCashTender | null = null,
 ) {
   return {
     alreadyCreated,
@@ -830,6 +831,7 @@ function toSaleResponse(
       status: sale.status,
       paymentMethod: sale.paymentMethod,
       cardProcessor,
+      cashTender,
 
       customerId:
         sale.customerId === null
