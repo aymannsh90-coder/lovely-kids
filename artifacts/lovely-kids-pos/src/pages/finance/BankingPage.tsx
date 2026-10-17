@@ -1245,6 +1245,308 @@ export default function BankingPage() {
     }
   }
 
+  async function createCurrencyConversion(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      !user?.isOwner ||
+      conversionSaving
+    ) {
+      return;
+    }
+
+    if (
+      !conversionFromAccount ||
+      !conversionToAccount
+    ) {
+      setError(
+        "اختر صندوق المصدر وصندوق الوجهة.",
+      );
+      return;
+    }
+
+    const fromAmount =
+      Number(
+        conversionFromAmount
+          .trim()
+          .replace(",", "."),
+      );
+
+    const toAmount =
+      Number(
+        conversionToAmount
+          .trim()
+          .replace(",", "."),
+      );
+
+    if (
+      !Number.isFinite(
+        fromAmount,
+      ) ||
+      fromAmount <= 0 ||
+      !Number.isFinite(
+        toAmount,
+      ) ||
+      toAmount <= 0
+    ) {
+      setError(
+        "أدخل المبلغ المصروف والمبلغ المستلم بشكل صحيح.",
+      );
+      return;
+    }
+
+    if (
+      fromAmount >
+      conversionFromAccount
+        .operationalBalanceMinor /
+        100
+    ) {
+      setError(
+        "المبلغ المصروف أكبر من الرصيد المتاح في صندوق المصدر.",
+      );
+      return;
+    }
+
+    if (
+      !conversionFromAccount
+        .cashSessionId ||
+      !conversionToAccount
+        .cashSessionId
+    ) {
+      setError(
+        "يجب فتح جلسة الصندوقين قبل تحويل العملة.",
+      );
+      return;
+    }
+
+    const rateText =
+      conversionRatePreview
+        ? conversionRatePreview.toFixed(
+            6,
+          )
+        : "—";
+
+    const foreignCode =
+      conversionFromAccount
+        .currencyCode ===
+      "ILS"
+        ? conversionToAccount
+            .currencyCode
+        : conversionFromAccount
+            .currencyCode;
+
+    const confirmed =
+      window.confirm(
+        [
+          "تأكيد تحويل العملة؟",
+          "",
+          "من: " +
+            conversionFromAccount.name,
+          "المبلغ المصروف: " +
+            conversionFromAmount +
+            " " +
+            conversionFromAccount
+              .currencyCode,
+          "",
+          "إلى: " +
+            conversionToAccount.name,
+          "المبلغ المستلم فعليًا: " +
+            conversionToAmount +
+            " " +
+            conversionToAccount
+              .currencyCode,
+          "",
+          "سعر الصفقة: 1 " +
+            foreignCode +
+            " = " +
+            rateText +
+            " ₪",
+          "",
+          conversionFromAccount
+            .currencyCode !==
+          "ILS"
+            ? "سيحسب النظام ربح/خسارة فرق العملة تلقائيًا حسب القيمة الدفترية المتوسطة."
+            : "شراء العملة الأجنبية سيثبت قيمتها الدفترية حسب الشيكل المدفوع.",
+        ].join("
+"),
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setConversionSaving(
+      true,
+    );
+    setError("");
+    setMessage("");
+
+    try {
+      const idempotencyKey =
+        conversionIdempotencyKey.current ??
+        newCurrencyConversionIdempotencyKey();
+
+      conversionIdempotencyKey.current =
+        idempotencyKey;
+
+      const result =
+        await createPosCurrencyConversion(
+          token,
+          {
+            idempotencyKey,
+            fromAccountId:
+              conversionFromAccount.id,
+            toAccountId:
+              conversionToAccount.id,
+            fromAmount:
+              conversionFromAmount
+                .trim()
+                .replace(
+                  ",",
+                  ".",
+                ),
+            toAmount:
+              conversionToAmount
+                .trim()
+                .replace(
+                  ",",
+                  ".",
+                ),
+            notes:
+              conversionNotes.trim() ||
+              undefined,
+          },
+        );
+
+      conversionIdempotencyKey.current =
+        null;
+
+      setConversionFromAmount(
+        "",
+      );
+      setConversionToAmount(
+        "",
+      );
+      setConversionNotes("");
+
+      const difference =
+        result.fxDifferenceMinor ??
+        0;
+
+      const differenceText =
+        difference > 0
+          ? ` ربح فرق عملة ${formatMinor(difference, "₪")}.`
+          : difference < 0
+            ? ` خسارة فرق عملة ${formatMinor(Math.abs(difference), "₪")}.`
+            : "";
+
+      setMessage(
+        "تم تسجيل تحويل العملة بنجاح." +
+          differenceText,
+      );
+
+      await loadData();
+    } catch (caught) {
+      if (
+        caught instanceof
+          ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setConversionSaving(
+        false,
+      );
+    }
+  }
+
+  async function reverseCurrencyConversion(
+    conversion:
+      PosCurrencyConversion,
+  ) {
+    if (
+      !user?.isOwner ||
+      reversingConversionId
+    ) {
+      return;
+    }
+
+    const reason =
+      window.prompt(
+        "اكتب سبب عكس تحويل العملة " +
+          conversion.transaction
+            .publicId +
+          ":",
+      );
+
+    if (
+      reason === null ||
+      !reason.trim()
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "سيتم إنشاء قيد عكسي وإرجاع أرصدة الصندوقين، ولن تُحذف الحركة الأصلية. متابعة؟",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setReversingConversionId(
+      conversion.transaction.publicId,
+    );
+    setError("");
+    setMessage("");
+
+    try {
+      await reversePosCurrencyConversion(
+        token,
+        {
+          publicId:
+            conversion.transaction
+              .publicId,
+          reason:
+            reason.trim(),
+        },
+      );
+
+      setMessage(
+        "تم عكس تحويل العملة بقيد معاكس.",
+      );
+
+      await loadData();
+    } catch (caught) {
+      if (
+        caught instanceof
+          ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorText(caught),
+      );
+    } finally {
+      setReversingConversionId(
+        null,
+      );
+    }
+  }
+
   async function createTransfer(
     event:
       FormEvent<HTMLFormElement>,
