@@ -628,6 +628,47 @@ function rateMicrosFromAmounts(
   );
 }
 
+function exactRateMicrosFromAmounts(
+  baseAmountMinor: number,
+  currencyAmountMinor: number,
+) {
+  const candidate =
+    rateMicrosFromAmounts(
+      baseAmountMinor,
+      currencyAmountMinor,
+    );
+
+  const candidates = [
+    candidate,
+    candidate - 1,
+    candidate + 1,
+  ].filter(
+    (value) =>
+      Number.isSafeInteger(
+        value,
+      ) &&
+      value > 0 &&
+      value <= MAX_MINOR,
+  );
+
+  for (const rateMicros of candidates) {
+    if (
+      convertedBaseMinor(
+        currencyAmountMinor,
+        rateMicros,
+      ) ===
+      baseAmountMinor
+    ) {
+      return rateMicros;
+    }
+  }
+
+  throw new FinanceTransferError(
+    "تعذر تمثيل سعر الصرف بدقة كافية لمطابقة قيمة القيد بالشيكل؛ عدّل المبلغ المستلم/المصروف قليلًا ثم أعد المحاولة.",
+    409,
+  );
+}
+
 function proportionalBaseMinor(
   totalBaseMinor: number,
   partCurrencyMinor: number,
@@ -1739,7 +1780,7 @@ async function handleCreateCurrencyConversion(
               fromAmountMinor;
 
             destinationRateMicros =
-              rateMicrosFromAmounts(
+              exactRateMicrosFromAmounts(
                 destinationBaseMinor,
                 toAmountMinor,
               );
@@ -1786,7 +1827,7 @@ async function handleCreateCurrencyConversion(
               );
 
             sourceRateMicros =
-              rateMicrosFromAmounts(
+              exactRateMicrosFromAmounts(
                 sourceBookBaseMinor,
                 fromAmountMinor,
               );
