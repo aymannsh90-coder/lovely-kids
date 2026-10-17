@@ -1187,6 +1187,1099 @@ async function handleCreateCashAccount(
   }
 }
 
+async function handleListCurrencyConversions(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const rows =
+    await db
+      .select({
+        transaction:
+          financeTransactionsTable,
+        line:
+          financeTransactionLinesTable,
+        account:
+          financeAccountsTable,
+      })
+      .from(
+        financeTransactionsTable,
+      )
+      .innerJoin(
+        financeTransactionLinesTable,
+        eq(
+          financeTransactionLinesTable.transactionId,
+          financeTransactionsTable.id,
+        ),
+      )
+      .innerJoin(
+        financeAccountsTable,
+        eq(
+          financeAccountsTable.id,
+          financeTransactionLinesTable.accountId,
+        ),
+      )
+      .where(
+        and(
+          eq(
+            financeTransactionsTable.sourceType,
+            "currency_conversion",
+          ),
+          eq(
+            financeTransactionsTable.sourceEvent,
+            "posted",
+          ),
+          eq(
+            financeTransactionsTable.transactionType,
+            "transfer",
+          ),
+        ),
+      )
+      .orderBy(
+        desc(
+          financeTransactionsTable.createdAt,
+        ),
+        asc(
+          financeTransactionLinesTable.lineNumber,
+        ),
+      );
+
+  const grouped =
+    new Map<
+      number,
+      {
+        transaction:
+          typeof financeTransactionsTable.$inferSelect;
+        source:
+          | {
+              id: number;
+              code: string;
+              name: string;
+              currencyCode: string;
+            }
+          | null;
+        destination:
+          | {
+              id: number;
+              code: string;
+              name: string;
+              currencyCode: string;
+            }
+          | null;
+        fromAmountMinor: number;
+        toAmountMinor: number;
+        sourceBookBaseMinor: number;
+        destinationBaseMinor: number;
+        fxDifferenceMinor: number;
+        actualRateMicros: number;
+      }
+    >();
+
+  for (const row of rows) {
+    let item =
+      grouped.get(
+        row.transaction.id,
+      );
+
+    if (!item) {
+      item = {
+        transaction:
+          row.transaction,
+        source: null,
+        destination: null,
+        fromAmountMinor:
+          0,
+        toAmountMinor:
+          0,
+        sourceBookBaseMinor:
+          0,
+        destinationBaseMinor:
+          0,
+        fxDifferenceMinor:
+          0,
+        actualRateMicros:
+          0,
+      };
+
+      grouped.set(
+        row.transaction.id,
+        item,
+      );
+    }
+
+    if (
+      row.account.code.startsWith(
+        "CASH_",
+      )
+    ) {
+      const account = {
+        id:
+          row.account.id,
+        code:
+          row.account.code,
+        name:
+          row.account.name,
+        currencyCode:
+          row.account.currencyCode,
+      };
+
+      if (
+        row.line.creditMinor >
+        0
+      ) {
+        item.source =
+          account;
+        item.fromAmountMinor =
+          row.line
+            .currencyAmountMinor ??
+          row.line.creditMinor;
+        item.sourceBookBaseMinor =
+          row.line.creditMinor;
+      }
+
+      if (
+        row.line.debitMinor >
+        0
+      ) {
+        item.destination =
+          account;
+        item.toAmountMinor =
+          row.line
+            .currencyAmountMinor ??
+          row.line.debitMinor;
+        item.destinationBaseMinor =
+          row.line.debitMinor;
+      }
+    }
+
+    if (
+      row.account.code ===
+        "FX_GAIN_REALIZED"
+    ) {
+      item.fxDifferenceMinor =
+        row.line.creditMinor;
+    }
+
+    if (
+      row.account.code ===
+        "FX_LOSS_REALIZED"
+    ) {
+      item.fxDifferenceMinor =
+        -row.line.debitMinor;
+    }
+  }
+
+  const results =
+    Array.from(
+      grouped.values(),
+    ).map((item) => {
+      let actualRateMicros =
+        0;
+
+      if (
+        item.source &&
+        item.destination
+      ) {
+        if (
+          item.source.currencyCode ===
+            "ILS" &&
+          item.destination.currencyCode !==
+            "ILS"
+        ) {
+          actualRateMicros =
+            rateMicrosFromAmounts(
+              item.sourceBookBaseMinor,
+              item.toAmountMinor,
+            );
+        } else if (
+          item.source.currencyCode !==
+            "ILS" &&
+          item.destination.currencyCode ===
+            "ILS"
+        ) {
+          actualRateMicros =
+            rateMicrosFromAmounts(
+              item.destinationBaseMinor,
+              item.fromAmountMinor,
+            );
+        }
+      }
+
+      return {
+        ...item,
+        actualRateMicros,
+      };
+    });
+
+  return json({
+    results,
+  });
+}
+
+async function handleCreateCurrencyConversion(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    (await request
+      .json()
+      .catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+
+  if (!body) {
+    return json(
+      {
+        error:
+          "بيانات تحويل العملة غير صالحة",
+      },
+      400,
+    );
+  }
+
+  try {
+    const idempotencyKey =
+      requiredText(
+        body.idempotencyKey,
+        "مفتاح منع التكرار",
+        160,
+      );
+
+    if (
+      idempotencyKey.length < 8
+    ) {
+      throw new FinanceTransferError(
+        "مفتاح منع التكرار قصير جدًا",
+      );
+    }
+
+    const fromAccountId =
+      positiveId(
+        body.fromAccountId,
+        "صندوق العملة المصدر",
+      );
+
+    const toAccountId =
+      positiveId(
+        body.toAccountId,
+        "صندوق العملة الوجهة",
+      );
+
+    if (
+      fromAccountId ===
+      toAccountId
+    ) {
+      throw new FinanceTransferError(
+        "صندوق المصدر والوجهة لا يمكن أن يكونا نفس الصندوق",
+      );
+    }
+
+    const fromAmountMinor =
+      moneyMinor(
+        body.fromAmount,
+      );
+
+    const toAmountMinor =
+      moneyMinor(
+        body.toAmount,
+      );
+
+    const notes =
+      optionalText(
+        body.notes,
+        1000,
+      );
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const duplicateRows =
+            await tx
+              .select()
+              .from(
+                financeTransactionsTable,
+              )
+              .where(
+                eq(
+                  financeTransactionsTable.idempotencyKey,
+                  idempotencyKey,
+                ),
+              )
+              .limit(1);
+
+          const duplicate =
+            duplicateRows[0];
+
+          if (duplicate) {
+            if (
+              duplicate.sourceType !==
+              "currency_conversion"
+            ) {
+              throw new FinanceTransferError(
+                "مفتاح منع التكرار مستخدم في حركة مالية أخرى",
+                409,
+              );
+            }
+
+            return {
+              alreadyCreated:
+                true,
+              transaction:
+                duplicate,
+            };
+          }
+
+          const fromAccount =
+            await loadAccount(
+              tx,
+              fromAccountId,
+            );
+
+          const toAccount =
+            await loadAccount(
+              tx,
+              toAccountId,
+            );
+
+          if (
+            !isCashAccount(
+              fromAccount,
+            ) ||
+            !isCashAccount(
+              toAccount,
+            )
+          ) {
+            throw new FinanceTransferError(
+              "تحويل العملات في هذه المرحلة متاح بين الصناديق النقدية فقط",
+              409,
+            );
+          }
+
+          if (
+            fromAccount.currencyCode ===
+            toAccount.currencyCode
+          ) {
+            throw new FinanceTransferError(
+              "استخدم التحويل العادي للحسابات التي تحمل نفس العملة",
+              409,
+            );
+          }
+
+          const hasIlsSide =
+            fromAccount.currencyCode ===
+              "ILS" ||
+            toAccount.currencyCode ===
+              "ILS";
+
+          if (!hasIlsSide) {
+            throw new FinanceTransferError(
+              "التحويل المباشر بين عملتين أجنبيتين غير متاح حاليًا؛ حوّل عبر الشيكل",
+              409,
+            );
+          }
+
+          const businessDate =
+            currentPalestineDate();
+
+          const fromSession =
+            await requireCurrencyCashSession(
+              tx,
+              fromAccount,
+              businessDate,
+            );
+
+          const toSession =
+            await requireCurrencyCashSession(
+              tx,
+              toAccount,
+              businessDate,
+            );
+
+          const available =
+            await availableMinor(
+              tx,
+              fromAccount,
+              fromSession,
+            );
+
+          if (
+            available <
+            fromAmountMinor
+          ) {
+            throw new FinanceTransferError(
+              `الرصيد المتاح في ${fromAccount.name} لا يكفي لتنفيذ تحويل العملة`,
+              409,
+            );
+          }
+
+          let sourceBookBaseMinor =
+            fromAmountMinor;
+          let destinationBaseMinor =
+            fromAmountMinor;
+          let sourceRateMicros =
+            1_000_000;
+          let destinationRateMicros =
+            1_000_000;
+          let actualRateMicros =
+            1_000_000;
+          let fxDifferenceMinor =
+            0;
+
+          if (
+            fromAccount.currencyCode ===
+              "ILS"
+          ) {
+            destinationBaseMinor =
+              fromAmountMinor;
+
+            destinationRateMicros =
+              rateMicrosFromAmounts(
+                destinationBaseMinor,
+                toAmountMinor,
+              );
+
+            actualRateMicros =
+              destinationRateMicros;
+          } else {
+            const sourceNativeBookBalance =
+              await accountBalanceMinor(
+                tx,
+                fromAccount,
+              );
+
+            const sourceBaseBookBalance =
+              await accountBaseBalanceMinor(
+                tx,
+                fromAccount.id,
+              );
+
+            if (
+              sourceNativeBookBalance <=
+                0 ||
+              sourceBaseBookBalance <=
+                0 ||
+              sourceNativeBookBalance <
+                fromAmountMinor
+            ) {
+              throw new FinanceTransferError(
+                "القيمة الدفترية لصندوق العملة الأجنبية غير مكتملة؛ لا يمكن احتساب فرق العملة بأمان",
+                409,
+              );
+            }
+
+            sourceBookBaseMinor =
+              proportionalBaseMinor(
+                sourceBaseBookBalance,
+                fromAmountMinor,
+                sourceNativeBookBalance,
+              );
+
+            sourceRateMicros =
+              rateMicrosFromAmounts(
+                sourceBookBaseMinor,
+                fromAmountMinor,
+              );
+
+            destinationBaseMinor =
+              toAmountMinor;
+
+            actualRateMicros =
+              rateMicrosFromAmounts(
+                destinationBaseMinor,
+                fromAmountMinor,
+              );
+
+            fxDifferenceMinor =
+              destinationBaseMinor -
+              sourceBookBaseMinor;
+          }
+
+          const publicId =
+            `FXC-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
+
+          const lines: Array<{
+            accountId: number;
+            currencyCode?: string;
+            currencyAmountMinor?: number;
+            exchangeRateMicros?: number;
+            debitMinor?: number;
+            creditMinor?: number;
+            memo?: string;
+          }> = [
+            {
+              accountId:
+                toAccount.id,
+              currencyCode:
+                toAccount.currencyCode,
+              currencyAmountMinor:
+                toAmountMinor,
+              exchangeRateMicros:
+                destinationRateMicros,
+              debitMinor:
+                destinationBaseMinor,
+              creditMinor:
+                0,
+              memo:
+                `استلام ${toAmountMinor / 100} ${toAccount.currencyCode} في ${toAccount.name}`,
+            },
+            {
+              accountId:
+                fromAccount.id,
+              currencyCode:
+                fromAccount.currencyCode,
+              currencyAmountMinor:
+                fromAmountMinor,
+              exchangeRateMicros:
+                sourceRateMicros,
+              debitMinor:
+                0,
+              creditMinor:
+                sourceBookBaseMinor,
+              memo:
+                `صرف ${fromAmountMinor / 100} ${fromAccount.currencyCode} من ${fromAccount.name}`,
+            },
+          ];
+
+          if (
+            fxDifferenceMinor >
+            0
+          ) {
+            const gainAccount =
+              await ensureFxDifferenceAccount(
+                tx,
+                "gain",
+              );
+
+            lines.push({
+              accountId:
+                gainAccount.id,
+              currencyCode:
+                "ILS",
+              currencyAmountMinor:
+                fxDifferenceMinor,
+              exchangeRateMicros:
+                1_000_000,
+              debitMinor:
+                0,
+              creditMinor:
+                fxDifferenceMinor,
+              memo:
+                "ربح محقق من تحويل عملة",
+            });
+          } else if (
+            fxDifferenceMinor <
+            0
+          ) {
+            const lossMinor =
+              Math.abs(
+                fxDifferenceMinor,
+              );
+
+            const lossAccount =
+              await ensureFxDifferenceAccount(
+                tx,
+                "loss",
+              );
+
+            lines.push({
+              accountId:
+                lossAccount.id,
+              currencyCode:
+                "ILS",
+              currencyAmountMinor:
+                lossMinor,
+              exchangeRateMicros:
+                1_000_000,
+              debitMinor:
+                lossMinor,
+              creditMinor:
+                0,
+              memo:
+                "خسارة محققة من تحويل عملة",
+            });
+          }
+
+          const posting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId,
+                idempotencyKey,
+                businessDate,
+                transactionType:
+                  "transfer",
+                sourceType:
+                  "currency_conversion",
+                sourceId:
+                  publicId,
+                sourceEvent:
+                  "posted",
+                cashSessionId:
+                  null,
+                notes:
+                  notes
+                    ? `تحويل عملة من ${fromAccount.name} إلى ${toAccount.name}: ${notes}`
+                    : `تحويل عملة من ${fromAccount.name} إلى ${toAccount.name}`,
+                createdByUserId:
+                  auth.user.id,
+                lines,
+              },
+            );
+
+          if (
+            posting.alreadyPosted
+          ) {
+            return {
+              alreadyCreated:
+                true,
+              transaction:
+                posting.transaction,
+            };
+          }
+
+          await updateCashSession(
+            tx,
+            fromSession,
+            -fromAmountMinor,
+          );
+
+          await updateCashSession(
+            tx,
+            toSession,
+            toAmountMinor,
+          );
+
+          return {
+            alreadyCreated:
+              false,
+            transaction:
+              posting.transaction,
+            fromAccount,
+            toAccount,
+            fromAmountMinor,
+            toAmountMinor,
+            sourceBookBaseMinor,
+            destinationBaseMinor,
+            actualRateMicros,
+            fxDifferenceMinor,
+          };
+        },
+      );
+
+    return json(
+      result,
+      result.alreadyCreated
+        ? 200
+        : 201,
+    );
+  } catch (caught) {
+    if (
+      caught instanceof
+        FinanceTransferError
+    ) {
+      return json(
+        {
+          error:
+            caught.message,
+        },
+        caught.status,
+      );
+    }
+
+    console.error(
+      "CURRENCY_CONVERSION_CREATE_FAILED",
+      caught,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر تنفيذ تحويل العملة",
+      },
+      500,
+    );
+  }
+}
+
+async function handleReverseCurrencyConversion(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    (await request
+      .json()
+      .catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+
+  if (!body) {
+    return json(
+      {
+        error:
+          "بيانات عكس تحويل العملة غير صالحة",
+      },
+      400,
+    );
+  }
+
+  try {
+    const publicId =
+      requiredText(
+        body.publicId,
+        "رقم تحويل العملة",
+        100,
+      );
+
+    const reason =
+      requiredText(
+        body.reason,
+        "سبب العكس",
+        500,
+      );
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const transactionRows =
+            await tx
+              .select()
+              .from(
+                financeTransactionsTable,
+              )
+              .where(
+                and(
+                  eq(
+                    financeTransactionsTable.publicId,
+                    publicId,
+                  ),
+                  eq(
+                    financeTransactionsTable.sourceType,
+                    "currency_conversion",
+                  ),
+                  eq(
+                    financeTransactionsTable.sourceEvent,
+                    "posted",
+                  ),
+                  eq(
+                    financeTransactionsTable.transactionType,
+                    "transfer",
+                  ),
+                ),
+              )
+              .limit(1)
+              .for("update");
+
+          const original =
+            transactionRows[0];
+
+          if (!original) {
+            throw new FinanceTransferError(
+              "تحويل العملة غير موجود",
+              404,
+            );
+          }
+
+          if (
+            original.status ===
+            "reversed"
+          ) {
+            return {
+              alreadyReversed:
+                true,
+              transaction:
+                original,
+            };
+          }
+
+          const joinedLines =
+            await tx
+              .select({
+                line:
+                  financeTransactionLinesTable,
+                account:
+                  financeAccountsTable,
+              })
+              .from(
+                financeTransactionLinesTable,
+              )
+              .innerJoin(
+                financeAccountsTable,
+                eq(
+                  financeAccountsTable.id,
+                  financeTransactionLinesTable.accountId,
+                ),
+              )
+              .where(
+                eq(
+                  financeTransactionLinesTable.transactionId,
+                  original.id,
+                ),
+              )
+              .orderBy(
+                asc(
+                  financeTransactionLinesTable.lineNumber,
+                ),
+              );
+
+          const sourceRow =
+            joinedLines.find(
+              (row) =>
+                row.account.code.startsWith(
+                  "CASH_",
+                ) &&
+                row.line.creditMinor >
+                  0,
+            );
+
+          const destinationRow =
+            joinedLines.find(
+              (row) =>
+                row.account.code.startsWith(
+                  "CASH_",
+                ) &&
+                row.line.debitMinor >
+                  0,
+            );
+
+          if (
+            !sourceRow ||
+            !destinationRow ||
+            !sourceRow.line
+              .currencyAmountMinor ||
+            !destinationRow.line
+              .currencyAmountMinor
+          ) {
+            throw new FinanceTransferError(
+              "تفاصيل تحويل العملة المحاسبية غير مكتملة",
+              409,
+            );
+          }
+
+          const businessDate =
+            currentPalestineDate();
+
+          if (
+            original.businessDate !==
+            businessDate
+          ) {
+            throw new FinanceTransferError(
+              "عكس تحويل العملة متاح في نفس يوم العمل فقط وقبل إغلاق الصناديق",
+              409,
+            );
+          }
+
+          const sourceSession =
+            await requireCurrencyCashSession(
+              tx,
+              sourceRow.account,
+              businessDate,
+            );
+
+          const destinationSession =
+            await requireCurrencyCashSession(
+              tx,
+              destinationRow.account,
+              businessDate,
+            );
+
+          if (
+            sourceSession.openedAt.getTime() >
+              original.createdAt.getTime() ||
+            destinationSession.openedAt.getTime() >
+              original.createdAt.getTime()
+          ) {
+            throw new FinanceTransferError(
+              "جلسة أحد الصناديق الحالية ليست نفس الجلسة التي نُفذ فيها تحويل العملة",
+              409,
+            );
+          }
+
+          const fromAmountMinor =
+            sourceRow.line
+              .currencyAmountMinor;
+
+          const toAmountMinor =
+            destinationRow.line
+              .currencyAmountMinor;
+
+          const destinationAvailable =
+            await availableMinor(
+              tx,
+              destinationRow.account,
+              destinationSession,
+            );
+
+          if (
+            destinationAvailable <
+            toAmountMinor
+          ) {
+            throw new FinanceTransferError(
+              `الرصيد المتاح في ${destinationRow.account.name} لا يكفي لعكس تحويل العملة`,
+              409,
+            );
+          }
+
+          const reversalPublicId =
+            `REV-${original.publicId}-${randomUUID().slice(0, 4).toUpperCase()}`;
+
+          const posting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  reversalPublicId,
+                idempotencyKey:
+                  `currency-conversion:${original.id}:reverse`,
+                businessDate,
+                transactionType:
+                  "reversal",
+                sourceType:
+                  "currency_conversion",
+                sourceId:
+                  original.sourceId,
+                sourceEvent:
+                  "reversed",
+                cashSessionId:
+                  null,
+                notes:
+                  `عكس ${original.publicId}: ${reason}`,
+                createdByUserId:
+                  auth.user.id,
+                lines:
+                  joinedLines.map(
+                    (row) => ({
+                      accountId:
+                        row.line.accountId,
+                      customerId:
+                        row.line.customerId,
+                      employeeId:
+                        row.line.employeeId,
+                      supplierId:
+                        row.line.supplierId,
+                      currencyCode:
+                        row.line.currencyCode,
+                      currencyAmountMinor:
+                        row.line.currencyAmountMinor,
+                      exchangeRateMicros:
+                        row.line.exchangeRateMicros,
+                      debitMinor:
+                        row.line.creditMinor,
+                      creditMinor:
+                        row.line.debitMinor,
+                      memo:
+                        `عكس: ${row.line.memo ?? original.publicId}`,
+                    }),
+                  ),
+              },
+            );
+
+          await tx
+            .update(
+              financeTransactionsTable,
+            )
+            .set({
+              status:
+                "reversed",
+              updatedAt:
+                new Date(),
+            })
+            .where(
+              eq(
+                financeTransactionsTable.id,
+                original.id,
+              ),
+            );
+
+          await updateCashSession(
+            tx,
+            sourceSession,
+            fromAmountMinor,
+          );
+
+          await updateCashSession(
+            tx,
+            destinationSession,
+            -toAmountMinor,
+          );
+
+          return {
+            alreadyReversed:
+              posting.alreadyPosted,
+            transaction:
+              original,
+            reversal:
+              posting.transaction,
+          };
+        },
+      );
+
+    return json(
+      result,
+    );
+  } catch (caught) {
+    if (
+      caught instanceof
+        FinanceTransferError
+    ) {
+      return json(
+        {
+          error:
+            caught.message,
+        },
+        caught.status,
+      );
+    }
+
+    console.error(
+      "CURRENCY_CONVERSION_REVERSE_FAILED",
+      caught,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر عكس تحويل العملة",
+      },
+      500,
+    );
+  }
+}
+
 async function handleListTransfers(
   request: Request,
   db: Db,
