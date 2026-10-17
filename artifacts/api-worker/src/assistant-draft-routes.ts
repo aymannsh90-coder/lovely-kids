@@ -592,8 +592,11 @@ function parseDraft(
       categories,
     );
 
+  // Speech recognition can produce nearby Arabic forms for "سحب"
+  // (for example: "سحاب" or "ساحب"). Treat these as the same
+  // employee-withdrawal command when an employee is also recognized.
   const employeeAdvanceWords =
-    /(سحب|مسحوب|سلف|سلفه|اخذ|اخد)/;
+    /(سحب|سحاب|ساحب|سحبت|مسحوب|سلف|سلفه|اخذ|اخد)/;
 
   const ownerWords =
     /(سحب المالك|مسحوب المالك|سحب شخصي|مسحوب شخصي|انا سحبت|انا اخذت|انا اخدت)/;
