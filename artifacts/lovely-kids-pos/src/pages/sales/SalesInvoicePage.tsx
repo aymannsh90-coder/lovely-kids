@@ -2444,6 +2444,7 @@ export default function SalesInvoicePage() {
                   min="0"
                   step="0.01"
                   value={invoiceDiscount}
+                  onFocus={(event) => event.currentTarget.select()}
                   onChange={(event) => setInvoiceDiscount(event.target.value)}
                 />
                 <span>₪</span>
