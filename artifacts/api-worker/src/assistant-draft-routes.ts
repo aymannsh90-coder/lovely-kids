@@ -1589,6 +1589,84 @@ async function handleUpdateDraft(
             );
     }
 
+    const paymentMethodRaw =
+      body.paymentMethod ===
+        undefined
+        ? current.paymentMethod
+        : body.paymentMethod;
+
+    const paymentMethod:
+      DraftPaymentMethod =
+      paymentMethodRaw ===
+        "cash" ||
+      paymentMethodRaw ===
+        "bank"
+        ? paymentMethodRaw
+        : (() => {
+            throw new AssistantDraftError(
+              "طريقة الدفع غير صالحة",
+            );
+          })();
+
+    let bankAccountId:
+      | number
+      | null =
+      paymentMethod ===
+        "bank"
+        ? current.bankAccountId
+        : null;
+
+    if (
+      paymentMethod ===
+        "bank" &&
+      body.bankAccountId !==
+        undefined
+    ) {
+      bankAccountId =
+        body.bankAccountId ===
+            null ||
+          body.bankAccountId ===
+            ""
+          ? null
+          : positiveId(
+              body.bankAccountId,
+              "الحساب البنكي",
+            );
+    }
+
+    if (
+      paymentMethod ===
+        "bank" &&
+      bankAccountId
+    ) {
+      const bankRows =
+        await db
+          .select()
+          .from(
+            bankAccountsTable,
+          )
+          .where(
+            and(
+              eq(
+                bankAccountsTable.id,
+                bankAccountId,
+              ),
+              eq(
+                bankAccountsTable.status,
+                "active",
+              ),
+            ),
+          )
+          .limit(1);
+
+      if (!bankRows[0]) {
+        throw new AssistantDraftError(
+          "الحساب البنكي غير موجود أو غير فعال",
+          404,
+        );
+      }
+    }
+
     const notes =
       body.notes ===
         undefined
@@ -1616,6 +1694,8 @@ async function handleUpdateDraft(
           amountMinor,
           employeeId,
           expenseCategoryId,
+          paymentMethod,
+          bankAccountId,
           registerKey,
           notes,
           parseMessage:
@@ -1845,6 +1925,63 @@ async function handleApproveDraft(
       );
     }
 
+    if (
+      draft.paymentMethod ===
+        "bank" &&
+      !draft.bankAccountId
+    ) {
+      throw new AssistantDraftError(
+        "اختر الحساب البنكي قبل الاعتماد",
+        409,
+      );
+    }
+
+    if (
+      draft.paymentMethod ===
+        "bank" &&
+      draft.bankAccountId
+    ) {
+      const bankRows =
+        await db
+          .select()
+          .from(
+            bankAccountsTable,
+          )
+          .where(
+            and(
+              eq(
+                bankAccountsTable.id,
+                draft.bankAccountId,
+              ),
+              eq(
+                bankAccountsTable.status,
+                "active",
+              ),
+            ),
+          )
+          .limit(1);
+
+      const bankAccount =
+        bankRows[0];
+
+      if (!bankAccount) {
+        throw new AssistantDraftError(
+          "الحساب البنكي غير موجود أو غير فعال",
+          404,
+        );
+      }
+
+      if (
+        bankAccount.currencyCode !==
+        "ILS"
+      ) {
+        throw new AssistantDraftError(
+          "اعتماد المساعد من البنك يدعم حاليًا حسابات ILS فقط",
+          409,
+        );
+      }
+    }
+
     let route:
       string;
 
@@ -1860,9 +1997,15 @@ async function handleApproveDraft(
           draft.amountMinor,
         ),
       paymentMethod:
-        "cash",
+        draft.paymentMethod,
       registerKey:
         draft.registerKey,
+      bankAccountId:
+        draft.paymentMethod ===
+          "bank"
+          ? draft.bankAccountId ??
+            undefined
+          : undefined,
       notes:
         draft.notes ??
         `اعتماد مسودة المساعد ${draft.publicId}: ${draft.originalText}`,
