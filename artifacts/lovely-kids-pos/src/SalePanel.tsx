@@ -2122,6 +2122,9 @@ export default function SalePanel({
                   value={
                     paidAmount
                   }
+                  onFocus={(event) =>
+                    event.currentTarget.select()
+                  }
                   disabled={
                     paymentMethod ===
                       "card" ||
@@ -2234,6 +2237,9 @@ export default function SalePanel({
                       step="0.01"
                       value={
                         settlementAmount
+                      }
+                      onFocus={(event) =>
+                        event.currentTarget.select()
                       }
                       onChange={(
                         event,
