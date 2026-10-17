@@ -509,6 +509,85 @@ function uniqueFirstNameMatch(
     : null;
 }
 
+const ASSISTANT_EXPENSE_PRESETS: Array<{
+  title: string;
+  pattern: RegExp;
+}> = [
+  {
+    title: "ضيافة",
+    pattern:
+      /ضياف|قهو|شاي/,
+  },
+  {
+    title: "تنظيف",
+    pattern:
+      /تنظيف|منظف|نظاف/,
+  },
+  {
+    title: "كهرباء",
+    pattern:
+      /كهرب/,
+  },
+  {
+    title: "مياه",
+    pattern:
+      /مياه|ميه|ماء/,
+  },
+  {
+    title: "مواصلات / توصيل",
+    pattern:
+      /توصيل|مواصل|نقل/,
+  },
+  {
+    title: "محروقات سيارة",
+    pattern:
+      /محروقات|بنزين|سولار|ديزل|وقود/,
+  },
+  {
+    title: "صيانة",
+    pattern:
+      /صيان|تصليح/,
+  },
+  {
+    title: "صدقات يومية",
+    pattern:
+      /صدق|صدقات|تبرع|تبرعات/,
+  },
+  {
+    title: "أكياس نايلون",
+    pattern:
+      /اكياس|أكياس|نايلون|نايلن/,
+  },
+  {
+    title: "ذكاء اصطناعي",
+    pattern:
+      /ذكاء اصطناعي|شات جي بي تي|chatgpt|openai|claude|gemini|ai اشتراك|اشتراك ai/,
+  },
+  {
+    title: "هاتف وإنترنت",
+    pattern:
+      /هاتف|انترنت|إنترنت|اتصال|اتصالات|خط خلوي|خلوي|جوال/,
+  },
+  {
+    title: "دعاية وإعلان",
+    pattern:
+      /دعاي|اعلان|إعلان|اعلانات|إعلانات|تسويق|meta ads|facebook ads|انستغرام|instagram ads/,
+  },
+];
+
+function expensePresetMatch(
+  normalizedText: string,
+) {
+  return (
+    ASSISTANT_EXPENSE_PRESETS.find(
+      (preset) =>
+        preset.pattern.test(
+          normalizedText,
+        ),
+    ) ?? null
+  );
+}
+
 function categoryMatch(
   normalizedText: string,
   categories:
@@ -542,6 +621,27 @@ function categoryMatch(
 
   if (direct) {
     return direct.category;
+  }
+
+  const preset =
+    expensePresetMatch(
+      normalizedText,
+    );
+
+  if (preset) {
+    const presetCategory =
+      categories.find(
+        (category) =>
+          preset.pattern.test(
+            normalizeArabic(
+              category.name,
+            ),
+          ),
+      );
+
+    if (presetCategory) {
+      return presetCategory;
+    }
   }
 
   const aliases: Array<{
@@ -862,6 +962,11 @@ function parseDraft(
       categories,
     );
 
+  const expensePreset =
+    expensePresetMatch(
+      normalized,
+    );
+
   const bankMatch =
     bankAccountMatch(
       normalized,
@@ -1021,7 +1126,8 @@ function parseDraft(
   if (
     intent ===
       "expense" &&
-    !category
+    !category &&
+    !expensePreset
   ) {
     missing.push(
       "تصنيف المصروف",
@@ -1066,7 +1172,10 @@ function parseDraft(
           : 0
         : intent ===
             "expense"
-          ? category
+          ? (
+              category ||
+              expensePreset
+            )
             ? 1
             : 0
           : intent ===
@@ -1133,10 +1242,20 @@ function parseDraft(
           null
         : null,
     transferDirection,
+    expensePresetName:
+      expensePreset?.title ??
+      null,
     confidence,
     parseMessage:
       complete
-        ? "فهمت الحركة. راجعها على الكمبيوتر قبل الاعتماد."
+        ? (
+            intent ===
+              "expense" &&
+            expensePreset &&
+            !category
+              ? `فهمت المصروف السريع «${expensePreset.title}». سيتم إنشاء تصنيفه عند أول اعتماد إذا لم يكن موجودًا.`
+              : "فهمت الحركة. راجعها على الكمبيوتر قبل الاعتماد."
+          )
         : `المسودة محفوظة وتحتاج مراجعة: ${missing.join("، ")}.`,
   };
 }
