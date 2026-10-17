@@ -347,6 +347,30 @@ export default function UnifiedPartyVoucherPage({
     setError("");
   }, [partyType]);
 
+  useEffect(() => {
+    const eligible =
+      mode === "receipt" &&
+      partyType === "customer" &&
+      paymentMethod === "cash";
+
+    if (!eligible) {
+      setForeignCashMode(
+        false,
+      );
+      setForeignCashAccountId(
+        "",
+      );
+      setForeignAmount("");
+      setForeignExchangeRate(
+        "",
+      );
+    }
+  }, [
+    mode,
+    partyType,
+    paymentMethod,
+  ]);
+
   const partyOptions =
     useMemo(() => {
       if (
@@ -414,6 +438,128 @@ export default function UnifiedPartyVoucherPage({
       deliveryCompanies,
     ]);
 
+  const selectedForeignAccount =
+    useMemo(
+      () =>
+        foreignCashAccounts.find(
+          (item) =>
+            String(
+              item.id,
+            ) ===
+            foreignCashAccountId,
+        ) ?? null,
+      [
+        foreignCashAccounts,
+        foreignCashAccountId,
+      ],
+    );
+
+  const selectedForeignCurrency =
+    useMemo(
+      () =>
+        selectedForeignAccount
+          ? financeCurrencies.find(
+              (item) =>
+                item.code ===
+                selectedForeignAccount.currencyCode,
+            ) ?? null
+          : null,
+      [
+        selectedForeignAccount,
+        financeCurrencies,
+      ],
+    );
+
+  useEffect(() => {
+    if (!selectedForeignAccount) {
+      return;
+    }
+
+    const rate =
+      selectedForeignCurrency
+        ?.latestRate
+        ?.ilsPerUnit;
+
+    if (
+      rate &&
+      Number.isFinite(
+        rate,
+      ) &&
+      rate > 0
+    ) {
+      setForeignExchangeRate(
+        String(rate),
+      );
+    }
+  }, [
+    selectedForeignAccount?.id,
+  ]);
+
+  const foreignReceiptPreview =
+    useMemo(() => {
+      const foreign =
+        Number(
+          foreignAmount
+            .trim()
+            .replace(",", "."),
+        );
+
+      const rate =
+        Number(
+          foreignExchangeRate
+            .trim()
+            .replace(",", "."),
+        );
+
+      const settlement =
+        Number(
+          amount
+            .trim()
+            .replace(",", "."),
+        );
+
+      if (
+        !Number.isFinite(
+          foreign,
+        ) ||
+        foreign <= 0 ||
+        !Number.isFinite(
+          rate,
+        ) ||
+        rate <= 0 ||
+        !Number.isFinite(
+          settlement,
+        ) ||
+        settlement <= 0
+      ) {
+        return null;
+      }
+
+      const receivedMinor =
+        Math.round(
+          foreign *
+            rate *
+            100,
+        );
+
+      const settlementMinor =
+        Math.round(
+          settlement * 100,
+        );
+
+      return {
+        receivedMinor,
+        settlementMinor,
+        changeMinor:
+          receivedMinor -
+          settlementMinor,
+      };
+    }, [
+      foreignAmount,
+      foreignExchangeRate,
+      amount,
+    ]);
+
   async function refreshSession() {
     const result =
       await getCurrentCashSession(
@@ -447,6 +593,7 @@ export default function UnifiedPartyVoucherPage({
     if (
       paymentMethod ===
         "cash" &&
+      !foreignCashMode &&
       !session
     ) {
       setError(
@@ -553,6 +700,184 @@ export default function UnifiedPartyVoucherPage({
       setError(
         "اختر الطرف المالي.",
       );
+      return;
+    }
+
+    if (
+      mode === "receipt" &&
+      partyType ===
+        "customer" &&
+      paymentMethod ===
+        "cash" &&
+      foreignCashMode
+    ) {
+      if (
+        !selectedForeignAccount
+      ) {
+        setError(
+          "اختر صندوق العملة الأجنبية.",
+        );
+        return;
+      }
+
+      if (
+        !selectedForeignAccount
+          .cashSessionId
+      ) {
+        setError(
+          "يجب فتح جلسة صندوق العملة من صفحة البنوك والصناديق أولًا.",
+        );
+        return;
+      }
+
+      const normalizedForeignAmount =
+        validAmount(
+          foreignAmount,
+        );
+
+      if (
+        !normalizedForeignAmount
+      ) {
+        setError(
+          "أدخل مبلغ العملة الأجنبية المستلم.",
+        );
+        return;
+      }
+
+      const normalizedRate =
+        foreignExchangeRate
+          .trim()
+          .replace(",", ".");
+
+      const numericRate =
+        Number(
+          normalizedRate,
+        );
+
+      if (
+        !Number.isFinite(
+          numericRate,
+        ) ||
+        numericRate <= 0
+      ) {
+        setError(
+          "أدخل سعر صرف صحيحًا.",
+        );
+        return;
+      }
+
+      if (
+        !foreignReceiptPreview
+      ) {
+        setError(
+          "تعذر حساب قيمة القبض بالشيكل.",
+        );
+        return;
+      }
+
+      if (
+        foreignReceiptPreview
+          .changeMinor <
+        0
+      ) {
+        setError(
+          "قيمة العملة المستلمة أقل من مبلغ التسديد.",
+        );
+        return;
+      }
+
+      if (
+        foreignReceiptPreview
+          .changeMinor >
+          0 &&
+        !session
+      ) {
+        setError(
+          "يجب فتح صندوق الشيكل لإرجاع الباقي.",
+        );
+        return;
+      }
+
+      setSaving(true);
+
+      try {
+        const result =
+          await createPosForeignCurrencyCustomerReceipt(
+            token,
+            {
+              customerId:
+                Number(
+                  partyId,
+                ),
+              amount:
+                normalizedAmount,
+              foreignAmount:
+                normalizedForeignAmount,
+              exchangeRate:
+                normalizedRate,
+              foreignCashAccountId:
+                selectedForeignAccount.id,
+              notes:
+                notes.trim() ||
+                undefined,
+              idempotencyKey:
+                newIdempotencyKey(
+                  "voucher_receipt_fx",
+                ),
+            },
+          );
+
+        await refreshSession();
+
+        const refreshedCash =
+          await getPosFinanceCashAccounts(
+            token,
+          );
+
+        setForeignCashAccounts(
+          refreshedCash.results.filter(
+            (item) =>
+              item.currencyCode !==
+                "ILS",
+          ),
+        );
+
+        const received =
+          (
+            result.receivedBaseMinor /
+            100
+          ).toFixed(2);
+
+        const change =
+          (
+            result.changeMinor /
+            100
+          ).toFixed(2);
+
+        setMessage(
+          `تم حفظ سند القبض ${result.voucher.publicId}: استلام ${normalizedForeignAmount} ${selectedForeignAccount.currencyCode} بقيمة ${received} ₪، تسديد ${normalizedAmount} ₪${result.changeMinor > 0 ? `، والباقي ${change} ₪ من صندوق الشيكل` : ""}.`,
+        );
+
+        setAmount("");
+        setForeignAmount("");
+        setNotes("");
+      } catch (caught) {
+        if (
+          caught instanceof
+            ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+          return;
+        }
+
+        setError(
+          errorText(caught),
+        );
+      } finally {
+        setSaving(false);
+      }
+
       return;
     }
 
