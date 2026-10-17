@@ -1165,7 +1165,17 @@ export default function AssistantInboxPage() {
                           (
                             editPaymentMethod ===
                               "bank" &&
-                            !editBankAccountId
+                            (
+                              !editBankAccountId ||
+                              bankAccounts.find(
+                                (account) =>
+                                  String(
+                                    account.id,
+                                  ) ===
+                                  editBankAccountId,
+                              )?.currencyCode !==
+                                "ILS"
+                            )
                           )
                         }
                       >
