@@ -461,6 +461,281 @@ async function accountBalanceMinor(
   );
 }
 
+async function accountBaseBalanceMinor(
+  tx: any,
+  accountId: number,
+) {
+  const rows =
+    await tx
+      .select({
+        balanceMinor:
+          sql<number>`
+            coalesce(
+              sum(
+                ${financeTransactionLinesTable.debitMinor}
+                -
+                ${financeTransactionLinesTable.creditMinor}
+              ),
+              0
+            )::integer
+          `,
+      })
+      .from(
+        financeTransactionLinesTable,
+      )
+      .where(
+        eq(
+          financeTransactionLinesTable.accountId,
+          accountId,
+        ),
+      );
+
+  return (
+    rows[0]?.balanceMinor ??
+    0
+  );
+}
+
+function rateMicrosFromAmounts(
+  baseAmountMinor: number,
+  currencyAmountMinor: number,
+) {
+  if (
+    baseAmountMinor <= 0 ||
+    currencyAmountMinor <= 0
+  ) {
+    throw new FinanceTransferError(
+      "تعذر احتساب سعر الصرف من المبالغ المدخلة",
+      409,
+    );
+  }
+
+  const rounded =
+    (
+      BigInt(
+        baseAmountMinor,
+      ) *
+        1_000_000n +
+      BigInt(
+        Math.floor(
+          currencyAmountMinor /
+          2,
+        ),
+      )
+    ) /
+    BigInt(
+      currencyAmountMinor,
+    );
+
+  if (
+    rounded <= 0n ||
+    rounded >
+      BigInt(
+        MAX_MINOR,
+      )
+  ) {
+    throw new FinanceTransferError(
+      "سعر الصرف الناتج خارج الحد المسموح",
+      409,
+    );
+  }
+
+  return Number(
+    rounded,
+  );
+}
+
+function proportionalBaseMinor(
+  totalBaseMinor: number,
+  partCurrencyMinor: number,
+  totalCurrencyMinor: number,
+) {
+  if (
+    totalBaseMinor <= 0 ||
+    partCurrencyMinor <= 0 ||
+    totalCurrencyMinor <= 0 ||
+    partCurrencyMinor >
+      totalCurrencyMinor
+  ) {
+    throw new FinanceTransferError(
+      "القيمة الدفترية للعملة غير مكتملة",
+      409,
+    );
+  }
+
+  const rounded =
+    (
+      BigInt(
+        totalBaseMinor,
+      ) *
+        BigInt(
+          partCurrencyMinor,
+        ) +
+      BigInt(
+        Math.floor(
+          totalCurrencyMinor /
+          2,
+        ),
+      )
+    ) /
+    BigInt(
+      totalCurrencyMinor,
+    );
+
+  if (
+    rounded <= 0n ||
+    rounded >
+      BigInt(
+        MAX_MINOR,
+      )
+  ) {
+    throw new FinanceTransferError(
+      "القيمة الدفترية الناتجة خارج الحد المسموح",
+      409,
+    );
+  }
+
+  return Number(
+    rounded,
+  );
+}
+
+async function requireCurrencyCashSession(
+  tx: any,
+  account: {
+    code: string;
+    name: string;
+    currencyCode: string;
+  },
+  businessDate: string,
+) {
+  if (!isCashAccount(account)) {
+    throw new FinanceTransferError(
+      "تحويل العملات في هذه المرحلة متاح بين الصناديق النقدية فقط",
+      409,
+    );
+  }
+
+  const session =
+    await openCashSession(
+      tx,
+      account,
+    );
+
+  if (!session) {
+    throw new FinanceTransferError(
+      `يجب فتح جلسة ${account.name} قبل تحويل العملة`,
+      409,
+    );
+  }
+
+  if (
+    session.businessDate !==
+      businessDate
+  ) {
+    throw new FinanceTransferError(
+      `جلسة ${account.name} مفتوحة بتاريخ ${session.businessDate}. أغلقها وافتح جلسة اليوم ${businessDate}.`,
+      409,
+    );
+  }
+
+  return session;
+}
+
+async function ensureFxDifferenceAccount(
+  tx: any,
+  kind:
+    | "gain"
+    | "loss",
+) {
+  const config =
+    kind === "gain"
+      ? {
+          code:
+            "FX_GAIN_REALIZED",
+          name:
+            "أرباح فروقات العملة المحققة",
+          accountType:
+            "income",
+        }
+      : {
+          code:
+            "FX_LOSS_REALIZED",
+          name:
+            "خسائر فروقات العملة المحققة",
+          accountType:
+            "expense",
+        };
+
+  const existingRows =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        eq(
+          financeAccountsTable.code,
+          config.code,
+        ),
+      )
+      .limit(1);
+
+  const existing =
+    existingRows[0] ??
+    null;
+
+  if (existing) {
+    if (
+      existing.accountType !==
+        config.accountType ||
+      existing.currencyCode !==
+        "ILS" ||
+      existing.status !==
+        "active"
+    ) {
+      throw new FinanceTransferError(
+        `حساب ${config.name} موجود بإعدادات غير متوافقة`,
+        409,
+      );
+    }
+
+    return existing;
+  }
+
+  const rows =
+    await tx
+      .insert(
+        financeAccountsTable,
+      )
+      .values({
+        code:
+          config.code,
+        name:
+          config.name,
+        accountType:
+          config.accountType,
+        currencyCode:
+          "ILS",
+        status:
+          "active",
+        notes:
+          "أنشئ تلقائيًا لمسار تحويل العملات",
+      })
+      .returning();
+
+  const account =
+    rows[0];
+
+  if (!account) {
+    throw new Error(
+      "FX_DIFFERENCE_ACCOUNT_CREATE_FAILED",
+    );
+  }
+
+  return account;
+}
+
 async function openCashSession(
   tx: any,
   account: {
