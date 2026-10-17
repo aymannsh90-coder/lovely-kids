@@ -768,53 +768,70 @@ async function loadReferences(
 
 async function presentDrafts(
   db: Db,
-  whereClause:
-    | ReturnType<typeof eq>
-    | ReturnType<typeof and>
-    | undefined,
+  whereClause: any,
 ) {
-  let query =
-    db
-      .select({
-        draft:
-          assistantDraftsTable,
-        employeeName:
-          employeesTable.name,
-        expenseCategoryName:
-          expenseCategoriesTable.name,
-      })
-      .from(
-        assistantDraftsTable,
-      )
-      .leftJoin(
-        employeesTable,
-        eq(
-          assistantDraftsTable.employeeId,
-          employeesTable.id,
-        ),
-      )
-      .leftJoin(
-        expenseCategoriesTable,
-        eq(
-          assistantDraftsTable.expenseCategoryId,
-          expenseCategoriesTable.id,
-        ),
-      )
-      .orderBy(
-        desc(
-          assistantDraftsTable.createdAt,
-        ),
-      );
-
-  if (whereClause) {
-    query =
-      query.where(
-        whereClause,
-      ) as typeof query;
-  }
+  const selection = {
+    draft:
+      assistantDraftsTable,
+    employeeName:
+      employeesTable.name,
+    expenseCategoryName:
+      expenseCategoriesTable.name,
+  };
 
   const rows =
-    await query;
+    whereClause
+      ? await db
+          .select(selection)
+          .from(
+            assistantDraftsTable,
+          )
+          .leftJoin(
+            employeesTable,
+            eq(
+              assistantDraftsTable.employeeId,
+              employeesTable.id,
+            ),
+          )
+          .leftJoin(
+            expenseCategoriesTable,
+            eq(
+              assistantDraftsTable.expenseCategoryId,
+              expenseCategoriesTable.id,
+            ),
+          )
+          .where(
+            whereClause,
+          )
+          .orderBy(
+            desc(
+              assistantDraftsTable.createdAt,
+            ),
+          )
+      : await db
+          .select(selection)
+          .from(
+            assistantDraftsTable,
+          )
+          .leftJoin(
+            employeesTable,
+            eq(
+              assistantDraftsTable.employeeId,
+              employeesTable.id,
+            ),
+          )
+          .leftJoin(
+            expenseCategoriesTable,
+            eq(
+              assistantDraftsTable.expenseCategoryId,
+              expenseCategoriesTable.id,
+            ),
+          )
+          .orderBy(
+            desc(
+              assistantDraftsTable.createdAt,
+            ),
+          );
 
   return rows.map(
     (row) => ({
