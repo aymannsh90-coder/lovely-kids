@@ -11,11 +11,14 @@ import {
   ApiError,
   POS_REGISTER_KEY,
   createPosExpense,
+  createPosForeignCurrencyCustomerReceipt,
   createPosUnifiedPaymentVoucher,
   createPosUnifiedReceiptVoucher,
   getCurrentCashSession,
   getDeliveryCompanies,
   getPosBankAccounts,
+  getPosFinanceBankingReference,
+  getPosFinanceCashAccounts,
   getPosCustomers,
   getPosEmployees,
   getPosExpenseCategories,
@@ -25,6 +28,8 @@ import {
   type PosDeliveryCompany,
   type PosEmployee,
   type PosExpenseCategory,
+  type PosFinanceCashAccount,
+  type PosFinanceCurrency,
   type PosSupplier,
 } from "../../lib/api";
 
@@ -122,6 +127,21 @@ export default function UnifiedPartyVoucherPage({
   const [bankAccounts, setBankAccounts] =
     useState<PosBankAccount[]>([]);
 
+  const [
+    foreignCashAccounts,
+    setForeignCashAccounts,
+  ] = useState<
+    PosFinanceCashAccount[]
+  >([]);
+
+  const [
+    financeCurrencies,
+    setFinanceCurrencies,
+  ] = useState<
+    PosFinanceCurrency[]
+  >([]);
+
+
   const [loading, setLoading] =
     useState(true);
   const [saving, setSaving] =
@@ -175,6 +195,26 @@ export default function UnifiedPartyVoucherPage({
   ] =
     useState("");
 
+  const [
+    foreignCashMode,
+    setForeignCashMode,
+  ] = useState(false);
+
+  const [
+    foreignCashAccountId,
+    setForeignCashAccountId,
+  ] = useState("");
+
+  const [
+    foreignAmount,
+    setForeignAmount,
+  ] = useState("");
+
+  const [
+    foreignExchangeRate,
+    setForeignExchangeRate,
+  ] = useState("");
+
   const [notes, setNotes] =
     useState("");
 
@@ -190,6 +230,8 @@ export default function UnifiedPartyVoucherPage({
         deliveryResult,
         categoryResult,
         bankResult,
+        cashResult,
+        bankingReference,
       ] =
         await Promise.all([
           getPosCustomers(
@@ -220,6 +262,12 @@ export default function UnifiedPartyVoucherPage({
             token,
           ),
           getPosBankAccounts(
+            token,
+          ),
+          getPosFinanceCashAccounts(
+            token,
+          ),
+          getPosFinanceBankingReference(
             token,
           ),
         ]);
@@ -254,6 +302,20 @@ export default function UnifiedPartyVoucherPage({
               "active" &&
             item.currencyCode ===
               "ILS",
+        ),
+      );
+      setForeignCashAccounts(
+        cashResult.results.filter(
+          (item) =>
+            item.currencyCode !==
+              "ILS",
+        ),
+      );
+      setFinanceCurrencies(
+        bankingReference.currencies.filter(
+          (item) =>
+            item.status ===
+            "active",
         ),
       );
     } catch (caught) {
