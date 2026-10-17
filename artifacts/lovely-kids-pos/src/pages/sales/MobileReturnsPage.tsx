@@ -859,6 +859,10 @@ export default function MobileReturnsPage() {
           <Link to="/sales/mobile/price-check">
             فحص السعر
           </Link>
+
+          <Link to="/sales/mobile/assistant">
+            المساعد
+          </Link>
         </nav>
 
         <div className="mobile-pos-user">
