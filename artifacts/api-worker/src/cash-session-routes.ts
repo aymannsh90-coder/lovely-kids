@@ -1,4 +1,7 @@
-import { cashSessionsTable } from "@workspace/db/schema";
+import {
+  cashSessionsTable,
+  financeAccountsTable,
+} from "@workspace/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -275,6 +278,40 @@ async function findOpenSession(
   return rows[0] ?? null;
 }
 
+async function findCashAccountForRegister(
+  db: Db,
+  registerKey: string,
+) {
+  const code =
+    `CASH_${registerKey.toUpperCase()}`;
+
+  const rows =
+    await db
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.code,
+            code,
+          ),
+          eq(
+            financeAccountsTable.accountType,
+            "asset",
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  return rows[0] ?? null;
+}
+
 async function findSessionById(
   db: Db,
   sessionId: number,
@@ -430,12 +467,116 @@ async function handleOpenSession(
     openingNote = note || null;
   }
 
+  const requestedCurrencyCode =
+    typeof payload.currencyCode ===
+      "string"
+      ? payload.currencyCode
+          .trim()
+          .toUpperCase()
+      : null;
+
+  if (
+    requestedCurrencyCode !== null &&
+    !/^[A-Z]{3}$/.test(
+      requestedCurrencyCode,
+    )
+  ) {
+    return json(
+      { error: "رمز العملة غير صالح" },
+      400,
+    );
+  }
+
+  const cashAccount =
+    await findCashAccountForRegister(
+      db,
+      registerKey,
+    );
+
+  let currencyCode = "ILS";
+
+  if (
+    registerKey ===
+    "main"
+  ) {
+    currencyCode =
+      requestedCurrencyCode ??
+      "ILS";
+
+    if (
+      currencyCode !==
+      "ILS"
+    ) {
+      return json(
+        {
+          error:
+            "الصندوق الرئيسي يعمل بالشيكل فقط",
+        },
+        409,
+      );
+    }
+
+    if (
+      cashAccount &&
+      cashAccount.currencyCode !==
+        "ILS"
+    ) {
+      return json(
+        {
+          error:
+            "عملة حساب الصندوق الرئيسي لا تطابق الشيكل",
+        },
+        409,
+      );
+    }
+  } else {
+    if (!cashAccount) {
+      return json(
+        {
+          error:
+            "حساب الصندوق غير موجود أو غير فعال",
+        },
+        404,
+      );
+    }
+
+    currencyCode =
+      cashAccount.currencyCode;
+
+    if (
+      requestedCurrencyCode &&
+      requestedCurrencyCode !==
+        currencyCode
+    ) {
+      return json(
+        {
+          error:
+            "عملة جلسة الصندوق لا تطابق عملة حساب الصندوق",
+        },
+        409,
+      );
+    }
+  }
+
   const existing = await findOpenSession(
     db,
     registerKey,
   );
 
   if (existing) {
+    if (
+      existing.currencyCode !==
+      currencyCode
+    ) {
+      return json(
+        {
+          error:
+            "عملة الجلسة المفتوحة لا تطابق عملة الصندوق",
+        },
+        409,
+      );
+    }
+
     return json({
       session: toCashSession(existing),
       alreadyOpen: true,
@@ -456,7 +597,7 @@ async function handleOpenSession(
               auth.user.id,
 
             openingBalanceMinor,
-            currencyCode: "ILS",
+            currencyCode,
             status: "open",
             openingNote,
           })
