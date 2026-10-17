@@ -502,7 +502,15 @@ async function assertForeignCashBookHistoryComplete(
 
   const incomplete =
     rows.some(
-      (line) => {
+      (
+        line: {
+          debitMinor: number;
+          creditMinor: number;
+          currencyCode: string | null;
+          currencyAmountMinor: number | null;
+          exchangeRateMicros: number | null;
+        },
+      ) => {
         const hasValue =
           line.debitMinor >
             0 ||
