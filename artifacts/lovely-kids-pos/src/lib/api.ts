@@ -765,7 +765,10 @@ export interface PosAssistantDraft {
   amountMinor: number | null;
   employeeId: number | null;
   expenseCategoryId: number | null;
-  paymentMethod: "cash";
+  paymentMethod:
+    | "cash"
+    | "bank";
+  bankAccountId: number | null;
   registerKey: string;
   confidence: number | null;
   parseMessage: string | null;
@@ -809,12 +812,24 @@ export function createPosAssistantDraft(
       expenseCategoryId:
         | number
         | null;
+      paymentMethod:
+        | "cash"
+        | "bank";
+      bankAccountId:
+        | number
+        | null;
       confidence: number;
       parseMessage: string;
       employeeName:
         | string
         | null;
       expenseCategoryName:
+        | string
+        | null;
+      bankAccountName:
+        | string
+        | null;
+      bankName:
         | string
         | null;
     };
@@ -863,6 +878,12 @@ export function updatePosAssistantDraft(
       | number
       | null;
     expenseCategoryId?:
+      | number
+      | null;
+    paymentMethod?:
+      | "cash"
+      | "bank";
+    bankAccountId?:
       | number
       | null;
     registerKey?: string;
