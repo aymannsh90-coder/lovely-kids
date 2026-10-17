@@ -13,12 +13,14 @@ import {
   approvePosAssistantDraft,
   getCurrentCashSession,
   getPosAssistantDrafts,
+  getPosBankAccounts,
   getPosEmployees,
   getPosExpenseCategories,
   rejectPosAssistantDraft,
   updatePosAssistantDraft,
   type PosAssistantDraft,
   type PosAssistantDraftIntent,
+  type PosBankAccount,
   type PosEmployee,
   type PosExpenseCategory,
 } from "../../lib/api";
@@ -119,6 +121,14 @@ export default function AssistantInboxPage() {
     >([]);
 
   const [
+    bankAccounts,
+    setBankAccounts,
+  ] =
+    useState<
+      PosBankAccount[]
+    >([]);
+
+  const [
     statusFilter,
     setStatusFilter,
   ] =
@@ -157,6 +167,21 @@ export default function AssistantInboxPage() {
   const [
     editCategoryId,
     setEditCategoryId,
+  ] =
+    useState("");
+
+  const [
+    editPaymentMethod,
+    setEditPaymentMethod,
+  ] =
+    useState<
+      | "cash"
+      | "bank"
+    >("cash");
+
+  const [
+    editBankAccountId,
+    setEditBankAccountId,
   ] =
     useState("");
 
@@ -216,6 +241,7 @@ export default function AssistantInboxPage() {
         draftResult,
         employeeResult,
         categoryResult,
+        bankResult,
       ] =
         await Promise.all([
           getPosAssistantDrafts(
@@ -232,6 +258,9 @@ export default function AssistantInboxPage() {
           getPosExpenseCategories(
             token,
           ),
+          getPosBankAccounts(
+            token,
+          ),
         ]);
 
       setDrafts(
@@ -246,6 +275,14 @@ export default function AssistantInboxPage() {
         categoryResult.results.filter(
           (category) =>
             category.status ===
+            "active",
+        ),
+      );
+
+      setBankAccounts(
+        bankResult.results.filter(
+          (account) =>
+            account.status ===
             "active",
         ),
       );
@@ -296,6 +333,10 @@ export default function AssistantInboxPage() {
       setEditAmount("");
       setEditEmployeeId("");
       setEditCategoryId("");
+      setEditPaymentMethod(
+        "cash",
+      );
+      setEditBankAccountId("");
       setEditNotes("");
       return;
     }
@@ -323,6 +364,18 @@ export default function AssistantInboxPage() {
       selected.expenseCategoryId
         ? String(
             selected.expenseCategoryId,
+          )
+        : "",
+    );
+
+    setEditPaymentMethod(
+      selected.paymentMethod,
+    );
+
+    setEditBankAccountId(
+      selected.bankAccountId
+        ? String(
+            selected.bankAccountId,
           )
         : "",
     );
@@ -367,6 +420,16 @@ export default function AssistantInboxPage() {
             editCategoryId
               ? Number(
                   editCategoryId,
+                )
+              : null,
+          paymentMethod:
+            editPaymentMethod,
+          bankAccountId:
+            editPaymentMethod ===
+              "bank" &&
+            editBankAccountId
+              ? Number(
+                  editBankAccountId,
                 )
               : null,
           registerKey:
@@ -430,7 +493,11 @@ export default function AssistantInboxPage() {
       return;
     }
 
-    if (!session) {
+    if (
+      editPaymentMethod ===
+        "cash" &&
+      !session
+    ) {
       setError(
         "يجب فتح الصندوق قبل اعتماد حركة نقدية. يمكنك حفظ المسودة الآن واعتمادها لاحقًا.",
       );
@@ -438,8 +505,25 @@ export default function AssistantInboxPage() {
     }
 
     if (
+      editPaymentMethod ===
+        "bank" &&
+      !editBankAccountId
+    ) {
+      setError(
+        "اختر الحساب البنكي قبل الاعتماد.",
+      );
+      return;
+    }
+
+    const settlementLabel =
+      editPaymentMethod ===
+        "bank"
+        ? "الحساب البنكي"
+        : "الصندوق";
+
+    if (
       !window.confirm(
-        "اعتماد هذه المسودة سينشئ الحركة المحاسبية فعليًا ويؤثر على الصندوق. متابعة؟",
+        `اعتماد هذه المسودة سينشئ الحركة المحاسبية فعليًا ويؤثر على ${settlementLabel}. متابعة؟`,
       )
     ) {
       return;
@@ -458,18 +542,24 @@ export default function AssistantInboxPage() {
           selected.id,
         );
 
-      const current =
-        await getCurrentCashSession(
-          token,
-          session.registerKey,
-        );
-
       if (
-        current.session
+        editPaymentMethod ===
+          "cash" &&
+        session
       ) {
-        setSession(
-          current.session,
-        );
+        const current =
+          await getCurrentCashSession(
+            token,
+            session.registerKey,
+          );
+
+        if (
+          current.session
+        ) {
+          setSession(
+            current.session,
+          );
+        }
       }
 
       await load(false);
@@ -898,6 +988,107 @@ export default function AssistantInboxPage() {
                     </label>
                   )}
 
+                  <label>
+                    <span>
+                      طريقة الدفع
+                    </span>
+                    <select
+                      value={
+                        editPaymentMethod
+                      }
+                      onChange={(
+                        event,
+                      ) => {
+                        const value =
+                          event.target.value as
+                            | "cash"
+                            | "bank";
+
+                        setEditPaymentMethod(
+                          value,
+                        );
+
+                        if (
+                          value ===
+                          "cash"
+                        ) {
+                          setEditBankAccountId(
+                            "",
+                          );
+                        }
+                      }}
+                      disabled={
+                        selected.status !==
+                          "pending"
+                      }
+                    >
+                      <option value="cash">
+                        نقدي
+                      </option>
+                      <option value="bank">
+                        بنك
+                      </option>
+                    </select>
+                  </label>
+
+                  {editPaymentMethod ===
+                    "bank" && (
+                    <label>
+                      <span>
+                        الحساب البنكي
+                      </span>
+                      <select
+                        value={
+                          editBankAccountId
+                        }
+                        onChange={(
+                          event,
+                        ) =>
+                          setEditBankAccountId(
+                            event.target.value,
+                          )
+                        }
+                        disabled={
+                          selected.status !==
+                            "pending"
+                        }
+                      >
+                        <option value="">
+                          اختر الحساب البنكي
+                        </option>
+                        {bankAccounts.map(
+                          (account) => (
+                            <option
+                              key={
+                                account.id
+                              }
+                              value={
+                                account.id
+                              }
+                              disabled={
+                                account.currencyCode !==
+                                "ILS"
+                              }
+                            >
+                              {
+                                account.bank.nameAr
+                              }{" "}
+                              —{" "}
+                              {
+                                account.name
+                              }{" "}
+                              (
+                              {
+                                account.currencyCode
+                              }
+                              )
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                  )}
+
                   <label className="assistant-review-wide">
                     <span>
                       ملاحظات
@@ -922,12 +1113,26 @@ export default function AssistantInboxPage() {
 
                   <div className="assistant-review-summary">
                     <span>
-                      طريقة الدفع
+                      التسوية
                     </span>
                     <strong>
-                      نقدي — الصندوق{" "}
-                      {session?.registerKey ??
-                        selected.registerKey}
+                      {editPaymentMethod ===
+                      "bank"
+                        ? (() => {
+                            const account =
+                              bankAccounts.find(
+                                (entry) =>
+                                  String(
+                                    entry.id,
+                                  ) ===
+                                  editBankAccountId,
+                              );
+
+                            return account
+                              ? `بنك — ${account.bank.nameAr} / ${account.name}`
+                              : "بنك — اختر الحساب";
+                          })()
+                        : `نقدي — الصندوق ${session?.registerKey ?? selected.registerKey}`}
                     </strong>
                   </div>
 
@@ -952,7 +1157,16 @@ export default function AssistantInboxPage() {
                         }
                         disabled={
                           actionBusy ||
-                          !session
+                          (
+                            editPaymentMethod ===
+                              "cash" &&
+                            !session
+                          ) ||
+                          (
+                            editPaymentMethod ===
+                              "bank" &&
+                            !editBankAccountId
+                          )
                         }
                       >
                         اعتماد وترحيل
@@ -981,10 +1195,30 @@ export default function AssistantInboxPage() {
                   )}
 
                   {!session &&
+                    editPaymentMethod ===
+                      "cash" &&
                     selected.status ===
                       "pending" && (
                     <div className="assistant-review-warning">
                       الصندوق مغلق الآن. يمكنك تعديل أو رفض المسودة، لكن الاعتماد النقدي يحتاج جلسة صندوق مفتوحة.
+                    </div>
+                  )}
+
+                  {editPaymentMethod ===
+                    "bank" &&
+                    editBankAccountId &&
+                    bankAccounts.find(
+                      (account) =>
+                        String(
+                          account.id,
+                        ) ===
+                        editBankAccountId,
+                    )?.currencyCode !==
+                      "ILS" &&
+                    selected.status ===
+                      "pending" && (
+                    <div className="assistant-review-warning">
+                      اعتماد المساعد البنكي يدعم حاليًا حسابات ILS فقط.
                     </div>
                   )}
                 </form>
