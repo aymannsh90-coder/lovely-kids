@@ -754,7 +754,12 @@ export interface PosEmployeeInput {
 export type PosAssistantDraftIntent =
   | "expense"
   | "employee_advance"
-  | "owner_withdrawal";
+  | "owner_withdrawal"
+  | "finance_transfer";
+
+export type PosAssistantTransferDirection =
+  | "cash_to_bank"
+  | "bank_to_cash";
 
 export interface PosAssistantDraft {
   id: number;
@@ -770,6 +775,9 @@ export interface PosAssistantDraft {
     | "bank";
   bankAccountId: number | null;
   registerKey: string;
+  transferDirection:
+    | PosAssistantTransferDirection
+    | null;
   confidence: number | null;
   parseMessage: string | null;
   notes: string | null;
@@ -778,6 +786,7 @@ export interface PosAssistantDraft {
     | "approved"
     | "rejected";
   financeVoucherId: number | null;
+  financeTransactionId: number | null;
   createdByUserId: number;
   reviewedByUserId: number | null;
   reviewedAt: string | null;
@@ -817,6 +826,9 @@ export function createPosAssistantDraft(
         | "bank";
       bankAccountId:
         | number
+        | null;
+      transferDirection:
+        | PosAssistantTransferDirection
         | null;
       confidence: number;
       parseMessage: string;
@@ -886,6 +898,9 @@ export function updatePosAssistantDraft(
     bankAccountId?:
       | number
       | null;
+    transferDirection?:
+      | PosAssistantTransferDirection
+      | null;
     registerKey?: string;
     notes?:
       | string
@@ -916,6 +931,10 @@ export function approvePosAssistantDraft(
     draft:
       PosAssistantDraft;
     voucher?: {
+      id: number;
+      publicId: string;
+    };
+    transaction?: {
       id: number;
       publicId: string;
     };

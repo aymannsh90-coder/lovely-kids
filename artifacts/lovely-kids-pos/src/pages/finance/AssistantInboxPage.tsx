@@ -20,6 +20,7 @@ import {
   updatePosAssistantDraft,
   type PosAssistantDraft,
   type PosAssistantDraftIntent,
+  type PosAssistantTransferDirection,
   type PosBankAccount,
   type PosEmployee,
   type PosExpenseCategory,
@@ -82,6 +83,13 @@ function intentLabel(
     "owner_withdrawal"
   ) {
     return "سحب مالك";
+  }
+
+  if (
+    intent ===
+    "finance_transfer"
+  ) {
+    return "تحويل صندوق ↔ بنك";
   }
 
   return "غير محدد";
@@ -184,6 +192,15 @@ export default function AssistantInboxPage() {
     setEditBankAccountId,
   ] =
     useState("");
+
+  const [
+    editTransferDirection,
+    setEditTransferDirection,
+  ] =
+    useState<
+      | PosAssistantTransferDirection
+      | ""
+    >("");
 
   const [
     editNotes,
@@ -337,6 +354,7 @@ export default function AssistantInboxPage() {
         "cash",
       );
       setEditBankAccountId("");
+      setEditTransferDirection("");
       setEditNotes("");
       return;
     }
@@ -378,6 +396,11 @@ export default function AssistantInboxPage() {
             selected.bankAccountId,
           )
         : "",
+    );
+
+    setEditTransferDirection(
+      selected.transferDirection ??
+      "",
     );
 
     setEditNotes(
@@ -423,14 +446,27 @@ export default function AssistantInboxPage() {
                 )
               : null,
           paymentMethod:
-            editPaymentMethod,
+            editIntent ===
+              "finance_transfer"
+              ? "bank"
+              : editPaymentMethod,
           bankAccountId:
-            editPaymentMethod ===
-              "bank" &&
+            (
+              editIntent ===
+                "finance_transfer" ||
+              editPaymentMethod ===
+                "bank"
+            ) &&
             editBankAccountId
               ? Number(
                   editBankAccountId,
                 )
+              : null,
+          transferDirection:
+            editIntent ===
+              "finance_transfer"
+              ? editTransferDirection ||
+                null
               : null,
           registerKey:
             session?.registerKey ??
@@ -493,20 +529,42 @@ export default function AssistantInboxPage() {
       return;
     }
 
+    const isTransfer =
+      editIntent ===
+      "finance_transfer";
+
     if (
-      editPaymentMethod ===
-        "cash" &&
+      (
+        editPaymentMethod ===
+          "cash" ||
+        isTransfer
+      ) &&
       !session
     ) {
       setError(
-        "يجب فتح الصندوق قبل اعتماد حركة نقدية. يمكنك حفظ المسودة الآن واعتمادها لاحقًا.",
+        isTransfer
+          ? "يجب فتح الصندوق قبل اعتماد تحويل بين الصندوق والبنك."
+          : "يجب فتح الصندوق قبل اعتماد حركة نقدية. يمكنك حفظ المسودة الآن واعتمادها لاحقًا.",
       );
       return;
     }
 
     if (
-      editPaymentMethod ===
-        "bank" &&
+      isTransfer &&
+      !editTransferDirection
+    ) {
+      setError(
+        "اختر اتجاه التحويل قبل الاعتماد.",
+      );
+      return;
+    }
+
+    if (
+      (
+        editPaymentMethod ===
+          "bank" ||
+        isTransfer
+      ) &&
       !editBankAccountId
     ) {
       setError(
@@ -516,10 +574,12 @@ export default function AssistantInboxPage() {
     }
 
     const settlementLabel =
-      editPaymentMethod ===
-        "bank"
-        ? "الحساب البنكي"
-        : "الصندوق";
+      isTransfer
+        ? "الصندوق والحساب البنكي"
+        : editPaymentMethod ===
+            "bank"
+          ? "الحساب البنكي"
+          : "الصندوق";
 
     if (
       !window.confirm(
@@ -543,8 +603,12 @@ export default function AssistantInboxPage() {
         );
 
       if (
-        editPaymentMethod ===
-          "cash" &&
+        (
+          editPaymentMethod ===
+            "cash" ||
+          editIntent ===
+            "finance_transfer"
+        ) &&
         session
       ) {
         const current =
@@ -567,7 +631,9 @@ export default function AssistantInboxPage() {
       setMessage(
         result.voucher?.publicId
           ? `تم اعتماد المسودة وإنشاء الحركة ${result.voucher.publicId}.`
-          : "المسودة كانت معتمدة مسبقًا.",
+          : result.transaction?.publicId
+            ? `تم اعتماد المسودة وإنشاء التحويل ${result.transaction.publicId}.`
+            : "المسودة كانت معتمدة مسبقًا.",
       );
     } catch (caught) {
       if (
@@ -832,6 +898,19 @@ export default function AssistantInboxPage() {
                         );
 
                         if (
+                          value ===
+                          "finance_transfer"
+                        ) {
+                          setEditPaymentMethod(
+                            "bank",
+                          );
+                        } else {
+                          setEditTransferDirection(
+                            "",
+                          );
+                        }
+
+                        if (
                           value !==
                           "employee_advance"
                         ) {
@@ -865,6 +944,9 @@ export default function AssistantInboxPage() {
                       </option>
                       <option value="owner_withdrawal">
                         سحب مالك
+                      </option>
+                      <option value="finance_transfer">
+                        تحويل صندوق ↔ بنك
                       </option>
                     </select>
                   </label>
@@ -988,6 +1070,45 @@ export default function AssistantInboxPage() {
                     </label>
                   )}
 
+                  {editIntent ===
+                    "finance_transfer" && (
+                    <label>
+                      <span>
+                        اتجاه التحويل
+                      </span>
+                      <select
+                        value={
+                          editTransferDirection
+                        }
+                        onChange={(
+                          event,
+                        ) =>
+                          setEditTransferDirection(
+                            event.target.value as
+                              | PosAssistantTransferDirection
+                              | "",
+                          )
+                        }
+                        disabled={
+                          selected.status !==
+                            "pending"
+                        }
+                      >
+                        <option value="">
+                          اختر الاتجاه
+                        </option>
+                        <option value="cash_to_bank">
+                          من الصندوق إلى البنك
+                        </option>
+                        <option value="bank_to_cash">
+                          من البنك إلى الصندوق
+                        </option>
+                      </select>
+                    </label>
+                  )}
+
+                  {editIntent !==
+                    "finance_transfer" && (
                   <label>
                     <span>
                       طريقة الدفع
@@ -1030,9 +1151,14 @@ export default function AssistantInboxPage() {
                       </option>
                     </select>
                   </label>
+                  )}
 
-                  {editPaymentMethod ===
-                    "bank" && (
+                  {(
+                    editPaymentMethod ===
+                      "bank" ||
+                    editIntent ===
+                      "finance_transfer"
+                  ) && (
                     <label>
                       <span>
                         الحساب البنكي
@@ -1113,11 +1239,14 @@ export default function AssistantInboxPage() {
 
                   <div className="assistant-review-summary">
                     <span>
-                      التسوية
+                      {editIntent ===
+                      "finance_transfer"
+                        ? "التحويل"
+                        : "التسوية"}
                     </span>
                     <strong>
-                      {editPaymentMethod ===
-                      "bank"
+                      {editIntent ===
+                      "finance_transfer"
                         ? (() => {
                             const account =
                               bankAccounts.find(
@@ -1128,11 +1257,44 @@ export default function AssistantInboxPage() {
                                   editBankAccountId,
                               );
 
-                            return account
-                              ? `بنك — ${account.bank.nameAr} / ${account.name}`
-                              : "بنك — اختر الحساب";
+                            const bankLabel =
+                              account
+                                ? `${account.bank.nameAr} / ${account.name}`
+                                : "اختر الحساب البنكي";
+
+                            if (
+                              editTransferDirection ===
+                              "cash_to_bank"
+                            ) {
+                              return `الصندوق ${session?.registerKey ?? selected.registerKey} → ${bankLabel}`;
+                            }
+
+                            if (
+                              editTransferDirection ===
+                              "bank_to_cash"
+                            ) {
+                              return `${bankLabel} → الصندوق ${session?.registerKey ?? selected.registerKey}`;
+                            }
+
+                            return `اختر اتجاه التحويل — ${bankLabel}`;
                           })()
-                        : `نقدي — الصندوق ${session?.registerKey ?? selected.registerKey}`}
+                        : editPaymentMethod ===
+                            "bank"
+                          ? (() => {
+                              const account =
+                                bankAccounts.find(
+                                  (entry) =>
+                                    String(
+                                      entry.id,
+                                    ) ===
+                                    editBankAccountId,
+                                );
+
+                              return account
+                                ? `بنك — ${account.bank.nameAr} / ${account.name}`
+                                : "بنك — اختر الحساب";
+                            })()
+                          : `نقدي — الصندوق ${session?.registerKey ?? selected.registerKey}`}
                     </strong>
                   </div>
 
@@ -1158,24 +1320,43 @@ export default function AssistantInboxPage() {
                         disabled={
                           actionBusy ||
                           (
-                            editPaymentMethod ===
-                              "cash" &&
-                            !session
-                          ) ||
-                          (
-                            editPaymentMethod ===
-                              "bank" &&
-                            (
-                              !editBankAccountId ||
-                              bankAccounts.find(
-                                (account) =>
-                                  String(
-                                    account.id,
-                                  ) ===
-                                  editBankAccountId,
-                              )?.currencyCode !==
-                                "ILS"
-                            )
+                            editIntent ===
+                              "finance_transfer"
+                              ? (
+                                  !session ||
+                                  !editTransferDirection ||
+                                  !editBankAccountId ||
+                                  bankAccounts.find(
+                                    (account) =>
+                                      String(
+                                        account.id,
+                                      ) ===
+                                      editBankAccountId,
+                                  )?.currencyCode !==
+                                    "ILS"
+                                )
+                              : (
+                                  (
+                                    editPaymentMethod ===
+                                      "cash" &&
+                                    !session
+                                  ) ||
+                                  (
+                                    editPaymentMethod ===
+                                      "bank" &&
+                                    (
+                                      !editBankAccountId ||
+                                      bankAccounts.find(
+                                        (account) =>
+                                          String(
+                                            account.id,
+                                          ) ===
+                                          editBankAccountId,
+                                      )?.currencyCode !==
+                                        "ILS"
+                                    )
+                                  )
+                                )
                           )
                         }
                       >
@@ -1199,23 +1380,33 @@ export default function AssistantInboxPage() {
                     <div className="assistant-reviewed-state">
                       {selected.status ===
                       "approved"
-                        ? `✅ معتمدة — السند #${selected.financeVoucherId ?? "—"}`
+                        ? selected.financeTransactionId
+                          ? `✅ معتمدة — التحويل المالي #${selected.financeTransactionId}`
+                          : `✅ معتمدة — السند #${selected.financeVoucherId ?? "—"}`
                         : "⛔ مرفوضة"}
                     </div>
                   )}
 
                   {!session &&
-                    editPaymentMethod ===
-                      "cash" &&
+                    (
+                      editPaymentMethod ===
+                        "cash" ||
+                      editIntent ===
+                        "finance_transfer"
+                    ) &&
                     selected.status ===
                       "pending" && (
                     <div className="assistant-review-warning">
-                      الصندوق مغلق الآن. يمكنك تعديل أو رفض المسودة، لكن الاعتماد النقدي يحتاج جلسة صندوق مفتوحة.
+                      الصندوق مغلق الآن. يمكنك تعديل أو رفض المسودة، لكن الحركة التي تمس الصندوق تحتاج جلسة صندوق مفتوحة.
                     </div>
                   )}
 
-                  {editPaymentMethod ===
-                    "bank" &&
+                  {(
+                    editPaymentMethod ===
+                      "bank" ||
+                    editIntent ===
+                      "finance_transfer"
+                  ) &&
                     editBankAccountId &&
                     bankAccounts.find(
                       (account) =>
@@ -1228,7 +1419,7 @@ export default function AssistantInboxPage() {
                     selected.status ===
                       "pending" && (
                     <div className="assistant-review-warning">
-                      اعتماد المساعد البنكي يدعم حاليًا حسابات ILS فقط.
+                      اعتماد المساعد والتحويلات عبر البنك تدعم حاليًا حسابات ILS فقط.
                     </div>
                   )}
                 </form>

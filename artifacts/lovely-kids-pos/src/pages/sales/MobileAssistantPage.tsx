@@ -111,6 +111,13 @@ function intentLabel(
     return "سحب مالك";
   }
 
+  if (
+    intent ===
+    "finance_transfer"
+  ) {
+    return "تحويل صندوق ↔ بنك";
+  }
+
   return "بحاجة لتحديد";
 }
 
@@ -515,7 +522,7 @@ export default function MobileAssistantPage() {
                 احكيلي الحركة
               </h1>
               <p>
-                مثال: أيمن سحب 100 شيكل، أو دفعت كهربا 80.
+                مثال: أيمن سحب 100 شيكل، دفعت كهربا 80، أو إيداع 100 من الصندوق في البنك.
               </p>
             </div>
           </div>

@@ -3,6 +3,7 @@ import {
   banksTable,
   employeesTable,
   expenseCategoriesTable,
+  financeAccountsTable,
 } from "@workspace/db/schema";
 import {
   assistantDraftsTable,
@@ -16,6 +17,7 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { handleFinanceTransferRequest } from "./finance-transfer-routes";
 import { handlePartyFinanceRequest } from "./party-finance-routes";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -23,7 +25,12 @@ type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type DraftIntent =
   | "expense"
   | "employee_advance"
-  | "owner_withdrawal";
+  | "owner_withdrawal"
+  | "finance_transfer";
+
+type DraftTransferDirection =
+  | "cash_to_bank"
+  | "bank_to_cash";
 
 type DraftPaymentMethod =
   | "cash"
@@ -502,6 +509,85 @@ function uniqueFirstNameMatch(
     : null;
 }
 
+const ASSISTANT_EXPENSE_PRESETS: Array<{
+  title: string;
+  pattern: RegExp;
+}> = [
+  {
+    title: "ضيافة",
+    pattern:
+      /ضياف|قهو|شاي/,
+  },
+  {
+    title: "تنظيف",
+    pattern:
+      /تنظيف|منظف|نظاف/,
+  },
+  {
+    title: "كهرباء",
+    pattern:
+      /كهرب/,
+  },
+  {
+    title: "مياه",
+    pattern:
+      /مياه|ميه|ماء/,
+  },
+  {
+    title: "مواصلات / توصيل",
+    pattern:
+      /توصيل|مواصل|نقل/,
+  },
+  {
+    title: "محروقات سيارة",
+    pattern:
+      /محروقات|بنزين|سولار|ديزل|وقود/,
+  },
+  {
+    title: "صيانة",
+    pattern:
+      /صيان|تصليح/,
+  },
+  {
+    title: "صدقات يومية",
+    pattern:
+      /صدق|صدقات|تبرع|تبرعات/,
+  },
+  {
+    title: "أكياس نايلون",
+    pattern:
+      /اكياس|أكياس|نايلون|نايلن/,
+  },
+  {
+    title: "ذكاء اصطناعي",
+    pattern:
+      /ذكاء اصطناعي|شات جي بي تي|chatgpt|openai|claude|gemini|ai اشتراك|اشتراك ai/,
+  },
+  {
+    title: "هاتف وإنترنت",
+    pattern:
+      /هاتف|انترنت|إنترنت|اتصال|اتصالات|خط خلوي|خلوي|جوال/,
+  },
+  {
+    title: "دعاية وإعلان",
+    pattern:
+      /دعاي|اعلان|إعلان|اعلانات|إعلانات|تسويق|meta ads|facebook ads|انستغرام|instagram ads/,
+  },
+];
+
+function expensePresetMatch(
+  normalizedText: string,
+) {
+  return (
+    ASSISTANT_EXPENSE_PRESETS.find(
+      (preset) =>
+        preset.pattern.test(
+          normalizedText,
+        ),
+    ) ?? null
+  );
+}
+
 function categoryMatch(
   normalizedText: string,
   categories:
@@ -535,6 +621,27 @@ function categoryMatch(
 
   if (direct) {
     return direct.category;
+  }
+
+  const preset =
+    expensePresetMatch(
+      normalizedText,
+    );
+
+  if (preset) {
+    const presetCategory =
+      categories.find(
+        (category) =>
+          preset.pattern.test(
+            normalizeArabic(
+              category.name,
+            ),
+          ),
+      );
+
+    if (presetCategory) {
+      return presetCategory;
+    }
   }
 
   const aliases: Array<{
@@ -614,6 +721,21 @@ function categoryMatch(
     },
     {
       patterns: [
+        /ذكاء اصطناعي/,
+        /شات ?جي ?بي ?تي/,
+        /chatgpt/,
+        /openai/,
+        /اشتراك.*(برنامج|برمج|ذكاء|تقني)/,
+      ],
+      codes: [
+        "ai",
+        "software",
+        "subscriptions",
+        "technology",
+      ],
+    },
+    {
+      patterns: [
         /بنزين/,
         /سولار/,
         /ديزل/,
@@ -656,15 +778,43 @@ function categoryMatch(
 
     const byName =
       categories.find(
-        (category) =>
-          alias.patterns.some(
-            (pattern) =>
-              pattern.test(
-                normalizeArabic(
-                  category.name,
+        (category) => {
+          const normalizedName =
+            normalizeArabic(
+              category.name,
+            );
+
+          if (
+            alias.patterns.some(
+              (pattern) =>
+                pattern.test(
+                  normalizedName,
                 ),
-              ),
-          ),
+            )
+          ) {
+            return true;
+          }
+
+          if (
+            alias.codes.some(
+              (code) =>
+                [
+                  "ai",
+                  "software",
+                  "subscriptions",
+                  "technology",
+                ].includes(
+                  code,
+                ),
+            )
+          ) {
+            return /(ذكاء|برامج|برمجيات|اشتراك|تقني|تقنيه)/.test(
+              normalizedName,
+            );
+          }
+
+          return false;
+        },
       );
 
     if (byName) {
@@ -812,6 +962,11 @@ function parseDraft(
       categories,
     );
 
+  const expensePreset =
+    expensePresetMatch(
+      normalized,
+    );
+
   const bankMatch =
     bankAccountMatch(
       normalized,
@@ -823,6 +978,72 @@ function parseDraft(
 
   const bankAccount =
     bankMatch.account;
+
+  const transferCue =
+    /(ايداع|ودع|تحويل|حول|نقل|نقلت|سحب.*من.*بنك)/.test(
+      normalized,
+    );
+
+  const cashIndex =
+    [
+      normalized.indexOf(
+        "الصندوق",
+      ),
+      normalized.indexOf(
+        "الكاش",
+      ),
+    ]
+      .filter(
+        (value) =>
+          value >= 0,
+      )
+      .sort(
+        (left, right) =>
+          left - right,
+      )[0] ??
+    -1;
+
+  const bankIndexes =
+    [
+      normalized.indexOf(
+        "البنك",
+      ),
+      normalized.indexOf(
+        "بنك",
+      ),
+      normalized.indexOf(
+        "حساب البنك",
+      ),
+    ]
+      .filter(
+        (value) =>
+          value >= 0,
+      )
+      .sort(
+        (left, right) =>
+          left - right,
+      );
+
+  const bankIndex =
+    bankIndexes[0] ??
+    -1;
+
+  let transferDirection:
+    | DraftTransferDirection
+    | null =
+    null;
+
+  if (
+    transferCue &&
+    cashIndex >= 0 &&
+    bankIndex >= 0
+  ) {
+    transferDirection =
+      cashIndex <
+      bankIndex
+        ? "cash_to_bank"
+        : "bank_to_cash";
+  }
 
   // Speech recognition can produce nearby Arabic forms for "سحب"
   // (for example: "سحاب" or "ساحب"). Treat these as the same
@@ -842,6 +1063,11 @@ function parseDraft(
     null;
 
   if (
+    transferDirection
+  ) {
+    intent =
+      "finance_transfer";
+  } else if (
     ownerWords.test(
       normalized,
     )
@@ -900,7 +1126,8 @@ function parseDraft(
   if (
     intent ===
       "expense" &&
-    !category
+    !category &&
+    !expensePreset
   ) {
     missing.push(
       "تصنيف المصروف",
@@ -908,8 +1135,22 @@ function parseDraft(
   }
 
   if (
-    paymentMethod ===
-      "bank" &&
+    intent ===
+      "finance_transfer" &&
+    !transferDirection
+  ) {
+    missing.push(
+      "اتجاه التحويل",
+    );
+  }
+
+  if (
+    (
+      paymentMethod ===
+        "bank" ||
+      intent ===
+        "finance_transfer"
+    ) &&
     !bankAccount
   ) {
     missing.push(
@@ -931,15 +1172,27 @@ function parseDraft(
           : 0
         : intent ===
             "expense"
-          ? category
+          ? (
+              category ||
+              expensePreset
+            )
             ? 1
             : 0
           : intent ===
               "owner_withdrawal"
             ? 1
-            : 0,
-      paymentMethod ===
-        "bank"
+            : intent ===
+                "finance_transfer"
+              ? transferDirection
+                ? 1
+                : 0
+              : 0,
+      (
+        paymentMethod ===
+          "bank" ||
+        intent ===
+          "finance_transfer"
+      )
         ? bankAccount
           ? 1
           : 0
@@ -973,17 +1226,36 @@ function parseDraft(
         ? category?.id ??
           null
         : null,
-    paymentMethod,
+    paymentMethod:
+      intent ===
+        "finance_transfer"
+        ? "bank"
+        : paymentMethod,
     bankAccountId:
-      paymentMethod ===
-        "bank"
+      (
+        paymentMethod ===
+          "bank" ||
+        intent ===
+          "finance_transfer"
+      )
         ? bankAccount?.id ??
           null
         : null,
+    transferDirection,
+    expensePresetName:
+      expensePreset?.title ??
+      null,
     confidence,
     parseMessage:
       complete
-        ? "فهمت الحركة. راجعها على الكمبيوتر قبل الاعتماد."
+        ? (
+            intent ===
+              "expense" &&
+            expensePreset &&
+            !category
+              ? `فهمت المصروف السريع «${expensePreset.title}». سيتم إنشاء تصنيفه عند أول اعتماد إذا لم يكن موجودًا.`
+              : "فهمت الحركة. راجعها على الكمبيوتر قبل الاعتماد."
+          )
         : `المسودة محفوظة وتحتاج مراجعة: ${missing.join("، ")}.`,
   };
 }
@@ -1245,6 +1517,8 @@ async function handleCreateDraft(
           bankAccountId:
             parsed.bankAccountId,
           registerKey,
+          transferDirection:
+            parsed.transferDirection,
           confidence:
             parsed.confidence,
           parseMessage:
@@ -1253,6 +1527,8 @@ async function handleCreateDraft(
           status:
             "pending",
           financeVoucherId:
+            null,
+          financeTransactionId:
             null,
           createdByUserId:
             Number(
@@ -1517,7 +1793,9 @@ async function handleUpdateDraft(
             intentRaw ===
               "employee_advance" ||
             intentRaw ===
-              "owner_withdrawal"
+              "owner_withdrawal" ||
+            intentRaw ===
+              "finance_transfer"
           ? intentRaw
           : (() => {
               throw new AssistantDraftError(
@@ -1552,6 +1830,42 @@ async function handleUpdateDraft(
         "expense"
         ? current.expenseCategoryId
         : null;
+
+    let transferDirection:
+      | DraftTransferDirection
+      | null =
+      intent ===
+        "finance_transfer"
+        ? (
+            current.transferDirection as
+              | DraftTransferDirection
+              | null
+          )
+        : null;
+
+    if (
+      intent ===
+        "finance_transfer" &&
+      body.transferDirection !==
+        undefined
+    ) {
+      transferDirection =
+        body.transferDirection ===
+          "cash_to_bank" ||
+        body.transferDirection ===
+          "bank_to_cash"
+          ? body.transferDirection
+          : body.transferDirection ===
+                null ||
+              body.transferDirection ===
+                ""
+            ? null
+            : (() => {
+                throw new AssistantDraftError(
+                  "اتجاه التحويل غير صالح",
+                );
+              })();
+    }
 
     if (
       intent ===
@@ -1597,16 +1911,19 @@ async function handleUpdateDraft(
 
     const paymentMethod:
       DraftPaymentMethod =
-      paymentMethodRaw ===
-        "cash" ||
-      paymentMethodRaw ===
-        "bank"
-        ? paymentMethodRaw
-        : (() => {
-            throw new AssistantDraftError(
-              "طريقة الدفع غير صالحة",
-            );
-          })();
+      intent ===
+        "finance_transfer"
+        ? "bank"
+        : paymentMethodRaw ===
+              "cash" ||
+            paymentMethodRaw ===
+              "bank"
+          ? paymentMethodRaw
+          : (() => {
+              throw new AssistantDraftError(
+                "طريقة الدفع غير صالحة",
+              );
+            })();
 
     let bankAccountId:
       | number
@@ -1697,6 +2014,7 @@ async function handleUpdateDraft(
           paymentMethod,
           bankAccountId,
           registerKey,
+          transferDirection,
           notes,
           parseMessage:
             "تم تعديل المسودة يدويًا وهي جاهزة للمراجعة.",
@@ -1830,6 +2148,50 @@ function minorToAmount(
   ).toFixed(2);
 }
 
+async function loadAssistantCashAccount(
+  db: Db,
+  registerKey: string,
+) {
+  const code =
+    `CASH_${registerKey.toUpperCase()}`;
+
+  const rows =
+    await db
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.code,
+            code,
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  const account =
+    rows[0];
+
+  if (
+    !account ||
+    account.accountType !==
+      "asset"
+  ) {
+    throw new AssistantDraftError(
+      "حساب الصندوق غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  return account;
+}
+
 async function handleApproveDraft(
   request: Request,
   db: Db,
@@ -1914,13 +2276,154 @@ async function handleApproveDraft(
       );
     }
 
+    let effectiveExpenseCategoryId =
+      draft.expenseCategoryId;
+
     if (
       draft.intent ===
         "expense" &&
-      !draft.expenseCategoryId
+      !effectiveExpenseCategoryId
+    ) {
+      const normalizedOriginal =
+        normalizeArabic(
+          draft.originalText,
+        );
+
+      const preset =
+        expensePresetMatch(
+          normalizedOriginal,
+        );
+
+      if (!preset) {
+        throw new AssistantDraftError(
+          "اختر تصنيف المصروف قبل الاعتماد",
+          409,
+        );
+      }
+
+      const categoryRows =
+        await db
+          .select()
+          .from(
+            expenseCategoriesTable,
+          )
+          .where(
+            eq(
+              expenseCategoriesTable.status,
+              "active",
+            ),
+          );
+
+      const existing =
+        categoryRows.find(
+          (category) =>
+            preset.pattern.test(
+              normalizeArabic(
+                category.name,
+              ),
+            ),
+        );
+
+      if (existing) {
+        effectiveExpenseCategoryId =
+          existing.id;
+      } else {
+        const categoryUrl =
+          new URL(
+            request.url,
+          );
+
+        categoryUrl.pathname =
+          "/api/pos/finance/expense-categories";
+        categoryUrl.search = "";
+
+        const categoryRequest =
+          new Request(
+            categoryUrl.toString(),
+            {
+              method:
+                "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+                Authorization:
+                  request.headers.get(
+                    "Authorization",
+                  ) ?? "",
+              },
+              body:
+                JSON.stringify({
+                  name:
+                    preset.title,
+                }),
+            },
+          );
+
+        const categoryResponse =
+          await handlePartyFinanceRequest(
+            categoryRequest,
+            db,
+            env,
+          );
+
+        if (!categoryResponse) {
+          throw new Error(
+            "ASSISTANT_EXPENSE_CATEGORY_ROUTE_NOT_FOUND",
+          );
+        }
+
+        const categoryBody =
+          (await categoryResponse
+            .clone()
+            .json()
+            .catch(() => null)) as
+            | Record<
+                string,
+                any
+              >
+            | null;
+
+        if (!categoryResponse.ok) {
+          return json(
+            {
+              error:
+                categoryBody?.error ??
+                "تعذر إنشاء تصنيف المصروف السريع",
+            },
+            categoryResponse.status,
+          );
+        }
+
+        const category =
+          categoryBody?.category;
+
+        if (
+          !category ||
+          !Number.isSafeInteger(
+            Number(
+              category.id,
+            ),
+          )
+        ) {
+          throw new Error(
+            "ASSISTANT_EXPENSE_CATEGORY_MISSING",
+          );
+        }
+
+        effectiveExpenseCategoryId =
+          Number(
+            category.id,
+          );
+      }
+    }
+
+    if (
+      draft.intent ===
+        "finance_transfer" &&
+      !draft.transferDirection
     ) {
       throw new AssistantDraftError(
-        "اختر تصنيف المصروف قبل الاعتماد",
+        "اختر اتجاه التحويل قبل الاعتماد",
         409,
       );
     }
@@ -1982,108 +2485,252 @@ async function handleApproveDraft(
       }
     }
 
-    let route:
-      string;
-
-    let payload:
-      Record<
-        string,
-        unknown
-      >;
-
-    const common = {
-      amount:
-        minorToAmount(
-          draft.amountMinor,
-        ),
-      paymentMethod:
-        draft.paymentMethod,
-      registerKey:
-        draft.registerKey,
-      bankAccountId:
-        draft.paymentMethod ===
-          "bank"
-          ? draft.bankAccountId ??
-            undefined
-          : undefined,
-      notes:
-        draft.notes ??
-        `اعتماد مسودة المساعد ${draft.publicId}: ${draft.originalText}`,
-      idempotencyKey:
-        `assistant-draft:${draft.id}:approve`,
-    };
+    let financeResponse:
+      Response;
 
     if (
       draft.intent ===
-      "expense"
+        "finance_transfer"
     ) {
-      route =
-        "/api/pos/finance/expenses";
+      if (
+        !draft.bankAccountId
+      ) {
+        throw new AssistantDraftError(
+          "اختر الحساب البنكي قبل الاعتماد",
+          409,
+        );
+      }
 
-      payload = {
-        ...common,
-        expenseCategoryId:
-          draft.expenseCategoryId,
-      };
-    } else if (
-      draft.intent ===
-      "employee_advance"
-    ) {
-      route =
-        `/api/pos/employees/${draft.employeeId}/advance`;
-
-      payload =
-        common;
-    } else {
-      route =
-        "/api/pos/finance/owner-withdrawals";
-
-      payload =
-        common;
-    }
-
-    const url =
-      new URL(
-        request.url,
-      );
-
-    url.pathname =
-      route;
-
-    url.search = "";
-
-    const internalRequest =
-      new Request(
-        url.toString(),
-        {
-          method:
-            "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Authorization:
-              request.headers.get(
-                "Authorization",
-              ) ?? "",
-          },
-          body:
-            JSON.stringify(
-              payload,
+      const bankRows =
+        await db
+          .select()
+          .from(
+            bankAccountsTable,
+          )
+          .where(
+            and(
+              eq(
+                bankAccountsTable.id,
+                draft.bankAccountId,
+              ),
+              eq(
+                bankAccountsTable.status,
+                "active",
+              ),
             ),
-        },
-      );
+          )
+          .limit(1);
 
-    const financeResponse =
-      await handlePartyFinanceRequest(
-        internalRequest,
-        db,
-        env,
-      );
+      const bankAccount =
+        bankRows[0];
 
-    if (!financeResponse) {
-      throw new Error(
-        "ASSISTANT_FINANCE_ROUTE_NOT_FOUND",
-      );
+      if (!bankAccount) {
+        throw new AssistantDraftError(
+          "الحساب البنكي غير موجود أو غير فعال",
+          404,
+        );
+      }
+
+      if (
+        bankAccount.currencyCode !==
+        "ILS"
+      ) {
+        throw new AssistantDraftError(
+          "تحويلات المساعد تدعم حاليًا حسابات ILS فقط",
+          409,
+        );
+      }
+
+      const cashAccount =
+        await loadAssistantCashAccount(
+          db,
+          draft.registerKey,
+        );
+
+      if (
+        cashAccount.currencyCode !==
+        "ILS"
+      ) {
+        throw new AssistantDraftError(
+          "تحويلات المساعد تدعم حاليًا صندوق ILS فقط",
+          409,
+        );
+      }
+
+      const fromAccountId =
+        draft.transferDirection ===
+          "cash_to_bank"
+          ? cashAccount.id
+          : bankAccount.financeAccountId;
+
+      const toAccountId =
+        draft.transferDirection ===
+          "cash_to_bank"
+          ? bankAccount.financeAccountId
+          : cashAccount.id;
+
+      const url =
+        new URL(
+          request.url,
+        );
+
+      url.pathname =
+        "/api/pos/finance/transfers";
+      url.search = "";
+
+      const internalRequest =
+        new Request(
+          url.toString(),
+          {
+            method:
+              "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                request.headers.get(
+                  "Authorization",
+                ) ?? "",
+            },
+            body:
+              JSON.stringify({
+                idempotencyKey:
+                  `assistant-draft:${draft.id}:approve`,
+                fromAccountId,
+                toAccountId,
+                amount:
+                  minorToAmount(
+                    draft.amountMinor,
+                  ),
+                notes:
+                  draft.notes ??
+                  `اعتماد مسودة المساعد ${draft.publicId}: ${draft.originalText}`,
+              }),
+          },
+        );
+
+      const response =
+        await handleFinanceTransferRequest(
+          internalRequest,
+          db,
+          env,
+        );
+
+      if (!response) {
+        throw new Error(
+          "ASSISTANT_TRANSFER_ROUTE_NOT_FOUND",
+        );
+      }
+
+      financeResponse =
+        response;
+    } else {
+      let route:
+        string;
+
+      let payload:
+        Record<
+          string,
+          unknown
+        >;
+
+      const common = {
+        amount:
+          minorToAmount(
+            draft.amountMinor,
+          ),
+        paymentMethod:
+          draft.paymentMethod,
+        registerKey:
+          draft.registerKey,
+        bankAccountId:
+          draft.paymentMethod ===
+            "bank"
+            ? draft.bankAccountId ??
+              undefined
+            : undefined,
+        notes:
+          draft.notes ??
+          `اعتماد مسودة المساعد ${draft.publicId}: ${draft.originalText}`,
+        idempotencyKey:
+          `assistant-draft:${draft.id}:approve`,
+      };
+
+      if (
+        draft.intent ===
+        "expense"
+      ) {
+        route =
+          "/api/pos/finance/expenses";
+
+        payload = {
+          ...common,
+          expenseCategoryId:
+            effectiveExpenseCategoryId,
+        };
+      } else if (
+        draft.intent ===
+        "employee_advance"
+      ) {
+        route =
+          `/api/pos/employees/${draft.employeeId}/advance`;
+
+        payload =
+          common;
+      } else {
+        route =
+          "/api/pos/finance/owner-withdrawals";
+
+        payload =
+          common;
+      }
+
+      const url =
+        new URL(
+          request.url,
+        );
+
+      url.pathname =
+        route;
+
+      url.search = "";
+
+      const internalRequest =
+        new Request(
+          url.toString(),
+          {
+            method:
+              "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                request.headers.get(
+                  "Authorization",
+                ) ?? "",
+            },
+            body:
+              JSON.stringify(
+                payload,
+              ),
+          },
+        );
+
+      const response =
+        await handlePartyFinanceRequest(
+          internalRequest,
+          db,
+          env,
+        );
+
+      if (!response) {
+        throw new Error(
+          "ASSISTANT_FINANCE_ROUTE_NOT_FOUND",
+        );
+      }
+
+      financeResponse =
+        response;
     }
 
     const financeBody =
@@ -2111,9 +2758,34 @@ async function handleApproveDraft(
     }
 
     const voucher =
-      financeBody?.voucher;
+      draft.intent ===
+        "finance_transfer"
+        ? null
+        : financeBody?.voucher;
+
+    const transaction =
+      draft.intent ===
+        "finance_transfer"
+        ? financeBody?.transaction
+        : null;
 
     if (
+      draft.intent ===
+        "finance_transfer"
+    ) {
+      if (
+        !transaction ||
+        !Number.isSafeInteger(
+          Number(
+            transaction.id,
+          ),
+        )
+      ) {
+        throw new Error(
+          "ASSISTANT_APPROVAL_TRANSACTION_MISSING",
+        );
+      }
+    } else if (
       !voucher ||
       !Number.isSafeInteger(
         Number(
@@ -2135,9 +2807,22 @@ async function handleApproveDraft(
           status:
             "approved",
           financeVoucherId:
-            Number(
-              voucher.id,
-            ),
+            voucher
+              ? Number(
+                  voucher.id,
+                )
+              : null,
+          financeTransactionId:
+            transaction
+              ? Number(
+                  transaction.id,
+                )
+              : null,
+          expenseCategoryId:
+            draft.intent ===
+              "expense"
+              ? effectiveExpenseCategoryId
+              : draft.expenseCategoryId,
           reviewedByUserId:
             Number(
               auth.user.id,
@@ -2185,17 +2870,34 @@ async function handleApproveDraft(
       if (
         retry?.status ===
           "approved" &&
-        retry.financeVoucherId ===
-          Number(
-            voucher.id,
+        (
+          (
+            voucher &&
+            retry.financeVoucherId ===
+              Number(
+                voucher.id,
+              )
+          ) ||
+          (
+            transaction &&
+            retry.financeTransactionId ===
+              Number(
+                transaction.id,
+              )
           )
+        )
       ) {
         return json({
           alreadyApproved:
             true,
           draft:
             retry,
-          voucher,
+          voucher:
+            voucher ??
+            undefined,
+          transaction:
+            transaction ??
+            undefined,
         });
       }
 
@@ -2210,7 +2912,12 @@ async function handleApproveDraft(
         false,
       draft:
         updated,
-      voucher,
+      voucher:
+        voucher ??
+        undefined,
+      transaction:
+        transaction ??
+        undefined,
     });
   } catch (caught) {
     if (
