@@ -3635,6 +3635,16 @@ async function handleVoidVoucher(
           }
 
           if (
+            voucher.currencyCode !==
+            "ILS"
+          ) {
+            throw new PartyFinanceError(
+              "إلغاء سند القبض بعملة أجنبية يحتاج مسار العكس متعدد الصناديق؛ لا تستخدم الإلغاء العام.",
+              409,
+            );
+          }
+
+          if (
             !voucher.financeTransactionId
           ) {
             throw new PartyFinanceError(
