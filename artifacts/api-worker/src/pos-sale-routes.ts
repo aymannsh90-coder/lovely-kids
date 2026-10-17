@@ -4948,6 +4948,14 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
         )
       : null;
 
+  const cashTender =
+    sale.paymentMethod === "cash"
+      ? await getCashTenderForSale(
+          db,
+          sale,
+        )
+      : null;
+
   return json(
     toSaleResponse(
       sale,
@@ -4956,6 +4964,7 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       navigation,
       customerBalanceMinor,
       cardProcessor,
+      cashTender,
     ),
   );
 }
