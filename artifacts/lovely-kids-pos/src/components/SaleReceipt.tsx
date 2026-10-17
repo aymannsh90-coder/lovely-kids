@@ -109,7 +109,27 @@ export default function SaleReceipt({
             result.sale.paymentMethod,
             result.sale.cardProcessor,
           )}
+          {result.sale.cashTender &&
+          result.sale.cashTender.currencyCode !== "ILS"
+            ? ` — ${result.sale.cashTender.currencyCode}`
+            : ""}
         </span>
+
+        {result.sale.cashTender &&
+          result.sale.cashTender.currencyCode !== "ILS" && (
+          <span dir="ltr">
+            {(
+              result.sale.cashTender.currencyAmountMinor /
+              100
+            ).toFixed(2)}{" "}
+            {result.sale.cashTender.currencyCode}
+            {" × "}
+            {(
+              result.sale.cashTender.exchangeRateMicros /
+              1_000_000
+            ).toFixed(6)}
+          </span>
+        )}
       </div>
 
       <div className="receipt-divider" />
@@ -164,8 +184,29 @@ export default function SaleReceipt({
 
         <div>
           <span>المدفوع</span>
-          <strong>{result.sale.paid.toFixed(2)} ₪</strong>
+          <strong>
+            {result.sale.cashTender &&
+            result.sale.cashTender.currencyCode !== "ILS"
+              ? `${(
+                  result.sale.cashTender.currencyAmountMinor /
+                  100
+                ).toFixed(2)} ${result.sale.cashTender.currencyCode}`
+              : `${result.sale.paid.toFixed(2)} ₪`}
+          </strong>
         </div>
+
+        {result.sale.cashTender &&
+          result.sale.cashTender.currencyCode !== "ILS" && (
+          <div>
+            <span>قيمة المستلم بالشيكل</span>
+            <strong>
+              {(
+                result.sale.cashTender.baseReceivedMinor /
+                100
+              ).toFixed(2)} ₪
+            </strong>
+          </div>
+        )}
 
 
         {result.sale.accountDueMinor > 0 && (
