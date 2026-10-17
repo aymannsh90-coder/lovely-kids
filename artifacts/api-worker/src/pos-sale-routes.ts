@@ -1568,10 +1568,76 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       throw new PosSaleError("خصم الفاتورة غير صالح");
     }
 
-    const paidMinor = parseMoneyToMinor(payload.paidAmount);
+    const cashCurrencyCode =
+      normalizeCurrencyCode(
+        payload.cashCurrencyCode,
+      );
+
+    if (!cashCurrencyCode) {
+      throw new PosSaleError(
+        "عملة الدفع النقدي غير صالحة",
+      );
+    }
+
+    if (
+      paymentMethod !==
+        "cash" &&
+      cashCurrencyCode !==
+        "ILS"
+    ) {
+      throw new PosSaleError(
+        "العملات الأجنبية متاحة حاليًا للدفع النقدي فقط",
+      );
+    }
+
+    const tenderPaidMinor =
+      parseMoneyToMinor(
+        payload.paidAmount,
+      );
+
+    if (
+      tenderPaidMinor === null
+    ) {
+      throw new PosSaleError(
+        "المبلغ المدفوع غير صالح",
+      );
+    }
+
+    let cashExchangeRateMicros =
+      1_000_000;
+
+    if (
+      cashCurrencyCode !==
+        "ILS"
+    ) {
+      const parsedRate =
+        parseExchangeRateMicros(
+          payload.cashExchangeRate,
+        );
+
+      if (!parsedRate) {
+        throw new PosSaleError(
+          "سعر صرف العملة النقدية غير صالح",
+        );
+      }
+
+      cashExchangeRateMicros =
+        parsedRate;
+    }
+
+    const paidMinor =
+      cashCurrencyCode ===
+        "ILS"
+        ? tenderPaidMinor
+        : convertedBaseMinor(
+            tenderPaidMinor,
+            cashExchangeRateMicros,
+          );
 
     if (paidMinor === null) {
-      throw new PosSaleError("المبلغ المدفوع غير صالح");
+      throw new PosSaleError(
+        "قيمة المبلغ المدفوع بعد تحويل العملة غير صالحة",
+      );
     }
 
     const customerName = parseOptionalText(
