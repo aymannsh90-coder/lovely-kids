@@ -1250,6 +1250,208 @@ async function handleInventoryProductCard(
   });
 }
 
+async function handleSaleCashCurrencyReference(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requirePosUser(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const currencies =
+    await db
+      .select()
+      .from(
+        financeCurrenciesTable,
+      )
+      .where(
+        eq(
+          financeCurrenciesTable.status,
+          "active",
+        ),
+      )
+      .orderBy(
+        desc(
+          financeCurrenciesTable.isBase,
+        ),
+        asc(
+          financeCurrenciesTable.code,
+        ),
+      );
+
+  const results = [];
+
+  for (const currency of currencies) {
+    const cashCode =
+      currency.code === "ILS"
+        ? "CASH_MAIN"
+        : `CASH_${currency.code}`;
+
+    const accountRows =
+      await db
+        .select()
+        .from(
+          financeAccountsTable,
+        )
+        .where(
+          and(
+            eq(
+              financeAccountsTable.code,
+              cashCode,
+            ),
+            eq(
+              financeAccountsTable.accountType,
+              "asset",
+            ),
+            eq(
+              financeAccountsTable.status,
+              "active",
+            ),
+          ),
+        )
+        .limit(1);
+
+    const account =
+      accountRows[0] ??
+      null;
+
+    const register =
+      account
+        ? account.code
+            .slice(
+              "CASH_".length,
+            )
+            .toLowerCase()
+        : null;
+
+    let session:
+      | typeof cashSessionsTable.$inferSelect
+      | null =
+      null;
+
+    if (
+      account &&
+      register
+    ) {
+      const sessionRows =
+        await db
+          .select()
+          .from(
+            cashSessionsTable,
+          )
+          .where(
+            and(
+              eq(
+                cashSessionsTable.registerKey,
+                register,
+              ),
+              eq(
+                cashSessionsTable.status,
+                "open",
+              ),
+            ),
+          )
+          .orderBy(
+            desc(
+              cashSessionsTable.openedAt,
+            ),
+          )
+          .limit(1);
+
+      session =
+        sessionRows[0] ??
+        null;
+    }
+
+    let rateMicros:
+      | number
+      | null =
+      currency.code ===
+        "ILS"
+        ? 1_000_000
+        : null;
+
+    if (
+      currency.code !==
+      "ILS"
+    ) {
+      const rateRows =
+        await db
+          .select()
+          .from(
+            financeExchangeRatesTable,
+          )
+          .where(
+            eq(
+              financeExchangeRatesTable.currencyCode,
+              currency.code,
+            ),
+          )
+          .orderBy(
+            desc(
+              financeExchangeRatesTable.rateDate,
+            ),
+            desc(
+              financeExchangeRatesTable.id,
+            ),
+          )
+          .limit(1);
+
+      rateMicros =
+        rateRows[0]
+          ?.ilsPerUnitMicros ??
+        null;
+    }
+
+    results.push({
+      code:
+        currency.code,
+      nameAr:
+        currency.nameAr,
+      symbol:
+        currency.symbol,
+      isBase:
+        currency.isBase,
+      cashAccountId:
+        account?.id ??
+        null,
+      cashAccountName:
+        account?.name ??
+        null,
+      registerKey:
+        register,
+      cashSessionId:
+        session?.id ??
+        null,
+      cashSessionBusinessDate:
+        session?.businessDate ??
+        null,
+      latestRateMicros:
+        rateMicros,
+      latestRate:
+        rateMicros === null
+          ? null
+          : rateMicros /
+            1_000_000,
+    });
+  }
+
+  return json({
+    defaultCurrencyCode:
+      "ILS",
+    currencies:
+      results,
+  });
+}
+
 async function handleCreateSale(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
 
@@ -4034,6 +4236,17 @@ export async function handlePosSaleRequest(
     );
   }
 
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/sales/cash-currencies"
+  ) {
+    return handleSaleCashCurrencyReference(
+      request,
+      db,
+      env,
+    );
+  }
 
   if (request.method === "GET" && path === "/api/pos/sales/today") {
     return handleTodaySales(request, db, env);
