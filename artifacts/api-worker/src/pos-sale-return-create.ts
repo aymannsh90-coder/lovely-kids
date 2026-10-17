@@ -25,6 +25,7 @@ import {
   CARD_PROCESSOR_CONFIG,
   ensureSaleFinanceAccount,
   getCardProcessorForSale,
+  getCashTenderForSale,
 } from "./pos-sale-routes";
 import {
   addProductCostAtCurrentAverage,
@@ -530,6 +531,28 @@ export async function handleCreatePosSaleReturn(
 
       if (sale.status !== "completed") {
         throw new PosSaleReturnError("لا يمكن إنشاء مرتجع لهذه الفاتورة", 409);
+      }
+
+      if (
+        sale.paymentMethod ===
+          "cash"
+      ) {
+        const cashTender =
+          await getCashTenderForSale(
+            tx,
+            sale,
+          );
+
+        if (
+          cashTender &&
+          cashTender.currencyCode !==
+            "ILS"
+        ) {
+          throw new PosSaleReturnError(
+            "مرتجع فاتورة مدفوعة بعملة أجنبية يحتاج معالجة استرداد عملة مستقلة. ألغِ الفاتورة في نفس اليوم إن كانت العملية خاطئة، أو عالج المرتجع بعد إضافة مسار العملات.",
+            409,
+          );
+        }
       }
 
       if (
