@@ -1811,6 +1811,468 @@ export default function BankingPage() {
             <div className="banking-section-title">
               <div>
                 <h3>
+                  تحويل العملات بين الصناديق
+                </h3>
+                <p>
+                  أدخل ما خرج فعليًا وما استلمته فعليًا. الشيكل يبقى عملة الأساس، وربح/خسارة فرق العملة يُحسب تلقائيًا عند بيع الدولار أو الدينار.
+                </p>
+              </div>
+              <span>
+                {
+                  conversions.length
+                }{" "}
+                حركة
+              </span>
+            </div>
+
+            <form
+              className="banking-transfer-form"
+              onSubmit={
+                createCurrencyConversion
+              }
+            >
+              <label>
+                <span>
+                  من الصندوق
+                </span>
+                <select
+                  value={
+                    conversionFromAccountId ??
+                    ""
+                  }
+                  disabled={
+                    conversionSaving
+                  }
+                  onChange={(event) => {
+                    conversionIdempotencyKey.current =
+                      null;
+                    setConversionFromAccountId(
+                      Number(
+                        event.target.value,
+                      ) ||
+                        null,
+                    );
+                    setConversionToAmount(
+                      "",
+                    );
+                  }}
+                >
+                  {conversionCashAccounts.map(
+                    (account) => (
+                      <option
+                        key={
+                          account.id
+                        }
+                        value={
+                          account.id
+                        }
+                      >
+                        {account.name} —{" "}
+                        {formatMinor(
+                          account.operationalBalanceMinor,
+                          currencySymbol(
+                            account.currencyCode,
+                          ),
+                        )}{" "}
+                        {account.cashSessionId
+                          ? ""
+                          : "— الجلسة مغلقة"}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <label>
+                <span>
+                  إلى الصندوق
+                </span>
+                <select
+                  value={
+                    conversionToAccountId ??
+                    ""
+                  }
+                  disabled={
+                    conversionSaving ||
+                    conversionDestinationOptions.length ===
+                      0
+                  }
+                  onChange={(event) => {
+                    conversionIdempotencyKey.current =
+                      null;
+                    setConversionToAccountId(
+                      Number(
+                        event.target.value,
+                      ) ||
+                        null,
+                    );
+                    setConversionToAmount(
+                      "",
+                    );
+                  }}
+                >
+                  {conversionDestinationOptions.map(
+                    (account) => (
+                      <option
+                        key={
+                          account.id
+                        }
+                        value={
+                          account.id
+                        }
+                      >
+                        {account.name} —{" "}
+                        {account.currencyCode}{" "}
+                        {account.cashSessionId
+                          ? ""
+                          : "— الجلسة مغلقة"}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <label>
+                <span>
+                  المبلغ المصروف{" "}
+                  {conversionFromAccount
+                    ?.currencyCode ??
+                    ""}
+                </span>
+                <input
+                  dir="ltr"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={
+                    conversionFromAmount
+                  }
+                  onFocus={(event) =>
+                    event.currentTarget.select()
+                  }
+                  onChange={(event) => {
+                    conversionIdempotencyKey.current =
+                      null;
+                    setConversionFromAmount(
+                      event.target.value,
+                    );
+                  }}
+                  placeholder="0.00"
+                  disabled={
+                    conversionSaving
+                  }
+                />
+              </label>
+
+              <label>
+                <span>
+                  المبلغ المستلم فعليًا{" "}
+                  {conversionToAccount
+                    ?.currencyCode ??
+                    ""}
+                </span>
+                <input
+                  dir="ltr"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={
+                    conversionToAmount
+                  }
+                  onFocus={(event) =>
+                    event.currentTarget.select()
+                  }
+                  onChange={(event) => {
+                    conversionIdempotencyKey.current =
+                      null;
+                    setConversionToAmount(
+                      event.target.value,
+                    );
+                  }}
+                  placeholder="0.00"
+                  disabled={
+                    conversionSaving
+                  }
+                />
+              </label>
+
+              <label className="banking-transfer-notes">
+                <span>
+                  ملاحظات
+                  <small>
+                    {" "}
+                    اختياري
+                  </small>
+                </span>
+                <input
+                  value={
+                    conversionNotes
+                  }
+                  onChange={(event) => {
+                    conversionIdempotencyKey.current =
+                      null;
+                    setConversionNotes(
+                      event.target.value,
+                    );
+                  }}
+                  placeholder="مثال: تحويل لدى الصراف"
+                  disabled={
+                    conversionSaving
+                  }
+                />
+              </label>
+
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={
+                  conversionSaving ||
+                  !conversionFromAccount ||
+                  !conversionToAccount ||
+                  !conversionFromAmount ||
+                  !conversionToAmount
+                }
+              >
+                {conversionSaving
+                  ? "جاري تحويل العملة…"
+                  : "تنفيذ تحويل العملة"}
+              </button>
+            </form>
+
+            {conversionFromAccount &&
+              conversionToAccount &&
+              conversionRatePreview !==
+                null && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  borderRadius: 10,
+                  background:
+                    "rgba(15,23,42,.05)",
+                  display: "grid",
+                  gap: 5,
+                }}
+              >
+                <strong>
+                  معاينة الصفقة
+                </strong>
+                <span>
+                  1{" "}
+                  {conversionFromAccount.currencyCode ===
+                  "ILS"
+                    ? conversionToAccount.currencyCode
+                    : conversionFromAccount.currencyCode}{" "}
+                  ={" "}
+                  {conversionRatePreview.toFixed(
+                    6,
+                  )}{" "}
+                  ₪
+                </span>
+                <small>
+                  {conversionFromAccount.currencyCode !==
+                  "ILS"
+                    ? "عند التنفيذ سيقارن النظام هذا السعر بالقيمة الدفترية المتوسطة للعملة ويُسجل ربح أو خسارة الفرق تلقائيًا."
+                    : "عند شراء العملة الأجنبية، القيمة الدفترية الجديدة ستساوي الشيكل المدفوع فعليًا."}
+                </small>
+              </div>
+            )}
+
+            <div
+              style={{
+                marginTop: 18,
+              }}
+            >
+              <div className="banking-section-title">
+                <div>
+                  <h3>
+                    سجل تحويل العملات
+                  </h3>
+                  <p>
+                    العكس متاح في نفس يوم العمل فقط وقبل إغلاق أي من الصندوقين.
+                  </p>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="banking-empty">
+                  جاري التحميل…
+                </div>
+              ) : conversions.length ===
+                0 ? (
+                <div className="banking-empty">
+                  لا توجد تحويلات عملة بعد.
+                </div>
+              ) : (
+                <div className="banking-transfer-table-wrap">
+                  <table className="banking-transfer-table">
+                    <thead>
+                      <tr>
+                        <th>
+                          الحركة
+                        </th>
+                        <th>
+                          من
+                        </th>
+                        <th>
+                          إلى
+                        </th>
+                        <th>
+                          سعر الصفقة
+                        </th>
+                        <th>
+                          فرق العملة
+                        </th>
+                        <th>
+                          الحالة
+                        </th>
+                        <th>
+                          إجراء
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {conversions.map(
+                        (conversion) => {
+                          const isReversed =
+                            conversion.transaction.status ===
+                            "reversed";
+
+                          return (
+                            <tr
+                              key={
+                                conversion.transaction.id
+                              }
+                            >
+                              <td>
+                                <strong dir="ltr">
+                                  {
+                                    conversion.transaction.publicId
+                                  }
+                                </strong>
+                                <small>
+                                  {
+                                    conversion.transaction.businessDate
+                                  }
+                                </small>
+                              </td>
+                              <td>
+                                <strong>
+                                  {formatMinor(
+                                    conversion.fromAmountMinor,
+                                    currencySymbol(
+                                      conversion.source?.currencyCode ??
+                                        "ILS",
+                                    ),
+                                  )}
+                                </strong>
+                                <small>
+                                  {conversion.source?.name ??
+                                    "—"}
+                                </small>
+                              </td>
+                              <td>
+                                <strong>
+                                  {formatMinor(
+                                    conversion.toAmountMinor,
+                                    currencySymbol(
+                                      conversion.destination?.currencyCode ??
+                                        "ILS",
+                                    ),
+                                  )}
+                                </strong>
+                                <small>
+                                  {conversion.destination?.name ??
+                                    "—"}
+                                </small>
+                              </td>
+                              <td dir="ltr">
+                                {conversion.actualRateMicros >
+                                0
+                                  ? (
+                                      conversion.actualRateMicros /
+                                      1_000_000
+                                    ).toFixed(
+                                      6,
+                                    ) +
+                                    " ₪"
+                                  : "—"}
+                              </td>
+                              <td>
+                                {conversion.fxDifferenceMinor >
+                                0
+                                  ? "ربح " +
+                                    formatMinor(
+                                      conversion.fxDifferenceMinor,
+                                      "₪",
+                                    )
+                                  : conversion.fxDifferenceMinor <
+                                      0
+                                    ? "خسارة " +
+                                      formatMinor(
+                                        Math.abs(
+                                          conversion.fxDifferenceMinor,
+                                        ),
+                                        "₪",
+                                      )
+                                    : "—"}
+                              </td>
+                              <td>
+                                <span
+                                  className={
+                                    isReversed
+                                      ? "banking-transfer-status is-reversed"
+                                      : "banking-transfer-status is-posted"
+                                  }
+                                >
+                                  {isReversed
+                                    ? "معكوس"
+                                    : "مرحّل"}
+                                </span>
+                              </td>
+                              <td>
+                                {isReversed ? (
+                                  <span className="banking-transfer-locked">
+                                    محفوظ
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="secondary-button banking-reverse-button"
+                                    disabled={
+                                      reversingConversionId !==
+                                      null
+                                    }
+                                    onClick={() =>
+                                      void reverseCurrencyConversion(
+                                        conversion,
+                                      )
+                                    }
+                                  >
+                                    {reversingConversionId ===
+                                    conversion.transaction.publicId
+                                      ? "جاري العكس…"
+                                      : "عكس"}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        },
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="banking-section banking-transfer-section">
+            <div className="banking-section-title">
+              <div>
+                <h3>
                   تحويل بين الصندوق والبنوك
                 </h3>
                 <p>
