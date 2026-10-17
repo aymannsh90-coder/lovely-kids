@@ -1266,14 +1266,14 @@ export default function AssistantInboxPage() {
                               editTransferDirection ===
                               "cash_to_bank"
                             ) {
-                              return `الصندوق ${session?.registerKey ?? selected.registerKey} ← ${bankLabel}`;
+                              return `الصندوق ${session?.registerKey ?? selected.registerKey} → ${bankLabel}`;
                             }
 
                             if (
                               editTransferDirection ===
                               "bank_to_cash"
                             ) {
-                              return `${bankLabel} ← الصندوق ${session?.registerKey ?? selected.registerKey}`;
+                              return `${bankLabel} → الصندوق ${session?.registerKey ?? selected.registerKey}`;
                             }
 
                             return `اختر اتجاه التحويل — ${bankLabel}`;
@@ -1419,7 +1419,7 @@ export default function AssistantInboxPage() {
                     selected.status ===
                       "pending" && (
                     <div className="assistant-review-warning">
-                      اعتماد المساعد البنكي يدعم حاليًا حسابات ILS فقط.
+                      اعتماد المساعد والتحويلات عبر البنك تدعم حاليًا حسابات ILS فقط.
                     </div>
                   )}
                 </form>
