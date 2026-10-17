@@ -22,11 +22,13 @@ import {
   createPosCustomerReceipt,
   getCurrentCashSession,
   getPosCustomers,
+  getPosSaleCashCurrencies,
   lookupPosProductByBarcode,
   searchPosProducts,
   type CashSession,
   type PosCustomer,
   type PosProductLookup,
+  type PosSaleCashCurrency,
   type PosSaleResult,
 } from "./lib/api";
 
@@ -73,6 +75,58 @@ function moneyToMinor(value: string) {
   }
 
   return Math.round(amount * 100);
+}
+
+function rateToMicros(
+  value: string,
+) {
+  const normalized =
+    value
+      .trim()
+      .replace(",", ".");
+
+  const match =
+    /^(\d+)(?:\.(\d{1,6}))?$/.exec(
+      normalized,
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const micros =
+    Number(match[1]) *
+      1_000_000 +
+    Number(
+      (match[2] ?? "")
+        .padEnd(6, "0"),
+    );
+
+  return Number.isSafeInteger(
+    micros,
+  ) &&
+    micros > 0
+    ? micros
+    : null;
+}
+
+function convertedMinor(
+  currencyAmountMinor: number,
+  rateMicros: number,
+) {
+  const rounded =
+    (
+      BigInt(
+        currencyAmountMinor,
+      ) *
+        BigInt(
+          rateMicros,
+        ) +
+      500_000n
+    ) /
+    1_000_000n;
+
+  return Number(rounded);
 }
 
 function formatMinor(value: number) {
@@ -241,9 +295,26 @@ export default function SalePanel({
 
   const [cart, setCart] = useState<CartLine[]>([]);
 
-  const [discountAmount, setDiscountAmount] = useState("0.00");
+  const [discountAmount, setDiscountAmount] = useState("");
 
   const [paidAmount, setPaidAmount] = useState("0.00");
+
+  const [
+    cashCurrencies,
+    setCashCurrencies,
+  ] = useState<
+    PosSaleCashCurrency[]
+  >([]);
+
+  const [
+    cashCurrencyCode,
+    setCashCurrencyCode,
+  ] = useState("ILS");
+
+  const [
+    cashExchangeRate,
+    setCashExchangeRate,
+  ] = useState("1");
 
   const [paymentMethod, setPaymentMethod] =
     useState<
@@ -347,7 +418,41 @@ export default function SalePanel({
 
   const totalMinor = Math.max(0, subtotalMinor - discountMinor);
 
-  const paidMinor = moneyToMinor(paidAmount) ?? 0;
+  const tenderPaidMinor =
+    moneyToMinor(
+      paidAmount,
+    ) ?? 0;
+
+  const selectedCashCurrency =
+    useMemo(
+      () =>
+        cashCurrencies.find(
+          (currency) =>
+            currency.code ===
+            cashCurrencyCode,
+        ) ?? null,
+      [
+        cashCurrencies,
+        cashCurrencyCode,
+      ],
+    );
+
+  const cashRateMicros =
+    cashCurrencyCode === "ILS"
+      ? 1_000_000
+      : rateToMicros(
+          cashExchangeRate,
+        );
+
+  const paidMinor =
+    paymentMethod === "cash" &&
+    cashCurrencyCode !== "ILS" &&
+    cashRateMicros
+      ? convertedMinor(
+          tenderPaidMinor,
+          cashRateMicros,
+        )
+      : tenderPaidMinor;
 
   const changeMinor =
     Math.max(
@@ -374,6 +479,12 @@ export default function SalePanel({
     if (
       paymentMethod === "credit"
     ) {
+      setCashCurrencyCode(
+        "ILS",
+      );
+      setCashExchangeRate(
+        "1",
+      );
       setPaidAmount("0.00");
 
       setSettlementAmount(
@@ -386,16 +497,43 @@ export default function SalePanel({
     if (
       paymentMethod === "mixed"
     ) {
+      setCashCurrencyCode(
+        "ILS",
+      );
+      setCashExchangeRate(
+        "1",
+      );
       setPaidAmount("0.00");
       return;
     }
 
-    setPaidAmount(
-      (totalMinor / 100).toFixed(2),
-    );
+    if (
+      paymentMethod === "card"
+    ) {
+      setCashCurrencyCode(
+        "ILS",
+      );
+      setCashExchangeRate(
+        "1",
+      );
+      setPaidAmount(
+        (totalMinor / 100).toFixed(2),
+      );
+      return;
+    }
+
+    if (
+      cashCurrencyCode ===
+        "ILS"
+    ) {
+      setPaidAmount(
+        (totalMinor / 100).toFixed(2),
+      );
+    }
   }, [
     totalMinor,
     paymentMethod,
+    cashCurrencyCode,
   ]);
 
   const customerIdFromQuery =
@@ -491,6 +629,72 @@ export default function SalePanel({
       .finally(() => {
         if (active) {
           setCustomersBusy(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    token,
+    onUnauthorized,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+
+    void getPosSaleCashCurrencies(
+      token,
+    )
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+
+        setCashCurrencies(
+          response.currencies,
+        );
+
+        const defaultCurrency =
+          response.currencies.find(
+            (currency) =>
+              currency.code ===
+              response.defaultCurrencyCode,
+          ) ??
+          response.currencies.find(
+            (currency) =>
+              currency.code ===
+              "ILS",
+          ) ??
+          null;
+
+        if (
+          defaultCurrency &&
+          cashCurrencyCode ===
+            "ILS"
+        ) {
+          setCashCurrencyCode(
+            defaultCurrency.code,
+          );
+          setCashExchangeRate(
+            defaultCurrency.latestRate
+              ? String(
+                  defaultCurrency.latestRate,
+                )
+              : "1",
+          );
+        }
+      })
+      .catch((caught) => {
+        if (!active) {
+          return;
+        }
+
+        if (
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          onUnauthorized();
         }
       });
 
@@ -932,6 +1136,46 @@ export default function SalePanel({
 
     if (
       paymentMethod === "cash" &&
+      cashCurrencyCode !== "ILS"
+    ) {
+      if (
+        !selectedCashCurrency ||
+        !selectedCashCurrency.cashAccountId
+      ) {
+        setError(
+          "صندوق العملة المختارة غير متاح.",
+        );
+        return;
+      }
+
+      if (
+        !selectedCashCurrency.cashSessionId ||
+        selectedCashCurrency.cashSessionBusinessDate !==
+          session.businessDate
+      ) {
+        setError(
+          `يجب فتح جلسة صندوق ${cashCurrencyCode} لليوم الحالي أولًا.`,
+        );
+        return;
+      }
+
+      if (!cashRateMicros) {
+        setError(
+          "أدخل سعر صرف صحيحًا للعملة المختارة.",
+        );
+        return;
+      }
+
+      if (tenderPaidMinor <= 0) {
+        setError(
+          "أدخل المبلغ المستلم بالعملة الأجنبية.",
+        );
+        return;
+      }
+    }
+
+    if (
+      paymentMethod === "cash" &&
       paidMinor < totalMinor
     ) {
       setError(
@@ -1056,6 +1300,17 @@ export default function SalePanel({
               undefined
             : undefined,
 
+        cashCurrencyCode:
+          paymentMethod === "cash"
+            ? cashCurrencyCode
+            : "ILS",
+
+        cashExchangeRate:
+          paymentMethod === "cash" &&
+          cashCurrencyCode !== "ILS"
+            ? cashExchangeRate.trim()
+            : undefined,
+
         discountAmount: discountAmount.trim(),
 
         paidAmount: paidAmount.trim(),
@@ -1132,7 +1387,9 @@ export default function SalePanel({
       printAfterSaleRef.current = printAfter;
       setLastSale(result);
       setCart([]);
-      setDiscountAmount("0.00");
+      setDiscountAmount("");
+      setCashCurrencyCode("ILS");
+      setCashExchangeRate("1");
       setPaymentMethod("cash");
       setCardProcessor(null);
       setSelectedCustomerId("");
@@ -1533,6 +1790,10 @@ export default function SalePanel({
                   min="0"
                   step="0.01"
                   value={discountAmount}
+                  placeholder="0.00"
+                  onFocus={(event) =>
+                    event.currentTarget.select()
+                  }
                   onChange={(event) => setDiscountAmount(event.target.value)}
                 />
 
@@ -1672,12 +1933,184 @@ export default function SalePanel({
               </div>
             </div>
 
+            {paymentMethod ===
+              "cash" && (
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                }}
+              >
+                <label>
+                  <span>
+                    عملة الدفع
+                  </span>
+
+                  <select
+                    value={
+                      cashCurrencyCode
+                    }
+                    disabled={
+                      saleBusy
+                    }
+                    onChange={(
+                      event,
+                    ) => {
+                      const code =
+                        event.target
+                          .value;
+
+                      const currency =
+                        cashCurrencies.find(
+                          (item) =>
+                            item.code ===
+                            code,
+                        ) ??
+                        null;
+
+                      setCashCurrencyCode(
+                        code,
+                      );
+
+                      if (
+                        code === "ILS"
+                      ) {
+                        setCashExchangeRate(
+                          "1",
+                        );
+                        setPaidAmount(
+                          (
+                            totalMinor /
+                            100
+                          ).toFixed(
+                            2,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setCashExchangeRate(
+                        currency
+                          ?.latestRate
+                          ? String(
+                              currency.latestRate,
+                            )
+                          : "",
+                      );
+
+                      setPaidAmount(
+                        "",
+                      );
+                    }}
+                  >
+                    <option value="ILS">
+                      ₪ شيكل — الافتراضي
+                    </option>
+
+                    {cashCurrencies
+                      .filter(
+                        (currency) =>
+                          currency.code !==
+                          "ILS",
+                      )
+                      .map(
+                        (currency) => (
+                          <option
+                            key={
+                              currency.code
+                            }
+                            value={
+                              currency.code
+                            }
+                          >
+                            {
+                              currency.symbol
+                            }{" "}
+                            {
+                              currency.nameAr
+                            }{" "}
+                            —{" "}
+                            {currency.cashSessionId
+                              ? "الصندوق مفتوح"
+                              : "الصندوق مغلق"}
+                          </option>
+                        ),
+                      )}
+                  </select>
+                </label>
+
+                {cashCurrencyCode !==
+                  "ILS" && (
+                  <>
+                    <label>
+                      <span>
+                        سعر الصرف — 1{" "}
+                        {
+                          cashCurrencyCode
+                        }{" "}
+                        = كم ₪
+                      </span>
+
+                      <input
+                        dir="ltr"
+                        type="number"
+                        min="0.000001"
+                        step="0.000001"
+                        value={
+                          cashExchangeRate
+                        }
+                        disabled={
+                          saleBusy
+                        }
+                        onFocus={(
+                          event,
+                        ) =>
+                          event.currentTarget.select()
+                        }
+                        onChange={(
+                          event,
+                        ) =>
+                          setCashExchangeRate(
+                            event.target
+                              .value,
+                          )
+                        }
+                      />
+                    </label>
+
+                    {selectedCashCurrency &&
+                      !selectedCashCurrency.cashSessionId && (
+                      <small
+                        style={{
+                          color:
+                            "#b91c1c",
+                        }}
+                      >
+                        جلسة صندوق{" "}
+                        {
+                          cashCurrencyCode
+                        }{" "}
+                        مغلقة. افتحها من
+                        البنوك والصناديق قبل
+                        البيع.
+                      </small>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <label>
               <span>
                 {paymentMethod ===
                 "mixed"
                   ? "الدفعة النقدية"
-                  : "المبلغ المدفوع"}
+                  : paymentMethod ===
+                      "cash" &&
+                    cashCurrencyCode !==
+                      "ILS"
+                    ? `المبلغ المستلم ${cashCurrencyCode}`
+                    : "المبلغ المدفوع"}
               </span>
 
               <div className="money-input">
@@ -1688,6 +2121,9 @@ export default function SalePanel({
                   step="0.01"
                   value={
                     paidAmount
+                  }
+                  onFocus={(event) =>
+                    event.currentTarget.select()
                   }
                   disabled={
                     paymentMethod ===
@@ -1705,9 +2141,51 @@ export default function SalePanel({
                   }
                 />
 
-                <span>₪</span>
+                <span>
+                  {paymentMethod ===
+                    "cash" &&
+                  cashCurrencyCode !==
+                    "ILS"
+                    ? selectedCashCurrency
+                        ?.symbol ??
+                      cashCurrencyCode
+                    : "₪"}
+                </span>
               </div>
             </label>
+
+            {paymentMethod ===
+              "cash" &&
+              cashCurrencyCode !==
+                "ILS" &&
+              cashRateMicros && (
+              <div
+                style={{
+                  display:
+                    "grid",
+                  gap: 3,
+                  fontSize: 12,
+                }}
+              >
+                <span>
+                  قيمة المستلم بالشيكل:{" "}
+                  <b>
+                    {formatMinor(
+                      paidMinor,
+                    )}
+                  </b>
+                </span>
+                <span>
+                  الباقي سيُرد من صندوق
+                  الشيكل:{" "}
+                  <b>
+                    {formatMinor(
+                      changeMinor,
+                    )}
+                  </b>
+                </span>
+              </div>
+            )}
 
             <div>
               <span>
@@ -1759,6 +2237,9 @@ export default function SalePanel({
                       step="0.01"
                       value={
                         settlementAmount
+                      }
+                      onFocus={(event) =>
+                        event.currentTarget.select()
                       }
                       onChange={(
                         event,
@@ -1954,7 +2435,24 @@ export default function SalePanel({
 
               <span>الإجمالي: {formatMinor(lastSale.sale.totalMinor)}</span>
 
-              {lastSale.sale.accountDueMinor > 0 && (
+              {lastSale.sale.cashTender &&
+              lastSale.sale.cashTender.currencyCode !== "ILS" && (
+              <span dir="ltr">
+                دفع نقدي:{" "}
+                {(
+                  lastSale.sale.cashTender.currencyAmountMinor /
+                  100
+                ).toFixed(2)}{" "}
+                {lastSale.sale.cashTender.currencyCode}
+                {" × "}
+                {(
+                  lastSale.sale.cashTender.exchangeRateMicros /
+                  1_000_000
+                ).toFixed(6)}
+              </span>
+            )}
+
+            {lastSale.sale.accountDueMinor > 0 && (
                 <span>
                   متبقي على الحساب:
                   {" "}
@@ -2093,8 +2591,30 @@ export default function SalePanel({
             <div>
               <span>المدفوع</span>
 
-              <strong>{lastSale.sale.paid.toFixed(2)} ₪</strong>
+              <strong>
+                {lastSale.sale.cashTender &&
+                lastSale.sale.cashTender.currencyCode !== "ILS"
+                  ? `${(
+                      lastSale.sale.cashTender.currencyAmountMinor /
+                      100
+                    ).toFixed(2)} ${lastSale.sale.cashTender.currencyCode}`
+                  : `${lastSale.sale.paid.toFixed(2)} ₪`}
+              </strong>
             </div>
+
+            {lastSale.sale.cashTender &&
+              lastSale.sale.cashTender.currencyCode !== "ILS" && (
+              <div>
+                <span>قيمة المستلم بالشيكل</span>
+
+                <strong>
+                  {(
+                    lastSale.sale.cashTender.baseReceivedMinor /
+                    100
+                  ).toFixed(2)} ₪
+                </strong>
+              </div>
+            )}
 
             <div>
               <span>الباقي</span>

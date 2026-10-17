@@ -361,6 +361,17 @@ export interface PosSaleResult {
       | "bop"
       | null;
 
+    cashTender:
+      | {
+          currencyCode: string;
+          currencyAmountMinor: number;
+          exchangeRateMicros: number;
+          baseReceivedMinor: number;
+          changeMinor: number;
+          cashSessionId: number | null;
+        }
+      | null;
+
     customerId: string | null;
     customerBalanceMinor: number | null;
     customerBalance: number | null;
@@ -2354,6 +2365,34 @@ export function cancelPosFinanceCheck(
 }
 
 
+export interface PosSaleCashCurrency {
+  code: string;
+  nameAr: string;
+  symbol: string;
+  isBase: boolean;
+  cashAccountId: number | null;
+  cashAccountName: string | null;
+  registerKey: string | null;
+  cashSessionId: number | null;
+  cashSessionBusinessDate: string | null;
+  latestRateMicros: number | null;
+  latestRate: number | null;
+}
+
+export function getPosSaleCashCurrencies(
+  token: string,
+) {
+  return apiRequest<{
+    defaultCurrencyCode: string;
+    currencies:
+      PosSaleCashCurrency[];
+  }>(
+    "/api/pos/sales/cash-currencies",
+    {},
+    token,
+  );
+}
+
 export function createPosSale(
   token: string,
   input: {
@@ -2367,6 +2406,8 @@ export function createPosSale(
     cardProcessor?:
       | "arab"
       | "bop";
+    cashCurrencyCode?: string;
+    cashExchangeRate?: string;
     discountAmount: string;
     paidAmount: string;
     customerId?: number;

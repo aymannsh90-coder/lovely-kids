@@ -1,6 +1,8 @@
 import {
   inventoryMovementsTable,
   cashSessionsTable,
+  financeTransactionLinesTable,
+  financeTransactionsTable,
   posSaleItemCostsTable,
   posSaleItemsTable,
   posSaleRevisionItemCostsTable,
@@ -1077,6 +1079,65 @@ export async function handleUpdatePosSale(
           "تعديل فاتورة فيزا غير متاح حاليًا حتى لا يختلف حساب الفيزا الوسيط عن قيمة الفاتورة. ألغِ الفاتورة وأعد إصدارها بالطريقة الصحيحة.",
           409,
         );
+      }
+
+      if (
+        sale.paymentMethod ===
+        "cash"
+      ) {
+        const foreignCashRows =
+          await tx
+            .select({
+              currencyCode:
+                financeTransactionLinesTable.currencyCode,
+            })
+            .from(
+              financeTransactionsTable,
+            )
+            .innerJoin(
+              financeTransactionLinesTable,
+              eq(
+                financeTransactionLinesTable.transactionId,
+                financeTransactionsTable.id,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  financeTransactionsTable.sourceType,
+                  "pos_sale",
+                ),
+                eq(
+                  financeTransactionsTable.sourceId,
+                  String(
+                    sale.id,
+                  ),
+                ),
+                eq(
+                  financeTransactionsTable.sourceEvent,
+                  "cash_settlement",
+                ),
+                eq(
+                  financeTransactionsTable.status,
+                  "posted",
+                ),
+              ),
+            );
+
+        if (
+          foreignCashRows.some(
+            (row) =>
+              row.currencyCode !==
+                null &&
+              row.currencyCode !==
+                "ILS",
+          )
+        ) {
+          throw new PosSaleEditError(
+            "تعديل فاتورة مدفوعة بعملة أجنبية غير متاح؛ ألغِ الفاتورة وأعد إصدارها للحفاظ على رصيد صندوق العملة وسعر الصرف.",
+            409,
+          );
+        }
       }
 
       const sessionRows = await tx

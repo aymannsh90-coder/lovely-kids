@@ -944,6 +944,17 @@ export default function SalesInvoicePage() {
       return;
     }
 
+    if (
+      sale.cashTender &&
+      sale.cashTender.currencyCode !==
+        "ILS"
+    ) {
+      setError(
+        "تعديل فاتورة مدفوعة بعملة أجنبية غير متاح؛ ألغِ الفاتورة وأعد إصدارها حتى يبقى صندوق العملة وسعر الصرف صحيحين.",
+      );
+      return;
+    }
+
     setInvoiceBusy(true);
     setError("");
     setMessage("");
@@ -1833,7 +1844,11 @@ export default function SalesInvoicePage() {
             editMode ||
             !loadedSale ||
             loadedSale.sale.status !== "completed" ||
-            loadedSale.sale.paymentMethod === "card"
+            loadedSale.sale.paymentMethod === "card" ||
+            (
+              loadedSale.sale.cashTender !== null &&
+              loadedSale.sale.cashTender.currencyCode !== "ILS"
+            )
           }
           onClick={() => {
             void handleEditInvoice();
@@ -2444,6 +2459,7 @@ export default function SalesInvoicePage() {
                   min="0"
                   step="0.01"
                   value={invoiceDiscount}
+                  onFocus={(event) => event.currentTarget.select()}
                   onChange={(event) => setInvoiceDiscount(event.target.value)}
                 />
                 <span>₪</span>

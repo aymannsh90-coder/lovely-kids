@@ -3,6 +3,8 @@ import {
   cashSessionsTable,
   customersTable,
   financeAccountsTable,
+  financeCurrenciesTable,
+  financeExchangeRatesTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
   posSaleItemCostsTable,
@@ -227,6 +229,156 @@ export async function getCardProcessorForSale(
     : null;
 }
 
+export interface PosSaleCashTender {
+  currencyCode: string;
+  currencyAmountMinor: number;
+  exchangeRateMicros: number;
+  baseReceivedMinor: number;
+  changeMinor: number;
+  cashSessionId: number | null;
+}
+
+export async function getCashTenderForSale(
+  db: any,
+  sale: typeof posSalesTable.$inferSelect,
+): Promise<PosSaleCashTender | null> {
+  if (
+    sale.paymentMethod !==
+      "cash"
+  ) {
+    return null;
+  }
+
+  const transactionRows =
+    await db
+      .select()
+      .from(
+        financeTransactionsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeTransactionsTable.sourceType,
+            "pos_sale",
+          ),
+          eq(
+            financeTransactionsTable.sourceId,
+            String(
+              sale.id,
+            ),
+          ),
+          eq(
+            financeTransactionsTable.sourceEvent,
+            "cash_settlement",
+          ),
+        ),
+      )
+      .orderBy(
+        desc(
+          financeTransactionsTable.id,
+        ),
+      )
+      .limit(1);
+
+  const transaction =
+    transactionRows[0] ??
+    null;
+
+  if (!transaction) {
+    return {
+      currencyCode:
+        "ILS",
+      currencyAmountMinor:
+        sale.paidMinor,
+      exchangeRateMicros:
+        1_000_000,
+      baseReceivedMinor:
+        sale.paidMinor,
+      changeMinor:
+        sale.changeMinor,
+      cashSessionId:
+        sale.cashSessionId,
+    };
+  }
+
+  const lines =
+    await db
+      .select()
+      .from(
+        financeTransactionLinesTable,
+      )
+      .where(
+        eq(
+          financeTransactionLinesTable.transactionId,
+          transaction.id,
+        ),
+      )
+      .orderBy(
+        asc(
+          financeTransactionLinesTable.lineNumber,
+        ),
+      );
+
+  const foreignLine =
+    lines.find(
+      (
+        line:
+          typeof financeTransactionLinesTable.$inferSelect,
+      ) =>
+        line.debitMinor >
+          0 &&
+        line.currencyCode !==
+          null &&
+        line.currencyCode !==
+          "ILS" &&
+        line.currencyAmountMinor !==
+          null &&
+        line.exchangeRateMicros !==
+          null,
+    );
+
+  if (
+    foreignLine &&
+    foreignLine.currencyCode &&
+    foreignLine.currencyAmountMinor &&
+    foreignLine.exchangeRateMicros
+  ) {
+    return {
+      currencyCode:
+        foreignLine.currencyCode,
+      currencyAmountMinor:
+        foreignLine.currencyAmountMinor,
+      exchangeRateMicros:
+        foreignLine.exchangeRateMicros,
+      baseReceivedMinor:
+        foreignLine.debitMinor,
+      changeMinor:
+        Math.max(
+          0,
+          foreignLine.debitMinor -
+            sale.totalMinor,
+        ),
+      cashSessionId:
+        transaction.cashSessionId,
+    };
+  }
+
+  return {
+    currencyCode:
+      "ILS",
+    currencyAmountMinor:
+      sale.paidMinor,
+    exchangeRateMicros:
+      1_000_000,
+    baseReceivedMinor:
+      sale.paidMinor,
+    changeMinor:
+      sale.changeMinor,
+    cashSessionId:
+      sale.cashSessionId,
+  };
+}
+
 function normalizeBarcode(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -281,6 +433,97 @@ function parseMoneyToMinor(value: unknown): number | null {
   }
 
   return minor;
+}
+
+function normalizeCurrencyCode(
+  value: unknown,
+) {
+  const normalized =
+    typeof value === "string" &&
+    value.trim()
+      ? value
+          .trim()
+          .toUpperCase()
+      : "ILS";
+
+  return /^[A-Z]{3}$/.test(
+    normalized,
+  )
+    ? normalized
+    : null;
+}
+
+function parseExchangeRateMicros(
+  value: unknown,
+) {
+  const normalized =
+    typeof value === "number"
+      ? String(value)
+      : typeof value === "string"
+        ? value
+            .trim()
+            .replace(",", ".")
+        : "";
+
+  const match =
+    /^(\d+)(?:\.(\d{1,6}))?$/.exec(
+      normalized,
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const micros =
+    Number(match[1]) *
+      1_000_000 +
+    Number(
+      (match[2] ?? "")
+        .padEnd(6, "0"),
+    );
+
+  if (
+    !Number.isSafeInteger(
+      micros,
+    ) ||
+    micros <= 0 ||
+    micros > MAX_MINOR
+  ) {
+    return null;
+  }
+
+  return micros;
+}
+
+function convertedBaseMinor(
+  currencyAmountMinor: number,
+  exchangeRateMicros: number,
+) {
+  const rounded =
+    (
+      BigInt(
+        currencyAmountMinor,
+      ) *
+        BigInt(
+          exchangeRateMicros,
+        ) +
+      500_000n
+    ) /
+    1_000_000n;
+
+  if (
+    rounded <= 0n ||
+    rounded >
+      BigInt(
+        MAX_MINOR,
+      )
+  ) {
+    return null;
+  }
+
+  return Number(
+    rounded,
+  );
 }
 
 function parseOptionalText(
@@ -575,6 +818,7 @@ function toSaleResponse(
   },
   customerBalanceMinor: number | null = null,
   cardProcessor: PosCardProcessor | null = null,
+  cashTender: PosSaleCashTender | null = null,
 ) {
   return {
     alreadyCreated,
@@ -590,6 +834,7 @@ function toSaleResponse(
       status: sale.status,
       paymentMethod: sale.paymentMethod,
       cardProcessor,
+      cashTender,
 
       customerId:
         sale.customerId === null
@@ -1157,6 +1402,317 @@ async function handleInventoryProductCard(
   });
 }
 
+async function loadForeignCashTenderTarget(
+  tx: any,
+  currencyCode: string,
+  businessDate: string,
+) {
+  const cashCode =
+    `CASH_${currencyCode}`;
+
+  const accountRows =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.code,
+            cashCode,
+          ),
+          eq(
+            financeAccountsTable.accountType,
+            "asset",
+          ),
+          eq(
+            financeAccountsTable.currencyCode,
+            currencyCode,
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  const account =
+    accountRows[0] ??
+    null;
+
+  if (!account) {
+    throw new PosSaleError(
+      `صندوق ${currencyCode} غير موجود أو غير فعال`,
+      409,
+    );
+  }
+
+  const registerKey =
+    account.code
+      .slice(
+        "CASH_".length,
+      )
+      .toLowerCase();
+
+  const sessionRows =
+    await tx
+      .select()
+      .from(
+        cashSessionsTable,
+      )
+      .where(
+        and(
+          eq(
+            cashSessionsTable.registerKey,
+            registerKey,
+          ),
+          eq(
+            cashSessionsTable.status,
+            "open",
+          ),
+        ),
+      )
+      .orderBy(
+        desc(
+          cashSessionsTable.openedAt,
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+  const session =
+    sessionRows[0] ??
+    null;
+
+  if (!session) {
+    throw new PosSaleError(
+      `يجب فتح جلسة صندوق ${currencyCode} قبل البيع بهذه العملة`,
+      409,
+    );
+  }
+
+  if (
+    session.currencyCode !==
+      currencyCode ||
+    session.businessDate !==
+      businessDate
+  ) {
+    throw new PosSaleError(
+      `جلسة صندوق ${currencyCode} لا تطابق يوم البيع الحالي`,
+      409,
+    );
+  }
+
+  return {
+    account,
+    session,
+  };
+}
+
+async function handleSaleCashCurrencyReference(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requirePosUser(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const currencies =
+    await db
+      .select()
+      .from(
+        financeCurrenciesTable,
+      )
+      .where(
+        eq(
+          financeCurrenciesTable.status,
+          "active",
+        ),
+      )
+      .orderBy(
+        desc(
+          financeCurrenciesTable.isBase,
+        ),
+        asc(
+          financeCurrenciesTable.code,
+        ),
+      );
+
+  const results = [];
+
+  for (const currency of currencies) {
+    const cashCode =
+      currency.code === "ILS"
+        ? "CASH_MAIN"
+        : `CASH_${currency.code}`;
+
+    const accountRows =
+      await db
+        .select()
+        .from(
+          financeAccountsTable,
+        )
+        .where(
+          and(
+            eq(
+              financeAccountsTable.code,
+              cashCode,
+            ),
+            eq(
+              financeAccountsTable.accountType,
+              "asset",
+            ),
+            eq(
+              financeAccountsTable.status,
+              "active",
+            ),
+          ),
+        )
+        .limit(1);
+
+    const account =
+      accountRows[0] ??
+      null;
+
+    const register =
+      account
+        ? account.code
+            .slice(
+              "CASH_".length,
+            )
+            .toLowerCase()
+        : null;
+
+    let session:
+      | typeof cashSessionsTable.$inferSelect
+      | null =
+      null;
+
+    if (
+      account &&
+      register
+    ) {
+      const sessionRows =
+        await db
+          .select()
+          .from(
+            cashSessionsTable,
+          )
+          .where(
+            and(
+              eq(
+                cashSessionsTable.registerKey,
+                register,
+              ),
+              eq(
+                cashSessionsTable.status,
+                "open",
+              ),
+            ),
+          )
+          .orderBy(
+            desc(
+              cashSessionsTable.openedAt,
+            ),
+          )
+          .limit(1);
+
+      session =
+        sessionRows[0] ??
+        null;
+    }
+
+    let rateMicros:
+      | number
+      | null =
+      currency.code ===
+        "ILS"
+        ? 1_000_000
+        : null;
+
+    if (
+      currency.code !==
+      "ILS"
+    ) {
+      const rateRows =
+        await db
+          .select()
+          .from(
+            financeExchangeRatesTable,
+          )
+          .where(
+            eq(
+              financeExchangeRatesTable.currencyCode,
+              currency.code,
+            ),
+          )
+          .orderBy(
+            desc(
+              financeExchangeRatesTable.rateDate,
+            ),
+            desc(
+              financeExchangeRatesTable.id,
+            ),
+          )
+          .limit(1);
+
+      rateMicros =
+        rateRows[0]
+          ?.ilsPerUnitMicros ??
+        null;
+    }
+
+    results.push({
+      code:
+        currency.code,
+      nameAr:
+        currency.nameAr,
+      symbol:
+        currency.symbol,
+      isBase:
+        currency.isBase,
+      cashAccountId:
+        account?.id ??
+        null,
+      cashAccountName:
+        account?.name ??
+        null,
+      registerKey:
+        register,
+      cashSessionId:
+        session?.id ??
+        null,
+      cashSessionBusinessDate:
+        session?.businessDate ??
+        null,
+      latestRateMicros:
+        rateMicros,
+      latestRate:
+        rateMicros === null
+          ? null
+          : rateMicros /
+            1_000_000,
+    });
+  }
+
+  return json({
+    defaultCurrencyCode:
+      "ILS",
+    currencies:
+      results,
+  });
+}
+
 async function handleCreateSale(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
 
@@ -1273,10 +1829,86 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       throw new PosSaleError("خصم الفاتورة غير صالح");
     }
 
-    const paidMinor = parseMoneyToMinor(payload.paidAmount);
+    const cashCurrencyCode =
+      normalizeCurrencyCode(
+        payload.cashCurrencyCode,
+      );
+
+    if (!cashCurrencyCode) {
+      throw new PosSaleError(
+        "عملة الدفع النقدي غير صالحة",
+      );
+    }
+
+    if (
+      paymentMethod !==
+        "cash" &&
+      cashCurrencyCode !==
+        "ILS"
+    ) {
+      throw new PosSaleError(
+        "العملات الأجنبية متاحة حاليًا للدفع النقدي فقط",
+      );
+    }
+
+    const tenderPaidMinor =
+      parseMoneyToMinor(
+        payload.paidAmount,
+      );
+
+    if (
+      tenderPaidMinor === null
+    ) {
+      throw new PosSaleError(
+        "المبلغ المدفوع غير صالح",
+      );
+    }
+
+    if (
+      paymentMethod === "cash" &&
+      cashCurrencyCode !== "ILS" &&
+      tenderPaidMinor <= 0
+    ) {
+      throw new PosSaleError(
+        "المبلغ المستلم بالعملة الأجنبية يجب أن يكون أكبر من صفر",
+      );
+    }
+
+    let cashExchangeRateMicros =
+      1_000_000;
+
+    if (
+      cashCurrencyCode !==
+        "ILS"
+    ) {
+      const parsedRate =
+        parseExchangeRateMicros(
+          payload.cashExchangeRate,
+        );
+
+      if (!parsedRate) {
+        throw new PosSaleError(
+          "سعر صرف العملة النقدية غير صالح",
+        );
+      }
+
+      cashExchangeRateMicros =
+        parsedRate;
+    }
+
+    const paidMinor =
+      cashCurrencyCode ===
+        "ILS"
+        ? tenderPaidMinor
+        : convertedBaseMinor(
+            tenderPaidMinor,
+            cashExchangeRateMicros,
+          );
 
     if (paidMinor === null) {
-      throw new PosSaleError("المبلغ المدفوع غير صالح");
+      throw new PosSaleError(
+        "قيمة المبلغ المدفوع بعد تحويل العملة غير صالحة",
+      );
     }
 
     const customerName = parseOptionalText(
@@ -1455,6 +2087,16 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           409,
         );
       }
+
+      const foreignCashTarget =
+        paymentMethod === "cash" &&
+        cashCurrencyCode !== "ILS"
+          ? await loadForeignCashTenderTarget(
+              tx,
+              cashCurrencyCode,
+              currentBusinessDate,
+            )
+          : null;
 
       let customer:
         typeof customersTable.$inferSelect |
@@ -1760,6 +2402,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       let accountDueMinor = 0;
       let changeMinor = 0;
       let cashReceivedMinor = 0;
+      let mainCashDeltaMinor = 0;
 
       if (paymentMethod === "cash") {
         if (paidMinor < totalMinor) {
@@ -1771,8 +2414,15 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         changeMinor =
           paidMinor - totalMinor;
 
-        cashReceivedMinor =
-          totalMinor;
+        if (foreignCashTarget) {
+          mainCashDeltaMinor =
+            -changeMinor;
+        } else {
+          cashReceivedMinor =
+            totalMinor;
+          mainCashDeltaMinor =
+            totalMinor;
+        }
       } else if (paymentMethod === "card") {
         if (paidMinor !== totalMinor) {
           throw new PosSaleError(
@@ -1800,6 +2450,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
         cashReceivedMinor =
           paidMinor;
+        mainCashDeltaMinor =
+          paidMinor;
 
         accountDueMinor =
           totalMinor - paidMinor;
@@ -1809,9 +2461,20 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         session.expectedBalanceMinor ??
         session.openingBalanceMinor;
 
+      if (
+        foreignCashTarget &&
+        changeMinor >
+          expectedBefore
+      ) {
+        throw new PosSaleError(
+          "رصيد صندوق الشيكل لا يكفي لإرجاع الباقي للزبون",
+          409,
+        );
+      }
+
       const expectedAfter =
         expectedBefore +
-        cashReceivedMinor;
+        mainCashDeltaMinor;
 
       if (
         !Number.isSafeInteger(expectedAfter) ||
@@ -1820,6 +2483,37 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       ) {
         throw new PosSaleError(
           "رصيد الصندوق يتجاوز الحد المسموح",
+        );
+      }
+
+      const foreignExpectedBefore =
+        foreignCashTarget
+          ? foreignCashTarget.session
+              .expectedBalanceMinor ??
+            foreignCashTarget.session
+              .openingBalanceMinor
+          : null;
+
+      const foreignExpectedAfter =
+        foreignExpectedBefore ===
+          null
+          ? null
+          : foreignExpectedBefore +
+            tenderPaidMinor;
+
+      if (
+        foreignExpectedAfter !==
+          null &&
+        (
+          !Number.isSafeInteger(
+            foreignExpectedAfter,
+          ) ||
+          foreignExpectedAfter >
+            MAX_MINOR
+        )
+      ) {
+        throw new PosSaleError(
+          "رصيد صندوق العملة الأجنبية يتجاوز الحد المسموح",
         );
       }
 
@@ -1988,7 +2682,104 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         );
       }
 
-      if (cashReceivedMinor > 0) {
+      if (foreignCashTarget) {
+        const cashSalesAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                "POS_SALES_CASH",
+              name:
+                "مبيعات نقطة البيع النقدية",
+              accountType:
+                "income",
+            },
+          );
+
+        const mainCashAccount =
+          changeMinor > 0
+            ? await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    "CASH_MAIN",
+                  name:
+                    "الصندوق الرئيسي",
+                  accountType:
+                    "asset",
+                },
+              )
+            : null;
+
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-CASH-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:cash-settlement`,
+            businessDate:
+              sale.businessDate,
+            transactionType:
+              "sale",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              "cash_settlement",
+            cashSessionId:
+              foreignCashTarget.session.id,
+            notes:
+              `بيع نقدي ${sale.publicId} — ${tenderPaidMinor / 100} ${cashCurrencyCode} بسعر ${cashExchangeRateMicros / 1_000_000}`,
+            createdByUserId:
+              auth.user.id,
+            lines: [
+              {
+                accountId:
+                  foreignCashTarget.account.id,
+                currencyCode:
+                  cashCurrencyCode,
+                currencyAmountMinor:
+                  tenderPaidMinor,
+                exchangeRateMicros:
+                  cashExchangeRateMicros,
+                debitMinor:
+                  paidMinor,
+                creditMinor:
+                  0,
+                memo:
+                  `تحصيل ${tenderPaidMinor / 100} ${cashCurrencyCode} لبيع ${sale.publicId}`,
+              },
+              {
+                accountId:
+                  cashSalesAccount.id,
+                debitMinor:
+                  0,
+                creditMinor:
+                  totalMinor,
+                memo:
+                  `مبيعات نقدية ${sale.publicId}`,
+              },
+              ...(mainCashAccount &&
+              changeMinor > 0
+                ? [
+                    {
+                      accountId:
+                        mainCashAccount.id,
+                      debitMinor:
+                        0,
+                      creditMinor:
+                        changeMinor,
+                      memo:
+                        `باقي للزبون من صندوق الشيكل ${sale.publicId}`,
+                    },
+                  ]
+                : []),
+            ],
+          },
+        );
+      } else if (cashReceivedMinor > 0) {
         const cashAccount =
           await ensureSaleFinanceAccount(
             tx,
@@ -2301,6 +3092,47 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         throw new PosSaleError("تم إغلاق الصندوق قبل إتمام البيع", 409);
       }
 
+      if (
+        foreignCashTarget &&
+        foreignExpectedAfter !==
+          null
+      ) {
+        const updatedForeignRows =
+          await tx
+            .update(
+              cashSessionsTable,
+            )
+            .set({
+              expectedBalanceMinor:
+                foreignExpectedAfter,
+              updatedAt:
+                new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  foreignCashTarget.session.id,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .returning({
+              id:
+                cashSessionsTable.id,
+            });
+
+        if (!updatedForeignRows[0]) {
+          throw new PosSaleError(
+            `تم إغلاق صندوق ${cashCurrencyCode} قبل إتمام البيع`,
+            409,
+          );
+        }
+      }
+
       return {
         sale,
         items: insertedItems.sort(
@@ -2340,6 +3172,47 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       );
     }
 
+    const savedCashTender =
+      result.sale.paymentMethod ===
+        "cash"
+        ? await getCashTenderForSale(
+            db,
+            result.sale,
+          )
+        : null;
+
+    if (
+      result.alreadyCreated &&
+      paymentMethod === "cash" &&
+      savedCashTender
+    ) {
+      if (
+        savedCashTender.currencyCode !==
+        cashCurrencyCode
+      ) {
+        throw new PosSaleError(
+          "مفتاح الفاتورة مستخدم مسبقًا بعملة نقدية مختلفة",
+          409,
+        );
+      }
+
+      if (
+        cashCurrencyCode !==
+          "ILS" &&
+        (
+          savedCashTender.currencyAmountMinor !==
+            tenderPaidMinor ||
+          savedCashTender.exchangeRateMicros !==
+            cashExchangeRateMicros
+        )
+      ) {
+        throw new PosSaleError(
+          "مفتاح الفاتورة مستخدم مسبقًا بمبلغ أو سعر صرف مختلف",
+          409,
+        );
+      }
+    }
+
     return json(
       toSaleResponse(
         result.sale,
@@ -2348,6 +3221,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         undefined,
         customerBalanceMinor,
         savedCardProcessor,
+        savedCashTender,
       ),
       result.alreadyCreated ? 200 : 201,
     );
@@ -2532,12 +3406,45 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         session.expectedBalanceMinor ??
         session.openingBalanceMinor;
 
-      const cashImpactMinor =
+      const cashTender =
         sale.paymentMethod === "cash"
-          ? sale.totalMinor
-          : sale.paymentMethod === "mixed"
-            ? sale.paidMinor - sale.changeMinor
-            : 0;
+          ? await getCashTenderForSale(
+              tx,
+              sale,
+            )
+          : null;
+
+      const isForeignCashSale =
+        cashTender !== null &&
+        cashTender.currencyCode !==
+          "ILS";
+
+      let foreignVoidSession:
+        | typeof cashSessionsTable.$inferSelect
+        | null =
+        null;
+
+      let foreignExpectedBefore:
+        | number
+        | null =
+        null;
+
+      let foreignExpectedAfter:
+        | number
+        | null =
+        null;
+
+      const cashImpactMinor =
+        isForeignCashSale
+          ? 0
+          : sale.paymentMethod ===
+              "cash"
+            ? sale.totalMinor
+            : sale.paymentMethod ===
+                "mixed"
+              ? sale.paidMinor -
+                sale.changeMinor
+              : 0;
 
       if (
         cashImpactMinor > 0 &&
@@ -2547,6 +3454,100 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           "رصيد الصندوق لا يكفي لإلغاء الفاتورة",
           409,
         );
+      }
+
+      let expectedAfter =
+        isForeignCashSale
+          ? expectedBefore +
+            (cashTender?.changeMinor ??
+              0)
+          : expectedBefore -
+            cashImpactMinor;
+
+      if (
+        !Number.isSafeInteger(
+          expectedAfter,
+        ) ||
+        expectedAfter < 0 ||
+        expectedAfter >
+          MAX_MINOR
+      ) {
+        throw new PosSaleError(
+          "رصيد صندوق الشيكل بعد الإلغاء غير صالح",
+          409,
+        );
+      }
+
+      if (
+        isForeignCashSale &&
+        cashTender
+      ) {
+        if (
+          !cashTender.cashSessionId
+        ) {
+          throw new PosSaleError(
+            "جلسة صندوق العملة الأصلية غير محفوظة ولا يمكن إلغاء الفاتورة بأمان",
+            409,
+          );
+        }
+
+        const foreignSessionRows =
+          await tx
+            .select()
+            .from(
+              cashSessionsTable,
+            )
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  cashTender.cashSessionId,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+        foreignVoidSession =
+          foreignSessionRows[0] ??
+          null;
+
+        if (
+          !foreignVoidSession ||
+          foreignVoidSession.currencyCode !==
+            cashTender.currencyCode ||
+          foreignVoidSession.businessDate !==
+            sale.businessDate
+        ) {
+          throw new PosSaleError(
+            "لا يمكن إلغاء الفاتورة بعد إغلاق أو تغيير جلسة صندوق العملة الأجنبية",
+            409,
+          );
+        }
+
+        foreignExpectedBefore =
+          foreignVoidSession
+            .expectedBalanceMinor ??
+          foreignVoidSession
+            .openingBalanceMinor;
+
+        if (
+          foreignExpectedBefore <
+          cashTender.currencyAmountMinor
+        ) {
+          throw new PosSaleError(
+            "رصيد صندوق العملة الأجنبية لا يكفي لعكس الفاتورة",
+            409,
+          );
+        }
+
+        foreignExpectedAfter =
+          foreignExpectedBefore -
+          cashTender.currencyAmountMinor;
       }
 
       const stockCardVoidOccurredAt = new Date();
@@ -2857,12 +3858,11 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         }
       }
 
-      const expectedAfter =
-        expectedBefore -
-        cashImpactMinor;
-
       const cashFinanceRows =
-        cashImpactMinor > 0
+        sale.paymentMethod ===
+          "cash" ||
+        sale.paymentMethod ===
+          "mixed"
           ? await tx
               .select()
               .from(
@@ -2942,6 +3942,7 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
             sourceEvent:
               "cash_settlement_void",
             cashSessionId:
+              cashFinance.cashSessionId ??
               session.id,
             notes:
               `عكس البيع النقدي ${sale.publicId}`,
@@ -2958,6 +3959,12 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
                     line.employeeId,
                   supplierId:
                     line.supplierId,
+                  currencyCode:
+                    line.currencyCode,
+                  currencyAmountMinor:
+                    line.currencyAmountMinor,
+                  exchangeRateMicros:
+                    line.exchangeRateMicros,
                   debitMinor:
                     line.creditMinor,
                   creditMinor:
@@ -3277,6 +4284,47 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         throw new PosSaleError("تم إغلاق الصندوق قبل إلغاء الفاتورة", 409);
       }
 
+      if (
+        foreignVoidSession &&
+        foreignExpectedAfter !==
+          null
+      ) {
+        const updatedForeignRows =
+          await tx
+            .update(
+              cashSessionsTable,
+            )
+            .set({
+              expectedBalanceMinor:
+                foreignExpectedAfter,
+              updatedAt:
+                new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  foreignVoidSession.id,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .returning({
+              id:
+                cashSessionsTable.id,
+            });
+
+        if (!updatedForeignRows[0]) {
+          throw new PosSaleError(
+            "تم إغلاق صندوق العملة الأجنبية قبل إلغاء الفاتورة",
+            409,
+          );
+        }
+      }
+
       const updatedSaleRows = await tx
         .update(posSalesTable)
         .set({
@@ -3317,6 +4365,15 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           )
         : null;
 
+    const cashTender =
+      result.sale.paymentMethod ===
+        "cash"
+        ? await getCashTenderForSale(
+            db,
+            result.sale,
+          )
+        : null;
+
     return json(
       toSaleResponse(
         result.sale,
@@ -3325,6 +4382,7 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         navigation,
         null,
         cardProcessor,
+        cashTender,
       ),
     );
   } catch (error) {
@@ -3903,6 +4961,14 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
         )
       : null;
 
+  const cashTender =
+    sale.paymentMethod === "cash"
+      ? await getCashTenderForSale(
+          db,
+          sale,
+        )
+      : null;
+
   return json(
     toSaleResponse(
       sale,
@@ -3911,6 +4977,7 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       navigation,
       customerBalanceMinor,
       cardProcessor,
+      cashTender,
     ),
   );
 }
@@ -3941,6 +5008,17 @@ export async function handlePosSaleRequest(
     );
   }
 
+
+  if (
+    request.method === "GET" &&
+    path === "/api/pos/sales/cash-currencies"
+  ) {
+    return handleSaleCashCurrencyReference(
+      request,
+      db,
+      env,
+    );
+  }
 
   if (request.method === "GET" && path === "/api/pos/sales/today") {
     return handleTodaySales(request, db, env);
