@@ -716,6 +716,10 @@ async function handleListCashAccounts(
       id: account.id,
       code: account.code,
       name: account.name,
+      registerKey:
+        registerKeyForCash(
+          account,
+        ),
       currencyCode:
         account.currencyCode,
       bookBalanceMinor,
