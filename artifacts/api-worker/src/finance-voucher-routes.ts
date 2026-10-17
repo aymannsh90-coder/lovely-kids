@@ -1882,21 +1882,24 @@ async function handleForeignCurrencyCustomerReceipt(
             changeMinor >
             0
           ) {
-            ilsSession =
+            const loadedIlsSession =
               await loadCashSession(
                 tx,
                 "main",
               );
 
             if (
-              ilsSession.businessDate !==
+              loadedIlsSession.businessDate !==
               businessDate
             ) {
               throw new VoucherError(
-                `جلسة الصندوق الرئيسي مفتوحة بتاريخ ${ilsSession.businessDate}. أغلقها وافتح جلسة اليوم ${businessDate}.`,
+                `جلسة الصندوق الرئيسي مفتوحة بتاريخ ${loadedIlsSession.businessDate}. أغلقها وافتح جلسة اليوم ${businessDate}.`,
                 409,
               );
             }
+
+            ilsSession =
+              loadedIlsSession;
 
             mainCash =
               await cashAccount(
@@ -1907,7 +1910,7 @@ async function handleForeignCurrencyCustomerReceipt(
             ilsCashState =
               await updateCashExpected(
                 tx,
-                ilsSession,
+                loadedIlsSession,
                 -changeMinor,
               );
           }
