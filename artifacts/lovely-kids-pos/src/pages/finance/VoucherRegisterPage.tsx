@@ -33,6 +33,37 @@ function formatMinor(value: number) {
   }).format(value / 100)} ₪`;
 }
 
+function formatCurrencyMinor(
+  value: number,
+  currencyCode: string,
+) {
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value / 100)} ${currencyCode}`;
+}
+
+function foreignReceiptBaseMinor(
+  voucher: PosFinanceVoucher,
+) {
+  if (
+    voucher.currencyCode ===
+      "ILS" ||
+    voucher.transactionAmountMinor ===
+      null
+  ) {
+    return null;
+  }
+
+  return Math.round(
+    (
+      voucher.transactionAmountMinor *
+      voucher.exchangeRateMicros
+    ) /
+      1_000_000,
+  );
+}
+
 function errorText(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -878,6 +909,59 @@ export default function VoucherRegisterPage() {
                           voucher.amountMinor,
                         )}
                       </strong>
+
+                      {voucher.currencyCode !==
+                        "ILS" &&
+                        voucher.transactionAmountMinor !==
+                          null && (
+                        <small
+                          style={{
+                            display:
+                              "block",
+                            marginTop:
+                              4,
+                            opacity:
+                              0.8,
+                          }}
+                        >
+                          استلام{" "}
+                          {formatCurrencyMinor(
+                            voucher.transactionAmountMinor,
+                            voucher.currencyCode,
+                          )}{" "}
+                          ×{" "}
+                          {(
+                            voucher.exchangeRateMicros /
+                            1_000_000
+                          ).toFixed(
+                            6,
+                          )}{" "}
+                          ={" "}
+                          {formatMinor(
+                            foreignReceiptBaseMinor(
+                              voucher,
+                            ) ??
+                              voucher.amountMinor,
+                          )}
+                          {(() => {
+                            const received =
+                              foreignReceiptBaseMinor(
+                                voucher,
+                              );
+
+                            if (
+                              received ===
+                                null ||
+                              received <=
+                                voucher.amountMinor
+                            ) {
+                              return "";
+                            }
+
+                            return ` — باقي ${formatMinor(received - voucher.amountMinor)}`;
+                          })()}
+                        </small>
+                      )}
                     </td>
 
                     <td>
@@ -909,7 +993,9 @@ export default function VoucherRegisterPage() {
                             flexWrap: "wrap",
                           }}
                         >
-                          {(
+                          {voucher.currencyCode ===
+                            "ILS" &&
+                          (
                             voucher.voucherType === "receipt" ||
                             voucher.voucherType === "payment" ||
                             voucher.voucherType === "journal"
