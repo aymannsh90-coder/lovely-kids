@@ -3,6 +3,7 @@ import {
   banksTable,
   employeesTable,
   expenseCategoriesTable,
+  financeAccountsTable,
 } from "@workspace/db/schema";
 import {
   assistantDraftsTable,
@@ -16,6 +17,7 @@ import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
+import { handleFinanceTransferRequest } from "./finance-transfer-routes";
 import { handlePartyFinanceRequest } from "./party-finance-routes";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -23,7 +25,12 @@ type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type DraftIntent =
   | "expense"
   | "employee_advance"
-  | "owner_withdrawal";
+  | "owner_withdrawal"
+  | "finance_transfer";
+
+type DraftTransferDirection =
+  | "cash_to_bank"
+  | "bank_to_cash";
 
 type DraftPaymentMethod =
   | "cash"
@@ -614,6 +621,21 @@ function categoryMatch(
     },
     {
       patterns: [
+        /ذكاء اصطناعي/,
+        /شات ?جي ?بي ?تي/,
+        /chatgpt/,
+        /openai/,
+        /اشتراك.*(برنامج|برمج|ذكاء|تقني)/,
+      ],
+      codes: [
+        "ai",
+        "software",
+        "subscriptions",
+        "technology",
+      ],
+    },
+    {
+      patterns: [
         /بنزين/,
         /سولار/,
         /ديزل/,
@@ -656,15 +678,43 @@ function categoryMatch(
 
     const byName =
       categories.find(
-        (category) =>
-          alias.patterns.some(
-            (pattern) =>
-              pattern.test(
-                normalizeArabic(
-                  category.name,
+        (category) => {
+          const normalizedName =
+            normalizeArabic(
+              category.name,
+            );
+
+          if (
+            alias.patterns.some(
+              (pattern) =>
+                pattern.test(
+                  normalizedName,
                 ),
-              ),
-          ),
+            )
+          ) {
+            return true;
+          }
+
+          if (
+            alias.codes.some(
+              (code) =>
+                [
+                  "ai",
+                  "software",
+                  "subscriptions",
+                  "technology",
+                ].includes(
+                  code,
+                ),
+            )
+          ) {
+            return /(ذكاء|برامج|برمجيات|اشتراك|تقني|تقنيه)/.test(
+              normalizedName,
+            );
+          }
+
+          return false;
+        },
       );
 
     if (byName) {
@@ -824,6 +874,72 @@ function parseDraft(
   const bankAccount =
     bankMatch.account;
 
+  const transferCue =
+    /(ايداع|ودع|تحويل|حول|نقل|نقلت|سحب.*من.*بنك)/.test(
+      normalized,
+    );
+
+  const cashIndex =
+    [
+      normalized.indexOf(
+        "الصندوق",
+      ),
+      normalized.indexOf(
+        "الكاش",
+      ),
+    ]
+      .filter(
+        (value) =>
+          value >= 0,
+      )
+      .sort(
+        (left, right) =>
+          left - right,
+      )[0] ??
+    -1;
+
+  const bankIndexes =
+    [
+      normalized.indexOf(
+        "البنك",
+      ),
+      normalized.indexOf(
+        "بنك",
+      ),
+      normalized.indexOf(
+        "حساب البنك",
+      ),
+    ]
+      .filter(
+        (value) =>
+          value >= 0,
+      )
+      .sort(
+        (left, right) =>
+          left - right,
+      );
+
+  const bankIndex =
+    bankIndexes[0] ??
+    -1;
+
+  let transferDirection:
+    | DraftTransferDirection
+    | null =
+    null;
+
+  if (
+    transferCue &&
+    cashIndex >= 0 &&
+    bankIndex >= 0
+  ) {
+    transferDirection =
+      cashIndex <
+      bankIndex
+        ? "cash_to_bank"
+        : "bank_to_cash";
+  }
+
   // Speech recognition can produce nearby Arabic forms for "سحب"
   // (for example: "سحاب" or "ساحب"). Treat these as the same
   // employee-withdrawal command when an employee is also recognized.
@@ -842,6 +958,11 @@ function parseDraft(
     null;
 
   if (
+    transferDirection
+  ) {
+    intent =
+      "finance_transfer";
+  } else if (
     ownerWords.test(
       normalized,
     )
@@ -908,8 +1029,22 @@ function parseDraft(
   }
 
   if (
-    paymentMethod ===
-      "bank" &&
+    intent ===
+      "finance_transfer" &&
+    !transferDirection
+  ) {
+    missing.push(
+      "اتجاه التحويل",
+    );
+  }
+
+  if (
+    (
+      paymentMethod ===
+        "bank" ||
+      intent ===
+        "finance_transfer"
+    ) &&
     !bankAccount
   ) {
     missing.push(
@@ -937,9 +1072,18 @@ function parseDraft(
           : intent ===
               "owner_withdrawal"
             ? 1
-            : 0,
-      paymentMethod ===
-        "bank"
+            : intent ===
+                "finance_transfer"
+              ? transferDirection
+                ? 1
+                : 0
+              : 0,
+      (
+        paymentMethod ===
+          "bank" ||
+        intent ===
+          "finance_transfer"
+      )
         ? bankAccount
           ? 1
           : 0
@@ -973,13 +1117,22 @@ function parseDraft(
         ? category?.id ??
           null
         : null,
-    paymentMethod,
+    paymentMethod:
+      intent ===
+        "finance_transfer"
+        ? "bank"
+        : paymentMethod,
     bankAccountId:
-      paymentMethod ===
-        "bank"
+      (
+        paymentMethod ===
+          "bank" ||
+        intent ===
+          "finance_transfer"
+      )
         ? bankAccount?.id ??
           null
         : null,
+    transferDirection,
     confidence,
     parseMessage:
       complete
@@ -1245,6 +1398,8 @@ async function handleCreateDraft(
           bankAccountId:
             parsed.bankAccountId,
           registerKey,
+          transferDirection:
+            parsed.transferDirection,
           confidence:
             parsed.confidence,
           parseMessage:
@@ -1253,6 +1408,8 @@ async function handleCreateDraft(
           status:
             "pending",
           financeVoucherId:
+            null,
+          financeTransactionId:
             null,
           createdByUserId:
             Number(
