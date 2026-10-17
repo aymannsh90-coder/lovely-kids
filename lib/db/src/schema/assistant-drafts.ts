@@ -185,7 +185,27 @@ export const assistantDraftsTable = pgTable(
 
     check(
       "assistant_drafts_register_key_valid",
-      sql`${table.registerKey} ~ '^[a-z0-9_-]{1,50}
+      sql`${table.registerKey} ~ '^[a-z0-9_-]{1,50}$'`,
+    ),
+
+    check(
+      "assistant_drafts_transfer_direction_valid",
+      sql`
+        ${table.transferDirection} is null
+        or ${table.transferDirection} in (
+          'cash_to_bank',
+          'bank_to_cash'
+        )
+      `,
+    ),
+
+    check(
+      "assistant_drafts_transfer_scope_valid",
+      sql`
+        ${table.transferDirection} is null
+        or ${table.intent} = 'finance_transfer'
+      `,
+    ),
 
     check(
       "assistant_drafts_confidence_valid",
