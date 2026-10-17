@@ -299,6 +299,23 @@ export default function SalePanel({
 
   const [paidAmount, setPaidAmount] = useState("0.00");
 
+  const [
+    cashCurrencies,
+    setCashCurrencies,
+  ] = useState<
+    PosSaleCashCurrency[]
+  >([]);
+
+  const [
+    cashCurrencyCode,
+    setCashCurrencyCode,
+  ] = useState("ILS");
+
+  const [
+    cashExchangeRate,
+    setCashExchangeRate,
+  ] = useState("1");
+
   const [paymentMethod, setPaymentMethod] =
     useState<
       | "cash"
@@ -401,7 +418,41 @@ export default function SalePanel({
 
   const totalMinor = Math.max(0, subtotalMinor - discountMinor);
 
-  const paidMinor = moneyToMinor(paidAmount) ?? 0;
+  const tenderPaidMinor =
+    moneyToMinor(
+      paidAmount,
+    ) ?? 0;
+
+  const selectedCashCurrency =
+    useMemo(
+      () =>
+        cashCurrencies.find(
+          (currency) =>
+            currency.code ===
+            cashCurrencyCode,
+        ) ?? null,
+      [
+        cashCurrencies,
+        cashCurrencyCode,
+      ],
+    );
+
+  const cashRateMicros =
+    cashCurrencyCode === "ILS"
+      ? 1_000_000
+      : rateToMicros(
+          cashExchangeRate,
+        );
+
+  const paidMinor =
+    paymentMethod === "cash" &&
+    cashCurrencyCode !== "ILS" &&
+    cashRateMicros
+      ? convertedMinor(
+          tenderPaidMinor,
+          cashRateMicros,
+        )
+      : tenderPaidMinor;
 
   const changeMinor =
     Math.max(
@@ -428,6 +479,12 @@ export default function SalePanel({
     if (
       paymentMethod === "credit"
     ) {
+      setCashCurrencyCode(
+        "ILS",
+      );
+      setCashExchangeRate(
+        "1",
+      );
       setPaidAmount("0.00");
 
       setSettlementAmount(
@@ -440,16 +497,43 @@ export default function SalePanel({
     if (
       paymentMethod === "mixed"
     ) {
+      setCashCurrencyCode(
+        "ILS",
+      );
+      setCashExchangeRate(
+        "1",
+      );
       setPaidAmount("0.00");
       return;
     }
 
-    setPaidAmount(
-      (totalMinor / 100).toFixed(2),
-    );
+    if (
+      paymentMethod === "card"
+    ) {
+      setCashCurrencyCode(
+        "ILS",
+      );
+      setCashExchangeRate(
+        "1",
+      );
+      setPaidAmount(
+        (totalMinor / 100).toFixed(2),
+      );
+      return;
+    }
+
+    if (
+      cashCurrencyCode ===
+        "ILS"
+    ) {
+      setPaidAmount(
+        (totalMinor / 100).toFixed(2),
+      );
+    }
   }, [
     totalMinor,
     paymentMethod,
+    cashCurrencyCode,
   ]);
 
   const customerIdFromQuery =
