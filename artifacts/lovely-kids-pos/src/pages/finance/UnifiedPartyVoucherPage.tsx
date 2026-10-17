@@ -1191,7 +1191,11 @@ export default function UnifiedPartyVoucherPage({
         )}
 
         <label>
-          <span>المبلغ ₪</span>
+          <span>
+            {foreignCashMode
+              ? "المبلغ المسدد من الذمة ₪"
+              : "المبلغ ₪"}
+          </span>
           <input
             dir="ltr"
             type="number"
@@ -1234,6 +1238,275 @@ export default function UnifiedPartyVoucherPage({
             </option>
           </select>
         </label>
+
+        {isReceipt &&
+          partyType ===
+            "customer" &&
+          paymentMethod ===
+            "cash" && (
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+              padding: 14,
+              borderRadius: 12,
+              background:
+                "rgba(59,130,246,.08)",
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems:
+                  "center",
+                gap: 8,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={
+                  foreignCashMode
+                }
+                disabled={saving}
+                onChange={(event) => {
+                  const checked =
+                    event.target
+                      .checked;
+
+                  setForeignCashMode(
+                    checked,
+                  );
+
+                  if (!checked) {
+                    setForeignCashAccountId(
+                      "",
+                    );
+                    setForeignAmount(
+                      "",
+                    );
+                    setForeignExchangeRate(
+                      "",
+                    );
+                  }
+                }}
+              />
+
+              <span>
+                قبض بعملة أجنبية
+              </span>
+            </label>
+
+            {foreignCashMode && (
+              <>
+                <label>
+                  <span>
+                    صندوق العملة
+                  </span>
+
+                  <select
+                    value={
+                      foreignCashAccountId
+                    }
+                    disabled={saving}
+                    onChange={(event) => {
+                      setForeignCashAccountId(
+                        event.target
+                          .value,
+                      );
+                    }}
+                  >
+                    <option value="">
+                      اختر صندوق الدولار / الدينار
+                    </option>
+
+                    {foreignCashAccounts.map(
+                      (account) => (
+                        <option
+                          key={
+                            account.id
+                          }
+                          value={
+                            account.id
+                          }
+                        >
+                          {account.name} —{" "}
+                          {
+                            account.currencyCode
+                          }{" "}
+                          —{" "}
+                          {account.cashSessionId
+                            ? "الجلسة مفتوحة"
+                            : "الجلسة مغلقة"}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+
+                <label>
+                  <span>
+                    المبلغ المستلم{" "}
+                    {selectedForeignAccount
+                      ?.currencyCode ??
+                      ""}
+                  </span>
+
+                  <input
+                    dir="ltr"
+                    type="number"
+                    inputMode="decimal"
+                    min="0.01"
+                    step="0.01"
+                    value={
+                      foreignAmount
+                    }
+                    onChange={(event) =>
+                      setForeignAmount(
+                        event.target
+                          .value,
+                      )
+                    }
+                    disabled={
+                      saving
+                    }
+                  />
+                </label>
+
+                <label>
+                  <span>
+                    سعر الصرف — 1{" "}
+                    {selectedForeignAccount
+                      ?.currencyCode ??
+                      "عملة"}{" "}
+                    = كم ₪
+                  </span>
+
+                  <input
+                    dir="ltr"
+                    type="number"
+                    inputMode="decimal"
+                    min="0.000001"
+                    step="0.000001"
+                    value={
+                      foreignExchangeRate
+                    }
+                    onChange={(event) =>
+                      setForeignExchangeRate(
+                        event.target
+                          .value,
+                      )
+                    }
+                    disabled={
+                      saving
+                    }
+                  />
+                </label>
+
+                {selectedForeignAccount &&
+                  !selectedForeignAccount
+                    .cashSessionId && (
+                  <div
+                    className="error-message"
+                  >
+                    جلسة{" "}
+                    {
+                      selectedForeignAccount.name
+                    }{" "}
+                    مغلقة. افتحها أولًا من
+                    صفحة البنوك والصناديق.
+                  </div>
+                )}
+
+                {foreignReceiptPreview && (
+                  <div
+                    style={{
+                      display:
+                        "grid",
+                      gap: 6,
+                      padding: 12,
+                      borderRadius:
+                        10,
+                      background:
+                        "rgba(15,23,42,.06)",
+                    }}
+                  >
+                    <strong>
+                      معاينة الحركة
+                    </strong>
+
+                    <span>
+                      قيمة المستلم:{" "}
+                      {(
+                        foreignReceiptPreview
+                          .receivedMinor /
+                        100
+                      ).toFixed(
+                        2,
+                      )}{" "}
+                      ₪
+                    </span>
+
+                    <span>
+                      تسديد الذمة:{" "}
+                      {(
+                        foreignReceiptPreview
+                          .settlementMinor /
+                        100
+                      ).toFixed(
+                        2,
+                      )}{" "}
+                      ₪
+                    </span>
+
+                    <span>
+                      الباقي بالشيكل:{" "}
+                      {(
+                        Math.max(
+                          0,
+                          foreignReceiptPreview
+                            .changeMinor,
+                        ) /
+                        100
+                      ).toFixed(
+                        2,
+                      )}{" "}
+                      ₪
+                    </span>
+
+                    {foreignReceiptPreview
+                      .changeMinor <
+                      0 && (
+                      <strong
+                        style={{
+                          color:
+                            "#b91c1c",
+                        }}
+                      >
+                        قيمة العملة المستلمة أقل
+                        من مبلغ التسديد.
+                      </strong>
+                    )}
+
+                    {foreignReceiptPreview
+                      .changeMinor >
+                        0 &&
+                      !session && (
+                      <strong
+                        style={{
+                          color:
+                            "#b91c1c",
+                        }}
+                      >
+                        يجب فتح صندوق الشيكل
+                        لإرجاع الباقي.
+                      </strong>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {paymentMethod ===
           "bank" && (
@@ -1346,6 +1619,10 @@ export default function UnifiedPartyVoucherPage({
             disabled={saving}
             onClick={() => {
               setAmount("");
+              setForeignAmount("");
+              setForeignExchangeRate("");
+              setForeignCashAccountId("");
+              setForeignCashMode(false);
               setNotes("");
               setError("");
               setMessage("");
