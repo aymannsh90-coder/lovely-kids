@@ -229,6 +229,153 @@ export async function getCardProcessorForSale(
     : null;
 }
 
+export interface PosSaleCashTender {
+  currencyCode: string;
+  currencyAmountMinor: number;
+  exchangeRateMicros: number;
+  baseReceivedMinor: number;
+  changeMinor: number;
+  cashSessionId: number | null;
+}
+
+export async function getCashTenderForSale(
+  db: any,
+  sale: typeof posSalesTable.$inferSelect,
+): Promise<PosSaleCashTender | null> {
+  if (
+    sale.paymentMethod !==
+      "cash"
+  ) {
+    return null;
+  }
+
+  const transactionRows =
+    await db
+      .select()
+      .from(
+        financeTransactionsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeTransactionsTable.sourceType,
+            "pos_sale",
+          ),
+          eq(
+            financeTransactionsTable.sourceId,
+            String(
+              sale.id,
+            ),
+          ),
+          eq(
+            financeTransactionsTable.sourceEvent,
+            "cash_settlement",
+          ),
+        ),
+      )
+      .orderBy(
+        desc(
+          financeTransactionsTable.id,
+        ),
+      )
+      .limit(1);
+
+  const transaction =
+    transactionRows[0] ??
+    null;
+
+  if (!transaction) {
+    return {
+      currencyCode:
+        "ILS",
+      currencyAmountMinor:
+        sale.paidMinor,
+      exchangeRateMicros:
+        1_000_000,
+      baseReceivedMinor:
+        sale.paidMinor,
+      changeMinor:
+        sale.changeMinor,
+      cashSessionId:
+        sale.cashSessionId,
+    };
+  }
+
+  const lines =
+    await db
+      .select()
+      .from(
+        financeTransactionLinesTable,
+      )
+      .where(
+        eq(
+          financeTransactionLinesTable.transactionId,
+          transaction.id,
+        ),
+      )
+      .orderBy(
+        asc(
+          financeTransactionLinesTable.lineNumber,
+        ),
+      );
+
+  const foreignLine =
+    lines.find(
+      (line) =>
+        line.debitMinor >
+          0 &&
+        line.currencyCode !==
+          null &&
+        line.currencyCode !==
+          "ILS" &&
+        line.currencyAmountMinor !==
+          null &&
+        line.exchangeRateMicros !==
+          null,
+    );
+
+  if (
+    foreignLine &&
+    foreignLine.currencyCode &&
+    foreignLine.currencyAmountMinor &&
+    foreignLine.exchangeRateMicros
+  ) {
+    return {
+      currencyCode:
+        foreignLine.currencyCode,
+      currencyAmountMinor:
+        foreignLine.currencyAmountMinor,
+      exchangeRateMicros:
+        foreignLine.exchangeRateMicros,
+      baseReceivedMinor:
+        foreignLine.debitMinor,
+      changeMinor:
+        Math.max(
+          0,
+          foreignLine.debitMinor -
+            sale.totalMinor,
+        ),
+      cashSessionId:
+        transaction.cashSessionId,
+    };
+  }
+
+  return {
+    currencyCode:
+      "ILS",
+    currencyAmountMinor:
+      sale.paidMinor,
+    exchangeRateMicros:
+      1_000_000,
+    baseReceivedMinor:
+      sale.paidMinor,
+    changeMinor:
+      sale.changeMinor,
+    cashSessionId:
+      sale.cashSessionId,
+  };
+}
+
 function normalizeBarcode(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
