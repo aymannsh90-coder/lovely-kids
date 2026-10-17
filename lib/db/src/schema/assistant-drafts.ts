@@ -13,6 +13,7 @@ import {
 import { employeesTable } from "./employees";
 import { expenseCategoriesTable } from "./expense-categories";
 import { financeVouchersTable } from "./finance-vouchers";
+import { bankAccountsTable } from "./finance-banking";
 import { usersTable } from "./users";
 
 export const assistantDraftsTable = pgTable(
@@ -51,6 +52,15 @@ export const assistantDraftsTable = pgTable(
     paymentMethod: text("payment_method")
       .notNull()
       .default("cash"),
+
+    bankAccountId: integer(
+      "bank_account_id",
+    ).references(
+      () => bankAccountsTable.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
 
     registerKey: text("register_key")
       .notNull()
@@ -143,7 +153,19 @@ export const assistantDraftsTable = pgTable(
 
     check(
       "assistant_drafts_payment_method_valid",
-      sql`${table.paymentMethod} = 'cash'`,
+      sql`${table.paymentMethod} in ('cash', 'bank')`,
+    ),
+
+    check(
+      "assistant_drafts_payment_scope_valid",
+      sql`
+        (
+          ${table.paymentMethod} = 'cash'
+          and ${table.bankAccountId} is null
+        )
+        or
+        ${table.paymentMethod} = 'bank'
+      `,
     ),
 
     check(
@@ -199,6 +221,17 @@ export const assistantDraftsTable = pgTable(
           and ${table.amountMinor} is not null
           and (
             (
+              ${table.paymentMethod} = 'cash'
+              and ${table.bankAccountId} is null
+            )
+            or
+            (
+              ${table.paymentMethod} = 'bank'
+              and ${table.bankAccountId} is not null
+            )
+          )
+          and (
+            (
               ${table.intent} = 'employee_advance'
               and ${table.employeeId} is not null
               and ${table.expenseCategoryId} is null
@@ -241,6 +274,9 @@ export const assistantDraftsTable = pgTable(
 
     index("assistant_drafts_created_by_idx")
       .on(table.createdByUserId),
+
+    index("assistant_drafts_bank_account_idx")
+      .on(table.bankAccountId),
 
     index("assistant_drafts_created_at_idx")
       .on(table.createdAt),
