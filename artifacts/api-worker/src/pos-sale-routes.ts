@@ -4271,6 +4271,47 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         throw new PosSaleError("تم إغلاق الصندوق قبل إلغاء الفاتورة", 409);
       }
 
+      if (
+        foreignVoidSession &&
+        foreignExpectedAfter !==
+          null
+      ) {
+        const updatedForeignRows =
+          await tx
+            .update(
+              cashSessionsTable,
+            )
+            .set({
+              expectedBalanceMinor:
+                foreignExpectedAfter,
+              updatedAt:
+                new Date(),
+            })
+            .where(
+              and(
+                eq(
+                  cashSessionsTable.id,
+                  foreignVoidSession.id,
+                ),
+                eq(
+                  cashSessionsTable.status,
+                  "open",
+                ),
+              ),
+            )
+            .returning({
+              id:
+                cashSessionsTable.id,
+            });
+
+        if (!updatedForeignRows[0]) {
+          throw new PosSaleError(
+            "تم إغلاق صندوق العملة الأجنبية قبل إلغاء الفاتورة",
+            409,
+          );
+        }
+      }
+
       const updatedSaleRows = await tx
         .update(posSalesTable)
         .set({
@@ -4311,6 +4352,15 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           )
         : null;
 
+    const cashTender =
+      result.sale.paymentMethod ===
+        "cash"
+        ? await getCashTenderForSale(
+            db,
+            result.sale,
+          )
+        : null;
+
     return json(
       toSaleResponse(
         result.sale,
@@ -4319,6 +4369,7 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         navigation,
         null,
         cardProcessor,
+        cashTender,
       ),
     );
   } catch (error) {
