@@ -2429,7 +2429,24 @@ export default function SalePanel({
 
               <span>الإجمالي: {formatMinor(lastSale.sale.totalMinor)}</span>
 
-              {lastSale.sale.accountDueMinor > 0 && (
+              {lastSale.sale.cashTender &&
+              lastSale.sale.cashTender.currencyCode !== "ILS" && (
+              <span dir="ltr">
+                دفع نقدي:{" "}
+                {(
+                  lastSale.sale.cashTender.currencyAmountMinor /
+                  100
+                ).toFixed(2)}{" "}
+                {lastSale.sale.cashTender.currencyCode}
+                {" × "}
+                {(
+                  lastSale.sale.cashTender.exchangeRateMicros /
+                  1_000_000
+                ).toFixed(6)}
+              </span>
+            )}
+
+            {lastSale.sale.accountDueMinor > 0 && (
                 <span>
                   متبقي على الحساب:
                   {" "}
@@ -2568,8 +2585,30 @@ export default function SalePanel({
             <div>
               <span>المدفوع</span>
 
-              <strong>{lastSale.sale.paid.toFixed(2)} ₪</strong>
+              <strong>
+                {lastSale.sale.cashTender &&
+                lastSale.sale.cashTender.currencyCode !== "ILS"
+                  ? `${(
+                      lastSale.sale.cashTender.currencyAmountMinor /
+                      100
+                    ).toFixed(2)} ${lastSale.sale.cashTender.currencyCode}`
+                  : `${lastSale.sale.paid.toFixed(2)} ₪`}
+              </strong>
             </div>
+
+            {lastSale.sale.cashTender &&
+              lastSale.sale.cashTender.currencyCode !== "ILS" && (
+              <div>
+                <span>قيمة المستلم بالشيكل</span>
+
+                <strong>
+                  {(
+                    lastSale.sale.cashTender.baseReceivedMinor /
+                    100
+                  ).toFixed(2)} ₪
+                </strong>
+              </div>
+            )}
 
             <div>
               <span>الباقي</span>
