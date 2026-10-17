@@ -2507,8 +2507,7 @@ async function createVoucher(
                 id: number;
                 name: string;
                 status?:
-                  | "active"
-                  | "inactive";
+                  string;
               }
             | null =
             null;
