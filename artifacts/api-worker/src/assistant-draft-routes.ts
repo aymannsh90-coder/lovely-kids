@@ -358,11 +358,113 @@ function uniqueFirstNameMatch(
       .employee;
   }
 
+  const textTokens =
+    normalizedText
+      .split(" ")
+      .filter(Boolean);
+
+  const paddedText =
+    ` ${textTokens.join(" ")} `;
+
+  // Match a clear multi-word portion of an existing employee name.
+  // This covers cases like saying "ابو ايمن" while the stored
+  // employee name contains an additional family name.
+  const partialMatches =
+    employees
+      .map(
+        (employee) => {
+          const nameTokens =
+            normalizeArabic(
+              employee.name,
+            )
+              .split(" ")
+              .filter(Boolean);
+
+          let bestTokenCount =
+            0;
+
+          for (
+            let size =
+              Math.min(
+                nameTokens.length,
+                textTokens.length,
+              );
+            size >= 2;
+            size -= 1
+          ) {
+            let matched =
+              false;
+
+            for (
+              let start = 0;
+              start + size <=
+              nameTokens.length;
+              start += 1
+            ) {
+              const phrase =
+                nameTokens
+                  .slice(
+                    start,
+                    start + size,
+                  )
+                  .join(" ");
+
+              if (
+                paddedText.includes(
+                  ` ${phrase} `,
+                )
+              ) {
+                bestTokenCount =
+                  size;
+                matched =
+                  true;
+                break;
+              }
+            }
+
+            if (matched) {
+              break;
+            }
+          }
+
+          return {
+            employee,
+            bestTokenCount,
+          };
+        },
+      )
+      .filter(
+        (entry) =>
+          entry.bestTokenCount >=
+          2,
+      )
+      .sort(
+        (left, right) =>
+          right.bestTokenCount -
+          left.bestTokenCount,
+      );
+
+  if (partialMatches[0]) {
+    const topScore =
+      partialMatches[0]
+        .bestTokenCount;
+
+    const top =
+      partialMatches.filter(
+        (entry) =>
+          entry.bestTokenCount ===
+          topScore,
+      );
+
+    if (top.length === 1) {
+      return top[0]
+        .employee;
+    }
+  }
+
   const tokens =
     new Set(
-      normalizedText.split(
-        " ",
-      ),
+      textTokens,
     );
 
   const firstNameMatches =
