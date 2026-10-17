@@ -3159,6 +3159,47 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       );
     }
 
+    const savedCashTender =
+      result.sale.paymentMethod ===
+        "cash"
+        ? await getCashTenderForSale(
+            db,
+            result.sale,
+          )
+        : null;
+
+    if (
+      result.alreadyCreated &&
+      paymentMethod === "cash" &&
+      savedCashTender
+    ) {
+      if (
+        savedCashTender.currencyCode !==
+        cashCurrencyCode
+      ) {
+        throw new PosSaleError(
+          "مفتاح الفاتورة مستخدم مسبقًا بعملة نقدية مختلفة",
+          409,
+        );
+      }
+
+      if (
+        cashCurrencyCode !==
+          "ILS" &&
+        (
+          savedCashTender.currencyAmountMinor !==
+            tenderPaidMinor ||
+          savedCashTender.exchangeRateMicros !==
+            cashExchangeRateMicros
+        )
+      ) {
+        throw new PosSaleError(
+          "مفتاح الفاتورة مستخدم مسبقًا بمبلغ أو سعر صرف مختلف",
+          409,
+        );
+      }
+    }
+
     return json(
       toSaleResponse(
         result.sale,
@@ -3167,6 +3208,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         undefined,
         customerBalanceMinor,
         savedCardProcessor,
+        savedCashTender,
       ),
       result.alreadyCreated ? 200 : 201,
     );
