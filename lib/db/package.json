@@ -13,7 +13,8 @@
     "migrate:pos:plan": "node ./scripts/run-pos-migrations.cjs --plan",
     "migrate:pos:preflight": "node ./scripts/run-pos-migrations.cjs --preflight",
     "migrate:pos:apply": "node ./scripts/run-pos-migrations.cjs --apply --target 20261003_add_pos_no_receipt_exchange.sql",
-    "historical-balances:dry-run": "node ./scripts/historical-customer-balances.cjs --dry-run"
+    "historical-balances:dry-run": "node ./scripts/historical-customer-balances.cjs --dry-run",
+    "historical-balances:apply": "node ./scripts/historical-customer-balances-apply.cjs --apply"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
