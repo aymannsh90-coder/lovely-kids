@@ -8315,7 +8315,7 @@ textarea:disabled {
 
 /* Mobile price check */
 .mobile-pos-tabs {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .mobile-pos-tabs a {
@@ -16130,5 +16130,482 @@ button.inventory-intelligence-metric {
 
   .financial-cost-input-wrap input {
     width: 105px;
+  }
+}
+
+
+/* =========================================================
+   Mobile assistant drafts
+   ========================================================= */
+
+.mobile-assistant-shell {
+  padding-bottom: 32px;
+}
+
+.mobile-assistant-card {
+  margin: 14px 16px;
+  padding: 16px;
+  border: 1px solid #eceff3;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+}
+
+.mobile-assistant-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.mobile-assistant-heading > span {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #fff1f8;
+  font-size: 21px;
+}
+
+.mobile-assistant-heading h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.mobile-assistant-heading p {
+  margin: 5px 0 0;
+  color: #69717b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mobile-assistant-card textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 122px;
+  border: 1px solid #dce1e7;
+  border-radius: 14px;
+  padding: 12px 13px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.6;
+  background: #fff;
+}
+
+.mobile-assistant-actions {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.mobile-assistant-actions button {
+  min-height: 50px;
+  border-radius: 13px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mobile-assistant-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mobile-assistant-mic {
+  border: 1px solid #d8dde3;
+  background: #f7f8fa;
+  color: #242a31;
+}
+
+.mobile-assistant-mic.is-listening {
+  border-color: #e91e8c;
+  background: #fff1f8;
+  color: #b41469;
+}
+
+.mobile-assistant-save {
+  border: 0;
+  background: #e91e8c;
+  color: #ffffff;
+}
+
+.mobile-assistant-safety {
+  margin-top: 11px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  background: #f6f8fa;
+  color: #5d6670;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.mobile-assistant-recent {
+  padding: 2px 16px 24px;
+}
+
+.mobile-assistant-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0 9px;
+}
+
+.mobile-assistant-section-title strong {
+  font-size: 16px;
+}
+
+.mobile-assistant-section-title span {
+  min-width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #f0f2f4;
+  color: #59616b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mobile-assistant-empty {
+  padding: 24px 12px;
+  border: 1px dashed #dce1e7;
+  border-radius: 14px;
+  text-align: center;
+  color: #747c86;
+  background: #fafbfc;
+}
+
+.mobile-assistant-draft {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #e6e9ed;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.mobile-assistant-draft > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-assistant-draft strong {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.mobile-assistant-draft small {
+  color: #7b838d;
+  font-size: 11px;
+}
+
+.mobile-assistant-draft-meta {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.mobile-assistant-draft-meta > span {
+  direction: ltr;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.mobile-assistant-draft-meta b {
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.mobile-assistant-draft-meta b.is-pending {
+  background: #fff5d8;
+  color: #8a6112;
+}
+
+.mobile-assistant-draft-meta b.is-approved {
+  background: #eaf8ef;
+  color: #227443;
+}
+
+.mobile-assistant-draft-meta b.is-rejected {
+  background: #fff0f0;
+  color: #ad2a2a;
+}
+
+/* =========================================================
+   Assistant desktop review inbox
+   ========================================================= */
+
+.assistant-inbox-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.assistant-inbox-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.assistant-inbox-head > div:first-child > span {
+  color: #e91e8c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assistant-inbox-head h1 {
+  margin: 3px 0 5px;
+  font-size: 26px;
+}
+
+.assistant-inbox-head p {
+  margin: 0;
+  max-width: 720px;
+  color: #68717b;
+}
+
+.assistant-inbox-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.assistant-inbox-filter select {
+  min-height: 42px;
+  border: 1px solid #dce1e7;
+  border-radius: 10px;
+  padding: 0 10px;
+  background: #fff;
+}
+
+.assistant-inbox-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(460px, 1.7fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.assistant-inbox-list,
+.assistant-review-card,
+.assistant-inbox-empty-card {
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.assistant-inbox-list {
+  overflow: hidden;
+}
+
+.assistant-inbox-count {
+  padding: 12px 14px;
+  border-bottom: 1px solid #eceff2;
+  color: #66707a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-inbox-empty {
+  padding: 28px 14px;
+  text-align: center;
+  color: #77808a;
+}
+
+.assistant-inbox-item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid #eef0f3;
+  padding: 13px 14px;
+  text-align: right;
+  background: #fff;
+  cursor: pointer;
+}
+
+.assistant-inbox-item:last-child {
+  border-bottom: 0;
+}
+
+.assistant-inbox-item.is-selected {
+  background: #fff3f9;
+}
+
+.assistant-inbox-item > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.assistant-inbox-item strong {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.assistant-inbox-item small {
+  color: #7b838d;
+  font-size: 11px;
+}
+
+.assistant-inbox-item > span {
+  flex: 0 0 auto;
+  direction: ltr;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.assistant-inbox-empty-card {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  color: #777f89;
+}
+
+.assistant-review-card {
+  padding: 18px;
+}
+
+.assistant-review-original {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  border-radius: 13px;
+  background: #fafbfc;
+}
+
+.assistant-review-original > span {
+  color: #7a828c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.assistant-review-original > strong {
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.assistant-review-original > small {
+  color: #747d87;
+}
+
+.assistant-review-parse {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #f3f8ff;
+  color: #3f5d7a;
+  font-size: 13px;
+}
+
+.assistant-review-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.assistant-review-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assistant-review-form label > span {
+  color: #555f69;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-review-form input,
+.assistant-review-form select {
+  min-height: 44px;
+  border: 1px solid #dce1e7;
+  border-radius: 10px;
+  padding: 0 10px;
+  background: #fff;
+  font: inherit;
+}
+
+.assistant-review-wide,
+.assistant-review-summary,
+.assistant-review-actions,
+.assistant-reviewed-state,
+.assistant-review-warning {
+  grid-column: 1 / -1;
+}
+
+.assistant-review-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #f7f8fa;
+  font-size: 13px;
+}
+
+.assistant-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding-top: 4px;
+}
+
+.assistant-reject-button {
+  min-height: 40px;
+  border: 1px solid #f0c8c8;
+  border-radius: 10px;
+  padding: 0 16px;
+  background: #fff5f5;
+  color: #a12424;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.assistant-reviewed-state {
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: #f6f8fa;
+  font-weight: 800;
+}
+
+.assistant-review-warning {
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #fff8df;
+  color: #795b16;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .assistant-inbox-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assistant-inbox-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-review-form {
+    grid-template-columns: 1fr;
   }
 }
