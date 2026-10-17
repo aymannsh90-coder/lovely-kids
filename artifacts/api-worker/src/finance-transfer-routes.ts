@@ -2,7 +2,6 @@ import {
   cashSessionsTable,
   financeAccountsTable,
   financeCurrenciesTable,
-  financeExchangeRatesTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
 } from "@workspace/db/schema";
@@ -341,47 +340,6 @@ async function loadAccount(
   }
 
   return account;
-}
-
-async function latestRateMicros(
-  tx: any,
-  currencyCode: string,
-) {
-  if (currencyCode === "ILS") {
-    return 1_000_000;
-  }
-
-  const rows =
-    await tx
-      .select()
-      .from(
-        financeExchangeRatesTable,
-      )
-      .where(
-        eq(
-          financeExchangeRatesTable.currencyCode,
-          currencyCode,
-        ),
-      )
-      .orderBy(
-        desc(
-          financeExchangeRatesTable.rateDate,
-        ),
-        desc(
-          financeExchangeRatesTable.id,
-        ),
-      )
-      .limit(1);
-
-  const rate = rows[0];
-
-  if (!rate) {
-    throw new FinanceTransferError(
-      `لا يوجد سعر صرف محفوظ للعملة ${currencyCode}`,
-    );
-  }
-
-  return rate.ilsPerUnitMicros;
 }
 
 async function accountBalanceMinor(
