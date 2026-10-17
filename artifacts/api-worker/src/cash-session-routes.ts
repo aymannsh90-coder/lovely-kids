@@ -597,6 +597,8 @@ async function handleOpenSession(
               auth.user.id,
 
             openingBalanceMinor,
+            expectedBalanceMinor:
+              openingBalanceMinor,
             currencyCode,
             status: "open",
             openingNote,
