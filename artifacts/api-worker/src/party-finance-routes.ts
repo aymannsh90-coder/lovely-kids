@@ -2563,526 +2563,6 @@ async function createVoucher(
             }
           }
 
-          if (
-            isForeignCustomerReceipt
-          ) {
-            if (
-              !voucher.cashSessionId ||
-              !voucher.partyId
-            ) {
-              throw new Error(
-                "FX_RECEIPT_VOID_METADATA_MISSING",
-              );
-            }
-
-            if (
-              originalLines.length !==
-                2 &&
-              originalLines.length !==
-                3
-            ) {
-              throw new PartyFinanceError(
-                "قيد سند العملة الأجنبية لا يطابق البنية الآمنة للعكس.",
-                409,
-              );
-            }
-
-            const businessDate =
-              currentPalestineDate();
-
-            if (
-              voucher.businessDate !==
-              businessDate
-            ) {
-              throw new PartyFinanceError(
-                "إلغاء قبض العملة الأجنبية متاح في نفس يوم العمل فقط وقبل إغلاق الصناديق.",
-                409,
-              );
-            }
-
-            const foreignSessionRows =
-              await tx
-                .select()
-                .from(
-                  cashSessionsTable,
-                )
-                .where(
-                  and(
-                    eq(
-                      cashSessionsTable.id,
-                      voucher.cashSessionId,
-                    ),
-                    eq(
-                      cashSessionsTable.status,
-                      "open",
-                    ),
-                  ),
-                )
-                .limit(1)
-                .for("update");
-
-            const foreignSession =
-              foreignSessionRows[0] ??
-              null;
-
-            if (!foreignSession) {
-              throw new PartyFinanceError(
-                "لا يمكن إلغاء قبض العملة بعد إغلاق جلسة صندوق العملة.",
-                409,
-              );
-            }
-
-            if (
-              foreignSession.businessDate !==
-                voucher.businessDate ||
-              foreignSession.currencyCode !==
-                voucher.currencyCode
-            ) {
-              throw new PartyFinanceError(
-                "جلسة صندوق العملة لا تطابق السند الأصلي.",
-                409,
-              );
-            }
-
-            const foreignCashCode =
-              `CASH_${foreignSession.registerKey.toUpperCase()}`;
-
-            const foreignAccountRows =
-              await tx
-                .select()
-                .from(
-                  financeAccountsTable,
-                )
-                .where(
-                  and(
-                    eq(
-                      financeAccountsTable.code,
-                      foreignCashCode,
-                    ),
-                    eq(
-                      financeAccountsTable.status,
-                      "active",
-                    ),
-                  ),
-                )
-                .limit(1);
-
-            const foreignAccount =
-              foreignAccountRows[0];
-
-            if (
-              !foreignAccount ||
-              foreignAccount.currencyCode !==
-                voucher.currencyCode
-            ) {
-              throw new Error(
-                "FX_RECEIPT_VOID_FOREIGN_ACCOUNT_INVALID",
-              );
-            }
-
-            const foreignLine =
-              originalLines.find(
-                (line) =>
-                  line.accountId ===
-                  foreignAccount.id,
-              );
-
-            if (
-              !foreignLine ||
-              foreignLine.debitMinor <=
-                0 ||
-              foreignLine.creditMinor !==
-                0 ||
-              foreignLine.currencyCode !==
-                voucher.currencyCode ||
-              !foreignLine.currencyAmountMinor ||
-              foreignLine.currencyAmountMinor <=
-                0
-            ) {
-              throw new PartyFinanceError(
-                "سطر صندوق العملة في القيد الأصلي غير صالح للعكس.",
-                409,
-              );
-            }
-
-            if (
-              voucher.transactionAmountMinor !==
-                null &&
-              voucher.transactionAmountMinor !==
-                foreignLine.currencyAmountMinor
-            ) {
-              throw new PartyFinanceError(
-                "مبلغ العملة في السند لا يطابق القيد الأصلي.",
-                409,
-              );
-            }
-
-            const customerLine =
-              originalLines.find(
-                (line) =>
-                  line.customerId ===
-                    voucher.partyId &&
-                  line.creditMinor >
-                    0,
-              );
-
-            if (
-              !customerLine ||
-              customerLine.creditMinor !==
-                voucher.amountMinor ||
-              customerLine.debitMinor !==
-                0
-            ) {
-              throw new PartyFinanceError(
-                "سطر ذمة الزبون في القيد الأصلي غير صالح للعكس.",
-                409,
-              );
-            }
-
-            const mainAccountRows =
-              await tx
-                .select()
-                .from(
-                  financeAccountsTable,
-                )
-                .where(
-                  eq(
-                    financeAccountsTable.code,
-                    "CASH_MAIN",
-                  ),
-                )
-                .limit(1);
-
-            const mainAccount =
-              mainAccountRows[0] ??
-              null;
-
-            const mainCashLine =
-              mainAccount
-                ? originalLines.find(
-                    (line) =>
-                      line.accountId ===
-                      mainAccount.id,
-                  ) ?? null
-                : null;
-
-            const changeMinor =
-              mainCashLine
-                ? mainCashLine.creditMinor
-                : 0;
-
-            if (
-              mainCashLine &&
-              (
-                mainCashLine.creditMinor <=
-                  0 ||
-                mainCashLine.debitMinor !==
-                  0 ||
-                mainCashLine.currencyCode !==
-                  "ILS"
-              )
-            ) {
-              throw new PartyFinanceError(
-                "سطر باقي الشيكل في القيد الأصلي غير صالح للعكس.",
-                409,
-              );
-            }
-
-            if (
-              foreignLine.debitMinor !==
-              customerLine.creditMinor +
-                changeMinor
-            ) {
-              throw new PartyFinanceError(
-                "قيد قبض العملة الأجنبية الأصلي غير متوازن مع الذمة والباقي.",
-                409,
-              );
-            }
-
-            const foreignAmountMinor =
-              foreignLine.currencyAmountMinor;
-
-            const foreignBefore =
-              foreignSession.expectedBalanceMinor ??
-              foreignSession.openingBalanceMinor;
-
-            if (
-              foreignBefore <
-              foreignAmountMinor
-            ) {
-              throw new PartyFinanceError(
-                "رصيد صندوق العملة لا يكفي لعكس القبض.",
-                409,
-              );
-            }
-
-            const foreignAfter =
-              foreignBefore -
-              foreignAmountMinor;
-
-            let ilsSession:
-              | typeof cashSessionsTable.$inferSelect
-              | null =
-              null;
-
-            let ilsBefore:
-              | number
-              | null =
-              null;
-
-            let ilsAfter:
-              | number
-              | null =
-              null;
-
-            if (
-              changeMinor >
-              0
-            ) {
-              if (!mainAccount) {
-                throw new Error(
-                  "FX_RECEIPT_VOID_MAIN_CASH_MISSING",
-                );
-              }
-
-              const ilsSessionRows =
-                await tx
-                  .select()
-                  .from(
-                    cashSessionsTable,
-                  )
-                  .where(
-                    and(
-                      eq(
-                        cashSessionsTable.registerKey,
-                        "main",
-                      ),
-                      eq(
-                        cashSessionsTable.status,
-                        "open",
-                      ),
-                    ),
-                  )
-                  .orderBy(
-                    desc(
-                      cashSessionsTable.openedAt,
-                    ),
-                  )
-                  .limit(1)
-                  .for("update");
-
-              ilsSession =
-                ilsSessionRows[0] ??
-                null;
-
-              if (!ilsSession) {
-                throw new PartyFinanceError(
-                  "لا يمكن إلغاء السند بعد إغلاق صندوق الشيكل الذي خرج منه الباقي.",
-                  409,
-                );
-              }
-
-              if (
-                ilsSession.currencyCode !==
-                  "ILS" ||
-                ilsSession.businessDate !==
-                  voucher.businessDate ||
-                ilsSession.openedAt.getTime() >
-                  voucher.createdAt.getTime()
-              ) {
-                throw new PartyFinanceError(
-                  "جلسة صندوق الشيكل الحالية ليست نفس الجلسة التي خرج منها الباقي.",
-                  409,
-                );
-              }
-
-              ilsBefore =
-                ilsSession.expectedBalanceMinor ??
-                ilsSession.openingBalanceMinor;
-
-              ilsAfter =
-                ilsBefore +
-                changeMinor;
-
-              if (
-                !Number.isSafeInteger(
-                  ilsAfter,
-                ) ||
-                ilsAfter >
-                  MAX_MINOR
-              ) {
-                throw new PartyFinanceError(
-                  "رصيد صندوق الشيكل بعد العكس غير صالح.",
-                  409,
-                );
-              }
-            }
-
-            const reversalPosting =
-              await postFinanceTransaction(
-                tx,
-                {
-                  publicId:
-                    `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
-                  idempotencyKey:
-                    `voucher:${voucher.id}:void`,
-                  businessDate,
-                  transactionType:
-                    "reversal",
-                  sourceType:
-                    "finance_voucher",
-                  sourceId:
-                    String(
-                      voucher.id,
-                    ),
-                  sourceEvent:
-                    "voided",
-                  cashSessionId:
-                    foreignSession.id,
-                  notes:
-                    `عكس ${voucher.publicId}: ${reason}`,
-                  createdByUserId:
-                    auth.user.id,
-                  lines:
-                    originalLines.map(
-                      (line) => ({
-                        accountId:
-                          line.accountId,
-                        customerId:
-                          line.customerId,
-                        employeeId:
-                          line.employeeId,
-                        supplierId:
-                          line.supplierId,
-                        currencyCode:
-                          line.currencyCode,
-                        currencyAmountMinor:
-                          line.currencyAmountMinor,
-                        exchangeRateMicros:
-                          line.exchangeRateMicros,
-                        debitMinor:
-                          line.creditMinor,
-                        creditMinor:
-                          line.debitMinor,
-                        memo:
-                          `عكس: ${line.memo ?? voucher.publicId}`,
-                      }),
-                    ),
-                },
-              );
-
-            await tx
-              .update(
-                financeTransactionsTable,
-              )
-              .set({
-                status:
-                  "reversed",
-                updatedAt:
-                  new Date(),
-              })
-              .where(
-                eq(
-                  financeTransactionsTable.id,
-                  originalFinance.id,
-                ),
-              );
-
-            const updatedVoucherRows =
-              await tx
-                .update(
-                  financeVouchersTable,
-                )
-                .set({
-                  status:
-                    "voided",
-                  voidedAt:
-                    new Date(),
-                  voidedByUserId:
-                    auth.user.id,
-                  voidReason:
-                    reason,
-                  updatedAt:
-                    new Date(),
-                })
-                .where(
-                  eq(
-                    financeVouchersTable.id,
-                    voucher.id,
-                  ),
-                )
-                .returning();
-
-            await tx
-              .update(
-                cashSessionsTable,
-              )
-              .set({
-                expectedBalanceMinor:
-                  foreignAfter,
-                updatedAt:
-                  new Date(),
-              })
-              .where(
-                and(
-                  eq(
-                    cashSessionsTable.id,
-                    foreignSession.id,
-                  ),
-                  eq(
-                    cashSessionsTable.status,
-                    "open",
-                  ),
-                ),
-              );
-
-            if (
-              ilsSession &&
-              ilsAfter !== null
-            ) {
-              await tx
-                .update(
-                  cashSessionsTable,
-                )
-                .set({
-                  expectedBalanceMinor:
-                    ilsAfter,
-                  updatedAt:
-                    new Date(),
-                })
-                .where(
-                  and(
-                    eq(
-                      cashSessionsTable.id,
-                      ilsSession.id,
-                    ),
-                    eq(
-                      cashSessionsTable.status,
-                      "open",
-                    ),
-                  ),
-                );
-            }
-
-            return {
-              voucher:
-                updatedVoucherRows[0],
-              reversal:
-                reversalPosting.transaction,
-              expectedCashBeforeMinor:
-                foreignBefore,
-              expectedCashAfterMinor:
-                foreignAfter,
-              foreignCashBeforeMinor:
-                foreignBefore,
-              foreignCashAfterMinor:
-                foreignAfter,
-              ilsCashBeforeMinor:
-                ilsBefore,
-              ilsCashAfterMinor:
-                ilsAfter,
-            };
-          }
 
           let session:
             | typeof cashSessionsTable.$inferSelect
@@ -4244,6 +3724,531 @@ async function handleVoidVoucher(
               "VOUCHER_FINANCE_LINES_MISSING",
             );
           }
+
+          if (
+            isForeignCustomerReceipt
+          ) {
+            if (
+              !voucher.cashSessionId ||
+              !voucher.partyId
+            ) {
+              throw new Error(
+                "FX_RECEIPT_VOID_METADATA_MISSING",
+              );
+            }
+
+            if (
+              originalLines.length !==
+                2 &&
+              originalLines.length !==
+                3
+            ) {
+              throw new PartyFinanceError(
+                "قيد سند العملة الأجنبية لا يطابق البنية الآمنة للعكس.",
+                409,
+              );
+            }
+
+            const businessDate =
+              currentPalestineDate();
+
+            if (
+              voucher.businessDate !==
+              businessDate
+            ) {
+              throw new PartyFinanceError(
+                "إلغاء قبض العملة الأجنبية متاح في نفس يوم العمل فقط وقبل إغلاق الصناديق.",
+                409,
+              );
+            }
+
+            const foreignSessionRows =
+              await tx
+                .select()
+                .from(
+                  cashSessionsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      cashSessionsTable.id,
+                      voucher.cashSessionId,
+                    ),
+                    eq(
+                      cashSessionsTable.status,
+                      "open",
+                    ),
+                  ),
+                )
+                .limit(1)
+                .for("update");
+
+            const foreignSession =
+              foreignSessionRows[0] ??
+              null;
+
+            if (!foreignSession) {
+              throw new PartyFinanceError(
+                "لا يمكن إلغاء قبض العملة بعد إغلاق جلسة صندوق العملة.",
+                409,
+              );
+            }
+
+            if (
+              foreignSession.businessDate !==
+                voucher.businessDate ||
+              foreignSession.currencyCode !==
+                voucher.currencyCode
+            ) {
+              throw new PartyFinanceError(
+                "جلسة صندوق العملة لا تطابق السند الأصلي.",
+                409,
+              );
+            }
+
+            const foreignCashCode =
+              `CASH_${foreignSession.registerKey.toUpperCase()}`;
+
+            const foreignAccountRows =
+              await tx
+                .select()
+                .from(
+                  financeAccountsTable,
+                )
+                .where(
+                  and(
+                    eq(
+                      financeAccountsTable.code,
+                      foreignCashCode,
+                    ),
+                    eq(
+                      financeAccountsTable.status,
+                      "active",
+                    ),
+                  ),
+                )
+                .limit(1);
+
+            const foreignAccount =
+              foreignAccountRows[0];
+
+            if (
+              !foreignAccount ||
+              foreignAccount.currencyCode !==
+                voucher.currencyCode
+            ) {
+              throw new Error(
+                "FX_RECEIPT_VOID_FOREIGN_ACCOUNT_INVALID",
+              );
+            }
+
+            const foreignLine =
+              originalLines.find(
+                (line) =>
+                  line.accountId ===
+                  foreignAccount.id,
+              );
+
+            if (
+              !foreignLine ||
+              foreignLine.debitMinor <=
+                0 ||
+              foreignLine.creditMinor !==
+                0 ||
+              foreignLine.currencyCode !==
+                voucher.currencyCode ||
+              !foreignLine.currencyAmountMinor ||
+              foreignLine.currencyAmountMinor <=
+                0
+            ) {
+              throw new PartyFinanceError(
+                "سطر صندوق العملة في القيد الأصلي غير صالح للعكس.",
+                409,
+              );
+            }
+
+            if (
+              voucher.transactionAmountMinor !==
+                null &&
+              voucher.transactionAmountMinor !==
+                foreignLine.currencyAmountMinor
+            ) {
+              throw new PartyFinanceError(
+                "مبلغ العملة في السند لا يطابق القيد الأصلي.",
+                409,
+              );
+            }
+
+            const customerLine =
+              originalLines.find(
+                (line) =>
+                  line.customerId ===
+                    voucher.partyId &&
+                  line.creditMinor >
+                    0,
+              );
+
+            if (
+              !customerLine ||
+              customerLine.creditMinor !==
+                voucher.amountMinor ||
+              customerLine.debitMinor !==
+                0
+            ) {
+              throw new PartyFinanceError(
+                "سطر ذمة الزبون في القيد الأصلي غير صالح للعكس.",
+                409,
+              );
+            }
+
+            const mainAccountRows =
+              await tx
+                .select()
+                .from(
+                  financeAccountsTable,
+                )
+                .where(
+                  eq(
+                    financeAccountsTable.code,
+                    "CASH_MAIN",
+                  ),
+                )
+                .limit(1);
+
+            const mainAccount =
+              mainAccountRows[0] ??
+              null;
+
+            const mainCashLine =
+              mainAccount
+                ? originalLines.find(
+                    (line) =>
+                      line.accountId ===
+                      mainAccount.id,
+                  ) ?? null
+                : null;
+
+            const changeMinor =
+              mainCashLine
+                ? mainCashLine.creditMinor
+                : 0;
+
+            if (
+              mainCashLine &&
+              (
+                mainCashLine.creditMinor <=
+                  0 ||
+                mainCashLine.debitMinor !==
+                  0 ||
+                mainCashLine.currencyCode !==
+                  "ILS"
+              )
+            ) {
+              throw new PartyFinanceError(
+                "سطر باقي الشيكل في القيد الأصلي غير صالح للعكس.",
+                409,
+              );
+            }
+
+            if (
+              foreignLine.debitMinor !==
+              customerLine.creditMinor +
+                changeMinor
+            ) {
+              throw new PartyFinanceError(
+                "قيد قبض العملة الأجنبية الأصلي غير متوازن مع الذمة والباقي.",
+                409,
+              );
+            }
+
+            const foreignAmountMinor =
+              foreignLine.currencyAmountMinor;
+
+            const foreignBefore =
+              foreignSession.expectedBalanceMinor ??
+              foreignSession.openingBalanceMinor;
+
+            if (
+              foreignBefore <
+              foreignAmountMinor
+            ) {
+              throw new PartyFinanceError(
+                "رصيد صندوق العملة لا يكفي لعكس القبض.",
+                409,
+              );
+            }
+
+            const foreignAfter =
+              foreignBefore -
+              foreignAmountMinor;
+
+            let ilsSession:
+              | typeof cashSessionsTable.$inferSelect
+              | null =
+              null;
+
+            let ilsBefore:
+              | number
+              | null =
+              null;
+
+            let ilsAfter:
+              | number
+              | null =
+              null;
+
+            if (
+              changeMinor >
+              0
+            ) {
+              if (!mainAccount) {
+                throw new Error(
+                  "FX_RECEIPT_VOID_MAIN_CASH_MISSING",
+                );
+              }
+
+              const ilsSessionRows =
+                await tx
+                  .select()
+                  .from(
+                    cashSessionsTable,
+                  )
+                  .where(
+                    and(
+                      eq(
+                        cashSessionsTable.registerKey,
+                        "main",
+                      ),
+                      eq(
+                        cashSessionsTable.status,
+                        "open",
+                      ),
+                    ),
+                  )
+                  .orderBy(
+                    desc(
+                      cashSessionsTable.openedAt,
+                    ),
+                  )
+                  .limit(1)
+                  .for("update");
+
+              ilsSession =
+                ilsSessionRows[0] ??
+                null;
+
+              if (!ilsSession) {
+                throw new PartyFinanceError(
+                  "لا يمكن إلغاء السند بعد إغلاق صندوق الشيكل الذي خرج منه الباقي.",
+                  409,
+                );
+              }
+
+              if (
+                ilsSession.currencyCode !==
+                  "ILS" ||
+                ilsSession.businessDate !==
+                  voucher.businessDate ||
+                ilsSession.openedAt.getTime() >
+                  voucher.createdAt.getTime()
+              ) {
+                throw new PartyFinanceError(
+                  "جلسة صندوق الشيكل الحالية ليست نفس الجلسة التي خرج منها الباقي.",
+                  409,
+                );
+              }
+
+              ilsBefore =
+                ilsSession.expectedBalanceMinor ??
+                ilsSession.openingBalanceMinor;
+
+              const nextIlsAfter =
+                ilsBefore +
+                changeMinor;
+
+              if (
+                !Number.isSafeInteger(
+                  nextIlsAfter,
+                ) ||
+                nextIlsAfter >
+                  MAX_MINOR
+              ) {
+                throw new PartyFinanceError(
+                  "رصيد صندوق الشيكل بعد العكس غير صالح.",
+                  409,
+                );
+              }
+
+              ilsAfter =
+                nextIlsAfter;
+            }
+
+            const reversalPosting =
+              await postFinanceTransaction(
+                tx,
+                {
+                  publicId:
+                    `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                  idempotencyKey:
+                    `voucher:${voucher.id}:void`,
+                  businessDate,
+                  transactionType:
+                    "reversal",
+                  sourceType:
+                    "finance_voucher",
+                  sourceId:
+                    String(
+                      voucher.id,
+                    ),
+                  sourceEvent:
+                    "voided",
+                  cashSessionId:
+                    foreignSession.id,
+                  notes:
+                    `عكس ${voucher.publicId}: ${reason}`,
+                  createdByUserId:
+                    auth.user.id,
+                  lines:
+                    originalLines.map(
+                      (line) => ({
+                        accountId:
+                          line.accountId,
+                        customerId:
+                          line.customerId,
+                        employeeId:
+                          line.employeeId,
+                        supplierId:
+                          line.supplierId,
+                        currencyCode:
+                          line.currencyCode,
+                        currencyAmountMinor:
+                          line.currencyAmountMinor,
+                        exchangeRateMicros:
+                          line.exchangeRateMicros,
+                        debitMinor:
+                          line.creditMinor,
+                        creditMinor:
+                          line.debitMinor,
+                        memo:
+                          `عكس: ${line.memo ?? voucher.publicId}`,
+                      }),
+                    ),
+                },
+              );
+
+            await tx
+              .update(
+                financeTransactionsTable,
+              )
+              .set({
+                status:
+                  "reversed",
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                eq(
+                  financeTransactionsTable.id,
+                  originalFinance.id,
+                ),
+              );
+
+            const updatedVoucherRows =
+              await tx
+                .update(
+                  financeVouchersTable,
+                )
+                .set({
+                  status:
+                    "voided",
+                  voidedAt:
+                    new Date(),
+                  voidedByUserId:
+                    auth.user.id,
+                  voidReason:
+                    reason,
+                  updatedAt:
+                    new Date(),
+                })
+                .where(
+                  eq(
+                    financeVouchersTable.id,
+                    voucher.id,
+                  ),
+                )
+                .returning();
+
+            await tx
+              .update(
+                cashSessionsTable,
+              )
+              .set({
+                expectedBalanceMinor:
+                  foreignAfter,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                and(
+                  eq(
+                    cashSessionsTable.id,
+                    foreignSession.id,
+                  ),
+                  eq(
+                    cashSessionsTable.status,
+                    "open",
+                  ),
+                ),
+              );
+
+            if (
+              ilsSession &&
+              ilsAfter !== null
+            ) {
+              await tx
+                .update(
+                  cashSessionsTable,
+                )
+                .set({
+                  expectedBalanceMinor:
+                    ilsAfter,
+                  updatedAt:
+                    new Date(),
+                })
+                .where(
+                  and(
+                    eq(
+                      cashSessionsTable.id,
+                      ilsSession.id,
+                    ),
+                    eq(
+                      cashSessionsTable.status,
+                      "open",
+                    ),
+                  ),
+                );
+            }
+
+            return {
+              voucher:
+                updatedVoucherRows[0],
+              reversal:
+                reversalPosting.transaction,
+              expectedCashBeforeMinor:
+                foreignBefore,
+              expectedCashAfterMinor:
+                foreignAfter,
+              foreignCashBeforeMinor:
+                foreignBefore,
+              foreignCashAfterMinor:
+                foreignAfter,
+              ilsCashBeforeMinor:
+                ilsBefore,
+              ilsCashAfterMinor:
+                ilsAfter,
+            };
+          }
+
 
           let session:
             | typeof cashSessionsTable.$inferSelect
