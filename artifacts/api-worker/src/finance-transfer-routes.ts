@@ -461,6 +461,81 @@ async function accountBalanceMinor(
   );
 }
 
+async function assertForeignCashBookHistoryComplete(
+  tx: any,
+  account: {
+    id: number;
+    name: string;
+    currencyCode: string;
+  },
+) {
+  if (
+    account.currencyCode ===
+    "ILS"
+  ) {
+    return;
+  }
+
+  const rows =
+    await tx
+      .select({
+        debitMinor:
+          financeTransactionLinesTable.debitMinor,
+        creditMinor:
+          financeTransactionLinesTable.creditMinor,
+        currencyCode:
+          financeTransactionLinesTable.currencyCode,
+        currencyAmountMinor:
+          financeTransactionLinesTable.currencyAmountMinor,
+        exchangeRateMicros:
+          financeTransactionLinesTable.exchangeRateMicros,
+      })
+      .from(
+        financeTransactionLinesTable,
+      )
+      .where(
+        eq(
+          financeTransactionLinesTable.accountId,
+          account.id,
+        ),
+      );
+
+  const incomplete =
+    rows.some(
+      (line) => {
+        const hasValue =
+          line.debitMinor >
+            0 ||
+          line.creditMinor >
+            0;
+
+        if (!hasValue) {
+          return false;
+        }
+
+        return (
+          line.currencyCode !==
+            account.currencyCode ||
+          line.currencyAmountMinor ===
+            null ||
+          line.currencyAmountMinor <=
+            0 ||
+          line.exchangeRateMicros ===
+            null ||
+          line.exchangeRateMicros <=
+            0
+        );
+      },
+    );
+
+  if (incomplete) {
+    throw new FinanceTransferError(
+      `السجل الدفتري لـ ${account.name} يحتوي حركة قديمة ناقصة مبلغ العملة أو سعر الصرف؛ لا يمكن احتساب متوسط القيمة الدفترية بأمان.`,
+      409,
+    );
+  }
+}
+
 async function accountBaseBalanceMinor(
   tx: any,
   accountId: number,
@@ -1664,6 +1739,11 @@ async function handleCreateCurrencyConversion(
             actualRateMicros =
               destinationRateMicros;
           } else {
+            await assertForeignCashBookHistoryComplete(
+              tx,
+              fromAccount,
+            );
+
             const sourceNativeBookBalance =
               await accountBalanceMinor(
                 tx,
