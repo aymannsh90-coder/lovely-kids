@@ -1136,6 +1136,46 @@ export default function SalePanel({
 
     if (
       paymentMethod === "cash" &&
+      cashCurrencyCode !== "ILS"
+    ) {
+      if (
+        !selectedCashCurrency ||
+        !selectedCashCurrency.cashAccountId
+      ) {
+        setError(
+          "صندوق العملة المختارة غير متاح.",
+        );
+        return;
+      }
+
+      if (
+        !selectedCashCurrency.cashSessionId ||
+        selectedCashCurrency.cashSessionBusinessDate !==
+          session.businessDate
+      ) {
+        setError(
+          `يجب فتح جلسة صندوق ${cashCurrencyCode} لليوم الحالي أولًا.`,
+        );
+        return;
+      }
+
+      if (!cashRateMicros) {
+        setError(
+          "أدخل سعر صرف صحيحًا للعملة المختارة.",
+        );
+        return;
+      }
+
+      if (tenderPaidMinor <= 0) {
+        setError(
+          "أدخل المبلغ المستلم بالعملة الأجنبية.",
+        );
+        return;
+      }
+    }
+
+    if (
+      paymentMethod === "cash" &&
       paidMinor < totalMinor
     ) {
       setError(
@@ -1260,6 +1300,17 @@ export default function SalePanel({
               undefined
             : undefined,
 
+        cashCurrencyCode:
+          paymentMethod === "cash"
+            ? cashCurrencyCode
+            : "ILS",
+
+        cashExchangeRate:
+          paymentMethod === "cash" &&
+          cashCurrencyCode !== "ILS"
+            ? cashExchangeRate.trim()
+            : undefined,
+
         discountAmount: discountAmount.trim(),
 
         paidAmount: paidAmount.trim(),
@@ -1336,7 +1387,9 @@ export default function SalePanel({
       printAfterSaleRef.current = printAfter;
       setLastSale(result);
       setCart([]);
-      setDiscountAmount("0.00");
+      setDiscountAmount("");
+      setCashCurrencyCode("ILS");
+      setCashExchangeRate("1");
       setPaymentMethod("cash");
       setCardProcessor(null);
       setSelectedCustomerId("");
