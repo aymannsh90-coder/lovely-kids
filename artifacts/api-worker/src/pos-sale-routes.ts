@@ -3,6 +3,8 @@ import {
   cashSessionsTable,
   customersTable,
   financeAccountsTable,
+  financeCurrenciesTable,
+  financeExchangeRatesTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
   posSaleItemCostsTable,
@@ -281,6 +283,97 @@ function parseMoneyToMinor(value: unknown): number | null {
   }
 
   return minor;
+}
+
+function normalizeCurrencyCode(
+  value: unknown,
+) {
+  const normalized =
+    typeof value === "string" &&
+    value.trim()
+      ? value
+          .trim()
+          .toUpperCase()
+      : "ILS";
+
+  return /^[A-Z]{3}$/.test(
+    normalized,
+  )
+    ? normalized
+    : null;
+}
+
+function parseExchangeRateMicros(
+  value: unknown,
+) {
+  const normalized =
+    typeof value === "number"
+      ? String(value)
+      : typeof value === "string"
+        ? value
+            .trim()
+            .replace(",", ".")
+        : "";
+
+  const match =
+    /^(\d+)(?:\.(\d{1,6}))?$/.exec(
+      normalized,
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const micros =
+    Number(match[1]) *
+      1_000_000 +
+    Number(
+      (match[2] ?? "")
+        .padEnd(6, "0"),
+    );
+
+  if (
+    !Number.isSafeInteger(
+      micros,
+    ) ||
+    micros <= 0 ||
+    micros > MAX_MINOR
+  ) {
+    return null;
+  }
+
+  return micros;
+}
+
+function convertedBaseMinor(
+  currencyAmountMinor: number,
+  exchangeRateMicros: number,
+) {
+  const rounded =
+    (
+      BigInt(
+        currencyAmountMinor,
+      ) *
+        BigInt(
+          exchangeRateMicros,
+        ) +
+      500_000n
+    ) /
+    1_000_000n;
+
+  if (
+    rounded <= 0n ||
+    rounded >
+      BigInt(
+        MAX_MINOR,
+      )
+  ) {
+    return null;
+  }
+
+  return Number(
+    rounded,
+  );
 }
 
 function parseOptionalText(
