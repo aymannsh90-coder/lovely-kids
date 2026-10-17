@@ -726,7 +726,9 @@ async function handleListCashAccounts(
       operationalBalanceMinor:
         session
           ? session
-              .expectedBalanceMinor
+              .expectedBalanceMinor ??
+            session
+              .openingBalanceMinor
           : bookBalanceMinor,
       balanceSource:
         session
