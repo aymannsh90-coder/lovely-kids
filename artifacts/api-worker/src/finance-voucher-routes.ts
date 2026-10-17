@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import {
+  customerReceivableBalanceMinor,
   ensureCustomerReceivableControlAccount,
 } from "./finance-customer-ledger";
 import {
@@ -309,6 +310,89 @@ function moneyMinor(
   return minor;
 }
 
+function exchangeRateMicros(
+  value: unknown,
+) {
+  const normalized =
+    typeof value === "number"
+      ? String(value)
+      : typeof value === "string"
+        ? value
+            .trim()
+            .replace(",", ".")
+        : "";
+
+  const match =
+    /^(\d+)(?:\.(\d{1,6}))?$/.exec(
+      normalized,
+    );
+
+  if (!match) {
+    throw new VoucherError(
+      "سعر الصرف غير صالح",
+    );
+  }
+
+  const whole =
+    Number(match[1]);
+  const fraction =
+    Number(
+      (match[2] ?? "")
+        .padEnd(6, "0"),
+    );
+
+  const micros =
+    whole * 1_000_000 +
+    fraction;
+
+  if (
+    !Number.isSafeInteger(
+      micros,
+    ) ||
+    micros <= 0 ||
+    micros > MAX_MINOR
+  ) {
+    throw new VoucherError(
+      "سعر الصرف خارج الحد المسموح",
+    );
+  }
+
+  return micros;
+}
+
+function convertedBaseMinor(
+  currencyAmountMinor: number,
+  rateMicros: number,
+) {
+  const rounded =
+    (
+      BigInt(
+        currencyAmountMinor,
+      ) *
+        BigInt(
+          rateMicros,
+        ) +
+      500_000n
+    ) /
+    1_000_000n;
+
+  if (
+    rounded <= 0n ||
+    rounded >
+      BigInt(
+        MAX_MINOR,
+      )
+  ) {
+    throw new VoucherError(
+      "قيمة العملة بعد التحويل خارج الحد المسموح",
+    );
+  }
+
+  return Number(
+    rounded,
+  );
+}
+
 function registerKey(
   value: unknown,
 ) {
@@ -509,6 +593,159 @@ async function cashAccount(
         "asset",
     },
   );
+}
+
+function registerKeyFromCashCode(
+  code: string,
+) {
+  if (
+    !code.startsWith(
+      "CASH_",
+    )
+  ) {
+    throw new VoucherError(
+      "الحساب المختار ليس صندوقًا نقديًا",
+      409,
+    );
+  }
+
+  return registerKey(
+    code
+      .slice(
+        "CASH_".length,
+      )
+      .toLowerCase(),
+  );
+}
+
+async function foreignCashAccount(
+  tx: any,
+  accountId: number,
+) {
+  const rows =
+    await tx
+      .select()
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.id,
+            accountId,
+          ),
+          eq(
+            financeAccountsTable.accountType,
+            "asset",
+          ),
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+        ),
+      )
+      .limit(1);
+
+  const account =
+    rows[0];
+
+  if (
+    !account ||
+    !account.code.startsWith(
+      "CASH_",
+    )
+  ) {
+    throw new VoucherError(
+      "صندوق العملة غير موجود أو غير فعال",
+      404,
+    );
+  }
+
+  if (
+    account.currencyCode ===
+      "ILS"
+  ) {
+    throw new VoucherError(
+      "اختر صندوقًا بعملة أجنبية",
+      409,
+    );
+  }
+
+  return account;
+}
+
+async function loadOpenCashSessionForAccount(
+  tx: any,
+  account: typeof financeAccountsTable.$inferSelect,
+) {
+  const register =
+    registerKeyFromCashCode(
+      account.code,
+    );
+
+  const rows =
+    await tx
+      .select()
+      .from(
+        cashSessionsTable,
+      )
+      .where(
+        and(
+          eq(
+            cashSessionsTable.registerKey,
+            register,
+          ),
+          eq(
+            cashSessionsTable.status,
+            "open",
+          ),
+        ),
+      )
+      .orderBy(
+        desc(
+          cashSessionsTable.openedAt,
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+  const session =
+    rows[0] ?? null;
+
+  if (!session) {
+    throw new VoucherError(
+      `يجب فتح جلسة ${account.name} أولًا`,
+      409,
+    );
+  }
+
+  if (
+    session.currencyCode !==
+      account.currencyCode
+  ) {
+    throw new VoucherError(
+      "عملة جلسة الصندوق لا تطابق عملة الحساب",
+      409,
+    );
+  }
+
+  const today =
+    currentPalestineDate();
+
+  if (
+    session.businessDate !==
+      today
+  ) {
+    throw new VoucherError(
+      `جلسة ${account.name} مفتوحة بتاريخ ${session.businessDate}. أغلقها وافتح جلسة اليوم ${today}.`,
+      409,
+    );
+  }
+
+  return {
+    register,
+    session,
+  };
 }
 
 async function bankAccount(
@@ -1370,6 +1607,9 @@ async function insertVoucher(
       | "bank"
       | "non_cash";
     amountMinor: number;
+    currencyCode?: string;
+    transactionAmountMinor?: number;
+    exchangeRateMicros?: number;
     bankAccountId:
       | number
       | null;
@@ -1410,10 +1650,13 @@ async function insertVoucher(
         amountMinor:
           input.amountMinor,
         currencyCode:
+          input.currencyCode ??
           "ILS",
         transactionAmountMinor:
+          input.transactionAmountMinor ??
           input.amountMinor,
         exchangeRateMicros:
+          input.exchangeRateMicros ??
           1_000_000,
         bankAccountId:
           input.bankAccountId,
@@ -1441,6 +1684,439 @@ async function insertVoucher(
   }
 
   return rows[0];
+}
+
+async function handleForeignCurrencyCustomerReceipt(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    (await request
+      .json()
+      .catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+
+  if (!body) {
+    return json(
+      {
+        error:
+          "بيانات سند القبض بالعملة الأجنبية غير صالحة",
+      },
+      400,
+    );
+  }
+
+  try {
+    const customerId =
+      positiveId(
+        body.customerId,
+        "الزبون",
+      );
+
+    const settlementMinor =
+      moneyMinor(
+        body.amount,
+      );
+
+    const foreignAmountMinor =
+      moneyMinor(
+        body.foreignAmount,
+      );
+
+    const rateMicros =
+      exchangeRateMicros(
+        body.exchangeRate,
+      );
+
+    const foreignCashAccountId =
+      positiveId(
+        body.foreignCashAccountId,
+        "صندوق العملة",
+      );
+
+    const key =
+      idempotencyKey(
+        body.idempotencyKey,
+      );
+
+    const notes =
+      textValue(
+        body.notes,
+        1000,
+      );
+
+    const businessDate =
+      currentPalestineDate();
+
+    const receivedBaseMinor =
+      convertedBaseMinor(
+        foreignAmountMinor,
+        rateMicros,
+      );
+
+    if (
+      receivedBaseMinor <
+      settlementMinor
+    ) {
+      throw new VoucherError(
+        "قيمة العملة المستلمة بالشيكل أقل من المبلغ المراد تسديده",
+        409,
+      );
+    }
+
+    const changeMinor =
+      receivedBaseMinor -
+      settlementMinor;
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const duplicate =
+            await existingVoucher(
+              tx,
+              key,
+            );
+
+          if (duplicate) {
+            return {
+              alreadyCreated: true,
+              voucher:
+                duplicate,
+              financeTransaction:
+                null,
+              receivedBaseMinor,
+              changeMinor,
+              foreignCashBeforeMinor:
+                null,
+              foreignCashAfterMinor:
+                null,
+              ilsCashBeforeMinor:
+                null,
+              ilsCashAfterMinor:
+                null,
+            };
+          }
+
+          await loadActiveCustomer(
+            tx,
+            customerId,
+          );
+
+          const customerBalanceMinor =
+            await customerReceivableBalanceMinor(
+              tx,
+              customerId,
+            );
+
+          if (
+            customerBalanceMinor <=
+            0
+          ) {
+            throw new VoucherError(
+              "لا توجد ذمة مدينة على الزبون لتسجيل قبض عليها",
+              409,
+            );
+          }
+
+          if (
+            settlementMinor >
+            customerBalanceMinor
+          ) {
+            throw new VoucherError(
+              "المبلغ المسدد أكبر من ذمة الزبون الحالية",
+              409,
+            );
+          }
+
+          const foreignAccount =
+            await foreignCashAccount(
+              tx,
+              foreignCashAccountId,
+            );
+
+          const foreignSessionInfo =
+            await loadOpenCashSessionForAccount(
+              tx,
+              foreignAccount,
+            );
+
+          const foreignCashState =
+            await updateCashExpected(
+              tx,
+              foreignSessionInfo.session,
+              foreignAmountMinor,
+            );
+
+          let ilsSession:
+            | typeof cashSessionsTable.$inferSelect
+            | null =
+            null;
+
+          let ilsCashState:
+            | {
+                before: number;
+                after: number;
+              }
+            | null =
+            null;
+
+          let mainCash:
+            | typeof financeAccountsTable.$inferSelect
+            | null =
+            null;
+
+          if (
+            changeMinor >
+            0
+          ) {
+            ilsSession =
+              await loadCashSession(
+                tx,
+                "main",
+              );
+
+            if (
+              ilsSession.businessDate !==
+              businessDate
+            ) {
+              throw new VoucherError(
+                `جلسة الصندوق الرئيسي مفتوحة بتاريخ ${ilsSession.businessDate}. أغلقها وافتح جلسة اليوم ${businessDate}.`,
+                409,
+              );
+            }
+
+            mainCash =
+              await cashAccount(
+                tx,
+                "main",
+              );
+
+            ilsCashState =
+              await updateCashExpected(
+                tx,
+                ilsSession,
+                -changeMinor,
+              );
+          }
+
+          const customerAccount =
+            await ensureCustomerReceivableControlAccount(
+              tx,
+            );
+
+          const voucher =
+            await insertVoucher(
+              tx,
+              {
+                publicPrefix:
+                  "REC",
+                key,
+                voucherType:
+                  "receipt",
+                voucherPurpose:
+                  "customer_receipt",
+                partyType:
+                  "customer",
+                partyId:
+                  customerId,
+                paymentMethod:
+                  "cash",
+                amountMinor:
+                  settlementMinor,
+                currencyCode:
+                  foreignAccount.currencyCode,
+                transactionAmountMinor:
+                  foreignAmountMinor,
+                exchangeRateMicros:
+                  rateMicros,
+                bankAccountId:
+                  null,
+                cashSessionId:
+                  foreignSessionInfo.session.id,
+                notes:
+                  notes ??
+                  `قبض ${foreignAmountMinor / 100} ${foreignAccount.currencyCode} بسعر ${rateMicros / 1_000_000}؛ تسديد ${settlementMinor / 100} ₪${changeMinor > 0 ? `؛ باقي ${changeMinor / 100} ₪` : ""}`,
+                userId:
+                  Number(
+                    auth.user.id,
+                  ),
+                businessDate,
+              },
+            );
+
+          const lines:
+            FinancePostingLineInput[] =
+            [
+              {
+                accountId:
+                  foreignAccount.id,
+                currencyCode:
+                  foreignAccount.currencyCode,
+                currencyAmountMinor:
+                  foreignAmountMinor,
+                exchangeRateMicros:
+                  rateMicros,
+                debitMinor:
+                  receivedBaseMinor,
+                memo:
+                  `قبض ${foreignAmountMinor / 100} ${foreignAccount.currencyCode} إلى ${foreignAccount.name}`,
+              },
+              {
+                accountId:
+                  customerAccount.id,
+                customerId,
+                currencyCode:
+                  "ILS",
+                currencyAmountMinor:
+                  settlementMinor,
+                exchangeRateMicros:
+                  1_000_000,
+                creditMinor:
+                  settlementMinor,
+                memo:
+                  "تسديد ذمة الزبون",
+              },
+            ];
+
+          if (
+            changeMinor >
+              0 &&
+            mainCash
+          ) {
+            lines.push({
+              accountId:
+                mainCash.id,
+              currencyCode:
+                "ILS",
+              currencyAmountMinor:
+                changeMinor,
+              exchangeRateMicros:
+                1_000_000,
+              creditMinor:
+                changeMinor,
+              memo:
+                "باقي للزبون من صندوق الشيكل",
+            });
+          }
+
+          const posting =
+            await postFinanceTransaction(
+              tx,
+              {
+                publicId:
+                  `FIN-${businessDate.replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+                idempotencyKey:
+                  `voucher:${voucher.id}:posted`,
+                businessDate,
+                transactionType:
+                  "receipt",
+                sourceType:
+                  "finance_voucher",
+                sourceId:
+                  String(
+                    voucher.id,
+                  ),
+                sourceEvent:
+                  "receipt",
+                cashSessionId:
+                  foreignSessionInfo.session.id,
+                notes:
+                  voucher.notes ??
+                  voucher.publicId,
+                createdByUserId:
+                  Number(
+                    auth.user.id,
+                  ),
+                lines,
+              },
+            );
+
+          const updatedRows =
+            await tx
+              .update(
+                financeVouchersTable,
+              )
+              .set({
+                financeTransactionId:
+                  posting.transaction.id,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                eq(
+                  financeVouchersTable.id,
+                  voucher.id,
+                ),
+              )
+              .returning();
+
+          return {
+            alreadyCreated: false,
+            voucher:
+              updatedRows[0] ??
+              voucher,
+            financeTransaction:
+              posting.transaction,
+            receivedBaseMinor,
+            changeMinor,
+            foreignCashBeforeMinor:
+              foreignCashState.before,
+            foreignCashAfterMinor:
+              foreignCashState.after,
+            ilsCashBeforeMinor:
+              ilsCashState?.before ??
+              null,
+            ilsCashAfterMinor:
+              ilsCashState?.after ??
+              null,
+          };
+        },
+      );
+
+    return json(
+      result,
+      201,
+    );
+  } catch (caught) {
+    if (
+      caught instanceof
+        VoucherError
+    ) {
+      return json(
+        {
+          error:
+            caught.message,
+        },
+        caught.status,
+      );
+    }
+
+    console.error(
+      "FOREIGN_CURRENCY_CUSTOMER_RECEIPT_FAILED",
+      caught,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر حفظ قبض الزبون بالعملة الأجنبية",
+      },
+      500,
+    );
+  }
 }
 
 async function handlePartyVoucher(
@@ -3070,6 +3746,18 @@ export async function handleUnifiedVoucherRequest(
     new URL(
       request.url,
     ).pathname;
+
+  if (
+    request.method === "POST" &&
+    path ===
+      "/api/pos/finance/vouchers/foreign-currency-customer-receipt"
+  ) {
+    return handleForeignCurrencyCustomerReceipt(
+      request,
+      db,
+      env,
+    );
+  }
 
   if (
     request.method === "POST" &&
