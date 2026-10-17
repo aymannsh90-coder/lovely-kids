@@ -12,19 +12,23 @@ import {
   createPosBankAccount,
   createPosFinanceCashAccount,
   createPosFinanceTransfer,
+  createPosCurrencyConversion,
   openCashSession,
   closeCashSession,
   getPosBankAccounts,
   getPosFinanceBankingReference,
   getPosFinanceCashAccounts,
   getPosFinanceTransfers,
+  getPosCurrencyConversions,
   reversePosFinanceTransfer,
+  reversePosCurrencyConversion,
   savePosExchangeRate,
   type PosBank,
   type PosBankAccount,
   type PosFinanceCashAccount,
   type PosFinanceCurrency,
   type PosFinanceTransfer,
+  type PosCurrencyConversion,
 } from "../../lib/api";
 
 interface TransferAccountOption {
@@ -50,6 +54,21 @@ function formatMinor(
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(minor / 100) + " " + symbol;
+}
+
+function newCurrencyConversionIdempotencyKey() {
+  const randomPart =
+    globalThis.crypto?.randomUUID?.() ??
+    (Date.now().toString(36) +
+      "-" +
+      Math.random()
+        .toString(36)
+        .slice(2));
+
+  return (
+    "currency-conversion:" +
+    randomPart
+  );
 }
 
 function newTransferIdempotencyKey() {
@@ -100,6 +119,14 @@ export default function BankingPage() {
   ] = useState<
     PosFinanceTransfer[]
   >([]);
+
+  const [
+    conversions,
+    setConversions,
+  ] = useState<
+    PosCurrencyConversion[]
+  >([]);
+
 
   const [
     rateInputs,
@@ -174,6 +201,41 @@ export default function BankingPage() {
   const transferIdempotencyKey =
     useRef<string | null>(null);
 
+  const [
+    conversionFromAccountId,
+    setConversionFromAccountId,
+  ] = useState<number | null>(
+    null,
+  );
+
+  const [
+    conversionToAccountId,
+    setConversionToAccountId,
+  ] = useState<number | null>(
+    null,
+  );
+
+  const [
+    conversionFromAmount,
+    setConversionFromAmount,
+  ] = useState("");
+
+  const [
+    conversionToAmount,
+    setConversionToAmount,
+  ] = useState("");
+
+  const [
+    conversionNotes,
+    setConversionNotes,
+  ] = useState("");
+
+  const conversionIdempotencyKey =
+    useRef<string | null>(
+      null,
+    );
+
+
   const [loading, setLoading] =
     useState(true);
 
@@ -189,6 +251,19 @@ export default function BankingPage() {
     transferSaving,
     setTransferSaving,
   ] = useState(false);
+
+  const [
+    conversionSaving,
+    setConversionSaving,
+  ] = useState(false);
+
+  const [
+    reversingConversionId,
+    setReversingConversionId,
+  ] = useState<string | null>(
+    null,
+  );
+
 
   const [
     cashSessionActionId,
@@ -241,11 +316,23 @@ export default function BankingPage() {
                 [] as PosFinanceTransfer[],
             });
 
+      const conversionPromise =
+        user?.isOwner
+          ? getPosCurrencyConversions(
+              token,
+            )
+          : Promise.resolve({
+              results:
+                [] as PosCurrencyConversion[],
+            });
+
+
       const [
         reference,
         accountResult,
         cashResult,
         transferResult,
+        conversionResult,
       ] =
         await Promise.all([
           getPosFinanceBankingReference(
@@ -256,6 +343,7 @@ export default function BankingPage() {
           ),
           cashPromise,
           transferPromise,
+          conversionPromise,
         ]);
 
       setCurrencies(
@@ -272,6 +360,9 @@ export default function BankingPage() {
       );
       setTransfers(
         transferResult.results,
+      );
+      setConversions(
+        conversionResult.results,
       );
 
       setRateInputs(
