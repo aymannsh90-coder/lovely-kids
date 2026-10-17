@@ -640,6 +640,72 @@ export default function SalePanel({
     onUnauthorized,
   ]);
 
+  useEffect(() => {
+    let active = true;
+
+    void getPosSaleCashCurrencies(
+      token,
+    )
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+
+        setCashCurrencies(
+          response.currencies,
+        );
+
+        const defaultCurrency =
+          response.currencies.find(
+            (currency) =>
+              currency.code ===
+              response.defaultCurrencyCode,
+          ) ??
+          response.currencies.find(
+            (currency) =>
+              currency.code ===
+              "ILS",
+          ) ??
+          null;
+
+        if (
+          defaultCurrency &&
+          cashCurrencyCode ===
+            "ILS"
+        ) {
+          setCashCurrencyCode(
+            defaultCurrency.code,
+          );
+          setCashExchangeRate(
+            defaultCurrency.latestRate
+              ? String(
+                  defaultCurrency.latestRate,
+                )
+              : "1",
+          );
+        }
+      })
+      .catch((caught) => {
+        if (!active) {
+          return;
+        }
+
+        if (
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          onUnauthorized();
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    token,
+    onUnauthorized,
+  ]);
+
   function clearProductSearch() {
     setSearchResults([]);
     setSearchOpen(false);
