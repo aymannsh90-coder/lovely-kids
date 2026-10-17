@@ -237,9 +237,87 @@ function amountFromText(
   text: string,
 ) {
   const normalized =
-    normalizeDigits(
-      text,
-    ).replace(",", ".");
+    normalizeArabic(
+      normalizeDigits(
+        text,
+      ).replace(",", "."),
+    );
+
+  const spokenDecimal =
+    normalized.match(
+      /(\d+)\s*(?:شيكل|شواكل|₪)?\s*(?:فاصله|فاصلة|نقطه|نقطة)\s*(\d{1,2})(?!\d)/,
+    );
+
+  if (spokenDecimal) {
+    const whole =
+      Number(
+        spokenDecimal[1],
+      );
+
+    const fractionText =
+      spokenDecimal[2];
+
+    const fraction =
+      fractionText.length === 1
+        ? Number(
+            fractionText,
+          ) / 10
+        : Number(
+            fractionText,
+          ) / 100;
+
+    const amount =
+      whole + fraction;
+
+    if (
+      Number.isFinite(
+        amount,
+      ) &&
+      amount > 0 &&
+      amount <=
+        21_474_836.47
+    ) {
+      return Math.round(
+        amount * 100,
+      );
+    }
+  }
+
+  const agorotAmount =
+    normalized.match(
+      /(\d+)\s*(?:شيكل|شواكل|₪)?\s*(?:و\s*)?(\d{1,2})\s*(?:اغوره|اغورات)/,
+    );
+
+  if (agorotAmount) {
+    const whole =
+      Number(
+        agorotAmount[1],
+      );
+
+    const agorot =
+      Number(
+        agorotAmount[2],
+      );
+
+    const amount =
+      whole +
+      agorot / 100;
+
+    if (
+      Number.isFinite(
+        amount,
+      ) &&
+      agorot >= 0 &&
+      agorot <= 99 &&
+      amount > 0 &&
+      amount <=
+        21_474_836.47
+    ) {
+      return Math.round(
+        amount * 100,
+      );
+    }
+  }
 
   const matches =
     normalized.match(
