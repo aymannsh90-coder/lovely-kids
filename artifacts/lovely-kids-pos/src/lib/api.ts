@@ -1657,6 +1657,93 @@ export function createPosFinanceCashAccount(
   );
 }
 
+export interface PosCurrencyConversion {
+  transaction:
+    PosFinanceTransferTransaction;
+  source:
+    | PosFinanceTransferAccount
+    | null;
+  destination:
+    | PosFinanceTransferAccount
+    | null;
+  fromAmountMinor: number;
+  toAmountMinor: number;
+  sourceBookBaseMinor: number;
+  destinationBaseMinor: number;
+  fxDifferenceMinor: number;
+  actualRateMicros: number;
+}
+
+export function getPosCurrencyConversions(
+  token: string,
+) {
+  return apiRequest<{
+    results:
+      PosCurrencyConversion[];
+  }>(
+    "/api/pos/finance/currency-conversions",
+    {},
+    token,
+  );
+}
+
+export function createPosCurrencyConversion(
+  token: string,
+  input: {
+    idempotencyKey: string;
+    fromAccountId: number;
+    toAccountId: number;
+    fromAmount: string;
+    toAmount: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    transaction:
+      PosFinanceTransferTransaction;
+    fromAccount?: PosFinanceTransferAccount;
+    toAccount?: PosFinanceTransferAccount;
+    fromAmountMinor?: number;
+    toAmountMinor?: number;
+    sourceBookBaseMinor?: number;
+    destinationBaseMinor?: number;
+    actualRateMicros?: number;
+    fxDifferenceMinor?: number;
+  }>(
+    "/api/pos/finance/currency-conversions",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function reversePosCurrencyConversion(
+  token: string,
+  input: {
+    publicId: string;
+    reason: string;
+  },
+) {
+  return apiRequest<{
+    alreadyReversed: boolean;
+    transaction:
+      PosFinanceTransferTransaction;
+    reversal?:
+      PosFinanceTransferTransaction;
+  }>(
+    "/api/pos/finance/currency-conversions/reverse",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+
 export function getPosFinanceTransfers(
   token: string,
 ) {
