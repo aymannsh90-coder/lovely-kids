@@ -321,7 +321,10 @@ export async function getCashTenderForSale(
 
   const foreignLine =
     lines.find(
-      (line) =>
+      (
+        line:
+          typeof financeTransactionLinesTable.$inferSelect,
+      ) =>
         line.debitMinor >
           0 &&
         line.currencyCode !==
