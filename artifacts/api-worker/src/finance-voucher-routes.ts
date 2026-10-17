@@ -3085,6 +3085,16 @@ async function handleReplaceUnifiedVoucher(
           }
 
           if (
+            voucher.currencyCode !==
+            "ILS"
+          ) {
+            throw new VoucherError(
+              "تعديل سند القبض بعملة أجنبية يحتاج مسار العكس متعدد الصناديق؛ ألغِ التعديل حتى Stage 3.",
+              409,
+            );
+          }
+
+          if (
             voucher.voucherType !==
               "receipt" &&
             voucher.voucherType !==
