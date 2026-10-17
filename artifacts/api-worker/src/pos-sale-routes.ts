@@ -2669,7 +2669,104 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         );
       }
 
-      if (cashReceivedMinor > 0) {
+      if (foreignCashTarget) {
+        const cashSalesAccount =
+          await ensureSaleFinanceAccount(
+            tx,
+            {
+              code:
+                "POS_SALES_CASH",
+              name:
+                "مبيعات نقطة البيع النقدية",
+              accountType:
+                "income",
+            },
+          );
+
+        const mainCashAccount =
+          changeMinor > 0
+            ? await ensureSaleFinanceAccount(
+                tx,
+                {
+                  code:
+                    "CASH_MAIN",
+                  name:
+                    "الصندوق الرئيسي",
+                  accountType:
+                    "asset",
+                },
+              )
+            : null;
+
+        await postFinanceTransaction(
+          tx,
+          {
+            publicId:
+              `FIN-CASH-${sale.publicId}`,
+            idempotencyKey:
+              `pos-sale:${sale.id}:cash-settlement`,
+            businessDate:
+              sale.businessDate,
+            transactionType:
+              "sale",
+            sourceType:
+              "pos_sale",
+            sourceId:
+              String(sale.id),
+            sourceEvent:
+              "cash_settlement",
+            cashSessionId:
+              foreignCashTarget.session.id,
+            notes:
+              `بيع نقدي ${sale.publicId} — ${tenderPaidMinor / 100} ${cashCurrencyCode} بسعر ${cashExchangeRateMicros / 1_000_000}`,
+            createdByUserId:
+              auth.user.id,
+            lines: [
+              {
+                accountId:
+                  foreignCashTarget.account.id,
+                currencyCode:
+                  cashCurrencyCode,
+                currencyAmountMinor:
+                  tenderPaidMinor,
+                exchangeRateMicros:
+                  cashExchangeRateMicros,
+                debitMinor:
+                  paidMinor,
+                creditMinor:
+                  0,
+                memo:
+                  `تحصيل ${tenderPaidMinor / 100} ${cashCurrencyCode} لبيع ${sale.publicId}`,
+              },
+              {
+                accountId:
+                  cashSalesAccount.id,
+                debitMinor:
+                  0,
+                creditMinor:
+                  totalMinor,
+                memo:
+                  `مبيعات نقدية ${sale.publicId}`,
+              },
+              ...(mainCashAccount &&
+              changeMinor > 0
+                ? [
+                    {
+                      accountId:
+                        mainCashAccount.id,
+                      debitMinor:
+                        0,
+                      creditMinor:
+                        changeMinor,
+                      memo:
+                        `باقي للزبون من صندوق الشيكل ${sale.publicId}`,
+                    },
+                  ]
+                : []),
+            ],
+          },
+        );
+      } else if (cashReceivedMinor > 0) {
         const cashAccount =
           await ensureSaleFinanceAccount(
             tx,
