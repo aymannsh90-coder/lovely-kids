@@ -1397,6 +1397,11 @@ async function handleCustomerLedger(
             transaction
               ?.businessDate ??
             null,
+          referencePeriod:
+            referencePeriodByTransactionId.get(
+              line.transactionId,
+            ) ??
+            null,
           createdAt:
             transaction
               ?.createdAt ??
@@ -2056,6 +2061,49 @@ async function handleEmployeeLedger(
           transaction,
         ],
       ),
+    );
+
+  const voucherPeriods =
+    txIds.length
+      ? await db
+          .select({
+            financeTransactionId:
+              financeVouchersTable.financeTransactionId,
+            referencePeriod:
+              financeVouchersTable.referencePeriod,
+          })
+          .from(
+            financeVouchersTable,
+          )
+          .where(
+            inArray(
+              financeVouchersTable.financeTransactionId,
+              txIds,
+            ),
+          )
+      : [];
+
+  const referencePeriodByTransactionId =
+    new Map(
+      voucherPeriods
+        .filter(
+          (
+            voucher,
+          ): voucher is {
+            financeTransactionId: number;
+            referencePeriod:
+              | string
+              | null;
+          } =>
+            voucher.financeTransactionId !==
+            null,
+        )
+        .map(
+          (voucher) => [
+            voucher.financeTransactionId,
+            voucher.referencePeriod,
+          ],
+        ),
     );
 
   let advanceMinor = 0;
