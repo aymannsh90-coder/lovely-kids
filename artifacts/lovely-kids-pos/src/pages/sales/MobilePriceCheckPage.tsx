@@ -293,6 +293,10 @@ export default function MobilePriceCheckPage() {
           >
             فحص السعر
           </Link>
+
+          <Link to="/sales/mobile/assistant">
+            المساعد
+          </Link>
         </nav>
 
         <div className="mobile-pos-user">

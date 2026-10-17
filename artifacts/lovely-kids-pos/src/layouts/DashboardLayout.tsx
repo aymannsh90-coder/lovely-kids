@@ -114,7 +114,8 @@ export default function DashboardLayout() {
           (item.group !== "purchases" || user?.isOwner === true) &&
           (item.group !== "reports" || user?.isOwner === true) &&
           (item.group !== "statements" || user?.isOwner === true) &&
-          (item.group !== "vouchers" || user?.isOwner === true),
+          (item.group !== "vouchers" || user?.isOwner === true) &&
+          (item.ownerOnly !== true || user?.isOwner === true),
       ),
     [activeSection, user?.isOwner],
   );

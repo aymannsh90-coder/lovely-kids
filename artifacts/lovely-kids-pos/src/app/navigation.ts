@@ -16,6 +16,7 @@ export interface PosNavigationItem {
   description: string;
   icon: string;
   requiresOpenSession: boolean;
+  ownerOnly?: boolean;
   status: "ready" | "planned";
 }
 
@@ -215,6 +216,17 @@ export const posNavigation: PosNavigationItem[] = [
     description: "إدارة الموظفين والسلف والرواتب والمستحقات وكشف الحركة.",
     icon: "👥",
     requiresOpenSession: false,
+    status: "ready",
+  },
+  {
+    key: "assistant-inbox",
+    group: "finance",
+    path: "/finance/assistant-inbox",
+    title: "مراجعة مساعد الجوال",
+    description: "مراجعة وتعديل واعتماد المسودات المسجلة من الهاتف.",
+    icon: "✨",
+    requiresOpenSession: false,
+    ownerOnly: true,
     status: "ready",
   },
   {

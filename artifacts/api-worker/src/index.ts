@@ -1,4 +1,5 @@
 import { handlePartyFinanceRequest } from "./party-finance-routes";
+import { handleAssistantDraftRequest } from "./assistant-draft-routes";
 import { handleFinanceBankingRequest } from "./finance-banking-routes";
 import { handleCardSettlementRequest } from "./finance-card-settlement-routes";
 import { handleFinanceTransferRequest } from "./finance-transfer-routes";
@@ -482,6 +483,17 @@ export default {
 
       if (unifiedVoucherResponse) {
         return unifiedVoucherResponse;
+      }
+
+      const assistantDraftResponse =
+        await handleAssistantDraftRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (assistantDraftResponse) {
+        return assistantDraftResponse;
       }
 
       const partyFinanceResponse = await handlePartyFinanceRequest(

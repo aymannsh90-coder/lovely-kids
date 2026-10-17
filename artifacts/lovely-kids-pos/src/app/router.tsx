@@ -13,6 +13,7 @@ import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
+import AssistantInboxPage from "../pages/finance/AssistantInboxPage";
 import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
 import UnifiedPartyVoucherPage from "../pages/finance/UnifiedPartyVoucherPage";
 import JournalVoucherPage from "../pages/finance/JournalVoucherPage";
@@ -27,6 +28,7 @@ import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import MobileSalePage from "../pages/sales/MobileSalePage";
 import MobileReturnsPage from "../pages/sales/MobileReturnsPage";
 import MobilePriceCheckPage from "../pages/sales/MobilePriceCheckPage";
+import MobileAssistantPage from "../pages/sales/MobileAssistantPage";
 import NewSalePage from "../pages/sales/NewSalePage";
 import SalesInvoicePage from "../pages/sales/SalesInvoicePage";
 import SalesReturnsPage from "../pages/sales/SalesReturnsPage";
@@ -72,6 +74,11 @@ export default function AppRouter() {
             <MobilePriceCheckPage />
           </RequireOpenSession>
         }
+      />
+
+      <Route
+        path="sales/mobile/assistant"
+        element={<MobileAssistantPage />}
       />
 
       <Route element={<DashboardLayout />}>
@@ -253,6 +260,15 @@ export default function AppRouter() {
             <RequireOpenSession>
               <ExpensesPage />
             </RequireOpenSession>
+          }
+        />
+
+        <Route
+          path="finance/assistant-inbox"
+          element={
+            <RequireOwner>
+              <AssistantInboxPage />
+            </RequireOwner>
           }
         />
 
