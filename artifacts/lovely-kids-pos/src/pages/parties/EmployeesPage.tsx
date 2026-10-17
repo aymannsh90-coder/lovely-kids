@@ -783,6 +783,37 @@ export default function EmployeesPage() {
       return;
     }
 
+    if (
+      selected.status !==
+        "active" &&
+      (
+        action ===
+          "advance" ||
+        action ===
+          "salary"
+      )
+    ) {
+      setError(
+        action ===
+          "salary"
+          ? "لا يمكن تسجيل استحقاق راتب جديد لموظف غير فعال."
+          : "لا يمكن تسجيل سلفة جديدة لموظف غير فعال.",
+      );
+      return;
+    }
+
+    if (
+      action === "salary" &&
+      !/^\d{4}-(0[1-9]|1[0-2])$/.test(
+        referencePeriod.trim(),
+      )
+    ) {
+      setError(
+        "اختر شهر استحقاق الراتب.",
+      );
+      return;
+    }
+
     const numeric =
       Number(
         actionAmount
@@ -1615,6 +1646,28 @@ export default function EmployeesPage() {
                             ? "is-selected"
                             : ""
                         }
+                        disabled={
+                          selected.status !==
+                            "active" &&
+                          (
+                            item ===
+                              "advance" ||
+                            item ===
+                              "salary"
+                          )
+                        }
+                        title={
+                          selected.status !==
+                            "active" &&
+                          (
+                            item ===
+                              "advance" ||
+                            item ===
+                              "salary"
+                          )
+                            ? "الموظف غير فعال؛ يمكن فقط تسديد السلفة أو دفع المستحقات."
+                            : undefined
+                        }
                         onClick={() => {
                           setAction(
                             item,
@@ -1848,8 +1901,21 @@ export default function EmployeesPage() {
                   <label>
                     <span>
                       الفترة / الشهر
+                      {action ===
+                        "salary" &&
+                        " *"}
                     </span>
                     <input
+                      type={
+                        action ===
+                        "salary"
+                          ? "month"
+                          : "text"
+                      }
+                      required={
+                        action ===
+                        "salary"
+                      }
                       value={
                         referencePeriod
                       }
@@ -1860,8 +1926,19 @@ export default function EmployeesPage() {
                           event.target.value,
                         )
                       }
-                      placeholder="مثال: 2026-10"
+                      placeholder={
+                        action ===
+                          "salary"
+                          ? undefined
+                          : "مثال: 2026-10"
+                      }
                     />
+                    {action ===
+                      "salary" && (
+                      <small>
+                        لا يمكن تسجيل راتبين مرحّلين لنفس الموظف ولنفس الشهر.
+                      </small>
+                    )}
                   </label>
 
                   <label className="employees-form-wide">
@@ -1887,7 +1964,24 @@ export default function EmployeesPage() {
                       type="submit"
                       className="primary-button"
                       disabled={
-                        actionBusy
+                        actionBusy ||
+                        (
+                          selected.status !==
+                            "active" &&
+                          (
+                            action ===
+                              "advance" ||
+                            action ===
+                              "salary"
+                          )
+                        ) ||
+                        (
+                          action ===
+                            "salary" &&
+                          !/^\d{4}-(0[1-9]|1[0-2])$/.test(
+                            referencePeriod.trim(),
+                          )
+                        )
                       }
                     >
                       {actionBusy
@@ -1936,6 +2030,9 @@ export default function EmployeesPage() {
                           المستحقات
                         </th>
                         <th>
+                          الفترة
+                        </th>
+                        <th>
                           المرجع
                         </th>
                       </tr>
@@ -1947,7 +2044,7 @@ export default function EmployeesPage() {
                         0 ? (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="employees-empty"
                           >
                             لا توجد حركات مسجلة لهذا الموظف.
@@ -2033,6 +2130,10 @@ export default function EmployeesPage() {
                                       : signedMinor(
                                           payableDelta,
                                         )}
+                                  </td>
+                                  <td>
+                                    {entry.referencePeriod ??
+                                      "—"}
                                   </td>
                                   <td>
                                     <small>
