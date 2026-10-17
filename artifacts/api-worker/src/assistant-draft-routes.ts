@@ -1,4 +1,6 @@
 import {
+  bankAccountsTable,
+  banksTable,
   employeesTable,
   expenseCategoriesTable,
 } from "@workspace/db/schema";
@@ -22,6 +24,18 @@ type DraftIntent =
   | "expense"
   | "employee_advance"
   | "owner_withdrawal";
+
+type DraftPaymentMethod =
+  | "cash"
+  | "bank";
+
+type AssistantBankReference = {
+  id: number;
+  name: string;
+  currencyCode: string;
+  bankNameAr: string;
+  bankNameEn: string | null;
+};
 
 const headers = {
   "Content-Type": "application/json",
@@ -661,6 +675,108 @@ function categoryMatch(
   return null;
 }
 
+function bankAccountMatch(
+  normalizedText: string,
+  accounts:
+    AssistantBankReference[],
+) {
+  const scored =
+    accounts
+      .map(
+        (account) => {
+          const candidates =
+            [
+              account.bankNameAr,
+              account.bankNameEn,
+              account.name,
+              `${account.bankNameAr} ${account.name}`,
+            ]
+              .filter(
+                (
+                  value,
+                ): value is string =>
+                  Boolean(
+                    value?.trim(),
+                  ),
+              )
+              .map(
+                (value) =>
+                  normalizeArabic(
+                    value,
+                  ),
+              )
+              .filter(Boolean);
+
+          const matched =
+            candidates
+              .filter(
+                (candidate) =>
+                  normalizedText.includes(
+                    candidate,
+                  ),
+              )
+              .sort(
+                (left, right) =>
+                  right.length -
+                  left.length,
+              )[0];
+
+          return {
+            account,
+            score:
+              matched?.length ??
+              0,
+          };
+        },
+      )
+      .filter(
+        (entry) =>
+          entry.score > 0,
+      )
+      .sort(
+        (left, right) =>
+          right.score -
+          left.score,
+      );
+
+  const bankWord =
+    /(^| )(بنك|البنك)( |$)/.test(
+      normalizedText,
+    );
+
+  if (!scored[0]) {
+    return {
+      paymentMethod:
+        bankWord
+          ? "bank"
+          : "cash" as
+              DraftPaymentMethod,
+      account: null as
+        AssistantBankReference | null,
+    };
+  }
+
+  const topScore =
+    scored[0].score;
+
+  const top =
+    scored.filter(
+      (entry) =>
+        entry.score ===
+        topScore,
+    );
+
+  return {
+    paymentMethod:
+      "bank" as
+        DraftPaymentMethod,
+    account:
+      top.length === 1
+        ? top[0].account
+        : null,
+  };
+}
+
 function parseDraft(
   rawText: string,
   employees:
@@ -671,6 +787,8 @@ function parseDraft(
     Array<
       typeof expenseCategoriesTable.$inferSelect
     >,
+  bankAccounts:
+    AssistantBankReference[],
 ) {
   const normalized =
     normalizeArabic(
@@ -693,6 +811,18 @@ function parseDraft(
       normalized,
       categories,
     );
+
+  const bankMatch =
+    bankAccountMatch(
+      normalized,
+      bankAccounts,
+    );
+
+  const paymentMethod =
+    bankMatch.paymentMethod;
+
+  const bankAccount =
+    bankMatch.account;
 
   // Speech recognition can produce nearby Arabic forms for "سحب"
   // (for example: "سحاب" or "ساحب"). Treat these as the same
@@ -777,6 +907,16 @@ function parseDraft(
     );
   }
 
+  if (
+    paymentMethod ===
+      "bank" &&
+    !bankAccount
+  ) {
+    missing.push(
+      "الحساب البنكي",
+    );
+  }
+
   const complete =
     missing.length === 0;
 
@@ -798,6 +938,12 @@ function parseDraft(
               "owner_withdrawal"
             ? 1
             : 0,
+      paymentMethod ===
+        "bank"
+        ? bankAccount
+          ? 1
+          : 0
+        : 1,
     ];
 
   const confidence =
@@ -827,6 +973,13 @@ function parseDraft(
         ? category?.id ??
           null
         : null,
+    paymentMethod,
+    bankAccountId:
+      paymentMethod ===
+        "bank"
+        ? bankAccount?.id ??
+          null
+        : null,
     confidence,
     parseMessage:
       complete
@@ -841,6 +994,7 @@ async function loadReferences(
   const [
     employees,
     categories,
+    bankAccounts,
   ] =
     await Promise.all([
       db
@@ -865,11 +1019,47 @@ async function loadReferences(
             "active",
           ),
         ),
+      db
+        .select({
+          id:
+            bankAccountsTable.id,
+          name:
+            bankAccountsTable.name,
+          currencyCode:
+            bankAccountsTable.currencyCode,
+          bankNameAr:
+            banksTable.nameAr,
+          bankNameEn:
+            banksTable.nameEn,
+        })
+        .from(
+          bankAccountsTable,
+        )
+        .innerJoin(
+          banksTable,
+          eq(
+            bankAccountsTable.bankId,
+            banksTable.id,
+          ),
+        )
+        .where(
+          and(
+            eq(
+              bankAccountsTable.status,
+              "active",
+            ),
+            eq(
+              banksTable.status,
+              "active",
+            ),
+          ),
+        ),
     ]);
 
   return {
     employees,
     categories,
+    bankAccounts,
   };
 }
 
@@ -1016,6 +1206,7 @@ async function handleCreateDraft(
     const {
       employees,
       categories,
+      bankAccounts,
     } =
       await loadReferences(
         db,
@@ -1026,6 +1217,7 @@ async function handleCreateDraft(
         originalText,
         employees,
         categories,
+        bankAccounts,
       );
 
     const publicId =
@@ -1049,7 +1241,9 @@ async function handleCreateDraft(
           expenseCategoryId:
             parsed.expenseCategoryId,
           paymentMethod:
-            "cash",
+            parsed.paymentMethod,
+          bankAccountId:
+            parsed.bankAccountId,
           registerKey,
           confidence:
             parsed.confidence,
@@ -1090,6 +1284,20 @@ async function handleCreateDraft(
                 category.id ===
                 parsed.expenseCategoryId,
             )?.name ??
+            null,
+          bankAccountName:
+            bankAccounts.find(
+              (account) =>
+                account.id ===
+                parsed.bankAccountId,
+            )?.name ??
+            null,
+          bankName:
+            bankAccounts.find(
+              (account) =>
+                account.id ===
+                parsed.bankAccountId,
+            )?.bankNameAr ??
             null,
         },
       },
