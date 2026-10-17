@@ -2389,6 +2389,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       let accountDueMinor = 0;
       let changeMinor = 0;
       let cashReceivedMinor = 0;
+      let mainCashDeltaMinor = 0;
 
       if (paymentMethod === "cash") {
         if (paidMinor < totalMinor) {
@@ -2400,8 +2401,15 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         changeMinor =
           paidMinor - totalMinor;
 
-        cashReceivedMinor =
-          totalMinor;
+        if (foreignCashTarget) {
+          mainCashDeltaMinor =
+            -changeMinor;
+        } else {
+          cashReceivedMinor =
+            totalMinor;
+          mainCashDeltaMinor =
+            totalMinor;
+        }
       } else if (paymentMethod === "card") {
         if (paidMinor !== totalMinor) {
           throw new PosSaleError(
@@ -2429,6 +2437,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
         cashReceivedMinor =
           paidMinor;
+        mainCashDeltaMinor =
+          paidMinor;
 
         accountDueMinor =
           totalMinor - paidMinor;
@@ -2438,9 +2448,20 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         session.expectedBalanceMinor ??
         session.openingBalanceMinor;
 
+      if (
+        foreignCashTarget &&
+        changeMinor >
+          expectedBefore
+      ) {
+        throw new PosSaleError(
+          "رصيد صندوق الشيكل لا يكفي لإرجاع الباقي للزبون",
+          409,
+        );
+      }
+
       const expectedAfter =
         expectedBefore +
-        cashReceivedMinor;
+        mainCashDeltaMinor;
 
       if (
         !Number.isSafeInteger(expectedAfter) ||
@@ -2449,6 +2470,37 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
       ) {
         throw new PosSaleError(
           "رصيد الصندوق يتجاوز الحد المسموح",
+        );
+      }
+
+      const foreignExpectedBefore =
+        foreignCashTarget
+          ? foreignCashTarget.session
+              .expectedBalanceMinor ??
+            foreignCashTarget.session
+              .openingBalanceMinor
+          : null;
+
+      const foreignExpectedAfter =
+        foreignExpectedBefore ===
+          null
+          ? null
+          : foreignExpectedBefore +
+            tenderPaidMinor;
+
+      if (
+        foreignExpectedAfter !==
+          null &&
+        (
+          !Number.isSafeInteger(
+            foreignExpectedAfter,
+          ) ||
+          foreignExpectedAfter >
+            MAX_MINOR
+        )
+      ) {
+        throw new PosSaleError(
+          "رصيد صندوق العملة الأجنبية يتجاوز الحد المسموح",
         );
       }
 
