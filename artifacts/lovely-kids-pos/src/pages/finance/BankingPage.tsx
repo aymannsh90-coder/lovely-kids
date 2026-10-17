@@ -532,6 +532,213 @@ export default function BankingPage() {
       ],
     );
 
+  const conversionCashAccounts =
+    useMemo(
+      () =>
+        cashAccounts.filter(
+          (account) =>
+            account.currencyCode ===
+              "ILS" ||
+            account.currencyCode ===
+              "USD" ||
+            account.currencyCode ===
+              "JOD",
+        ),
+      [cashAccounts],
+    );
+
+  const conversionFromAccount =
+    useMemo(
+      () =>
+        conversionCashAccounts.find(
+          (account) =>
+            account.id ===
+            conversionFromAccountId,
+        ) ?? null,
+      [
+        conversionCashAccounts,
+        conversionFromAccountId,
+      ],
+    );
+
+  const conversionDestinationOptions =
+    useMemo(
+      () =>
+        conversionFromAccount
+          ? conversionCashAccounts.filter(
+              (account) =>
+                account.id !==
+                  conversionFromAccount.id &&
+                account.currencyCode !==
+                  conversionFromAccount.currencyCode &&
+                (
+                  account.currencyCode ===
+                    "ILS" ||
+                  conversionFromAccount.currencyCode ===
+                    "ILS"
+                ),
+            )
+          : [],
+      [
+        conversionCashAccounts,
+        conversionFromAccount,
+      ],
+    );
+
+  const conversionToAccount =
+    useMemo(
+      () =>
+        conversionDestinationOptions.find(
+          (account) =>
+            account.id ===
+            conversionToAccountId,
+        ) ?? null,
+      [
+        conversionDestinationOptions,
+        conversionToAccountId,
+      ],
+    );
+
+  const conversionRatePreview =
+    useMemo(() => {
+      if (
+        !conversionFromAccount ||
+        !conversionToAccount
+      ) {
+        return null;
+      }
+
+      const fromAmount =
+        Number(
+          conversionFromAmount
+            .trim()
+            .replace(",", "."),
+        );
+
+      const toAmount =
+        Number(
+          conversionToAmount
+            .trim()
+            .replace(",", "."),
+        );
+
+      if (
+        !Number.isFinite(
+          fromAmount,
+        ) ||
+        fromAmount <= 0 ||
+        !Number.isFinite(
+          toAmount,
+        ) ||
+        toAmount <= 0
+      ) {
+        return null;
+      }
+
+      if (
+        conversionFromAccount.currencyCode ===
+          "ILS"
+      ) {
+        return (
+          fromAmount /
+          toAmount
+        );
+      }
+
+      if (
+        conversionToAccount.currencyCode ===
+          "ILS"
+      ) {
+        return (
+          toAmount /
+          fromAmount
+        );
+      }
+
+      return null;
+    }, [
+      conversionFromAccount,
+      conversionToAccount,
+      conversionFromAmount,
+      conversionToAmount,
+    ]);
+
+
+  useEffect(() => {
+    if (
+      !user?.isOwner ||
+      conversionCashAccounts.length ===
+        0
+    ) {
+      setConversionFromAccountId(
+        null,
+      );
+      setConversionToAccountId(
+        null,
+      );
+      return;
+    }
+
+    const defaultFrom =
+      conversionCashAccounts.find(
+        (account) =>
+          account.code ===
+          "CASH_MAIN",
+      ) ??
+      conversionCashAccounts[0];
+
+    const currentFrom =
+      conversionCashAccounts.find(
+        (account) =>
+          account.id ===
+          conversionFromAccountId,
+      ) ??
+      defaultFrom;
+
+    if (
+      conversionFromAccountId !==
+      currentFrom.id
+    ) {
+      setConversionFromAccountId(
+        currentFrom.id,
+      );
+    }
+
+    const destinations =
+      conversionCashAccounts.filter(
+        (account) =>
+          account.id !==
+            currentFrom.id &&
+          account.currencyCode !==
+            currentFrom.currencyCode &&
+          (
+            account.currencyCode ===
+              "ILS" ||
+            currentFrom.currencyCode ===
+              "ILS"
+          ),
+      );
+
+    const currentTo =
+      destinations.find(
+        (account) =>
+          account.id ===
+          conversionToAccountId,
+      );
+
+    if (!currentTo) {
+      setConversionToAccountId(
+        destinations[0]?.id ??
+          null,
+      );
+    }
+  }, [
+    user?.isOwner,
+    conversionCashAccounts,
+    conversionFromAccountId,
+    conversionToAccountId,
+  ]);
+
   useEffect(() => {
     if (
       !user?.isOwner ||
