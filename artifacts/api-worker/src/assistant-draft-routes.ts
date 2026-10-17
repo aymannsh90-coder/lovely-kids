@@ -1,8 +1,10 @@
 import {
-  assistantDraftsTable,
   employeesTable,
   expenseCategoriesTable,
 } from "@workspace/db/schema";
+import {
+  assistantDraftsTable,
+} from "../../../lib/db/src/schema/assistant-drafts";
 import {
   and,
   desc,
