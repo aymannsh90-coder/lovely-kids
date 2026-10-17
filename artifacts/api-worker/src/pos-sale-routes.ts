@@ -3846,7 +3846,10 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
       }
 
       const cashFinanceRows =
-        cashImpactMinor > 0
+        sale.paymentMethod ===
+          "cash" ||
+        sale.paymentMethod ===
+          "mixed"
           ? await tx
               .select()
               .from(
@@ -3926,6 +3929,7 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
             sourceEvent:
               "cash_settlement_void",
             cashSessionId:
+              cashFinance.cashSessionId ??
               session.id,
             notes:
               `عكس البيع النقدي ${sale.publicId}`,
@@ -3942,6 +3946,12 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
                     line.employeeId,
                   supplierId:
                     line.supplierId,
+                  currencyCode:
+                    line.currencyCode,
+                  currencyAmountMinor:
+                    line.currencyAmountMinor,
+                  exchangeRateMicros:
+                    line.exchangeRateMicros,
                   debitMinor:
                     line.creditMinor,
                   creditMinor:
