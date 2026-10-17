@@ -2276,15 +2276,145 @@ async function handleApproveDraft(
       );
     }
 
+    let effectiveExpenseCategoryId =
+      draft.expenseCategoryId;
+
     if (
       draft.intent ===
         "expense" &&
-      !draft.expenseCategoryId
+      !effectiveExpenseCategoryId
     ) {
-      throw new AssistantDraftError(
-        "اختر تصنيف المصروف قبل الاعتماد",
-        409,
-      );
+      const normalizedOriginal =
+        normalizeArabic(
+          draft.originalText,
+        );
+
+      const preset =
+        expensePresetMatch(
+          normalizedOriginal,
+        );
+
+      if (!preset) {
+        throw new AssistantDraftError(
+          "اختر تصنيف المصروف قبل الاعتماد",
+          409,
+        );
+      }
+
+      const categoryRows =
+        await db
+          .select()
+          .from(
+            expenseCategoriesTable,
+          )
+          .where(
+            eq(
+              expenseCategoriesTable.status,
+              "active",
+            ),
+          );
+
+      const existing =
+        categoryRows.find(
+          (category) =>
+            preset.pattern.test(
+              normalizeArabic(
+                category.name,
+              ),
+            ),
+        );
+
+      if (existing) {
+        effectiveExpenseCategoryId =
+          existing.id;
+      } else {
+        const categoryUrl =
+          new URL(
+            request.url,
+          );
+
+        categoryUrl.pathname =
+          "/api/pos/finance/expense-categories";
+        categoryUrl.search = "";
+
+        const categoryRequest =
+          new Request(
+            categoryUrl.toString(),
+            {
+              method:
+                "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+                Authorization:
+                  request.headers.get(
+                    "Authorization",
+                  ) ?? "",
+              },
+              body:
+                JSON.stringify({
+                  name:
+                    preset.title,
+                }),
+            },
+          );
+
+        const categoryResponse =
+          await handlePartyFinanceRequest(
+            categoryRequest,
+            db,
+            env,
+          );
+
+        if (!categoryResponse) {
+          throw new Error(
+            "ASSISTANT_EXPENSE_CATEGORY_ROUTE_NOT_FOUND",
+          );
+        }
+
+        const categoryBody =
+          (await categoryResponse
+            .clone()
+            .json()
+            .catch(() => null)) as
+            | Record<
+                string,
+                any
+              >
+            | null;
+
+        if (!categoryResponse.ok) {
+          return json(
+            {
+              error:
+                categoryBody?.error ??
+                "تعذر إنشاء تصنيف المصروف السريع",
+            },
+            categoryResponse.status,
+          );
+        }
+
+        const category =
+          categoryBody?.category;
+
+        if (
+          !category ||
+          !Number.isSafeInteger(
+            Number(
+              category.id,
+            ),
+          )
+        ) {
+          throw new Error(
+            "ASSISTANT_EXPENSE_CATEGORY_MISSING",
+          );
+        }
+
+        effectiveExpenseCategoryId =
+          Number(
+            category.id,
+          );
+      }
     }
 
     if (
@@ -2536,7 +2666,7 @@ async function handleApproveDraft(
         payload = {
           ...common,
           expenseCategoryId:
-            draft.expenseCategoryId,
+            effectiveExpenseCategoryId,
         };
       } else if (
         draft.intent ===
@@ -2688,6 +2818,11 @@ async function handleApproveDraft(
                   transaction.id,
                 )
               : null,
+          expenseCategoryId:
+            draft.intent ===
+              "expense"
+              ? effectiveExpenseCategoryId
+              : draft.expenseCategoryId,
           reviewedByUserId:
             Number(
               auth.user.id,
