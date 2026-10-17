@@ -22,11 +22,13 @@ import {
   createPosCustomerReceipt,
   getCurrentCashSession,
   getPosCustomers,
+  getPosSaleCashCurrencies,
   lookupPosProductByBarcode,
   searchPosProducts,
   type CashSession,
   type PosCustomer,
   type PosProductLookup,
+  type PosSaleCashCurrency,
   type PosSaleResult,
 } from "./lib/api";
 
@@ -73,6 +75,58 @@ function moneyToMinor(value: string) {
   }
 
   return Math.round(amount * 100);
+}
+
+function rateToMicros(
+  value: string,
+) {
+  const normalized =
+    value
+      .trim()
+      .replace(",", ".");
+
+  const match =
+    /^(\d+)(?:\.(\d{1,6}))?$/.exec(
+      normalized,
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const micros =
+    Number(match[1]) *
+      1_000_000 +
+    Number(
+      (match[2] ?? "")
+        .padEnd(6, "0"),
+    );
+
+  return Number.isSafeInteger(
+    micros,
+  ) &&
+    micros > 0
+    ? micros
+    : null;
+}
+
+function convertedMinor(
+  currencyAmountMinor: number,
+  rateMicros: number,
+) {
+  const rounded =
+    (
+      BigInt(
+        currencyAmountMinor,
+      ) *
+        BigInt(
+          rateMicros,
+        ) +
+      500_000n
+    ) /
+    1_000_000n;
+
+  return Number(rounded);
 }
 
 function formatMinor(value: number) {
