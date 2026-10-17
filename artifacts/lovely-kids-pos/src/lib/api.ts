@@ -1201,6 +1201,47 @@ export function createPosUnifiedReceiptVoucher(
   );
 }
 
+export function createPosForeignCurrencyCustomerReceipt(
+  token: string,
+  input: {
+    customerId: number;
+    amount: string;
+    foreignAmount: string;
+    exchangeRate: string;
+    foreignCashAccountId: number;
+    notes?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<
+    PosUnifiedVoucherResult & {
+      receivedBaseMinor: number;
+      changeMinor: number;
+      foreignCashBeforeMinor:
+        | number
+        | null;
+      foreignCashAfterMinor:
+        | number
+        | null;
+      ilsCashBeforeMinor:
+        | number
+        | null;
+      ilsCashAfterMinor:
+        | number
+        | null;
+    }
+  >(
+    "/api/pos/finance/vouchers/foreign-currency-customer-receipt",
+    {
+      method: "POST",
+      body: JSON.stringify(
+        input,
+      ),
+    },
+    token,
+  );
+}
+
 export function createPosUnifiedPaymentVoucher(
   token: string,
   input: {
