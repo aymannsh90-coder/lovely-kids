@@ -511,17 +511,17 @@ async function assertForeignCashBookHistoryComplete(
           exchangeRateMicros: number | null;
         },
       ) => {
-        const hasValue =
+        const baseMinor =
           line.debitMinor >
-            0 ||
-          line.creditMinor >
-            0;
+            0
+            ? line.debitMinor
+            : line.creditMinor;
 
-        if (!hasValue) {
+        if (baseMinor <= 0) {
           return false;
         }
 
-        return (
+        if (
           line.currencyCode !==
             account.currencyCode ||
           line.currencyAmountMinor ===
@@ -532,13 +532,32 @@ async function assertForeignCashBookHistoryComplete(
             null ||
           line.exchangeRateMicros <=
             0
+        ) {
+          return true;
+        }
+
+        const reproducedBase =
+          (
+            BigInt(
+              line.currencyAmountMinor,
+            ) *
+              BigInt(
+                line.exchangeRateMicros,
+              ) +
+            500_000n
+          ) /
+          1_000_000n;
+
+        return (
+          reproducedBase !==
+          BigInt(baseMinor)
         );
       },
     );
 
   if (incomplete) {
     throw new FinanceTransferError(
-      `السجل الدفتري لـ ${account.name} يحتوي حركة قديمة ناقصة مبلغ العملة أو سعر الصرف؛ لا يمكن احتساب متوسط القيمة الدفترية بأمان.`,
+      `السجل الدفتري لـ ${account.name} يحتوي حركة قديمة لا تتطابق فيها قيمة العملة وسعر الصرف مع قيمة القيد بالشيكل؛ لا يمكن احتساب متوسط القيمة الدفترية بأمان.`,
       409,
     );
   }
@@ -1759,6 +1778,27 @@ async function handleCreateCurrencyConversion(
             );
           }
 
+          if (
+            fromAccount.currencyCode ===
+              "ILS"
+          ) {
+            const sourceGlBaseBalance =
+              await accountBaseBalanceMinor(
+                tx,
+                fromAccount.id,
+              );
+
+            if (
+              sourceGlBaseBalance <
+              fromAmountMinor
+            ) {
+              throw new FinanceTransferError(
+                `الرصيد الدفتري في GL لحساب ${fromAccount.name} لا يكفي لتنفيذ تحويل العملة`,
+                409,
+              );
+            }
+          }
+
           let sourceBookBaseMinor =
             fromAmountMinor;
           let destinationBaseMinor =
@@ -2729,17 +2769,60 @@ async function handleCreateTransfer(
             );
           }
 
-          const exchangeRateMicros =
-            await latestRateMicros(
+          let exchangeRateMicros =
+            1_000_000;
+
+          let baseAmountMinor =
+            amountMinor;
+
+          if (
+            fromAccount.currencyCode !==
+            "ILS"
+          ) {
+            await assertForeignCashBookHistoryComplete(
               tx,
-              fromAccount.currencyCode,
+              fromAccount,
             );
 
-          const baseAmountMinor =
-            convertedBaseMinor(
-              amountMinor,
-              exchangeRateMicros,
-            );
+            const sourceNativeBookBalance =
+              await accountBalanceMinor(
+                tx,
+                fromAccount,
+              );
+
+            const sourceBaseBookBalance =
+              await accountBaseBalanceMinor(
+                tx,
+                fromAccount.id,
+              );
+
+            if (
+              sourceNativeBookBalance <=
+                0 ||
+              sourceBaseBookBalance <=
+                0 ||
+              sourceNativeBookBalance <
+                amountMinor
+            ) {
+              throw new FinanceTransferError(
+                `القيمة الدفترية في ${fromAccount.name} لا تكفي لتنفيذ التحويل بأمان`,
+                409,
+              );
+            }
+
+            baseAmountMinor =
+              proportionalBaseMinor(
+                sourceBaseBookBalance,
+                amountMinor,
+                sourceNativeBookBalance,
+              );
+
+            exchangeRateMicros =
+              exactRateMicrosFromAmounts(
+                baseAmountMinor,
+                amountMinor,
+              );
+          }
 
           const fromSession =
             await openCashSession(
