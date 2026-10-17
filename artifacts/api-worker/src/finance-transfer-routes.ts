@@ -419,7 +419,7 @@ async function accountBalanceMinor(
   );
 }
 
-async function assertForeignCashBookHistoryComplete(
+async function assertForeignAccountBookHistoryComplete(
   tx: any,
   account: {
     id: number;
@@ -1786,7 +1786,7 @@ async function handleCreateCurrencyConversion(
             actualRateMicros =
               destinationRateMicros;
           } else {
-            await assertForeignCashBookHistoryComplete(
+            await assertForeignAccountBookHistoryComplete(
               tx,
               fromAccount,
             );
@@ -2737,7 +2737,7 @@ async function handleCreateTransfer(
             fromAccount.currencyCode !==
             "ILS"
           ) {
-            await assertForeignCashBookHistoryComplete(
+            await assertForeignAccountBookHistoryComplete(
               tx,
               fromAccount,
             );
