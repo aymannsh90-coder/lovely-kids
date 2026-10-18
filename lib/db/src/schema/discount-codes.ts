@@ -22,6 +22,12 @@ export const discountCodesTable = pgTable(
 
     discountPercent: integer("discount_percent").notNull(),
 
+    // Cost of the influencer/ad campaign in minor ILS (agorot).
+    // Owner-only in the application layer.
+    campaignCostMinor: integer("campaign_cost_minor")
+      .notNull()
+      .default(0),
+
     isActive: boolean("is_active").notNull().default(true),
 
     stackWithShippingPromotion: boolean(
@@ -53,6 +59,11 @@ export const discountCodesTable = pgTable(
     check(
       "discount_codes_percent_valid",
       sql`${table.discountPercent} between 1 and 100`,
+    ),
+
+    check(
+      "discount_codes_campaign_cost_valid",
+      sql`${table.campaignCostMinor} >= 0`,
     ),
 
     check(
