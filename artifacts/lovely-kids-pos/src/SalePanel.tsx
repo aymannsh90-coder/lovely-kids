@@ -154,6 +154,25 @@ function getSizes(product: PosProductLookup, color: string | null) {
   return product.sizes;
 }
 
+function getBarcodeForSelection(
+  product: PosProductLookup,
+  color: string | null,
+  size: string | null,
+) {
+  const exactBarcode =
+    product.barcodes?.find(
+      (entry) =>
+        entry.color === color &&
+        entry.size === size,
+    )?.barcode ?? null;
+
+  if (exactBarcode) {
+    return exactBarcode;
+  }
+
+  return product.primaryBarcode?.trim() ?? "";
+}
+
 function getLineAvailability(line: CartLine) {
   if (line.product.colorVariants.length > 0 && line.color) {
     const variant = line.product.colorVariants.find(
@@ -1011,17 +1030,34 @@ export default function SalePanel({
 
     const sizes = getSizes(line.product, color);
 
+    const size =
+      sizes.length === 1
+        ? sizes[0]
+        : null;
+
     const targetId = updateVariantSelection(line.id, {
       color,
-      size: sizes.length === 1 ? sizes[0] : null,
+      size,
+      barcode: getBarcodeForSelection(
+        line.product,
+        color,
+        size,
+      ),
     });
 
     focusLineField(targetId, sizes.length > 1 ? "size" : "quantity");
   }
 
   function changeSize(line: CartLine, sizeValue: string) {
+    const size = sizeValue || null;
+
     const targetId = updateVariantSelection(line.id, {
-      size: sizeValue || null,
+      size,
+      barcode: getBarcodeForSelection(
+        line.product,
+        line.color,
+        size,
+      ),
     });
 
     focusLineField(targetId, "quantity");
