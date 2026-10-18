@@ -1545,16 +1545,35 @@ export default function AdminOrdersScreen() {
       return;
     }
 
+    const hasCodeDiscount =
+      typeof editingOrder.discountCode === "string" &&
+      editingOrder.discountCode.trim().length > 0 &&
+      Number.isSafeInteger(editingOrder.discountCodePercent) &&
+      Number(editingOrder.discountCodePercent) >= 1 &&
+      Number(editingOrder.discountCodePercent) <= 100;
+
     const invoiceDiscount =
-      editInvoiceDiscount.trim() === ""
-        ? 0
-        : Number(editInvoiceDiscount);
+      hasCodeDiscount
+        ? Math.floor(
+            (
+              editProductsTotal *
+              Number(editingOrder.discountCodePercent)
+            ) /
+              100,
+          )
+        : editInvoiceDiscount.trim() === ""
+          ? 0
+          : Number(editInvoiceDiscount);
 
     if (
       !Number.isSafeInteger(invoiceDiscount) ||
       invoiceDiscount < 0
     ) {
-      setEditOrderError("الخصم العام يجب أن يكون رقماً صحيحاً");
+      setEditOrderError(
+        hasCodeDiscount
+          ? "تعذر احتساب خصم كود الخصم"
+          : "الخصم العام يجب أن يكون رقماً صحيحاً",
+      );
       return;
     }
 
@@ -1781,15 +1800,39 @@ export default function AdminOrdersScreen() {
       (zone) => zone.label === editShippingZone,
     ) ?? null;
 
+  const editingOrderHasDiscountCode =
+    !!editingOrder &&
+    typeof editingOrder.discountCode === "string" &&
+    editingOrder.discountCode.trim().length > 0 &&
+    Number.isSafeInteger(editingOrder.discountCodePercent) &&
+    Number(editingOrder.discountCodePercent) >= 1 &&
+    Number(editingOrder.discountCodePercent) <= 100;
+
   const editShippingCost = editSelectedShippingZone
-    ? getAdminEditShippingCost(
-        settings,
-        editSelectedShippingZone,
-        editProductsTotal,
-      )
+    ? editingOrderHasDiscountCode &&
+      editingOrder?.discountCodeStacksWithShippingPromotion === false
+      ? editSelectedShippingZone.cost
+      : getAdminEditShippingCost(
+          settings,
+          editSelectedShippingZone,
+          editProductsTotal,
+        )
     : 0;
 
   const editInvoiceDiscountValue = (() => {
+    if (
+      editingOrderHasDiscountCode &&
+      editingOrder
+    ) {
+      return Math.floor(
+        (
+          editProductsTotal *
+          Number(editingOrder.discountCodePercent)
+        ) /
+          100,
+      );
+    }
+
     const value =
       editInvoiceDiscount.trim() === ""
         ? 0
@@ -4818,34 +4861,78 @@ export default function AdminOrdersScreen() {
                   })}
                 </View>
 
-                <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
-                  الخصم العام (₪)
-                </Text>
+                {editingOrderHasDiscountCode &&
+                editingOrder ? (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#86EFAC",
+                      backgroundColor: "#F0FDF4",
+                      borderRadius: 12,
+                      padding: 12,
+                      gap: 5,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#166534",
+                        fontWeight: "900",
+                        textAlign: "right",
+                      }}
+                    >
+                      🎟️ خصم كود {editingOrder.discountCodeLabel ?? editingOrder.discountCode}
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#166534",
+                        textAlign: "right",
+                        fontWeight: "800",
+                      }}
+                    >
+                      {editingOrder.discountCodePercent}% — محسوب تلقائياً: {editInvoiceDiscountValue}₪
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#15803D",
+                        textAlign: "right",
+                        fontSize: 11,
+                      }}
+                    >
+                      لا يمكن تغيير الخصم يدوياً؛ عند تعديل المنتجات يعاد احتسابه بنفس نسبة الكود الأصلية مع التقريب لأسفل.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                      الخصم العام (₪)
+                    </Text>
 
-                <TextInput
-                  value={editInvoiceDiscount}
-                  onChangeText={(value) => {
-                    setEditInvoiceDiscount(
-                      value.replace(/[^0-9]/g, ""),
-                    );
-                    setEditOrderError(null);
-                  }}
-                  keyboardType="number-pad"
-                  placeholder="0"
-                  placeholderTextColor={colors.mutedForeground}
-                  style={[
-                    styles.editOrderFieldInput,
-                    {
-                      color: colors.foreground,
-                      borderColor:
-                        editInvoiceDiscountValue > editProductsTotal
-                          ? "#DC2626"
-                          : colors.border,
-                      backgroundColor: colors.card,
-                    },
-                  ]}
-                  textAlign="right"
-                />
+                    <TextInput
+                      value={editInvoiceDiscount}
+                      onChangeText={(value) => {
+                        setEditInvoiceDiscount(
+                          value.replace(/[^0-9]/g, ""),
+                        );
+                        setEditOrderError(null);
+                      }}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[
+                        styles.editOrderFieldInput,
+                        {
+                          color: colors.foreground,
+                          borderColor:
+                            editInvoiceDiscountValue > editProductsTotal
+                              ? "#DC2626"
+                              : colors.border,
+                          backgroundColor: colors.card,
+                        },
+                      ]}
+                      textAlign="right"
+                    />
+                  </>
+                )}
 
                 <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
                   ملاحظات الطلب
@@ -5501,7 +5588,9 @@ export default function AdminOrdersScreen() {
                       fontWeight: "600",
                     }}
                   >
-                    الخصم العام
+                    {editingOrderHasDiscountCode
+                      ? `خصم كود ${editingOrder?.discountCodeLabel ?? editingOrder?.discountCode ?? ""}`
+                      : "الخصم العام"}
                   </Text>
                   <Text
                     style={{
