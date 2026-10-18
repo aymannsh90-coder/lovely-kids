@@ -1602,9 +1602,139 @@ setLoading(true);
               <Text style={[styles.totalPrice, { color: colors.primary }]}>{totalPrice} ₪</Text>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>الإجمالي</Text>
             </View>
+            {settings.discountCodesEnabled === true ? (
+              <View
+                style={{
+                  gap: 8,
+                  marginTop: 4,
+                  marginBottom: 6,
+                }}
+              >
+                {appliedDiscountCode ? (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#22C55E",
+                      borderRadius: 12,
+                      padding: 10,
+                      backgroundColor: "#22C55E12",
+                      gap: 5,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#16A34A",
+                        fontWeight: "900",
+                        textAlign: "right",
+                      }}
+                    >
+                      🎟️ {appliedDiscountCode.campaignName} — {appliedDiscountCode.code} ({appliedDiscountCode.discountPercent}%)
+                    </Text>
+                    <View style={styles.summaryRow}>
+                      <Text style={{ color: "#16A34A", fontWeight: "900" }}>
+                        -{appliedDiscountAmount} ₪
+                      </Text>
+                      <Text style={{ color: colors.foreground, fontWeight: "800" }}>
+                        خصم الكود
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={{ color: colors.primary, fontWeight: "900" }}>
+                        {totalPrice - appliedDiscountAmount} ₪
+                      </Text>
+                      <Text style={{ color: colors.foreground, fontWeight: "800" }}>
+                        بعد الخصم
+                      </Text>
+                    </View>
+                    <Pressable onPress={removeDiscountCode}>
+                      <Text
+                        style={{
+                          color: "#DC2626",
+                          fontWeight: "800",
+                          textAlign: "right",
+                          fontSize: 12,
+                        }}
+                      >
+                        إزالة الكود
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ gap: 6 }}>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "800",
+                        textAlign: "right",
+                      }}
+                    >
+                      🎟️ عندك كود خصم؟
+                    </Text>
+                    <View
+                      style={[
+                        styles.inputRow,
+                        {
+                          backgroundColor: colors.input,
+                          borderColor: discountCodeError
+                            ? "#DC2626"
+                            : colors.border,
+                        },
+                      ]}
+                    >
+                      <TextInput
+                        value={discountCodeInput}
+                        onChangeText={(value) => {
+                          setDiscountCodeInput(value);
+                          setDiscountCodeError(null);
+                        }}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        placeholder="أدخل كود الخصم"
+                        placeholderTextColor={colors.mutedForeground}
+                        style={[styles.input, { color: colors.foreground }]}
+                        textAlign="right"
+                        onSubmitEditing={() => void handleApplyDiscountCode()}
+                      />
+                      <Pressable
+                        onPress={() => void handleApplyDiscountCode()}
+                        disabled={discountCodeLoading}
+                        style={{
+                          backgroundColor: colors.primary,
+                          borderRadius: 9,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                        }}
+                      >
+                        {discountCodeLoading ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={{ color: "#fff", fontWeight: "900" }}>
+                            تطبيق
+                          </Text>
+                        )}
+                      </Pressable>
+                    </View>
+                    {discountCodeError ? (
+                      <Text
+                        style={{
+                          color: "#DC2626",
+                          fontSize: 12,
+                          textAlign: "right",
+                        }}
+                      >
+                        {discountCodeError}
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
+              </View>
+            ) : null}
+
             {isShippingPromotionActive(
               totalPrice,
-              settings.shippingPromotionEnabled === true,
+              (!appliedDiscountCode ||
+                appliedDiscountCode.stackWithShippingPromotion) &&
+                settings.shippingPromotionEnabled === true,
               settings.shippingPromotionThreshold ?? 500,
               settings.shippingPromotionStartDate ?? "",
               settings.shippingPromotionEndDate ?? "",
