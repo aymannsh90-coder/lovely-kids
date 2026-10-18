@@ -18,6 +18,7 @@ import {
 import { handleMetaCatalogRequest } from "./meta-catalog-routes";
 import { handleSettingsRequest } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
+import { handleDiscountCodeRequest } from "./discount-code-routes";
 import { handleImageRequest } from "./image-routes";
 import { handleHeroMediaRequest } from "./hero-media-routes";
 import { handleNotificationRequest } from "./notification-routes";
@@ -601,6 +602,17 @@ export default {
         }
 
         return settingsResponse;
+      }
+
+      const discountCodeResponse =
+        await handleDiscountCodeRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (discountCodeResponse) {
+        return discountCodeResponse;
       }
 
       const orderResponse =
