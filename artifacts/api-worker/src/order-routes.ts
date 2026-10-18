@@ -1048,6 +1048,8 @@ async function handleConvertOrderToStorePickup(
     .set({
       shippingZone: "استلام من المحل",
       shippingCost: 0,
+      shippingOriginalCost: 0,
+      shippingPromotionDiscount: 0,
       fulfillmentMethod: "pickup",
       deliveryCompanyId: null,
       deliveryCompanyCost: 0,
