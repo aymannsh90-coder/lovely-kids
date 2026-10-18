@@ -91,6 +91,7 @@ export default function DiscountCodesScreen() {
     useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const authorizedFetch = useCallback(
     async (path: string, init?: RequestInit) => {
@@ -171,6 +172,28 @@ export default function DiscountCodesScreen() {
     );
   };
 
+  const resetEditor = () => {
+    setEditingId(null);
+    setCampaignName("");
+    setCode("");
+    setPercent("5");
+    setStackWithShippingPromotion(false);
+    setStartDate("");
+    setEndDate("");
+  };
+
+  const startEditing = (item: DiscountCode) => {
+    setEditingId(item.id);
+    setCampaignName(item.campaignName);
+    setCode(item.code);
+    setPercent(String(item.discountPercent));
+    setStackWithShippingPromotion(
+      item.stackWithShippingPromotion,
+    );
+    setStartDate(item.startDate ?? "");
+    setEndDate(item.endDate ?? "");
+  };
+
   const createCode = async () => {
     const cleanCampaign = campaignName.trim();
     const cleanCode = code.trim().toUpperCase();
@@ -200,14 +223,16 @@ export default function DiscountCodesScreen() {
 
     try {
       const response = await authorizedFetch(
-        "/api/admin/discount-codes",
+        editingId === null
+          ? "/api/admin/discount-codes"
+          : `/api/admin/discount-codes/${editingId}`,
         {
-          method: "POST",
+          method: editingId === null ? "POST" : "PATCH",
           body: JSON.stringify({
             campaignName: cleanCampaign,
             code: cleanCode,
             discountPercent,
-            isActive: true,
+            ...(editingId === null ? { isActive: true } : {}),
             stackWithShippingPromotion,
             startDate: startDate.trim() || null,
             endDate: endDate.trim() || null,
@@ -225,12 +250,10 @@ export default function DiscountCodesScreen() {
         );
       }
 
-      setCampaignName("");
-      setCode("");
-      setPercent("5");
-      setStackWithShippingPromotion(false);
-      setStartDate("");
-      setEndDate("");
+      const wasEditing =
+        editingId !== null;
+
+      resetEditor();
 
       await loadCodes();
 
@@ -240,7 +263,9 @@ export default function DiscountCodesScreen() {
 
       Alert.alert(
         "تم",
-        "تم إنشاء كود الخصم بنجاح",
+        wasEditing
+          ? "تم تعديل كود الخصم بنجاح"
+          : "تم إنشاء كود الخصم بنجاح",
       );
     } catch (error) {
       Alert.alert(
@@ -358,9 +383,25 @@ export default function DiscountCodesScreen() {
             },
           ]}
         >
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-            إضافة كود جديد
-          </Text>
+          <View style={styles.codeHeader}>
+            <Text style={[styles.cardTitle, { color: colors.foreground }]}>
+              {editingId === null ? "إضافة كود جديد" : "تعديل كود الخصم"}
+            </Text>
+
+            {editingId !== null ? (
+              <Pressable
+                onPress={resetEditor}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                }}
+              >
+                <Text style={{ color: "#DC2626", fontWeight: "800" }}>
+                  إلغاء التعديل
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
 
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
             اسم الحملة أو الشخص
@@ -490,7 +531,11 @@ export default function DiscountCodesScreen() {
               <Ionicons name="add-circle-outline" size={20} color="#fff" />
             )}
             <Text style={styles.primaryButtonText}>
-              {savingCode ? "جاري الحفظ..." : "إضافة كود الخصم"}
+              {savingCode
+                ? "جاري الحفظ..."
+                : editingId === null
+                  ? "إضافة كود الخصم"
+                  : "حفظ تعديلات الكود"}
             </Text>
           </Pressable>
         </View>
@@ -686,6 +731,27 @@ export default function DiscountCodesScreen() {
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                   الفترة: {item.startDate || "بدون بداية"} ← {item.endDate || "بدون نهاية"}
                 </Text>
+
+                <Pressable
+                  onPress={() => startEditing(item)}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: colors.primary + "70",
+                    borderRadius: 10,
+                    paddingVertical: 9,
+                    paddingHorizontal: 12,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontWeight: "900",
+                    }}
+                  >
+                    تعديل الكود والنسبة والفترة
+                  </Text>
+                </Pressable>
               </View>
             ))
           )}
