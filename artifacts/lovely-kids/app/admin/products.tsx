@@ -163,6 +163,21 @@ export default function AdminProductsScreen() {
   const [newBatchCostInput, setNewBatchCostInput] =
     useState("");
 
+  const [
+    openingCorrectionOpen,
+    setOpeningCorrectionOpen,
+  ] = useState(false);
+
+  const [
+    openingCorrectionInput,
+    setOpeningCorrectionInput,
+  ] = useState("");
+
+  const [
+    openingCorrectionReason,
+    setOpeningCorrectionReason,
+  ] = useState("");
+
   // Per-color/size variant stock adjustment
   const [variantStockInputs, setVariantStockInputs] = useState<Record<string, string>>({});
   const [variantSaving, setVariantSaving] = useState<string | null>(null);
@@ -560,6 +575,9 @@ export default function AdminProductsScreen() {
     setOpeningCostInput("");
     setStockCostMode(null);
     setNewBatchCostInput("");
+    setOpeningCorrectionOpen(false);
+    setOpeningCorrectionInput("");
+    setOpeningCorrectionReason("");
     setOwnerCostInfo(null);
 
     if (user?.isOwner) {
@@ -582,6 +600,9 @@ export default function AdminProductsScreen() {
     setOpeningCostInput("");
     setStockCostMode(null);
     setNewBatchCostInput("");
+    setOpeningCorrectionOpen(false);
+    setOpeningCorrectionInput("");
+    setOpeningCorrectionReason("");
     setOwnerCostInfo(null);
   };
 
@@ -741,6 +762,159 @@ export default function AdminProductsScreen() {
           error instanceof Error
             ? error.message
             : "تعذر تسجيل التكلفة",
+        );
+      } finally {
+        setStockSaving(false);
+      }
+    };
+
+  const openOpeningCostCorrection =
+    () => {
+      if (
+        !ownerCostInfo?.initialized
+      ) {
+        return;
+      }
+
+      setOpeningCorrectionInput(
+        (
+          (ownerCostInfo.referenceUnitCostMinor ??
+            ownerCostInfo.averageCostMinor ??
+            0) /
+          100
+        ).toFixed(2),
+      );
+      setOpeningCorrectionReason("");
+      setOpeningCorrectionOpen(true);
+    };
+
+  const closeOpeningCostCorrection =
+    () => {
+      if (stockSaving) {
+        return;
+      }
+
+      setOpeningCorrectionOpen(false);
+      setOpeningCorrectionInput("");
+      setOpeningCorrectionReason("");
+    };
+
+  const handleOpeningCostCorrection =
+    async () => {
+      if (
+        !stockProduct ||
+        !user?.isOwner ||
+        !ownerCostInfo?.initialized
+      ) {
+        return;
+      }
+
+      const raw =
+        openingCorrectionInput
+          .trim()
+          .replace(",", ".");
+
+      const shekels =
+        Number(raw);
+
+      if (
+        !raw ||
+        !Number.isFinite(shekels) ||
+        shekels < 0
+      ) {
+        Alert.alert(
+          "التكلفة",
+          "أدخل سعر تكلفة صحيح",
+        );
+        return;
+      }
+
+      const unitCostMinor =
+        Math.round(
+          shekels * 100,
+        );
+
+      if (
+        !Number.isSafeInteger(
+          unitCostMinor,
+        )
+      ) {
+        Alert.alert(
+          "التكلفة",
+          "سعر التكلفة أكبر من الحد المسموح",
+        );
+        return;
+      }
+
+      setStockSaving(true);
+
+      try {
+        const token =
+          await getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            "يجب تسجيل الدخول",
+          );
+        }
+
+        const res = await fetch(
+          `${API_BASE}/api/owner/costs/opening-correction`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              productId:
+                stockProduct.id,
+              unitCostMinor,
+              reason:
+                openingCorrectionReason
+                  .trim() || undefined,
+            }),
+          },
+        );
+
+        if (!res.ok) {
+          let message =
+            "تعذر تعديل التكلفة الأصلية";
+
+          try {
+            const data =
+              (await res.json()) as {
+                error?: string;
+              };
+
+            if (data.error) {
+              message = data.error;
+            }
+          } catch {}
+
+          throw new Error(message);
+        }
+
+        await refreshOwnerCostInfo(
+          stockProduct.id,
+        );
+
+        setOpeningCorrectionOpen(false);
+        setOpeningCorrectionInput("");
+        setOpeningCorrectionReason("");
+
+        Alert.alert(
+          "تم",
+          "تم تعديل التكلفة الأصلية وتسجيل التصحيح",
+        );
+      } catch (error) {
+        Alert.alert(
+          "التكلفة",
+          error instanceof Error
+            ? error.message
+            : "تعذر تعديل التكلفة الأصلية",
         );
       } finally {
         setStockSaving(false);
@@ -1989,6 +2163,161 @@ export default function AdminProductsScreen() {
                             ? `الكمية المحاسبية: ${ownerCostInfo.accountingQuantity ?? 0}`
                             : "تنبيه: الكمية المحاسبية لا تطابق المخزون الحالي"}
                         </Text>
+
+                        <Pressable
+                          onPress={
+                            openingCorrectionOpen
+                              ? closeOpeningCostCorrection
+                              : openOpeningCostCorrection
+                          }
+                          disabled={
+                            stockSaving
+                          }
+                          style={{
+                            borderWidth: 1,
+                            borderColor:
+                              colors.primary + "70",
+                            backgroundColor:
+                              openingCorrectionOpen
+                                ? colors.primary + "18"
+                                : colors.card,
+                            borderRadius: 10,
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                colors.primary,
+                              textAlign:
+                                "center",
+                              fontWeight:
+                                "900",
+                            }}
+                          >
+                            {openingCorrectionOpen
+                              ? "إلغاء تعديل التكلفة الأصلية"
+                              : "تعديل التكلفة الأصلية"}
+                          </Text>
+                        </Pressable>
+
+                        {openingCorrectionOpen && (
+                          <View
+                            style={{
+                              gap: 8,
+                              padding: 12,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor:
+                                colors.border,
+                              backgroundColor:
+                                colors.background,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  colors.mutedForeground,
+                                textAlign:
+                                  "right",
+                                fontSize: 12,
+                                lineHeight: 18,
+                              }}
+                            >
+                              عدّل السعر فقط إذا كان سعر التكلفة الأصلي أُدخل بالخطأ. سيتم تسجيل العملية كتصحيح تكلفة للمالك.
+                            </Text>
+
+                            <TextInput
+                              value={
+                                openingCorrectionInput
+                              }
+                              onChangeText={
+                                setOpeningCorrectionInput
+                              }
+                              placeholder="سعر التكلفة الصحيح بالشيكل"
+                              placeholderTextColor={
+                                colors.mutedForeground
+                              }
+                              keyboardType="decimal-pad"
+                              style={{
+                                borderWidth: 1,
+                                borderColor:
+                                  colors.border,
+                                borderRadius: 10,
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                color:
+                                  colors.foreground,
+                                backgroundColor:
+                                  colors.card,
+                                textAlign: "right",
+                              }}
+                            />
+
+                            <TextInput
+                              value={
+                                openingCorrectionReason
+                              }
+                              onChangeText={
+                                setOpeningCorrectionReason
+                              }
+                              placeholder="سبب التعديل (اختياري)"
+                              placeholderTextColor={
+                                colors.mutedForeground
+                              }
+                              maxLength={300}
+                              style={{
+                                borderWidth: 1,
+                                borderColor:
+                                  colors.border,
+                                borderRadius: 10,
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                color:
+                                  colors.foreground,
+                                backgroundColor:
+                                  colors.card,
+                                textAlign: "right",
+                              }}
+                            />
+
+                            <Pressable
+                              onPress={
+                                handleOpeningCostCorrection
+                              }
+                              disabled={
+                                stockSaving ||
+                                !openingCorrectionInput.trim()
+                              }
+                              style={{
+                                backgroundColor:
+                                  stockSaving ||
+                                  !openingCorrectionInput.trim()
+                                    ? colors.muted
+                                    : colors.primary,
+                                borderRadius: 10,
+                                padding: 11,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color:
+                                    stockSaving ||
+                                    !openingCorrectionInput.trim()
+                                      ? colors.mutedForeground
+                                      : "#fff",
+                                  fontWeight:
+                                    "900",
+                                  textAlign:
+                                    "center",
+                                }}
+                              >
+                                حفظ تصحيح التكلفة
+                              </Text>
+                            </Pressable>
+                          </View>
+                        )}
 
                         <Text
                           style={{
