@@ -332,6 +332,97 @@ function getOrderInvoiceDiscount(items: OrderItem[]): number {
   ) / 100;
 }
 
+function formatMinorMoney(
+  minor: number,
+) {
+  const value =
+    minor / 100;
+
+  return Number.isInteger(value)
+    ? `${value}₪`
+    : `${value.toFixed(2)}₪`;
+}
+
+function getOnlineExchangeDisplay(
+  order: Order,
+) {
+  const hasExchangeLink =
+    Number.isSafeInteger(
+      order.exchangeOriginalOrderId,
+    ) &&
+    Number(
+      order.exchangeOriginalOrderId,
+    ) > 0;
+
+  if (!hasExchangeLink) {
+    return null;
+  }
+
+  const amounts = [
+    order.exchangeReturnNetMinor,
+    order.exchangeNewNetMinor,
+    order.exchangeDifferenceMinor,
+    order.exchangeDeliveryChargeMinor,
+    order.exchangeSettlementAmountMinor,
+  ];
+
+  if (
+    amounts.some(
+      (value) =>
+        !Number.isSafeInteger(
+          value,
+        ),
+    )
+  ) {
+    return null;
+  }
+
+  const returnNetMinor =
+    Number(
+      order.exchangeReturnNetMinor,
+    );
+  const newNetMinor =
+    Number(
+      order.exchangeNewNetMinor,
+    );
+  const differenceMinor =
+    Number(
+      order.exchangeDifferenceMinor,
+    );
+  const deliveryChargeMinor =
+    Number(
+      order.exchangeDeliveryChargeMinor,
+    );
+  const settlementAmountMinor =
+    Number(
+      order.exchangeSettlementAmountMinor,
+    );
+
+  const settlementLabel =
+    settlementAmountMinor > 0
+      ? "المطلوب من الزبون"
+      : settlementAmountMinor < 0
+        ? "مستحق للزبون"
+        : "صافي التبديل";
+
+  const differenceLabel =
+    differenceMinor > 0
+      ? "فرق الأصناف — على الزبون"
+      : differenceMinor < 0
+        ? "فرق الأصناف — للزبون"
+        : "فرق الأصناف";
+
+  return {
+    returnNetMinor,
+    newNetMinor,
+    differenceMinor,
+    deliveryChargeMinor,
+    settlementAmountMinor,
+    settlementLabel,
+    differenceLabel,
+  };
+}
+
 function paymentStatusInfo(s: string) {
   switch (s) {
     case "proof_submitted": return { label: "وصل مُرفق", color: "#FF9800", icon: "image-outline" as const };
@@ -2597,6 +2688,8 @@ export default function AdminOrdersScreen() {
             const paymentConfirmed = item.paymentStatus === "confirmed";
             const invoiceDiscount =
               getOrderInvoiceDiscount(item.items);
+            const exchangeDisplay =
+              getOnlineExchangeDisplay(item);
 
             return (
               <Pressable
@@ -2686,7 +2779,43 @@ export default function AdminOrdersScreen() {
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={[styles.totalAmount, { color: colors.primary }]}>{item.totalPrice}₪</Text>
+                  <View
+                    style={{
+                      alignItems: "flex-start",
+                      gap: 2,
+                    }}
+                  >
+                    {exchangeDisplay ? (
+                      <Text
+                        style={{
+                          color: "#7C3AED",
+                          fontSize: 11,
+                          fontWeight: "800",
+                        }}
+                      >
+                        {exchangeDisplay.settlementLabel}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.totalAmount,
+                        {
+                          color:
+                            exchangeDisplay
+                              ? "#7C3AED"
+                              : colors.primary,
+                        },
+                      ]}
+                    >
+                      {exchangeDisplay
+                        ? formatMinorMoney(
+                            Math.abs(
+                              exchangeDisplay.settlementAmountMinor,
+                            ),
+                          )
+                        : `${item.totalPrice}₪`}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* Expanded Details */}
@@ -2774,6 +2903,243 @@ export default function AdminOrdersScreen() {
                         </View>
                       ) : null}
                     </View>
+
+                    {exchangeDisplay ? (
+                      <View
+                        style={{
+                          backgroundColor:
+                            "#F5F3FF",
+                          borderWidth: 1,
+                          borderColor:
+                            "#C4B5FD",
+                          borderRadius: 12,
+                          padding: 12,
+                          gap: 7,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              "#6D28D9",
+                            fontWeight:
+                              "900",
+                            textAlign:
+                              "right",
+                            fontSize: 14,
+                          }}
+                        >
+                          🔄 ملخص التبديل
+                        </Text>
+
+                        <View
+                          style={{
+                            flexDirection:
+                              "row-reverse",
+                            justifyContent:
+                              "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                colors.foreground,
+                              fontWeight:
+                                "700",
+                            }}
+                          >
+                            قيمة الأصناف المرتجعة
+                          </Text>
+                          <Text
+                            style={{
+                              color:
+                                colors.foreground,
+                              fontWeight:
+                                "900",
+                            }}
+                          >
+                            {formatMinorMoney(
+                              exchangeDisplay.returnNetMinor,
+                            )}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            flexDirection:
+                              "row-reverse",
+                            justifyContent:
+                              "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                colors.foreground,
+                              fontWeight:
+                                "700",
+                            }}
+                          >
+                            قيمة الأصناف الجديدة
+                          </Text>
+                          <Text
+                            style={{
+                              color:
+                                colors.foreground,
+                              fontWeight:
+                                "900",
+                            }}
+                          >
+                            {formatMinorMoney(
+                              exchangeDisplay.newNetMinor,
+                            )}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            flexDirection:
+                              "row-reverse",
+                            justifyContent:
+                              "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                exchangeDisplay.differenceMinor < 0
+                                  ? "#059669"
+                                  : exchangeDisplay.differenceMinor > 0
+                                    ? "#DC2626"
+                                    : colors.foreground,
+                              fontWeight:
+                                "800",
+                            }}
+                          >
+                            {exchangeDisplay.differenceLabel}
+                          </Text>
+                          <Text
+                            style={{
+                              color:
+                                exchangeDisplay.differenceMinor < 0
+                                  ? "#059669"
+                                  : exchangeDisplay.differenceMinor > 0
+                                    ? "#DC2626"
+                                    : colors.foreground,
+                              fontWeight:
+                                "900",
+                            }}
+                          >
+                            {formatMinorMoney(
+                              Math.abs(
+                                exchangeDisplay.differenceMinor,
+                              ),
+                            )}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            flexDirection:
+                              "row-reverse",
+                            justifyContent:
+                              "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                colors.foreground,
+                              fontWeight:
+                                "700",
+                            }}
+                          >
+                            رسوم التوصيل
+                          </Text>
+                          <Text
+                            style={{
+                              color:
+                                colors.foreground,
+                              fontWeight:
+                                "900",
+                            }}
+                          >
+                            {formatMinorMoney(
+                              exchangeDisplay.deliveryChargeMinor,
+                            )}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            borderTopWidth: 1,
+                            borderTopColor:
+                              "#C4B5FD",
+                            paddingTop: 8,
+                            marginTop: 2,
+                            flexDirection:
+                              "row-reverse",
+                            justifyContent:
+                              "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                "#6D28D9",
+                              fontWeight:
+                                "900",
+                            }}
+                          >
+                            {exchangeDisplay.settlementLabel}
+                          </Text>
+                          <Text
+                            style={{
+                              color:
+                                "#6D28D9",
+                              fontWeight:
+                                "900",
+                              fontSize: 16,
+                            }}
+                          >
+                            {formatMinorMoney(
+                              Math.abs(
+                                exchangeDisplay.settlementAmountMinor,
+                              ),
+                            )}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : item.exchangeOriginalOrderId ? (
+                      <View
+                        style={{
+                          backgroundColor:
+                            "#FFF7ED",
+                          borderWidth: 1,
+                          borderColor:
+                            "#F59E0B",
+                          borderRadius: 12,
+                          padding: 10,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              "#B45309",
+                            fontWeight:
+                              "800",
+                            textAlign:
+                              "right",
+                          }}
+                        >
+                          بيانات تسوية التبديل غير مكتملة. حدّث الطلبات قبل الاعتماد على المبلغ الظاهر.
+                        </Text>
+                      </View>
+                    ) : null}
 
                     {item.shippingZone === "استلام من المحل" &&
                     item.status !== "done" &&
