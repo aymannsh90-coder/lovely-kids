@@ -770,6 +770,9 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       );
     }
 
+    const shippingPromotionProductsTotal =
+      productsTotal - discountCodeAmount;
+
     const shippingCost =
       discountCodeRow &&
       !discountCodeRow.stackWithShippingPromotion
@@ -777,7 +780,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         : resolveShippingCost(
             settingsData,
             shipping,
-            productsTotal,
+            shippingPromotionProductsTotal,
           );
 
     const shippingOriginalCost =
