@@ -1423,6 +1423,205 @@ async function handleOpeningCostCorrection(
           };
         }
 
+        const previousUnitCostMinor =
+          state.referenceUnitCostMinor;
+
+        const [
+          saleCostRows,
+          returnCostRows,
+          revisionCostRows,
+          exchangeReturnCostRows,
+          exchangeSaleCostRows,
+          onlineCostRows,
+          historicalCostRows,
+        ] =
+          await Promise.all([
+            tx
+              .select({
+                quantity:
+                  posSaleItemCostsTable.quantity,
+                unitCostMinor:
+                  posSaleItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  posSaleItemCostsTable.costTotalMinor,
+              })
+              .from(
+                posSaleItemCostsTable,
+              )
+              .where(
+                eq(
+                  posSaleItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  posSaleReturnItemCostsTable.quantity,
+                costTotalMinor:
+                  posSaleReturnItemCostsTable.costTotalMinor,
+              })
+              .from(
+                posSaleReturnItemCostsTable,
+              )
+              .where(
+                eq(
+                  posSaleReturnItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  posSaleRevisionItemCostsTable.quantity,
+                unitCostMinor:
+                  posSaleRevisionItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  posSaleRevisionItemCostsTable.costTotalMinor,
+              })
+              .from(
+                posSaleRevisionItemCostsTable,
+              )
+              .where(
+                eq(
+                  posSaleRevisionItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  exchangeReturnItemCostsTable.quantity,
+                unitCostMinor:
+                  exchangeReturnItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  exchangeReturnItemCostsTable.costTotalMinor,
+              })
+              .from(
+                exchangeReturnItemCostsTable,
+              )
+              .where(
+                eq(
+                  exchangeReturnItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  exchangeSaleItemCostsTable.quantity,
+                unitCostMinor:
+                  exchangeSaleItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  exchangeSaleItemCostsTable.costTotalMinor,
+              })
+              .from(
+                exchangeSaleItemCostsTable,
+              )
+              .where(
+                eq(
+                  exchangeSaleItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  orderItemCostsTable.quantity,
+                unitCostMinor:
+                  orderItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  orderItemCostsTable.costTotalMinor,
+              })
+              .from(
+                orderItemCostsTable,
+              )
+              .where(
+                eq(
+                  orderItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                unitCostMinor:
+                  productHistoricalCostsTable.unitCostMinor,
+              })
+              .from(
+                productHistoricalCostsTable,
+              )
+              .where(
+                eq(
+                  productHistoricalCostsTable.productId,
+                  productId,
+                ),
+              ),
+          ]);
+
+        const hasDifferentHistoricalCost =
+          saleCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          returnCostRows.some(
+            (row) =>
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          revisionCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          exchangeReturnCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          exchangeSaleCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          onlineCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          historicalCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor,
+          );
+
+        if (
+          hasDifferentHistoricalCost
+        ) {
+          return {
+            ok: false as const,
+            status: 409,
+            error:
+              "يوجد لهذا الصنف سجل تكلفة تاريخي بسعر مختلف، لذلك لا يمكن تعديل التكلفة الأصلية تلقائياً بدون إعادة احتساب تاريخ التكلفة.",
+          };
+        }
+
         const inventoryValueMinor =
           state.quantityOnHand *
           unitCostMinor;
@@ -1441,9 +1640,6 @@ async function handleOpeningCostCorrection(
               "قيمة المخزون بعد التصحيح أكبر من الحد المسموح",
           };
         }
-
-        const previousUnitCostMinor =
-          state.referenceUnitCostMinor;
 
         if (
           previousUnitCostMinor ===
