@@ -1000,7 +1000,7 @@ export default function CartScreen() {
                     { color: colors.mutedForeground },
                   ]}
                 >
-                  {totalItems} {totalItems === 1 ? "منتج" : "منتجات"}
+                  {totalItems} {totalItems === 1 ? "منتج" : "منتجات"} — {discountedProductsTotal}₪
                 </Text>
               </View>
 
@@ -1090,7 +1090,7 @@ export default function CartScreen() {
                     { color: colors.mutedForeground },
                   ]}
                 >
-                  المجموع
+                  قيمة المنتجات
                 </Text>
               </View>
 
@@ -2095,7 +2095,7 @@ export default function CartScreen() {
                           backgroundColor: colors.primary,
                           width: `${Math.round(
                             cartPromotionProgress * 100,
-                          )}%`,
+                          )}%` as `${number}%`,
                         },
                       ]}
                     />
