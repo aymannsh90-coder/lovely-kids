@@ -1261,6 +1261,47 @@ async function handleUpdate(
   );
 }
 
+async function handleRemoveUnusedCode(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const auth = await requireAdmin(request, db, env);
+  if (!auth.ok) return auth.response;
+  if (auth.user.isOwner !== true) {
+    return json({ error: "الحذف النهائي متاح للمالك فقط" }, 403);
+  }
+
+  const usage = await db
+    .select({ id: ordersTable.id })
+    .from(ordersTable)
+    .where(eq(ordersTable.discountCodeId, id))
+    .limit(1);
+
+  if (usage[0]) {
+    return json(
+      {
+        error:
+          "لا يمكن حذف كود سبق استخدامه. قم بأرشفته للحفاظ على تقارير الطلبات والربحية.",
+        canArchive: true,
+      },
+      409,
+    );
+  }
+
+  const removed = await db
+    .delete(discountCodesTable)
+    .where(eq(discountCodesTable.id, id))
+    .returning({ id: discountCodesTable.id });
+
+  if (!removed[0]) {
+    return json({ error: "كود الخصم غير موجود" }, 404);
+  }
+
+  return json({ ok: true, id });
+}
+
 export async function handleDiscountCodeRequest(
   request: Request,
   db: Db,
@@ -1326,6 +1367,18 @@ export async function handleDiscountCodeRequest(
       Number(
         updateMatch[1],
       ),
+    );
+  }
+
+  if (
+    request.method === "DELETE" &&
+    updateMatch
+  ) {
+    return handleRemoveUnusedCode(
+      request,
+      db,
+      env,
+      Number(updateMatch[1]),
     );
   }
 
