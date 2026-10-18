@@ -1116,7 +1116,7 @@ export default function CartScreen() {
               ) : null}
 
               {selectedZone ? (
-                <>
+                isStorePickup ? (
                   <View style={styles.summaryRow}>
                     <Text
                       style={[
@@ -1124,7 +1124,7 @@ export default function CartScreen() {
                         { color: colors.foreground },
                       ]}
                     >
-                      {shippingOriginalCost}₪
+                      0₪
                     </Text>
                     <Text
                       style={[
@@ -1132,19 +1132,19 @@ export default function CartScreen() {
                         { color: colors.mutedForeground },
                       ]}
                     >
-                      التوصيل الأصلي ({selectedZone.label})
+                      الاستلام من المحل
                     </Text>
                   </View>
-
-                  {shippingPromotionDiscount > 0 ? (
+                ) : (
+                  <>
                     <View style={styles.summaryRow}>
                       <Text
                         style={[
                           styles.summaryValue,
-                          { color: "#16A34A" },
+                          { color: colors.foreground },
                         ]}
                       >
-                        -{shippingPromotionDiscount}₪
+                        {shippingOriginalCost}₪
                       </Text>
                       <Text
                         style={[
@@ -1152,46 +1152,67 @@ export default function CartScreen() {
                           { color: colors.mutedForeground },
                         ]}
                       >
-                        خصم عرض التوصيل
+                        التوصيل الأصلي ({selectedZone.label})
                       </Text>
                     </View>
-                  ) : null}
 
-                  <View style={styles.summaryRow}>
-                    <View style={styles.shippingValueWrap}>
+                    {shippingPromotionDiscount > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text
+                          style={[
+                            styles.summaryValue,
+                            { color: "#16A34A" },
+                          ]}
+                        >
+                          -{shippingPromotionDiscount}₪
+                        </Text>
+                        <Text
+                          style={[
+                            styles.summaryLabel,
+                            { color: colors.mutedForeground },
+                          ]}
+                        >
+                          خصم عرض التوصيل
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.summaryRow}>
+                      <View style={styles.shippingValueWrap}>
+                        <Text
+                          style={[
+                            styles.summaryValue,
+                            { color: colors.foreground },
+                          ]}
+                        >
+                          {shippingCost}₪
+                        </Text>
+                        {shippingPromotionDiscount > 0 ? (
+                          <View style={styles.shippingPromoBadge}>
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={13}
+                              color="#16A34A"
+                            />
+                            <Text style={styles.shippingPromoBadgeText}>
+                              عرض التوصيل
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text
                         style={[
-                          styles.summaryValue,
-                          { color: colors.foreground },
+                          styles.summaryLabel,
+                          { color: colors.mutedForeground },
                         ]}
                       >
-                        {shippingCost}₪
+                        {shippingPromotionDiscount > 0
+                          ? "التوصيل بعد العرض"
+                          : "التوصيل"}
                       </Text>
-                      {shippingPromotionDiscount > 0 ? (
-                        <View style={styles.shippingPromoBadge}>
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={13}
-                            color="#16A34A"
-                          />
-                          <Text style={styles.shippingPromoBadgeText}>
-                            عرض التوصيل
-                          </Text>
-                        </View>
-                      ) : null}
                     </View>
-                    <Text
-                      style={[
-                        styles.summaryLabel,
-                        { color: colors.mutedForeground },
-                      ]}
-                    >
-                      {shippingPromotionDiscount > 0
-                        ? "التوصيل بعد العرض"
-                        : "التوصيل"}
-                    </Text>
-                  </View>
-                </>
+                  </>
+                )
               ) : (
                 <View style={styles.summaryRow}>
                   <Text
@@ -1440,7 +1461,7 @@ export default function CartScreen() {
               { color: showValidationErrors && !selectedZone ? "#DC2626" : colors.foreground },
             ]}
           >
-            منطقة التوصيل *
+            طريقة الاستلام / منطقة التوصيل *
           </Text>
           <View
             style={[
@@ -1574,7 +1595,9 @@ export default function CartScreen() {
                   { color: colors.mutedForeground },
                 ]}
               >
-                ادفع نقدًا عند وصول الطلب
+                {isStorePickup
+                  ? "ادفع نقدًا عند استلام الطلب من المحل"
+                  : "ادفع نقدًا عند وصول الطلب"}
               </Text>
             </View>
             <Ionicons
