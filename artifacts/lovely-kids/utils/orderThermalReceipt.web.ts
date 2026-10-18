@@ -221,6 +221,20 @@ export async function printOrderThermalReceipt(
     0,
   );
 
+  const discountCodeAmount =
+    Number.isSafeInteger(order.discountCodeAmount)
+      ? Number(order.discountCodeAmount)
+      : null;
+
+  const hasDiscountCode =
+    typeof order.discountCode === "string" &&
+    order.discountCode.trim().length > 0 &&
+    typeof order.discountCodeLabel === "string" &&
+    order.discountCodeLabel.trim().length > 0 &&
+    Number.isSafeInteger(order.discountCodePercent) &&
+    discountCodeAmount !== null &&
+    discountCodeAmount >= 0;
+
   const shippingCost = Number(order.shippingCost || 0);
 
   const shippingOriginalCost =
@@ -663,16 +677,26 @@ export async function printOrderThermalReceipt(
               </div>
 
               ${
-                invoiceDiscount > 0
+                hasDiscountCode
                   ? `
                     <div>
-                      <span>الخصم العام</span>
-                      <strong>-${money(invoiceDiscount)}</strong>
+                      <span>كود الخصم: ${escapeHtml(order.discountCode)} — ${escapeHtml(order.discountCodeLabel)} (${Number(order.discountCodePercent)}%)</span>
+                      <strong></strong>
+                    </div>
+                    <div>
+                      <span>خصم كود ${escapeHtml(order.discountCodeLabel)}</span>
+                      <strong>-${money(discountCodeAmount)}</strong>
                     </div>
                   `
-                  : ""
+                  : invoiceDiscount > 0
+                    ? `
+                      <div>
+                        <span>الخصم العام</span>
+                        <strong>-${money(invoiceDiscount)}</strong>
+                      </div>
+                    `
+                    : ""
               }
-
               ${
                 hasShippingPromotion
                   ? `
