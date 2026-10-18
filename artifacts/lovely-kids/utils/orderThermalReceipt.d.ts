@@ -27,6 +27,11 @@ export interface ThermalOrder {
   shippingCost?: number;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
+  discountCode?: string | null;
+  discountCodeLabel?: string | null;
+  discountCodePercent?: number | null;
+  discountCodeAmount?: number | null;
+  discountCodeStacksWithShippingPromotion?: boolean | null;
   notes?: string;
   paymentMethod: string;
   paymentStatus: string;

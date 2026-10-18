@@ -1,8 +1,9 @@
-import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { boolean, pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { deliveryCompaniesTable } from "./delivery-companies";
+import { discountCodesTable } from "./discount-codes";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -23,6 +24,20 @@ export const ordersTable = pgTable("orders", {
   // even if shipping settings change later.
   shippingOriginalCost: integer("shipping_original_cost"),
   shippingPromotionDiscount: integer("shipping_promotion_discount"),
+
+  // Discount-code snapshot. The foreign key is optional on purpose:
+  // historical receipts remain valid even if the admin later removes a code.
+  discountCodeId: integer("discount_code_id").references(
+    () => discountCodesTable.id,
+    { onDelete: "set null" },
+  ),
+  discountCode: text("discount_code"),
+  discountCodeLabel: text("discount_code_label"),
+  discountCodePercent: integer("discount_code_percent"),
+  discountCodeAmount: integer("discount_code_amount"),
+  discountCodeStacksWithShippingPromotion: boolean(
+    "discount_code_stacks_with_shipping_promotion",
+  ),
 
   // delivery = courier company
   // pickup   = customer receives the order from the shop
@@ -58,6 +73,11 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   deliveryCompanyCost: true,
   shippingOriginalCost: true,
   shippingPromotionDiscount: true,
+  discountCodeId: true,
+  discountCodeLabel: true,
+  discountCodePercent: true,
+  discountCodeAmount: true,
+  discountCodeStacksWithShippingPromotion: true,
   createdAt: true,
 }).extend({
   items: z.array(
@@ -76,6 +96,7 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   paymentProof: z.string().optional(),
   shippingZone: z.string().optional(),
   shippingCost: z.number().optional(),
+  discountCode: z.string().trim().max(80).optional(),
 });
 
 export type InsertOrder = z.infer<typeof insertOrderSchema>;

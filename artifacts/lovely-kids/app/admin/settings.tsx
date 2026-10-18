@@ -538,6 +538,58 @@ export default function SettingsScreen() {
         </View>
       </Section>
 
+      {/* ── أكواد الخصم ── */}
+      <Section title="🎟️ أكواد الخصم">
+        <Pressable
+          onPress={() => router.push("/admin/discount-codes")}
+          style={[styles.navRow, { backgroundColor: colors.secondary }]}
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+          <Text style={[styles.navText, { color: colors.foreground }]}>
+            إدارة أكواد الخصم والتقارير
+          </Text>
+          <Ionicons name="ticket-outline" size={22} color={colors.primary} />
+        </Pressable>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View
+          style={[
+            styles.field,
+            {
+              flexDirection:
+                Platform.OS === "web" ? "row-reverse" : "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.fieldLabel,
+              {
+                color: settings.discountCodesEnabled
+                  ? "#16A34A"
+                  : colors.mutedForeground,
+                fontWeight: "800",
+              },
+            ]}
+          >
+            {settings.discountCodesEnabled
+              ? "أكواد الخصم مفعلة"
+              : "أكواد الخصم متوقفة"}
+          </Text>
+          <Text
+            style={[
+              styles.fieldLabel,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            التفعيل والإيقاف من صفحة أكواد الخصم
+          </Text>
+        </View>
+      </Section>
+
       {/* ── التصنيفات ── */}
       <Section title="🏷️ أسماء التصنيفات">
         <Pressable

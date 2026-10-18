@@ -412,6 +412,16 @@ function calculateReplacementSnapshot(
   order: OrderRow,
   settingsData: unknown,
 ) {
+  if (
+    typeof order.discountCode === "string" &&
+    order.discountCode.trim().length > 0
+  ) {
+    throw new OnlineExchangeError(
+      "طلب التبديل البديل لا يجوز أن يحتوي كود خصم. كود الخصم يطبق على فاتورة الشراء الأصلية فقط.",
+      409,
+    );
+  }
+
   const items =
     parseStoredItems(order);
 

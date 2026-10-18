@@ -1,12 +1,18 @@
 import {
   inventoryMovementsTable,
   appSettingsTable,
+  discountCodesTable,
   orderItemCostsTable,
   ordersTable,
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import {
+  discountCodesEnabled,
+  isDiscountCodeActiveNow,
+  normalizeDiscountCode,
+} from "./discount-code-service";
 import type { openDb } from "./db";
 import {
   consumeProductCost,
@@ -43,6 +49,7 @@ export interface TrustedOrderInput {
   notes?: string | null;
   shippingZone?: string;
   paymentMethod?: "cod" | "bank_transfer";
+  discountCode?: string;
   items: TrustedOrderItem[];
 }
 
@@ -250,6 +257,138 @@ interface TrustedStoredItem {
   image?: string;
   size?: string;
   color?: string;
+  invoiceDiscountMinor?: number;
+}
+
+function allocateOrderDiscountMinor(
+  items: Array<{
+    price: number;
+    quantity: number;
+  }>,
+  discountAmount: number,
+): number[] {
+  if (discountAmount === 0) {
+    return items.map(() => 0);
+  }
+
+  const productsTotal =
+    items.reduce(
+      (sum, item) =>
+        sum +
+        item.price *
+          item.quantity,
+      0,
+    );
+
+  if (
+    productsTotal <= 0 ||
+    discountAmount >
+      productsTotal
+  ) {
+    throw new OrderValidationError(
+      "خصم الكود أكبر من إجمالي المنتجات",
+    );
+  }
+
+  const discountMinor =
+    discountAmount * 100;
+
+  const denominator =
+    BigInt(productsTotal);
+
+  const rows =
+    items.map(
+      (item, index) => {
+        const gross =
+          item.price *
+          item.quantity;
+
+        const grossMinor =
+          gross * 100;
+
+        const numerator =
+          BigInt(
+            discountMinor,
+          ) *
+          BigInt(gross);
+
+        return {
+          index,
+          grossMinor,
+          amount:
+            Number(
+              numerator /
+                denominator,
+            ),
+          remainder:
+            numerator %
+            denominator,
+        };
+      },
+    );
+
+  let remaining =
+    discountMinor -
+    rows.reduce(
+      (sum, row) =>
+        sum + row.amount,
+      0,
+    );
+
+  const ranked =
+    [...rows].sort(
+      (left, right) => {
+        if (
+          left.remainder ===
+          right.remainder
+        ) {
+          return (
+            left.index -
+            right.index
+          );
+        }
+
+        return left.remainder >
+          right.remainder
+          ? -1
+          : 1;
+      },
+    );
+
+  for (
+    let index = 0;
+    remaining > 0 &&
+    index < ranked.length;
+    index += 1
+  ) {
+    const row =
+      ranked[index];
+
+    if (
+      row.amount <
+      row.grossMinor
+    ) {
+      row.amount += 1;
+      remaining -= 1;
+    }
+  }
+
+  if (remaining !== 0) {
+    throw new OrderValidationError(
+      "تعذر توزيع خصم الكود على المنتجات",
+    );
+  }
+
+  return rows
+    .sort(
+      (left, right) =>
+        left.index -
+        right.index,
+    )
+    .map(
+      (row) =>
+        row.amount,
+    );
 }
 
 export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
@@ -532,19 +671,140 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       productsTotal += product.price * item.quantity;
     }
 
-    const shippingCost = resolveShippingCost(
-      settingsData,
-      shipping,
-      productsTotal,
-    );
+    const rawDiscountCode =
+      input.discountCode?.trim() ??
+      "";
 
-    const shippingOriginalCost = shipping.cost;
-    const shippingPromotionDiscount = Math.max(
-      0,
-      shippingOriginalCost - shippingCost,
-    );
+    let discountCodeRow:
+      typeof discountCodesTable.$inferSelect |
+      null = null;
 
-    const totalPrice = productsTotal + shippingCost;
+    if (rawDiscountCode) {
+      if (
+        !discountCodesEnabled(
+          settingsData,
+        )
+      ) {
+        throw new OrderValidationError(
+          "أكواد الخصم غير مفعلة حاليًا",
+        );
+      }
+
+      const normalizedCode =
+        normalizeDiscountCode(
+          rawDiscountCode,
+        );
+
+      const discountRows =
+        await tx
+          .select()
+          .from(
+            discountCodesTable,
+          )
+          .where(
+            eq(
+              discountCodesTable.normalizedCode,
+              normalizedCode,
+            ),
+          )
+          .limit(1);
+
+      const candidate =
+        discountRows[0];
+
+      if (
+        !candidate ||
+        !isDiscountCodeActiveNow(
+          candidate,
+        )
+      ) {
+        throw new OrderValidationError(
+          "كود الخصم غير صالح أو غير فعال",
+        );
+      }
+
+      discountCodeRow =
+        candidate;
+    }
+
+    // Business rule:
+    // percentage discount is calculated on merchandise only
+    // and ALWAYS rounded down to a whole shekel.
+    const discountCodeAmount =
+      discountCodeRow
+        ? Math.floor(
+            (
+              productsTotal *
+              discountCodeRow.discountPercent
+            ) /
+              100,
+          )
+        : 0;
+
+    if (
+      !Number.isSafeInteger(
+        discountCodeAmount,
+      ) ||
+      discountCodeAmount < 0 ||
+      discountCodeAmount >
+        productsTotal
+    ) {
+      throw new OrderValidationError(
+        "تعذر احتساب خصم الكود",
+      );
+    }
+
+    if (discountCodeRow) {
+      const lineDiscounts =
+        allocateOrderDiscountMinor(
+          trustedItems,
+          discountCodeAmount,
+        );
+
+      trustedItems.forEach(
+        (item, index) => {
+          item.invoiceDiscountMinor =
+            lineDiscounts[index] ??
+            0;
+        },
+      );
+    }
+
+    const shippingCost =
+      discountCodeRow &&
+      !discountCodeRow.stackWithShippingPromotion
+        ? shipping.cost
+        : resolveShippingCost(
+            settingsData,
+            shipping,
+            productsTotal,
+          );
+
+    const shippingOriginalCost =
+      shipping.cost;
+
+    const shippingPromotionDiscount =
+      Math.max(
+        0,
+        shippingOriginalCost -
+          shippingCost,
+      );
+
+    const totalPrice =
+      productsTotal -
+      discountCodeAmount +
+      shippingCost;
+
+    if (
+      !Number.isSafeInteger(
+        totalPrice,
+      ) ||
+      totalPrice < 0
+    ) {
+      throw new OrderValidationError(
+        "إجمالي الطلب غير صالح",
+      );
+    }
 
     const orderRows = await tx
       .insert(ordersTable)
@@ -560,6 +820,28 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         shippingCost,
         shippingOriginalCost,
         shippingPromotionDiscount,
+
+        discountCodeId:
+          discountCodeRow?.id ??
+          null,
+        discountCode:
+          discountCodeRow?.code ??
+          null,
+        discountCodeLabel:
+          discountCodeRow?.campaignName ??
+          null,
+        discountCodePercent:
+          discountCodeRow?.discountPercent ??
+          null,
+        discountCodeAmount:
+          discountCodeRow
+            ? discountCodeAmount
+            : null,
+        discountCodeStacksWithShippingPromotion:
+          discountCodeRow
+            ? discountCodeRow.stackWithShippingPromotion
+            : null,
+
         fulfillmentMethod:
           shipping.label === STORE_PICKUP_LABEL
             ? "pickup"

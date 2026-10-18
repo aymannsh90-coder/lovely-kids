@@ -42,6 +42,13 @@ type Step = "cart" | "checkout" | "payment" | "success";
 
 const STORE_PICKUP_LABEL = "استلام من المحل";
 
+type AppliedDiscountCode = {
+  code: string;
+  campaignName: string;
+  discountPercent: number;
+  stackWithShippingPromotion: boolean;
+};
+
 type MetaBrowserAttribution = {
   metaFbp?: string;
   metaFbc?: string;
@@ -220,6 +227,12 @@ export default function CartScreen() {
   const [proofUploaded, setProofUploaded] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
 
+  const [discountCodeInput, setDiscountCodeInput] = useState("");
+  const [appliedDiscountCode, setAppliedDiscountCode] =
+    useState<AppliedDiscountCode | null>(null);
+  const [discountCodeLoading, setDiscountCodeLoading] = useState(false);
+  const [discountCodeError, setDiscountCodeError] = useState<string | null>(null);
+
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 84 + 8 : insets.bottom + 49 + 8;
 
@@ -230,6 +243,98 @@ export default function CartScreen() {
       if (!address.trim() && user.deliveryAddress) setAddress(user.deliveryAddress);
     }
   }, [step]);
+
+  useEffect(() => {
+    if (settings.discountCodesEnabled === true) return;
+
+    setDiscountCodeInput("");
+    setAppliedDiscountCode(null);
+    setDiscountCodeError(null);
+  }, [settings.discountCodesEnabled]);
+
+  const appliedDiscountAmount =
+    appliedDiscountCode
+      ? Math.floor(
+          (totalPrice * appliedDiscountCode.discountPercent) / 100,
+        )
+      : 0;
+
+  const handleApplyDiscountCode = async () => {
+    const rawCode = discountCodeInput.trim();
+
+    if (!rawCode) {
+      setAppliedDiscountCode(null);
+      setDiscountCodeError("أدخل كود الخصم");
+      return;
+    }
+
+    setDiscountCodeLoading(true);
+    setDiscountCodeError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/discount-codes/validate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            code: rawCode,
+          }),
+        },
+      );
+
+      const data = (await response.json().catch(() => ({}))) as {
+        valid?: boolean;
+        code?: string;
+        campaignName?: string;
+        discountPercent?: number;
+        stackWithShippingPromotion?: boolean;
+        error?: string;
+      };
+
+      if (
+        !response.ok ||
+        data.valid !== true ||
+        typeof data.code !== "string" ||
+        typeof data.campaignName !== "string" ||
+        !Number.isSafeInteger(data.discountPercent)
+      ) {
+        throw new Error(
+          data.error || "كود الخصم غير صالح أو غير فعال",
+        );
+      }
+
+      setAppliedDiscountCode({
+        code: data.code,
+        campaignName: data.campaignName,
+        discountPercent: Number(data.discountPercent),
+        stackWithShippingPromotion:
+          data.stackWithShippingPromotion === true,
+      });
+      setDiscountCodeInput(data.code);
+      setDiscountCodeError(null);
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+    } catch (error) {
+      setAppliedDiscountCode(null);
+      setDiscountCodeError(
+        error instanceof Error
+          ? error.message
+          : "تعذر التحقق من كود الخصم",
+      );
+    } finally {
+      setDiscountCodeLoading(false);
+    }
+  };
+
+  const removeDiscountCode = () => {
+    setAppliedDiscountCode(null);
+    setDiscountCodeInput("");
+    setDiscountCodeError(null);
+  };
 
   const bank = settings.bankInfo;
   const hasBankInfo = bank.bankName || bank.accountNumber;
@@ -265,16 +370,27 @@ export default function CartScreen() {
     // This does not fire an additional event; it only enriches subsequent events.
 setLoading(true);
 
+    const allowShippingPromotion =
+      !appliedDiscountCode ||
+      appliedDiscountCode.stackWithShippingPromotion;
+
     let shippingCost = getShippingCost(
       selectedZone,
       totalPrice,
-      settings.shippingPromotionEnabled === true,
+      allowShippingPromotion &&
+        settings.shippingPromotionEnabled === true,
       settings.shippingPromotionThreshold ?? 500,
       settings.shippingPromotionStartDate ?? "",
       settings.shippingPromotionEndDate ?? "",
     );
 
-    let currentTotal = totalPrice + shippingCost;
+    let currentDiscountAmount =
+      appliedDiscountAmount;
+
+    let currentTotal =
+      totalPrice -
+      currentDiscountAmount +
+      shippingCost;
     const currentItems = [...items];
     let createdOrderId: number | null = null;
     let createdTrackingToken: string | null = null;
@@ -309,6 +425,9 @@ setLoading(true);
           shippingZone: selectedZone.label,
           shippingCost,
           paymentMethod,
+          ...(appliedDiscountCode
+            ? { discountCode: appliedDiscountCode.code }
+            : {}),
           ...metaAttribution,
         }),
       });
@@ -324,6 +443,10 @@ setLoading(true);
           id: number;
           shippingCost?: number;
           totalPrice?: number;
+          discountCode?: string | null;
+          discountCodeLabel?: string | null;
+          discountCodePercent?: number | null;
+          discountCodeAmount?: number | null;
           trackingToken?: string;
         };
 
@@ -348,6 +471,14 @@ setLoading(true);
           order.totalPrice >= 0
         ) {
           currentTotal = order.totalPrice;
+        }
+
+        if (
+          typeof order.discountCodeAmount === "number" &&
+          Number.isInteger(order.discountCodeAmount) &&
+          order.discountCodeAmount >= 0
+        ) {
+          currentDiscountAmount = order.discountCodeAmount;
         }
 
         trackMetaEvent("Purchase", {
@@ -411,6 +542,9 @@ setLoading(true);
       `\n──────────────\n` +
       `${itemsList}\n` +
       `──────────────\n` +
+      (appliedDiscountCode
+        ? `🎟️ كود الخصم: ${appliedDiscountCode.code} — ${appliedDiscountCode.campaignName} (${appliedDiscountCode.discountPercent}%)\n💸 الخصم: -${currentDiscountAmount}₪\n`
+        : "") +
       `🚚 التوصيل (${selectedZone.label}): ${shippingCost}₪\n` +
       `💰 *الإجمالي شامل التوصيل: ${currentTotal}₪*` +
       (trackingUrl
@@ -742,9 +876,14 @@ setLoading(true);
         (zone) => zone.label !== STORE_PICKUP_LABEL,
       ),
     ];
+    const allowShippingPromotion =
+      !appliedDiscountCode ||
+      appliedDiscountCode.stackWithShippingPromotion;
+
     const promotionActive = isShippingPromotionActive(
       totalPrice,
-      settings.shippingPromotionEnabled === true,
+      allowShippingPromotion &&
+        settings.shippingPromotionEnabled === true,
       settings.shippingPromotionThreshold ?? 500,
       settings.shippingPromotionStartDate ?? "",
       settings.shippingPromotionEndDate ?? "",
@@ -754,14 +893,18 @@ setLoading(true);
       ? getShippingCost(
           selectedZone,
           totalPrice,
-          settings.shippingPromotionEnabled === true,
+          allowShippingPromotion &&
+            settings.shippingPromotionEnabled === true,
           settings.shippingPromotionThreshold ?? 500,
           settings.shippingPromotionStartDate ?? "",
           settings.shippingPromotionEndDate ?? "",
         )
       : 0;
 
-    const finalTotal = totalPrice + shippingCost;
+    const finalTotal =
+      totalPrice -
+      appliedDiscountAmount +
+      shippingCost;
     const canSubmit =
       name.trim().length > 0 &&
       phone.trim().length > 0 &&
@@ -811,6 +954,161 @@ setLoading(true);
                 </Text>
               </View>
             ))}
+            {settings.discountCodesEnabled === true ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  gap: 8,
+                  paddingTop: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.foreground,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  🎟️ هل لديك كود خصم؟
+                </Text>
+
+                {appliedDiscountCode ? (
+                  <View
+                    style={{
+                      gap: 7,
+                      padding: 10,
+                      borderWidth: 1,
+                      borderColor: "#22C55E",
+                      borderRadius: 12,
+                      backgroundColor: "#22C55E12",
+                    }}
+                  >
+                    <View style={styles.summaryItem}>
+                      <Text
+                        style={[
+                          styles.summaryItemPrice,
+                          { color: "#16A34A" },
+                        ]}
+                      >
+                        -{appliedDiscountAmount}₪
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryItemName,
+                          { color: "#16A34A", fontWeight: "900" },
+                        ]}
+                      >
+                        خصم {appliedDiscountCode.campaignName} — {appliedDiscountCode.code} ({appliedDiscountCode.discountPercent}%)
+                      </Text>
+                    </View>
+
+                    {!appliedDiscountCode.stackWithShippingPromotion &&
+                    settings.shippingPromotionEnabled === true ? (
+                      <Text
+                        style={{
+                          color: colors.mutedForeground,
+                          fontSize: 12,
+                          textAlign: "right",
+                        }}
+                      >
+                        هذا الكود لا يجتمع مع عرض التوصيل؛ تم احتساب سعر التوصيل الأصلي.
+                      </Text>
+                    ) : null}
+
+                    <Pressable
+                      onPress={removeDiscountCode}
+                      style={{
+                        alignSelf: "flex-end",
+                        paddingVertical: 5,
+                        paddingHorizontal: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#DC2626",
+                          fontWeight: "800",
+                        }}
+                      >
+                        إزالة الكود
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ gap: 7 }}>
+                    <View
+                      style={[
+                        styles.inputRow,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: discountCodeError
+                            ? "#DC2626"
+                            : colors.border,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="ticket-outline"
+                        size={18}
+                        color={colors.mutedForeground}
+                      />
+                      <TextInput
+                        value={discountCodeInput}
+                        onChangeText={(value) => {
+                          setDiscountCodeInput(value);
+                          setDiscountCodeError(null);
+                        }}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        placeholder="مثال: NAGHAM123"
+                        placeholderTextColor={colors.mutedForeground}
+                        style={[styles.input, { color: colors.foreground }]}
+                        textAlign="right"
+                        onSubmitEditing={() => {
+                          void handleApplyDiscountCode();
+                        }}
+                      />
+                      <Pressable
+                        disabled={discountCodeLoading}
+                        onPress={() => {
+                          void handleApplyDiscountCode();
+                        }}
+                        style={{
+                          backgroundColor: colors.primary,
+                          paddingHorizontal: 14,
+                          paddingVertical: 9,
+                          borderRadius: 9,
+                          opacity: discountCodeLoading ? 0.7 : 1,
+                        }}
+                      >
+                        {discountCodeLoading ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={{ color: "#fff", fontWeight: "900" }}>
+                            تطبيق
+                          </Text>
+                        )}
+                      </Pressable>
+                    </View>
+
+                    {discountCodeError ? (
+                      <Text
+                        style={{
+                          color: "#DC2626",
+                          fontSize: 12,
+                          textAlign: "right",
+                          fontWeight: "700",
+                        }}
+                      >
+                        {discountCodeError}
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
+              </View>
+            ) : null}
+
             <View style={[styles.summaryItem, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }]}>
               <Text style={[styles.summaryItemPrice, { color: colors.mutedForeground }]}>
                 {selectedZone ? `${shippingCost}₪` : "—"}
@@ -1304,9 +1602,139 @@ setLoading(true);
               <Text style={[styles.totalPrice, { color: colors.primary }]}>{totalPrice} ₪</Text>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>الإجمالي</Text>
             </View>
+            {settings.discountCodesEnabled === true ? (
+              <View
+                style={{
+                  gap: 8,
+                  marginTop: 4,
+                  marginBottom: 6,
+                }}
+              >
+                {appliedDiscountCode ? (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#22C55E",
+                      borderRadius: 12,
+                      padding: 10,
+                      backgroundColor: "#22C55E12",
+                      gap: 5,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#16A34A",
+                        fontWeight: "900",
+                        textAlign: "right",
+                      }}
+                    >
+                      🎟️ {appliedDiscountCode.campaignName} — {appliedDiscountCode.code} ({appliedDiscountCode.discountPercent}%)
+                    </Text>
+                    <View style={styles.summaryRow}>
+                      <Text style={{ color: "#16A34A", fontWeight: "900" }}>
+                        -{appliedDiscountAmount} ₪
+                      </Text>
+                      <Text style={{ color: colors.foreground, fontWeight: "800" }}>
+                        خصم الكود
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text style={{ color: colors.primary, fontWeight: "900" }}>
+                        {totalPrice - appliedDiscountAmount} ₪
+                      </Text>
+                      <Text style={{ color: colors.foreground, fontWeight: "800" }}>
+                        بعد الخصم
+                      </Text>
+                    </View>
+                    <Pressable onPress={removeDiscountCode}>
+                      <Text
+                        style={{
+                          color: "#DC2626",
+                          fontWeight: "800",
+                          textAlign: "right",
+                          fontSize: 12,
+                        }}
+                      >
+                        إزالة الكود
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ gap: 6 }}>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "800",
+                        textAlign: "right",
+                      }}
+                    >
+                      🎟️ عندك كود خصم؟
+                    </Text>
+                    <View
+                      style={[
+                        styles.inputRow,
+                        {
+                          backgroundColor: colors.input,
+                          borderColor: discountCodeError
+                            ? "#DC2626"
+                            : colors.border,
+                        },
+                      ]}
+                    >
+                      <TextInput
+                        value={discountCodeInput}
+                        onChangeText={(value) => {
+                          setDiscountCodeInput(value);
+                          setDiscountCodeError(null);
+                        }}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        placeholder="أدخل كود الخصم"
+                        placeholderTextColor={colors.mutedForeground}
+                        style={[styles.input, { color: colors.foreground }]}
+                        textAlign="right"
+                        onSubmitEditing={() => void handleApplyDiscountCode()}
+                      />
+                      <Pressable
+                        onPress={() => void handleApplyDiscountCode()}
+                        disabled={discountCodeLoading}
+                        style={{
+                          backgroundColor: colors.primary,
+                          borderRadius: 9,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                        }}
+                      >
+                        {discountCodeLoading ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={{ color: "#fff", fontWeight: "900" }}>
+                            تطبيق
+                          </Text>
+                        )}
+                      </Pressable>
+                    </View>
+                    {discountCodeError ? (
+                      <Text
+                        style={{
+                          color: "#DC2626",
+                          fontSize: 12,
+                          textAlign: "right",
+                        }}
+                      >
+                        {discountCodeError}
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
+              </View>
+            ) : null}
+
             {isShippingPromotionActive(
               totalPrice,
-              settings.shippingPromotionEnabled === true,
+              (!appliedDiscountCode ||
+                appliedDiscountCode.stackWithShippingPromotion) &&
+                settings.shippingPromotionEnabled === true,
               settings.shippingPromotionThreshold ?? 500,
               settings.shippingPromotionStartDate ?? "",
               settings.shippingPromotionEndDate ?? "",

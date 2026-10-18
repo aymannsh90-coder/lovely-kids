@@ -112,6 +112,7 @@ export interface AppSettings {
   shippingPromotionThreshold: number;
   shippingPromotionStartDate: string;
   shippingPromotionEndDate: string;
+  discountCodesEnabled: boolean;
   promoPopupEnabled: boolean;
   promoPopupImageUrl: string;
   promoPopupObjectPath: string;
@@ -204,6 +205,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   shippingPromotionThreshold: 500,
   shippingPromotionStartDate: "",
   shippingPromotionEndDate: "",
+  discountCodesEnabled: false,
   promoPopupEnabled: false,
   promoPopupImageUrl: "",
   promoPopupObjectPath: "",

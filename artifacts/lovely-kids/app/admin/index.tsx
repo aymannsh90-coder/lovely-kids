@@ -74,6 +74,12 @@ const ADMIN_CARDS = [
     route: "/admin/shipping-promotion" as const,
   },
   {
+    label: "أكواد الخصم",
+    subtitle: "التفعيل، الأكواد، ونسبة الخصم والتقارير",
+    icon: "ticket-outline" as const,
+    route: "/admin/discount-codes" as never,
+  },
+  {
     label: "أقسام الصفحة الرئيسية",
     subtitle: "إظهار وإخفاء أقسام الرئيسية",
     icon: "eye-outline" as const,

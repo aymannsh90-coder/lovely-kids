@@ -1636,12 +1636,47 @@ export async function editOrderItemsAndAdjustStock(
       );
     }
 
+    const hasDiscountCodeSnapshot =
+      typeof order.discountCode === "string" &&
+      order.discountCode.trim().length > 0 &&
+      typeof order.discountCodeLabel === "string" &&
+      order.discountCodeLabel.trim().length > 0 &&
+      Number.isSafeInteger(order.discountCodePercent) &&
+      Number(order.discountCodePercent) >= 1 &&
+      Number(order.discountCodePercent) <= 100 &&
+      Number.isSafeInteger(order.discountCodeAmount) &&
+      order.discountCodeAmount !== null &&
+      order.discountCodeAmount >= 0 &&
+      typeof order.discountCodeStacksWithShippingPromotion ===
+        "boolean";
+
+    if (
+      linkedOnlineExchange &&
+      hasDiscountCodeSnapshot
+    ) {
+      throw new OrderEditError(
+        "طلب التبديل البديل لا يجوز أن يحتوي كود خصم",
+        409,
+      );
+    }
+
+    // Existing code-discount orders keep the original campaign percentage
+    // when an admin edits their items. The discount is recalculated from
+    // the new merchandise total and always rounded down to whole ILS.
     const invoiceDiscount =
-      details.invoiceDiscount === undefined
-        ? existingDiscountMinor / 100
-        : parseOrderInvoiceDiscount(
-            details.invoiceDiscount,
-          );
+      hasDiscountCodeSnapshot
+        ? Math.floor(
+            (
+              productsTotal *
+              Number(order.discountCodePercent)
+            ) /
+              100,
+          )
+        : details.invoiceDiscount === undefined
+          ? existingDiscountMinor / 100
+          : parseOrderInvoiceDiscount(
+              details.invoiceDiscount,
+            );
 
     if (invoiceDiscount > productsTotal) {
       throw new OrderEditError(
@@ -1664,11 +1699,16 @@ export async function editOrderItemsAndAdjustStock(
         invoiceDiscountAllocations[index];
     });
 
-    let shippingCost = resolveShippingCost(
-      settingsData,
-      shipping,
-      productsTotal,
-    );
+    let shippingCost =
+      hasDiscountCodeSnapshot &&
+      order.discountCodeStacksWithShippingPromotion ===
+        false
+        ? shipping.cost
+        : resolveShippingCost(
+            settingsData,
+            shipping,
+            productsTotal,
+          );
 
     let exchangeDeliveryBaseChargeMinor:
       number | null = null;
@@ -2326,6 +2366,10 @@ export async function editOrderItemsAndAdjustStock(
         shippingCost,
         shippingOriginalCost,
         shippingPromotionDiscount,
+        discountCodeAmount:
+          hasDiscountCodeSnapshot
+            ? invoiceDiscount
+            : order.discountCodeAmount,
         fulfillmentMethod:
           shipping.label === STORE_PICKUP_LABEL
             ? "pickup"

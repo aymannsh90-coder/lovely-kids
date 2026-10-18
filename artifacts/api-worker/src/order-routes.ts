@@ -325,6 +325,8 @@ async function handleCreateOrder(
         notes: parsed.data.notes,
         shippingZone: parsed.data.shippingZone,
         paymentMethod: parsed.data.paymentMethod,
+        discountCode:
+          parsed.data.discountCode,
         items: parsed.data.items.map((item) => ({
           id: item.id,
           quantity: item.quantity,

@@ -22,6 +22,11 @@ export interface PrintableOrder {
   shippingCost?: number;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
+  discountCode?: string | null;
+  discountCodeLabel?: string | null;
+  discountCodePercent?: number | null;
+  discountCodeAmount?: number | null;
+  discountCodeStacksWithShippingPromotion?: boolean | null;
   notes?: string;
   paymentMethod: string;
   paymentStatus: string;
@@ -108,6 +113,20 @@ export async function createOrderPrintHtml(
           : 0),
       0,
     ) / 100;
+
+  const discountCodeAmount =
+    Number.isSafeInteger(order.discountCodeAmount)
+      ? Number(order.discountCodeAmount)
+      : null;
+
+  const hasDiscountCode =
+    typeof order.discountCode === "string" &&
+    order.discountCode.trim().length > 0 &&
+    typeof order.discountCodeLabel === "string" &&
+    order.discountCodeLabel.trim().length > 0 &&
+    Number.isSafeInteger(order.discountCodePercent) &&
+    discountCodeAmount !== null &&
+    discountCodeAmount >= 0;
 
   const shippingCost =
     typeof order.shippingCost === "number"
@@ -273,9 +292,14 @@ export async function createOrderPrintHtml(
 
     <div class="totals">
       ${
-        invoiceDiscount > 0
-          ? `<div class="row"><strong>الخصم العام:</strong> -${invoiceDiscount} ₪</div>`
-          : ""
+        hasDiscountCode
+          ? `
+            <div class="row"><strong>كود الخصم:</strong> ${escapeHtml(order.discountCode)} — ${escapeHtml(order.discountCodeLabel)} (${Number(order.discountCodePercent)}%)</div>
+            <div class="row"><strong>خصم كود ${escapeHtml(order.discountCodeLabel)}:</strong> -${discountCodeAmount} ₪</div>
+          `
+          : invoiceDiscount > 0
+            ? `<div class="row"><strong>الخصم العام:</strong> -${invoiceDiscount} ₪</div>`
+            : ""
       }
       ${
         hasShippingPromotion
