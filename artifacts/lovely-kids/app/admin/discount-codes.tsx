@@ -50,6 +50,8 @@ type DiscountCodeStats = {
   costCoverageComplete: boolean | null;
 };
 
+type CodeFilter = "active" | "archived" | "all";
+
 type DiscountCode = {
   id: number;
   campaignName: string;
@@ -128,6 +130,9 @@ export default function DiscountCodesScreen() {
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [savingCode, setSavingCode] = useState(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [codeFilter, setCodeFilter] = useState<CodeFilter>("active");
 
   const [campaignName, setCampaignName] = useState("");
   const [code, setCode] = useState("");
@@ -412,6 +417,66 @@ export default function DiscountCodesScreen() {
     }
   };
 
+  const deleteUnusedCode = async (item: DiscountCode) => {
+    setDeletingId(item.id);
+
+    try {
+      const response = await authorizedFetch(
+        `/api/admin/discount-codes/${item.id}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "تعذر حذف كود الخصم",
+        );
+      }
+
+      if (editingId === item.id) {
+        resetEditor();
+      }
+
+      setPendingDeleteId(null);
+      await loadCodes();
+
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      );
+
+      Alert.alert(
+        "تم الحذف",
+        `تم حذف الكود ${item.code} نهائيًا لأنه لم يُستخدم في أي طلب.`,
+      );
+    } catch (error) {
+      Alert.alert(
+        "حذف كود الخصم",
+        error instanceof Error
+          ? error.message
+          : "تعذر حذف كود الخصم",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const activeCodesCount =
+    codes.filter((item) => item.isActive).length;
+  const archivedCodesCount =
+    codes.length - activeCodesCount;
+
+  const filteredCodes =
+    codes.filter((item) => {
+      if (codeFilter === "active") return item.isActive;
+      if (codeFilter === "archived") return !item.isActive;
+      return true;
+    });
+
   return (
     <ScrollView
       style={[styles.scroll, { backgroundColor: colors.background }]}
@@ -679,14 +744,77 @@ export default function DiscountCodesScreen() {
             الأكواد والتقارير
           </Text>
 
+          <View style={styles.filterRow}>
+            {(
+              [
+                {
+                  key: "active" as const,
+                  label: `الفعالة (${activeCodesCount})`,
+                },
+                {
+                  key: "archived" as const,
+                  label: `المؤرشفة (${archivedCodesCount})`,
+                },
+                {
+                  key: "all" as const,
+                  label: `الكل (${codes.length})`,
+                },
+              ] satisfies Array<{
+                key: CodeFilter;
+                label: string;
+              }>
+            ).map((option) => {
+              const selected = codeFilter === option.key;
+
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setCodeFilter(option.key)}
+                  style={[
+                    styles.filterButton,
+                    {
+                      backgroundColor: selected
+                        ? colors.primary
+                        : colors.input,
+                      borderColor: selected
+                        ? colors.primary
+                        : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      {
+                        color: selected
+                          ? "#fff"
+                          : colors.foreground,
+                      },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {loading ? (
             <ActivityIndicator color={colors.primary} />
           ) : codes.length === 0 ? (
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               لا يوجد أكواد خصم حتى الآن.
             </Text>
+          ) : filteredCodes.length === 0 ? (
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              {codeFilter === "active"
+                ? "لا يوجد أكواد فعالة."
+                : codeFilter === "archived"
+                  ? "لا يوجد أكواد مؤرشفة."
+                  : "لا يوجد أكواد خصم."}
+            </Text>
           ) : (
-            codes.map((item) => (
+            filteredCodes.map((item) => (
               <View
                 key={item.id}
                 style={[
@@ -701,9 +829,33 @@ export default function DiscountCodesScreen() {
               >
                 <View style={styles.codeHeader}>
                   <View style={styles.flexText}>
-                    <Text style={[styles.codeName, { color: colors.foreground }]}>
-                      {item.campaignName}
-                    </Text>
+                    <View style={styles.codeTitleRow}>
+                      <Text style={[styles.codeName, { color: colors.foreground }]}>
+                        {item.campaignName}
+                      </Text>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          {
+                            backgroundColor: item.isActive
+                              ? "#22C55E18"
+                              : colors.input,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: item.isActive
+                              ? "#16A34A"
+                              : colors.mutedForeground,
+                            fontSize: 11,
+                            fontWeight: "900",
+                          }}
+                        >
+                          {item.isActive ? "فعال" : "مؤرشف"}
+                        </Text>
+                      </View>
+                    </View>
                     <Text style={[styles.codeValue, { color: colors.primary }]}>
                       {item.code} · {item.discountPercent}%
                     </Text>
@@ -967,6 +1119,169 @@ export default function DiscountCodesScreen() {
                       : ""}
                   </Text>
                 </Pressable>
+
+                <View style={styles.lifecycleActions}>
+                  <Pressable
+                    onPress={() =>
+                      void patchCode(item, {
+                        isActive: !item.isActive,
+                      })
+                    }
+                    disabled={updatingId === item.id}
+                    style={[
+                      styles.lifecycleButton,
+                      {
+                        borderColor: item.isActive
+                          ? "#B45309"
+                          : "#16A34A",
+                        opacity:
+                          updatingId === item.id
+                            ? 0.55
+                            : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={
+                        item.isActive
+                          ? "archive-outline"
+                          : "refresh-outline"
+                      }
+                      size={17}
+                      color={
+                        item.isActive
+                          ? "#B45309"
+                          : "#16A34A"
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.lifecycleButtonText,
+                        {
+                          color: item.isActive
+                            ? "#B45309"
+                            : "#16A34A",
+                        },
+                      ]}
+                    >
+                      {item.isActive
+                        ? "أرشفة الكود"
+                        : "إعادة تفعيل"}
+                    </Text>
+                  </Pressable>
+
+                  {user?.isOwner === true &&
+                  item.stats.usageCount === 0 ? (
+                    <Pressable
+                      onPress={() =>
+                        setPendingDeleteId(
+                          pendingDeleteId === item.id
+                            ? null
+                            : item.id,
+                        )
+                      }
+                      disabled={deletingId === item.id}
+                      style={[
+                        styles.lifecycleButton,
+                        {
+                          borderColor: "#DC2626",
+                          opacity:
+                            deletingId === item.id
+                              ? 0.55
+                              : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={17}
+                        color="#DC2626"
+                      />
+                      <Text
+                        style={[
+                          styles.lifecycleButtonText,
+                          { color: "#DC2626" },
+                        ]}
+                      >
+                        حذف نهائي
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                {user?.isOwner === true &&
+                item.stats.usageCount > 0 ? (
+                  <Text
+                    style={[
+                      styles.hint,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    هذا الكود استُخدم في {item.stats.usageCount} طلب/طلبات؛ يمكن أرشفته لكن لا يُحذف نهائيًا حتى تبقى التقارير التاريخية محفوظة.
+                  </Text>
+                ) : null}
+
+                {pendingDeleteId === item.id ? (
+                  <View
+                    style={[
+                      styles.deleteConfirmBox,
+                      {
+                        backgroundColor: "#FEF2F2",
+                        borderColor: "#FCA5A5",
+                      },
+                    ]}
+                  >
+                    <Text style={styles.deleteConfirmText}>
+                      حذف {item.code} نهائيًا؟ هذا مسموح فقط لأنه لم يُستخدم في أي طلب، ولن يمكن التراجع عنه.
+                    </Text>
+                    <View style={styles.deleteConfirmActions}>
+                      <Pressable
+                        onPress={() => setPendingDeleteId(null)}
+                        style={[
+                          styles.confirmSmallButton,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: colors.card,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: colors.foreground,
+                            fontWeight: "800",
+                          }}
+                        >
+                          إلغاء
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => void deleteUnusedCode(item)}
+                        disabled={deletingId === item.id}
+                        style={[
+                          styles.confirmSmallButton,
+                          { backgroundColor: "#DC2626" },
+                        ]}
+                      >
+                        {deletingId === item.id ? (
+                          <ActivityIndicator
+                            size="small"
+                            color="#fff"
+                          />
+                        ) : (
+                          <Text
+                            style={{
+                              color: "#fff",
+                              fontWeight: "900",
+                            }}
+                          >
+                            نعم، حذف نهائي
+                          </Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
               </View>
             ))
           )}
@@ -1005,6 +1320,21 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "900",
     textAlign: "right",
+  },
+  filterRow: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  filterButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  filterButtonText: {
+    fontSize: 12,
+    fontWeight: "900",
   },
   toggleRow: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
@@ -1063,6 +1393,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  codeTitleRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  statusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   codeName: {
     fontSize: 16,
     fontWeight: "900",
@@ -1094,5 +1435,51 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     marginTop: 2,
+  },
+  lifecycleActions: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  lifecycleButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexGrow: 1,
+  },
+  lifecycleButtonText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  deleteConfirmBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 11,
+    gap: 10,
+  },
+  deleteConfirmText: {
+    color: "#991B1B",
+    fontSize: 12,
+    lineHeight: 19,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  deleteConfirmActions: {
+    flexDirection: "row-reverse",
+    gap: 8,
+  },
+  confirmSmallButton: {
+    flex: 1,
+    minHeight: 38,
+    borderWidth: 1,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
   },
 });
