@@ -52,3 +52,8 @@ Thumbs.db
 # Local database backups
 backups/
 /artifacts/media-worker/.wrangler/
+
+# Local audit/export artifacts
+/exports/
+/lovely-kids-audit-stage*.txt
+/حسابات زبائن تاريخيه.xls
