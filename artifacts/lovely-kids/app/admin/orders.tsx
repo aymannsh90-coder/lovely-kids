@@ -108,6 +108,11 @@ interface Order {
   shippingCost?: number;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
+  discountCode?: string | null;
+  discountCodeLabel?: string | null;
+  discountCodePercent?: number | null;
+  discountCodeAmount?: number | null;
+  discountCodeStacksWithShippingPromotion?: boolean | null;
   fulfillmentMethod?: "delivery" | "pickup" | null;
   status: string;
   notes?: string;
