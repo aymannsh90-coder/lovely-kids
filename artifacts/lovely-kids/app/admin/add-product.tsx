@@ -1865,11 +1865,16 @@ export default function AddProductScreen() {
   };
 
   const openingCostMinor = () => {
+    const raw =
+      openingCostInput.trim();
+
+    if (!raw) {
+      return null;
+    }
+
     const shekels =
       Number(
-        openingCostInput
-          .trim()
-          .replace(",", "."),
+        raw.replace(",", "."),
       );
 
     if (
@@ -2015,14 +2020,15 @@ export default function AddProductScreen() {
         if (
           user?.isOwner &&
           nextQuantity !== null &&
-          nextQuantity > 0
+          nextQuantity > 0 &&
+          openingCostInput.trim()
         ) {
           const unitCostMinor =
             openingCostMinor();
 
           if (unitCostMinor === null) {
             throw new Error(
-              "أدخل التكلفة الافتتاحية للصنف قبل الحفظ",
+              "أدخل تكلفة افتتاحية صحيحة أو اترك الحقل فارغاً",
             );
           }
 
@@ -3351,7 +3357,7 @@ export default function AddProductScreen() {
                     textAlign: "right",
                   }}
                 >
-                  إذا كان المنتج يحتوي كمية حالية، أدخل تكلفة القطعة الافتتاحية. لن تظهر هذه البيانات للمشرف.
+                  تكلفة القطعة الافتتاحية اختيارية. إذا تركتها فارغة سيُحفظ المنتج والمخزون وتظهر التكلفة كغير مدخلة حتى تضيفها لاحقاً. لن تظهر هذه البيانات للمشرف.
                 </Text>
 
                 <TextInput

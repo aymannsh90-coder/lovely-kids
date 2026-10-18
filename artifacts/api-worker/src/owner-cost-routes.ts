@@ -10,6 +10,7 @@ import {
   posSaleItemCostsTable,
   posSaleItemsTable,
   posSaleReturnItemCostsTable,
+  posSaleRevisionItemCostsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
@@ -1187,6 +1188,713 @@ async function handleOpeningCost(
 }
 
 
+async function handleOpeningCostCorrection(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth = await requireOwner(
+    request,
+    db,
+    env,
+  );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    await request
+      .json()
+      .catch(() => null);
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return json(
+      { error: "البيانات غير صالحة" },
+      400,
+    );
+  }
+
+  const payload =
+    body as Record<string, unknown>;
+
+  const productId =
+    parseProductId(
+      payload.productId,
+    );
+
+  const unitCostMinor =
+    parseUnitCostMinor(
+      payload.unitCostMinor,
+    );
+
+  const reason =
+    typeof payload.reason === "string"
+      ? payload.reason.trim().slice(0, 300)
+      : "";
+
+  if (productId === null) {
+    return json(
+      { error: "رقم الصنف غير صالح" },
+      400,
+    );
+  }
+
+  if (unitCostMinor === null) {
+    return json(
+      { error: "تكلفة الصنف غير صالحة" },
+      400,
+    );
+  }
+
+  const ownerId =
+    Number(auth.owner.id);
+
+  if (
+    !Number.isSafeInteger(ownerId) ||
+    ownerId <= 0
+  ) {
+    return json(
+      { error: "تعذر تحديد حساب المالك" },
+      500,
+    );
+  }
+
+  const result =
+    await db.transaction(
+      async (tx) => {
+        const productRows =
+          await tx
+            .select({
+              id:
+                productsTable.id,
+              nameAr:
+                productsTable.nameAr,
+              stock:
+                productsTable.stock,
+              colorVariants:
+                productsTable.colorVariants,
+            })
+            .from(productsTable)
+            .where(
+              and(
+                eq(
+                  productsTable.id,
+                  productId,
+                ),
+                isNull(
+                  productsTable.deletedAt,
+                ),
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+        const product =
+          productRows[0];
+
+        if (!product) {
+          return {
+            ok: false as const,
+            status: 404,
+            error: "الصنف غير موجود",
+          };
+        }
+
+        const stateRows =
+          await tx
+            .select()
+            .from(
+              productCostStateTable,
+            )
+            .where(
+              eq(
+                productCostStateTable.productId,
+                productId,
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+        const state =
+          stateRows[0];
+
+        if (!state) {
+          return {
+            ok: false as const,
+            status: 409,
+            error:
+              "تكلفة الصنف غير مدخلة بعد. استخدم إدخال التكلفة أولاً.",
+          };
+        }
+
+        const currentQuantity =
+          getProductQuantity({
+            stock:
+              product.stock,
+            colorVariants:
+              product.colorVariants,
+          });
+
+        if (
+          currentQuantity === null ||
+          currentQuantity !==
+            state.quantityOnHand
+        ) {
+          return {
+            ok: false as const,
+            status: 409,
+            error:
+              "كمية المخزون لا تطابق كمية محاسبة التكلفة. عالج فرق الكمية قبل تعديل التكلفة.",
+          };
+        }
+
+        const ledgerRows =
+          await tx
+            .select({
+              id:
+                productCostLedgerTable.id,
+              eventType:
+                productCostLedgerTable.eventType,
+              sourceType:
+                productCostLedgerTable.sourceType,
+              quantityDelta:
+                productCostLedgerTable.quantityDelta,
+              quantityAfter:
+                productCostLedgerTable.quantityAfter,
+            })
+            .from(
+              productCostLedgerTable,
+            )
+            .where(
+              eq(
+                productCostLedgerTable.productId,
+                productId,
+              ),
+            )
+            .orderBy(
+              asc(
+                productCostLedgerTable.id,
+              ),
+            )
+            .for("update");
+
+        const opening =
+          ledgerRows.find(
+            (row) =>
+              row.eventType ===
+                "opening" &&
+              row.sourceType ===
+                "manual_opening",
+          );
+
+        if (!opening) {
+          return {
+            ok: false as const,
+            status: 409,
+            error:
+              "لا توجد تكلفة افتتاحية قابلة للتصحيح لهذا الصنف.",
+          };
+        }
+
+        const hasLaterAcquisitionCost =
+          ledgerRows.some(
+            (row) =>
+              row.eventType ===
+                "purchase" ||
+              row.eventType ===
+                "purchase_void" ||
+              row.eventType ===
+                "adjustment_in",
+          );
+
+        if (
+          hasLaterAcquisitionCost
+        ) {
+          return {
+            ok: false as const,
+            status: 409,
+            error:
+              "لا يمكن تعديل التكلفة الأصلية مباشرة بعد وجود دفعة شراء أو إضافة مخزون بتكلفة لاحقة. استخدم تصحيح تكلفة مخصص للحركة اللاحقة.",
+          };
+        }
+
+        const previousUnitCostMinor =
+          state.referenceUnitCostMinor;
+
+        const [
+          saleCostRows,
+          returnCostRows,
+          revisionCostRows,
+          exchangeReturnCostRows,
+          exchangeSaleCostRows,
+          onlineCostRows,
+          historicalCostRows,
+        ] =
+          await Promise.all([
+            tx
+              .select({
+                quantity:
+                  posSaleItemCostsTable.quantity,
+                unitCostMinor:
+                  posSaleItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  posSaleItemCostsTable.costTotalMinor,
+              })
+              .from(
+                posSaleItemCostsTable,
+              )
+              .where(
+                eq(
+                  posSaleItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  posSaleReturnItemCostsTable.quantity,
+                costTotalMinor:
+                  posSaleReturnItemCostsTable.costTotalMinor,
+              })
+              .from(
+                posSaleReturnItemCostsTable,
+              )
+              .where(
+                eq(
+                  posSaleReturnItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  posSaleRevisionItemCostsTable.quantity,
+                unitCostMinor:
+                  posSaleRevisionItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  posSaleRevisionItemCostsTable.costTotalMinor,
+              })
+              .from(
+                posSaleRevisionItemCostsTable,
+              )
+              .where(
+                eq(
+                  posSaleRevisionItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  exchangeReturnItemCostsTable.quantity,
+                unitCostMinor:
+                  exchangeReturnItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  exchangeReturnItemCostsTable.costTotalMinor,
+              })
+              .from(
+                exchangeReturnItemCostsTable,
+              )
+              .where(
+                eq(
+                  exchangeReturnItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  exchangeSaleItemCostsTable.quantity,
+                unitCostMinor:
+                  exchangeSaleItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  exchangeSaleItemCostsTable.costTotalMinor,
+              })
+              .from(
+                exchangeSaleItemCostsTable,
+              )
+              .where(
+                eq(
+                  exchangeSaleItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                quantity:
+                  orderItemCostsTable.quantity,
+                unitCostMinor:
+                  orderItemCostsTable.unitCostMinor,
+                costTotalMinor:
+                  orderItemCostsTable.costTotalMinor,
+              })
+              .from(
+                orderItemCostsTable,
+              )
+              .where(
+                eq(
+                  orderItemCostsTable.productId,
+                  productId,
+                ),
+              ),
+            tx
+              .select({
+                unitCostMinor:
+                  productHistoricalCostsTable.unitCostMinor,
+              })
+              .from(
+                productHistoricalCostsTable,
+              )
+              .where(
+                eq(
+                  productHistoricalCostsTable.productId,
+                  productId,
+                ),
+              ),
+          ]);
+
+        const hasDifferentHistoricalCost =
+          saleCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          returnCostRows.some(
+            (row) =>
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          revisionCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          exchangeReturnCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          exchangeSaleCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          onlineCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor ||
+              row.costTotalMinor !==
+                row.quantity *
+                  previousUnitCostMinor,
+          ) ||
+          historicalCostRows.some(
+            (row) =>
+              row.unitCostMinor !==
+                previousUnitCostMinor,
+          );
+
+        if (
+          hasDifferentHistoricalCost
+        ) {
+          return {
+            ok: false as const,
+            status: 409,
+            error:
+              "يوجد لهذا الصنف سجل تكلفة تاريخي بسعر مختلف، لذلك لا يمكن تعديل التكلفة الأصلية تلقائياً بدون إعادة احتساب تاريخ التكلفة.",
+          };
+        }
+
+        const inventoryValueMinor =
+          state.quantityOnHand *
+          unitCostMinor;
+
+        if (
+          !Number.isSafeInteger(
+            inventoryValueMinor,
+          ) ||
+          inventoryValueMinor >
+            2_147_483_647
+        ) {
+          return {
+            ok: false as const,
+            status: 400,
+            error:
+              "قيمة المخزون بعد التصحيح أكبر من الحد المسموح",
+          };
+        }
+
+        if (
+          previousUnitCostMinor ===
+          unitCostMinor
+        ) {
+          return {
+            ok: true as const,
+            unchanged: true as const,
+            product: {
+              productId:
+                String(product.id),
+              nameAr:
+                product.nameAr,
+              quantity:
+                state.quantityOnHand,
+              previousUnitCostMinor,
+              unitCostMinor,
+              inventoryValueMinor:
+                state.inventoryValueMinor,
+            },
+          };
+        }
+
+        await tx
+          .update(
+            productCostStateTable,
+          )
+          .set({
+            inventoryValueMinor,
+            referenceUnitCostMinor:
+              unitCostMinor,
+            costQuality:
+              "confirmed",
+            updatedAt:
+              new Date(),
+          })
+          .where(
+            eq(
+              productCostStateTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            productCostLedgerTable,
+          )
+          .set({
+            inventoryValueDeltaMinor:
+              sql`${productCostLedgerTable.quantityDelta} * ${unitCostMinor}`,
+            inventoryValueAfterMinor:
+              sql`${productCostLedgerTable.quantityAfter} * ${unitCostMinor}`,
+            costQuality:
+              "confirmed",
+          })
+          .where(
+            eq(
+              productCostLedgerTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            posSaleItemCostsTable,
+          )
+          .set({
+            unitCostMinor,
+            costTotalMinor:
+              sql`${posSaleItemCostsTable.quantity} * ${unitCostMinor}`,
+            costQuality:
+              "confirmed",
+          })
+          .where(
+            eq(
+              posSaleItemCostsTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            posSaleReturnItemCostsTable,
+          )
+          .set({
+            costTotalMinor:
+              sql`${posSaleReturnItemCostsTable.quantity} * ${unitCostMinor}`,
+            costQuality:
+              "confirmed",
+          })
+          .where(
+            eq(
+              posSaleReturnItemCostsTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            posSaleRevisionItemCostsTable,
+          )
+          .set({
+            unitCostMinor,
+            costTotalMinor:
+              sql`${posSaleRevisionItemCostsTable.quantity} * ${unitCostMinor}`,
+            costQuality:
+              "confirmed",
+          })
+          .where(
+            eq(
+              posSaleRevisionItemCostsTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            exchangeReturnItemCostsTable,
+          )
+          .set({
+            unitCostMinor,
+            costTotalMinor:
+              sql`${exchangeReturnItemCostsTable.quantity} * ${unitCostMinor}`,
+            costQuality:
+              "confirmed",
+          })
+          .where(
+            eq(
+              exchangeReturnItemCostsTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            exchangeSaleItemCostsTable,
+          )
+          .set({
+            unitCostMinor,
+            costTotalMinor:
+              sql`${exchangeSaleItemCostsTable.quantity} * ${unitCostMinor}`,
+            costQuality:
+              "confirmed",
+          })
+          .where(
+            eq(
+              exchangeSaleItemCostsTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            orderItemCostsTable,
+          )
+          .set({
+            unitCostMinor,
+            costTotalMinor:
+              sql`${orderItemCostsTable.quantity} * ${unitCostMinor}`,
+            costQuality:
+              "confirmed",
+            updatedAt:
+              new Date(),
+          })
+          .where(
+            eq(
+              orderItemCostsTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .update(
+            productHistoricalCostsTable,
+          )
+          .set({
+            unitCostMinor,
+            costQuality:
+              "confirmed",
+            updatedAt:
+              new Date(),
+          })
+          .where(
+            eq(
+              productHistoricalCostsTable.productId,
+              productId,
+            ),
+          );
+
+        await tx
+          .insert(
+            productCostLedgerTable,
+          )
+          .values({
+            productId,
+            eventType:
+              "correction",
+            sourceType:
+              "opening_cost_correction",
+            sourceRef:
+              String(productId),
+            sourceItemRef:
+              crypto.randomUUID(),
+            quantityDelta:
+              0,
+            inventoryValueDeltaMinor:
+              0,
+            quantityAfter:
+              state.quantityOnHand,
+            inventoryValueAfterMinor:
+              inventoryValueMinor,
+            costQuality:
+              "confirmed",
+            note:
+              [
+                `Opening cost corrected from ${previousUnitCostMinor} to ${unitCostMinor} minor units.`,
+                reason
+                  ? `Reason: ${reason}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            createdByUserId:
+              ownerId,
+          });
+
+        return {
+          ok: true as const,
+          unchanged: false as const,
+          product: {
+            productId:
+              String(product.id),
+            nameAr:
+              product.nameAr,
+            quantity:
+              state.quantityOnHand,
+            previousUnitCostMinor,
+            unitCostMinor,
+            inventoryValueMinor,
+          },
+        };
+      },
+    );
+
+  if (!result.ok) {
+    return json(
+      { error: result.error },
+      result.status,
+    );
+  }
+
+  return json(result);
+}
+
+
 async function handleHistoricalCostRepair(
   request: Request,
   db: Db,
@@ -2089,6 +2797,18 @@ export async function handleOwnerCostRequest(
       "/api/owner/costs/opening"
   ) {
     return handleOpeningCost(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path ===
+      "/api/owner/costs/opening-correction"
+  ) {
+    return handleOpeningCostCorrection(
       request,
       db,
       env,

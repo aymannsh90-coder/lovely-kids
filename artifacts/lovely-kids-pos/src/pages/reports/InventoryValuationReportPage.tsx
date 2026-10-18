@@ -9,7 +9,9 @@ import {
 } from "../../app/pos-context";
 import {
   ApiError,
+  correctOwnerOpeningCost,
   getOwnerInventoryValuationProducts,
+  setOwnerOpeningCost,
   type OwnerInventoryValuationProduct,
 } from "../../lib/api";
 
@@ -257,6 +259,30 @@ export default function InventoryValuationReportPage() {
     query,
     setQuery,
   ] = useState("");
+
+  const [
+    costEditorProduct,
+    setCostEditorProduct,
+  ] =
+    useState<
+      OwnerInventoryValuationProduct | null
+    >(null);
+
+  const [
+    costInput,
+    setCostInput,
+  ] = useState("");
+
+  const [
+    costReason,
+    setCostReason,
+  ] = useState("");
+
+  const [
+    savingCost,
+    setSavingCost,
+  ] = useState(false);
+
 
   async function loadData() {
     setLoading(true);
@@ -513,6 +539,136 @@ export default function InventoryValuationReportPage() {
     setCreatedTo("");
     setQuery("");
   }
+
+  function openCostEditor(
+    product:
+      OwnerInventoryValuationProduct,
+  ) {
+    setCostEditorProduct(
+      product,
+    );
+
+    setCostInput(
+      product.initialized &&
+        product.referenceUnitCostMinor !==
+          null
+        ? (
+            product.referenceUnitCostMinor /
+            100
+          ).toFixed(2)
+        : "",
+    );
+
+    setCostReason("");
+    setError("");
+  }
+
+  function closeCostEditor() {
+    if (savingCost) {
+      return;
+    }
+
+    setCostEditorProduct(null);
+    setCostInput("");
+    setCostReason("");
+  }
+
+  async function saveCostEditor() {
+    if (!costEditorProduct) {
+      return;
+    }
+
+    const normalized =
+      costInput
+        .trim()
+        .replace(",", ".");
+
+    const shekels =
+      Number(normalized);
+
+    if (
+      !normalized ||
+      !Number.isFinite(
+        shekels,
+      ) ||
+      shekels < 0
+    ) {
+      setError(
+        "أدخل سعر تكلفة صحيح",
+      );
+      return;
+    }
+
+    const unitCostMinor =
+      Math.round(
+        shekels * 100,
+      );
+
+    if (
+      !Number.isSafeInteger(
+        unitCostMinor,
+      )
+    ) {
+      setError(
+        "سعر التكلفة أكبر من الحد المسموح",
+      );
+      return;
+    }
+
+    setSavingCost(true);
+    setError("");
+
+    try {
+      if (
+        costEditorProduct.initialized
+      ) {
+        await correctOwnerOpeningCost(
+          token,
+          {
+            productId:
+              costEditorProduct.productId,
+            unitCostMinor,
+            reason:
+              costReason,
+          },
+        );
+      } else {
+        await setOwnerOpeningCost(
+          token,
+          {
+            productId:
+              costEditorProduct.productId,
+            unitCostMinor,
+            costQuality:
+              "confirmed",
+          },
+        );
+      }
+
+      await loadData();
+      setCostEditorProduct(null);
+      setCostInput("");
+      setCostReason("");
+    } catch (caught) {
+      if (
+        caught instanceof
+          ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "تعذر حفظ سعر التكلفة",
+      );
+    } finally {
+      setSavingCost(false);
+    }
+  }
+
 
   return (
     <div
@@ -791,6 +947,7 @@ export default function InventoryValuationReportPage() {
                 <th>قيمة التكلفة</th>
                 <th>ربح متوقع</th>
                 <th>حالة التكلفة</th>
+                <th>التكلفة</th>
               </tr>
             </thead>
 
@@ -799,7 +956,7 @@ export default function InventoryValuationReportPage() {
               0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="inventory-valuation-empty"
                   >
                     {loading
@@ -939,6 +1096,21 @@ export default function InventoryValuationReportPage() {
                             )}
                           </span>
                         </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() =>
+                              openCostEditor(
+                                product,
+                              )
+                            }
+                          >
+                            {product.initialized
+                              ? "تعديل التكلفة الأصلية"
+                              : "إدخال التكلفة"}
+                          </button>
+                        </td>
                       </tr>
                     );
                   },
@@ -948,6 +1120,192 @@ export default function InventoryValuationReportPage() {
           </table>
         </div>
       </section>
+
+      {costEditorProduct && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              closeCostEditor();
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 12000,
+            background:
+              "rgba(15, 23, 42, .68)",
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+          }}
+        >
+          <article
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              costEditorProduct.initialized
+                ? "تعديل التكلفة الأصلية"
+                : "إدخال التكلفة"
+            }
+            style={{
+              width:
+                "min(520px, 94vw)",
+              background:
+                "var(--panel, #fff)",
+              borderRadius: 18,
+              padding: 20,
+              display: "grid",
+              gap: 14,
+              boxShadow:
+                "0 24px 80px rgba(15,23,42,.45)",
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                }}
+              >
+                {costEditorProduct.initialized
+                  ? "تعديل التكلفة الأصلية"
+                  : "إدخال التكلفة"}
+              </h3>
+
+              <p>
+                {costEditorProduct.nameAr}
+                {" · "}
+                #{costEditorProduct.productId}
+              </p>
+            </div>
+
+            {costEditorProduct.initialized && (
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  background:
+                    "rgba(245, 158, 11, .12)",
+                }}
+              >
+                السعر الحالي:{" "}
+                <strong>
+                  {costEditorProduct.referenceUnitCostMinor ===
+                  null
+                    ? "—"
+                    : formatMoney(
+                        costEditorProduct.referenceUnitCostMinor,
+                      )}
+                </strong>
+                <br />
+                سيتم تسجيل العملية كتصحيح تكلفة للمالك، مع الحفاظ على سجل تدقيق.
+              </div>
+            )}
+
+            <label
+              style={{
+                display: "grid",
+                gap: 6,
+              }}
+            >
+              <span>
+                سعر تكلفة القطعة ₪
+              </span>
+
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={
+                  costInput
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setCostInput(
+                    event.target.value,
+                  )
+                }
+                placeholder="مثال: 45.00"
+                disabled={
+                  savingCost
+                }
+              />
+            </label>
+
+            {costEditorProduct.initialized && (
+              <label
+                style={{
+                  display: "grid",
+                  gap: 6,
+                }}
+              >
+                <span>
+                  سبب التعديل (اختياري)
+                </span>
+
+                <input
+                  value={
+                    costReason
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setCostReason(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="مثال: خطأ عند إدخال التكلفة الأصلية"
+                  maxLength={300}
+                  disabled={
+                    savingCost
+                  }
+                />
+              </label>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent:
+                  "flex-start",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() =>
+                  void saveCostEditor()
+                }
+                disabled={
+                  savingCost
+                }
+              >
+                {savingCost
+                  ? "جاري الحفظ…"
+                  : "حفظ التكلفة"}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={
+                  closeCostEditor
+                }
+                disabled={
+                  savingCost
+                }
+              >
+                إلغاء
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
     </div>
   );
 }

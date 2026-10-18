@@ -517,18 +517,6 @@ async function handleCreateProduct(
     });
 
   if (
-    actor.isOwner &&
-    openingQuantity !== null &&
-    openingQuantity > 0 &&
-    openingUnitCostMinor === null
-  ) {
-    return json(
-      { error: "أدخل التكلفة الافتتاحية للصنف قبل الحفظ" },
-      409,
-    );
-  }
-
-  if (
     openingUnitCostMinor !== null &&
     (openingQuantity === null || openingQuantity <= 0)
   ) {
