@@ -1749,11 +1749,13 @@ export async function editOrderItemsAndAdjustStock(
       shipping.cost;
 
     const shippingPromotionDiscount =
-      Math.max(
-        0,
-        shippingOriginalCost -
-          shippingCost,
-      );
+      linkedOnlineExchange
+        ? 0
+        : Math.max(
+            0,
+            shippingOriginalCost -
+              shippingCost,
+          );
 
     const totalPrice =
       productsTotal -
