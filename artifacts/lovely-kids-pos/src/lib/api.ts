@@ -3725,6 +3725,42 @@ export function setOwnerOpeningCost(
 }
 
 
+export function correctOwnerOpeningCost(
+  token: string,
+  input: {
+    productId: string;
+    unitCostMinor: number;
+    reason?: string;
+  },
+) {
+  return apiRequest<{
+    unchanged: boolean;
+    product: {
+      productId: string;
+      nameAr: string;
+      quantity: number;
+      previousUnitCostMinor: number;
+      unitCostMinor: number;
+      inventoryValueMinor: number;
+    };
+  }>(
+    "/api/owner/costs/opening-correction",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        productId:
+          input.productId,
+        unitCostMinor:
+          input.unitCostMinor,
+        reason:
+          input.reason?.trim() || undefined,
+      }),
+    },
+    token,
+  );
+}
+
+
 export function setOwnerHistoricalCostRepair(
   token: string,
   input: {
