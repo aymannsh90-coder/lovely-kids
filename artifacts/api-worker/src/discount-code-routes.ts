@@ -189,6 +189,12 @@ function parseCodeInput(
       body.discountPercent,
     );
 
+  const campaignCostMinor =
+    Number(
+      body.campaignCostMinor ??
+        0,
+    );
+
   const startDate =
     parseDateOnly(
       body.startDate,
@@ -237,6 +243,21 @@ function parseCodeInput(
   }
 
   if (
+    !Number.isSafeInteger(
+      campaignCostMinor,
+    ) ||
+    campaignCostMinor < 0 ||
+    campaignCostMinor >
+      2_147_483_647
+  ) {
+    return {
+      ok: false as const,
+      error:
+        "تكلفة الحملة غير صالحة",
+    };
+  }
+
+  if (
     startDate === undefined ||
     endDate === undefined
   ) {
@@ -268,6 +289,7 @@ function parseCodeInput(
       normalizedCode,
       discountPercent:
         percent,
+      campaignCostMinor,
       isActive:
         body.isActive !==
         false,
@@ -846,8 +868,46 @@ async function handleList(
             : grossProfitMinor +
               deliveryImpactMinor;
 
+        const campaignNetProfitMinor =
+          !canSeeProfit ||
+          profitAfterDeliveryMinor ===
+            null
+            ? null
+            : profitAfterDeliveryMinor -
+              row.campaignCostMinor;
+
+        const campaignRoiPercent =
+          campaignNetProfitMinor ===
+            null ||
+          row.campaignCostMinor <= 0
+            ? null
+            : Math.round(
+                (
+                  campaignNetProfitMinor /
+                  row.campaignCostMinor
+                ) *
+                  10000,
+              ) /
+              100;
+
+        const campaignPerformance =
+          campaignNetProfitMinor ===
+            null
+            ? "unknown"
+            : campaignNetProfitMinor >
+                0
+              ? "profitable"
+              : campaignNetProfitMinor <
+                  0
+                ? "loss"
+                : "break_even";
+
         return {
           ...row,
+          campaignCostMinor:
+            canSeeProfit
+              ? row.campaignCostMinor
+              : null,
           stats: {
             usageCount:
               stats.usageCount,
@@ -889,6 +949,18 @@ async function handleList(
               canSeeProfit
                 ? profitAfterDeliveryMinor
                 : null,
+            campaignNetProfitMinor:
+              canSeeProfit
+                ? campaignNetProfitMinor
+                : null,
+            campaignRoiPercent:
+              canSeeProfit
+                ? campaignRoiPercent
+                : null,
+            campaignPerformance:
+              canSeeProfit
+                ? campaignPerformance
+                : "hidden",
 
             costCoveragePercent:
               coveragePercent,
@@ -938,6 +1010,20 @@ async function handleCreate(
     );
   }
 
+  if (
+    auth.user.isOwner !== true &&
+    parsed.data.campaignCostMinor !==
+      0
+  ) {
+    return json(
+      {
+        error:
+          "تكلفة الحملة متاحة للمالك فقط",
+      },
+      403,
+    );
+  }
+
   const duplicate =
     await db
       .select({
@@ -976,7 +1062,16 @@ async function handleCreate(
       .returning();
 
   return json(
-    rows[0],
+    rows[0]
+      ? {
+          ...rows[0],
+          campaignCostMinor:
+            auth.user.isOwner ===
+            true
+              ? rows[0].campaignCostMinor
+              : null,
+        }
+      : null,
     201,
   );
 }
@@ -1054,6 +1149,11 @@ async function handleUpdate(
       discountPercent:
         body.discountPercent ??
         current.discountPercent,
+      campaignCostMinor:
+        body.campaignCostMinor ===
+        undefined
+          ? current.campaignCostMinor
+          : body.campaignCostMinor,
       isActive:
         body.isActive ??
         current.isActive,
@@ -1079,6 +1179,20 @@ async function handleUpdate(
           parsed.error,
       },
       400,
+    );
+  }
+
+  if (
+    auth.user.isOwner !== true &&
+    parsed.data.campaignCostMinor !==
+      current.campaignCostMinor
+  ) {
+    return json(
+      {
+        error:
+          "تكلفة الحملة متاحة للمالك فقط",
+      },
+      403,
     );
   }
 
@@ -1134,7 +1248,16 @@ async function handleUpdate(
       .returning();
 
   return json(
-    rows[0],
+    rows[0]
+      ? {
+          ...rows[0],
+          campaignCostMinor:
+            auth.user.isOwner ===
+            true
+              ? rows[0].campaignCostMinor
+              : null,
+        }
+      : null,
   );
 }
 
