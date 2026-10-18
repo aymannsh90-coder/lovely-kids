@@ -27,10 +27,6 @@ ON "discount_codes" ("normalized_code");
 ALTER TABLE "discount_codes"
   ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX IF NOT EXISTS
-  "orders_discount_code_id_idx"
-ON "orders" ("discount_code_id");
-
 ALTER TABLE "orders"
   ADD COLUMN IF NOT EXISTS "discount_code_id" integer,
   ADD COLUMN IF NOT EXISTS "discount_code" text,
@@ -38,6 +34,10 @@ ALTER TABLE "orders"
   ADD COLUMN IF NOT EXISTS "discount_code_percent" integer,
   ADD COLUMN IF NOT EXISTS "discount_code_amount" integer,
   ADD COLUMN IF NOT EXISTS "discount_code_stacks_with_shipping_promotion" boolean;
+
+CREATE INDEX IF NOT EXISTS
+  "orders_discount_code_id_idx"
+ON "orders" ("discount_code_id");
 
 DO $$
 BEGIN
