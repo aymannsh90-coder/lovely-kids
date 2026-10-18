@@ -2729,6 +2729,21 @@ export default function AdminOrdersScreen() {
                         </View>
                       )}
 
+                      {item.discountCode &&
+                      item.discountCodeLabel &&
+                      Number.isSafeInteger(item.discountCodePercent) ? (
+                        <View
+                          style={[
+                            styles.newDot,
+                            { backgroundColor: "#16A34A" },
+                          ]}
+                        >
+                          <Text style={styles.newDotText}>
+                            كود {item.discountCodeLabel} {item.discountCodePercent}%
+                          </Text>
+                        </View>
+                      ) : null}
+
                       {item.status === "new" && (
                         <View style={[styles.newDot, { backgroundColor: colors.primary }]}>
                           <Text style={styles.newDotText}>جديد</Text>
@@ -2780,7 +2795,10 @@ export default function AdminOrdersScreen() {
                           { color: "#DC2626" },
                         ]}
                       >
-                        خصم {invoiceDiscount}₪
+                        {item.discountCodeLabel &&
+                        Number.isSafeInteger(item.discountCodePercent)
+                          ? `كود ${item.discountCodeLabel} ${item.discountCodePercent}% · خصم ${invoiceDiscount}₪`
+                          : `خصم ${invoiceDiscount}₪`}
                       </Text>
                     ) : null}
                   </View>
@@ -2908,6 +2926,52 @@ export default function AdminOrdersScreen() {
                         </View>
                       ) : null}
                     </View>
+
+                    {item.discountCode &&
+                    item.discountCodeLabel &&
+                    Number.isSafeInteger(item.discountCodePercent) &&
+                    Number.isSafeInteger(item.discountCodeAmount) ? (
+                      <View
+                        style={{
+                          backgroundColor: "#F0FDF4",
+                          borderWidth: 1,
+                          borderColor: "#86EFAC",
+                          borderRadius: 12,
+                          padding: 12,
+                          gap: 5,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#166534",
+                            fontWeight: "900",
+                            textAlign: "right",
+                          }}
+                        >
+                          🎟️ كود الخصم: {item.discountCode}
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#166534",
+                            fontWeight: "800",
+                            textAlign: "right",
+                          }}
+                        >
+                          {item.discountCodeLabel} · {item.discountCodePercent}% · خصم {item.discountCodeAmount}₪
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#15803D",
+                            fontSize: 11,
+                            textAlign: "right",
+                          }}
+                        >
+                          {item.discountCodeStacksWithShippingPromotion
+                            ? "الكود مسموح مع عرض التوصيل"
+                            : "الكود لا يجتمع مع عرض التوصيل — تم اعتماد سعر التوصيل الأصلي"}
+                        </Text>
+                      </View>
+                    ) : null}
 
                     {exchangeDisplay ? (
                       <View
