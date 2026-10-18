@@ -1,12 +1,15 @@
 import {
   appSettingsTable,
   discountCodesTable,
+  orderItemCostsTable,
   ordersTable,
 } from "@workspace/db/schema";
 import {
   and,
   desc,
   eq,
+  inArray,
+  isNotNull,
   ne,
   sql,
 } from "drizzle-orm";
@@ -394,73 +397,489 @@ async function handleList(
         ),
       );
 
-  const usageRows =
+  const orderRows =
     await db
       .select({
+        id:
+          ordersTable.id,
         discountCodeId:
           ordersTable.discountCodeId,
-        ordersCount:
-          sql<number>`count(*)::int`,
-        salesTotal:
-          sql<number>`coalesce(sum(${ordersTable.totalPrice}), 0)::int`,
-        discountTotal:
-          sql<number>`coalesce(sum(${ordersTable.discountCodeAmount}), 0)::int`,
+        status:
+          ordersTable.status,
+        totalPrice:
+          ordersTable.totalPrice,
+        shippingCost:
+          ordersTable.shippingCost,
+        deliveryCompanyCost:
+          ordersTable.deliveryCompanyCost,
+        discountCodeAmount:
+          ordersTable.discountCodeAmount,
+        items:
+          ordersTable.items,
       })
       .from(
         ordersTable,
       )
       .where(
-        ne(
-          ordersTable.status,
-          "cancelled",
+        isNotNull(
+          ordersTable.discountCodeId,
         ),
-      )
-      .groupBy(
-        ordersTable.discountCodeId,
       );
 
-  const usageById =
-    new Map(
-      usageRows
-        .filter(
-          (row) =>
-            row.discountCodeId !==
-            null,
-        )
-        .map(
-          (row) => [
-            row.discountCodeId!,
-            {
-              ordersCount:
-                Number(
-                  row.ordersCount,
-                ),
-              salesTotal:
-                Number(
-                  row.salesTotal,
-                ),
-              discountTotal:
-                Number(
-                  row.discountTotal,
-                ),
-            },
+  const orderIds =
+    orderRows.map(
+      (order) =>
+        order.id,
+    );
+
+  const costRows =
+    orderIds.length === 0
+      ? []
+      : await db
+          .select({
+            orderId:
+              orderItemCostsTable.orderId,
+            lineNumber:
+              orderItemCostsTable.lineNumber,
+            quantity:
+              orderItemCostsTable.quantity,
+            costTotalMinor:
+              orderItemCostsTable.costTotalMinor,
+            costQuality:
+              orderItemCostsTable.costQuality,
+          })
+          .from(
+            orderItemCostsTable,
+          )
+          .where(
+            inArray(
+              orderItemCostsTable.orderId,
+              orderIds,
+            ),
+          );
+
+  const costsByOrder =
+    new Map<
+      number,
+      typeof costRows
+    >();
+
+  for (const cost of costRows) {
+    const list =
+      costsByOrder.get(
+        cost.orderId,
+      ) ?? [];
+
+    list.push(cost);
+
+    costsByOrder.set(
+      cost.orderId,
+      list,
+    );
+  }
+
+  type Stats = {
+    usageCount: number;
+    activeOrdersCount: number;
+    completedOrdersCount: number;
+    cancelledOrdersCount: number;
+
+    activeOrderValue: number;
+    completedOrderValue: number;
+
+    activeProductsNetSales: number;
+    completedProductsNetSales: number;
+
+    totalDiscountAmount: number;
+    completedDiscountAmount: number;
+
+    completedShippingCharged: number;
+    completedDeliveryCost: number;
+
+    completedCogsKnownMinor: number;
+    completedSaleQuantity: number;
+    completedTrackedQuantity: number;
+    completedCostCoverageComplete: boolean;
+    completedCostQualities: string[];
+  };
+
+  const statsByCode =
+    new Map<
+      number,
+      Stats
+    >();
+
+  function getStats(
+    codeId: number,
+  ) {
+    const current =
+      statsByCode.get(
+        codeId,
+      );
+
+    if (current) {
+      return current;
+    }
+
+    const initial: Stats = {
+      usageCount: 0,
+      activeOrdersCount: 0,
+      completedOrdersCount: 0,
+      cancelledOrdersCount: 0,
+
+      activeOrderValue: 0,
+      completedOrderValue: 0,
+
+      activeProductsNetSales: 0,
+      completedProductsNetSales: 0,
+
+      totalDiscountAmount: 0,
+      completedDiscountAmount: 0,
+
+      completedShippingCharged: 0,
+      completedDeliveryCost: 0,
+
+      completedCogsKnownMinor: 0,
+      completedSaleQuantity: 0,
+      completedTrackedQuantity: 0,
+      completedCostCoverageComplete: true,
+      completedCostQualities: [],
+    };
+
+    statsByCode.set(
+      codeId,
+      initial,
+    );
+
+    return initial;
+  }
+
+  for (const order of orderRows) {
+    const codeId =
+      order.discountCodeId;
+
+    if (
+      codeId === null
+    ) {
+      continue;
+    }
+
+    const stats =
+      getStats(
+        codeId,
+      );
+
+    stats.usageCount += 1;
+
+    if (
+      order.status ===
+        "cancelled"
+    ) {
+      stats.cancelledOrdersCount +=
+        1;
+      continue;
+    }
+
+    stats.activeOrdersCount +=
+      1;
+
+    if (
+      Number.isSafeInteger(
+        order.totalPrice,
+      ) &&
+      order.totalPrice >= 0
+    ) {
+      stats.activeOrderValue +=
+        order.totalPrice;
+    }
+
+    const shippingCost =
+      order.shippingCost ?? 0;
+
+    if (
+      Number.isSafeInteger(
+        shippingCost,
+      ) &&
+      shippingCost >= 0 &&
+      shippingCost <=
+        order.totalPrice
+    ) {
+      stats.activeProductsNetSales +=
+        order.totalPrice -
+        shippingCost;
+    }
+
+    if (
+      Number.isSafeInteger(
+        order.discountCodeAmount,
+      ) &&
+      order.discountCodeAmount !==
+        null &&
+      order.discountCodeAmount >= 0
+    ) {
+      stats.totalDiscountAmount +=
+        order.discountCodeAmount;
+    }
+
+    if (
+      order.status !==
+        "done"
+    ) {
+      continue;
+    }
+
+    stats.completedOrdersCount +=
+      1;
+
+    if (
+      Number.isSafeInteger(
+        order.totalPrice,
+      ) &&
+      order.totalPrice >= 0
+    ) {
+      stats.completedOrderValue +=
+        order.totalPrice;
+    } else {
+      stats.completedCostCoverageComplete =
+        false;
+    }
+
+    if (
+      Number.isSafeInteger(
+        shippingCost,
+      ) &&
+      shippingCost >= 0 &&
+      shippingCost <=
+        order.totalPrice
+    ) {
+      stats.completedProductsNetSales +=
+        order.totalPrice -
+        shippingCost;
+
+      stats.completedShippingCharged +=
+        shippingCost;
+    } else {
+      stats.completedCostCoverageComplete =
+        false;
+    }
+
+    if (
+      Number.isSafeInteger(
+        order.discountCodeAmount,
+      ) &&
+      order.discountCodeAmount !==
+        null &&
+      order.discountCodeAmount >= 0
+    ) {
+      stats.completedDiscountAmount +=
+        order.discountCodeAmount;
+    }
+
+    const deliveryCost =
+      order.deliveryCompanyCost;
+
+    if (
+      Number.isSafeInteger(
+        deliveryCost,
+      ) &&
+      deliveryCost !== null &&
+      deliveryCost >= 0
+    ) {
+      stats.completedDeliveryCost +=
+        deliveryCost;
+    } else {
+      stats.completedCostCoverageComplete =
+        false;
+    }
+
+    if (
+      !Array.isArray(
+        order.items,
+      )
+    ) {
+      stats.completedCostCoverageComplete =
+        false;
+      continue;
+    }
+
+    const items =
+      order.items as Array<{
+        quantity?: unknown;
+      }>;
+
+    const orderCosts =
+      costsByOrder.get(
+        order.id,
+      ) ?? [];
+
+    const costByLine =
+      new Map(
+        orderCosts.map(
+          (cost) => [
+            cost.lineNumber,
+            cost,
           ],
         ),
+      );
+
+    items.forEach(
+      (item, index) => {
+        const quantity =
+          Number(
+            item.quantity,
+          );
+
+        if (
+          !Number.isSafeInteger(
+            quantity,
+          ) ||
+          quantity <= 0
+        ) {
+          stats.completedCostCoverageComplete =
+            false;
+          return;
+        }
+
+        stats.completedSaleQuantity +=
+          quantity;
+
+        const cost =
+          costByLine.get(
+            index + 1,
+          );
+
+        if (
+          !cost ||
+          cost.quantity !==
+            quantity
+        ) {
+          stats.completedCostCoverageComplete =
+            false;
+          return;
+        }
+
+        stats.completedTrackedQuantity +=
+          quantity;
+
+        stats.completedCogsKnownMinor +=
+          cost.costTotalMinor;
+
+        stats.completedCostQualities.push(
+          cost.costQuality,
+        );
+      },
     );
+  }
 
   return json(
     rows.map(
-      (row) => ({
-        ...row,
-        stats:
-          usageById.get(
+      (row) => {
+        const stats =
+          statsByCode.get(
             row.id,
           ) ?? {
-            ordersCount: 0,
-            salesTotal: 0,
-            discountTotal: 0,
+            usageCount: 0,
+            activeOrdersCount: 0,
+            completedOrdersCount: 0,
+            cancelledOrdersCount: 0,
+            activeOrderValue: 0,
+            completedOrderValue: 0,
+            activeProductsNetSales: 0,
+            completedProductsNetSales: 0,
+            totalDiscountAmount: 0,
+            completedDiscountAmount: 0,
+            completedShippingCharged: 0,
+            completedDeliveryCost: 0,
+            completedCogsKnownMinor: 0,
+            completedSaleQuantity: 0,
+            completedTrackedQuantity: 0,
+            completedCostCoverageComplete:
+              true,
+            completedCostQualities: [],
+          };
+
+        const coveragePercent =
+          stats.completedSaleQuantity <=
+          0
+            ? 100
+            : Math.round(
+                (
+                  stats.completedTrackedQuantity /
+                  stats.completedSaleQuantity
+                ) *
+                  10000,
+              ) /
+              100;
+
+        const costQualityComplete =
+          stats.completedCostCoverageComplete &&
+          stats.completedCostQualities.every(
+            (quality) =>
+              quality ===
+              "confirmed",
+          );
+
+        const grossProfitMinor =
+          costQualityComplete
+            ? stats.completedProductsNetSales *
+                100 -
+              stats.completedCogsKnownMinor
+            : null;
+
+        const deliveryImpactMinor =
+          (
+            stats.completedShippingCharged -
+            stats.completedDeliveryCost
+          ) *
+          100;
+
+        const profitAfterDeliveryMinor =
+          grossProfitMinor ===
+          null
+            ? null
+            : grossProfitMinor +
+              deliveryImpactMinor;
+
+        return {
+          ...row,
+          stats: {
+            usageCount:
+              stats.usageCount,
+            activeOrdersCount:
+              stats.activeOrdersCount,
+            completedOrdersCount:
+              stats.completedOrdersCount,
+            cancelledOrdersCount:
+              stats.cancelledOrdersCount,
+
+            activeOrderValue:
+              stats.activeOrderValue,
+            completedOrderValue:
+              stats.completedOrderValue,
+
+            activeProductsNetSales:
+              stats.activeProductsNetSales,
+            completedProductsNetSales:
+              stats.completedProductsNetSales,
+
+            totalDiscountAmount:
+              stats.totalDiscountAmount,
+            completedDiscountAmount:
+              stats.completedDiscountAmount,
+
+            completedCogsKnownMinor:
+              stats.completedCogsKnownMinor,
+            grossProfitMinor,
+            deliveryImpactMinor,
+            profitAfterDeliveryMinor,
+
+            costCoveragePercent:
+              coveragePercent,
+            costCoverageComplete:
+              costQualityComplete,
           },
-      }),
+        };
+      },
     ),
   );
 }
