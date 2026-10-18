@@ -38,6 +38,14 @@ type DiscountCodeStats = {
   grossProfitMinor: number | null;
   deliveryImpactMinor: number | null;
   profitAfterDeliveryMinor: number | null;
+  campaignNetProfitMinor: number | null;
+  campaignRoiPercent: number | null;
+  campaignPerformance:
+    | "profitable"
+    | "loss"
+    | "break_even"
+    | "unknown"
+    | "hidden";
   costCoveragePercent: number | null;
   costCoverageComplete: boolean | null;
 };
@@ -47,6 +55,7 @@ type DiscountCode = {
   campaignName: string;
   code: string;
   discountPercent: number;
+  campaignCostMinor: number | null;
   isActive: boolean;
   stackWithShippingPromotion: boolean;
   startDate: string | null;
@@ -62,6 +71,42 @@ function moneyMinor(value: number | null) {
 
 function money(value: number) {
   return `${value} ₪`;
+}
+
+function compactMinorInput(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isSafeInteger(value) ||
+    value < 0
+  ) {
+    return "0";
+  }
+
+  const shekels =
+    value / 100;
+
+  return Number.isInteger(shekels)
+    ? String(shekels)
+    : shekels.toFixed(2);
+}
+
+function campaignPerformanceLabel(
+  value: DiscountCodeStats["campaignPerformance"],
+) {
+  switch (value) {
+    case "profitable":
+      return "الحملة مربحة";
+    case "loss":
+      return "الحملة خاسرة";
+    case "break_even":
+      return "الحملة على نقطة التعادل";
+    case "hidden":
+      return "خاص بالمالك";
+    default:
+      return "الجدوى غير مكتملة";
+  }
 }
 
 export default function DiscountCodesScreen() {
@@ -87,6 +132,8 @@ export default function DiscountCodesScreen() {
   const [campaignName, setCampaignName] = useState("");
   const [code, setCode] = useState("");
   const [percent, setPercent] = useState("5");
+  const [campaignCostInput, setCampaignCostInput] =
+    useState("0");
   const [stackWithShippingPromotion, setStackWithShippingPromotion] =
     useState(false);
   const [startDate, setStartDate] = useState("");
@@ -177,6 +224,7 @@ export default function DiscountCodesScreen() {
     setCampaignName("");
     setCode("");
     setPercent("5");
+    setCampaignCostInput("0");
     setStackWithShippingPromotion(false);
     setStartDate("");
     setEndDate("");
@@ -187,6 +235,11 @@ export default function DiscountCodesScreen() {
     setCampaignName(item.campaignName);
     setCode(item.code);
     setPercent(String(item.discountPercent));
+    setCampaignCostInput(
+      compactMinorInput(
+        item.campaignCostMinor,
+      ),
+    );
     setStackWithShippingPromotion(
       item.stackWithShippingPromotion,
     );
@@ -198,6 +251,24 @@ export default function DiscountCodesScreen() {
     const cleanCampaign = campaignName.trim();
     const cleanCode = code.trim().toUpperCase();
     const discountPercent = Number(percent);
+
+    const normalizedCampaignCost =
+      campaignCostInput
+        .trim()
+        .replace(",", ".");
+
+    const campaignCostShekels =
+      normalizedCampaignCost === ""
+        ? 0
+        : Number(
+            normalizedCampaignCost,
+          );
+
+    const campaignCostMinor =
+      Math.round(
+        campaignCostShekels *
+          100,
+      );
 
     if (!cleanCampaign || !cleanCode) {
       Alert.alert(
@@ -219,6 +290,24 @@ export default function DiscountCodesScreen() {
       return;
     }
 
+    if (
+      !Number.isFinite(
+        campaignCostShekels,
+      ) ||
+      campaignCostShekels < 0 ||
+      !Number.isSafeInteger(
+        campaignCostMinor,
+      ) ||
+      campaignCostMinor >
+        2_147_483_647
+    ) {
+      Alert.alert(
+        "تكلفة الحملة",
+        "أدخل تكلفة إعلان صحيحة أو اتركها صفر",
+      );
+      return;
+    }
+
     setSavingCode(true);
 
     try {
@@ -232,6 +321,9 @@ export default function DiscountCodesScreen() {
             campaignName: cleanCampaign,
             code: cleanCode,
             discountPercent,
+            ...(user?.isOwner === true
+              ? { campaignCostMinor }
+              : {}),
             ...(editingId === null ? { isActive: true } : {}),
             stackWithShippingPromotion,
             startDate: startDate.trim() || null,
@@ -471,6 +563,40 @@ export default function DiscountCodesScreen() {
             textAlign="center"
           />
 
+          {user?.isOwner === true ? (
+            <>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                تكلفة الإعلان / المشهور (₪)
+              </Text>
+              <TextInput
+                value={campaignCostInput}
+                onChangeText={(value) =>
+                  setCampaignCostInput(
+                    value.replace(
+                      /[^0-9.,]/g,
+                      "",
+                    ),
+                  )
+                }
+                keyboardType="decimal-pad"
+                placeholder="مثال: 200"
+                placeholderTextColor={colors.mutedForeground}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.foreground,
+                    backgroundColor: colors.input,
+                    borderColor: colors.border,
+                  },
+                ]}
+                textAlign="center"
+              />
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                تُخصم تكلفة الحملة مرة واحدة من ربح الطلبات لمعرفة صافي جدوى الإعلان.
+              </Text>
+            </>
+          ) : null}
+
           <View style={styles.toggleRow}>
             <Switch
               value={stackWithShippingPromotion}
@@ -674,6 +800,68 @@ export default function DiscountCodesScreen() {
                       الربح بعد التوصيل
                     </Text>
                   </View>
+
+                  {user?.isOwner === true ? (
+                    <>
+                      <View style={styles.statBox}>
+                        <Text
+                          style={[
+                            styles.statValue,
+                            { color: "#B45309" },
+                          ]}
+                        >
+                          {moneyMinor(item.campaignCostMinor)}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+                          تكلفة الحملة
+                        </Text>
+                      </View>
+
+                      <View style={styles.statBox}>
+                        <Text
+                          style={[
+                            styles.statValue,
+                            {
+                              color:
+                                item.stats.campaignNetProfitMinor === null
+                                  ? colors.mutedForeground
+                                  : item.stats.campaignNetProfitMinor >= 0
+                                    ? "#16A34A"
+                                    : "#DC2626",
+                            },
+                          ]}
+                        >
+                          {moneyMinor(item.stats.campaignNetProfitMinor)}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+                          صافي ربح الحملة
+                        </Text>
+                      </View>
+
+                      <View style={styles.statBox}>
+                        <Text
+                          style={[
+                            styles.statValue,
+                            {
+                              color:
+                                item.stats.campaignRoiPercent === null
+                                  ? colors.mutedForeground
+                                  : item.stats.campaignRoiPercent >= 0
+                                    ? "#16A34A"
+                                    : "#DC2626",
+                            },
+                          ]}
+                        >
+                          {item.stats.campaignRoiPercent === null
+                            ? "—"
+                            : `${item.stats.campaignRoiPercent.toFixed(2)}%`}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+                          عائد الحملة ROI
+                        </Text>
+                      </View>
+                    </>
+                  ) : null}
                 </View>
 
                 <View
@@ -695,6 +883,30 @@ export default function DiscountCodesScreen() {
                       </Text>
                       <Text style={[styles.hint, { color: colors.foreground }]}>
                         الربح الإجمالي قبل أثر التوصيل: {moneyMinor(item.stats.grossProfitMinor)}
+                      </Text>
+                      <Text style={[styles.hint, { color: colors.foreground }]}>
+                        الربح بعد التوصيل: {moneyMinor(item.stats.profitAfterDeliveryMinor)}
+                      </Text>
+                      <Text style={[styles.hint, { color: colors.foreground }]}>
+                        تكلفة الحملة: {moneyMinor(item.campaignCostMinor)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.hint,
+                          {
+                            color:
+                              item.stats.campaignPerformance === "profitable"
+                                ? "#16A34A"
+                                : item.stats.campaignPerformance === "loss"
+                                  ? "#DC2626"
+                                  : "#B45309",
+                            fontWeight: "900",
+                          },
+                        ]}
+                      >
+                        {campaignPerformanceLabel(item.stats.campaignPerformance)}
+                        {" — "}
+                        صافي الحملة: {moneyMinor(item.stats.campaignNetProfitMinor)}
                       </Text>
                       <Text
                         style={[
@@ -750,6 +962,9 @@ export default function DiscountCodesScreen() {
                     }}
                   >
                     تعديل الكود والنسبة والفترة
+                    {user?.isOwner === true
+                      ? " وتكلفة الحملة"
+                      : ""}
                   </Text>
                 </Pressable>
               </View>
