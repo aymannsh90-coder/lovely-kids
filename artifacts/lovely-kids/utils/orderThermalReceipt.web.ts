@@ -31,6 +31,8 @@ export interface ThermalOrder {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  shippingOriginalCost?: number | null;
+  shippingPromotionDiscount?: number | null;
   notes?: string;
   paymentMethod: string;
   paymentStatus: string;
@@ -215,6 +217,21 @@ export async function printOrderThermalReceipt(
   );
 
   const shippingCost = Number(order.shippingCost || 0);
+
+  const shippingOriginalCost =
+    Number.isSafeInteger(order.shippingOriginalCost)
+      ? Number(order.shippingOriginalCost)
+      : shippingCost;
+
+  const shippingPromotionDiscount =
+    Number.isSafeInteger(order.shippingPromotionDiscount)
+      ? Number(order.shippingPromotionDiscount)
+      : 0;
+
+  const hasShippingPromotion =
+    shippingPromotionDiscount > 0 &&
+    shippingOriginalCost >= shippingPromotionDiscount &&
+    shippingOriginalCost - shippingPromotionDiscount === shippingCost;
 
   const invoiceDiscount =
     order.items.reduce(
@@ -652,14 +669,25 @@ export async function printOrderThermalReceipt(
               }
 
               ${
-                shippingCost > 0
+                hasShippingPromotion
                   ? `
                     <div>
-                      <span>التوصيل</span>
-                      <strong>${money(shippingCost)}</strong>
+                      <span>التوصيل الأصلي</span>
+                      <strong>${money(shippingOriginalCost)}</strong>
+                    </div>
+                    <div>
+                      <span>خصم عرض التوصيل</span>
+                      <strong>-${money(shippingPromotionDiscount)}</strong>
                     </div>
                   `
-                  : ""
+                  : shippingCost > 0
+                    ? `
+                      <div>
+                        <span>التوصيل</span>
+                        <strong>${money(shippingCost)}</strong>
+                      </div>
+                    `
+                    : ""
               }
 
               <div class="receipt-total">

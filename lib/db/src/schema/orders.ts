@@ -18,6 +18,12 @@ export const ordersTable = pgTable("orders", {
   // May be zero during a free-delivery promotion.
   shippingCost: integer("shipping_cost"),
 
+  // Snapshot of the regular delivery price at order time.
+  // Kept separately so receipts can show a delivery promotion accurately
+  // even if shipping settings change later.
+  shippingOriginalCost: integer("shipping_original_cost"),
+  shippingPromotionDiscount: integer("shipping_promotion_discount"),
+
   // delivery = courier company
   // pickup   = customer receives the order from the shop
   fulfillmentMethod: text("fulfillment_method"),
@@ -50,6 +56,8 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   fulfillmentMethod: true,
   deliveryCompanyId: true,
   deliveryCompanyCost: true,
+  shippingOriginalCost: true,
+  shippingPromotionDiscount: true,
   createdAt: true,
 }).extend({
   items: z.array(

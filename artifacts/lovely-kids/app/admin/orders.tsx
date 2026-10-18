@@ -106,6 +106,8 @@ interface Order {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  shippingOriginalCost?: number | null;
+  shippingPromotionDiscount?: number | null;
   fulfillmentMethod?: "delivery" | "pickup" | null;
   status: string;
   notes?: string;

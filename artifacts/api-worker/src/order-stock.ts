@@ -1745,6 +1745,18 @@ export async function editOrderItemsAndAdjustStock(
         customerDeliveryMinor;
     }
 
+    const shippingOriginalCost =
+      shipping.cost;
+
+    const shippingPromotionDiscount =
+      linkedOnlineExchange
+        ? 0
+        : Math.max(
+            0,
+            shippingOriginalCost -
+              shippingCost,
+          );
+
     const totalPrice =
       productsTotal -
       invoiceDiscount +
@@ -2312,6 +2324,8 @@ export async function editOrderItemsAndAdjustStock(
         customerAddress,
         shippingZone: shipping.label,
         shippingCost,
+        shippingOriginalCost,
+        shippingPromotionDiscount,
         fulfillmentMethod:
           shipping.label === STORE_PICKUP_LABEL
             ? "pickup"

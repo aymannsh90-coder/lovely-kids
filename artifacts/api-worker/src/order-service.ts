@@ -538,6 +538,12 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       productsTotal,
     );
 
+    const shippingOriginalCost = shipping.cost;
+    const shippingPromotionDiscount = Math.max(
+      0,
+      shippingOriginalCost - shippingCost,
+    );
+
     const totalPrice = productsTotal + shippingCost;
 
     const orderRows = await tx
@@ -552,6 +558,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         totalPrice,
         shippingZone: shipping.label,
         shippingCost,
+        shippingOriginalCost,
+        shippingPromotionDiscount,
         fulfillmentMethod:
           shipping.label === STORE_PICKUP_LABEL
             ? "pickup"

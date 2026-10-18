@@ -20,6 +20,8 @@ export interface PrintableOrder {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  shippingOriginalCost?: number | null;
+  shippingPromotionDiscount?: number | null;
   notes?: string;
   paymentMethod: string;
   paymentStatus: string;
@@ -106,6 +108,27 @@ export async function createOrderPrintHtml(
           : 0),
       0,
     ) / 100;
+
+  const shippingCost =
+    typeof order.shippingCost === "number"
+      ? order.shippingCost
+      : null;
+
+  const shippingOriginalCost =
+    Number.isSafeInteger(order.shippingOriginalCost)
+      ? Number(order.shippingOriginalCost)
+      : shippingCost ?? 0;
+
+  const shippingPromotionDiscount =
+    Number.isSafeInteger(order.shippingPromotionDiscount)
+      ? Number(order.shippingPromotionDiscount)
+      : 0;
+
+  const hasShippingPromotion =
+    shippingCost !== null &&
+    shippingPromotionDiscount > 0 &&
+    shippingOriginalCost >= shippingPromotionDiscount &&
+    shippingOriginalCost - shippingPromotionDiscount === shippingCost;
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -255,9 +278,14 @@ export async function createOrderPrintHtml(
           : ""
       }
       ${
-        order.shippingCost != null
-          ? `<div class="row"><strong>التوصيل:</strong> ${order.shippingCost} ₪</div>`
-          : ""
+        hasShippingPromotion
+          ? `
+            <div class="row"><strong>التوصيل الأصلي:</strong> ${shippingOriginalCost} ₪</div>
+            <div class="row"><strong>خصم عرض التوصيل:</strong> -${shippingPromotionDiscount} ₪</div>
+          `
+          : shippingCost !== null
+            ? `<div class="row"><strong>التوصيل:</strong> ${shippingCost} ₪</div>`
+            : ""
       }
       <div class="total">الإجمالي: ${order.totalPrice} ₪</div>
     </div>
