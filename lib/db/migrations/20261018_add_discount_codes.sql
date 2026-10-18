@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS "discount_codes" (
   "code" text NOT NULL,
   "normalized_code" text NOT NULL,
   "discount_percent" integer NOT NULL,
+  "campaign_cost_minor" integer NOT NULL DEFAULT 0,
   "is_active" boolean NOT NULL DEFAULT true,
   "stack_with_shipping_promotion" boolean NOT NULL DEFAULT false,
   "start_date" date,
@@ -12,6 +13,8 @@ CREATE TABLE IF NOT EXISTS "discount_codes" (
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "discount_codes_percent_valid"
     CHECK ("discount_percent" BETWEEN 1 AND 100),
+  CONSTRAINT "discount_codes_campaign_cost_valid"
+    CHECK ("campaign_cost_minor" >= 0),
   CONSTRAINT "discount_codes_dates_valid"
     CHECK (
       "start_date" IS NULL
@@ -19,6 +22,16 @@ CREATE TABLE IF NOT EXISTS "discount_codes" (
       OR "end_date" >= "start_date"
     )
 );
+ALTER TABLE "discount_codes"
+  ADD COLUMN IF NOT EXISTS "campaign_cost_minor" integer NOT NULL DEFAULT 0;
+
+ALTER TABLE "discount_codes"
+  DROP CONSTRAINT IF EXISTS "discount_codes_campaign_cost_valid";
+
+ALTER TABLE "discount_codes"
+  ADD CONSTRAINT "discount_codes_campaign_cost_valid"
+  CHECK ("campaign_cost_minor" >= 0);
+
 
 CREATE UNIQUE INDEX IF NOT EXISTS
   "discount_codes_normalized_code_unique"
