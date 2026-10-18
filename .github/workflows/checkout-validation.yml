@@ -1,0 +1,45 @@
+name: Checkout validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "artifacts/lovely-kids/**"
+      - "artifacts/api-worker/**"
+      - "lib/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/checkout-validation.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck API Worker
+        run: pnpm --filter @workspace/api-worker typecheck
+
+      - name: Typecheck storefront
+        run: pnpm --filter @workspace/lovely-kids typecheck
+
+      - name: Build storefront
+        run: pnpm --filter @workspace/lovely-kids build
