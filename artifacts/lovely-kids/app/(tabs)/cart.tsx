@@ -232,6 +232,8 @@ export default function CartScreen() {
     useState<AppliedDiscountCode | null>(null);
   const [discountCodeLoading, setDiscountCodeLoading] = useState(false);
   const [discountCodeError, setDiscountCodeError] = useState<string | null>(null);
+  const [checkoutItemsExpanded, setCheckoutItemsExpanded] = useState(false);
+  const [checkoutCouponExpanded, setCheckoutCouponExpanded] = useState(false);
 
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 84 + 8 : insets.bottom + 49 + 8;
@@ -315,6 +317,7 @@ export default function CartScreen() {
       });
       setDiscountCodeInput(data.code);
       setDiscountCodeError(null);
+      setCheckoutCouponExpanded(false);
       Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Success,
       );
@@ -334,6 +337,7 @@ export default function CartScreen() {
     setAppliedDiscountCode(null);
     setDiscountCodeInput("");
     setDiscountCodeError(null);
+    setCheckoutCouponExpanded(false);
   };
 
   const bank = settings.bankInfo;
@@ -940,186 +944,346 @@ setLoading(true);
           showsVerticalScrollIndicator={false}
         >
           {/* Order Summary */}
-          <View style={[styles.orderSummary, { backgroundColor: colors.secondary + "30", borderColor: colors.secondary }]}>
-            <Text style={[styles.orderSummaryTitle, { color: colors.foreground }]}>
-              ملخص الطلب ({totalItems} منتج)
-            </Text>
-            {items.map((item) => (
-              <View key={`${item.id}-${item.color ?? ""}-${item.size ?? ""}`} style={styles.summaryItem}>
-                <Text style={[styles.summaryItemPrice, { color: colors.primary }]}>
-                  {item.price * item.quantity}₪
+          <View
+            style={[
+              styles.orderSummary,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.orderSummaryHeader}>
+              <View style={styles.orderSummaryHeading}>
+                <Text
+                  style={[
+                    styles.orderSummaryTitle,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  ملخص الطلب
                 </Text>
-                <Text style={[styles.summaryItemName, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.name} x{item.quantity}
+                <Text
+                  style={[
+                    styles.orderSummaryCount,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  {totalItems} {totalItems === 1 ? "منتج" : "منتجات"}
                 </Text>
               </View>
-            ))}
-            {settings.discountCodesEnabled === true ? (
-              <View
-                style={{
-                  marginTop: 10,
-                  gap: 8,
-                  paddingTop: 10,
-                  borderTopWidth: 1,
-                  borderTopColor: colors.border,
-                }}
+
+              <Pressable
+                onPress={() =>
+                  setCheckoutItemsExpanded((current) => !current)
+                }
+                style={[
+                  styles.summaryToggle,
+                  { backgroundColor: colors.input },
+                ]}
               >
+                <Ionicons
+                  name={
+                    checkoutItemsExpanded
+                      ? "chevron-up"
+                      : "chevron-down"
+                  }
+                  size={16}
+                  color={colors.primary}
+                />
                 <Text
-                  style={{
-                    color: colors.foreground,
-                    fontWeight: "800",
-                    textAlign: "right",
-                  }}
+                  style={[
+                    styles.summaryToggleText,
+                    { color: colors.primary },
+                  ]}
                 >
-                  🎟️ هل لديك كود خصم؟
+                  {checkoutItemsExpanded
+                    ? "إخفاء المنتجات"
+                    : "عرض المنتجات"}
                 </Text>
+              </Pressable>
+            </View>
 
-                {appliedDiscountCode ? (
+            {checkoutItemsExpanded ? (
+              <View
+                style={[
+                  styles.summaryItemsList,
+                  { borderTopColor: colors.border },
+                ]}
+              >
+                {items.map((item) => (
                   <View
-                    style={{
-                      gap: 7,
-                      padding: 10,
-                      borderWidth: 1,
-                      borderColor: "#22C55E",
-                      borderRadius: 12,
-                      backgroundColor: "#22C55E12",
-                    }}
+                    key={`${item.id}-${item.color ?? ""}-${item.size ?? ""}`}
+                    style={styles.summaryItem}
                   >
-                    <View style={styles.summaryItem}>
-                      <Text
-                        style={[
-                          styles.summaryItemPrice,
-                          { color: "#16A34A" },
-                        ]}
-                      >
-                        -{appliedDiscountAmount}₪
-                      </Text>
-                      <Text
-                        style={[
-                          styles.summaryItemName,
-                          { color: "#16A34A", fontWeight: "900" },
-                        ]}
-                      >
-                        خصم {appliedDiscountCode.campaignName} — {appliedDiscountCode.code} ({appliedDiscountCode.discountPercent}%)
-                      </Text>
-                    </View>
-
-                    {!appliedDiscountCode.stackWithShippingPromotion &&
-                    settings.shippingPromotionEnabled === true ? (
-                      <Text
-                        style={{
-                          color: colors.mutedForeground,
-                          fontSize: 12,
-                          textAlign: "right",
-                        }}
-                      >
-                        هذا الكود لا يجتمع مع عرض التوصيل؛ تم احتساب سعر التوصيل الأصلي.
-                      </Text>
-                    ) : null}
-
-                    <Pressable
-                      onPress={removeDiscountCode}
-                      style={{
-                        alignSelf: "flex-end",
-                        paddingVertical: 5,
-                        paddingHorizontal: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#DC2626",
-                          fontWeight: "800",
-                        }}
-                      >
-                        إزالة الكود
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <View style={{ gap: 7 }}>
-                    <View
+                    <Text
                       style={[
-                        styles.inputRow,
-                        {
-                          backgroundColor: colors.card,
-                          borderColor: discountCodeError
-                            ? "#DC2626"
-                            : colors.border,
-                        },
+                        styles.summaryItemPrice,
+                        { color: colors.primary },
                       ]}
                     >
-                      <Ionicons
-                        name="ticket-outline"
-                        size={18}
-                        color={colors.mutedForeground}
-                      />
-                      <TextInput
-                        value={discountCodeInput}
-                        onChangeText={(value) => {
-                          setDiscountCodeInput(value);
-                          setDiscountCodeError(null);
-                        }}
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                        placeholder="مثال: NAGHAM123"
-                        placeholderTextColor={colors.mutedForeground}
-                        style={[styles.input, { color: colors.foreground }]}
-                        textAlign="right"
-                        onSubmitEditing={() => {
-                          void handleApplyDiscountCode();
-                        }}
-                      />
-                      <Pressable
-                        disabled={discountCodeLoading}
-                        onPress={() => {
-                          void handleApplyDiscountCode();
-                        }}
-                        style={{
-                          backgroundColor: colors.primary,
-                          paddingHorizontal: 14,
-                          paddingVertical: 9,
-                          borderRadius: 9,
-                          opacity: discountCodeLoading ? 0.7 : 1,
-                        }}
-                      >
-                        {discountCodeLoading ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={{ color: "#fff", fontWeight: "900" }}>
-                            تطبيق
-                          </Text>
-                        )}
-                      </Pressable>
-                    </View>
-
-                    {discountCodeError ? (
-                      <Text
-                        style={{
-                          color: "#DC2626",
-                          fontSize: 12,
-                          textAlign: "right",
-                          fontWeight: "700",
-                        }}
-                      >
-                        {discountCodeError}
-                      </Text>
-                    ) : null}
+                      {item.price * item.quantity}₪
+                    </Text>
+                    <Text
+                      style={[
+                        styles.summaryItemName,
+                        { color: colors.foreground },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.name} x{item.quantity}
+                    </Text>
                   </View>
-                )}
+                ))}
               </View>
             ) : null}
 
-            <View style={[styles.summaryItem, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }]}>
-              <Text style={[styles.summaryItemPrice, { color: colors.mutedForeground }]}>
-                {selectedZone ? `${shippingCost}₪` : "—"}
-              </Text>
-              <Text style={[styles.summaryItemName, { color: colors.mutedForeground }]}>
-                🚚 التوصيل{selectedZone ? ` (${selectedZone.label})` : ""}
-              </Text>
+            <View
+              style={[
+                styles.summaryBreakdown,
+                { borderTopColor: colors.border },
+              ]}
+            >
+              <View style={styles.summaryRow}>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {totalPrice}₪
+                </Text>
+                <Text
+                  style={[
+                    styles.summaryLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  المجموع
+                </Text>
+              </View>
+
+              {appliedDiscountCode ? (
+                <View style={styles.summaryRow}>
+                  <Text
+                    style={[
+                      styles.summaryValue,
+                      { color: "#16A34A" },
+                    ]}
+                  >
+                    -{appliedDiscountAmount}₪
+                  </Text>
+                  <Text
+                    style={[
+                      styles.summaryLabel,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    خصم الكود
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.summaryRow}>
+                <View style={styles.shippingValueWrap}>
+                  <Text
+                    style={[
+                      styles.summaryValue,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    {selectedZone ? `${shippingCost}₪` : "—"}
+                  </Text>
+                  {selectedZone && promotionActive ? (
+                    <View style={styles.shippingPromoBadge}>
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={13}
+                        color="#16A34A"
+                      />
+                      <Text style={styles.shippingPromoBadgeText}>
+                        عرض التوصيل
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text
+                  style={[
+                    styles.summaryLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  التوصيل
+                  {selectedZone ? ` (${selectedZone.label})` : ""}
+                </Text>
+              </View>
             </View>
-            <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
-              <Text style={[styles.totalAmount, { color: colors.primary }]}>{finalTotal}₪</Text>
-              <Text style={[styles.totalText, { color: colors.foreground }]}>الإجمالي شامل التوصيل</Text>
+
+            {settings.discountCodesEnabled === true ? (
+              appliedDiscountCode ? (
+                <View
+                  style={[
+                    styles.appliedCouponCompact,
+                    { backgroundColor: "#22C55E10" },
+                  ]}
+                >
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color="#16A34A"
+                  />
+                  <View style={styles.appliedCouponInfo}>
+                    <Text style={styles.appliedCouponCode}>
+                      {appliedDiscountCode.code} · خصم{" "}
+                      {appliedDiscountCode.discountPercent}%
+                    </Text>
+                    <Text style={styles.appliedCouponSaving}>
+                      وفرت {appliedDiscountAmount}₪
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={removeDiscountCode}
+                    hitSlop={8}
+                    style={styles.removeCouponButton}
+                  >
+                    <Text style={styles.removeCouponText}>إزالة</Text>
+                  </Pressable>
+                </View>
+              ) : checkoutCouponExpanded ? (
+                <View style={styles.checkoutCouponArea}>
+                  <View
+                    style={[
+                      styles.inputRow,
+                      {
+                        backgroundColor: colors.input,
+                        borderColor: discountCodeError
+                          ? "#DC2626"
+                          : colors.border,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="ticket-outline"
+                      size={18}
+                      color={colors.mutedForeground}
+                    />
+                    <TextInput
+                      value={discountCodeInput}
+                      onChangeText={(value) => {
+                        setDiscountCodeInput(value);
+                        setDiscountCodeError(null);
+                      }}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      placeholder="أدخل كود الخصم"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[
+                        styles.input,
+                        { color: colors.foreground },
+                      ]}
+                      textAlign="right"
+                      onSubmitEditing={() => {
+                        void handleApplyDiscountCode();
+                      }}
+                    />
+                    <Pressable
+                      disabled={discountCodeLoading}
+                      onPress={() => {
+                        void handleApplyDiscountCode();
+                      }}
+                      style={[
+                        styles.applyCouponButton,
+                        {
+                          backgroundColor: colors.primary,
+                          opacity: discountCodeLoading ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      {discountCodeLoading ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.applyCouponText}>تطبيق</Text>
+                      )}
+                    </Pressable>
+                  </View>
+
+                  <Pressable
+                    onPress={() => {
+                      setCheckoutCouponExpanded(false);
+                      setDiscountCodeError(null);
+                    }}
+                    style={styles.cancelCouponButton}
+                  >
+                    <Text
+                      style={[
+                        styles.cancelCouponText,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      إلغاء
+                    </Text>
+                  </Pressable>
+
+                  {discountCodeError ? (
+                    <Text style={styles.discountErrorText}>
+                      {discountCodeError}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => setCheckoutCouponExpanded(true)}
+                  style={styles.couponCollapsedRow}
+                >
+                  <View style={styles.couponCollapsedLabel}>
+                    <Ionicons
+                      name="ticket-outline"
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text
+                      style={[
+                        styles.couponCollapsedText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      عندك كود خصم؟
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.couponAddText,
+                      { color: colors.primary },
+                    ]}
+                  >
+                    إضافة
+                  </Text>
+                </Pressable>
+              )
+            ) : null}
+
+            <View
+              style={[
+                styles.totalRow,
+                { borderTopColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.totalAmount,
+                  { color: colors.primary },
+                ]}
+              >
+                {finalTotal}₪
+              </Text>
+              <Text
+                style={[
+                  styles.totalText,
+                  { color: colors.foreground },
+                ]}
+              >
+                الإجمالي شامل التوصيل
+              </Text>
             </View>
           </View>
 
@@ -1880,15 +2044,41 @@ const styles = StyleSheet.create({
   freeShipping: { flexDirection: "row-reverse", alignItems: "center", gap: 6, padding: 10, borderRadius: 10, justifyContent: "center" },
   orderBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 16, borderRadius: 16, marginTop: 4 },
   orderBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  formContent: { padding: 16, gap: 14 },
-  orderSummary: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
-  orderSummaryTitle: { fontSize: 15, fontWeight: "700", textAlign: "right", marginBottom: 4 },
+  formContent: { padding: 16, gap: 12 },
+  orderSummary: { borderRadius: 16, borderWidth: 1, padding: 14, gap: 12 },
+  orderSummaryHeader: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  orderSummaryHeading: { alignItems: "flex-end", gap: 2 },
+  orderSummaryTitle: { fontSize: 16, fontWeight: "800", textAlign: "right" },
+  orderSummaryCount: { fontSize: 12, fontWeight: "600", textAlign: "right" },
+  summaryToggle: { flexDirection: "row-reverse", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10 },
+  summaryToggleText: { fontSize: 12, fontWeight: "800" },
+  summaryItemsList: { gap: 7, borderTopWidth: 1, paddingTop: 10 },
+  summaryBreakdown: { gap: 8, borderTopWidth: 1, paddingTop: 10 },
   summaryItem: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
   summaryItemName: { fontSize: 13, textAlign: "right", flex: 1 },
   summaryItemPrice: { fontSize: 13, fontWeight: "700", marginLeft: 8 },
-  totalRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, paddingTop: 8, marginTop: 4 },
-  totalAmount: { fontSize: 20, fontWeight: "800" },
-  totalText: { fontSize: 15, fontWeight: "700" },
+  shippingValueWrap: { flexDirection: "row-reverse", alignItems: "center", gap: 7, flexWrap: "wrap" },
+  shippingPromoBadge: { flexDirection: "row-reverse", alignItems: "center", gap: 3, backgroundColor: "#22C55E12", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 },
+  shippingPromoBadgeText: { color: "#16A34A", fontSize: 10, fontWeight: "800" },
+  appliedCouponCompact: { flexDirection: "row-reverse", alignItems: "center", gap: 9, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 9 },
+  appliedCouponInfo: { flex: 1, alignItems: "flex-end", gap: 1 },
+  appliedCouponCode: { color: "#15803D", fontSize: 12, fontWeight: "900", textAlign: "right" },
+  appliedCouponSaving: { color: "#16A34A", fontSize: 11, fontWeight: "700", textAlign: "right" },
+  removeCouponButton: { paddingHorizontal: 6, paddingVertical: 5 },
+  removeCouponText: { color: "#DC2626", fontSize: 11, fontWeight: "800" },
+  checkoutCouponArea: { gap: 6 },
+  applyCouponButton: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 9 },
+  applyCouponText: { color: "#fff", fontWeight: "900" },
+  cancelCouponButton: { alignSelf: "flex-start", paddingHorizontal: 6, paddingVertical: 2 },
+  cancelCouponText: { fontSize: 11, fontWeight: "700" },
+  discountErrorText: { color: "#DC2626", fontSize: 12, textAlign: "right", fontWeight: "700" },
+  couponCollapsedRow: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
+  couponCollapsedLabel: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  couponCollapsedText: { fontSize: 13, fontWeight: "700" },
+  couponAddText: { fontSize: 12, fontWeight: "900" },
+  totalRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, paddingTop: 11, marginTop: 1 },
+  totalAmount: { fontSize: 22, fontWeight: "900" },
+  totalText: { fontSize: 15, fontWeight: "800" },
   formSection: { fontSize: 16, fontWeight: "800", textAlign: "right" },
   fieldGroup: { gap: 6 },
   fieldLabel: { fontSize: 14, fontWeight: "600", textAlign: "right" },
