@@ -860,14 +860,6 @@ export default function DiscountCodesScreen() {
                       {item.code} · {item.discountPercent}%
                     </Text>
                   </View>
-
-                  <Switch
-                    value={item.isActive}
-                    onValueChange={(value) =>
-                      void patchCode(item, { isActive: value })
-                    }
-                    disabled={updatingId === item.id}
-                  />
                 </View>
 
                 <View style={styles.toggleRow}>
