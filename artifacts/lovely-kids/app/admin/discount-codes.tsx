@@ -34,12 +34,12 @@ type DiscountCodeStats = {
   completedProductsNetSales: number;
   totalDiscountAmount: number;
   completedDiscountAmount: number;
-  completedCogsKnownMinor: number;
+  completedCogsKnownMinor: number | null;
   grossProfitMinor: number | null;
-  deliveryImpactMinor: number;
+  deliveryImpactMinor: number | null;
   profitAfterDeliveryMinor: number | null;
-  costCoveragePercent: number;
-  costCoverageComplete: boolean;
+  costCoveragePercent: number | null;
+  costCoverageComplete: boolean | null;
 };
 
 type DiscountCode = {
@@ -67,7 +67,7 @@ function money(value: number) {
 export default function DiscountCodesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getAuthToken } = useAuth();
+  const { user, getAuthToken } = useAuth();
   const {
     settings,
     settingsReady,
@@ -642,28 +642,45 @@ export default function DiscountCodesScreen() {
                   <Text style={[styles.hint, { color: colors.foreground }]}>
                     صافي مبيعات المنتجات المكتملة: {money(item.stats.completedProductsNetSales)}
                   </Text>
-                  <Text style={[styles.hint, { color: colors.foreground }]}>
-                    تكلفة البضاعة المعروفة: {moneyMinor(item.stats.completedCogsKnownMinor)}
-                  </Text>
-                  <Text style={[styles.hint, { color: colors.foreground }]}>
-                    الربح الإجمالي قبل أثر التوصيل: {moneyMinor(item.stats.grossProfitMinor)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.hint,
-                      {
-                        color: item.stats.costCoverageComplete
-                          ? "#16A34A"
-                          : "#B45309",
-                        fontWeight: "800",
-                      },
-                    ]}
-                  >
-                    تغطية التكلفة: {item.stats.costCoveragePercent}%
-                    {item.stats.costCoverageComplete
-                      ? " — مكتملة"
-                      : " — الربح النهائي غير معتمد حتى تكتمل التكلفة"}
-                  </Text>
+
+                  {user?.isOwner === true ? (
+                    <>
+                      <Text style={[styles.hint, { color: colors.foreground }]}>
+                        تكلفة البضاعة المعروفة: {moneyMinor(item.stats.completedCogsKnownMinor)}
+                      </Text>
+                      <Text style={[styles.hint, { color: colors.foreground }]}>
+                        الربح الإجمالي قبل أثر التوصيل: {moneyMinor(item.stats.grossProfitMinor)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.hint,
+                          {
+                            color: item.stats.costCoverageComplete
+                              ? "#16A34A"
+                              : "#B45309",
+                            fontWeight: "800",
+                          },
+                        ]}
+                      >
+                        تغطية التكلفة: {item.stats.costCoveragePercent ?? 0}%
+                        {item.stats.costCoverageComplete
+                          ? " — مكتملة"
+                          : " — الربح النهائي غير معتمد حتى تكتمل التكلفة"}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.hint,
+                        {
+                          color: colors.mutedForeground,
+                          fontWeight: "800",
+                        },
+                      ]}
+                    >
+                      بيانات التكلفة والربح متاحة للمالك فقط.
+                    </Text>
+                  )}
                 </View>
 
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
