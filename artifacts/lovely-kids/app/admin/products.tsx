@@ -901,7 +901,9 @@ export default function AdminProductsScreen() {
           stockProduct.id,
         );
 
-        closeOpeningCostCorrection();
+        setOpeningCorrectionOpen(false);
+        setOpeningCorrectionInput("");
+        setOpeningCorrectionReason("");
 
         Alert.alert(
           "تم",
