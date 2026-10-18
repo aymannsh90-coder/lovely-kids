@@ -114,6 +114,20 @@ export async function createOrderPrintHtml(
       0,
     ) / 100;
 
+  const discountCodeAmount =
+    Number.isSafeInteger(order.discountCodeAmount)
+      ? Number(order.discountCodeAmount)
+      : null;
+
+  const hasDiscountCode =
+    typeof order.discountCode === "string" &&
+    order.discountCode.trim().length > 0 &&
+    typeof order.discountCodeLabel === "string" &&
+    order.discountCodeLabel.trim().length > 0 &&
+    Number.isSafeInteger(order.discountCodePercent) &&
+    discountCodeAmount !== null &&
+    discountCodeAmount >= 0;
+
   const shippingCost =
     typeof order.shippingCost === "number"
       ? order.shippingCost
@@ -278,9 +292,14 @@ export async function createOrderPrintHtml(
 
     <div class="totals">
       ${
-        invoiceDiscount > 0
-          ? `<div class="row"><strong>الخصم العام:</strong> -${invoiceDiscount} ₪</div>`
-          : ""
+        hasDiscountCode
+          ? `
+            <div class="row"><strong>كود الخصم:</strong> ${escapeHtml(order.discountCode)} — ${escapeHtml(order.discountCodeLabel)} (${Number(order.discountCodePercent)}%)</div>
+            <div class="row"><strong>خصم كود ${escapeHtml(order.discountCodeLabel)}:</strong> -${discountCodeAmount} ₪</div>
+          `
+          : invoiceDiscount > 0
+            ? `<div class="row"><strong>الخصم العام:</strong> -${invoiceDiscount} ₪</div>`
+            : ""
       }
       ${
         hasShippingPromotion
