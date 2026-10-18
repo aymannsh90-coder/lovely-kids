@@ -24,6 +24,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS
   "discount_codes_normalized_code_unique"
 ON "discount_codes" ("normalized_code");
 
+ALTER TABLE "discount_codes"
+  ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS
+  "orders_discount_code_id_idx"
+ON "orders" ("discount_code_id");
+
 ALTER TABLE "orders"
   ADD COLUMN IF NOT EXISTS "discount_code_id" integer,
   ADD COLUMN IF NOT EXISTS "discount_code" text,
