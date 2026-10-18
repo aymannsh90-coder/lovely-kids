@@ -11,7 +11,6 @@ import {
   inArray,
   isNotNull,
   ne,
-  sql,
 } from "drizzle-orm";
 
 import {
@@ -385,6 +384,9 @@ async function handleList(
     return auth.response;
   }
 
+  const canSeeProfit =
+    auth.user.isOwner === true;
+
   const rows =
     await db
       .select()
@@ -433,9 +435,9 @@ async function handleList(
     );
 
   const costRows =
-    orderIds.length === 0
-      ? []
-      : await db
+    canSeeProfit &&
+    orderIds.length > 0
+      ? await db
           .select({
             orderId:
               orderItemCostsTable.orderId,
@@ -456,7 +458,8 @@ async function handleList(
               orderItemCostsTable.orderId,
               orderIds,
             ),
-          );
+          )
+      : [];
 
   const costsByOrder =
     new Map<
@@ -799,19 +802,22 @@ async function handleList(
           };
 
         const coveragePercent =
-          stats.completedSaleQuantity <=
-          0
-            ? 100
-            : Math.round(
+          !canSeeProfit
+            ? null
+            : stats.completedSaleQuantity <=
+                0
+              ? 100
+              : Math.round(
                 (
                   stats.completedTrackedQuantity /
                   stats.completedSaleQuantity
-                ) *
-                  10000,
-              ) /
-              100;
+                  ) *
+                    10000,
+                ) /
+                100;
 
         const costQualityComplete =
+          canSeeProfit &&
           stats.completedCostCoverageComplete &&
           stats.completedCostQualities.every(
             (quality) =>
@@ -868,15 +874,28 @@ async function handleList(
               stats.completedDiscountAmount,
 
             completedCogsKnownMinor:
-              stats.completedCogsKnownMinor,
-            grossProfitMinor,
-            deliveryImpactMinor,
-            profitAfterDeliveryMinor,
+              canSeeProfit
+                ? stats.completedCogsKnownMinor
+                : null,
+            grossProfitMinor:
+              canSeeProfit
+                ? grossProfitMinor
+                : null,
+            deliveryImpactMinor:
+              canSeeProfit
+                ? deliveryImpactMinor
+                : null,
+            profitAfterDeliveryMinor:
+              canSeeProfit
+                ? profitAfterDeliveryMinor
+                : null,
 
             costCoveragePercent:
               coveragePercent,
             costCoverageComplete:
-              costQualityComplete,
+              canSeeProfit
+                ? costQualityComplete
+                : null,
           },
         };
       },
