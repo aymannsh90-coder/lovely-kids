@@ -48,6 +48,20 @@ const json = (data: unknown, status = 200) =>
     },
   });
 
+function sanitizeCustomerOrder<T extends object>(
+  order: T,
+): Omit<T, "deliveryCompanyCost"> {
+  const publicOrder = {
+    ...order,
+  } as T & {
+    deliveryCompanyCost?: unknown;
+  };
+
+  delete publicOrder.deliveryCompanyCost;
+
+  return publicOrder;
+}
+
 
 type MetaAttribution = {
   fbp?: string;
@@ -503,10 +517,13 @@ async function handleCreateOrder(
       env,
     );
 
+    const publicOrder =
+      sanitizeCustomerOrder(newOrder);
+
     return json(
       trackingToken
-        ? { ...newOrder, trackingToken }
-        : newOrder,
+        ? { ...publicOrder, trackingToken }
+        : publicOrder,
       201,
     );
   } catch (error) {
@@ -722,14 +739,18 @@ async function handleLookupOrder(
 
     if (masterRows[0]) {
       return json({
-        ...masterRows[0],
+        ...sanitizeCustomerOrder(
+          masterRows[0],
+        ),
         mergedFromOrderId:
           order.id,
       });
     }
   }
 
-  return json(order);
+  return json(
+    sanitizeCustomerOrder(order),
+  );
 }
 
 async function handleTrackOrder(
@@ -797,7 +818,7 @@ async function handleTrackOrder(
         );
 
       return json({
-        ...master,
+        ...sanitizeCustomerOrder(master),
         mergedFromOrderId:
           order.id,
         ...(masterToken
@@ -810,7 +831,9 @@ async function handleTrackOrder(
     }
   }
 
-  return json(order);
+  return json(
+    sanitizeCustomerOrder(order),
+  );
 }
 
 async function handleGetMyOrders(
@@ -844,7 +867,11 @@ async function handleGetMyOrders(
     )
     .orderBy(desc(ordersTable.createdAt));
 
-  return json(orders);
+  return json(
+    orders.map((order) =>
+      sanitizeCustomerOrder(order),
+    ),
+  );
 }
 
 async function handleMarkOrderPrinted(
@@ -1266,7 +1293,13 @@ async function handleCancelOrder(
     return json({ error: "لا يمكن إلغاء هذا الطلب" }, 409);
   }
 
-  return json(result.order);
+  return json(
+    user.isAdmin
+      ? result.order
+      : sanitizeCustomerOrder(
+          result.order,
+        ),
+  );
 }
 
 async function handleConvertOrderToStorePickup(
@@ -1844,7 +1877,13 @@ async function handlePaymentProof(
     return json({ error: "الطلب غير موجود" }, 404);
   }
 
-  return json(updated[0]);
+  return json(
+    user?.isAdmin
+      ? updated[0]
+      : sanitizeCustomerOrder(
+          updated[0],
+        ),
+  );
 }
 
 async function handleConfirmPayment(
