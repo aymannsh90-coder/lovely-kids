@@ -173,10 +173,6 @@ export const deliveryCompanySettlementItemsTable = pgTable(
     uniqueIndex("delivery_company_settlement_items_pair_idx")
       .on(table.settlementId, table.orderId),
 
-    uniqueIndex("delivery_company_settlement_items_active_order_idx")
-      .on(table.orderId)
-      .where(sql`${table.status} = 'posted'`),
-
     index("delivery_company_settlement_items_settlement_idx")
       .on(table.settlementId),
 
