@@ -99,6 +99,11 @@ interface Order {
   exchangeSettlementAmountMinor?: number | null;
   exchangeFinancialCompletedAt?: string | null;
   exchangeReturnReceivedAt?: string | null;
+  mergedIntoOrderId?: number | null;
+  mergedAt?: string | null;
+  mergedByUserId?: number | null;
+  mergedOrderIds?: number[];
+  mergedOrderCount?: number;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -286,6 +291,15 @@ function statusInfo(
   s: string,
   isPickup = false,
 ) {
+  if (s === "merged") {
+    return {
+      key: "merged",
+      label: "مدمج",
+      color: "#64748B",
+      icon: "git-merge-outline" as const,
+    };
+  }
+
   const found =
     STATUS_OPTIONS.find(
       (o) => o.key === s,
@@ -474,6 +488,27 @@ function normalizeOrderLookup(value: string) {
     .replace(/[۰-۹]/g, (d) => String(persianDigits.indexOf(d)));
 }
 
+function normalizeMergePhone(value: string) {
+  const digits = value
+    .replace(/[^0-9]/g, "")
+    .replace(/^00/, "");
+
+  return digits.length >= 9
+    ? digits.slice(-9)
+    : digits;
+}
+
+function isMergeEligibleOrder(order: Order) {
+  return (
+    (order.status === "new" ||
+      order.status === "confirmed") &&
+    order.paymentMethod === "cod" &&
+    order.mergedIntoOrderId == null &&
+    (order.mergedOrderCount ?? 0) === 0 &&
+    !order.exchangePublicId
+  );
+}
+
 export default function AdminOrdersScreen() {
   const colors = useColors();
   const { settings } = useAppSettings();
@@ -522,6 +557,12 @@ export default function AdminOrdersScreen() {
   const [qrScanned, setQrScanned] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [mergeSelectedIds, setMergeSelectedIds] =
+    useState<Set<number>>(new Set());
+  const [mergePreviewVisible, setMergePreviewVisible] =
+    useState(false);
+  const [mergeBusy, setMergeBusy] =
+    useState(false);
   const [printConfirmVisible, setPrintConfirmVisible] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editItems, setEditItems] = useState<EditableOrderItem[]>([]);
@@ -1870,9 +1911,435 @@ export default function AdminOrdersScreen() {
     });
   };
 
+  const mergeSelectedOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          mergeSelectedIds.has(order.id),
+      ),
+    [orders, mergeSelectedIds],
+  );
+
+  const mergePreview = useMemo(() => {
+    if (mergeSelectedOrders.length < 2) {
+      return {
+        error: "اختر طلبين أو أكثر للدمج",
+        productsNet: 0,
+        shippingCost: 0,
+        originalShippingTotal: 0,
+        total: 0,
+        zone: "",
+      };
+    }
+
+    const first =
+      mergeSelectedOrders[0]!;
+
+    const phone =
+      normalizeMergePhone(
+        first.customerPhone,
+      );
+
+    if (
+      !phone ||
+      mergeSelectedOrders.some(
+        (order) =>
+          normalizeMergePhone(
+            order.customerPhone,
+          ) !== phone,
+      )
+    ) {
+      return {
+        error: "الطلبات المختارة ليست لنفس رقم هاتف الزبون",
+        productsNet: 0,
+        shippingCost: 0,
+        originalShippingTotal: 0,
+        total: 0,
+        zone: "",
+      };
+    }
+
+    const zone =
+      first.shippingZone?.trim() ?? "";
+
+    if (
+      !zone ||
+      mergeSelectedOrders.some(
+        (order) =>
+          (order.shippingZone?.trim() ?? "") !==
+          zone,
+      )
+    ) {
+      return {
+        error: "يجب أن تكون الطلبات على نفس منطقة التوصيل أو نفس طريقة الاستلام",
+        productsNet: 0,
+        shippingCost: 0,
+        originalShippingTotal: 0,
+        total: 0,
+        zone,
+      };
+    }
+
+    if (
+      mergeSelectedOrders.some(
+        (order) =>
+          !isMergeEligibleOrder(order),
+      )
+    ) {
+      return {
+        error: "أحد الطلبات المختارة لا يسمح بالدمج",
+        productsNet: 0,
+        shippingCost: 0,
+        originalShippingTotal: 0,
+        total: 0,
+        zone,
+      };
+    }
+
+    const productsNet =
+      mergeSelectedOrders.reduce(
+        (sum, order) =>
+          sum +
+          Math.max(
+            0,
+            order.totalPrice -
+              (order.shippingCost ?? 0),
+          ),
+        0,
+      );
+
+    const originalShippingTotal =
+      mergeSelectedOrders.reduce(
+        (sum, order) =>
+          sum +
+          Math.max(
+            0,
+            order.shippingCost ?? 0,
+          ),
+        0,
+      );
+
+    const shippingZone =
+      zone === ADMIN_STORE_PICKUP_LABEL
+        ? {
+            label: ADMIN_STORE_PICKUP_LABEL,
+            cost: 0,
+            promoCost: 0,
+          }
+        : (
+            settings.shippingZones ??
+            []
+          ).find(
+            (candidate) =>
+              candidate.label === zone,
+          ) ?? null;
+
+    if (!shippingZone) {
+      return {
+        error: "منطقة التوصيل الحالية غير موجودة في الإعدادات",
+        productsNet,
+        shippingCost: 0,
+        originalShippingTotal,
+        total: productsNet,
+        zone,
+      };
+    }
+
+    const hasNonStackingDiscount =
+      mergeSelectedOrders.some(
+        (order) =>
+          !!order.discountCode &&
+          order.discountCodeStacksWithShippingPromotion ===
+            false,
+      );
+
+    const shippingCost =
+      zone === ADMIN_STORE_PICKUP_LABEL
+        ? 0
+        : hasNonStackingDiscount
+          ? shippingZone.cost
+          : getAdminEditShippingCost(
+              settings,
+              shippingZone,
+              productsNet,
+            );
+
+    return {
+      error: null as string | null,
+      productsNet,
+      shippingCost,
+      originalShippingTotal,
+      total:
+        productsNet +
+        shippingCost,
+      zone,
+    };
+  }, [
+    mergeSelectedOrders,
+    settings,
+  ]);
+
+  const toggleMergeSelection = (
+    order: Order,
+  ) => {
+    if (!isMergeEligibleOrder(order)) {
+      showError(
+        "يمكن دمج الطلبات الجديدة أو المؤكدة والدفع عند الاستلام فقط",
+      );
+      return;
+    }
+
+    setMergeSelectedIds(
+      (current) => {
+        const next =
+          new Set(current);
+
+        if (next.has(order.id)) {
+          next.delete(order.id);
+          return next;
+        }
+
+        if (next.size >= 10) {
+          showError(
+            "يمكن دمج حتى 10 طلبات في العملية الواحدة",
+          );
+          return next;
+        }
+
+        next.add(order.id);
+        return next;
+      },
+    );
+  };
+
+  const openMergePreview = () => {
+    if (mergePreview.error) {
+      showError(
+        mergePreview.error,
+      );
+      return;
+    }
+
+    setMergePreviewVisible(true);
+  };
+
+  const selectCustomerMergeCandidates = (
+    order: Order,
+  ) => {
+    const phone =
+      normalizeMergePhone(
+        order.customerPhone,
+      );
+
+    const orderTime =
+      new Date(
+        order.createdAt,
+      ).getTime();
+
+    const candidates =
+      orders.filter(
+        (candidate) => {
+          if (
+            !isMergeEligibleOrder(
+              candidate,
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            normalizeMergePhone(
+              candidate.customerPhone,
+            ) !== phone
+          ) {
+            return false;
+          }
+
+          if (
+            (candidate.shippingZone?.trim() ?? "") !==
+            (order.shippingZone?.trim() ?? "")
+          ) {
+            return false;
+          }
+
+          const candidateTime =
+            new Date(
+              candidate.createdAt,
+            ).getTime();
+
+          return (
+            Number.isFinite(
+              candidateTime,
+            ) &&
+            Number.isFinite(
+              orderTime,
+            ) &&
+            Math.abs(
+              candidateTime -
+                orderTime,
+            ) <=
+              24 *
+                60 *
+                60 *
+                1000
+          );
+        },
+      );
+
+    if (candidates.length < 2) {
+      showError(
+        "لا توجد طلبات أخرى قابلة للدمج لنفس الزبون خلال 24 ساعة",
+      );
+      return;
+    }
+
+    if (candidates.length > 10) {
+      showError(
+        "يوجد أكثر من 10 طلبات. اختر حتى 10 طلبات يدويًا للدمج.",
+      );
+      return;
+    }
+
+    setMergeSelectedIds(
+      new Set(
+        candidates.map(
+          (candidate) =>
+            candidate.id,
+        ),
+      ),
+    );
+
+    setMergePreviewVisible(
+      true,
+    );
+  };
+
+  const performMergeOrders = async () => {
+    if (
+      mergeBusy ||
+      mergePreview.error ||
+      mergeSelectedOrders.length <
+        2
+    ) {
+      return;
+    }
+
+    setMergeBusy(true);
+
+    try {
+      const token =
+        await getAuthToken();
+
+      if (!token) {
+        throw new Error(
+          "انتهت جلسة تسجيل الدخول",
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE}/api/orders/merge`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify({
+                orderIds:
+                  mergeSelectedOrders.map(
+                    (order) =>
+                      order.id,
+                  ),
+              }),
+          },
+        );
+
+      const body =
+        (await response
+          .json()
+          .catch(
+            () => null,
+          )) as
+          | (
+              Order & {
+                mergedOrderIds?: number[];
+              }
+            )
+          | {
+              error?: string;
+            }
+          | null;
+
+      if (
+        !response.ok ||
+        !body ||
+        !("id" in body)
+      ) {
+        throw new Error(
+          body &&
+          "error" in body &&
+          body.error
+            ? body.error
+            : "تعذر دمج الطلبات",
+        );
+      }
+
+      setMergePreviewVisible(
+        false,
+      );
+      setMergeSelectedIds(
+        new Set(),
+      );
+      setExpanded(body.id);
+
+      await fetchOrders();
+
+      if (
+        Platform.OS !==
+        "web"
+      ) {
+        Alert.alert(
+          "تم دمج الطلبات",
+          `تم إنشاء الطلب الرئيسي #${body.id} بدون خصم المخزون مرة ثانية.`,
+        );
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "تعذر دمج الطلبات";
+
+      showError(message);
+
+      if (
+        Platform.OS !==
+        "web"
+      ) {
+        Alert.alert(
+          "تعذر دمج الطلبات",
+          message,
+        );
+      }
+    } finally {
+      setMergeBusy(false);
+    }
+  };
+
   const orderStatusCounts = useMemo(() => {
+    const operationalOrders =
+      orders.filter(
+        (order) =>
+          order.mergedIntoOrderId ==
+          null,
+      );
+
     const counts: Record<string, number> = {
-      all: orders.length,
+      all:
+        operationalOrders.length,
       exchange: 0,
     };
 
@@ -1880,7 +2347,7 @@ export default function AdminOrdersScreen() {
       counts[option.key] = 0;
     }
 
-    for (const order of orders) {
+    for (const order of operationalOrders) {
       if (order.exchangePublicId) {
         counts.exchange += 1;
       }
@@ -1899,6 +2366,13 @@ export default function AdminOrdersScreen() {
     const compactNeedle = needle.replace(/\s+/g, "");
 
     return orders.filter((order) => {
+      if (
+        order.mergedIntoOrderId !== null &&
+        !needle
+      ) {
+        return false;
+      }
+
       if (
         orderStatusFilter === "exchange" &&
         !order.exchangePublicId
@@ -2656,6 +3130,204 @@ export default function AdminOrdersScreen() {
         </Pressable>
       </View>
 
+      {mergeSelectedIds.size > 0 ? (
+        <View
+          style={[
+            styles.mergeSelectionBar,
+            {
+              backgroundColor: "#EFF6FF",
+              borderColor: "#93C5FD",
+            },
+          ]}
+        >
+          <View style={styles.mergeSelectionInfo}>
+            <Ionicons name="git-merge-outline" size={20} color="#2563EB" />
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <Text style={styles.mergeSelectionTitle}>
+                تم اختيار {mergeSelectedIds.size} طلب/طلبات للدمج
+              </Text>
+              <Text style={styles.mergeSelectionSub}>
+                الدمج لا يخصم المخزون مرة ثانية
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.mergeSelectionActions}>
+            <Pressable
+              onPress={() => {
+                setMergeSelectedIds(new Set());
+                setMergePreviewVisible(false);
+              }}
+              style={[
+                styles.mergeSecondaryButton,
+                { borderColor: "#94A3B8" },
+              ]}
+            >
+              <Text style={styles.mergeSecondaryButtonText}>
+                إلغاء التحديد
+              </Text>
+            </Pressable>
+
+            <Pressable
+              disabled={mergeSelectedIds.size < 2}
+              onPress={openMergePreview}
+              style={[
+                styles.mergePrimaryButton,
+                {
+                  backgroundColor:
+                    mergeSelectedIds.size < 2
+                      ? "#94A3B8"
+                      : "#2563EB",
+                },
+              ]}
+            >
+              <Ionicons name="git-merge-outline" size={17} color="#fff" />
+              <Text style={styles.mergePrimaryButtonText}>
+                معاينة الدمج
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      <Modal
+        transparent
+        visible={mergePreviewVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!mergeBusy) setMergePreviewVisible(false);
+        }}
+      >
+        <View style={styles.mergeModalOverlay}>
+          <View
+            style={[
+              styles.mergeModalCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.mergeModalHeader}>
+              <Pressable
+                disabled={mergeBusy}
+                onPress={() => setMergePreviewVisible(false)}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={22} color={colors.mutedForeground} />
+              </Pressable>
+              <View style={{ flex: 1, alignItems: "flex-end" }}>
+                <Text style={[styles.mergeModalTitle, { color: colors.foreground }]}>
+                  معاينة دمج الطلبات
+                </Text>
+                <Text style={[styles.mergeModalSub, { color: colors.mutedForeground }]}>
+                  سيتم إنشاء طلب رئيسي واحد مع إبقاء الطلبات الأصلية محفوظة كسجل.
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.mergeModalScroll}
+              contentContainerStyle={styles.mergeModalScrollContent}
+            >
+              {mergePreview.error ? (
+                <View style={styles.mergeErrorBox}>
+                  <Ionicons name="alert-circle-outline" size={19} color="#B91C1C" />
+                  <Text style={styles.mergeErrorText}>{mergePreview.error}</Text>
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.mergeSummaryBox,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.mergeSummaryTitle, { color: colors.foreground }]}>
+                  الطلبات المختارة
+                </Text>
+                {mergeSelectedOrders.map((order) => (
+                  <View
+                    key={order.id}
+                    style={[styles.mergeOrderRow, { borderBottomColor: colors.border }]}
+                  >
+                    <Text style={[styles.mergeOrderAmount, { color: colors.primary }]}>
+                      {order.totalPrice}₪
+                    </Text>
+                    <View style={{ flex: 1, alignItems: "flex-end" }}>
+                      <Text style={[styles.mergeOrderName, { color: colors.foreground }]}>
+                        #{order.id} — {order.customerName}
+                      </Text>
+                      <Text style={[styles.mergeOrderMeta, { color: colors.mutedForeground }]}>
+                        {order.items.length} صنف · {order.shippingZone ?? "بدون منطقة"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.mergeTotalsBox}>
+                <View style={styles.mergeTotalRow}>
+                  <Text style={styles.mergeTotalValue}>{mergePreview.productsNet}₪</Text>
+                  <Text style={styles.mergeTotalLabel}>قيمة المنتجات بعد الخصومات</Text>
+                </View>
+                <View style={styles.mergeTotalRow}>
+                  <Text style={styles.mergeRemovedShippingValue}>
+                    {mergePreview.originalShippingTotal}₪
+                  </Text>
+                  <Text style={styles.mergeTotalLabel}>رسوم التوصيل قبل الدمج</Text>
+                </View>
+                <View style={styles.mergeTotalRow}>
+                  <Text style={styles.mergeTotalValue}>{mergePreview.shippingCost}₪</Text>
+                  <Text style={styles.mergeTotalLabel}>التوصيل بعد الدمج — مرة واحدة</Text>
+                </View>
+                <View style={[styles.mergeTotalRow, styles.mergeGrandTotalRow]}>
+                  <Text style={styles.mergeGrandTotalValue}>{mergePreview.total}₪</Text>
+                  <Text style={styles.mergeGrandTotalLabel}>الإجمالي المتوقع بعد الدمج</Text>
+                </View>
+              </View>
+
+              <View style={styles.mergeSafetyBox}>
+                <Text style={styles.mergeSafetyTitle}>ما الذي سيحدث؟</Text>
+                <Text style={styles.mergeSafetyText}>• المنتجات والمخزون المحجوز لن يتم خصمهما مرة ثانية.</Text>
+                <Text style={styles.mergeSafetyText}>• سيتم إلغاء رسوم التوصيل المنفصلة للطلبات الأصلية والإبقاء على توصيل واحد فقط.</Text>
+                <Text style={styles.mergeSafetyText}>• إذا وصل مجموع المنتجات بعد الخصومات إلى حد عرض التوصيل، سيُطبق العرض تلقائيًا من Settings الحالية.</Text>
+                <Text style={styles.mergeSafetyText}>• سيتم اعتماد بيانات أحدث طلب من الطلبات المختارة.</Text>
+                <Text style={styles.mergeSafetyText}>• الطلبات الأصلية ستبقى محفوظة بحالة «مدمج» للرجوع إليها والتقارير.</Text>
+              </View>
+            </ScrollView>
+
+            <View style={[styles.mergeModalActions, { borderTopColor: colors.border }]}>
+              <Pressable
+                disabled={mergeBusy}
+                onPress={() => setMergePreviewVisible(false)}
+                style={[styles.mergeSecondaryButton, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.mergeSecondaryButtonText, { color: colors.foreground }]}>
+                  رجوع
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={mergeBusy || !!mergePreview.error}
+                onPress={() => void performMergeOrders()}
+                style={[
+                  styles.mergeConfirmButton,
+                  { opacity: mergeBusy || mergePreview.error ? 0.55 : 1 },
+                ]}
+              >
+                {mergeBusy ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="git-merge-outline" size={18} color="#fff" />
+                )}
+                <Text style={styles.mergePrimaryButtonText}>
+                  {mergeBusy
+                    ? "جاري الدمج..."
+                    : "تأكيد دمج " + mergeSelectedOrders.length + " طلبات"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -2738,6 +3410,51 @@ export default function AdminOrdersScreen() {
               getOrderInvoiceDiscount(item.items);
             const exchangeDisplay =
               getOnlineExchangeDisplay(item);
+            const mergeEligible =
+              isMergeEligibleOrder(item);
+            const mergeSelected =
+              mergeSelectedIds.has(item.id);
+            const mergeCustomerCandidates =
+              mergeEligible
+                ? orders.filter((candidate) => {
+                    if (!isMergeEligibleOrder(candidate)) {
+                      return false;
+                    }
+
+                    if (
+                      normalizeMergePhone(candidate.customerPhone) !==
+                      normalizeMergePhone(item.customerPhone)
+                    ) {
+                      return false;
+                    }
+
+                    if (
+                      (candidate.shippingZone?.trim() ?? "") !==
+                      (item.shippingZone?.trim() ?? "")
+                    ) {
+                      return false;
+                    }
+
+                    const candidateTime =
+                      new Date(candidate.createdAt).getTime();
+                    const itemTime =
+                      new Date(item.createdAt).getTime();
+
+                    return (
+                      Number.isFinite(candidateTime) &&
+                      Number.isFinite(itemTime) &&
+                      Math.abs(candidateTime - itemTime) <=
+                        24 * 60 * 60 * 1000
+                    );
+                  })
+                : [];
+
+            const mergeSuggestionLatestId =
+              mergeCustomerCandidates.reduce(
+                (max, candidate) =>
+                  Math.max(max, candidate.id),
+                0,
+              );
 
             return (
               <Pressable
@@ -2758,6 +3475,40 @@ export default function AdminOrdersScreen() {
                 {/* Card Header */}
                 <View style={styles.cardTop}>
                   <View style={styles.cardTopLeft}>
+                    {mergeEligible ? (
+                      <Pressable
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          toggleMergeSelection(item);
+                        }}
+                        style={[
+                          styles.mergeSelectButton,
+                          {
+                            borderColor: mergeSelected
+                              ? "#2563EB"
+                              : colors.border,
+                            backgroundColor: mergeSelected
+                              ? "#DBEAFE"
+                              : colors.background,
+                          },
+                        ]}
+                        hitSlop={4}
+                      >
+                        <Ionicons
+                          name={
+                            mergeSelected
+                              ? "checkbox"
+                              : "square-outline"
+                          }
+                          size={20}
+                          color={
+                            mergeSelected
+                              ? "#2563EB"
+                              : colors.mutedForeground
+                          }
+                        />
+                      </Pressable>
+                    ) : null}
                     <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                   </View>
                   <View style={styles.cardTopRight}>
@@ -2771,6 +3522,32 @@ export default function AdminOrdersScreen() {
                           </Text>
                         </View>
                       )}
+
+                      {(item.mergedOrderCount ?? 0) > 0 ? (
+                        <View
+                          style={[
+                            styles.newDot,
+                            { backgroundColor: "#2563EB" },
+                          ]}
+                        >
+                          <Text style={styles.newDotText}>
+                            طلب مدمج من {item.mergedOrderCount} طلبات
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {item.mergedIntoOrderId ? (
+                        <View
+                          style={[
+                            styles.newDot,
+                            { backgroundColor: "#64748B" },
+                          ]}
+                        >
+                          <Text style={styles.newDotText}>
+                            مدمج في #{item.mergedIntoOrderId}
+                          </Text>
+                        </View>
+                      ) : null}
 
                       {item.discountCode &&
                       item.discountCodeLabel &&
@@ -2824,6 +3601,33 @@ export default function AdminOrdersScreen() {
                     )}
                   </View>
                 </View>
+
+                {mergeEligible &&
+                mergeCustomerCandidates.length >= 2 &&
+                item.id === mergeSuggestionLatestId ? (
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      selectCustomerMergeCandidates(item);
+                    }}
+                    style={[
+                      styles.mergeSuggestion,
+                      {
+                        backgroundColor: "#EFF6FF",
+                        borderColor: "#93C5FD",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="git-merge-outline"
+                      size={17}
+                      color="#2563EB"
+                    />
+                    <Text style={styles.mergeSuggestionText}>
+                      يوجد {mergeCustomerCandidates.length} طلبات قابلة للدمج لنفس الزبون خلال 24 ساعة — معاينة الدمج
+                    </Text>
+                  </Pressable>
+                ) : null}
 
                 {/* Price row */}
                 <View style={[styles.priceRow, { borderTopColor: colors.border }]}>
@@ -6102,6 +6906,261 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
+  },
+  mergeSelectionBar: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 9,
+  },
+  mergeSelectionInfo: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  mergeSelectionTitle: {
+    color: "#1E3A8A",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  mergeSelectionSub: {
+    color: "#475569",
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: "right",
+  },
+  mergeSelectionActions: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    gap: 8,
+  },
+  mergePrimaryButton: {
+    flex: 1,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minHeight: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  mergeConfirmButton: {
+    flex: 1,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 44,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#2563EB",
+  },
+  mergePrimaryButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  mergeSecondaryButton: {
+    flex: 1,
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+  },
+  mergeSecondaryButtonText: {
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  mergeModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.48)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+  },
+  mergeModalCard: {
+    width: Platform.OS === "web" ? 680 : "96%",
+    maxWidth: "96%",
+    maxHeight: "90%",
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  mergeModalHeader: {
+    flexDirection: Platform.OS === "web" ? "row" : "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  mergeModalTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  mergeModalSub: {
+    fontSize: 12,
+    marginTop: 3,
+    lineHeight: 18,
+    textAlign: "right",
+  },
+  mergeModalScroll: {
+    maxHeight: 560,
+  },
+  mergeModalScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  mergeErrorBox: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 10,
+    padding: 10,
+    backgroundColor: "#FEE2E2",
+  },
+  mergeErrorText: {
+    flex: 1,
+    color: "#B91C1C",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  mergeSummaryBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 4,
+  },
+  mergeSummaryTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "right",
+    marginBottom: 3,
+  },
+  mergeOrderRow: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  mergeOrderAmount: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  mergeOrderName: {
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  mergeOrderMeta: {
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: "right",
+  },
+  mergeTotalsBox: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 12,
+    padding: 11,
+    gap: 8,
+    backgroundColor: "#F8FAFC",
+  },
+  mergeTotalRow: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
+  mergeTotalLabel: {
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  mergeTotalValue: {
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  mergeRemovedShippingValue: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "900",
+    textDecorationLine: "line-through",
+  },
+  mergeGrandTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: "#CBD5E1",
+    paddingTop: 9,
+    marginTop: 2,
+  },
+  mergeGrandTotalLabel: {
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  mergeGrandTotalValue: {
+    color: "#2563EB",
+    fontSize: 19,
+    fontWeight: "900",
+  },
+  mergeSafetyBox: {
+    borderRadius: 12,
+    padding: 11,
+    backgroundColor: "#F0FDF4",
+    gap: 5,
+  },
+  mergeSafetyTitle: {
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  mergeSafetyText: {
+    color: "#166534",
+    fontSize: 12,
+    lineHeight: 19,
+    textAlign: "right",
+  },
+  mergeModalActions: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    gap: 8,
+    borderTopWidth: 1,
+    padding: 12,
+  },
+  mergeSelectButton: {
+    width: 32,
+    height: 32,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mergeSuggestion: {
+    marginHorizontal: 12,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  mergeSuggestionText: {
+    flex: 1,
+    color: "#1D4ED8",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
   },
   list: { padding: 12, gap: 10 },
   orderCard: { borderRadius: 16, overflow: "hidden" },

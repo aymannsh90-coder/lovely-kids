@@ -31,6 +31,10 @@ import {
 } from "./order-finance";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import { sendMetaPurchaseEvent } from "./meta-capi";
+import {
+  mergeOnlineOrders,
+  OrderMergeError,
+} from "./order-merge";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -286,6 +290,106 @@ const orderOwnerWhere = (userId: number, phone?: string | null) =>
       )
     : eq(ordersTable.userId, userId);
 
+async function handleMergeOrders(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const user = await getCurrentUser(
+    db,
+    request,
+    env,
+  );
+
+  if (!user) {
+    return json({ error: "يجب تسجيل الدخول" }, 401);
+  }
+
+  if (!user.isAdmin) {
+    return json({ error: "غير مصرح" }, 403);
+  }
+
+  const body = await request
+    .json()
+    .catch(() => null) as
+    | { orderIds?: unknown }
+    | null;
+
+  try {
+    const merged =
+      await mergeOnlineOrders(
+        db,
+        body?.orderIds,
+        user.id,
+      );
+
+    return json(merged, 201);
+  } catch (error) {
+    if (error instanceof OrderMergeError) {
+      return json(
+        { error: error.message },
+        error.status,
+      );
+    }
+
+    console.error(
+      "MERGE_ORDERS_FAILED",
+      error,
+    );
+
+    return json(
+      { error: "تعذر دمج الطلبات" },
+      500,
+    );
+  }
+}
+
+async function getOrderMergeRelation(
+  db: Db,
+  id: number,
+) {
+  const rows = await db
+    .select({
+      id: ordersTable.id,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
+    })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  const order = rows[0];
+
+  if (!order) {
+    return {
+      exists: false as const,
+      mergedIntoOrderId: null,
+      hasMergedChildren: false,
+    };
+  }
+
+  const childRows = await db
+    .select({
+      id: ordersTable.id,
+    })
+    .from(ordersTable)
+    .where(
+      eq(
+        ordersTable.mergedIntoOrderId,
+        id,
+      ),
+    )
+    .limit(1);
+
+  return {
+    exists: true as const,
+    mergedIntoOrderId:
+      order.mergedIntoOrderId,
+    hasMergedChildren:
+      childRows.length > 0,
+  };
+}
+
 async function handleCreateOrder(
   request: Request,
   db: Db,
@@ -495,13 +599,44 @@ async function handleGetOrders(
         ]),
     );
 
+  const mergedOrderIdsByMaster =
+    new Map<number, number[]>();
+
+  for (const order of orders) {
+    if (
+      order.mergedIntoOrderId === null
+    ) {
+      continue;
+    }
+
+    const current =
+      mergedOrderIdsByMaster.get(
+        order.mergedIntoOrderId,
+      ) ?? [];
+
+    current.push(order.id);
+
+    mergedOrderIdsByMaster.set(
+      order.mergedIntoOrderId,
+      current,
+    );
+  }
+
   return json(
     orders.map((order) => {
       const linkedExchange =
         exchangeByReplacement.get(order.id);
 
+      const mergedOrderIds =
+        mergedOrderIdsByMaster.get(
+          order.id,
+        ) ?? [];
+
       return {
         ...order,
+        mergedOrderIds,
+        mergedOrderCount:
+          mergedOrderIds.length,
         exchangeOriginalOrderId:
           linkedExchange?.originalOrderId ?? null,
         exchangePublicId:
@@ -560,7 +695,38 @@ async function handleLookupOrder(
     return json({ error: "الطلب غير موجود" }, 404);
   }
 
-  return json(rows[0]);
+  const order = rows[0];
+
+  if (
+    order.mergedIntoOrderId !== null
+  ) {
+    const masterRows = await db
+      .select()
+      .from(ordersTable)
+      .where(
+        and(
+          eq(
+            ordersTable.id,
+            order.mergedIntoOrderId,
+          ),
+          eq(
+            ordersTable.customerPhone,
+            customerPhone,
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (masterRows[0]) {
+      return json({
+        ...masterRows[0],
+        mergedFromOrderId:
+          order.id,
+      });
+    }
+  }
+
+  return json(order);
 }
 
 async function handleTrackOrder(
@@ -602,6 +768,45 @@ async function handleTrackOrder(
     return json({ error: "رابط المتابعة غير صالح" }, 403);
   }
 
+  if (
+    order.mergedIntoOrderId !== null
+  ) {
+    const masterRows = await db
+      .select()
+      .from(ordersTable)
+      .where(
+        eq(
+          ordersTable.id,
+          order.mergedIntoOrderId,
+        ),
+      )
+      .limit(1);
+
+    const master =
+      masterRows[0];
+
+    if (master) {
+      const masterToken =
+        createOrderTrackingToken(
+          master.id,
+          master.customerPhone,
+          env,
+        );
+
+      return json({
+        ...master,
+        mergedFromOrderId:
+          order.id,
+        ...(masterToken
+          ? {
+              trackingToken:
+                masterToken,
+            }
+          : {}),
+      });
+    }
+  }
+
   return json(order);
 }
 
@@ -623,7 +828,17 @@ async function handleGetMyOrders(
   const orders = await db
     .select()
     .from(ordersTable)
-    .where(orderOwnerWhere(user.id, user.phone))
+    .where(
+      and(
+        orderOwnerWhere(
+          user.id,
+          user.phone,
+        ),
+        isNull(
+          ordersTable.mergedIntoOrderId,
+        ),
+      ),
+    )
     .orderBy(desc(ordersTable.createdAt));
 
   return json(orders);
@@ -673,6 +888,17 @@ export async function handleOrderRequest(
     path === "/api/orders"
   ) {
     return handleCreateOrder(request, db, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/orders/merge"
+  ) {
+    return handleMergeOrders(
+      request,
+      db,
+      env,
+    );
   }
 
   if (
@@ -859,6 +1085,44 @@ async function handleEditOrderItems(
     return json({ error: "غير مصرح" }, 403);
   }
 
+  const mergeRelation =
+    await getOrderMergeRelation(
+      db,
+      id,
+    );
+
+  if (!mergeRelation.exists) {
+    return json(
+      { error: "الطلب غير موجود" },
+      404,
+    );
+  }
+
+  if (
+    mergeRelation.mergedIntoOrderId !==
+    null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب مدمج داخل الطلب #${mergeRelation.mergedIntoOrderId} ولا يمكن تعديله منفردًا`,
+      },
+      409,
+    );
+  }
+
+  if (
+    mergeRelation.hasMergedChildren
+  ) {
+    return json(
+      {
+        error:
+          "لا يمكن تعديل أصناف الطلب الرئيسي بعد الدمج حتى تبقى حركة المخزون والتقارير محفوظة",
+      },
+      409,
+    );
+  }
+
   const body = await request.json().catch(() => null) as
     | {
         items?: unknown;
@@ -925,6 +1189,8 @@ async function handleCancelOrder(
       status: ordersTable.status,
       userId: ordersTable.userId,
       customerPhone: ordersTable.customerPhone,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -932,6 +1198,19 @@ async function handleCancelOrder(
 
   if (!current[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (
+    current[0].mergedIntoOrderId !==
+    null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب مدمج داخل الطلب #${current[0].mergedIntoOrderId}`,
+      },
+      409,
+    );
   }
 
   if (
@@ -1010,6 +1289,8 @@ async function handleConvertOrderToStorePickup(
       shippingZone: ordersTable.shippingZone,
       shippingCost: ordersTable.shippingCost,
       totalPrice: ordersTable.totalPrice,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -1019,6 +1300,18 @@ async function handleConvertOrderToStorePickup(
 
   if (!order) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (
+    order.mergedIntoOrderId !== null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب مدمج داخل الطلب #${order.mergedIntoOrderId}`,
+      },
+      409,
+    );
   }
 
   if (order.status === "done" || order.status === "cancelled") {
@@ -1112,6 +1405,8 @@ async function handleUpdateOrderStatus(
       deliveryCompanyId: ordersTable.deliveryCompanyId,
       deliveryCompanyCost: ordersTable.deliveryCompanyCost,
       paymentMethod: ordersTable.paymentMethod,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -1119,6 +1414,19 @@ async function handleUpdateOrderStatus(
 
   if (!current[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (
+    current[0].mergedIntoOrderId !==
+    null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب مدمج داخل الطلب #${current[0].mergedIntoOrderId}`,
+      },
+      409,
+    );
   }
 
   const isPickup =
@@ -1456,6 +1764,8 @@ async function handlePaymentProof(
       paymentMethod: ordersTable.paymentMethod,
       status: ordersTable.status,
       paymentStatus: ordersTable.paymentStatus,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -1463,6 +1773,18 @@ async function handlePaymentProof(
 
   if (!current[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (
+    current[0].mergedIntoOrderId !== null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب مدمج داخل الطلب #${current[0].mergedIntoOrderId}`,
+      },
+      409,
+    );
   }
 
   const guestPhone = body?.customerPhone?.trim() ?? "";
@@ -1548,6 +1870,8 @@ async function handleConfirmPayment(
       paymentMethod: ordersTable.paymentMethod,
       paymentStatus: ordersTable.paymentStatus,
       customerPhone: ordersTable.customerPhone,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
     })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
@@ -1555,6 +1879,18 @@ async function handleConfirmPayment(
 
   if (!current[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (
+    current[0].mergedIntoOrderId !== null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب مدمج داخل الطلب #${current[0].mergedIntoOrderId}`,
+      },
+      409,
+    );
   }
 
   if (current[0].paymentMethod !== "bank_transfer") {
@@ -1621,13 +1957,52 @@ async function handleDeleteOrder(
   }
 
   const current = await db
-    .select({ status: ordersTable.status })
+    .select({
+      status: ordersTable.status,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
+    })
     .from(ordersTable)
     .where(eq(ordersTable.id, id))
     .limit(1);
 
   if (!current[0]) {
     return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  if (
+    current[0].mergedIntoOrderId !== null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب جزء من طلب مدمج #${current[0].mergedIntoOrderId} ولا يمكن حذفه`,
+      },
+      409,
+    );
+  }
+
+  const mergedChildren = await db
+    .select({
+      id: ordersTable.id,
+    })
+    .from(ordersTable)
+    .where(
+      eq(
+        ordersTable.mergedIntoOrderId,
+        id,
+      ),
+    )
+    .limit(1);
+
+  if (mergedChildren[0]) {
+    return json(
+      {
+        error:
+          "لا يمكن حذف الطلب الرئيسي المدمج لأن الطلبات الأصلية مرتبطة به",
+      },
+      409,
+    );
   }
 
   if (current[0].status !== "cancelled" && current[0].status !== "done") {
