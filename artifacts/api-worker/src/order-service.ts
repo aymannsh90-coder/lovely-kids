@@ -111,7 +111,7 @@ const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   {
     label: "الضفة الغربية",
     cost: 20,
-    companyCost: 20,
+    companyCost: 19,
     promoCost: 20,
   },
   {
