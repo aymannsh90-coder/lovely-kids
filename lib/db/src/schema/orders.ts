@@ -54,6 +54,17 @@ export const ordersTable = pgTable("orders", {
   deliveryCompanyCost: integer("delivery_company_cost"),
 
   status: text("status").notNull().default("new"),
+
+  // When several online orders are consolidated into one operational order,
+  // source orders stay in the database for audit/history and point to the
+  // surviving master order. Stock is NOT moved again during the merge.
+  mergedIntoOrderId: integer("merged_into_order_id"),
+  mergedAt: timestamp("merged_at"),
+  mergedByUserId: integer("merged_by_user_id").references(
+    () => usersTable.id,
+    { onDelete: "set null" },
+  ),
+
   notes: text("notes"),
   paymentMethod: text("payment_method").notNull().default("cod"),
   paymentStatus: text("payment_status").notNull().default("pending"),
@@ -78,6 +89,9 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   discountCodePercent: true,
   discountCodeAmount: true,
   discountCodeStacksWithShippingPromotion: true,
+  mergedIntoOrderId: true,
+  mergedAt: true,
+  mergedByUserId: true,
   createdAt: true,
 }).extend({
   items: z.array(
