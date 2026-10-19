@@ -333,7 +333,7 @@ export default function HomeScreen() {
       : colors.mutedForeground;
   const insets = useSafeAreaInsets();
   const { products } = useVisibleProducts();
-  const { settings } = useAppSettings();
+  const { settings, settingsReady } = useAppSettings();
   const { user, getAuthToken } = useAuth();
   const { count: wishlistCount } = useWishlist();
   const firstName = user?.name?.trim().split(/\s+/)[0] || "";
@@ -654,6 +654,17 @@ export default function HomeScreen() {
       </View>
     );
   };
+
+  if (!settingsReady) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#F0FAFE",
+        }}
+      />
+    );
+  }
 
   return (
     <View
