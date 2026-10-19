@@ -50,7 +50,8 @@ export const ordersTable = pgTable("orders", {
 
   // Real courier fee for this order, frozen when the order is dispatched.
   // Same unit as totalPrice/shippingCost (whole ILS, NOT minor units).
-  // Example: West Bank = 20 ILS even when customer shippingCost = 0.
+  // Example: West Bank actual courier cost = 19 ILS even when the
+  // customer-facing shippingCost is 20 ILS or 0 ILS during a promotion.
   deliveryCompanyCost: integer("delivery_company_cost"),
 
   status: text("status").notNull().default("new"),
