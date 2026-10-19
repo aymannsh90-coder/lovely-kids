@@ -11,6 +11,10 @@ import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import {
+  appendProductToSupplierDraft,
+  PurchaseDraftServiceError,
+} from "./purchase-draft-service";
+import {
   isPurchaseApiEnabled,
   isPurchaseWriteEnabled,
   purchaseFeatureDisabledResponse,
@@ -1297,299 +1301,22 @@ async function handleAppendDraftItem(
     }
 
     const result =
-      await db.transaction(async (tx) => {
-        const supplierRows = await tx
-          .select()
-          .from(suppliersTable)
-          .where(
-            eq(
-              suppliersTable.id,
-              supplierId,
-            ),
-          )
-          .for("update")
-          .limit(1);
-
-        const supplier = supplierRows[0];
-
-        if (!supplier) {
-          throw new PurchaseDraftError(
-            "المورد غير موجود",
-            404,
-          );
-        }
-
-        if (supplier.status !== "active") {
-          throw new PurchaseDraftError(
-            "لا يمكن الإضافة إلى مورد غير فعال",
-            409,
-          );
-        }
-
-        const productRows = await tx
-          .select()
-          .from(productsTable)
-          .where(
-            eq(
-              productsTable.id,
-              productId,
-            ),
-          )
-          .limit(1);
-
-        const product = productRows[0];
-
-        if (!product) {
-          throw new PurchaseDraftError(
-            "المنتج غير موجود",
-            404,
-          );
-        }
-
-        let purchase = await getDraft(
+      await db.transaction((tx) =>
+        appendProductToSupplierDraft(
           tx,
-          auth.user.id,
-          supplierId,
-          warehouseKey,
-        );
-
-        if (!purchase) {
-          const publicId =
-            "DRAFT-" +
-            businessDate.replaceAll("-", "") +
-            "-" +
-            randomUUID()
-              .slice(0, 8)
-              .toUpperCase();
-
-          const insertedRows = await tx
-            .insert(posPurchasesTable)
-            .values({
-              publicId,
-              idempotencyKey:
-                "purchase-draft:" +
-                auth.user.id +
-                ":" +
-                supplierId +
-                ":" +
-                warehouseKey,
-              supplierId,
-              supplierInvoiceNumber: null,
-              businessDate,
-              warehouseKey,
-              currencyCode,
-              enteredByUserId:
-                auth.user.id,
-              status: "draft",
-              paymentMethod: "credit",
-              subtotalMinor: 0,
-              discountMinor: 0,
-              totalMinor: 0,
-              paidMinor: 0,
-              dueMinor: 0,
-              notes:
-                "مسودة تلقائية من إدخال الأصناف",
-            })
-            .returning();
-
-          purchase = insertedRows[0] ?? null;
-
-          if (!purchase) {
-            throw new Error(
-              "PURCHASE_DRAFT_INSERT_FAILED",
-            );
-          }
-        }
-
-        const currentItems = await tx
-          .select()
-          .from(posPurchaseItemsTable)
-          .where(
-            eq(
-              posPurchaseItemsTable.purchaseId,
-              purchase.id,
-            ),
-          )
-          .orderBy(
-            asc(
-              posPurchaseItemsTable.lineNumber,
-            ),
-          );
-
-        const existing =
-          currentItems.find(
-            (item) =>
-              item.productId === product.id,
-          ) ?? null;
-
-        if (existing) {
-          const nextQuantity =
-            existing.quantity + quantity;
-
-          if (
-            !Number.isSafeInteger(nextQuantity) ||
-            nextQuantity > 99_999
-          ) {
-            throw new PurchaseDraftError(
-              "إجمالي كمية الصنف في المسودة أكبر من الحد المسموح",
-            );
-          }
-
-          const mergedCostMinor =
-            existing.unitCostMinor === null ||
-            unitCostMinor === null
-              ? null
-              : existing.unitCostMinor ===
-                  unitCostMinor
-                ? existing.unitCostMinor
-                : null;
-
-          const nextLineTotalMinor =
-            mergedCostMinor === null
-              ? null
-              : mergedCostMinor *
-                  nextQuantity -
-                existing.lineDiscountMinor;
-
-          await tx
-            .update(posPurchaseItemsTable)
-            .set({
-              quantity: nextQuantity,
-              unitCostMinor:
-                mergedCostMinor,
-              lineTotalMinor:
-                nextLineTotalMinor,
-            })
-            .where(
-              eq(
-                posPurchaseItemsTable.id,
-                existing.id,
-              ),
-            );
-        } else {
-          const nextLineNumber =
-            currentItems.reduce(
-              (max, item) =>
-                Math.max(
-                  max,
-                  item.lineNumber,
-                ),
-              0,
-            ) + 1;
-
-          await tx
-            .insert(posPurchaseItemsTable)
-            .values({
-              purchaseId: purchase.id,
-              lineNumber:
-                nextLineNumber,
-              productId:
-                product.id,
-              barcode:
-                product.barcode,
-              productCode:
-                product.productCode,
-              productNameAr:
-                product.nameAr,
-              productImage:
-                product.image,
-              color: null,
-              size: null,
-              quantity,
-              freeQuantity: 0,
-              unitCostMinor,
-              lineDiscountMinor: 0,
-              lineTotalMinor:
-                unitCostMinor === null
-                  ? null
-                  : unitCostMinor *
-                    quantity,
-              generalStockBefore: null,
-              generalStockAfter: null,
-              variantStockBefore: null,
-              variantStockAfter: null,
-            });
-        }
-
-        const items = await tx
-          .select()
-          .from(posPurchaseItemsTable)
-          .where(
-            eq(
-              posPurchaseItemsTable.purchaseId,
-              purchase.id,
-            ),
-          )
-          .orderBy(
-            asc(
-              posPurchaseItemsTable.lineNumber,
-            ),
-          );
-
-        let subtotalMinor = 0;
-        let discountMinor = 0;
-
-        for (const item of items) {
-          if (item.unitCostMinor !== null) {
-            subtotalMinor +=
-              item.unitCostMinor *
-              item.quantity;
-
-            discountMinor +=
-              item.lineDiscountMinor;
-          }
-        }
-
-        const totalMinor =
-          subtotalMinor -
-          discountMinor;
-
-        const updatedRows = await tx
-          .update(posPurchasesTable)
-          .set({
+          {
+            userId:
+              auth.user.id,
+            supplierId,
+            productId,
+            quantity,
+            unitCostMinor,
             businessDate,
+            warehouseKey,
             currencyCode,
-            paymentMethod: "credit",
-            subtotalMinor,
-            discountMinor,
-            totalMinor,
-            paidMinor: 0,
-            dueMinor:
-              totalMinor,
-            updatedAt:
-              new Date(),
-          })
-          .where(
-            and(
-              eq(
-                posPurchasesTable.id,
-                purchase.id,
-              ),
-              eq(
-                posPurchasesTable.status,
-                "draft",
-              ),
-            ),
-          )
-          .returning();
-
-        const updatedPurchase =
-          updatedRows[0];
-
-        if (!updatedPurchase) {
-          throw new PurchaseDraftError(
-            "تعذر تحديث مسودة المشتريات",
-            409,
-          );
-        }
-
-        return {
-          purchase:
-            updatedPurchase,
-          items,
-          supplier,
-        };
-      });
+          },
+        ),
+      );
 
     return json(
       toResponse(
@@ -1600,7 +1327,8 @@ async function handleAppendDraftItem(
     );
   } catch (error) {
     if (
-      error instanceof PurchaseDraftError
+      error instanceof PurchaseDraftError ||
+      error instanceof PurchaseDraftServiceError
     ) {
       return json(
         { error: error.message },
