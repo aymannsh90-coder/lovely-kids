@@ -45,6 +45,32 @@ export function isProductFullyUnavailable(product: Product): boolean {
   });
 }
 
+function hasAlternativeSelection(
+  product: Product,
+  item: CartItem,
+): boolean {
+  const variants = product.colorVariants ?? [];
+
+  if (variants.length > 0) {
+    return variants.some((variant) => {
+      const sizes = Array.isArray(variant.sizes) ? variant.sizes : [];
+
+      if (sizes.length === 0) {
+        return variant.color !== item.color;
+      }
+
+      return sizes.some(
+        (size) =>
+          !isSizeOutOfStock(size) &&
+          (variant.color !== item.color || size.size !== item.size),
+      );
+    });
+  }
+
+  const sizes = product.sizes ?? [];
+  return sizes.some((size) => size !== item.size);
+}
+
 function unavailableSelectionMessage(item: CartItem): string {
   if (item.color && item.size) {
     return `المقاس ${item.size} من اللون ${item.color} لم يعد متوفرًا`;
@@ -197,12 +223,16 @@ export function getCartStockStatus(
       };
     }
 
+    const hasAlternatives = hasAlternativeSelection(product, item);
+
     return {
       valid: false,
       kind: "quantity_exceeds_stock",
       message: `الكمية الموجودة في السلة ${item.quantity}، والمتوفر الآن ${availableQuantity} فقط`,
-      detail: "يمكنك تحديث الكمية للمتوفر أو اختيار لون/مقاس آخر.",
-      hasAlternatives: true,
+      detail: hasAlternatives
+        ? "يمكنك تحديث الكمية للمتوفر أو اختيار لون/مقاس آخر."
+        : "يمكنك تحديث الكمية للمتوفر ثم متابعة الطلب.",
+      hasAlternatives,
       availableQuantity,
     };
   }
