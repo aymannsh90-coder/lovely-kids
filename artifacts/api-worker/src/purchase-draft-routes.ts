@@ -1190,6 +1190,439 @@ async function handleSaveDraft(
   }
 }
 
+
+async function handleAppendDraftItem(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    await request.json().catch(() => null);
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return json(
+      { error: "بيانات الصنف غير صالحة" },
+      400,
+    );
+  }
+
+  const payload =
+    body as Record<string, unknown>;
+
+  try {
+    const supplierId = parsePositiveInteger(
+      payload.supplierId,
+      "رقم المورد",
+    );
+
+    const productId = parsePositiveInteger(
+      payload.productId,
+      "رقم المنتج",
+    );
+
+    const quantity = parsePositiveInteger(
+      payload.quantity,
+      "الكمية الجديدة",
+      99_999,
+    );
+
+    const businessDate =
+      normalizeBusinessDate(
+        payload.businessDate,
+      );
+
+    const warehouseKey =
+      normalizeWarehouseKey(
+        payload.warehouseKey,
+      );
+
+    const currencyCode =
+      normalizeCurrencyCode(
+        payload.currencyCode,
+      );
+
+    const rawUnitCost =
+      payload.unitCost ??
+      payload.unitCostMinor;
+
+    let unitCostMinor: number | null = null;
+
+    if (
+      rawUnitCost !== undefined &&
+      rawUnitCost !== null &&
+      rawUnitCost !== ""
+    ) {
+      if (
+        payload.unitCostMinor !== undefined &&
+        payload.unitCost === undefined
+      ) {
+        const parsedMinor =
+          typeof rawUnitCost === "string"
+            ? Number(rawUnitCost)
+            : rawUnitCost;
+
+        if (
+          typeof parsedMinor !== "number" ||
+          !Number.isSafeInteger(parsedMinor) ||
+          parsedMinor < 0 ||
+          parsedMinor > MAX_MINOR
+        ) {
+          throw new PurchaseDraftError(
+            "تكلفة الصنف غير صالحة",
+          );
+        }
+
+        unitCostMinor = parsedMinor;
+      } else {
+        unitCostMinor =
+          parseMoneyToMinor(rawUnitCost);
+
+        if (unitCostMinor === null) {
+          throw new PurchaseDraftError(
+            "تكلفة الصنف غير صالحة",
+          );
+        }
+      }
+    }
+
+    const result =
+      await db.transaction(async (tx) => {
+        const supplierRows = await tx
+          .select()
+          .from(suppliersTable)
+          .where(
+            eq(
+              suppliersTable.id,
+              supplierId,
+            ),
+          )
+          .for("update")
+          .limit(1);
+
+        const supplier = supplierRows[0];
+
+        if (!supplier) {
+          throw new PurchaseDraftError(
+            "المورد غير موجود",
+            404,
+          );
+        }
+
+        if (supplier.status !== "active") {
+          throw new PurchaseDraftError(
+            "لا يمكن الإضافة إلى مورد غير فعال",
+            409,
+          );
+        }
+
+        const productRows = await tx
+          .select()
+          .from(productsTable)
+          .where(
+            eq(
+              productsTable.id,
+              productId,
+            ),
+          )
+          .limit(1);
+
+        const product = productRows[0];
+
+        if (!product) {
+          throw new PurchaseDraftError(
+            "المنتج غير موجود",
+            404,
+          );
+        }
+
+        let purchase = await getDraft(
+          tx,
+          auth.user.id,
+          supplierId,
+          warehouseKey,
+        );
+
+        if (!purchase) {
+          const publicId =
+            "DRAFT-" +
+            businessDate.replaceAll("-", "") +
+            "-" +
+            randomUUID()
+              .slice(0, 8)
+              .toUpperCase();
+
+          const insertedRows = await tx
+            .insert(posPurchasesTable)
+            .values({
+              publicId,
+              idempotencyKey:
+                "purchase-draft:" +
+                auth.user.id +
+                ":" +
+                supplierId +
+                ":" +
+                warehouseKey,
+              supplierId,
+              supplierInvoiceNumber: null,
+              businessDate,
+              warehouseKey,
+              currencyCode,
+              enteredByUserId:
+                auth.user.id,
+              status: "draft",
+              paymentMethod: "credit",
+              subtotalMinor: 0,
+              discountMinor: 0,
+              totalMinor: 0,
+              paidMinor: 0,
+              dueMinor: 0,
+              notes:
+                "مسودة تلقائية من إدخال الأصناف",
+            })
+            .returning();
+
+          purchase = insertedRows[0] ?? null;
+
+          if (!purchase) {
+            throw new Error(
+              "PURCHASE_DRAFT_INSERT_FAILED",
+            );
+          }
+        }
+
+        const currentItems = await tx
+          .select()
+          .from(posPurchaseItemsTable)
+          .where(
+            eq(
+              posPurchaseItemsTable.purchaseId,
+              purchase.id,
+            ),
+          )
+          .orderBy(
+            asc(
+              posPurchaseItemsTable.lineNumber,
+            ),
+          );
+
+        const existing =
+          currentItems.find(
+            (item) =>
+              item.productId === product.id,
+          ) ?? null;
+
+        if (existing) {
+          const nextQuantity =
+            existing.quantity + quantity;
+
+          if (
+            !Number.isSafeInteger(nextQuantity) ||
+            nextQuantity > 99_999
+          ) {
+            throw new PurchaseDraftError(
+              "إجمالي كمية الصنف في المسودة أكبر من الحد المسموح",
+            );
+          }
+
+          const mergedCostMinor =
+            existing.unitCostMinor === null ||
+            unitCostMinor === null
+              ? null
+              : existing.unitCostMinor ===
+                  unitCostMinor
+                ? existing.unitCostMinor
+                : null;
+
+          const nextLineTotalMinor =
+            mergedCostMinor === null
+              ? null
+              : mergedCostMinor *
+                  nextQuantity -
+                existing.lineDiscountMinor;
+
+          await tx
+            .update(posPurchaseItemsTable)
+            .set({
+              quantity: nextQuantity,
+              unitCostMinor:
+                mergedCostMinor,
+              lineTotalMinor:
+                nextLineTotalMinor,
+            })
+            .where(
+              eq(
+                posPurchaseItemsTable.id,
+                existing.id,
+              ),
+            );
+        } else {
+          const nextLineNumber =
+            currentItems.reduce(
+              (max, item) =>
+                Math.max(
+                  max,
+                  item.lineNumber,
+                ),
+              0,
+            ) + 1;
+
+          await tx
+            .insert(posPurchaseItemsTable)
+            .values({
+              purchaseId: purchase.id,
+              lineNumber:
+                nextLineNumber,
+              productId:
+                product.id,
+              barcode:
+                product.barcode,
+              productCode:
+                product.productCode,
+              productNameAr:
+                product.nameAr,
+              productImage:
+                product.image,
+              color: null,
+              size: null,
+              quantity,
+              freeQuantity: 0,
+              unitCostMinor,
+              lineDiscountMinor: 0,
+              lineTotalMinor:
+                unitCostMinor === null
+                  ? null
+                  : unitCostMinor *
+                    quantity,
+              generalStockBefore: null,
+              generalStockAfter: null,
+              variantStockBefore: null,
+              variantStockAfter: null,
+            });
+        }
+
+        const items = await tx
+          .select()
+          .from(posPurchaseItemsTable)
+          .where(
+            eq(
+              posPurchaseItemsTable.purchaseId,
+              purchase.id,
+            ),
+          )
+          .orderBy(
+            asc(
+              posPurchaseItemsTable.lineNumber,
+            ),
+          );
+
+        let subtotalMinor = 0;
+        let discountMinor = 0;
+
+        for (const item of items) {
+          if (item.unitCostMinor !== null) {
+            subtotalMinor +=
+              item.unitCostMinor *
+              item.quantity;
+
+            discountMinor +=
+              item.lineDiscountMinor;
+          }
+        }
+
+        const totalMinor =
+          subtotalMinor -
+          discountMinor;
+
+        const updatedRows = await tx
+          .update(posPurchasesTable)
+          .set({
+            businessDate,
+            currencyCode,
+            paymentMethod: "credit",
+            subtotalMinor,
+            discountMinor,
+            totalMinor,
+            paidMinor: 0,
+            dueMinor:
+              totalMinor,
+            updatedAt:
+              new Date(),
+          })
+          .where(
+            and(
+              eq(
+                posPurchasesTable.id,
+                purchase.id,
+              ),
+              eq(
+                posPurchasesTable.status,
+                "draft",
+              ),
+            ),
+          )
+          .returning();
+
+        const updatedPurchase =
+          updatedRows[0];
+
+        if (!updatedPurchase) {
+          throw new PurchaseDraftError(
+            "تعذر تحديث مسودة المشتريات",
+            409,
+          );
+        }
+
+        return {
+          purchase:
+            updatedPurchase,
+          items,
+          supplier,
+        };
+      });
+
+    return json(
+      toResponse(
+        result.purchase,
+        result.items,
+        result.supplier,
+      ),
+    );
+  } catch (error) {
+    if (
+      error instanceof PurchaseDraftError
+    ) {
+      return json(
+        { error: error.message },
+        error.status,
+      );
+    }
+
+    console.error(
+      "POS_PURCHASE_DRAFT_APPEND_FAILED",
+      error,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر إضافة الصنف إلى مسودة المورد",
+      },
+      500,
+    );
+  }
+}
+
 async function handleDiscardDraft(
   request: Request,
   db: Db,
@@ -1243,8 +1676,15 @@ export async function handlePurchaseDraftRequest(
   const path =
     new URL(request.url).pathname;
 
+  const isDraftPath =
+    path === "/api/pos/purchases/draft";
+
+  const isAppendItemPath =
+    path === "/api/pos/purchases/draft/append-item";
+
   if (
-    path !== "/api/pos/purchases/draft"
+    !isDraftPath &&
+    !isAppendItemPath
   ) {
     return null;
   }
@@ -1253,7 +1693,10 @@ export async function handlePurchaseDraftRequest(
     return purchaseFeatureDisabledResponse();
   }
 
-  if (request.method === "GET") {
+  if (
+    isDraftPath &&
+    request.method === "GET"
+  ) {
     return handleGetDraft(
       request,
       db,
@@ -1261,7 +1704,25 @@ export async function handlePurchaseDraftRequest(
     );
   }
 
-  if (request.method === "POST") {
+  if (
+    isAppendItemPath &&
+    request.method === "POST"
+  ) {
+    if (!isPurchaseWriteEnabled(env)) {
+      return purchaseWritesDisabledResponse();
+    }
+
+    return handleAppendDraftItem(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    isDraftPath &&
+    request.method === "POST"
+  ) {
     if (!isPurchaseWriteEnabled(env)) {
       return purchaseWritesDisabledResponse();
     }
@@ -1273,7 +1734,10 @@ export async function handlePurchaseDraftRequest(
     );
   }
 
-  if (request.method === "DELETE") {
+  if (
+    isDraftPath &&
+    request.method === "DELETE"
+  ) {
     if (!isPurchaseWriteEnabled(env)) {
       return purchaseWritesDisabledResponse();
     }
