@@ -912,6 +912,49 @@ async function handleSaveDraft(
       "رقم المورد",
     );
 
+    const expectedDraftPublicId =
+      optionalText(
+        payload.draftPublicId,
+        "رقم المسودة",
+        80,
+      );
+
+    const expectedDraftUpdatedAt =
+      optionalText(
+        payload.draftUpdatedAt,
+        "إصدار المسودة",
+        80,
+      );
+
+    let expectedDraftUpdatedAtMs:
+      number | null = null;
+
+    if (expectedDraftUpdatedAt) {
+      expectedDraftUpdatedAtMs =
+        Date.parse(
+          expectedDraftUpdatedAt,
+        );
+
+      if (
+        !Number.isFinite(
+          expectedDraftUpdatedAtMs,
+        )
+      ) {
+        throw new PurchaseDraftError(
+          "إصدار المسودة غير صالح",
+        );
+      }
+    }
+
+    if (
+      expectedDraftPublicId &&
+      expectedDraftUpdatedAtMs === null
+    ) {
+      throw new PurchaseDraftError(
+        "إصدار المسودة مطلوب عند تعديل مسودة موجودة",
+      );
+    }
+
     const supplierInvoiceNumber =
       optionalText(
         payload.supplierInvoiceNumber,
@@ -1033,6 +1076,37 @@ async function handleSaveDraft(
 
         const existing =
           existingRows[0] ?? null;
+
+        if (existing) {
+          if (
+            !expectedDraftPublicId ||
+            expectedDraftUpdatedAtMs === null
+          ) {
+            throw new PurchaseDraftError(
+              "تم إنشاء أو تحديث مسودة لهذا المورد من مكان آخر. أعد تحميل المسودة قبل الحفظ.",
+              409,
+            );
+          }
+
+          if (
+            existing.publicId !==
+              expectedDraftPublicId ||
+            existing.updatedAt.getTime() !==
+              expectedDraftUpdatedAtMs
+          ) {
+            throw new PurchaseDraftError(
+              "تم تحديث مسودة هذا المورد من مكان آخر. أعد تحميلها قبل الحفظ حتى لا تضيع أصناف جديدة.",
+              409,
+            );
+          }
+        } else if (
+          expectedDraftPublicId
+        ) {
+          throw new PurchaseDraftError(
+            "المسودة التي تحاول تعديلها لم تعد موجودة. أعد تحميل الصفحة.",
+            409,
+          );
+        }
 
         const resolvedLines =
           await resolveLines(tx, items);
