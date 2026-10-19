@@ -1545,6 +1545,10 @@ async function handleCreatePurchase(
                 auth.user.id,
               ),
               eq(
+                posPurchasesTable.supplierId,
+                supplierId,
+              ),
+              eq(
                 posPurchasesTable.warehouseKey,
                 warehouseKey,
               ),
@@ -2023,6 +2027,10 @@ async function handleCreatePurchase(
               eq(
                 posPurchasesTable.enteredByUserId,
                 auth.user.id,
+              ),
+              eq(
+                posPurchasesTable.supplierId,
+                supplierId,
               ),
               eq(
                 posPurchasesTable.warehouseKey,
