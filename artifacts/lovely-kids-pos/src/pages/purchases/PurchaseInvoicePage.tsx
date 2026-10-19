@@ -1310,6 +1310,10 @@ export default function PurchaseInvoicePage() {
       const result = await createPosPurchase(token, {
         supplierId,
         idempotencyKey,
+        draftPublicId:
+          savedPurchase?.purchase.status === "draft"
+            ? savedPurchase.purchase.publicId
+            : undefined,
         supplierInvoiceNumber:
           supplierInvoiceNumber.trim() || undefined,
         businessDate,
