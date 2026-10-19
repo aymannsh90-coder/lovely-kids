@@ -1727,11 +1727,7 @@ async function handleCreatePurchase(
 
       if (draftPublicId) {
         const draftRows = await tx
-          .select({
-            id: posPurchasesTable.id,
-            updatedAt:
-              posPurchasesTable.updatedAt,
-          })
+          .select()
           .from(posPurchasesTable)
           .where(
             and(
@@ -1777,6 +1773,34 @@ async function handleCreatePurchase(
         ) {
           throw new PurchaseError(
             "تم تحديث مسودة هذا المورد من مكان آخر. أعد تحميل المسودة قبل الاعتماد حتى لا تضيع أصناف جديدة.",
+            409,
+          );
+        }
+
+        if (
+          lockedDraft.supplierInvoiceNumber !==
+            supplierInvoiceNumber ||
+          lockedDraft.businessDate !==
+            businessDate ||
+          lockedDraft.currencyCode !==
+            currencyCode ||
+          lockedDraft.paymentMethod !==
+            paymentMethod ||
+          lockedDraft.subtotalMinor !==
+            subtotalMinor ||
+          lockedDraft.discountMinor !==
+            discountMinor ||
+          lockedDraft.totalMinor !==
+            totalMinor ||
+          lockedDraft.paidMinor !==
+            paidMinor ||
+          lockedDraft.dueMinor !==
+            dueMinor ||
+          lockedDraft.notes !==
+            notes
+        ) {
+          throw new PurchaseError(
+            "تم تعديل بيانات الفاتورة بعد آخر حفظ للمسودة. احفظ المسودة ثم أعد الاعتماد.",
             409,
           );
         }
@@ -1985,6 +2009,55 @@ async function handleCreatePurchase(
           left.productId - right.productId ||
           left.lineNumber - right.lineNumber,
       );
+
+      const comparableDraftItems =
+        [...lockedDraftItems].sort(
+          (left, right) =>
+            (left.productId ?? Number.MAX_SAFE_INTEGER) -
+              (right.productId ?? Number.MAX_SAFE_INTEGER) ||
+            left.lineNumber - right.lineNumber,
+        );
+
+      if (
+        comparableDraftItems.length !==
+        resolvedItems.length
+      ) {
+        throw new PurchaseError(
+          "أصناف الفاتورة تغيرت بعد آخر حفظ للمسودة. احفظ المسودة ثم أعد الاعتماد.",
+          409,
+        );
+      }
+
+      for (
+        let index = 0;
+        index < resolvedItems.length;
+        index += 1
+      ) {
+        const current =
+          resolvedItems[index];
+        const saved =
+          comparableDraftItems[index];
+
+        if (
+          !current ||
+          !saved ||
+          saved.productId !==
+            current.productId ||
+          saved.quantity !==
+            current.quantity ||
+          saved.freeQuantity !==
+            current.freeQuantity ||
+          saved.unitCostMinor !==
+            current.unitCostMinor ||
+          saved.lineDiscountMinor !==
+            current.lineDiscountMinor
+        ) {
+          throw new PurchaseError(
+            "تفاصيل الأصناف تغيرت بعد آخر حفظ للمسودة. احفظ المسودة ثم أعد الاعتماد.",
+            409,
+          );
+        }
+      }
 
       const purchaseLines: Array<
         typeof posPurchaseItemsTable.$inferInsert
