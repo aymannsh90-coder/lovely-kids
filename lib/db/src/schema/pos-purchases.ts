@@ -186,8 +186,9 @@ export const posPurchasesTable = pgTable(
 
     index("pos_purchases_created_at_idx").on(table.createdAt),
 
-    uniqueIndex("pos_purchases_one_open_draft_per_user_warehouse_idx")
+    uniqueIndex("pos_purchases_one_open_draft_per_supplier_user_warehouse_idx")
       .on(
+        table.supplierId,
         table.enteredByUserId,
         table.warehouseKey,
       )
