@@ -145,7 +145,7 @@ export const posPurchasesTable = pgTable(
       "pos_purchases_void_state_valid",
       sql`
         (
-          ${table.status} = 'completed'
+          ${table.status} in ('draft', 'completed')
           and ${table.voidedAt} is null
           and ${table.voidedByUserId} is null
           and ${table.voidReason} is null
