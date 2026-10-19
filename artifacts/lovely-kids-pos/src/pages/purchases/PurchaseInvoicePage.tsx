@@ -1461,7 +1461,10 @@ export default function PurchaseInvoicePage() {
         size: item.size,
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
-        unitCost: item.unitCost.toFixed(2),
+        unitCost:
+          item.unitCost === null
+            ? ""
+            : item.unitCost.toFixed(2),
         lineDiscount: item.lineDiscount.toFixed(2),
       })),
     );
