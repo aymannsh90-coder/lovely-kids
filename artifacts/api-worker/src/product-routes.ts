@@ -643,6 +643,19 @@ async function handleCreateProduct(
     );
   }
 
+  if (
+    purchaseSupplierId !== null &&
+    (
+      openingQuantity === null ||
+      openingQuantity <= 0
+    )
+  ) {
+    return json(
+      { error: "اختيار المورد يتطلب إدخال كمية للصنف" },
+      400,
+    );
+  }
+
   const openingInventoryValueMinor =
     openingUnitCostMinor !== null &&
     openingQuantity !== null
