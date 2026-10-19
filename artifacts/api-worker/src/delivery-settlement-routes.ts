@@ -313,10 +313,29 @@ async function loadUnsettledOrders(
       const amountMinor =
         amountByOrderId.get(order.id) ?? 0;
 
+      const shippingChargedMinor =
+        Number.isSafeInteger(order.shippingCost) &&
+        order.shippingCost !== null
+          ? order.shippingCost * 100
+          : 0;
+
+      const deliveryCompanyCostMinor =
+        Number.isSafeInteger(order.deliveryCompanyCost) &&
+        order.deliveryCompanyCost !== null
+          ? order.deliveryCompanyCost * 100
+          : 0;
+
+      const deliveryMarginMinor =
+        shippingChargedMinor -
+        deliveryCompanyCostMinor;
+
       return {
         ...order,
         amountMinor,
         amount: amountMinor / 100,
+        shippingChargedMinor,
+        deliveryCompanyCostMinor,
+        deliveryMarginMinor,
       };
     })
     .filter(
@@ -375,6 +394,26 @@ async function handleSummary(
         sum + order.amountMinor,
       0,
     );
+
+  const shippingChargedMinor =
+    unsettledOrders.reduce(
+      (sum, order) =>
+        sum +
+        order.shippingChargedMinor,
+      0,
+    );
+
+  const deliveryCompanyCostMinor =
+    unsettledOrders.reduce(
+      (sum, order) =>
+        sum +
+        order.deliveryCompanyCostMinor,
+      0,
+    );
+
+  const deliveryMarginMinor =
+    shippingChargedMinor -
+    deliveryCompanyCostMinor;
 
   const settlements = await db
     .select()
@@ -448,6 +487,10 @@ async function handleSummary(
     outstandingMinor,
     outstanding:
       outstandingMinor / 100,
+
+    shippingChargedMinor,
+    deliveryCompanyCostMinor,
+    deliveryMarginMinor,
 
     unsettledOrders,
 
