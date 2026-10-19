@@ -881,7 +881,7 @@ export default function PurchaseInvoicePage() {
   function addProduct(
     product: PosProductLookup,
     initialQuantity = 1,
-    initialUnitCost = "0.00",
+    initialUnitCost = "",
     forcedVariant?: {
       barcode: string;
       color: string;
@@ -912,7 +912,7 @@ export default function PurchaseInvoicePage() {
                   line.quantity + quantityToAdd,
                 ),
                 unitCost:
-                  initialUnitCost !== "0.00"
+                  initialUnitCost.trim()
                     ? initialUnitCost
                     : line.unitCost,
               }
@@ -1066,7 +1066,14 @@ export default function PurchaseInvoicePage() {
     }
   }
 
-  function validateInvoice() {
+  function validateInvoice(
+    options?: {
+      allowUnknownCost?: boolean;
+    },
+  ) {
+    const allowUnknownCost =
+      options?.allowUnknownCost === true;
+
     if (!supplierId) {
       return "اختر المورد.";
     }
@@ -1081,6 +1088,7 @@ export default function PurchaseInvoicePage() {
 
     let gross = 0;
     let discounts = 0;
+    let hasUnknownCost = false;
 
     for (const line of lines) {
       if (
@@ -1100,20 +1108,39 @@ export default function PurchaseInvoicePage() {
         return `الكمية المجانية للمنتج ${line.product.nameAr} غير صالحة`;
       }
 
-      const unitCostMinor = moneyToMinor(line.unitCost);
+      const rawUnitCost =
+        line.unitCost.trim();
+
       const discountMinor = moneyToMinor(
         line.lineDiscount,
       );
-
-      if (unitCostMinor === null) {
-        return `تكلفة ${line.product.nameAr} غير صالحة`;
-      }
 
       if (discountMinor === null) {
         return `خصم ${line.product.nameAr} غير صالح`;
       }
 
-      const lineGross = unitCostMinor * line.quantity;
+      if (!rawUnitCost) {
+        if (!allowUnknownCost) {
+          return `تكلفة ${line.product.nameAr} غير مدخلة`;
+        }
+
+        if (discountMinor !== 0) {
+          return `لا يمكن إدخال خصم للمنتج ${line.product.nameAr} قبل إدخال تكلفته`;
+        }
+
+        hasUnknownCost = true;
+        continue;
+      }
+
+      const unitCostMinor =
+        moneyToMinor(rawUnitCost);
+
+      if (unitCostMinor === null) {
+        return `تكلفة ${line.product.nameAr} غير صالحة`;
+      }
+
+      const lineGross =
+        unitCostMinor * line.quantity;
 
       if (
         !Number.isSafeInteger(lineGross) ||
@@ -1128,18 +1155,34 @@ export default function PurchaseInvoicePage() {
 
     const invoiceDiscountMinor =
       moneyToMinor(invoiceDiscount);
-    const strictPaidMinor = moneyToMinor(paid);
+    const strictPaidMinor =
+      moneyToMinor(paid);
 
     if (invoiceDiscountMinor === null) {
       return "خصم الفاتورة غير صالح";
     }
 
-    if (invoiceDiscountMinor > gross - discounts) {
-      return "خصم الفاتورة أكبر من صافي الأصناف";
-    }
-
     if (strictPaidMinor === null) {
       return "المبلغ المدفوع غير صالح";
+    }
+
+    if (hasUnknownCost) {
+      if (invoiceDiscountMinor !== 0) {
+        return "أكمل تكاليف الأصناف قبل إدخال خصم على الفاتورة.";
+      }
+
+      if (
+        paymentMethod !== "credit" ||
+        strictPaidMinor !== 0
+      ) {
+        return "المسودة التي تحتوي تكلفة غير مدخلة تُحفظ آجل بدون دفعة حتى اكتمال التكلفة.";
+      }
+
+      return null;
+    }
+
+    if (invoiceDiscountMinor > gross - discounts) {
+      return "خصم الفاتورة أكبر من صافي الأصناف";
     }
 
     const finalTotal =
@@ -1254,7 +1297,10 @@ export default function PurchaseInvoicePage() {
       return;
     }
 
-    const validationError = validateInvoice();
+    const validationError =
+      validateInvoice({
+        allowUnknownCost: true,
+      });
 
     if (validationError) {
       setError(validationError);
