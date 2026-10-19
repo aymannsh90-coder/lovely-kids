@@ -13,8 +13,7 @@ WITH target_orders AS (
   WHERE o.shipping_zone = 'الضفة الغربية'
     AND o.fulfillment_method = 'delivery'
     AND o.status IN ('delivering', 'done')
-    AND o.delivery_company_cost IS NOT NULL
-    AND o.delivery_company_cost <> 19
+    AND o.delivery_company_cost = 20
 ),
 posted_settlements AS (
   SELECT
