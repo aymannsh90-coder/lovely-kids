@@ -2176,6 +2176,13 @@ export default function AdminOrdersScreen() {
       return;
     }
 
+    if (candidates.length > 10) {
+      showError(
+        "يوجد أكثر من 10 طلبات. اختر حتى 10 طلبات يدويًا للدمج.",
+      );
+      return;
+    }
+
     setMergeSelectedIds(
       new Set(
         candidates.map(
