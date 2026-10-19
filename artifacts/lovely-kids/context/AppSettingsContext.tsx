@@ -289,10 +289,31 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   const fetchSettings = useCallback(async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), INITIAL_FETCH_TIMEOUT_MS);
-      const res = await fetch(`${API_BASE}/api/settings`, { signal: controller.signal });
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        INITIAL_FETCH_TIMEOUT_MS,
+      );
+
+      const authToken =
+        await getAuthTokenRef.current();
+
+      const res = await fetch(
+        `${API_BASE}/api/settings`,
+        {
+          signal: controller.signal,
+          headers: authToken
+            ? {
+                Authorization:
+                  `Bearer ${authToken}`,
+              }
+            : undefined,
+        },
+      );
+
       clearTimeout(timeoutId);
+
       if (!res.ok) return;
+
       const data = await res.json();
       applyRemote(data);
     } catch {
