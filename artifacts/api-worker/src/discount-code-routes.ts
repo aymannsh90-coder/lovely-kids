@@ -440,6 +440,8 @@ async function handleList(
           ordersTable.discountCodeAmount,
         items:
           ordersTable.items,
+        mergedIntoOrderId:
+          ordersTable.mergedIntoOrderId,
       })
       .from(
         ordersTable,
@@ -449,6 +451,51 @@ async function handleList(
           ordersTable.discountCodeId,
         ),
       );
+
+  const mergedMasterIds =
+    Array.from(
+      new Set(
+        orderRows
+          .map(
+            (order) =>
+              order.mergedIntoOrderId,
+          )
+          .filter(
+            (value): value is number =>
+              value !== null,
+          ),
+      ),
+    );
+
+  const mergedMasterStatusRows =
+    mergedMasterIds.length > 0
+      ? await db
+          .select({
+            id:
+              ordersTable.id,
+            status:
+              ordersTable.status,
+          })
+          .from(
+            ordersTable,
+          )
+          .where(
+            inArray(
+              ordersTable.id,
+              mergedMasterIds,
+            ),
+          )
+      : [];
+
+  const mergedMasterStatusById =
+    new Map(
+      mergedMasterStatusRows.map(
+        (row) => [
+          row.id,
+          row.status,
+        ],
+      ),
+    );
 
   const orderIds =
     orderRows.map(
@@ -596,8 +643,18 @@ async function handleList(
 
     stats.usageCount += 1;
 
+    const effectiveStatus =
+      order.status === "merged" &&
+      order.mergedIntoOrderId !== null
+        ? (
+            mergedMasterStatusById.get(
+              order.mergedIntoOrderId,
+            ) ?? "merged"
+          )
+        : order.status;
+
     if (
-      order.status ===
+      effectiveStatus ===
         "cancelled"
     ) {
       stats.cancelledOrdersCount +=
@@ -647,7 +704,7 @@ async function handleList(
     }
 
     if (
-      order.status !==
+      effectiveStatus !==
         "done"
     ) {
       continue;
