@@ -32,6 +32,9 @@ import {
   consumeProductCost,
   restoreExactProductCost,
 } from "./inventory-cost-engine";
+import {
+  getPendingPurchaseQuantityForProduct,
+} from "./purchase-draft-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -3027,6 +3030,31 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           );
 
         if (!costResult.tracked) {
+          if (
+            costResult.reason ===
+              "insufficient_accounting_quantity" ||
+            costResult.reason ===
+              "uninitialized"
+          ) {
+            const pendingPurchaseQuantity =
+              await getPendingPurchaseQuantityForProduct(
+                tx,
+                {
+                  productId:
+                    item.productId,
+                },
+              );
+
+            if (
+              pendingPurchaseQuantity > 0
+            ) {
+              throw new PosSaleError(
+                "يوجد لهذا المنتج كمية مشتريات غير معتمدة محاسبيًا. اعتمد فاتورة المورد أولًا قبل بيع هذه الكمية.",
+                409,
+              );
+            }
+          }
+
           console.warn(
             "POS_SALE_COST_UNTRACKED",
             {
