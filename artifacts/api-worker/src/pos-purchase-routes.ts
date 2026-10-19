@@ -9,6 +9,7 @@ import {
   productBarcodesTable,
   productsTable,
   suppliersTable,
+  type ColorVariant,
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, gt, lt, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
