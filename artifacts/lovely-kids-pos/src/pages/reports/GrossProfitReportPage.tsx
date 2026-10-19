@@ -376,14 +376,14 @@ function ChannelCard({
             />
 
             <Metric
-              label="أثر التوصيل"
+              label="صافي ربح/خسارة التوصيل"
               value={formatReportMoney(
                 data.deliveryImpactMinor,
               )}
             />
 
             <Metric
-              label="الربح بعد أثر التوصيل"
+              label="مجمل الربح بعد التوصيل"
               value={
                 data.profitAfterDeliveryMinor ===
                 null
