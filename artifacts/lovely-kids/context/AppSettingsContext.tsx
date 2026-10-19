@@ -46,7 +46,15 @@ export interface AboutInfo {
 
 export interface ShippingZone {
   label: string;
+
+  // السعر الذي يظهر للزبون ويُستخدم كأساس لعرض التوصيل.
   cost: number;
+
+  // التكلفة الفعلية التي تحاسبنا بها شركة التوصيل.
+  // لا تظهر للزبون ولا تدخل في احتساب عرض التوصيل.
+  companyCost?: number;
+
+  // سعر التوصيل للزبون أثناء العرض.
   promoCost?: number;
 }
 
@@ -197,9 +205,24 @@ const DEFAULT_SETTINGS: AppSettings = {
     ],
   },
   shippingZones: [
-    { label: "الضفة الغربية", cost: 20, promoCost: 20 },
-    { label: "القدس", cost: 30, promoCost: 30 },
-    { label: "أراضي الـ48", cost: 70, promoCost: 70 },
+    {
+      label: "الضفة الغربية",
+      cost: 20,
+      companyCost: 20,
+      promoCost: 20,
+    },
+    {
+      label: "القدس",
+      cost: 30,
+      companyCost: 30,
+      promoCost: 30,
+    },
+    {
+      label: "أراضي الـ48",
+      cost: 70,
+      companyCost: 70,
+      promoCost: 70,
+    },
   ],
   shippingPromotionEnabled: false,
   shippingPromotionThreshold: 500,
