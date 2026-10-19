@@ -9,6 +9,27 @@ ALTER TABLE pos_purchases
   ADD CONSTRAINT pos_purchases_status_valid
   CHECK (status IN ('draft', 'completed', 'voided'));
 
+ALTER TABLE pos_purchases
+  DROP CONSTRAINT IF EXISTS pos_purchases_void_state_valid;
+
+ALTER TABLE pos_purchases
+  ADD CONSTRAINT pos_purchases_void_state_valid
+  CHECK (
+    (
+      status IN ('draft', 'completed')
+      AND voided_at IS NULL
+      AND voided_by_user_id IS NULL
+      AND void_reason IS NULL
+    )
+    OR
+    (
+      status = 'voided'
+      AND voided_at IS NOT NULL
+      AND voided_by_user_id IS NOT NULL
+      AND length(btrim(void_reason)) > 0
+    )
+  );
+
 CREATE UNIQUE INDEX IF NOT EXISTS pos_purchases_one_open_draft_per_user_warehouse_idx
   ON pos_purchases (entered_by_user_id, warehouse_key)
   WHERE status = 'draft';
