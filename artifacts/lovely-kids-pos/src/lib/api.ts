@@ -337,8 +337,8 @@ export interface PosSaleItemResult {
   soldUnitPrice: number;
   lineDiscountMinor: number;
   lineDiscount: number;
-  lineTotalMinor: number | null;
-  lineTotal: number | null;
+  lineTotalMinor: number;
+  lineTotal: number;
   generalStockBefore: number | null;
   generalStockAfter: number | null;
   variantStockBefore: number | null;
@@ -3203,8 +3203,8 @@ export interface PosPurchaseItemResult {
   unitCost: number | null;
   lineDiscountMinor: number;
   lineDiscount: number;
-  lineTotalMinor: number;
-  lineTotal: number;
+  lineTotalMinor: number | null;
+  lineTotal: number | null;
   generalStockBefore: number | null;
   generalStockAfter: number | null;
   variantStockBefore: number | null;
