@@ -904,6 +904,134 @@ export async function restoreExactProductCost(
 }
 
 /**
+ * Add an exact acquisition value to inventory and initialize cost
+ * accounting when this is the first approved cost movement.
+ *
+ * IMPORTANT: when no cost state exists, the caller must first prove
+ * that the product's physical quantity is fully explained by pending
+ * purchase/opening quantities. This helper intentionally does not
+ * inspect physical product stock on its own.
+ */
+export async function addExactProductCostOrInitialize(
+  tx: Tx,
+  input: {
+    productId: number;
+    quantity: number;
+    costTotalMinor: number;
+    costQuality: CostQuality;
+  } & LedgerMetadata,
+): Promise<TrackedCostResult> {
+  assertPositiveInteger(
+    input.quantity,
+    "quantity",
+  );
+
+  assertNonNegativeDbInteger(
+    input.costTotalMinor,
+    "costTotalMinor",
+  );
+
+  const state =
+    await lockCostState(
+      tx,
+      input.productId,
+    );
+
+  if (state) {
+    const restored =
+      await restoreExactProductCost(
+        tx,
+        input,
+      );
+
+    if (!restored.tracked) {
+      throw new InventoryCostError(
+        "Failed to add exact product cost to initialized state",
+      );
+    }
+
+    return restored;
+  }
+
+  const referenceUnitCostMinor =
+    deriveUnitCostMinor(
+      input.costTotalMinor,
+      input.quantity,
+    );
+
+  await tx
+    .insert(productCostStateTable)
+    .values({
+      productId:
+        input.productId,
+
+      quantityOnHand:
+        input.quantity,
+
+      inventoryValueMinor:
+        input.costTotalMinor,
+
+      referenceUnitCostMinor,
+
+      costQuality:
+        input.costQuality,
+    });
+
+  await writeLedger(
+    tx,
+    {
+      productId:
+        input.productId,
+
+      quantityDelta:
+        input.quantity,
+
+      inventoryValueDeltaMinor:
+        input.costTotalMinor,
+
+      quantityAfter:
+        input.quantity,
+
+      inventoryValueAfterMinor:
+        input.costTotalMinor,
+
+      costQuality:
+        input.costQuality,
+    },
+    input,
+  );
+
+  return {
+    tracked: true,
+
+    productId:
+      input.productId,
+
+    quantity:
+      input.quantity,
+
+    unitCostMinor:
+      referenceUnitCostMinor,
+
+    costTotalMinor:
+      input.costTotalMinor,
+
+    costQuality:
+      input.costQuality,
+
+    quantityBefore: 0,
+    quantityAfter:
+      input.quantity,
+
+    inventoryValueBeforeMinor: 0,
+    inventoryValueAfterMinor:
+      input.costTotalMinor,
+
+    referenceUnitCostMinor,
+  };
+}
+
+/**
  * Add stock with no explicit acquisition cost.
  *
  * Uses the current average/reference product cost as an estimate.
