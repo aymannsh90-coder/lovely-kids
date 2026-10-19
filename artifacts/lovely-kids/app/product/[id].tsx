@@ -30,6 +30,7 @@ import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
 import { trackMetaEvent } from "@/utils/metaPixel";
 import { trackProductAnalyticsEvent } from "@/utils/productAnalytics";
+import { isProductFullyUnavailable } from "@/utils/cartStock";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -209,7 +210,15 @@ function similarityScore(current: Product, candidate: Product): number {
 }
 
 export default function ProductDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, cartEdit, cartSize, cartColor } = useLocalSearchParams<{
+    id: string;
+    cartEdit?: string;
+    cartSize?: string;
+    cartColor?: string;
+  }>();
+  const isCartEditMode = cartEdit === "1";
+  const originalCartSize = cartSize || undefined;
+  const originalCartColor = cartColor || undefined;
   const colors = useColors();
   const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -233,7 +242,7 @@ export default function ProductDetailScreen() {
   const carouselPageWidth = isDesktopWeb
     ? desktopGalleryWidth
     : SCREEN_WIDTH;
-  const { addItem, items } = useCart();
+  const { addItem, replaceItemVariant, items } = useCart();
   const {
     requestGeneralPrompt,
     setGeneralPromptBlocked,
@@ -259,11 +268,15 @@ export default function ProductDetailScreen() {
   }, [product, products]);
 
   const hasColorVariants = !!product?.colorVariants && product.colorVariants.length > 0;
-  const [selectedColor, setSelectedColor] = useState<string | undefined>(undefined);
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(
+    isCartEditMode ? originalCartColor : undefined,
+  );
   const activeColorVariant = hasColorVariants
     ? product!.colorVariants!.find((c) => c.color === selectedColor)
     : undefined;
-  const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
+  const [selectedSize, setSelectedSize] = useState<string | undefined>(
+    isCartEditMode ? originalCartSize : undefined,
+  );
   const [added, setAdded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [cartModal, setCartModal] = useState(false);
@@ -290,9 +303,56 @@ export default function ProductDetailScreen() {
   const flatRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    setSelectedSize(undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedColor]);
+    if (!product || !isCartEditMode) return;
+
+    if (product.colorVariants?.length) {
+      const originalVariant = originalCartColor
+        ? product.colorVariants.find(
+            (variant) => variant.color === originalCartColor,
+          )
+        : undefined;
+
+      if (!originalVariant) {
+        setSelectedColor(undefined);
+        setSelectedSize(undefined);
+        return;
+      }
+
+      setSelectedColor(originalVariant.color);
+
+      if (originalVariant.sizes.length > 0) {
+        const originalSize = originalCartSize
+          ? originalVariant.sizes.find(
+              (size) => size.size === originalCartSize,
+            )
+          : undefined;
+
+        setSelectedSize(
+          originalSize && !isSizeOutOfStock(originalSize)
+            ? originalSize.size
+            : undefined,
+        );
+      } else {
+        setSelectedSize(undefined);
+      }
+
+      return;
+    }
+
+    setSelectedColor(undefined);
+
+    const sizes = product.sizes ?? [];
+    setSelectedSize(
+      originalCartSize && sizes.includes(originalCartSize)
+        ? originalCartSize
+        : undefined,
+    );
+  }, [
+    product?.id,
+    isCartEditMode,
+    originalCartColor,
+    originalCartSize,
+  ]);
 
   useEffect(() => {
     if (!product) return;
@@ -363,7 +423,7 @@ export default function ProductDetailScreen() {
   ];
 
   const wishlisted = isWishlisted(product.id);
-  const isOutOfStock = product.stock !== undefined && product.stock !== null && product.stock <= 0;
+  const isOutOfStock = isProductFullyUnavailable(product);
   const discountPct = calcDiscount(product.price, product.originalPrice);
 
   const needsColor = hasColorVariants && !activeColorVariant?.color;
@@ -413,6 +473,63 @@ export default function ProductDetailScreen() {
         item.size === selectedSize &&
         item.color === selectedColor,
     );
+
+    if (isCartEditMode) {
+      const sourceItem = items.find(
+        (item) =>
+          item.id === product.id &&
+          item.size === originalCartSize &&
+          item.color === originalCartColor,
+      );
+
+      if (!sourceItem) {
+        setSelectionAlert(
+          "تعذر العثور على العنصر القديم في السلة. ارجع إلى السلة وحاول مرة أخرى.",
+        );
+        return;
+      }
+
+      const targetIsSource =
+        sourceItem.size === selectedSize &&
+        sourceItem.color === selectedColor;
+
+      const existingTarget = targetIsSource ? undefined : existing;
+      const requiredStock =
+        sourceItem.quantity + (existingTarget?.quantity ?? 0);
+
+      if (
+        availableStock !== null &&
+        requiredStock > availableStock
+      ) {
+        showStockLimit(availableStock);
+        return;
+      }
+
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      ).catch(() => {});
+
+      replaceItemVariant(
+        {
+          id: product.id,
+          size: originalCartSize,
+          color: originalCartColor,
+        },
+        {
+          id: product.id,
+          name: product.nameAr,
+          price: product.price,
+          image: activeColorVariant?.image ?? product.image,
+          category: product.category,
+          size: selectedSize,
+          color: selectedColor,
+        },
+        sourceItem.quantity,
+      );
+
+      router.back();
+      return;
+    }
 
     const performAdd = () => {
       Haptics.notificationAsync(
@@ -666,6 +783,42 @@ export default function ProductDetailScreen() {
             {product.nameAr}
           </Text>
 
+          {isCartEditMode ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: colors.primary + "55",
+                backgroundColor: colors.primary + "0F",
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                marginBottom: 14,
+                gap: 4,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.foreground,
+                  fontSize: 14,
+                  fontWeight: "800",
+                  textAlign: "right",
+                }}
+              >
+                تعديل اختيار محفوظ في السلة
+              </Text>
+              <Text
+                style={{
+                  color: colors.mutedForeground,
+                  fontSize: 12,
+                  lineHeight: 20,
+                  textAlign: "right",
+                }}
+              >
+                اختاري لونًا أو مقاسًا متوفرًا، ثم اضغطي «تم التعديل». لن تتم إضافة منتج جديد إلى السلة.
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.priceRow}>
             <Text
               style={[
@@ -697,6 +850,9 @@ export default function ProductDetailScreen() {
                     onPress={() => {
                       if (isOutOfStock) return;
 
+                      if (selectedColor !== cv.color) {
+                        setSelectedSize(undefined);
+                      }
                       setSelectedColor(cv.color);
 
                       if (cv.image) {
@@ -1008,7 +1164,7 @@ export default function ProductDetailScreen() {
               ]}
             >
               <Ionicons
-                name="bag-add-outline"
+                name={isCartEditMode ? "checkmark-circle-outline" : "bag-add-outline"}
                 size={20}
                 color="#fff"
               />
@@ -1018,7 +1174,7 @@ export default function ProductDetailScreen() {
                   { color: "#fff" },
                 ]}
               >
-                أضف إلى السلة
+                {isCartEditMode ? "تم التعديل" : "أضف إلى السلة"}
               </Text>
             </Pressable>
           </>

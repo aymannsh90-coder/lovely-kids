@@ -30,7 +30,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useColors } from "@/hooks/useColors";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
-import { getAvailableStock } from "@/data/products";
+import { type Product, getAvailableStock } from "@/data/products";
+import { getCartStockStatus } from "@/utils/cartStock";
 import { confirmRemoveFromCart, showStockLimit } from "@/utils/cartPrompts";
 
 import { API_BASE } from "@/constants/api";
@@ -225,7 +226,7 @@ export default function CartScreen() {
   const { settings } = useAppSettings();
   const { user, updateProfile, getAuthToken } = useAuth();
   const { items, updateQuantity, removeItem, totalPrice, totalItems, clearCart } = useCart();
-  const { products } = useVisibleProducts();
+  const { products, refreshProducts } = useVisibleProducts();
 
   const [step, setStep] = useState<Step>("cart");
   const [loading, setLoading] = useState(false);
@@ -250,10 +251,22 @@ export default function CartScreen() {
   const [discountCodeError, setDiscountCodeError] = useState<string | null>(null);
   const [checkoutItemsExpanded, setCheckoutItemsExpanded] = useState(false);
   const [checkoutCouponExpanded, setCheckoutCouponExpanded] = useState(false);
+  const [cartStockSnapshot, setCartStockSnapshot] = useState<Product[] | null>(null);
+  const [cartStockChecking, setCartStockChecking] = useState(false);
   const checkoutSubmitLock = useRef(false);
 
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 84 + 8 : insets.bottom + 49 + 8;
+
+  useEffect(() => {
+    if (step !== "cart" || items.length === 0) return;
+
+    void refreshProducts();
+  }, [step, items.length, refreshProducts]);
+
+  useEffect(() => {
+    setCartStockSnapshot(null);
+  }, [items]);
 
   useEffect(() => {
     if (step === "checkout" && user) {
@@ -528,11 +541,26 @@ export default function CartScreen() {
           eventId: `order-${order.id}`,
         });
       } catch (error) {
-        Alert.alert(
-          "تعذّر إنشاء الطلب",
+        const errorMessage =
           error instanceof Error
             ? error.message
-            : "تحقق من اتصال الإنترنت وحاول مرة أخرى"
+            : "تحقق من اتصال الإنترنت وحاول مرة أخرى";
+        const isStockError =
+          /غير متوفر|لم يعد متوفر|المخزون/.test(errorMessage);
+
+        if (isStockError) {
+          setCartStockSnapshot(null);
+          void refreshProducts();
+          setStep("cart");
+        }
+
+        Alert.alert(
+          isStockError
+            ? "تغيّر المخزون"
+            : "تعذّر إنشاء الطلب",
+          isStockError
+            ? `${errorMessage}\n\nراجع المنتج المعلّم في السلة، ويمكنك اختيار لون أو مقاس بديل إن كان متوفرًا.`
+            : errorMessage,
         );
         checkoutSubmitLock.current = false;
         setLoading(false);
@@ -609,6 +637,75 @@ export default function CartScreen() {
     setTimeout(() => {
       Linking.openURL(`https://wa.me/${whatsapp}?text=${message}`).catch(() => {});
     }, 800);
+  };
+
+  const fetchFreshCartProducts = async (): Promise<Product[]> => {
+    const response = await fetch(`${API_BASE}/api/products?cartStockCheck=${Date.now()}`);
+
+    if (!response.ok) {
+      throw new Error("تعذر تحديث المخزون");
+    }
+
+    const freshProducts = (await response.json()) as Product[];
+
+    if (!Array.isArray(freshProducts)) {
+      throw new Error("بيانات المخزون غير صالحة");
+    }
+
+    setCartStockSnapshot(freshProducts);
+    return freshProducts;
+  };
+
+  const handleContinueToCheckout = async () => {
+    if (cartStockChecking) return;
+
+    setCartStockChecking(true);
+
+    try {
+      let validationProducts = products;
+
+      try {
+        validationProducts = await fetchFreshCartProducts();
+      } catch {
+        // The backend still performs the final authoritative stock check.
+        // If the catalog refresh fails briefly, use the latest in-memory data.
+      }
+
+      if (validationProducts.length > 0) {
+        const hasStockIssue = items.some((item) => {
+          const product = validationProducts.find(
+            (entry) => entry.id === item.id,
+          );
+
+          return !getCartStockStatus(item, product).valid;
+        });
+
+        if (hasStockIssue) {
+          Alert.alert(
+            "راجعي السلة",
+            "بعض المنتجات أو الألوان أو المقاسات في سلتك لم تعد متوفرة بنفس الاختيار. عدّلي المنتجات المعلّمة أولًا ثم تابعي الطلب.",
+          );
+          return;
+        }
+      }
+
+      trackMetaEvent("InitiateCheckout", {
+        content_ids: items.map((item) => item.id),
+        contents: items.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+          item_price: item.price,
+        })),
+        content_type: "product",
+        num_items: totalItems,
+        value: totalPrice,
+        currency: "ILS",
+      });
+
+      setStep("checkout");
+    } finally {
+      setCartStockChecking(false);
+    }
   };
 
   const handleUploadProof = async () => {
@@ -1719,6 +1816,21 @@ export default function CartScreen() {
     );
   }
 
+  const cartProducts =
+    cartStockSnapshot && cartStockSnapshot.length > 0
+      ? cartStockSnapshot
+      : products;
+  const hasCartStockData = cartProducts.length > 0;
+  const cartHasKnownStockIssues =
+    hasCartStockData &&
+    items.some((item) => {
+      const product = cartProducts.find(
+        (entry) => entry.id === item.id,
+      );
+
+      return !getCartStockStatus(item, product).valid;
+    });
+
   const cartPromotionCanStack =
     !appliedDiscountCode ||
     appliedDiscountCode.stackWithShippingPromotion;
@@ -1811,106 +1923,250 @@ export default function CartScreen() {
                   }
                 : null,
             ]}
-            renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.cartItem,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                  },
-                  isDesktopWeb ? styles.desktopCartItem : null,
-                ]}
-              >
-                <View style={styles.itemRight}>
-                  <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
-                  {(item.size || item.color) && (
-                    <Text style={[styles.itemSize, { color: colors.mutedForeground }]}>
-                      {[item.color ? `اللون: ${item.color}` : null, item.size ? `المقاس: ${item.size}` : null]
-                        .filter(Boolean)
-                        .join(" — ")}
-                    </Text>
-                  )}
-                  <Text style={[styles.itemPrice, { color: colors.primary }]}>
-                    {item.price * item.quantity} ₪
-                  </Text>
-                  <Pressable
-                    onPress={() =>
-                      confirmRemoveFromCart(() =>
-                        removeItem(item.id, item.size, item.color),
-                      )
-                    }
-                    style={styles.deleteBtn}
-                  >
-                    <Ionicons name="trash-outline" size={15} color="#dc2626" />
-                    <Text style={styles.deleteText}>حذف</Text>
-                  </Pressable>
-                </View>
-                <Image
-                  source={{ uri: item.image }}
-                  style={[
-                    styles.itemImage,
-                    isDesktopWeb ? styles.desktopItemImage : null,
-                  ]}
-                />
+            renderItem={({ item }) => {
+              const product = hasCartStockData
+                ? cartProducts.find((entry) => entry.id === item.id)
+                : undefined;
+              const stockStatus = hasCartStockData
+                ? getCartStockStatus(item, product)
+                : {
+                    valid: true,
+                    kind: null,
+                    message: null,
+                    detail: null,
+                    hasAlternatives: false,
+                    availableQuantity: null,
+                  };
+              const hasStockIssue = !stockStatus.valid;
+
+              return (
                 <View
                   style={[
-                    styles.quantityRow,
-                    isDesktopWeb ? styles.desktopQuantityRow : null,
+                    styles.cartItem,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: hasStockIssue ? "#EF4444" : colors.border,
+                      borderWidth: hasStockIssue ? 1.5 : 1,
+                    },
+                    isDesktopWeb ? styles.desktopCartItem : null,
                   ]}
                 >
-                  <Pressable
-                    onPress={() => {
-                      const product = products.find(
-                        (entry) => entry.id === item.id,
-                      );
-                      const availableStock = product
-                        ? getAvailableStock(product, item.size, item.color)
-                        : null;
+                  <View style={styles.itemRight}>
+                    <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
+                    {(item.size || item.color) && (
+                      <Text style={[styles.itemSize, { color: colors.mutedForeground }]}>
+                        {[item.color ? `اللون: ${item.color}` : null, item.size ? `المقاس: ${item.size}` : null]
+                          .filter(Boolean)
+                          .join(" — ")}
+                      </Text>
+                    )}
+                    <Text style={[styles.itemPrice, { color: colors.primary }]}>
+                      {item.price * item.quantity} ₪
+                    </Text>
 
-                      if (
-                        availableStock !== null &&
-                        item.quantity >= availableStock
-                      ) {
-                        showStockLimit(availableStock);
-                        return;
-                      }
+                    {hasStockIssue ? (
+                      <View
+                        style={{
+                          backgroundColor: "#FEF2F2",
+                          borderColor: "#FCA5A5",
+                          borderWidth: 1,
+                          borderRadius: 10,
+                          paddingHorizontal: 10,
+                          paddingVertical: 8,
+                          marginTop: 6,
+                          gap: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#B91C1C",
+                            fontSize: 12,
+                            fontWeight: "900",
+                            textAlign: "right",
+                          }}
+                        >
+                          {stockStatus.message}
+                        </Text>
+                        {stockStatus.detail ? (
+                          <Text
+                            style={{
+                              color: "#7F1D1D",
+                              fontSize: 11,
+                              lineHeight: 18,
+                              textAlign: "right",
+                            }}
+                          >
+                            {stockStatus.detail}
+                          </Text>
+                        ) : null}
 
-                      updateQuantity(
-                        item.id,
-                        item.quantity + 1,
-                        item.size,
-                        item.color,
-                      );
-                    }}
-                    style={[styles.qtyBtn, { backgroundColor: colors.primary }]}
-                  >
-                    <Ionicons name="add" size={16} color="#fff" />
-                  </Pressable>
-                  <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
-                  <Pressable
-                    onPress={() => {
-                      if (item.quantity === 1) {
+                        <View
+                          style={{
+                            flexDirection: "row-reverse",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            marginTop: 4,
+                          }}
+                        >
+                          {stockStatus.kind === "quantity_exceeds_stock" &&
+                          stockStatus.availableQuantity !== null &&
+                          stockStatus.availableQuantity > 0 ? (
+                            <Pressable
+                              onPress={() =>
+                                updateQuantity(
+                                  item.id,
+                                  stockStatus.availableQuantity!,
+                                  item.size,
+                                  item.color,
+                                )
+                              }
+                              style={{
+                                backgroundColor: "#fff",
+                                borderColor: "#FCA5A5",
+                                borderWidth: 1,
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#B91C1C",
+                                  fontWeight: "800",
+                                  fontSize: 11,
+                                }}
+                              >
+                                تحديث للكمية المتوفرة
+                              </Text>
+                            </Pressable>
+                          ) : null}
+
+                          {stockStatus.hasAlternatives && product ? (
+                            <Pressable
+                              onPress={() =>
+                                router.push({
+                                  pathname: "/product/[id]",
+                                  params: {
+                                    id: item.id,
+                                    cartEdit: "1",
+                                    cartSize: item.size ?? "",
+                                    cartColor: item.color ?? "",
+                                  },
+                                })
+                              }
+                              style={{
+                                backgroundColor: colors.primary,
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#fff",
+                                  fontWeight: "900",
+                                  fontSize: 11,
+                                }}
+                              >
+                                تعديل الاختيار
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : null}
+
+                    <Pressable
+                      onPress={() =>
                         confirmRemoveFromCart(() =>
                           removeItem(item.id, item.size, item.color),
-                        );
-                        return;
+                        )
                       }
-
-                      updateQuantity(
-                        item.id,
-                        item.quantity - 1,
-                        item.size,
-                        item.color,
-                      );
-                    }}
-                    style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
+                      style={styles.deleteBtn}
+                    >
+                      <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                      <Text style={styles.deleteText}>حذف</Text>
+                    </Pressable>
+                  </View>
+                  <Image
+                    source={{ uri: item.image }}
+                    style={[
+                      styles.itemImage,
+                      isDesktopWeb ? styles.desktopItemImage : null,
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.quantityRow,
+                      isDesktopWeb ? styles.desktopQuantityRow : null,
+                    ]}
                   >
-                    <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
-                  </Pressable>
+                    <Pressable
+                      disabled={hasStockIssue}
+                      onPress={() => {
+                        const availableStock = product
+                          ? getAvailableStock(product, item.size, item.color)
+                          : null;
+
+                        if (
+                          availableStock !== null &&
+                          item.quantity >= availableStock
+                        ) {
+                          showStockLimit(availableStock);
+                          return;
+                        }
+
+                        updateQuantity(
+                          item.id,
+                          item.quantity + 1,
+                          item.size,
+                          item.color,
+                        );
+                      }}
+                      style={[
+                        styles.qtyBtn,
+                        {
+                          backgroundColor: hasStockIssue
+                            ? colors.muted
+                            : colors.primary,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="add"
+                        size={16}
+                        color={
+                          hasStockIssue
+                            ? colors.mutedForeground
+                            : "#fff"
+                        }
+                      />
+                    </Pressable>
+                    <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
+                    <Pressable
+                      onPress={() => {
+                        if (item.quantity === 1) {
+                          confirmRemoveFromCart(() =>
+                            removeItem(item.id, item.size, item.color),
+                          );
+                          return;
+                        }
+
+                        updateQuantity(
+                          item.id,
+                          item.quantity - 1,
+                          item.size,
+                          item.color,
+                        );
+                      }}
+                      style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
+                    >
+                      <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-            )}
+              );
+            }}
           />
 
           <View
@@ -2127,26 +2383,49 @@ export default function CartScreen() {
               </View>
             ) : null}
             <Pressable
-              onPress={() => {
-                trackMetaEvent("InitiateCheckout", {
-                  content_ids: items.map((item) => item.id),
-                  contents: items.map((item) => ({
-                    id: item.id,
-                    quantity: item.quantity,
-                    item_price: item.price,
-                  })),
-                  content_type: "product",
-                  num_items: totalItems,
-                  value: totalPrice,
-                  currency: "ILS",
-                });
-
-                setStep("checkout");
-              }}
-              style={[styles.orderBtn, { backgroundColor: colors.primary }]}
+              onPress={handleContinueToCheckout}
+              disabled={cartStockChecking}
+              style={[
+                styles.orderBtn,
+                {
+                  backgroundColor: cartStockChecking
+                    ? colors.muted
+                    : cartHasKnownStockIssues
+                      ? "#DC2626"
+                      : colors.primary,
+                },
+              ]}
             >
-              <Ionicons name="arrow-back" size={20} color="#fff" />
-              <Text style={styles.orderBtnText}>متابعة الطلب</Text>
+              {cartStockChecking ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.mutedForeground}
+                />
+              ) : (
+                <Ionicons
+                  name={
+                    cartHasKnownStockIssues
+                      ? "alert-circle-outline"
+                      : "arrow-back"
+                  }
+                  size={20}
+                  color="#fff"
+                />
+              )}
+              <Text
+                style={[
+                  styles.orderBtnText,
+                  cartStockChecking
+                    ? { color: colors.mutedForeground }
+                    : null,
+                ]}
+              >
+                {cartStockChecking
+                  ? "جاري التحقق من المخزون..."
+                  : cartHasKnownStockIssues
+                    ? "راجعي المنتجات غير المتوفرة"
+                    : "متابعة الطلب"}
+              </Text>
             </Pressable>
           </View>
         </View>
