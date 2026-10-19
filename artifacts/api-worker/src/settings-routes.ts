@@ -43,85 +43,6 @@ export function sanitizePublicSettingsData(
   };
 }
 
-function mergeSettingsPreservingCompanyCosts(
-  existing: Record<string, unknown>,
-  partial: Record<string, unknown>,
-) {
-  if (!Array.isArray(partial.shippingZones)) {
-    return {
-      ...existing,
-      ...partial,
-    };
-  }
-
-  const existingZones =
-    Array.isArray(existing.shippingZones)
-      ? existing.shippingZones
-      : [];
-
-  const companyCostByLabel =
-    new Map<string, unknown>();
-
-  for (const zone of existingZones) {
-    if (
-      !zone ||
-      typeof zone !== "object" ||
-      Array.isArray(zone)
-    ) {
-      continue;
-    }
-
-    const current =
-      zone as Record<string, unknown>;
-
-    if (
-      typeof current.label === "string" &&
-      current.companyCost !== undefined
-    ) {
-      companyCostByLabel.set(
-        current.label,
-        current.companyCost,
-      );
-    }
-  }
-
-  const shippingZones =
-    partial.shippingZones.map((zone) => {
-      if (
-        !zone ||
-        typeof zone !== "object" ||
-        Array.isArray(zone)
-      ) {
-        return zone;
-      }
-
-      const next = {
-        ...(zone as Record<string, unknown>),
-      };
-
-      if (
-        next.companyCost === undefined &&
-        typeof next.label === "string"
-      ) {
-        const existingCompanyCost =
-          companyCostByLabel.get(next.label);
-
-        if (existingCompanyCost !== undefined) {
-          next.companyCost =
-            existingCompanyCost;
-        }
-      }
-
-      return next;
-    });
-
-  return {
-    ...existing,
-    ...partial,
-    shippingZones,
-  };
-}
-
 const json = (data: unknown, status = 200) =>
   Response.json(rewriteMediaUrlsForPublic(data), {
     status,
@@ -189,11 +110,10 @@ async function handleUpdateSettings(
   const storedPartial =
     rewriteMediaUrlsForStorage(partial, env);
 
-  const merged =
-    mergeSettingsPreservingCompanyCosts(
-      existing,
-      storedPartial,
-    );
+  const merged = {
+    ...existing,
+    ...storedPartial,
+  };
 
   await db
     .insert(appSettingsTable)
