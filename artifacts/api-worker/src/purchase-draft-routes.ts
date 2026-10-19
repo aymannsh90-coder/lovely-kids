@@ -699,6 +699,7 @@ async function resolveLines(
 async function getDraft(
   db: Db,
   userId: number,
+  supplierId: number,
   warehouseKey: string,
 ) {
   const rows = await db
@@ -710,6 +711,10 @@ async function getDraft(
         eq(
           posPurchasesTable.enteredByUserId,
           userId,
+        ),
+        eq(
+          posPurchasesTable.supplierId,
+          supplierId,
         ),
         eq(
           posPurchasesTable.warehouseKey,
@@ -735,6 +740,10 @@ async function handleGetDraft(
   }
 
   const url = new URL(request.url);
+  const supplierId = parsePositiveInteger(
+    url.searchParams.get("supplierId"),
+    "رقم المورد",
+  );
   const warehouseKey = normalizeWarehouseKey(
     url.searchParams.get("warehouseKey") ??
       "main",
@@ -743,6 +752,7 @@ async function handleGetDraft(
   const purchase = await getDraft(
     db,
     auth.user.id,
+    supplierId,
     warehouseKey,
   );
 
@@ -938,6 +948,10 @@ async function handleSaveDraft(
                 auth.user.id,
               ),
               eq(
+                posPurchasesTable.supplierId,
+                supplierId,
+              ),
+              eq(
                 posPurchasesTable.warehouseKey,
                 warehouseKey,
               ),
@@ -1025,6 +1039,8 @@ async function handleSaveDraft(
               idempotencyKey:
                 "purchase-draft:" +
                 auth.user.id +
+                ":" +
+                supplierId +
                 ":" +
                 warehouseKey,
               supplierId,
@@ -1120,6 +1136,10 @@ async function handleDiscardDraft(
   }
 
   const url = new URL(request.url);
+  const supplierId = parsePositiveInteger(
+    url.searchParams.get("supplierId"),
+    "رقم المورد",
+  );
   const warehouseKey = normalizeWarehouseKey(
     url.searchParams.get("warehouseKey") ??
       "main",
@@ -1133,6 +1153,10 @@ async function handleDiscardDraft(
         eq(
           posPurchasesTable.enteredByUserId,
           auth.user.id,
+        ),
+        eq(
+          posPurchasesTable.supplierId,
+          supplierId,
         ),
         eq(
           posPurchasesTable.warehouseKey,
