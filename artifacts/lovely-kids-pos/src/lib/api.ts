@@ -3277,12 +3277,13 @@ export function getLatestPosPurchase(
 
 export async function getOpenPosPurchaseDraft(
   token: string,
+  supplierId: string,
   warehouseKey = "main",
 ) {
   const result = await apiRequest<
     PosPurchaseResult | { purchase: null }
   >(
-    `/api/pos/purchases/draft?warehouseKey=${encodeURIComponent(warehouseKey)}`,
+    `/api/pos/purchases/draft?supplierId=${encodeURIComponent(supplierId)}&warehouseKey=${encodeURIComponent(warehouseKey)}`,
     {},
     token,
   );
@@ -3328,10 +3329,11 @@ export function savePosPurchaseDraft(
 
 export function discardOpenPosPurchaseDraft(
   token: string,
+  supplierId: string,
   warehouseKey = "main",
 ) {
   return apiRequest<{ ok: true }>(
-    `/api/pos/purchases/draft?warehouseKey=${encodeURIComponent(warehouseKey)}`,
+    `/api/pos/purchases/draft?supplierId=${encodeURIComponent(supplierId)}&warehouseKey=${encodeURIComponent(warehouseKey)}`,
     {
       method: "DELETE",
     },
