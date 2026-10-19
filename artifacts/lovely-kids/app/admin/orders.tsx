@@ -3095,6 +3095,197 @@ export default function AdminOrdersScreen() {
         </Pressable>
       </View>
 
+      {mergeSelectedIds.size > 0 ? (
+        <View
+          style={[
+            styles.mergeSelectionBar,
+            {
+              backgroundColor: "#EFF6FF",
+              borderColor: "#93C5FD",
+            },
+          ]}
+        >
+          <View style={styles.mergeSelectionInfo}>
+            <Ionicons name="git-merge-outline" size={20} color="#2563EB" />
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <Text style={styles.mergeSelectionTitle}>
+                تم اختيار {mergeSelectedIds.size} طلب/طلبات للدمج
+              </Text>
+              <Text style={styles.mergeSelectionSub}>
+                الدمج لا يخصم المخزون مرة ثانية
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.mergeSelectionActions}>
+            <Pressable
+              onPress={() => {
+                setMergeSelectedIds(new Set());
+                setMergePreviewVisible(false);
+              }}
+              style={[
+                styles.mergeSecondaryButton,
+                { borderColor: "#94A3B8" },
+              ]}
+            >
+              <Text style={styles.mergeSecondaryButtonText}>
+                إلغاء التحديد
+              </Text>
+            </Pressable>
+
+            <Pressable
+              disabled={mergeSelectedIds.size < 2}
+              onPress={openMergePreview}
+              style={[
+                styles.mergePrimaryButton,
+                {
+                  backgroundColor:
+                    mergeSelectedIds.size < 2
+                      ? "#94A3B8"
+                      : "#2563EB",
+                },
+              ]}
+            >
+              <Ionicons name="git-merge-outline" size={17} color="#fff" />
+              <Text style={styles.mergePrimaryButtonText}>
+                معاينة الدمج
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      <Modal
+        transparent
+        visible={mergePreviewVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!mergeBusy) setMergePreviewVisible(false);
+        }}
+      >
+        <View style={styles.mergeModalOverlay}>
+          <View
+            style={[
+              styles.mergeModalCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.mergeModalHeader}>
+              <Pressable
+                disabled={mergeBusy}
+                onPress={() => setMergePreviewVisible(false)}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={22} color={colors.mutedForeground} />
+              </Pressable>
+              <View style={{ flex: 1, alignItems: "flex-end" }}>
+                <Text style={[styles.mergeModalTitle, { color: colors.foreground }]}>
+                  معاينة دمج الطلبات
+                </Text>
+                <Text style={[styles.mergeModalSub, { color: colors.mutedForeground }]}>
+                  سيتم إنشاء طلب رئيسي واحد مع إبقاء الطلبات الأصلية محفوظة كسجل.
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.mergeModalScroll}
+              contentContainerStyle={styles.mergeModalScrollContent}
+            >
+              {mergePreview.error ? (
+                <View style={styles.mergeErrorBox}>
+                  <Ionicons name="alert-circle-outline" size={19} color="#B91C1C" />
+                  <Text style={styles.mergeErrorText}>{mergePreview.error}</Text>
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.mergeSummaryBox,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.mergeSummaryTitle, { color: colors.foreground }]}>
+                  الطلبات المختارة
+                </Text>
+                {mergeSelectedOrders.map((order) => (
+                  <View
+                    key={order.id}
+                    style={[styles.mergeOrderRow, { borderBottomColor: colors.border }]}
+                  >
+                    <Text style={[styles.mergeOrderAmount, { color: colors.primary }]}>
+                      {order.totalPrice}₪
+                    </Text>
+                    <View style={{ flex: 1, alignItems: "flex-end" }}>
+                      <Text style={[styles.mergeOrderName, { color: colors.foreground }]}>
+                        #{order.id} — {order.customerName}
+                      </Text>
+                      <Text style={[styles.mergeOrderMeta, { color: colors.mutedForeground }]}>
+                        {order.items.length} صنف · {order.shippingZone ?? "بدون منطقة"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.mergeTotalsBox}>
+                <View style={styles.mergeTotalRow}>
+                  <Text style={styles.mergeTotalValue}>{mergePreview.productsNet}₪</Text>
+                  <Text style={styles.mergeTotalLabel}>قيمة المنتجات بعد الخصومات</Text>
+                </View>
+                <View style={styles.mergeTotalRow}>
+                  <Text style={styles.mergeTotalValue}>{mergePreview.shippingCost}₪</Text>
+                  <Text style={styles.mergeTotalLabel}>التوصيل مرة واحدة</Text>
+                </View>
+                <View style={[styles.mergeTotalRow, styles.mergeGrandTotalRow]}>
+                  <Text style={styles.mergeGrandTotalValue}>{mergePreview.total}₪</Text>
+                  <Text style={styles.mergeGrandTotalLabel}>الإجمالي المتوقع بعد الدمج</Text>
+                </View>
+              </View>
+
+              <View style={styles.mergeSafetyBox}>
+                <Text style={styles.mergeSafetyTitle}>ما الذي سيحدث؟</Text>
+                <Text style={styles.mergeSafetyText}>• المنتجات والمخزون المحجوز لن يتم خصمهما مرة ثانية.</Text>
+                <Text style={styles.mergeSafetyText}>• التوصيل سيُحسب مرة واحدة حسب إعدادات المنطقة والعرض الحالية.</Text>
+                <Text style={styles.mergeSafetyText}>• سيتم اعتماد بيانات أحدث طلب من الطلبات المختارة.</Text>
+                <Text style={styles.mergeSafetyText}>• الطلبات الأصلية ستبقى محفوظة بحالة «مدمج» للرجوع إليها والتقارير.</Text>
+              </View>
+            </ScrollView>
+
+            <View style={[styles.mergeModalActions, { borderTopColor: colors.border }]}>
+              <Pressable
+                disabled={mergeBusy}
+                onPress={() => setMergePreviewVisible(false)}
+                style={[styles.mergeSecondaryButton, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.mergeSecondaryButtonText, { color: colors.foreground }]}>
+                  رجوع
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={mergeBusy || !!mergePreview.error}
+                onPress={() => void performMergeOrders()}
+                style={[
+                  styles.mergeConfirmButton,
+                  { opacity: mergeBusy || mergePreview.error ? 0.55 : 1 },
+                ]}
+              >
+                {mergeBusy ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="git-merge-outline" size={18} color="#fff" />
+                )}
+                <Text style={styles.mergePrimaryButtonText}>
+                  {mergeBusy
+                    ? "جاري الدمج..."
+                    : "تأكيد دمج " + mergeSelectedOrders.length + " طلبات"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
