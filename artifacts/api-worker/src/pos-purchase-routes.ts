@@ -10,7 +10,7 @@ import {
   productsTable,
   suppliersTable,
 } from "@workspace/db/schema";
-import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -546,6 +546,7 @@ async function getPurchaseNavigation(
       .where(
         and(
           eq(posPurchasesTable.warehouseKey, purchase.warehouseKey),
+          ne(posPurchasesTable.status, "draft"),
           lt(posPurchasesTable.id, purchase.id),
         ),
       )
@@ -558,6 +559,7 @@ async function getPurchaseNavigation(
       .where(
         and(
           eq(posPurchasesTable.warehouseKey, purchase.warehouseKey),
+          ne(posPurchasesTable.status, "draft"),
           gt(posPurchasesTable.id, purchase.id),
         ),
       )
@@ -597,7 +599,12 @@ async function handleLatestPurchase(
   const purchaseRows = await db
     .select()
     .from(posPurchasesTable)
-    .where(eq(posPurchasesTable.warehouseKey, warehouseKey))
+    .where(
+      and(
+        eq(posPurchasesTable.warehouseKey, warehouseKey),
+        ne(posPurchasesTable.status, "draft"),
+      ),
+    )
     .orderBy(desc(posPurchasesTable.id))
     .limit(1);
 
