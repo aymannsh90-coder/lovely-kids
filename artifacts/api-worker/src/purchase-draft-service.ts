@@ -62,6 +62,77 @@ function assertOptionalMoneyMinor(
   }
 }
 
+export async function getPendingPurchaseQuantityForProduct(
+  tx: any,
+  input: {
+    productId: number;
+    warehouseKey?: string;
+  },
+) {
+  assertPositiveInteger(
+    input.productId,
+    "رقم المنتج",
+  );
+
+  const rows = await tx
+    .select({
+      quantity:
+        posPurchaseItemsTable.quantity,
+      freeQuantity:
+        posPurchaseItemsTable.freeQuantity,
+      warehouseKey:
+        posPurchasesTable.warehouseKey,
+    })
+    .from(posPurchaseItemsTable)
+    .innerJoin(
+      posPurchasesTable,
+      eq(
+        posPurchaseItemsTable.purchaseId,
+        posPurchasesTable.id,
+      ),
+    )
+    .where(
+      and(
+        eq(
+          posPurchaseItemsTable.productId,
+          input.productId,
+        ),
+        eq(
+          posPurchasesTable.status,
+          "draft",
+        ),
+      ),
+    );
+
+  let total = 0;
+
+  for (const row of rows) {
+    if (
+      input.warehouseKey &&
+      row.warehouseKey !==
+        input.warehouseKey
+    ) {
+      continue;
+    }
+
+    total +=
+      row.quantity +
+      row.freeQuantity;
+
+    if (
+      !Number.isSafeInteger(total) ||
+      total > 99_999_999
+    ) {
+      throw new PurchaseDraftServiceError(
+        "كمية المشتريات المفتوحة أكبر من الحد المسموح",
+        409,
+      );
+    }
+  }
+
+  return total;
+}
+
 export async function appendProductToSupplierDraft(
   tx: any,
   input: AppendProductToSupplierDraftInput,
