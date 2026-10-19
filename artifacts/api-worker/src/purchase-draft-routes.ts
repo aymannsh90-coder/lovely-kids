@@ -274,9 +274,9 @@ type DraftItem = {
   barcode: string | null;
   quantity: number;
   freeQuantity: number;
-  unitCostMinor: number;
+  unitCostMinor: number | null;
   lineDiscountMinor: number;
-  lineTotalMinor: number;
+  lineTotalMinor: number | null;
 };
 
 function parseItems(value: unknown): DraftItem[] {
@@ -332,14 +332,24 @@ function parseItems(value: unknown): DraftItem[] {
       );
     }
 
-    const unitCostMinor = parseMoneyToMinor(
-      item.unitCost ?? item.cost,
-    );
+    const rawUnitCost =
+      item.unitCost ?? item.cost;
 
-    if (unitCostMinor === null) {
-      throw new PurchaseDraftError(
-        "تكلفة أحد الأصناف غير صالحة",
-      );
+    let unitCostMinor: number | null = null;
+
+    if (
+      rawUnitCost !== undefined &&
+      rawUnitCost !== null &&
+      rawUnitCost !== ""
+    ) {
+      unitCostMinor =
+        parseMoneyToMinor(rawUnitCost);
+
+      if (unitCostMinor === null) {
+        throw new PurchaseDraftError(
+          "تكلفة أحد الأصناف غير صالحة",
+        );
+      }
     }
 
     const lineDiscountMinor = parseMoneyToMinor(
@@ -352,18 +362,36 @@ function parseItems(value: unknown): DraftItem[] {
       );
     }
 
-    const grossMinor = unitCostMinor * quantity;
+    if (
+      unitCostMinor === null &&
+      lineDiscountMinor !== 0
+    ) {
+      throw new PurchaseDraftError(
+        "لا يمكن إدخال خصم لصنف تكلفته غير مدخلة",
+      );
+    }
+
+    const grossMinor =
+      unitCostMinor === null
+        ? null
+        : unitCostMinor * quantity;
 
     if (
-      !Number.isSafeInteger(grossMinor) ||
-      grossMinor > MAX_MINOR
+      grossMinor !== null &&
+      (
+        !Number.isSafeInteger(grossMinor) ||
+        grossMinor > MAX_MINOR
+      )
     ) {
       throw new PurchaseDraftError(
         "قيمة أحد الأصناف تتجاوز الحد المسموح",
       );
     }
 
-    if (lineDiscountMinor > grossMinor) {
+    if (
+      grossMinor !== null &&
+      lineDiscountMinor > grossMinor
+    ) {
       throw new PurchaseDraftError(
         "خصم أحد الأصناف أكبر من قيمته",
       );
@@ -378,7 +406,9 @@ function parseItems(value: unknown): DraftItem[] {
       unitCostMinor,
       lineDiscountMinor,
       lineTotalMinor:
-        grossMinor - lineDiscountMinor,
+        grossMinor === null
+          ? null
+          : grossMinor - lineDiscountMinor,
     };
   });
 }
@@ -403,11 +433,18 @@ function parseFinancials(
   let subtotalMinor = 0;
   let itemDiscountMinor = 0;
 
+  const hasUnknownCost =
+    items.some(
+      (item) => item.unitCostMinor === null,
+    );
+
   for (const item of items) {
-    subtotalMinor +=
-      item.unitCostMinor * item.quantity;
-    itemDiscountMinor +=
-      item.lineDiscountMinor;
+    if (item.unitCostMinor !== null) {
+      subtotalMinor +=
+        item.unitCostMinor * item.quantity;
+      itemDiscountMinor +=
+        item.lineDiscountMinor;
+    }
 
     if (
       !Number.isSafeInteger(subtotalMinor) ||
@@ -428,6 +465,15 @@ function parseFinancials(
   if (invoiceDiscountMinor === null) {
     throw new PurchaseDraftError(
       "خصم الفاتورة غير صالح",
+    );
+  }
+
+  if (
+    hasUnknownCost &&
+    invoiceDiscountMinor !== 0
+  ) {
+    throw new PurchaseDraftError(
+      "أكمل تكاليف الأصناف قبل إدخال خصم على الفاتورة",
     );
   }
 
@@ -466,6 +512,18 @@ function parseFinancials(
     }
 
     paidMinor = parsedPaid;
+  }
+
+  if (
+    hasUnknownCost &&
+    (
+      paymentMethod !== "credit" ||
+      paidMinor !== 0
+    )
+  ) {
+    throw new PurchaseDraftError(
+      "المسودة التي تحتوي تكلفة غير مدخلة تحفظ آجل بدون دفعة حتى اكتمال التكلفة",
+    );
   }
 
   if (paidMinor > totalMinor) {
@@ -518,6 +576,10 @@ function toResponse(
 ) {
   return {
     alreadyCreated: false,
+    hasUnknownCost:
+      items.some(
+        (item) => item.unitCostMinor === null,
+      ),
     navigation: {
       previousPublicId: null,
       nextPublicId: null,
@@ -578,14 +640,19 @@ function toResponse(
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
         unitCostMinor: item.unitCostMinor,
-        unitCost: item.unitCostMinor / 100,
+        unitCost:
+          item.unitCostMinor === null
+            ? null
+            : item.unitCostMinor / 100,
         lineDiscountMinor:
           item.lineDiscountMinor,
         lineDiscount:
           item.lineDiscountMinor / 100,
         lineTotalMinor: item.lineTotalMinor,
         lineTotal:
-          item.lineTotalMinor / 100,
+          item.lineTotalMinor === null
+            ? null
+            : item.lineTotalMinor / 100,
         generalStockBefore:
           item.generalStockBefore,
         generalStockAfter:
