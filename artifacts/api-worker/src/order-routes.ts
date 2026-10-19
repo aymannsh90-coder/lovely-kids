@@ -695,7 +695,38 @@ async function handleLookupOrder(
     return json({ error: "الطلب غير موجود" }, 404);
   }
 
-  return json(rows[0]);
+  const order = rows[0];
+
+  if (
+    order.mergedIntoOrderId !== null
+  ) {
+    const masterRows = await db
+      .select()
+      .from(ordersTable)
+      .where(
+        and(
+          eq(
+            ordersTable.id,
+            order.mergedIntoOrderId,
+          ),
+          eq(
+            ordersTable.customerPhone,
+            customerPhone,
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (masterRows[0]) {
+      return json({
+        ...masterRows[0],
+        mergedFromOrderId:
+          order.id,
+      });
+    }
+  }
+
+  return json(order);
 }
 
 async function handleTrackOrder(
@@ -737,6 +768,45 @@ async function handleTrackOrder(
     return json({ error: "رابط المتابعة غير صالح" }, 403);
   }
 
+  if (
+    order.mergedIntoOrderId !== null
+  ) {
+    const masterRows = await db
+      .select()
+      .from(ordersTable)
+      .where(
+        eq(
+          ordersTable.id,
+          order.mergedIntoOrderId,
+        ),
+      )
+      .limit(1);
+
+    const master =
+      masterRows[0];
+
+    if (master) {
+      const masterToken =
+        createOrderTrackingToken(
+          master.id,
+          master.customerPhone,
+          env,
+        );
+
+      return json({
+        ...master,
+        mergedFromOrderId:
+          order.id,
+        ...(masterToken
+          ? {
+              trackingToken:
+                masterToken,
+            }
+          : {}),
+      });
+    }
+  }
+
   return json(order);
 }
 
@@ -758,7 +828,17 @@ async function handleGetMyOrders(
   const orders = await db
     .select()
     .from(ordersTable)
-    .where(orderOwnerWhere(user.id, user.phone))
+    .where(
+      and(
+        orderOwnerWhere(
+          user.id,
+          user.phone,
+        ),
+        isNull(
+          ordersTable.mergedIntoOrderId,
+        ),
+      ),
+    )
     .orderBy(desc(ordersTable.createdAt));
 
   return json(orders);
