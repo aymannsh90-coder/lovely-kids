@@ -4,8 +4,10 @@ import {
   financeAccountsTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
+  posPurchaseItemCostsTable,
   posPurchaseItemsTable,
   posPurchasesTable,
+  productCostStateTable,
   productBarcodesTable,
   productsTable,
   suppliersTable,
@@ -26,6 +28,16 @@ import {
   isPurchaseWriteEnabled,
   purchaseWritesDisabledResponse,
 } from "./purchase-feature";
+import {
+  addExactProductCostOrInitialize,
+  InventoryCostError,
+} from "./inventory-cost-engine";
+import {
+  getPendingPurchaseQuantityForProduct,
+} from "./purchase-draft-service";
+import {
+  getProductQuantity,
+} from "./product-quantity";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -90,6 +102,151 @@ interface ParsedPurchaseItem {
   lineTotalMinor: number;
 }
 
+function allocateApprovedPurchaseCosts(
+  items: Array<typeof posPurchaseItemsTable.$inferSelect>,
+  invoiceDiscountMinor: number,
+) {
+  const ordered = [...items].sort(
+    (left, right) =>
+      left.lineNumber - right.lineNumber ||
+      left.id - right.id,
+  );
+
+  let totalBeforeInvoiceDiscount = 0;
+
+  for (const item of ordered) {
+    if (item.lineTotalMinor === null) {
+      throw new PurchaseError(
+        "لا يمكن اعتماد فاتورة تحتوي تكلفة غير مدخلة",
+        409,
+      );
+    }
+
+    totalBeforeInvoiceDiscount +=
+      item.lineTotalMinor;
+
+    if (
+      !Number.isSafeInteger(
+        totalBeforeInvoiceDiscount,
+      ) ||
+      totalBeforeInvoiceDiscount >
+        MAX_MINOR
+    ) {
+      throw new PurchaseError(
+        "قيمة تكلفة المشتريات تتجاوز الحد المسموح",
+      );
+    }
+  }
+
+  if (
+    invoiceDiscountMinor < 0 ||
+    invoiceDiscountMinor >
+      totalBeforeInvoiceDiscount
+  ) {
+    throw new PurchaseError(
+      "خصم الفاتورة غير صالح لتوزيع تكلفة المخزون",
+      409,
+    );
+  }
+
+  let cumulativeLineNet = 0;
+  let allocatedSoFar = 0;
+
+  const allocations = ordered.map(
+    (item) => {
+      const lineNet =
+        item.lineTotalMinor as number;
+
+      cumulativeLineNet +=
+        lineNet;
+
+      const targetAllocated =
+        totalBeforeInvoiceDiscount === 0
+          ? 0
+          : Number(
+              (
+                BigInt(
+                  cumulativeLineNet,
+                ) *
+                BigInt(
+                  invoiceDiscountMinor,
+                )
+              ) /
+                BigInt(
+                  totalBeforeInvoiceDiscount,
+                ),
+            );
+
+      const lineInvoiceDiscount =
+        targetAllocated -
+        allocatedSoFar;
+
+      allocatedSoFar =
+        targetAllocated;
+
+      const costTotalMinor =
+        lineNet -
+        lineInvoiceDiscount;
+
+      const receivedQuantity =
+        item.quantity +
+        item.freeQuantity;
+
+      if (
+        !Number.isSafeInteger(
+          receivedQuantity,
+        ) ||
+        receivedQuantity <= 0
+      ) {
+        throw new PurchaseError(
+          "كمية الاستلام لأحد المنتجات غير صالحة",
+          409,
+        );
+      }
+
+      if (
+        !Number.isSafeInteger(
+          costTotalMinor,
+        ) ||
+        costTotalMinor < 0
+      ) {
+        throw new PurchaseError(
+          "تكلفة أحد المنتجات بعد الخصومات غير صالحة",
+          409,
+        );
+      }
+
+      return {
+        item,
+        receivedQuantity,
+        invoiceDiscountAllocatedMinor:
+          lineInvoiceDiscount,
+        costTotalMinor,
+      };
+    },
+  );
+
+  const allocatedTotal =
+    allocations.reduce(
+      (sum, entry) =>
+        sum +
+        entry.costTotalMinor,
+      0,
+    );
+
+  if (
+    allocatedTotal !==
+    totalBeforeInvoiceDiscount -
+      invoiceDiscountMinor
+  ) {
+    throw new PurchaseError(
+      "تعذر توزيع خصم الفاتورة على تكلفة الأصناف بدقة",
+      409,
+    );
+  }
+
+  return allocations;
+}
 async function requirePurchaseOwner(
   request: Request,
   db: Db,
