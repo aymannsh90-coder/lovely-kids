@@ -1415,17 +1415,50 @@ export default function PurchaseInvoicePage() {
     setMessage("");
 
     try {
+      const draftForApproval =
+        await savePosPurchaseDraft(
+          token,
+          {
+            supplierId,
+            draftPublicId:
+              savedPurchase?.purchase.status === "draft"
+                ? savedPurchase.purchase.publicId
+                : undefined,
+            draftUpdatedAt:
+              savedPurchase?.purchase.status === "draft"
+                ? savedPurchase.purchase.updatedAt
+                : undefined,
+            supplierInvoiceNumber:
+              supplierInvoiceNumber.trim() || undefined,
+            businessDate,
+            warehouseKey,
+            currencyCode: "ILS",
+            paymentMethod,
+            invoiceDiscount,
+            paid,
+            notes: notes.trim() || undefined,
+            items: lines.map((line) => ({
+              productId: line.product.productId,
+              barcode: line.barcode || undefined,
+              quantity: line.quantity,
+              freeQuantity: line.freeQuantity,
+              unitCost: line.unitCost,
+              lineDiscount: line.lineDiscount,
+            })),
+          },
+        );
+
+      setSavedPurchase(
+        draftForApproval,
+      );
+
       const result = await createPosPurchase(token, {
         supplierId,
         idempotencyKey,
         draftPublicId:
-          savedPurchase?.purchase.status === "draft"
-            ? savedPurchase.purchase.publicId
-            : undefined,
+          draftForApproval.purchase.publicId,
         draftUpdatedAt:
-          savedPurchase?.purchase.status === "draft"
-            ? savedPurchase.purchase.updatedAt
-            : undefined,
+          draftForApproval.purchase.updatedAt,
         supplierInvoiceNumber:
           supplierInvoiceNumber.trim() || undefined,
         businessDate,
