@@ -1085,9 +1085,12 @@ async function handleUpdateProduct(
     typeof productBody === "object" &&
     !Array.isArray(productBody)
   ) {
-    delete productBody.purchaseSupplierId;
-    delete productBody.purchaseUnitCostMinor;
-    delete productBody.purchaseBusinessDate;
+    const cleanProductBody =
+      productBody as Record<string, unknown>;
+
+    delete cleanProductBody.purchaseSupplierId;
+    delete cleanProductBody.purchaseUnitCostMinor;
+    delete cleanProductBody.purchaseBusinessDate;
   }
 
   const parsed =
