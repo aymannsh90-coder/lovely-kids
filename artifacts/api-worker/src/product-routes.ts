@@ -21,6 +21,10 @@ import {
   appendProductToSupplierDraft,
   PurchaseDraftServiceError,
 } from "./purchase-draft-service";
+import {
+  isPurchaseWriteEnabled,
+  purchaseWritesDisabledResponse,
+} from "./purchase-feature";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -449,6 +453,18 @@ async function handleCreateProduct(
 
   const rawPurchaseBusinessDate =
     bodyRecord?.purchaseBusinessDate;
+
+  const hasPurchaseDraftMetadata =
+    rawPurchaseSupplierId !== undefined ||
+    rawPurchaseUnitCostMinor !== undefined ||
+    rawPurchaseBusinessDate !== undefined;
+
+  if (
+    hasPurchaseDraftMetadata &&
+    !isPurchaseWriteEnabled(env)
+  ) {
+    return purchaseWritesDisabledResponse();
+  }
 
   if (
     rawOpeningUnitCostMinor !== undefined &&
@@ -960,12 +976,20 @@ async function handleUpdateProduct(
   const rawPurchaseBusinessDate =
     bodyRecord?.purchaseBusinessDate;
 
+  const hasPurchaseDraftMetadata =
+    rawPurchaseSupplierId !== undefined ||
+    rawPurchaseUnitCostMinor !== undefined ||
+    rawPurchaseBusinessDate !== undefined;
+
   if (
-    (
-      rawPurchaseSupplierId !== undefined ||
-      rawPurchaseUnitCostMinor !== undefined ||
-      rawPurchaseBusinessDate !== undefined
-    ) &&
+    hasPurchaseDraftMetadata &&
+    !isPurchaseWriteEnabled(env)
+  ) {
+    return purchaseWritesDisabledResponse();
+  }
+
+  if (
+    hasPurchaseDraftMetadata &&
     !actor.isOwner
   ) {
     return json(
