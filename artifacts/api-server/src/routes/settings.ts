@@ -19,13 +19,13 @@ function sanitizePublicSettingsData(
             return zone;
           }
 
-            const publicZone = {
-              ...(zone as Record<string, unknown>),
-            };
+          const publicZone = {
+            ...(zone as Record<string, unknown>),
+          };
 
-            delete publicZone.companyCost;
+          delete publicZone.companyCost;
 
-            return publicZone;
+          return publicZone;
         })
       : data.shippingZones;
 
