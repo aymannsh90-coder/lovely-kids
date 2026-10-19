@@ -208,7 +208,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     {
       label: "الضفة الغربية",
       cost: 20,
-      companyCost: 20,
+      companyCost: 19,
       promoCost: 20,
     },
     {
