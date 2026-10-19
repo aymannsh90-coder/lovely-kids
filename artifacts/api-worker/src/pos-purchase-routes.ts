@@ -964,6 +964,22 @@ async function handleVoidPurchase(
         throw new PurchaseError("لا يمكن حذف هذه الفاتورة", 409);
       }
 
+      const hasLegacyStockAffectingItems =
+        purchaseItems.some(
+          (item) =>
+            item.generalStockBefore !== null ||
+            item.generalStockAfter !== null ||
+            item.variantStockBefore !== null ||
+            item.variantStockAfter !== null,
+        );
+
+      if (!hasLegacyStockAffectingItems) {
+        throw new PurchaseError(
+          "لا يمكن إلغاء فاتورة مشتريات معتمدة حديثة مباشرة لأنها مرتبطة بتكلفة المخزون. استخدم مردود المشتريات لعكسها بشكل صحيح.",
+          409,
+        );
+      }
+
       const stockCardVoidOccurredAt = new Date();
 
       const orderedItems = [...purchaseItems].sort((left, right) => {
