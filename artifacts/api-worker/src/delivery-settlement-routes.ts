@@ -167,6 +167,8 @@ async function loadUnsettledOrders(
     .select({
       orderId:
         deliveryCompanySettlementItemsTable.orderId,
+      amountMinor:
+        deliveryCompanySettlementItemsTable.amountMinor,
     })
     .from(deliveryCompanySettlementItemsTable)
     .where(
@@ -182,17 +184,21 @@ async function loadUnsettledOrders(
       ),
     );
 
-  const settledIds = new Set(
-    settledRows.map((row) => row.orderId),
-  );
+  const settledMinorByOrderId =
+    new Map<number, number>();
 
-  const candidates = orderRows.filter(
-    (order) => !settledIds.has(order.id),
-  );
-
-  if (candidates.length === 0) {
-    return [];
+  for (const row of settledRows) {
+    settledMinorByOrderId.set(
+      row.orderId,
+      (
+        settledMinorByOrderId.get(
+          row.orderId,
+        ) ?? 0
+      ) + row.amountMinor,
+    );
   }
+
+  const candidates = orderRows;
 
   const candidateIds = candidates.map(
     (order) => String(order.id),
@@ -210,9 +216,12 @@ async function loadUnsettledOrders(
           financeTransactionsTable.sourceType,
           "web_order",
         ),
-        eq(
+        inArray(
           financeTransactionsTable.sourceEvent,
-          "done",
+          [
+            "done",
+            "delivery_cost_correction_20261019",
+          ],
         ),
         eq(
           financeTransactionsTable.status,
@@ -310,8 +319,20 @@ async function loadUnsettledOrders(
 
   return candidates
     .map((order) => {
-      const amountMinor =
+      const grossReceivableMinor =
         amountByOrderId.get(order.id) ?? 0;
+
+      const settledMinor =
+        settledMinorByOrderId.get(
+          order.id,
+        ) ?? 0;
+
+      const amountMinor =
+        Math.max(
+          0,
+          grossReceivableMinor -
+            settledMinor,
+        );
 
       const shippingChargedMinor =
         Number.isSafeInteger(order.shippingCost) &&
@@ -331,6 +352,8 @@ async function loadUnsettledOrders(
 
       return {
         ...order,
+        grossReceivableMinor,
+        settledMinor,
         amountMinor,
         amount: amountMinor / 100,
         shippingChargedMinor,
