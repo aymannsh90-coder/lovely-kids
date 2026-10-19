@@ -3348,6 +3348,7 @@ export function createPosPurchase(
     supplierId: string;
     idempotencyKey: string;
     draftPublicId?: string;
+    draftUpdatedAt?: string;
     supplierInvoiceNumber?: string;
     businessDate: string;
     warehouseKey: string;
