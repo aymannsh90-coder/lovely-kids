@@ -19,8 +19,10 @@ function paymentMethodLabel(value: string) {
   return value;
 }
 
-function money(value: number) {
-  return `${value.toFixed(2)} ₪`;
+function money(value: number | null) {
+  return value === null
+    ? "غير مدخل"
+    : `${value.toFixed(2)} ₪`;
 }
 
 export default function PurchaseA4Invoice({
