@@ -20,20 +20,60 @@ export default function AdminShippingScreen() {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings } = useAppSettings();
 
-  const [drafts, setDrafts] = useState<string[]>([]);
+  const [customerDrafts, setCustomerDrafts] =
+    useState<string[]>([]);
+  const [companyDrafts, setCompanyDrafts] =
+    useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const topPadding = getResponsiveTopPadding(insets.top);
 
   useEffect(() => {
-    setDrafts((settings.shippingZones ?? []).map((z) => String(z.cost)));
+    const zones = settings.shippingZones ?? [];
+
+    setCustomerDrafts(
+      zones.map(
+        (zone) =>
+          String(zone.cost),
+      ),
+    );
+
+    setCompanyDrafts(
+      zones.map(
+        (zone) =>
+          String(
+            zone.companyCost ??
+              zone.cost,
+          ),
+      ),
+    );
   }, [settings.shippingZones]);
 
   const save = async () => {
     const zones = (settings.shippingZones ?? []).map((zone, index) => ({
       ...zone,
-      cost: Math.max(0, parseInt(drafts[index] || "0", 10) || 0),
+
+      // السعر الذي يظهر للزبون ويبقى مرجع عرض التوصيل.
+      cost: Math.max(
+        0,
+        parseInt(
+          customerDrafts[index] ||
+            "0",
+          10,
+        ) || 0,
+      ),
+
+      // التكلفة الفعلية التي تدخل في حساب شركة التوصيل فقط.
+      companyCost: Math.max(
+        0,
+        parseInt(
+          companyDrafts[index] ??
+            customerDrafts[index] ??
+            "0",
+          10,
+        ) || 0,
+      ),
     }));
 
     setSaving(true);
@@ -62,23 +102,175 @@ export default function AdminShippingScreen() {
             key={`${zone.label}-${index}`}
             style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
-            <Text style={[styles.label, { color: colors.foreground }]}>{zone.label}</Text>
+            <View style={styles.zoneInfo}>
+              <Text
+                style={[
+                  styles.label,
+                  { color: colors.foreground },
+                ]}
+              >
+                {zone.label}
+              </Text>
 
-            <View style={[styles.inputBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <TextInput
-                value={drafts[index] ?? ""}
-                onChangeText={(value) => {
-                  const clean = value.replace(/\D/g, "");
-                  setDrafts((prev) => {
-                    const next = [...prev];
-                    next[index] = clean;
-                    return next;
-                  });
-                }}
-                keyboardType="number-pad"
-                style={[styles.input, { color: colors.foreground }]}
-              />
-              <Text style={[styles.currency, { color: colors.foreground }]}>₪</Text>
+              <Text
+                style={[
+                  styles.hint,
+                  {
+                    color:
+                      colors.mutedForeground,
+                  },
+                ]}
+              >
+                السعر للزبون يبقى أساس عرض التوصيل، والتكلفة الفعلية تستخدم فقط في حساب شركة التوصيل.
+              </Text>
+            </View>
+
+            <View style={styles.priceColumns}>
+              <View style={styles.priceField}>
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {
+                      color:
+                        colors.mutedForeground,
+                    },
+                  ]}
+                >
+                  السعر للزبون
+                </Text>
+
+                <View
+                  style={[
+                    styles.inputBox,
+                    {
+                      backgroundColor:
+                        colors.background,
+                      borderColor:
+                        colors.border,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    value={
+                      customerDrafts[index] ??
+                      ""
+                    }
+                    onChangeText={(value) => {
+                      const clean =
+                        value.replace(
+                          /\D/g,
+                          "",
+                        );
+
+                      setCustomerDrafts(
+                        (previous) => {
+                          const next = [
+                            ...previous,
+                          ];
+
+                          next[index] =
+                            clean;
+
+                          return next;
+                        },
+                      );
+                    }}
+                    keyboardType="number-pad"
+                    style={[
+                      styles.input,
+                      {
+                        color:
+                          colors.foreground,
+                      },
+                    ]}
+                  />
+
+                  <Text
+                    style={[
+                      styles.currency,
+                      {
+                        color:
+                          colors.foreground,
+                      },
+                    ]}
+                  >
+                    ₪
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.priceField}>
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {
+                      color:
+                        colors.mutedForeground,
+                    },
+                  ]}
+                >
+                  التكلفة الفعلية للشركة
+                </Text>
+
+                <View
+                  style={[
+                    styles.inputBox,
+                    {
+                      backgroundColor:
+                        colors.background,
+                      borderColor:
+                        colors.border,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    value={
+                      companyDrafts[index] ??
+                      ""
+                    }
+                    onChangeText={(value) => {
+                      const clean =
+                        value.replace(
+                          /\D/g,
+                          "",
+                        );
+
+                      setCompanyDrafts(
+                        (previous) => {
+                          const next = [
+                            ...previous,
+                          ];
+
+                          next[index] =
+                            clean;
+
+                          return next;
+                        },
+                      );
+                    }}
+                    keyboardType="number-pad"
+                    style={[
+                      styles.input,
+                      {
+                        color:
+                          colors.foreground,
+                      },
+                    ]}
+                  />
+
+                  <Text
+                    style={[
+                      styles.currency,
+                      {
+                        color:
+                          colors.foreground,
+                      },
+                    ]}
+                  >
+                    ₪
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
         ))}
@@ -90,7 +282,11 @@ export default function AdminShippingScreen() {
         >
           <Ionicons name={saved ? "checkmark-circle" : "save-outline"} size={20} color="#fff" />
           <Text style={styles.saveText}>
-            {saving ? "جاري الحفظ..." : saved ? "تم الحفظ" : "حفظ أسعار التوصيل"}
+            {saving
+              ? "جاري الحفظ..."
+              : saved
+                ? "تم الحفظ"
+                : "حفظ أسعار وتكلفة التوصيل"}
           </Text>
         </Pressable>
       </View>
@@ -110,14 +306,41 @@ const styles = StyleSheet.create({
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
   body: { padding: 16, gap: 12, width: "100%", maxWidth: 650, alignSelf: "center" },
   row: {
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
-    alignItems: "center",
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "column",
+    alignItems: Platform.OS === "web" ? "center" : "stretch",
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
     gap: 12,
   },
-  label: { flex: 1, fontWeight: "800", textAlign: "right" },
+  zoneInfo: {
+    flex: 1,
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  label: {
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  hint: {
+    fontSize: 11,
+    lineHeight: 18,
+    textAlign: "right",
+  },
+  priceColumns: {
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  priceField: {
+    alignItems: "center",
+    gap: 5,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   inputBox: {
     width: 110,
     height: 44,
