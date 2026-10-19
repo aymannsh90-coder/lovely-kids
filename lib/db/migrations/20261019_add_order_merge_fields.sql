@@ -3,7 +3,7 @@ ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS merged_at timestamp,
   ADD COLUMN IF NOT EXISTS merged_by_user_id integer;
 
-DO $
+DO $order_merge$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
@@ -17,9 +17,9 @@ BEGIN
       ON DELETE SET NULL;
   END IF;
 END
-$;
+$order_merge$;
 
-DO $
+DO $order_merge$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
@@ -33,7 +33,7 @@ BEGIN
       ON DELETE RESTRICT;
   END IF;
 END
-$;
+$order_merge$;
 
 CREATE INDEX IF NOT EXISTS orders_merged_into_order_id_idx
   ON orders (merged_into_order_id);
