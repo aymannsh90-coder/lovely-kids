@@ -173,7 +173,12 @@ export const posPurchasesTable = pgTable(
         table.supplierId,
         table.supplierInvoiceNumber,
       )
-      .where(sql`${table.supplierInvoiceNumber} is not null`),
+      .where(
+        sql`
+          ${table.supplierInvoiceNumber} is not null
+          and ${table.status} = 'completed'
+        `,
+      ),
 
     index("pos_purchases_business_date_idx").on(table.businessDate),
 
