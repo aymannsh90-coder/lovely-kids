@@ -274,9 +274,12 @@ async function getAutomaticFulfillmentUpdate(
       fulfillmentMethod: "delivery",
       deliveryCompanyId: company.id,
 
-      // التكلفة الفعلية لشركة التوصيل.
-      // نستخدم السعر الأساسي للمنطقة وليس سعر العرض للزبون.
-      deliveryCompanyCost: shipping.cost,
+      // Snapshot للتكلفة الفعلية لشركة التوصيل وقت إخراج الطلب.
+      // لا نستخدم cost ولا promoCost هنا إلا كـfallback للبيانات القديمة
+      // التي لم يكن فيها companyCost بعد.
+      deliveryCompanyCost:
+        shipping.companyCost ??
+        shipping.cost,
     },
   };
 }
