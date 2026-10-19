@@ -1,6 +1,6 @@
--- Stage 1: persistent open purchase invoices.
+-- Stages 1-2: persistent supplier purchase drafts and approved purchase cost snapshots.
 -- This migration is intentionally NOT auto-applied by the application.
--- Apply manually after review.
+-- Apply manually only after code review and production schema preflight.
 
 BEGIN;
 
