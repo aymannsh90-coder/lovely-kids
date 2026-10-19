@@ -24,12 +24,13 @@ export function sanitizePublicSettingsData(
               return zone;
             }
 
-            const {
-              companyCost: _companyCost,
-              ...publicZone
-            } = zone as Record<string, unknown>;
+            const publicZone = {
+            ...(zone as Record<string, unknown>),
+          };
 
-            return publicZone;
+          delete publicZone.companyCost;
+
+          return publicZone;
           },
         )
       : data.shippingZones;
