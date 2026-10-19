@@ -489,9 +489,13 @@ function normalizeOrderLookup(value: string) {
 }
 
 function normalizeMergePhone(value: string) {
-  return value
+  const digits = value
     .replace(/[^0-9]/g, "")
     .replace(/^00/, "");
+
+  return digits.length >= 9
+    ? digits.slice(-9)
+    : digits;
 }
 
 function isMergeEligibleOrder(order: Order) {
