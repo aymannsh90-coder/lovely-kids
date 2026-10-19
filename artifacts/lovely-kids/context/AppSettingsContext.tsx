@@ -46,7 +46,15 @@ export interface AboutInfo {
 
 export interface ShippingZone {
   label: string;
+
+  // السعر الذي يظهر للزبون ويُستخدم كأساس لعرض التوصيل.
   cost: number;
+
+  // التكلفة الفعلية التي تحاسبنا بها شركة التوصيل.
+  // لا تظهر للزبون ولا تدخل في احتساب عرض التوصيل.
+  companyCost?: number;
+
+  // سعر التوصيل للزبون أثناء العرض.
   promoCost?: number;
 }
 
@@ -197,9 +205,24 @@ const DEFAULT_SETTINGS: AppSettings = {
     ],
   },
   shippingZones: [
-    { label: "الضفة الغربية", cost: 20, promoCost: 20 },
-    { label: "القدس", cost: 30, promoCost: 30 },
-    { label: "أراضي الـ48", cost: 70, promoCost: 70 },
+    {
+      label: "الضفة الغربية",
+      cost: 20,
+      companyCost: 19,
+      promoCost: 20,
+    },
+    {
+      label: "القدس",
+      cost: 30,
+      companyCost: 30,
+      promoCost: 30,
+    },
+    {
+      label: "أراضي الـ48",
+      cost: 70,
+      companyCost: 70,
+      promoCost: 70,
+    },
   ],
   shippingPromotionEnabled: false,
   shippingPromotionThreshold: 500,
@@ -266,10 +289,31 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   const fetchSettings = useCallback(async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), INITIAL_FETCH_TIMEOUT_MS);
-      const res = await fetch(`${API_BASE}/api/settings`, { signal: controller.signal });
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        INITIAL_FETCH_TIMEOUT_MS,
+      );
+
+      const authToken =
+        await getAuthTokenRef.current();
+
+      const res = await fetch(
+        `${API_BASE}/api/settings`,
+        {
+          signal: controller.signal,
+          headers: authToken
+            ? {
+                Authorization:
+                  `Bearer ${authToken}`,
+              }
+            : undefined,
+        },
+      );
+
       clearTimeout(timeoutId);
+
       if (!res.ok) return;
+
       const data = await res.json();
       applyRemote(data);
     } catch {

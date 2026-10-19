@@ -3445,6 +3445,11 @@ export interface PosDeliveryUnsettledOrder {
   createdAt: string;
   amountMinor: number;
   amount: number;
+
+  // التوصيل على الزبون، تكلفة الشركة، وصافي الربح/الخسارة.
+  shippingChargedMinor: number;
+  deliveryCompanyCostMinor: number;
+  deliveryMarginMinor: number;
 }
 
 export interface PosDeliverySettlementSummary {
@@ -3456,6 +3461,11 @@ export interface PosDeliverySettlementSummary {
   };
   outstandingMinor: number;
   outstanding: number;
+
+  shippingChargedMinor: number;
+  deliveryCompanyCostMinor: number;
+  deliveryMarginMinor: number;
+
   unsettledOrders: PosDeliveryUnsettledOrder[];
   settlements: Array<{
     id: number;

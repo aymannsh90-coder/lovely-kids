@@ -16,7 +16,10 @@ import {
   purgeExpiredTrashedProducts,
 } from "./product-routes";
 import { handleMetaCatalogRequest } from "./meta-catalog-routes";
-import { handleSettingsRequest } from "./settings-routes";
+import {
+  handleSettingsRequest,
+  sanitizePublicSettingsData,
+} from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
 import { handleDiscountCodeRequest } from "./discount-code-routes";
 import { handleImageRequest } from "./image-routes";
@@ -244,7 +247,9 @@ export class PublicAPI extends WorkerEntrypoint<Env> {
         return new Response(
           JSON.stringify(
             rewriteMediaUrlsForPublic(
-              (rows[0]?.data as Record<string, unknown>) ?? {},
+              sanitizePublicSettingsData(
+                (rows[0]?.data as Record<string, unknown>) ?? {},
+              ),
             ),
           ),
           {

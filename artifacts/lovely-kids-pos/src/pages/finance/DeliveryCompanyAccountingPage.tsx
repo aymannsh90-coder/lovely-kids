@@ -415,6 +415,27 @@ export default function DeliveryCompanyAccountingPage() {
             </article>
 
             <article>
+              <span>إيراد التوصيل من الزبائن</span>
+              <strong>
+                {formatMoney(summary.shippingChargedMinor)}
+              </strong>
+            </article>
+
+            <article>
+              <span>تكلفة شركة التوصيل</span>
+              <strong>
+                {formatMoney(summary.deliveryCompanyCostMinor)}
+              </strong>
+            </article>
+
+            <article>
+              <span>صافي ربح/خسارة التوصيل</span>
+              <strong>
+                {formatMoney(summary.deliveryMarginMinor)}
+              </strong>
+            </article>
+
+            <article>
               <span>شركة التوصيل</span>
               <strong>{summary.company.name}</strong>
             </article>
@@ -461,7 +482,9 @@ export default function DeliveryCompanyAccountingPage() {
                       <th>الزبون</th>
                       <th>المنطقة</th>
                       <th>إجمالي الطلب</th>
-                      <th>أجرة التوصيل</th>
+                      <th>التوصيل على الزبون</th>
+                      <th>تكلفة الشركة</th>
+                      <th>ربح/خسارة التوصيل</th>
                       <th>المستحق لنا</th>
                     </tr>
                   </thead>
@@ -496,11 +519,22 @@ export default function DeliveryCompanyAccountingPage() {
 
                           <td>
                             {formatMoney(
-                              Math.round(
-                                (order.deliveryCompanyCost ??
-                                  0) * 100,
-                              ),
+                              order.shippingChargedMinor,
                             )}
+                          </td>
+
+                          <td>
+                            {formatMoney(
+                              order.deliveryCompanyCostMinor,
+                            )}
+                          </td>
+
+                          <td>
+                            <strong>
+                              {formatMoney(
+                                order.deliveryMarginMinor,
+                              )}
+                            </strong>
                           </td>
 
                           <td>

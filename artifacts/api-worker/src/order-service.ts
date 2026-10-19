@@ -30,7 +30,15 @@ export class OrderValidationError extends Error {}
 
 export interface ShippingZone {
   label: string;
+
+  // السعر المعتمد للزبون، وهو المرجع لعرض التوصيل.
   cost: number;
+
+  // التكلفة الفعلية التي تخصمها شركة التوصيل من تحصيلها.
+  // منفصلة بالكامل عن سعر الزبون وعن promoCost.
+  companyCost?: number;
+
+  // سعر العرض للزبون فقط.
   promoCost?: number;
 }
 
@@ -100,9 +108,24 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
 export const STORE_PICKUP_LABEL = "استلام من المحل";
 
 const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
-  { label: "الضفة الغربية", cost: 20, promoCost: 20 },
-  { label: "القدس", cost: 30, promoCost: 30 },
-  { label: "أراضي الـ48", cost: 70, promoCost: 70 },
+  {
+    label: "الضفة الغربية",
+    cost: 20,
+    companyCost: 19,
+    promoCost: 20,
+  },
+  {
+    label: "القدس",
+    cost: 30,
+    companyCost: 30,
+    promoCost: 30,
+  },
+  {
+    label: "أراضي الـ48",
+    cost: 70,
+    companyCost: 70,
+    promoCost: 70,
+  },
 ];
 
 export function resolveShippingZone(
@@ -125,12 +148,47 @@ export function resolveShippingZone(
 
   const configuredZones = Array.isArray(rawZones)
     ? rawZones.filter(
-        (zone): zone is ShippingZone =>
-          typeof zone === "object" &&
-          zone !== null &&
-          typeof (zone as ShippingZone).label === "string" &&
-          Number.isInteger((zone as ShippingZone).cost) &&
-          (zone as ShippingZone).cost >= 0,
+        (zone): zone is ShippingZone => {
+          if (
+            typeof zone !== "object" ||
+            zone === null
+          ) {
+            return false;
+          }
+
+          const candidate =
+            zone as ShippingZone;
+
+          if (
+            typeof candidate.label !== "string" ||
+            !Number.isInteger(candidate.cost) ||
+            candidate.cost < 0
+          ) {
+            return false;
+          }
+
+          if (
+            candidate.companyCost !== undefined &&
+            (
+              !Number.isInteger(candidate.companyCost) ||
+              candidate.companyCost < 0
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            candidate.promoCost !== undefined &&
+            (
+              !Number.isInteger(candidate.promoCost) ||
+              candidate.promoCost < 0
+            )
+          ) {
+            return false;
+          }
+
+          return true;
+        },
       )
     : [];
 
