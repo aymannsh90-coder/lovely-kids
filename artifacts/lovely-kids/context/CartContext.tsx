@@ -23,6 +23,11 @@ interface CartContextType {
   addItem: (item: Omit<CartItem, "quantity">) => void;
   removeItem: (id: string, size?: string, color?: string) => void;
   updateQuantity: (id: string, quantity: number, size?: string, color?: string) => void;
+  replaceItemVariant: (
+    original: { id: string; size?: string; color?: string },
+    replacement: Omit<CartItem, "quantity">,
+    quantity?: number,
+  ) => void;
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
@@ -33,6 +38,7 @@ const CartContext = createContext<CartContextType>({
   addItem: () => {},
   removeItem: () => {},
   updateQuantity: () => {},
+  replaceItemVariant: () => {},
   clearCart: () => {},
   totalItems: 0,
   totalPrice: 0,
@@ -99,6 +105,57 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [matchesVariant]
   );
 
+  const replaceItemVariant = useCallback(
+    (
+      original: { id: string; size?: string; color?: string },
+      replacement: Omit<CartItem, "quantity">,
+      quantity?: number,
+    ) => {
+      setItems((prev) => {
+        const sourceIndex = prev.findIndex((item) =>
+          matchesVariant(item, original),
+        );
+
+        if (sourceIndex < 0) return prev;
+
+        const source = prev[sourceIndex];
+        const replacementQuantity =
+          Number.isInteger(quantity) && (quantity ?? 0) > 0
+            ? quantity!
+            : source.quantity;
+
+        const next = [...prev];
+        next.splice(sourceIndex, 1);
+
+        const targetIndex = next.findIndex((item) =>
+          matchesVariant(item, replacement),
+        );
+
+        if (targetIndex >= 0) {
+          const target = next[targetIndex];
+          next[targetIndex] = {
+            ...target,
+            ...replacement,
+            quantity: target.quantity + replacementQuantity,
+          };
+        } else {
+          next.splice(
+            Math.min(sourceIndex, next.length),
+            0,
+            {
+              ...replacement,
+              quantity: replacementQuantity,
+            },
+          );
+        }
+
+        AsyncStorage.setItem("cart", JSON.stringify(next));
+        return next;
+      });
+    },
+    [matchesVariant],
+  );
+
   const clearCart = useCallback(() => {
     saveCart([]);
   }, [saveCart]);
@@ -113,6 +170,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         addItem,
         removeItem,
         updateQuantity,
+        replaceItemVariant,
         clearCart,
         totalItems,
         totalPrice,
