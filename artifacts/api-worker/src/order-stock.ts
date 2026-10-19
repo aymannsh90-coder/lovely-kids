@@ -24,6 +24,9 @@ import {
   resolveShippingZone,
   STORE_PICKUP_LABEL,
 } from "./order-service";
+import {
+  getPendingPurchaseQuantityForProduct,
+} from "./purchase-draft-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -367,6 +370,38 @@ export class OrderEditError extends Error {
     readonly status = 400,
   ) {
     super(message);
+  }
+}
+
+async function rejectPendingPurchaseCostGap(
+  tx: any,
+  productId: number,
+  reason: string,
+) {
+  if (
+    reason !==
+      "insufficient_accounting_quantity" &&
+    reason !==
+      "uninitialized"
+  ) {
+    return;
+  }
+
+  const pendingPurchaseQuantity =
+    await getPendingPurchaseQuantityForProduct(
+      tx,
+      {
+        productId,
+      },
+    );
+
+  if (
+    pendingPurchaseQuantity > 0
+  ) {
+    throw new OrderEditError(
+      "يوجد لهذا المنتج كمية مشتريات غير معتمدة محاسبيًا. اعتمد فاتورة المورد أولًا قبل استخدام هذه الكمية في الطلب.",
+      409,
+    );
   }
 }
 
@@ -1999,6 +2034,12 @@ export async function editOrderItemsAndAdjustStock(
           );
 
         if (!consumed.tracked) {
+          await rejectPendingPurchaseCostGap(
+            tx,
+            productId,
+            consumed.reason,
+          );
+
           console.warn(
             "ONLINE_ORDER_EDIT_NEW_PRODUCT_COST_UNTRACKED",
             {
@@ -2068,6 +2109,12 @@ export async function editOrderItemsAndAdjustStock(
             );
 
           if (!consumed.tracked) {
+            await rejectPendingPurchaseCostGap(
+              tx,
+              productId,
+              consumed.reason,
+            );
+
             console.warn(
               "ONLINE_ORDER_EDIT_LEGACY_INCREASE_COST_UNTRACKED",
               {
@@ -2304,6 +2351,12 @@ export async function editOrderItemsAndAdjustStock(
           );
 
         if (!consumed.tracked) {
+          await rejectPendingPurchaseCostGap(
+            tx,
+            productId,
+            consumed.reason,
+          );
+
           throw new OrderEditError(
             "تعذر احتساب تكلفة الكمية المضافة",
             409,
@@ -2851,6 +2904,12 @@ export async function restoreCancelledOrderAndDeductStock(
         );
 
       if (!consumedCost.tracked) {
+        await rejectPendingPurchaseCostGap(
+          tx,
+          productId,
+          consumedCost.reason,
+        );
+
         console.warn(
           "ONLINE_ORDER_REACTIVATION_COST_UNTRACKED",
           {
