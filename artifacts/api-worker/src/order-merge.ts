@@ -3,6 +3,7 @@ import {
   exchangeDocumentsTable,
   orderItemCostsTable,
   ordersTable,
+  securityAuditLogsTable,
 } from "@workspace/db/schema";
 import {
   asc,
@@ -766,6 +767,34 @@ export async function mergeOnlineOrders(
           ),
         );
     }
+
+    await tx
+      .insert(
+        securityAuditLogsTable,
+      )
+      .values({
+        actorUserId,
+        targetUserId:
+          detailSource.userId,
+        action:
+          "online_orders_merged",
+        details: {
+          masterOrderId:
+            master.id,
+          sourceOrderIds:
+            orders.map(
+              (order) =>
+                order.id,
+            ),
+          customerPhone:
+            detailSource.customerPhone,
+          shippingZone:
+            shipping.label,
+          mergedProductsNet,
+          mergedShippingCost,
+          mergedTotal,
+        },
+      });
 
     return {
       ...master,
