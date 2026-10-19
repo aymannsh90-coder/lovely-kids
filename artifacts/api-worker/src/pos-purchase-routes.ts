@@ -1517,6 +1517,43 @@ async function handleCreatePurchase(
         );
       }
 
+      if (draftPublicId) {
+        const draftRows = await tx
+          .select({
+            id: posPurchasesTable.id,
+          })
+          .from(posPurchasesTable)
+          .where(
+            and(
+              eq(
+                posPurchasesTable.publicId,
+                draftPublicId,
+              ),
+              eq(
+                posPurchasesTable.status,
+                "draft",
+              ),
+              eq(
+                posPurchasesTable.enteredByUserId,
+                auth.user.id,
+              ),
+              eq(
+                posPurchasesTable.warehouseKey,
+                warehouseKey,
+              ),
+            ),
+          )
+          .for("update")
+          .limit(1);
+
+        if (!draftRows[0]) {
+          throw new PurchaseError(
+            "فاتورة المشتريات المفتوحة لم تعد موجودة. أعد تحميل الصفحة قبل الاعتماد.",
+            409,
+          );
+        }
+      }
+
       if (supplierInvoiceNumber) {
         const sameInvoiceRows = await tx
           .select({
