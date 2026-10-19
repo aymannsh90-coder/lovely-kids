@@ -30,6 +30,7 @@ import {
 } from "./purchase-feature";
 import {
   addExactProductCostOrInitialize,
+  deriveUnitCostMinor,
   InventoryCostError,
 } from "./inventory-cost-engine";
 import {
@@ -2059,14 +2060,40 @@ async function handleCreatePurchase(
         typeof posPurchaseItemsTable.$inferInsert
       > = [];
 
-      for (const item of resolvedItems) {
-        const productRows = await tx
-          .select()
-          .from(productsTable)
-          .where(eq(productsTable.id, item.productId))
-          .limit(1);
+      const lockedProductsById =
+        new Map<
+          number,
+          typeof productsTable.$inferSelect
+        >();
 
-        const product = productRows[0];
+      for (const item of resolvedItems) {
+        let product =
+          lockedProductsById.get(
+            item.productId,
+          );
+
+        if (!product) {
+          const productRows = await tx
+            .select()
+            .from(productsTable)
+            .where(
+              eq(
+                productsTable.id,
+                item.productId,
+              ),
+            )
+            .for("update")
+            .limit(1);
+
+          product = productRows[0];
+
+          if (product) {
+            lockedProductsById.set(
+              product.id,
+              product,
+            );
+          }
+        }
 
         if (!product) {
           throw new PurchaseError(
@@ -2153,8 +2180,239 @@ async function handleCreatePurchase(
         .values(linesWithPurchase)
         .returning();
 
-      // Purchase invoice is accounting-only.
-      // Do not create an inventory movement here.
+      // Purchase approval does NOT mutate physical stock.
+      // The physical quantity was already entered from the product screen.
+      // Here we only bring Inventory Cost Engine up to the same quantity/value.
+      const costAllocations =
+        allocateApprovedPurchaseCosts(
+          insertedItems,
+          invoiceDiscountMinor,
+        );
+
+      const allocatedPurchaseValue =
+        costAllocations.reduce(
+          (sum, entry) =>
+            sum +
+            entry.costTotalMinor,
+          0,
+        );
+
+      if (
+        allocatedPurchaseValue !==
+        totalMinor
+      ) {
+        throw new PurchaseError(
+          "صافي تكلفة المخزون لا يطابق إجمالي فاتورة المشتريات",
+          409,
+        );
+      }
+
+      const approvedProductIds = [
+        ...new Set(
+          costAllocations.map(
+            (entry) => {
+              if (
+                entry.item.productId ===
+                null
+              ) {
+                throw new PurchaseError(
+                  "تعذر تحديد منتج أحد سطور المشتريات",
+                  409,
+                );
+              }
+
+              return entry.item.productId;
+            },
+          ),
+        ),
+      ].sort(
+        (left, right) =>
+          left - right,
+      );
+
+      for (
+        const productId
+        of approvedProductIds
+      ) {
+        const product =
+          lockedProductsById.get(
+            productId,
+          );
+
+        if (!product) {
+          throw new PurchaseError(
+            "تعذر قفل أحد المنتجات قبل اعتماد تكلفة المشتريات",
+            409,
+          );
+        }
+
+        const physicalQuantity =
+          getProductQuantity(
+            product,
+          );
+
+        if (
+          physicalQuantity === null
+        ) {
+          throw new PurchaseError(
+            "تعذر حساب كمية المخزون الفعلية لأحد أصناف المشتريات",
+            409,
+          );
+        }
+
+        const pendingPurchaseQuantity =
+          await getPendingPurchaseQuantityForProduct(
+            tx,
+            {
+              productId,
+              warehouseKey,
+            },
+          );
+
+        const costStateRows =
+          await tx
+            .select({
+              quantityOnHand:
+                productCostStateTable.quantityOnHand,
+            })
+            .from(productCostStateTable)
+            .where(
+              eq(
+                productCostStateTable.productId,
+                productId,
+              ),
+            )
+            .for("update")
+            .limit(1);
+
+        const currentCostQuantity =
+          costStateRows[0]?.quantityOnHand ??
+          null;
+
+        if (
+          currentCostQuantity === null
+        ) {
+          if (
+            physicalQuantity !==
+            pendingPurchaseQuantity
+          ) {
+            throw new PurchaseError(
+              `الصنف ${product.nameAr} لديه مخزون سابق غير ممثل في محرك التكلفة. أدخل تكلفة أول المدة قبل اعتماد فاتورة المورد.`,
+              409,
+            );
+          }
+        } else if (
+          currentCostQuantity +
+            pendingPurchaseQuantity !==
+          physicalQuantity
+        ) {
+          throw new PurchaseError(
+            `مخزون الصنف ${product.nameAr} لا يطابق محرك التكلفة ومسودات المشتريات المفتوحة. راجع المخزون قبل الاعتماد.`,
+            409,
+          );
+        }
+      }
+
+      for (
+        const allocation
+        of costAllocations
+      ) {
+        const productId =
+          allocation.item.productId;
+
+        if (productId === null) {
+          throw new PurchaseError(
+            "تعذر تحديد منتج أحد سطور المشتريات",
+            409,
+          );
+        }
+
+        let costResult;
+
+        try {
+          costResult =
+            await addExactProductCostOrInitialize(
+              tx,
+              {
+                productId,
+
+                quantity:
+                  allocation.receivedQuantity,
+
+                costTotalMinor:
+                  allocation.costTotalMinor,
+
+                costQuality:
+                  "confirmed",
+
+                eventType:
+                  "purchase",
+
+                sourceType:
+                  "pos_purchase",
+
+                sourceRef:
+                  String(
+                    purchase.id,
+                  ),
+
+                sourceItemRef:
+                  String(
+                    allocation.item.id,
+                  ),
+
+                businessDate,
+
+                note:
+                  `Approved purchase ${purchase.publicId}`,
+
+                createdByUserId:
+                  auth.user.id,
+              },
+            );
+        } catch (error) {
+          if (
+            error instanceof
+            InventoryCostError
+          ) {
+            throw new PurchaseError(
+              "تعذر تحديث تكلفة المخزون لفاتورة المشتريات",
+              409,
+            );
+          }
+
+          throw error;
+        }
+
+        await tx
+          .insert(
+            posPurchaseItemCostsTable,
+          )
+          .values({
+            purchaseItemId:
+              allocation.item.id,
+
+            productId,
+
+            receivedQuantity:
+              allocation.receivedQuantity,
+
+            unitCostMinor:
+              deriveUnitCostMinor(
+                allocation.costTotalMinor,
+                allocation.receivedQuantity,
+              ),
+
+            costTotalMinor:
+              allocation.costTotalMinor,
+
+            invoiceDiscountAllocatedMinor:
+              allocation.invoiceDiscountAllocatedMinor,
+
+            costQuality:
+              costResult.costQuality,
+          });
+      }
 
       if (totalMinor > 0) {
         const ensureAccount = async (input: {
