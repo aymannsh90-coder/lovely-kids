@@ -541,11 +541,26 @@ export default function CartScreen() {
           eventId: `order-${order.id}`,
         });
       } catch (error) {
-        Alert.alert(
-          "تعذّر إنشاء الطلب",
+        const errorMessage =
           error instanceof Error
             ? error.message
-            : "تحقق من اتصال الإنترنت وحاول مرة أخرى"
+            : "تحقق من اتصال الإنترنت وحاول مرة أخرى";
+        const isStockError =
+          /غير متوفر|لم يعد متوفر|المخزون/.test(errorMessage);
+
+        if (isStockError) {
+          setCartStockSnapshot(null);
+          void refreshProducts();
+          setStep("cart");
+        }
+
+        Alert.alert(
+          isStockError
+            ? "تغيّر المخزون"
+            : "تعذّر إنشاء الطلب",
+          isStockError
+            ? `${errorMessage}\n\nراجع المنتج المعلّم في السلة، ويمكنك اختيار لون أو مقاس بديل إن كان متوفرًا.`
+            : errorMessage,
         );
         checkoutSubmitLock.current = false;
         setLoading(false);
