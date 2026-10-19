@@ -1926,6 +1926,7 @@ export default function AdminOrdersScreen() {
         error: "اختر طلبين أو أكثر للدمج",
         productsNet: 0,
         shippingCost: 0,
+        originalShippingTotal: 0,
         total: 0,
         zone: "",
       };
@@ -1952,6 +1953,7 @@ export default function AdminOrdersScreen() {
         error: "الطلبات المختارة ليست لنفس رقم هاتف الزبون",
         productsNet: 0,
         shippingCost: 0,
+        originalShippingTotal: 0,
         total: 0,
         zone: "",
       };
@@ -1972,6 +1974,7 @@ export default function AdminOrdersScreen() {
         error: "يجب أن تكون الطلبات على نفس منطقة التوصيل أو نفس طريقة الاستلام",
         productsNet: 0,
         shippingCost: 0,
+        originalShippingTotal: 0,
         total: 0,
         zone,
       };
@@ -1987,6 +1990,7 @@ export default function AdminOrdersScreen() {
         error: "أحد الطلبات المختارة لا يسمح بالدمج",
         productsNet: 0,
         shippingCost: 0,
+        originalShippingTotal: 0,
         total: 0,
         zone,
       };
@@ -2000,6 +2004,17 @@ export default function AdminOrdersScreen() {
             0,
             order.totalPrice -
               (order.shippingCost ?? 0),
+          ),
+        0,
+      );
+
+    const originalShippingTotal =
+      mergeSelectedOrders.reduce(
+        (sum, order) =>
+          sum +
+          Math.max(
+            0,
+            order.shippingCost ?? 0,
           ),
         0,
       );
@@ -2024,6 +2039,7 @@ export default function AdminOrdersScreen() {
         error: "منطقة التوصيل الحالية غير موجودة في الإعدادات",
         productsNet,
         shippingCost: 0,
+        originalShippingTotal,
         total: productsNet,
         zone,
       };
@@ -2052,6 +2068,7 @@ export default function AdminOrdersScreen() {
       error: null as string | null,
       productsNet,
       shippingCost,
+      originalShippingTotal,
       total:
         productsNet +
         shippingCost,
@@ -3252,8 +3269,14 @@ export default function AdminOrdersScreen() {
                   <Text style={styles.mergeTotalLabel}>قيمة المنتجات بعد الخصومات</Text>
                 </View>
                 <View style={styles.mergeTotalRow}>
+                  <Text style={styles.mergeRemovedShippingValue}>
+                    {mergePreview.originalShippingTotal}₪
+                  </Text>
+                  <Text style={styles.mergeTotalLabel}>رسوم التوصيل قبل الدمج</Text>
+                </View>
+                <View style={styles.mergeTotalRow}>
                   <Text style={styles.mergeTotalValue}>{mergePreview.shippingCost}₪</Text>
-                  <Text style={styles.mergeTotalLabel}>التوصيل مرة واحدة</Text>
+                  <Text style={styles.mergeTotalLabel}>التوصيل بعد الدمج — مرة واحدة</Text>
                 </View>
                 <View style={[styles.mergeTotalRow, styles.mergeGrandTotalRow]}>
                   <Text style={styles.mergeGrandTotalValue}>{mergePreview.total}₪</Text>
@@ -3264,7 +3287,8 @@ export default function AdminOrdersScreen() {
               <View style={styles.mergeSafetyBox}>
                 <Text style={styles.mergeSafetyTitle}>ما الذي سيحدث؟</Text>
                 <Text style={styles.mergeSafetyText}>• المنتجات والمخزون المحجوز لن يتم خصمهما مرة ثانية.</Text>
-                <Text style={styles.mergeSafetyText}>• التوصيل سيُحسب مرة واحدة حسب إعدادات المنطقة والعرض الحالية.</Text>
+                <Text style={styles.mergeSafetyText}>• سيتم إلغاء رسوم التوصيل المنفصلة للطلبات الأصلية والإبقاء على توصيل واحد فقط.</Text>
+                <Text style={styles.mergeSafetyText}>• إذا وصل مجموع المنتجات بعد الخصومات إلى حد عرض التوصيل، سيُطبق العرض تلقائيًا من Settings الحالية.</Text>
                 <Text style={styles.mergeSafetyText}>• سيتم اعتماد بيانات أحدث طلب من الطلبات المختارة.</Text>
                 <Text style={styles.mergeSafetyText}>• الطلبات الأصلية ستبقى محفوظة بحالة «مدمج» للرجوع إليها والتقارير.</Text>
               </View>
@@ -7065,6 +7089,12 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontSize: 13,
     fontWeight: "900",
+  },
+  mergeRemovedShippingValue: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "900",
+    textDecorationLine: "line-through",
   },
   mergeGrandTotalRow: {
     borderTopWidth: 1,
