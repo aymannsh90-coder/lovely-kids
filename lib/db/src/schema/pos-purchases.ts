@@ -100,7 +100,7 @@ export const posPurchasesTable = pgTable(
 
     check(
       "pos_purchases_status_valid",
-      sql`${table.status} in ('completed', 'voided')`,
+      sql`${table.status} in ('draft', 'completed', 'voided')`,
     ),
 
     check(
@@ -180,6 +180,13 @@ export const posPurchasesTable = pgTable(
     index("pos_purchases_entered_by_idx").on(table.enteredByUserId),
 
     index("pos_purchases_created_at_idx").on(table.createdAt),
+
+    uniqueIndex("pos_purchases_one_open_draft_per_user_warehouse_idx")
+      .on(
+        table.enteredByUserId,
+        table.warehouseKey,
+      )
+      .where(sql`${table.status} = \'draft\'`),
   ],
 ).enableRLS();
 
