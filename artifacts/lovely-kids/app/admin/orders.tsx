@@ -488,6 +488,23 @@ function normalizeOrderLookup(value: string) {
     .replace(/[۰-۹]/g, (d) => String(persianDigits.indexOf(d)));
 }
 
+function normalizeMergePhone(value: string) {
+  return value
+    .replace(/[^0-9]/g, "")
+    .replace(/^00/, "");
+}
+
+function isMergeEligibleOrder(order: Order) {
+  return (
+    (order.status === "new" ||
+      order.status === "confirmed") &&
+    order.paymentMethod === "cod" &&
+    order.mergedIntoOrderId == null &&
+    (order.mergedOrderCount ?? 0) === 0 &&
+    !order.exchangePublicId
+  );
+}
+
 export default function AdminOrdersScreen() {
   const colors = useColors();
   const { settings } = useAppSettings();
@@ -1890,9 +1907,404 @@ export default function AdminOrdersScreen() {
     });
   };
 
+  const mergeSelectedOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          mergeSelectedIds.has(order.id),
+      ),
+    [orders, mergeSelectedIds],
+  );
+
+  const mergePreview = useMemo(() => {
+    if (mergeSelectedOrders.length < 2) {
+      return {
+        error: "اختر طلبين أو أكثر للدمج",
+        productsNet: 0,
+        shippingCost: 0,
+        total: 0,
+        zone: "",
+      };
+    }
+
+    const first =
+      mergeSelectedOrders[0]!;
+
+    const phone =
+      normalizeMergePhone(
+        first.customerPhone,
+      );
+
+    if (
+      !phone ||
+      mergeSelectedOrders.some(
+        (order) =>
+          normalizeMergePhone(
+            order.customerPhone,
+          ) !== phone,
+      )
+    ) {
+      return {
+        error: "الطلبات المختارة ليست لنفس رقم هاتف الزبون",
+        productsNet: 0,
+        shippingCost: 0,
+        total: 0,
+        zone: "",
+      };
+    }
+
+    const zone =
+      first.shippingZone?.trim() ?? "";
+
+    if (
+      !zone ||
+      mergeSelectedOrders.some(
+        (order) =>
+          (order.shippingZone?.trim() ?? "") !==
+          zone,
+      )
+    ) {
+      return {
+        error: "يجب أن تكون الطلبات على نفس منطقة التوصيل أو نفس طريقة الاستلام",
+        productsNet: 0,
+        shippingCost: 0,
+        total: 0,
+        zone,
+      };
+    }
+
+    if (
+      mergeSelectedOrders.some(
+        (order) =>
+          !isMergeEligibleOrder(order),
+      )
+    ) {
+      return {
+        error: "أحد الطلبات المختارة لا يسمح بالدمج",
+        productsNet: 0,
+        shippingCost: 0,
+        total: 0,
+        zone,
+      };
+    }
+
+    const productsNet =
+      mergeSelectedOrders.reduce(
+        (sum, order) =>
+          sum +
+          Math.max(
+            0,
+            order.totalPrice -
+              (order.shippingCost ?? 0),
+          ),
+        0,
+      );
+
+    const shippingZone =
+      zone === ADMIN_STORE_PICKUP_LABEL
+        ? {
+            label: ADMIN_STORE_PICKUP_LABEL,
+            cost: 0,
+            promoCost: 0,
+          }
+        : (
+            settings.shippingZones ??
+            []
+          ).find(
+            (candidate) =>
+              candidate.label === zone,
+          ) ?? null;
+
+    if (!shippingZone) {
+      return {
+        error: "منطقة التوصيل الحالية غير موجودة في الإعدادات",
+        productsNet,
+        shippingCost: 0,
+        total: productsNet,
+        zone,
+      };
+    }
+
+    const hasNonStackingDiscount =
+      mergeSelectedOrders.some(
+        (order) =>
+          !!order.discountCode &&
+          order.discountCodeStacksWithShippingPromotion ===
+            false,
+      );
+
+    const shippingCost =
+      zone === ADMIN_STORE_PICKUP_LABEL
+        ? 0
+        : hasNonStackingDiscount
+          ? shippingZone.cost
+          : getAdminEditShippingCost(
+              settings,
+              shippingZone,
+              productsNet,
+            );
+
+    return {
+      error: null as string | null,
+      productsNet,
+      shippingCost,
+      total:
+        productsNet +
+        shippingCost,
+      zone,
+    };
+  }, [
+    mergeSelectedOrders,
+    settings,
+  ]);
+
+  const toggleMergeSelection = (
+    order: Order,
+  ) => {
+    if (!isMergeEligibleOrder(order)) {
+      showError(
+        "يمكن دمج الطلبات الجديدة أو المؤكدة والدفع عند الاستلام فقط",
+      );
+      return;
+    }
+
+    setMergeSelectedIds(
+      (current) => {
+        const next =
+          new Set(current);
+
+        if (next.has(order.id)) {
+          next.delete(order.id);
+        } else {
+          next.add(order.id);
+        }
+
+        return next;
+      },
+    );
+  };
+
+  const openMergePreview = () => {
+    if (mergePreview.error) {
+      showError(
+        mergePreview.error,
+      );
+      return;
+    }
+
+    setMergePreviewVisible(true);
+  };
+
+  const selectCustomerMergeCandidates = (
+    order: Order,
+  ) => {
+    const phone =
+      normalizeMergePhone(
+        order.customerPhone,
+      );
+
+    const orderTime =
+      new Date(
+        order.createdAt,
+      ).getTime();
+
+    const candidates =
+      orders.filter(
+        (candidate) => {
+          if (
+            !isMergeEligibleOrder(
+              candidate,
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            normalizeMergePhone(
+              candidate.customerPhone,
+            ) !== phone
+          ) {
+            return false;
+          }
+
+          if (
+            (candidate.shippingZone?.trim() ?? "") !==
+            (order.shippingZone?.trim() ?? "")
+          ) {
+            return false;
+          }
+
+          const candidateTime =
+            new Date(
+              candidate.createdAt,
+            ).getTime();
+
+          return (
+            Number.isFinite(
+              candidateTime,
+            ) &&
+            Number.isFinite(
+              orderTime,
+            ) &&
+            Math.abs(
+              candidateTime -
+                orderTime,
+            ) <=
+              24 *
+                60 *
+                60 *
+                1000
+          );
+        },
+      );
+
+    if (candidates.length < 2) {
+      showError(
+        "لا توجد طلبات أخرى قابلة للدمج لنفس الزبون خلال 24 ساعة",
+      );
+      return;
+    }
+
+    setMergeSelectedIds(
+      new Set(
+        candidates.map(
+          (candidate) =>
+            candidate.id,
+        ),
+      ),
+    );
+
+    setMergePreviewVisible(
+      true,
+    );
+  };
+
+  const performMergeOrders = async () => {
+    if (
+      mergeBusy ||
+      mergePreview.error ||
+      mergeSelectedOrders.length <
+        2
+    ) {
+      return;
+    }
+
+    setMergeBusy(true);
+
+    try {
+      const token =
+        await getAuthToken();
+
+      if (!token) {
+        throw new Error(
+          "انتهت جلسة تسجيل الدخول",
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE}/api/orders/merge`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify({
+                orderIds:
+                  mergeSelectedOrders.map(
+                    (order) =>
+                      order.id,
+                  ),
+              }),
+          },
+        );
+
+      const body =
+        (await response
+          .json()
+          .catch(
+            () => null,
+          )) as
+          | (
+              Order & {
+                mergedOrderIds?: number[];
+              }
+            )
+          | {
+              error?: string;
+            }
+          | null;
+
+      if (
+        !response.ok ||
+        !body ||
+        !("id" in body)
+      ) {
+        throw new Error(
+          body &&
+          "error" in body &&
+          body.error
+            ? body.error
+            : "تعذر دمج الطلبات",
+        );
+      }
+
+      setMergePreviewVisible(
+        false,
+      );
+      setMergeSelectedIds(
+        new Set(),
+      );
+      setExpanded(body.id);
+
+      await fetchOrders();
+
+      if (
+        Platform.OS !==
+        "web"
+      ) {
+        Alert.alert(
+          "تم دمج الطلبات",
+          `تم إنشاء الطلب الرئيسي #${body.id} بدون خصم المخزون مرة ثانية.`,
+        );
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "تعذر دمج الطلبات";
+
+      showError(message);
+
+      if (
+        Platform.OS !==
+        "web"
+      ) {
+        Alert.alert(
+          "تعذر دمج الطلبات",
+          message,
+        );
+      }
+    } finally {
+      setMergeBusy(false);
+    }
+  };
+
   const orderStatusCounts = useMemo(() => {
+    const operationalOrders =
+      orders.filter(
+        (order) =>
+          order.mergedIntoOrderId ==
+          null,
+      );
+
     const counts: Record<string, number> = {
-      all: orders.length,
+      all:
+        operationalOrders.length,
       exchange: 0,
     };
 
@@ -1900,7 +2312,7 @@ export default function AdminOrdersScreen() {
       counts[option.key] = 0;
     }
 
-    for (const order of orders) {
+    for (const order of operationalOrders) {
       if (order.exchangePublicId) {
         counts.exchange += 1;
       }
@@ -1919,6 +2331,13 @@ export default function AdminOrdersScreen() {
     const compactNeedle = needle.replace(/\s+/g, "");
 
     return orders.filter((order) => {
+      if (
+        order.mergedIntoOrderId !== null &&
+        !needle
+      ) {
+        return false;
+      }
+
       if (
         orderStatusFilter === "exchange" &&
         !order.exchangePublicId
