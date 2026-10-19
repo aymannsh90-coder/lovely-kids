@@ -3300,6 +3300,8 @@ export function savePosPurchaseDraft(
   token: string,
   input: {
     supplierId: string;
+    draftPublicId?: string;
+    draftUpdatedAt?: string;
     supplierInvoiceNumber?: string;
     businessDate: string;
     warehouseKey: string;
