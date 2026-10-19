@@ -299,7 +299,13 @@ router.patch("/orders/:id/payment-proof", requireAuth, async (req, res) => {
     return;
   }
 
-  res.json(updated[0]);
+  res.json(
+    user.isAdmin
+      ? updated[0]
+      : sanitizeCustomerOrder(
+          updated[0],
+        ),
+  );
 });
 
 // PATCH /api/orders/:id/confirm-payment — admin confirms payment
