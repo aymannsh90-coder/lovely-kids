@@ -32,8 +32,10 @@ ALTER TABLE pos_purchases
     )
   );
 
-CREATE UNIQUE INDEX IF NOT EXISTS pos_purchases_one_open_draft_per_user_warehouse_idx
-  ON pos_purchases (entered_by_user_id, warehouse_key)
+DROP INDEX IF EXISTS pos_purchases_one_open_draft_per_user_warehouse_idx;
+
+CREATE UNIQUE INDEX IF NOT EXISTS pos_purchases_one_open_draft_per_supplier_user_warehouse_idx
+  ON pos_purchases (supplier_id, entered_by_user_id, warehouse_key)
   WHERE status = 'draft';
 
 DROP INDEX IF EXISTS pos_purchases_supplier_invoice_unique_idx;
