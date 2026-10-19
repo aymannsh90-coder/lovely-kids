@@ -4,6 +4,10 @@
 
 BEGIN;
 
+ALTER TABLE pos_purchase_items
+  ALTER COLUMN unit_cost_minor DROP NOT NULL,
+  ALTER COLUMN line_total_minor DROP NOT NULL;
+
 ALTER TABLE pos_purchases
   DROP CONSTRAINT IF EXISTS pos_purchases_status_valid;
 
