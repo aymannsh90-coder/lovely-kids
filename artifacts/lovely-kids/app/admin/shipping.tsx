@@ -97,6 +97,30 @@ export default function AdminShippingScreen() {
       </View>
 
       <View style={styles.body}>
+        <View
+          style={[
+            styles.infoCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name="information-circle-outline"
+            size={20}
+            color={colors.primary}
+          />
+          <Text
+            style={[
+              styles.infoText,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            السعر للزبون هو الذي يظهر في المتجر ويُستخدم في عروض التوصيل. التكلفة الفعلية للشركة داخلية فقط وتُثبت على الطرد عند إخراجه للتوصيل.
+          </Text>
+        </View>
+
         {(settings.shippingZones ?? []).map((zone, index) => (
           <View
             key={`${zone.label}-${index}`}
@@ -112,17 +136,6 @@ export default function AdminShippingScreen() {
                 {zone.label}
               </Text>
 
-              <Text
-                style={[
-                  styles.hint,
-                  {
-                    color:
-                      colors.mutedForeground,
-                  },
-                ]}
-              >
-                السعر للزبون يبقى أساس عرض التوصيل، والتكلفة الفعلية تستخدم فقط في حساب شركة التوصيل.
-              </Text>
             </View>
 
             <View style={styles.priceColumns}>
@@ -313,6 +326,20 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
+  infoCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 19,
+    textAlign: "right",
+  },
   zoneInfo: {
     flex: 1,
     alignItems: "flex-end",
@@ -320,11 +347,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontWeight: "800",
-    textAlign: "right",
-  },
-  hint: {
-    fontSize: 11,
-    lineHeight: 18,
     textAlign: "right",
   },
   priceColumns: {
