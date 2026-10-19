@@ -234,7 +234,9 @@ export async function appendProductToSupplierDraft(
 
   const existing =
     currentItems.find(
-      (item) =>
+      (
+        item: typeof posPurchaseItemsTable.$inferSelect,
+      ) =>
         item.productId === product.id,
     ) ?? null;
 
@@ -289,7 +291,10 @@ export async function appendProductToSupplierDraft(
   } else {
     const nextLineNumber =
       currentItems.reduce(
-        (max, item) =>
+        (
+          max: number,
+          item: typeof posPurchaseItemsTable.$inferSelect,
+        ) =>
           Math.max(
             max,
             item.lineNumber,
