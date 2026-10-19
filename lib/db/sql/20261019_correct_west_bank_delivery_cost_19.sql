@@ -24,8 +24,7 @@ BEGIN
   WHERE o.shipping_zone = 'الضفة الغربية'
     AND o.fulfillment_method = 'delivery'
     AND o.status = 'done'
-    AND o.delivery_company_cost IS NOT NULL
-    AND o.delivery_company_cost <> 19
+    AND o.delivery_company_cost = 20
     AND NOT EXISTS (
       SELECT 1
       FROM finance_transactions t
@@ -47,8 +46,7 @@ BEGIN
   WHERE o.shipping_zone = 'الضفة الغربية'
     AND o.fulfillment_method = 'delivery'
     AND o.status = 'done'
-    AND o.delivery_company_cost IS NOT NULL
-    AND o.delivery_company_cost <> 19
+    AND o.delivery_company_cost = 20
     AND o.delivery_company_id IS NULL;
 
   IF missing_company > 0 THEN
@@ -63,8 +61,7 @@ BEGIN
   WHERE o.shipping_zone = 'الضفة الغربية'
     AND o.fulfillment_method = 'delivery'
     AND o.status = 'done'
-    AND o.delivery_company_cost IS NOT NULL
-    AND o.delivery_company_cost <> 19
+    AND o.delivery_company_cost = 20
     AND NOT EXISTS (
       SELECT 1
       FROM finance_accounts a
@@ -85,8 +82,7 @@ BEGIN
   WHERE o.shipping_zone = 'الضفة الغربية'
     AND o.fulfillment_method = 'delivery'
     AND o.status = 'done'
-    AND o.delivery_company_cost IS NOT NULL
-    AND o.delivery_company_cost <> 19
+    AND o.delivery_company_cost = 20
     AND NOT EXISTS (
       SELECT 1
       FROM finance_accounts a
@@ -153,8 +149,7 @@ WITH targets AS (
   WHERE o.shipping_zone = 'الضفة الغربية'
     AND o.fulfillment_method = 'delivery'
     AND o.status = 'done'
-    AND o.delivery_company_cost IS NOT NULL
-    AND o.delivery_company_cost <> 19
+    AND o.delivery_company_cost = 20
 ),
 new_transactions AS (
   INSERT INTO finance_transactions (
@@ -263,8 +258,7 @@ SET delivery_company_cost = 19
 WHERE shipping_zone = 'الضفة الغربية'
   AND fulfillment_method = 'delivery'
   AND status IN ('delivering', 'done')
-  AND delivery_company_cost IS NOT NULL
-  AND delivery_company_cost <> 19;
+  AND delivery_company_cost = 20;
 
 INSERT INTO security_audit_logs (
   actor_user_id,
