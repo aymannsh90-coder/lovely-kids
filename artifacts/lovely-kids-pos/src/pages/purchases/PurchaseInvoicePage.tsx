@@ -12,9 +12,12 @@ import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
   ApiError,
   createPosPurchase,
+  discardOpenPosPurchaseDraft,
   getCurrentCashSession,
   getLatestPosPurchase,
+  getOpenPosPurchaseDraft,
   getPosPurchaseByPublicId,
+  savePosPurchaseDraft,
   voidPosPurchase,
   getPosSuppliers,
   lookupPosProductByBarcode,
@@ -208,16 +211,8 @@ function getSizes(
   );
 }
 
-function lineSelectionComplete(line: PurchaseLine) {
-  const colors = getColors(line.product);
-
-  if (colors.length > 0 && !line.color) {
-    return false;
-  }
-
-  const sizes = getSizes(line.product, line.color);
-
-  return sizes.length === 0 || Boolean(line.size);
+function lineSelectionComplete(_line: PurchaseLine) {
+  return true;
 }
 
 function errorMessage(error: unknown) {
@@ -357,6 +352,7 @@ export default function PurchaseInvoicePage() {
   useEffect(() => {
     if (PURCHASE_API_ENABLED) {
       void loadSuppliers();
+      void loadOpenDraft();
     }
   }, [token]);
 
@@ -886,48 +882,61 @@ export default function PurchaseInvoicePage() {
       size: string;
     },
   ) {
-    const colors = getColors(product);
+    const quantityToAdd = Math.max(
+      1,
+      Math.min(
+        99_999,
+        Math.trunc(initialQuantity),
+      ),
+    );
 
-    const color =
-      forcedVariant?.color ??
-      product.mappedColor ??
-      (colors.length === 1 ? colors[0] : null);
+    setLines((current) => {
+      const existing = current.find(
+        (line) =>
+          line.product.productId === product.productId,
+      );
 
-    const sizes = getSizes(product, color);
+      if (existing) {
+        return current.map((line) =>
+          line.id === existing.id
+            ? {
+                ...line,
+                quantity: Math.min(
+                  99_999,
+                  line.quantity + quantityToAdd,
+                ),
+                unitCost:
+                  initialUnitCost !== "0.00"
+                    ? initialUnitCost
+                    : line.unitCost,
+              }
+            : line,
+        );
+      }
 
-    const size =
-      forcedVariant?.size ??
-      product.mappedSize ??
-      (sizes.length === 1 ? sizes[0] : null);
-
-    setLines((current) => [
-      ...current,
-      {
-        id: createKey(),
-        barcode:
-          forcedVariant?.barcode ??
-          product.barcode ??
-          "",
-        product,
-        color,
-        size,
-        quantity: Math.max(
-          1,
-          Math.min(
-            99_999,
-            Math.trunc(initialQuantity),
-          ),
-        ),
-        freeQuantity: 0,
-        unitCost: initialUnitCost,
-        lineDiscount: "0.00",
-      },
-    ]);
+      return [
+        ...current,
+        {
+          id: createKey(),
+          barcode:
+            forcedVariant?.barcode ??
+            product.barcode ??
+            "",
+          product,
+          color: null,
+          size: null,
+          quantity: quantityToAdd,
+          freeQuantity: 0,
+          unitCost: initialUnitCost,
+          lineDiscount: "0.00",
+        },
+      ];
+    });
 
     setQuery("");
     clearSearchResults();
     setError("");
-    setMessage(`تمت إضافة ${product.nameAr}`);
+    setMessage(`تمت إضافة ${product.nameAr} إلى فاتورة المشتريات المفتوحة`);
 
     window.setTimeout(() => {
       searchInput.current?.focus();
@@ -1068,10 +1077,6 @@ export default function PurchaseInvoicePage() {
     let discounts = 0;
 
     for (const line of lines) {
-      if (!lineSelectionComplete(line)) {
-        return `اختر اللون والمقاس للمنتج ${line.product.nameAr}`;
-      }
-
       if (
         !Number.isSafeInteger(line.quantity) ||
         line.quantity < 1 ||
@@ -1163,6 +1168,93 @@ export default function PurchaseInvoicePage() {
     return null;
   }
 
+  async function loadOpenDraft() {
+    try {
+      const result = await getOpenPosPurchaseDraft(
+        token,
+        "main",
+      );
+
+      if (result) {
+        applyStoredPurchase(result);
+        setMessage(
+          `تم استرجاع فاتورة المشتريات المفتوحة ${result.purchase.publicId}.`,
+        );
+      }
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    }
+  }
+
+  async function handleSaveDraft() {
+    if (!PURCHASE_WRITES_ENABLED) {
+      setError("حفظ مسودة المشتريات غير مفعل.");
+      return;
+    }
+
+    const validationError = validateInvoice();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setInvoiceBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result = await savePosPurchaseDraft(
+        token,
+        {
+          supplierId,
+          supplierInvoiceNumber:
+            supplierInvoiceNumber.trim() || undefined,
+          businessDate,
+          warehouseKey,
+          currencyCode: "ILS",
+          paymentMethod,
+          invoiceDiscount,
+          paid,
+          notes: notes.trim() || undefined,
+          items: lines.map((line) => ({
+            productId: line.product.productId,
+            barcode: line.barcode || undefined,
+            quantity: line.quantity,
+            freeQuantity: line.freeQuantity,
+            unitCost: line.unitCost,
+            lineDiscount: line.lineDiscount,
+          })),
+        },
+      );
+
+      setSavedPurchase(result);
+      setMessage(
+        `تم حفظ المسودة ${result.purchase.publicId}. لا يوجد أي قيد مالي حتى اعتماد الفاتورة.`,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
   async function refreshCashSession() {
     const current = await getCurrentCashSession(
       token,
@@ -1234,8 +1326,6 @@ export default function PurchaseInvoicePage() {
           freeQuantity: line.freeQuantity,
           unitCost: line.unitCost,
           lineDiscount: line.lineDiscount,
-          color: line.color ?? undefined,
-          size: line.size ?? undefined,
         })),
       });
 
@@ -1320,7 +1410,11 @@ export default function PurchaseInvoicePage() {
 
     setSavedPurchase(result);
     setError("");
-    setMessage(`تم فتح الفاتورة ${result.purchase.publicId}.`);
+    setMessage(
+      result.purchase.status === "draft"
+        ? `تم فتح المسودة ${result.purchase.publicId} ويمكنك متابعة تعديلها.`
+        : `تم فتح الفاتورة ${result.purchase.publicId}.`,
+    );
     clearSearchResults();
     requestKey.current = null;
   }
@@ -1493,7 +1587,37 @@ export default function PurchaseInvoicePage() {
     }
   }
 
-  function resetInvoice() {
+  async function resetInvoice() {
+    if (
+      savedPurchase?.purchase.status === "draft"
+    ) {
+      const confirmed = window.confirm(
+        "سيتم إلغاء المسودة المفتوحة وبدء فاتورة جديدة. هل تريد المتابعة؟",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await discardOpenPosPurchaseDraft(
+          token,
+          warehouseKey,
+        );
+      } catch (caught) {
+        if (
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+          return;
+        }
+
+        setError(errorMessage(caught));
+        return;
+      }
+    }
+
     setSupplierInvoiceNumber("");
     setBusinessDate(localBusinessDate());
     setWarehouseKey("main");
@@ -1535,7 +1659,9 @@ export default function PurchaseInvoicePage() {
           {savedPurchase
             ? savedPurchase.purchase.status === "voided"
               ? `محذوفة — ${savedPurchase.purchase.publicId}`
-              : savedPurchase.purchase.publicId
+              : savedPurchase.purchase.status === "draft"
+                ? `مسودة مفتوحة — ${savedPurchase.purchase.publicId}`
+                : savedPurchase.purchase.publicId
             : PURCHASE_WRITES_ENABLED
               ? "مسودة فاتورة جديدة"
               : "واجهة تطوير — الحفظ محمي"}
@@ -1546,7 +1672,7 @@ export default function PurchaseInvoicePage() {
         <button
           type="button"
           disabled={invoiceBusy}
-          onClick={resetInvoice}
+          onClick={() => void resetInvoice()}
         >
           فاتورة جديدة
         </button>
@@ -1607,16 +1733,30 @@ export default function PurchaseInvoicePage() {
         </button>
 
         <button
+          type="button"
+          disabled={
+            invoiceBusy ||
+            !PURCHASE_WRITES_ENABLED ||
+            (savedPurchase !== null &&
+              savedPurchase.purchase.status !== "draft")
+          }
+          onClick={() => void handleSaveDraft()}
+        >
+          {invoiceBusy ? "جاري الحفظ…" : "حفظ المسودة"}
+        </button>
+
+        <button
           className="is-primary-action"
           type="button"
           disabled={
             invoiceBusy ||
             !PURCHASE_WRITES_ENABLED ||
-            savedPurchase !== null
+            (savedPurchase !== null &&
+              savedPurchase.purchase.status !== "draft")
           }
           onClick={() => void handleSaveInvoice()}
         >
-          {invoiceBusy ? "جاري الحفظ…" : "حفظ الفاتورة"}
+          {invoiceBusy ? "جاري الاعتماد…" : "اعتماد الفاتورة"}
         </button>
 
         <button
@@ -1624,12 +1764,13 @@ export default function PurchaseInvoicePage() {
           disabled={
             invoiceBusy ||
             !PURCHASE_WRITES_ENABLED ||
-            savedPurchase !== null
+            (savedPurchase !== null &&
+              savedPurchase.purchase.status !== "draft")
           }
           onClick={() => void handleSaveInvoice(true)}
         >
           <span aria-hidden="true">🖨️</span>
-          حفظ وطباعة A4
+          اعتماد وطباعة A4
         </button>
 
         <button
@@ -1657,12 +1798,15 @@ export default function PurchaseInvoicePage() {
             disabled={
               invoiceBusy ||
               !PURCHASE_WRITES_ENABLED ||
-              savedPurchase.purchase.status === "voided"
+              savedPurchase.purchase.status === "voided" ||
+              savedPurchase.purchase.status === "draft"
             }
             onClick={() => void handleVoidInvoice()}
           >
             {savedPurchase.purchase.status === "voided"
               ? "الفاتورة محذوفة"
+              : savedPurchase.purchase.status === "draft"
+                ? "المسودة غير معتمدة"
               : invoiceBusy
                 ? "جاري الحذف…"
                 : "حذف الفاتورة"}
@@ -1696,7 +1840,11 @@ export default function PurchaseInvoicePage() {
 
       <fieldset
         className="purchase-invoice-fieldset"
-        disabled={invoiceBusy || savedPurchase !== null}
+        disabled={
+          invoiceBusy ||
+          (savedPurchase !== null &&
+            savedPurchase.purchase.status !== "draft")
+        }
       >
         <section className="accounting-invoice-information">
           <div className="accounting-invoice-card">
@@ -1914,8 +2062,6 @@ export default function PurchaseInvoicePage() {
                 <th>الباركود</th>
                 <th>رقم الصنف</th>
                 <th>اسم الصنف</th>
-                <th>اللون</th>
-                <th>المقاس</th>
                 <th>الكمية</th>
                 <th>مجاني</th>
                 <th>تكلفة الوحدة</th>
@@ -1928,19 +2074,13 @@ export default function PurchaseInvoicePage() {
             <tbody>
               {lines.length === 0 ? (
                 <tr className="accounting-empty-row">
-                  <td colSpan={12}>
+                  <td colSpan={10}>
                     امسح باركود صنف أو استخدم البحث
                     لإضافته.
                   </td>
                 </tr>
               ) : (
                 lines.map((line, index) => {
-                  const colors = getColors(line.product);
-                  const sizes = getSizes(
-                    line.product,
-                    line.color,
-                  );
-
                   const lineTotal = Math.max(
                     0,
                     safeMoneyToMinor(line.unitCost) *
@@ -1952,11 +2092,6 @@ export default function PurchaseInvoicePage() {
 
                   return (
                     <tr
-                      className={
-                        lineSelectionComplete(line)
-                          ? ""
-                          : "is-incomplete"
-                      }
                       key={line.id}
                     >
                       <td>{index + 1}</td>
@@ -1968,69 +2103,6 @@ export default function PurchaseInvoicePage() {
                       <td className="accounting-product-cell">
                         <img src={line.product.image} alt="" />
                         <strong>{line.product.nameAr}</strong>
-                      </td>
-
-                      <td>
-                        {savedPurchase ? (
-                          line.color ?? "—"
-                        ) : colors.length > 0 ? (
-                          <select
-                            value={line.color ?? ""}
-                            onChange={(event) =>
-                              changeColor(
-                                line,
-                                event.target.value,
-                              )
-                            }
-                          >
-                            <option value="">
-                              اختر اللون
-                            </option>
-
-                            {colors.map((color) => (
-                              <option
-                                value={color}
-                                key={color}
-                              >
-                                {color}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-
-                      <td>
-                        {savedPurchase ? (
-                          line.size ?? "—"
-                        ) : sizes.length > 0 ? (
-                          <select
-                            value={line.size ?? ""}
-                            onChange={(event) =>
-                              updateLine(line.id, {
-                                size:
-                                  event.target.value ||
-                                  null,
-                              })
-                            }
-                          >
-                            <option value="">
-                              اختر المقاس
-                            </option>
-
-                            {sizes.map((size) => (
-                              <option
-                                value={size}
-                                key={size}
-                              >
-                                {size}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          "—"
-                        )}
                       </td>
 
                       <td>
