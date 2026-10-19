@@ -1299,25 +1299,6 @@ async function handleCreateSettlement(
       );
     }
 
-    const pgError = error as {
-      code?: string;
-      constraint?: string;
-    };
-
-    if (
-      pgError.code === "23505" &&
-      pgError.constraint ===
-        "delivery_company_settlement_items_active_order_idx"
-    ) {
-      return json(
-        {
-          error:
-            "أحد الطلبات المحددة تمت تسويته مسبقًا",
-        },
-        409,
-      );
-    }
-
     console.error(
       "DELIVERY_SETTLEMENT_CREATE_FAILED",
       error,
