@@ -60,6 +60,15 @@ export default function PurchaseA4Invoice({
         </div>
       </header>
 
+      {purchase.status === "draft" && (
+        <div className="purchase-a4-voided">
+          <strong>مسودة غير معتمدة</strong>
+          <span>
+            هذه المسودة لا تنشئ ذمة مورد ولا قيدًا ماليًا حتى اعتمادها.
+          </span>
+        </div>
+      )}
+
       {purchase.status === "voided" && (
         <div className="purchase-a4-voided">
           <strong>فاتورة محذوفة</strong>
@@ -115,8 +124,6 @@ export default function PurchaseA4Invoice({
             <th>#</th>
             <th>رقم الصنف</th>
             <th>اسم الصنف</th>
-            <th>اللون</th>
-            <th>المقاس</th>
             <th>الكمية</th>
             <th>مجاني</th>
             <th>تكلفة الوحدة</th>
@@ -131,8 +138,6 @@ export default function PurchaseA4Invoice({
               <td>{index + 1}</td>
               <td dir="ltr">{item.productCode ?? "—"}</td>
               <td>{item.productNameAr}</td>
-              <td>{item.color ?? "—"}</td>
-              <td>{item.size ?? "—"}</td>
               <td>{item.quantity}</td>
               <td>{item.freeQuantity}</td>
               <td dir="ltr">{money(item.unitCost)}</td>
