@@ -21,6 +21,27 @@ export type StockCostInput =
       unitCostMinor: number;
     };
 
+export type PurchaseDraftLinkInput = {
+  supplierId: string;
+  unitCostMinor: number | null;
+  businessDate: string;
+};
+
+function purchaseDraftLinkBody(
+  input?: PurchaseDraftLinkInput,
+) {
+  if (!input) return {};
+
+  return {
+    purchaseSupplierId:
+      input.supplierId,
+    purchaseUnitCostMinor:
+      input.unitCostMinor,
+    purchaseBusinessDate:
+      input.businessDate,
+  };
+}
+
 function costInputBody(
   costInput?: StockCostInput,
 ) {
@@ -47,10 +68,12 @@ interface ProductsContextType {
     openingCost?: {
       unitCostMinor: number;
     },
+    purchaseDraftLink?: PurchaseDraftLinkInput,
   ) => Promise<Product>;
   updateProduct: (
     product: Product,
     costInput?: StockCostInput,
+    purchaseDraftLink?: PurchaseDraftLinkInput,
   ) => Promise<Product>;
   deleteProduct: (id: string) => Promise<void>;
   setProductHidden: (id: string, hidden: boolean) => Promise<Product>;
@@ -287,6 +310,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     openingCost?: {
       unitCostMinor: number;
     },
+    purchaseDraftLink?: PurchaseDraftLinkInput,
   ) => {
     const headers = await getAdminHeaders();
 
@@ -301,6 +325,9 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
                 openingCost.unitCostMinor,
             }
           : {}),
+        ...purchaseDraftLinkBody(
+          purchaseDraftLink,
+        ),
       }),
     });
     if (!res.ok) {
@@ -319,6 +346,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   const updateProduct = useCallback(async (
     product: Product,
     costInput?: StockCostInput,
+    purchaseDraftLink?: PurchaseDraftLinkInput,
   ) => {
     const headers = await getAdminHeaders();
 
@@ -330,6 +358,9 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           ...toInsertBody(product),
           ...costInputBody(costInput),
+          ...purchaseDraftLinkBody(
+            purchaseDraftLink,
+          ),
         }),
       },
     );
