@@ -91,12 +91,23 @@ export function getCartStockStatus(
   item: CartItem,
   product: Product | undefined,
 ): CartStockStatus {
-  if (!product || isProductFullyUnavailable(product)) {
+  if (!product) {
+    return {
+      valid: false,
+      kind: "product_unavailable",
+      message: "هذا المنتج لم يعد متوفرًا للطلب",
+      detail: "يمكنك حذفه من السلة ومتابعة باقي الطلب.",
+      hasAlternatives: false,
+      availableQuantity: 0,
+    };
+  }
+
+  if (isProductFullyUnavailable(product)) {
     return {
       valid: false,
       kind: "product_unavailable",
       message: "هذا المنتج نفد بالكامل",
-      detail: "يمكنك حذفه من السلة ومتابعة باقي الطلب.",
+      detail: "نفدت جميع الخيارات المتاحة لهذا المنتج. يمكنك حذفه من السلة ومتابعة باقي الطلب.",
       hasAlternatives: false,
       availableQuantity: 0,
     };
