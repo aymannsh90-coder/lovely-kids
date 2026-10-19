@@ -21,6 +21,9 @@ import {
   allocateOrderCostAcrossLines,
   type OrderCostLine,
 } from "./order-cost-helpers";
+import {
+  getPendingPurchaseQuantityForProduct,
+} from "./purchase-draft-service";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -1026,10 +1029,45 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
           },
         );
 
-      // Never block a real customer order merely because
-      // this product was not initialized for cost accounting
-      // or an older stock mismatch exists.
+      // Preserve the legacy behavior for old/uninitialized cost
+      // records, but never let a customer order consume quantity that
+      // is known to belong to an unapproved supplier purchase draft.
       if (!costResult.tracked) {
+        if (
+          costResult.reason ===
+            "insufficient_accounting_quantity" ||
+          costResult.reason ===
+            "uninitialized"
+        ) {
+          const pendingPurchaseQuantity =
+            await getPendingPurchaseQuantityForProduct(
+              tx,
+              {
+                productId,
+              },
+            );
+
+          if (
+            pendingPurchaseQuantity > 0
+          ) {
+            console.warn(
+              "ONLINE_ORDER_BLOCKED_PENDING_PURCHASE",
+              {
+                orderId:
+                  order.id,
+                productId,
+                pendingPurchaseQuantity,
+                reason:
+                  costResult.reason,
+              },
+            );
+
+            throw new OrderValidationError(
+              "أحد المنتجات قيد تحديث المخزون حاليًا. حاول إتمام الطلب بعد قليل.",
+            );
+          }
+        }
+
         console.warn(
           "ONLINE_ORDER_COST_UNTRACKED",
           {
