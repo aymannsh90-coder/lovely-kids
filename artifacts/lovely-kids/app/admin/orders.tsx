@@ -2075,10 +2075,17 @@ export default function AdminOrdersScreen() {
 
         if (next.has(order.id)) {
           next.delete(order.id);
-        } else {
-          next.add(order.id);
+          return next;
         }
 
+        if (next.size >= 10) {
+          showError(
+            "يمكن دمج حتى 10 طلبات في العملية الواحدة",
+          );
+          return next;
+        }
+
+        next.add(order.id);
         return next;
       },
     );
