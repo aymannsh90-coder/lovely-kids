@@ -1316,6 +1316,14 @@ export default function PurchaseInvoicePage() {
         token,
         {
           supplierId,
+          draftPublicId:
+            savedPurchase?.purchase.status === "draft"
+              ? savedPurchase.purchase.publicId
+              : undefined,
+          draftUpdatedAt:
+            savedPurchase?.purchase.status === "draft"
+              ? savedPurchase.purchase.updatedAt
+              : undefined,
           supplierInvoiceNumber:
             supplierInvoiceNumber.trim() || undefined,
           businessDate,
