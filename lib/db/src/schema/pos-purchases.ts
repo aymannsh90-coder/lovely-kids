@@ -224,9 +224,9 @@ export const posPurchaseItemsTable = pgTable(
     quantity: integer("quantity").notNull(),
     freeQuantity: integer("free_quantity").notNull().default(0),
 
-    unitCostMinor: integer("unit_cost_minor").notNull(),
+    unitCostMinor: integer("unit_cost_minor"),
     lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
-    lineTotalMinor: integer("line_total_minor").notNull(),
+    lineTotalMinor: integer("line_total_minor"),
 
     generalStockBefore: integer("general_stock_before"),
     generalStockAfter: integer("general_stock_after"),
