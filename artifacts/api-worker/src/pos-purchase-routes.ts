@@ -1319,6 +1319,38 @@ async function handleCreatePurchase(
       80,
     );
 
+    const draftUpdatedAt = optionalText(
+      payload.draftUpdatedAt,
+      "إصدار المسودة",
+      80,
+    );
+
+    let draftUpdatedAtMs: number | null = null;
+
+    if (draftUpdatedAt) {
+      draftUpdatedAtMs =
+        Date.parse(draftUpdatedAt);
+
+      if (
+        !Number.isFinite(
+          draftUpdatedAtMs,
+        )
+      ) {
+        throw new PurchaseError(
+          "إصدار المسودة غير صالح",
+        );
+      }
+    }
+
+    if (
+      draftPublicId &&
+      draftUpdatedAtMs === null
+    ) {
+      throw new PurchaseError(
+        "يجب إرسال إصدار المسودة عند اعتماد فاتورة مفتوحة",
+      );
+    }
+
     const businessDate = normalizeBusinessDate(
       payload.businessDate,
     );
@@ -1528,6 +1560,8 @@ async function handleCreatePurchase(
         const draftRows = await tx
           .select({
             id: posPurchasesTable.id,
+            updatedAt:
+              posPurchasesTable.updatedAt,
           })
           .from(posPurchasesTable)
           .where(
@@ -1557,9 +1591,23 @@ async function handleCreatePurchase(
           .for("update")
           .limit(1);
 
-        if (!draftRows[0]) {
+        const lockedDraft =
+          draftRows[0];
+
+        if (!lockedDraft) {
           throw new PurchaseError(
             "فاتورة المشتريات المفتوحة لم تعد موجودة. أعد تحميل الصفحة قبل الاعتماد.",
+            409,
+          );
+        }
+
+        if (
+          draftUpdatedAtMs !== null &&
+          lockedDraft.updatedAt.getTime() !==
+            draftUpdatedAtMs
+        ) {
+          throw new PurchaseError(
+            "تم تحديث مسودة هذا المورد من مكان آخر. أعد تحميل المسودة قبل الاعتماد حتى لا تضيع أصناف جديدة.",
             409,
           );
         }
