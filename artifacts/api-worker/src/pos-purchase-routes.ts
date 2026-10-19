@@ -9,7 +9,6 @@ import {
   productBarcodesTable,
   productsTable,
   suppliersTable,
-  type ColorVariant,
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -1521,6 +1520,10 @@ async function handleCreatePurchase(
                 posPurchasesTable.supplierInvoiceNumber,
                 supplierInvoiceNumber,
               ),
+              eq(
+                posPurchasesTable.status,
+                "completed",
+              ),
             ),
           )
           .limit(1);
@@ -1707,111 +1710,11 @@ async function handleCreatePurchase(
           );
         }
 
-        if (
-          item.mappedColor &&
-          item.color &&
-          item.mappedColor !== item.color
-        ) {
-          throw new PurchaseError(
-            `لون باركود ${item.barcode} غير مطابق`,
-          );
-        }
-
-        if (
-          item.mappedSize &&
-          item.size &&
-          item.mappedSize !== item.size
-        ) {
-          throw new PurchaseError(
-            `مقاس باركود ${item.barcode} غير مطابق`,
-          );
-        }
-
-        const color =
-          item.mappedColor ?? item.color;
-
-        const size =
-          item.mappedSize ?? item.size;
-
-        // Keep product option validation even though purchase invoices
-        // no longer mutate physical inventory.
-        const colorVariants =
-          (product.colorVariants as
-            | ColorVariant[]
-            | null) ?? [];
-
-        const generalSizes =
-          (product.sizes as string[] | null) ?? [];
-
-        if (colorVariants.length > 0) {
-          if (!color) {
-            throw new PurchaseError(
-              `يجب تحديد لون ${product.nameAr}`,
-            );
-          }
-
-          const variant =
-            colorVariants.find(
-              (entry) => entry.color === color,
-            );
-
-          if (!variant) {
-            throw new PurchaseError(
-              `لون ${product.nameAr} غير موجود`,
-            );
-          }
-
-          const variantSizes =
-            Array.isArray(variant.sizes)
-              ? variant.sizes
-              : [];
-
-          if (variantSizes.length > 0) {
-            if (!size) {
-              throw new PurchaseError(
-                `يجب تحديد مقاس ${product.nameAr}`,
-              );
-            }
-
-            if (
-              !variantSizes.some(
-                (entry) => entry.size === size,
-              )
-            ) {
-              throw new PurchaseError(
-                `مقاس ${product.nameAr} غير موجود`,
-              );
-            }
-          } else if (size) {
-            throw new PurchaseError(
-              `المقاس غير صالح للمنتج ${product.nameAr}`,
-            );
-          }
-        } else {
-          if (color) {
-            throw new PurchaseError(
-              `اللون غير صالح للمنتج ${product.nameAr}`,
-            );
-          }
-
-          if (
-            generalSizes.length > 0 &&
-            (!size || !generalSizes.includes(size))
-          ) {
-            throw new PurchaseError(
-              `مقاس ${product.nameAr} غير موجود`,
-            );
-          }
-
-          if (
-            generalSizes.length === 0 &&
-            size
-          ) {
-            throw new PurchaseError(
-              `المقاس غير صالح للمنتج ${product.nameAr}`,
-            );
-          }
-        }
+        // Purchase invoices intentionally work at product/model level.
+        // Barcode variant metadata may help locate the product, but purchase
+        // accounting must not require or mutate color/size inventory.
+        const color = null;
+        const size = null;
 
         // Purchase invoices are accounting-only.
         // Physical inventory is managed manually from the store
@@ -2053,6 +1956,22 @@ async function handleCreatePurchase(
           );
         }
       }
+
+      await tx
+        .delete(posPurchasesTable)
+        .where(
+          and(
+            eq(posPurchasesTable.status, "draft"),
+            eq(
+              posPurchasesTable.enteredByUserId,
+              auth.user.id,
+            ),
+            eq(
+              posPurchasesTable.warehouseKey,
+              warehouseKey,
+            ),
+          ),
+        );
 
       return {
         purchase,
