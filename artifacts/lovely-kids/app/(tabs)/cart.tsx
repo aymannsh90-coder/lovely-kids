@@ -640,7 +640,7 @@ export default function CartScreen() {
   };
 
   const fetchFreshCartProducts = async (): Promise<Product[]> => {
-    const response = await fetch(`${API_BASE}/api/products`);
+    const response = await fetch(`${API_BASE}/api/products?cartStockCheck=${Date.now()}`);
 
     if (!response.ok) {
       throw new Error("تعذر تحديث المخزون");
