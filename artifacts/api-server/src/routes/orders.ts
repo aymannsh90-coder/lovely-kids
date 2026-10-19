@@ -7,6 +7,20 @@ import { createTrustedOrder, OrderValidationError } from "../lib/create-order";
 
 const router = Router();
 
+function sanitizeCustomerOrder<T extends object>(
+  order: T,
+): Omit<T, "deliveryCompanyCost"> {
+  const publicOrder = {
+    ...order,
+  } as T & {
+    deliveryCompanyCost?: unknown;
+  };
+
+  delete publicOrder.deliveryCompanyCost;
+
+  return publicOrder;
+}
+
 
 // POST /api/orders — create an order using trusted server data
 router.post("/orders", async (req, res) => {
@@ -39,7 +53,9 @@ router.post("/orders", async (req, res) => {
       })),
     });
 
-    res.status(201).json(newOrder);
+    res.status(201).json(
+      sanitizeCustomerOrder(newOrder),
+    );
 
     const itemCount = Array.isArray(newOrder.items)
       ? newOrder.items.length
@@ -101,7 +117,11 @@ router.get("/orders/my", requireAuth, async (_req, res) => {
     .where(eq(ordersTable.customerPhone, user.phone))
     .orderBy(desc(ordersTable.createdAt));
 
-  res.json(orders);
+  res.json(
+    orders.map((order) =>
+      sanitizeCustomerOrder(order),
+    ),
+  );
 });
 
 // PATCH /api/orders/:id/cancel — customer cancels their order (only when status = "new")
@@ -157,7 +177,13 @@ router.patch("/orders/:id/cancel", requireAuth, async (req, res) => {
     .where(eq(ordersTable.id, id))
     .returning();
 
-  res.json(updated[0]);
+  res.json(
+    user.isAdmin
+      ? updated[0]
+      : sanitizeCustomerOrder(
+          updated[0],
+        ),
+  );
 });
 
 // PATCH /api/orders/:id/status — update order status (admin)
