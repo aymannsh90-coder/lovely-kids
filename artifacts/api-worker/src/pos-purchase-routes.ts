@@ -1306,6 +1306,12 @@ async function handleCreatePurchase(
       100,
     );
 
+    const draftPublicId = optionalText(
+      payload.draftPublicId,
+      "رقم المسودة",
+      80,
+    );
+
     const businessDate = normalizeBusinessDate(
       payload.businessDate,
     );
@@ -1964,21 +1970,27 @@ async function handleCreatePurchase(
         }
       }
 
-      await tx
-        .delete(posPurchasesTable)
-        .where(
-          and(
-            eq(posPurchasesTable.status, "draft"),
-            eq(
-              posPurchasesTable.enteredByUserId,
-              auth.user.id,
+      if (draftPublicId) {
+        await tx
+          .delete(posPurchasesTable)
+          .where(
+            and(
+              eq(posPurchasesTable.status, "draft"),
+              eq(
+                posPurchasesTable.enteredByUserId,
+                auth.user.id,
+              ),
+              eq(
+                posPurchasesTable.warehouseKey,
+                warehouseKey,
+              ),
+              eq(
+                posPurchasesTable.publicId,
+                draftPublicId,
+              ),
             ),
-            eq(
-              posPurchasesTable.warehouseKey,
-              warehouseKey,
-            ),
-          ),
-        );
+          );
+      }
 
       return {
         purchase,
