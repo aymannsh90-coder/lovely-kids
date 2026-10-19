@@ -3368,6 +3368,51 @@ export default function AdminOrdersScreen() {
               getOrderInvoiceDiscount(item.items);
             const exchangeDisplay =
               getOnlineExchangeDisplay(item);
+            const mergeEligible =
+              isMergeEligibleOrder(item);
+            const mergeSelected =
+              mergeSelectedIds.has(item.id);
+            const mergeCustomerCandidates =
+              mergeEligible
+                ? orders.filter((candidate) => {
+                    if (!isMergeEligibleOrder(candidate)) {
+                      return false;
+                    }
+
+                    if (
+                      normalizeMergePhone(candidate.customerPhone) !==
+                      normalizeMergePhone(item.customerPhone)
+                    ) {
+                      return false;
+                    }
+
+                    if (
+                      (candidate.shippingZone?.trim() ?? "") !==
+                      (item.shippingZone?.trim() ?? "")
+                    ) {
+                      return false;
+                    }
+
+                    const candidateTime =
+                      new Date(candidate.createdAt).getTime();
+                    const itemTime =
+                      new Date(item.createdAt).getTime();
+
+                    return (
+                      Number.isFinite(candidateTime) &&
+                      Number.isFinite(itemTime) &&
+                      Math.abs(candidateTime - itemTime) <=
+                        24 * 60 * 60 * 1000
+                    );
+                  })
+                : [];
+
+            const mergeSuggestionLatestId =
+              mergeCustomerCandidates.reduce(
+                (max, candidate) =>
+                  Math.max(max, candidate.id),
+                0,
+              );
 
             return (
               <Pressable
@@ -3388,6 +3433,40 @@ export default function AdminOrdersScreen() {
                 {/* Card Header */}
                 <View style={styles.cardTop}>
                   <View style={styles.cardTopLeft}>
+                    {mergeEligible ? (
+                      <Pressable
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          toggleMergeSelection(item);
+                        }}
+                        style={[
+                          styles.mergeSelectButton,
+                          {
+                            borderColor: mergeSelected
+                              ? "#2563EB"
+                              : colors.border,
+                            backgroundColor: mergeSelected
+                              ? "#DBEAFE"
+                              : colors.background,
+                          },
+                        ]}
+                        hitSlop={4}
+                      >
+                        <Ionicons
+                          name={
+                            mergeSelected
+                              ? "checkbox"
+                              : "square-outline"
+                          }
+                          size={20}
+                          color={
+                            mergeSelected
+                              ? "#2563EB"
+                              : colors.mutedForeground
+                          }
+                        />
+                      </Pressable>
+                    ) : null}
                     <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                   </View>
                   <View style={styles.cardTopRight}>
@@ -3401,6 +3480,32 @@ export default function AdminOrdersScreen() {
                           </Text>
                         </View>
                       )}
+
+                      {(item.mergedOrderCount ?? 0) > 0 ? (
+                        <View
+                          style={[
+                            styles.newDot,
+                            { backgroundColor: "#2563EB" },
+                          ]}
+                        >
+                          <Text style={styles.newDotText}>
+                            طلب مدمج من {item.mergedOrderCount} طلبات
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {item.mergedIntoOrderId ? (
+                        <View
+                          style={[
+                            styles.newDot,
+                            { backgroundColor: "#64748B" },
+                          ]}
+                        >
+                          <Text style={styles.newDotText}>
+                            مدمج في #{item.mergedIntoOrderId}
+                          </Text>
+                        </View>
+                      ) : null}
 
                       {item.discountCode &&
                       item.discountCodeLabel &&
@@ -3454,6 +3559,33 @@ export default function AdminOrdersScreen() {
                     )}
                   </View>
                 </View>
+
+                {mergeEligible &&
+                mergeCustomerCandidates.length >= 2 &&
+                item.id === mergeSuggestionLatestId ? (
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      selectCustomerMergeCandidates(item);
+                    }}
+                    style={[
+                      styles.mergeSuggestion,
+                      {
+                        backgroundColor: "#EFF6FF",
+                        borderColor: "#93C5FD",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="git-merge-outline"
+                      size={17}
+                      color="#2563EB"
+                    />
+                    <Text style={styles.mergeSuggestionText}>
+                      يوجد {mergeCustomerCandidates.length} طلبات قابلة للدمج لنفس الزبون خلال 24 ساعة — معاينة الدمج
+                    </Text>
+                  </Pressable>
+                ) : null}
 
                 {/* Price row */}
                 <View style={[styles.priceRow, { borderTopColor: colors.border }]}>
