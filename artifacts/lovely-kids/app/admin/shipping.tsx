@@ -139,7 +139,15 @@ export default function AdminShippingScreen() {
             </View>
 
             <View style={styles.priceColumns}>
-              <View style={styles.priceField}>
+              <View
+                style={[
+                  styles.priceField,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
                 <Text
                   style={[
                     styles.fieldLabel,
@@ -212,7 +220,15 @@ export default function AdminShippingScreen() {
                 </View>
               </View>
 
-              <View style={styles.priceField}>
+              <View
+                style={[
+                  styles.priceField,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
                 <Text
                   style={[
                     styles.fieldLabel,
@@ -317,14 +333,20 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
-  body: { padding: 16, gap: 12, width: "100%", maxWidth: 650, alignSelf: "center" },
+  body: {
+    padding: 16,
+    gap: 12,
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+  },
   row: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "column",
-    alignItems: Platform.OS === "web" ? "center" : "stretch",
+    alignItems: "stretch",
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
-    gap: 12,
+    gap: 14,
   },
   infoCard: {
     borderWidth: 1,
@@ -342,6 +364,8 @@ const styles = StyleSheet.create({
   },
   zoneInfo: {
     flex: 1,
+    minWidth: Platform.OS === "web" ? 150 : undefined,
+    justifyContent: "center",
     alignItems: "flex-end",
     gap: 4,
   },
@@ -351,24 +375,35 @@ const styles = StyleSheet.create({
   },
   priceColumns: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
-    alignItems: "flex-end",
+    alignItems: "stretch",
+    justifyContent: Platform.OS === "web" ? "flex-start" : "space-between",
+    flexWrap: "wrap",
     gap: 10,
   },
   priceField: {
-    alignItems: "center",
-    gap: 5,
+    width: Platform.OS === "web" ? 160 : "48%",
+    minWidth: 145,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 8,
+    alignItems: "stretch",
+    gap: 6,
   },
   fieldLabel: {
+    width: "100%",
+    minHeight: 32,
     fontSize: 11,
+    lineHeight: 16,
     fontWeight: "700",
     textAlign: "center",
+    textAlignVertical: "center",
   },
   inputBox: {
-    width: 110,
+    width: "100%",
     height: 44,
     borderWidth: 1,
     borderRadius: 10,
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 10,
   },
