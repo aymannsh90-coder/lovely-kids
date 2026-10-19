@@ -2084,7 +2084,67 @@ export default function AddProductScreen() {
             }
           | undefined;
 
+        let purchaseDraftLink:
+          | {
+              supplierId: string;
+              unitCostMinor: number | null;
+              businessDate: string;
+            }
+          | undefined;
+
         if (
+          user?.isOwner &&
+          purchaseSupplierId &&
+          !increased
+        ) {
+          throw new Error(
+            "اختر المورد فقط عند إدخال كمية جديدة للصنف.",
+          );
+        }
+
+        if (
+          user?.isOwner &&
+          increased &&
+          purchaseSupplierId
+        ) {
+          let unitCostMinor:
+            number | null = null;
+
+          if (
+            editNewBatchCostInput.trim()
+          ) {
+            const shekels =
+              Number(
+                editNewBatchCostInput
+                  .trim()
+                  .replace(",", "."),
+              );
+
+            if (
+              !Number.isFinite(
+                shekels,
+              ) ||
+              shekels < 0
+            ) {
+              throw new Error(
+                "أدخل تكلفة شراء صحيحة أو اتركها فارغة.",
+              );
+            }
+
+            unitCostMinor =
+              Math.round(
+                shekels * 100,
+              );
+          }
+
+          purchaseDraftLink = {
+            supplierId:
+              purchaseSupplierId,
+            unitCostMinor,
+            businessDate:
+              localBusinessDate(),
+          };
+        } else if (
           user?.isOwner &&
           increased
         ) {
@@ -2137,6 +2197,7 @@ export default function AddProductScreen() {
               editProduct.id,
           },
           costInput,
+          purchaseDraftLink,
         );
       } else {
         let openingCost:
@@ -2145,7 +2206,49 @@ export default function AddProductScreen() {
             }
           | undefined;
 
+        let purchaseDraftLink:
+          | {
+              supplierId: string;
+              unitCostMinor: number | null;
+              businessDate: string;
+            }
+          | undefined;
+
         if (
+          user?.isOwner &&
+          purchaseSupplierId
+        ) {
+          if (
+            nextQuantity === null ||
+            nextQuantity <= 0
+          ) {
+            throw new Error(
+              "اختيار المورد يتطلب إدخال كمية للصنف.",
+            );
+          }
+
+          const unitCostMinor =
+            openingCostInput.trim()
+              ? openingCostMinor()
+              : null;
+
+          if (
+            openingCostInput.trim() &&
+            unitCostMinor === null
+          ) {
+            throw new Error(
+              "أدخل تكلفة شراء صحيحة أو اتركها فارغة.",
+            );
+          }
+
+          purchaseDraftLink = {
+            supplierId:
+              purchaseSupplierId,
+            unitCostMinor,
+            businessDate:
+              localBusinessDate(),
+          };
+        } else if (
           user?.isOwner &&
           nextQuantity !== null &&
           nextQuantity > 0 &&
@@ -2168,6 +2271,7 @@ export default function AddProductScreen() {
         await addProduct(
           productData,
           openingCost,
+          purchaseDraftLink,
         );
       }
 
