@@ -1646,7 +1646,6 @@ async function handleCreatePurchase(
     const dueMinor = totalMinor - paidMinor;
 
     const result = await db.transaction(async (tx) => {
-      let lockedDraftId: number | null = null;
       let lockedDraftItems: Array<
         typeof posPurchaseItemsTable.$inferSelect
       > = [];
@@ -1804,9 +1803,6 @@ async function handleCreatePurchase(
             409,
           );
         }
-
-        lockedDraftId =
-          lockedDraft.id;
 
         lockedDraftItems = await tx
           .select()
