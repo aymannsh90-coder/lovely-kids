@@ -3231,7 +3231,7 @@ export interface PosPurchaseResult {
     warehouseKey: string;
     currencyCode: string;
     enteredByUserId: string;
-    status: "completed" | "voided";
+    status: "draft" | "completed" | "voided";
     paymentMethod: "cash" | "credit" | "mixed";
     subtotalMinor: number;
     subtotal: number;
@@ -3271,6 +3271,70 @@ export function getLatestPosPurchase(
   return apiRequest<PosPurchaseResult>(
     `/api/pos/purchases/latest?warehouseKey=${encodeURIComponent(warehouseKey)}`,
     {},
+    token,
+  );
+}
+
+export async function getOpenPosPurchaseDraft(
+  token: string,
+  warehouseKey = "main",
+) {
+  const result = await apiRequest<
+    PosPurchaseResult | { purchase: null }
+  >(
+    `/api/pos/purchases/draft?warehouseKey=${encodeURIComponent(warehouseKey)}`,
+    {},
+    token,
+  );
+
+  if (result.purchase === null) {
+    return null;
+  }
+
+  return result as PosPurchaseResult;
+}
+
+export function savePosPurchaseDraft(
+  token: string,
+  input: {
+    supplierId: string;
+    supplierInvoiceNumber?: string;
+    businessDate: string;
+    warehouseKey: string;
+    currencyCode: string;
+    paymentMethod: "cash" | "credit" | "mixed";
+    invoiceDiscount: string;
+    paid: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      barcode?: string;
+      quantity: number;
+      freeQuantity?: number;
+      unitCost: string;
+      lineDiscount?: string;
+    }>;
+  },
+) {
+  return apiRequest<PosPurchaseResult>(
+    "/api/pos/purchases/draft",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function discardOpenPosPurchaseDraft(
+  token: string,
+  warehouseKey = "main",
+) {
+  return apiRequest<{ ok: true }>(
+    `/api/pos/purchases/draft?warehouseKey=${encodeURIComponent(warehouseKey)}`,
+    {
+      method: "DELETE",
+    },
     token,
   );
 }
