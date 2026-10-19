@@ -3914,6 +3914,7 @@ export default function AddProductScreen() {
                     }}
                   />
                 ) : (
+                  <>
                   <View
                   style={{
                     flexDirection:
@@ -4029,7 +4030,8 @@ export default function AddProductScreen() {
                     }}
                   />
                 )}
-                </>}
+                  </>
+                )}
               </>
             )}
           </View>
