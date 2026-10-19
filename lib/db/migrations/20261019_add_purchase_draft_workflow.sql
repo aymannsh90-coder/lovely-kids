@@ -2,6 +2,8 @@
 -- This migration is intentionally NOT auto-applied by the application.
 -- Apply manually after review.
 
+BEGIN;
+
 ALTER TABLE pos_purchases
   DROP CONSTRAINT IF EXISTS pos_purchases_status_valid;
 
@@ -40,3 +42,5 @@ CREATE UNIQUE INDEX pos_purchases_supplier_invoice_unique_idx
   ON pos_purchases (supplier_id, supplier_invoice_number)
   WHERE supplier_invoice_number IS NOT NULL
     AND status = 'completed';
+
+COMMIT;
