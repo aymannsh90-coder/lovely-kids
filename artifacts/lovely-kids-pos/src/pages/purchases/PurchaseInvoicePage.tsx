@@ -352,7 +352,6 @@ export default function PurchaseInvoicePage() {
   useEffect(() => {
     if (PURCHASE_API_ENABLED) {
       void loadSuppliers();
-      void loadOpenDraft();
     }
   }, [token]);
 
@@ -821,7 +820,14 @@ export default function PurchaseInvoicePage() {
       setSuppliers(result.results);
 
       if (result.results.length === 1) {
-        setSupplierId(result.results[0]?.id ?? "");
+        const onlySupplierId =
+          result.results[0]?.id ?? "";
+
+        setSupplierId(onlySupplierId);
+
+        if (onlySupplierId) {
+          void loadOpenDraft(onlySupplierId);
+        }
       }
     } catch (caught) {
       if (
@@ -1168,10 +1174,20 @@ export default function PurchaseInvoicePage() {
     return null;
   }
 
-  async function loadOpenDraft() {
+  async function loadOpenDraft(
+    rawSupplierId: string,
+  ) {
+    const targetSupplierId =
+      rawSupplierId.trim();
+
+    if (!targetSupplierId) {
+      return;
+    }
+
     try {
       const result = await getOpenPosPurchaseDraft(
         token,
+        targetSupplierId,
         "main",
       );
 
@@ -1191,6 +1207,44 @@ export default function PurchaseInvoicePage() {
       }
 
       setError(errorMessage(caught));
+    }
+  }
+
+  async function handleSupplierChange(
+    nextSupplierId: string,
+  ) {
+    if (nextSupplierId === supplierId) {
+      return;
+    }
+
+    if (
+      lines.length > 0 ||
+      savedPurchase?.purchase.status === "draft"
+    ) {
+      const confirmed = window.confirm(
+        "سيتم ترك بيانات المورد الحالي محفوظة كما هي وفتح مسودة المورد الجديد إن وجدت. أي تعديلات غير محفوظة على الشاشة ستُفقد. هل تريد المتابعة؟",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setSupplierId(nextSupplierId);
+    setSupplierInvoiceNumber("");
+    setNotes("");
+    setLines([]);
+    setPaymentMethod("credit");
+    setInvoiceDiscount("0.00");
+    setPaid("0.00");
+    setSavedPurchase(null);
+    setError("");
+    setMessage("");
+    clearSearchResults();
+    requestKey.current = null;
+
+    if (nextSupplierId) {
+      await loadOpenDraft(nextSupplierId);
     }
   }
 
@@ -1606,6 +1660,7 @@ export default function PurchaseInvoicePage() {
       try {
         await discardOpenPosPurchaseDraft(
           token,
+          savedPurchase.purchase.supplierId,
           warehouseKey,
         );
       } catch (caught) {
@@ -1922,7 +1977,9 @@ export default function PurchaseInvoicePage() {
                     suppliersBusy || !PURCHASE_API_ENABLED
                   }
                   onChange={(event) =>
-                    setSupplierId(event.target.value)
+                    void handleSupplierChange(
+                      event.target.value,
+                    )
                   }
                 >
                   <option value="">
