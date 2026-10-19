@@ -473,11 +473,17 @@ function toPurchaseResponse(
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
         unitCostMinor: item.unitCostMinor,
-        unitCost: item.unitCostMinor / 100,
+        unitCost:
+          item.unitCostMinor === null
+            ? null
+            : item.unitCostMinor / 100,
         lineDiscountMinor: item.lineDiscountMinor,
         lineDiscount: item.lineDiscountMinor / 100,
         lineTotalMinor: item.lineTotalMinor,
-        lineTotal: item.lineTotalMinor / 100,
+        lineTotal:
+          item.lineTotalMinor === null
+            ? null
+            : item.lineTotalMinor / 100,
         generalStockBefore: item.generalStockBefore,
         generalStockAfter: item.generalStockAfter,
         variantStockBefore: item.variantStockBefore,
