@@ -1508,6 +1508,13 @@ async function handleCreatePurchase(
       );
     }
 
+    if (!draftPublicId) {
+      throw new PurchaseError(
+        "اعتماد فاتورة المشتريات يجب أن يتم من مسودة المورد المفتوحة",
+        409,
+      );
+    }
+
     const businessDate = normalizeBusinessDate(
       payload.businessDate,
     );
@@ -1639,6 +1646,11 @@ async function handleCreatePurchase(
     const dueMinor = totalMinor - paidMinor;
 
     const result = await db.transaction(async (tx) => {
+      let lockedDraftId: number | null = null;
+      let lockedDraftItems: Array<
+        typeof posPurchaseItemsTable.$inferSelect
+      > = [];
+
       const duplicateRows = await tx
         .select()
         .from(posPurchasesTable)
@@ -1768,6 +1780,24 @@ async function handleCreatePurchase(
             409,
           );
         }
+
+        lockedDraftId =
+          lockedDraft.id;
+
+        lockedDraftItems = await tx
+          .select()
+          .from(posPurchaseItemsTable)
+          .where(
+            eq(
+              posPurchaseItemsTable.purchaseId,
+              lockedDraft.id,
+            ),
+          )
+          .orderBy(
+            asc(
+              posPurchaseItemsTable.lineNumber,
+            ),
+          );
       }
 
       if (supplierInvoiceNumber) {
