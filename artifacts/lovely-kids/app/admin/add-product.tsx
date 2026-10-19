@@ -39,6 +39,25 @@ import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
 
+type PurchaseSupplierOption = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+function localBusinessDate() {
+  const now = new Date();
+  const offset =
+    now.getTimezoneOffset() *
+    60_000;
+
+  return new Date(
+    now.getTime() - offset,
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
 export default function AddProductScreen() {
   const colors = useColors();
   const barcodeBeep = useAudioPlayer(require("../../assets/sounds/barcode-beep.wav"));
@@ -119,6 +138,31 @@ export default function AddProductScreen() {
 
   const [editNewBatchCostInput, setEditNewBatchCostInput] =
     useState("");
+
+  const [
+    purchaseSuppliers,
+    setPurchaseSuppliers,
+  ] = useState<PurchaseSupplierOption[]>([]);
+
+  const [
+    purchaseSupplierId,
+    setPurchaseSupplierId,
+  ] = useState("");
+
+  const [
+    purchaseSupplierPickerOpen,
+    setPurchaseSupplierPickerOpen,
+  ] = useState(false);
+
+  const [
+    purchaseSuppliersLoading,
+    setPurchaseSuppliersLoading,
+  ] = useState(false);
+
+  const [
+    purchaseSupplierLoadError,
+    setPurchaseSupplierLoadError,
+  ] = useState("");
 
 
 
@@ -264,6 +308,90 @@ export default function AddProductScreen() {
     setNewDurationChanged(false);
     setErrors([]);
   }, [copyFrom, copyProduct, productId]);
+
+  useEffect(() => {
+    if (!user?.isOwner) {
+      setPurchaseSuppliers([]);
+      setPurchaseSupplierId("");
+      return;
+    }
+
+    let active = true;
+
+    void (async () => {
+      setPurchaseSuppliersLoading(true);
+      setPurchaseSupplierLoadError("");
+
+      try {
+        const token =
+          await getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            "تعذر التحقق من جلسة المالك",
+          );
+        }
+
+        const response =
+          await fetch(
+            `${API_BASE}/api/pos/suppliers?status=active`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            },
+          );
+
+        if (!response.ok) {
+          let message =
+            "تعذر تحميل الموردين";
+
+          try {
+            const data =
+              (await response.json()) as {
+                error?: string;
+              };
+
+            if (data.error) {
+              message = data.error;
+            }
+          } catch {}
+
+          throw new Error(message);
+        }
+
+        const data =
+          (await response.json()) as {
+            results?: PurchaseSupplierOption[];
+          };
+
+        if (active) {
+          setPurchaseSuppliers(
+            Array.isArray(data.results)
+              ? data.results
+              : [],
+          );
+        }
+      } catch (error) {
+        if (active) {
+          setPurchaseSupplierLoadError(
+            error instanceof Error
+              ? error.message
+              : "تعذر تحميل الموردين",
+          );
+        }
+      } finally {
+        if (active) {
+          setPurchaseSuppliersLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [getAuthToken, user?.isOwner]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
