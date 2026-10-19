@@ -349,6 +349,16 @@ export default function PurchaseInvoicePage() {
     (supplier) => supplier.id === supplierId,
   );
 
+  const isModernAccountingOnlyPurchase =
+    savedPurchase?.purchase.status === "completed" &&
+    savedPurchase.purchase.items.every(
+      (item) =>
+        item.generalStockBefore === null &&
+        item.generalStockAfter === null &&
+        item.variantStockBefore === null &&
+        item.variantStockAfter === null,
+    );
+
   useEffect(() => {
     if (PURCHASE_API_ENABLED) {
       void loadSuppliers();
@@ -1395,7 +1405,7 @@ export default function PurchaseInvoicePage() {
         `قيمة الفاتورة: ${formatMinor(totalMinor)}`,
         `إجمالي المستلم: ${paidQuantity + freeQuantity}`,
         "",
-        "سيتم تسجيل الفاتورة محاسبيًا على حساب المورد دون تعديل مخزون المتجر.",
+        "سيتم تسجيل الفاتورة محاسبيًا وتثبيت تكلفة البضاعة على الكمية التي أُدخلت مسبقًا، دون زيادة المخزون مرة ثانية.",
         "هل تريد المتابعة؟",
       ].join("\n"),
     );
@@ -1492,7 +1502,7 @@ export default function PurchaseInvoicePage() {
       setMessage(
         result.alreadyCreated
           ? `تم تحميل الفاتورة ${result.purchase.publicId} دون تكرارها.`
-          : `تم حفظ الفاتورة ${result.purchase.publicId} محاسبيًا دون تعديل مخزون المتجر.`,
+          : `تم اعتماد الفاتورة ${result.purchase.publicId} وتثبيت ذمة المورد وتكلفة المخزون دون زيادة الكمية مرة ثانية.`,
       );
     } catch (caught) {
       if (
@@ -1659,6 +1669,13 @@ export default function PurchaseInvoicePage() {
       return;
     }
 
+    if (isModernAccountingOnlyPurchase) {
+      setError(
+        "هذه الفاتورة مرتبطة بتكلفة المخزون ولا تُلغى مباشرة. استخدم مردود المشتريات لعكسها بشكل صحيح.",
+      );
+      return;
+    }
+
     if (!PURCHASE_WRITES_ENABLED) {
       setError("حذف فواتير المشتريات غير مفعل.");
       return;
@@ -1794,8 +1811,8 @@ export default function PurchaseInvoicePage() {
           <span>المشتريات والموردون</span>
           <h1>فاتورة مشتريات</h1>
           <p>
-            تسجيل فاتورة المورد والحسابات المالية دون
-            تعديل مخزون المتجر.
+            مراجعة فاتورة المورد واعتماد الذمة وتكلفة
+            المخزون دون زيادة الكمية مرة ثانية.
           </p>
         </div>
 
@@ -1952,7 +1969,8 @@ export default function PurchaseInvoicePage() {
               invoiceBusy ||
               !PURCHASE_WRITES_ENABLED ||
               savedPurchase.purchase.status === "voided" ||
-              savedPurchase.purchase.status === "draft"
+              savedPurchase.purchase.status === "draft" ||
+              isModernAccountingOnlyPurchase
             }
             onClick={() => void handleVoidInvoice()}
           >
@@ -1960,9 +1978,11 @@ export default function PurchaseInvoicePage() {
               ? "الفاتورة محذوفة"
               : savedPurchase.purchase.status === "draft"
                 ? "المسودة غير معتمدة"
-              : invoiceBusy
-                ? "جاري الحذف…"
-                : "حذف الفاتورة"}
+                : isModernAccountingOnlyPurchase
+                  ? "يُعكس عبر مردود مشتريات"
+                  : invoiceBusy
+                    ? "جاري الحذف…"
+                    : "حذف الفاتورة"}
           </button>
         )}
       </div>
