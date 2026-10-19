@@ -95,7 +95,7 @@ export function getCartStockStatus(
     return {
       valid: false,
       kind: "product_unavailable",
-      message: "هذا المنتج لم يعد متوفرًا للطلب",
+      message: "هذا المنتج انتهى أو لم يعد متوفرًا للطلب",
       detail: "يمكنك حذفه من السلة ومتابعة باقي الطلب.",
       hasAlternatives: false,
       availableQuantity: 0,
