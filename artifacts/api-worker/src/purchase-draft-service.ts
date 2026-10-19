@@ -195,6 +195,7 @@ export async function appendProductToSupplierDraft(
         input.productId,
       ),
     )
+    .for("update")
     .limit(1);
 
   const product = productRows[0];
