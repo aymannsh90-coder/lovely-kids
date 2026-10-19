@@ -5,12 +5,57 @@ import { getCurrentUser } from "../lib/auth";
 
 const router = Router();
 
+function sanitizePublicSettingsData(
+  data: Record<string, unknown>,
+) {
+  const shippingZones =
+    Array.isArray(data.shippingZones)
+      ? data.shippingZones.map((zone) => {
+          if (
+            !zone ||
+            typeof zone !== "object" ||
+            Array.isArray(zone)
+          ) {
+            return zone;
+          }
+
+          const {
+            companyCost: _companyCost,
+            ...publicZone
+          } = zone as Record<string, unknown>;
+
+          return publicZone;
+        })
+      : data.shippingZones;
+
+  return {
+    ...data,
+    ...(shippingZones === undefined
+      ? {}
+      : { shippingZones }),
+  };
+}
+
 // =======================
 // GET /api/settings
 // =======================
-router.get("/settings", async (_req, res) => {
-  const rows = await db.select().from(appSettingsTable).where(eq(appSettingsTable.id, 1));
-  return res.json((rows[0]?.data as Record<string, unknown>) ?? {});
+router.get("/settings", async (req, res) => {
+  const rows = await db
+    .select()
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.id, 1));
+
+  const data =
+    (rows[0]?.data as Record<string, unknown>) ?? {};
+
+  const user =
+    await getCurrentUser(req);
+
+  return res.json(
+    user?.isAdmin
+      ? data
+      : sanitizePublicSettingsData(data),
+  );
 });
 
 // =======================
