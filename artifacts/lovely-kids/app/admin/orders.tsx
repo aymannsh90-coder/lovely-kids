@@ -99,6 +99,11 @@ interface Order {
   exchangeSettlementAmountMinor?: number | null;
   exchangeFinancialCompletedAt?: string | null;
   exchangeReturnReceivedAt?: string | null;
+  mergedIntoOrderId?: number | null;
+  mergedAt?: string | null;
+  mergedByUserId?: number | null;
+  mergedOrderIds?: number[];
+  mergedOrderCount?: number;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -286,6 +291,15 @@ function statusInfo(
   s: string,
   isPickup = false,
 ) {
+  if (s === "merged") {
+    return {
+      key: "merged",
+      label: "مدمج",
+      color: "#64748B",
+      icon: "git-merge-outline" as const,
+    };
+  }
+
   const found =
     STATUS_OPTIONS.find(
       (o) => o.key === s,
@@ -522,6 +536,12 @@ export default function AdminOrdersScreen() {
   const [qrScanned, setQrScanned] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [mergeSelectedIds, setMergeSelectedIds] =
+    useState<Set<number>>(new Set());
+  const [mergePreviewVisible, setMergePreviewVisible] =
+    useState(false);
+  const [mergeBusy, setMergeBusy] =
+    useState(false);
   const [printConfirmVisible, setPrintConfirmVisible] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editItems, setEditItems] = useState<EditableOrderItem[]>([]);
