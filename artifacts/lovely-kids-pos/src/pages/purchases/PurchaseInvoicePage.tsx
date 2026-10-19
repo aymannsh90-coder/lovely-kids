@@ -12,9 +12,12 @@ import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
   ApiError,
   createPosPurchase,
+  discardOpenPosPurchaseDraft,
   getCurrentCashSession,
   getLatestPosPurchase,
+  getOpenPosPurchaseDraft,
   getPosPurchaseByPublicId,
+  savePosPurchaseDraft,
   voidPosPurchase,
   getPosSuppliers,
   lookupPosProductByBarcode,
@@ -208,16 +211,8 @@ function getSizes(
   );
 }
 
-function lineSelectionComplete(line: PurchaseLine) {
-  const colors = getColors(line.product);
-
-  if (colors.length > 0 && !line.color) {
-    return false;
-  }
-
-  const sizes = getSizes(line.product, line.color);
-
-  return sizes.length === 0 || Boolean(line.size);
+function lineSelectionComplete(_line: PurchaseLine) {
+  return true;
 }
 
 function errorMessage(error: unknown) {
@@ -353,6 +348,16 @@ export default function PurchaseInvoicePage() {
   const selectedSupplier = suppliers.find(
     (supplier) => supplier.id === supplierId,
   );
+
+  const isModernAccountingOnlyPurchase =
+    savedPurchase?.purchase.status === "completed" &&
+    savedPurchase.purchase.items.every(
+      (item) =>
+        item.generalStockBefore === null &&
+        item.generalStockAfter === null &&
+        item.variantStockBefore === null &&
+        item.variantStockAfter === null,
+    );
 
   useEffect(() => {
     if (PURCHASE_API_ENABLED) {
@@ -825,7 +830,14 @@ export default function PurchaseInvoicePage() {
       setSuppliers(result.results);
 
       if (result.results.length === 1) {
-        setSupplierId(result.results[0]?.id ?? "");
+        const onlySupplierId =
+          result.results[0]?.id ?? "";
+
+        setSupplierId(onlySupplierId);
+
+        if (onlySupplierId) {
+          void loadOpenDraft(onlySupplierId);
+        }
       }
     } catch (caught) {
       if (
@@ -879,55 +891,68 @@ export default function PurchaseInvoicePage() {
   function addProduct(
     product: PosProductLookup,
     initialQuantity = 1,
-    initialUnitCost = "0.00",
+    initialUnitCost = "",
     forcedVariant?: {
       barcode: string;
       color: string;
       size: string;
     },
   ) {
-    const colors = getColors(product);
+    const quantityToAdd = Math.max(
+      1,
+      Math.min(
+        99_999,
+        Math.trunc(initialQuantity),
+      ),
+    );
 
-    const color =
-      forcedVariant?.color ??
-      product.mappedColor ??
-      (colors.length === 1 ? colors[0] : null);
+    setLines((current) => {
+      const existing = current.find(
+        (line) =>
+          line.product.productId === product.productId,
+      );
 
-    const sizes = getSizes(product, color);
+      if (existing) {
+        return current.map((line) =>
+          line.id === existing.id
+            ? {
+                ...line,
+                quantity: Math.min(
+                  99_999,
+                  line.quantity + quantityToAdd,
+                ),
+                unitCost:
+                  initialUnitCost.trim()
+                    ? initialUnitCost
+                    : line.unitCost,
+              }
+            : line,
+        );
+      }
 
-    const size =
-      forcedVariant?.size ??
-      product.mappedSize ??
-      (sizes.length === 1 ? sizes[0] : null);
-
-    setLines((current) => [
-      ...current,
-      {
-        id: createKey(),
-        barcode:
-          forcedVariant?.barcode ??
-          product.barcode ??
-          "",
-        product,
-        color,
-        size,
-        quantity: Math.max(
-          1,
-          Math.min(
-            99_999,
-            Math.trunc(initialQuantity),
-          ),
-        ),
-        freeQuantity: 0,
-        unitCost: initialUnitCost,
-        lineDiscount: "0.00",
-      },
-    ]);
+      return [
+        ...current,
+        {
+          id: createKey(),
+          barcode:
+            forcedVariant?.barcode ??
+            product.barcode ??
+            "",
+          product,
+          color: null,
+          size: null,
+          quantity: quantityToAdd,
+          freeQuantity: 0,
+          unitCost: initialUnitCost,
+          lineDiscount: "0.00",
+        },
+      ];
+    });
 
     setQuery("");
     clearSearchResults();
     setError("");
-    setMessage(`تمت إضافة ${product.nameAr}`);
+    setMessage(`تمت إضافة ${product.nameAr} إلى فاتورة المشتريات المفتوحة`);
 
     window.setTimeout(() => {
       searchInput.current?.focus();
@@ -1051,7 +1076,14 @@ export default function PurchaseInvoicePage() {
     }
   }
 
-  function validateInvoice() {
+  function validateInvoice(
+    options?: {
+      allowUnknownCost?: boolean;
+    },
+  ) {
+    const allowUnknownCost =
+      options?.allowUnknownCost === true;
+
     if (!supplierId) {
       return "اختر المورد.";
     }
@@ -1066,12 +1098,9 @@ export default function PurchaseInvoicePage() {
 
     let gross = 0;
     let discounts = 0;
+    let hasUnknownCost = false;
 
     for (const line of lines) {
-      if (!lineSelectionComplete(line)) {
-        return `اختر اللون والمقاس للمنتج ${line.product.nameAr}`;
-      }
-
       if (
         !Number.isSafeInteger(line.quantity) ||
         line.quantity < 1 ||
@@ -1089,20 +1118,39 @@ export default function PurchaseInvoicePage() {
         return `الكمية المجانية للمنتج ${line.product.nameAr} غير صالحة`;
       }
 
-      const unitCostMinor = moneyToMinor(line.unitCost);
+      const rawUnitCost =
+        line.unitCost.trim();
+
       const discountMinor = moneyToMinor(
         line.lineDiscount,
       );
-
-      if (unitCostMinor === null) {
-        return `تكلفة ${line.product.nameAr} غير صالحة`;
-      }
 
       if (discountMinor === null) {
         return `خصم ${line.product.nameAr} غير صالح`;
       }
 
-      const lineGross = unitCostMinor * line.quantity;
+      if (!rawUnitCost) {
+        if (!allowUnknownCost) {
+          return `تكلفة ${line.product.nameAr} غير مدخلة`;
+        }
+
+        if (discountMinor !== 0) {
+          return `لا يمكن إدخال خصم للمنتج ${line.product.nameAr} قبل إدخال تكلفته`;
+        }
+
+        hasUnknownCost = true;
+        continue;
+      }
+
+      const unitCostMinor =
+        moneyToMinor(rawUnitCost);
+
+      if (unitCostMinor === null) {
+        return `تكلفة ${line.product.nameAr} غير صالحة`;
+      }
+
+      const lineGross =
+        unitCostMinor * line.quantity;
 
       if (
         !Number.isSafeInteger(lineGross) ||
@@ -1117,18 +1165,34 @@ export default function PurchaseInvoicePage() {
 
     const invoiceDiscountMinor =
       moneyToMinor(invoiceDiscount);
-    const strictPaidMinor = moneyToMinor(paid);
+    const strictPaidMinor =
+      moneyToMinor(paid);
 
     if (invoiceDiscountMinor === null) {
       return "خصم الفاتورة غير صالح";
     }
 
-    if (invoiceDiscountMinor > gross - discounts) {
-      return "خصم الفاتورة أكبر من صافي الأصناف";
-    }
-
     if (strictPaidMinor === null) {
       return "المبلغ المدفوع غير صالح";
+    }
+
+    if (hasUnknownCost) {
+      if (invoiceDiscountMinor !== 0) {
+        return "أكمل تكاليف الأصناف قبل إدخال خصم على الفاتورة.";
+      }
+
+      if (
+        paymentMethod !== "credit" ||
+        strictPaidMinor !== 0
+      ) {
+        return "المسودة التي تحتوي تكلفة غير مدخلة تُحفظ آجل بدون دفعة حتى اكتمال التكلفة.";
+      }
+
+      return null;
+    }
+
+    if (invoiceDiscountMinor > gross - discounts) {
+      return "خصم الفاتورة أكبر من صافي الأصناف";
     }
 
     const finalTotal =
@@ -1163,6 +1227,152 @@ export default function PurchaseInvoicePage() {
     return null;
   }
 
+  async function loadOpenDraft(
+    rawSupplierId: string,
+  ) {
+    const targetSupplierId =
+      rawSupplierId.trim();
+
+    if (!targetSupplierId) {
+      return;
+    }
+
+    try {
+      const result = await getOpenPosPurchaseDraft(
+        token,
+        targetSupplierId,
+        "main",
+      );
+
+      if (result) {
+        applyStoredPurchase(result);
+        setMessage(
+          `تم استرجاع فاتورة المشتريات المفتوحة ${result.purchase.publicId}.`,
+        );
+      }
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    }
+  }
+
+  async function handleSupplierChange(
+    nextSupplierId: string,
+  ) {
+    if (nextSupplierId === supplierId) {
+      return;
+    }
+
+    if (
+      lines.length > 0 ||
+      savedPurchase?.purchase.status === "draft"
+    ) {
+      const confirmed = window.confirm(
+        "سيتم ترك بيانات المورد الحالي محفوظة كما هي وفتح مسودة المورد الجديد إن وجدت. أي تعديلات غير محفوظة على الشاشة ستُفقد. هل تريد المتابعة؟",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setSupplierId(nextSupplierId);
+    setSupplierInvoiceNumber("");
+    setNotes("");
+    setLines([]);
+    setPaymentMethod("credit");
+    setInvoiceDiscount("0.00");
+    setPaid("0.00");
+    setSavedPurchase(null);
+    setError("");
+    setMessage("");
+    clearSearchResults();
+    requestKey.current = null;
+
+    if (nextSupplierId) {
+      await loadOpenDraft(nextSupplierId);
+    }
+  }
+
+  async function handleSaveDraft() {
+    if (!PURCHASE_WRITES_ENABLED) {
+      setError("حفظ مسودة المشتريات غير مفعل.");
+      return;
+    }
+
+    const validationError =
+      validateInvoice({
+        allowUnknownCost: true,
+      });
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setInvoiceBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result = await savePosPurchaseDraft(
+        token,
+        {
+          supplierId,
+          draftPublicId:
+            savedPurchase?.purchase.status === "draft"
+              ? savedPurchase.purchase.publicId
+              : undefined,
+          draftUpdatedAt:
+            savedPurchase?.purchase.status === "draft"
+              ? savedPurchase.purchase.updatedAt
+              : undefined,
+          supplierInvoiceNumber:
+            supplierInvoiceNumber.trim() || undefined,
+          businessDate,
+          warehouseKey,
+          currencyCode: "ILS",
+          paymentMethod,
+          invoiceDiscount,
+          paid,
+          notes: notes.trim() || undefined,
+          items: lines.map((line) => ({
+            productId: line.product.productId,
+            barcode: line.barcode || undefined,
+            quantity: line.quantity,
+            freeQuantity: line.freeQuantity,
+            unitCost: line.unitCost,
+            lineDiscount: line.lineDiscount,
+          })),
+        },
+      );
+
+      setSavedPurchase(result);
+      setMessage(
+        `تم حفظ المسودة ${result.purchase.publicId}. لا يوجد أي قيد مالي حتى اعتماد الفاتورة.`,
+      );
+    } catch (caught) {
+      if (
+        caught instanceof ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(errorMessage(caught));
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
   async function refreshCashSession() {
     const current = await getCurrentCashSession(
       token,
@@ -1195,7 +1405,7 @@ export default function PurchaseInvoicePage() {
         `قيمة الفاتورة: ${formatMinor(totalMinor)}`,
         `إجمالي المستلم: ${paidQuantity + freeQuantity}`,
         "",
-        "سيتم تسجيل الفاتورة محاسبيًا على حساب المورد دون تعديل مخزون المتجر.",
+        "سيتم تسجيل الفاتورة محاسبيًا وتثبيت تكلفة البضاعة على الكمية التي أُدخلت مسبقًا، دون زيادة المخزون مرة ثانية.",
         "هل تريد المتابعة؟",
       ].join("\n"),
     );
@@ -1215,9 +1425,50 @@ export default function PurchaseInvoicePage() {
     setMessage("");
 
     try {
+      const draftForApproval =
+        await savePosPurchaseDraft(
+          token,
+          {
+            supplierId,
+            draftPublicId:
+              savedPurchase?.purchase.status === "draft"
+                ? savedPurchase.purchase.publicId
+                : undefined,
+            draftUpdatedAt:
+              savedPurchase?.purchase.status === "draft"
+                ? savedPurchase.purchase.updatedAt
+                : undefined,
+            supplierInvoiceNumber:
+              supplierInvoiceNumber.trim() || undefined,
+            businessDate,
+            warehouseKey,
+            currencyCode: "ILS",
+            paymentMethod,
+            invoiceDiscount,
+            paid,
+            notes: notes.trim() || undefined,
+            items: lines.map((line) => ({
+              productId: line.product.productId,
+              barcode: line.barcode || undefined,
+              quantity: line.quantity,
+              freeQuantity: line.freeQuantity,
+              unitCost: line.unitCost,
+              lineDiscount: line.lineDiscount,
+            })),
+          },
+        );
+
+      setSavedPurchase(
+        draftForApproval,
+      );
+
       const result = await createPosPurchase(token, {
         supplierId,
         idempotencyKey,
+        draftPublicId:
+          draftForApproval.purchase.publicId,
+        draftUpdatedAt:
+          draftForApproval.purchase.updatedAt,
         supplierInvoiceNumber:
           supplierInvoiceNumber.trim() || undefined,
         businessDate,
@@ -1234,8 +1485,6 @@ export default function PurchaseInvoicePage() {
           freeQuantity: line.freeQuantity,
           unitCost: line.unitCost,
           lineDiscount: line.lineDiscount,
-          color: line.color ?? undefined,
-          size: line.size ?? undefined,
         })),
       });
 
@@ -1253,7 +1502,7 @@ export default function PurchaseInvoicePage() {
       setMessage(
         result.alreadyCreated
           ? `تم تحميل الفاتورة ${result.purchase.publicId} دون تكرارها.`
-          : `تم حفظ الفاتورة ${result.purchase.publicId} محاسبيًا دون تعديل مخزون المتجر.`,
+          : `تم اعتماد الفاتورة ${result.purchase.publicId} وتثبيت ذمة المورد وتكلفة المخزون دون زيادة الكمية مرة ثانية.`,
       );
     } catch (caught) {
       if (
@@ -1313,14 +1562,21 @@ export default function PurchaseInvoicePage() {
         size: item.size,
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
-        unitCost: item.unitCost.toFixed(2),
+        unitCost:
+          item.unitCost === null
+            ? ""
+            : item.unitCost.toFixed(2),
         lineDiscount: item.lineDiscount.toFixed(2),
       })),
     );
 
     setSavedPurchase(result);
     setError("");
-    setMessage(`تم فتح الفاتورة ${result.purchase.publicId}.`);
+    setMessage(
+      result.purchase.status === "draft"
+        ? `تم فتح المسودة ${result.purchase.publicId} ويمكنك متابعة تعديلها.`
+        : `تم فتح الفاتورة ${result.purchase.publicId}.`,
+    );
     clearSearchResults();
     requestKey.current = null;
   }
@@ -1413,6 +1669,13 @@ export default function PurchaseInvoicePage() {
       return;
     }
 
+    if (isModernAccountingOnlyPurchase) {
+      setError(
+        "هذه الفاتورة مرتبطة بتكلفة المخزون ولا تُلغى مباشرة. استخدم مردود المشتريات لعكسها بشكل صحيح.",
+      );
+      return;
+    }
+
     if (!PURCHASE_WRITES_ENABLED) {
       setError("حذف فواتير المشتريات غير مفعل.");
       return;
@@ -1493,7 +1756,38 @@ export default function PurchaseInvoicePage() {
     }
   }
 
-  function resetInvoice() {
+  async function resetInvoice() {
+    if (
+      savedPurchase?.purchase.status === "draft"
+    ) {
+      const confirmed = window.confirm(
+        "سيتم إلغاء المسودة المفتوحة وبدء فاتورة جديدة. هل تريد المتابعة؟",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await discardOpenPosPurchaseDraft(
+          token,
+          savedPurchase.purchase.supplierId,
+          warehouseKey,
+        );
+      } catch (caught) {
+        if (
+          caught instanceof ApiError &&
+          caught.status === 401
+        ) {
+          clearAuthentication();
+          return;
+        }
+
+        setError(errorMessage(caught));
+        return;
+      }
+    }
+
     setSupplierInvoiceNumber("");
     setBusinessDate(localBusinessDate());
     setWarehouseKey("main");
@@ -1517,8 +1811,8 @@ export default function PurchaseInvoicePage() {
           <span>المشتريات والموردون</span>
           <h1>فاتورة مشتريات</h1>
           <p>
-            تسجيل فاتورة المورد والحسابات المالية دون
-            تعديل مخزون المتجر.
+            مراجعة فاتورة المورد واعتماد الذمة وتكلفة
+            المخزون دون زيادة الكمية مرة ثانية.
           </p>
         </div>
 
@@ -1535,7 +1829,9 @@ export default function PurchaseInvoicePage() {
           {savedPurchase
             ? savedPurchase.purchase.status === "voided"
               ? `محذوفة — ${savedPurchase.purchase.publicId}`
-              : savedPurchase.purchase.publicId
+              : savedPurchase.purchase.status === "draft"
+                ? `مسودة مفتوحة — ${savedPurchase.purchase.publicId}`
+                : savedPurchase.purchase.publicId
             : PURCHASE_WRITES_ENABLED
               ? "مسودة فاتورة جديدة"
               : "واجهة تطوير — الحفظ محمي"}
@@ -1546,7 +1842,7 @@ export default function PurchaseInvoicePage() {
         <button
           type="button"
           disabled={invoiceBusy}
-          onClick={resetInvoice}
+          onClick={() => void resetInvoice()}
         >
           فاتورة جديدة
         </button>
@@ -1607,16 +1903,30 @@ export default function PurchaseInvoicePage() {
         </button>
 
         <button
+          type="button"
+          disabled={
+            invoiceBusy ||
+            !PURCHASE_WRITES_ENABLED ||
+            (savedPurchase !== null &&
+              savedPurchase.purchase.status !== "draft")
+          }
+          onClick={() => void handleSaveDraft()}
+        >
+          {invoiceBusy ? "جاري الحفظ…" : "حفظ المسودة"}
+        </button>
+
+        <button
           className="is-primary-action"
           type="button"
           disabled={
             invoiceBusy ||
             !PURCHASE_WRITES_ENABLED ||
-            savedPurchase !== null
+            (savedPurchase !== null &&
+              savedPurchase.purchase.status !== "draft")
           }
           onClick={() => void handleSaveInvoice()}
         >
-          {invoiceBusy ? "جاري الحفظ…" : "حفظ الفاتورة"}
+          {invoiceBusy ? "جاري الاعتماد…" : "اعتماد الفاتورة"}
         </button>
 
         <button
@@ -1624,12 +1934,13 @@ export default function PurchaseInvoicePage() {
           disabled={
             invoiceBusy ||
             !PURCHASE_WRITES_ENABLED ||
-            savedPurchase !== null
+            (savedPurchase !== null &&
+              savedPurchase.purchase.status !== "draft")
           }
           onClick={() => void handleSaveInvoice(true)}
         >
           <span aria-hidden="true">🖨️</span>
-          حفظ وطباعة A4
+          اعتماد وطباعة A4
         </button>
 
         <button
@@ -1657,15 +1968,21 @@ export default function PurchaseInvoicePage() {
             disabled={
               invoiceBusy ||
               !PURCHASE_WRITES_ENABLED ||
-              savedPurchase.purchase.status === "voided"
+              savedPurchase.purchase.status === "voided" ||
+              savedPurchase.purchase.status === "draft" ||
+              isModernAccountingOnlyPurchase
             }
             onClick={() => void handleVoidInvoice()}
           >
             {savedPurchase.purchase.status === "voided"
               ? "الفاتورة محذوفة"
-              : invoiceBusy
-                ? "جاري الحذف…"
-                : "حذف الفاتورة"}
+              : savedPurchase.purchase.status === "draft"
+                ? "المسودة غير معتمدة"
+                : isModernAccountingOnlyPurchase
+                  ? "يُعكس عبر مردود مشتريات"
+                  : invoiceBusy
+                    ? "جاري الحذف…"
+                    : "حذف الفاتورة"}
           </button>
         )}
       </div>
@@ -1696,7 +2013,11 @@ export default function PurchaseInvoicePage() {
 
       <fieldset
         className="purchase-invoice-fieldset"
-        disabled={invoiceBusy || savedPurchase !== null}
+        disabled={
+          invoiceBusy ||
+          (savedPurchase !== null &&
+            savedPurchase.purchase.status !== "draft")
+        }
       >
         <section className="accounting-invoice-information">
           <div className="accounting-invoice-card">
@@ -1770,7 +2091,9 @@ export default function PurchaseInvoicePage() {
                     suppliersBusy || !PURCHASE_API_ENABLED
                   }
                   onChange={(event) =>
-                    setSupplierId(event.target.value)
+                    void handleSupplierChange(
+                      event.target.value,
+                    )
                   }
                 >
                   <option value="">
@@ -1914,8 +2237,6 @@ export default function PurchaseInvoicePage() {
                 <th>الباركود</th>
                 <th>رقم الصنف</th>
                 <th>اسم الصنف</th>
-                <th>اللون</th>
-                <th>المقاس</th>
                 <th>الكمية</th>
                 <th>مجاني</th>
                 <th>تكلفة الوحدة</th>
@@ -1928,19 +2249,13 @@ export default function PurchaseInvoicePage() {
             <tbody>
               {lines.length === 0 ? (
                 <tr className="accounting-empty-row">
-                  <td colSpan={12}>
+                  <td colSpan={10}>
                     امسح باركود صنف أو استخدم البحث
                     لإضافته.
                   </td>
                 </tr>
               ) : (
                 lines.map((line, index) => {
-                  const colors = getColors(line.product);
-                  const sizes = getSizes(
-                    line.product,
-                    line.color,
-                  );
-
                   const lineTotal = Math.max(
                     0,
                     safeMoneyToMinor(line.unitCost) *
@@ -1952,11 +2267,6 @@ export default function PurchaseInvoicePage() {
 
                   return (
                     <tr
-                      className={
-                        lineSelectionComplete(line)
-                          ? ""
-                          : "is-incomplete"
-                      }
                       key={line.id}
                     >
                       <td>{index + 1}</td>
@@ -1968,69 +2278,6 @@ export default function PurchaseInvoicePage() {
                       <td className="accounting-product-cell">
                         <img src={line.product.image} alt="" />
                         <strong>{line.product.nameAr}</strong>
-                      </td>
-
-                      <td>
-                        {savedPurchase ? (
-                          line.color ?? "—"
-                        ) : colors.length > 0 ? (
-                          <select
-                            value={line.color ?? ""}
-                            onChange={(event) =>
-                              changeColor(
-                                line,
-                                event.target.value,
-                              )
-                            }
-                          >
-                            <option value="">
-                              اختر اللون
-                            </option>
-
-                            {colors.map((color) => (
-                              <option
-                                value={color}
-                                key={color}
-                              >
-                                {color}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-
-                      <td>
-                        {savedPurchase ? (
-                          line.size ?? "—"
-                        ) : sizes.length > 0 ? (
-                          <select
-                            value={line.size ?? ""}
-                            onChange={(event) =>
-                              updateLine(line.id, {
-                                size:
-                                  event.target.value ||
-                                  null,
-                              })
-                            }
-                          >
-                            <option value="">
-                              اختر المقاس
-                            </option>
-
-                            {sizes.map((size) => (
-                              <option
-                                value={size}
-                                key={size}
-                              >
-                                {size}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          "—"
-                        )}
                       </td>
 
                       <td>

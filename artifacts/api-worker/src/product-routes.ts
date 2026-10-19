@@ -17,6 +17,10 @@ import { rewriteMediaUrlsForPublic } from "./media-url";
 import { rewriteMediaUrlsForStorage } from "./media-url";
 import { syncManualProductCostQuantity } from "./inventory-cost-engine";
 import { getProductQuantity } from "./product-quantity";
+import {
+  appendProductToSupplierDraft,
+  PurchaseDraftServiceError,
+} from "./purchase-draft-service";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -427,13 +431,24 @@ async function handleCreateProduct(
       .json()
       .catch(() => null);
 
-  const rawOpeningUnitCostMinor =
+  const bodyRecord =
     body &&
     typeof body === "object" &&
     !Array.isArray(body)
       ? (body as Record<string, unknown>)
-          .openingUnitCostMinor
-      : undefined;
+      : null;
+
+  const rawOpeningUnitCostMinor =
+    bodyRecord?.openingUnitCostMinor;
+
+  const rawPurchaseSupplierId =
+    bodyRecord?.purchaseSupplierId;
+
+  const rawPurchaseUnitCostMinor =
+    bodyRecord?.purchaseUnitCostMinor;
+
+  const rawPurchaseBusinessDate =
+    bodyRecord?.purchaseBusinessDate;
 
   if (
     rawOpeningUnitCostMinor !== undefined &&
@@ -463,6 +478,104 @@ async function handleCreateProduct(
       Number(rawOpeningUnitCostMinor);
   }
 
+  if (
+    (
+      rawPurchaseSupplierId !== undefined ||
+      rawPurchaseUnitCostMinor !== undefined ||
+      rawPurchaseBusinessDate !== undefined
+    ) &&
+    !actor.isOwner
+  ) {
+    return json(
+      { error: "ربط المنتج بالمورد متاح للمالك فقط" },
+      403,
+    );
+  }
+
+  let purchaseSupplierId: number | null = null;
+
+  if (
+    rawPurchaseSupplierId !== undefined &&
+    rawPurchaseSupplierId !== null &&
+    rawPurchaseSupplierId !== ""
+  ) {
+    const parsedSupplierId =
+      typeof rawPurchaseSupplierId === "string"
+        ? Number(rawPurchaseSupplierId)
+        : rawPurchaseSupplierId;
+
+    if (
+      typeof parsedSupplierId !== "number" ||
+      !Number.isSafeInteger(parsedSupplierId) ||
+      parsedSupplierId <= 0
+    ) {
+      return json(
+        { error: "المورد المحدد غير صالح" },
+        400,
+      );
+    }
+
+    purchaseSupplierId =
+      parsedSupplierId;
+  }
+
+  let purchaseUnitCostMinor: number | null = null;
+
+  if (
+    rawPurchaseUnitCostMinor !== undefined &&
+    rawPurchaseUnitCostMinor !== null &&
+    rawPurchaseUnitCostMinor !== ""
+  ) {
+    const parsedCost =
+      typeof rawPurchaseUnitCostMinor === "string"
+        ? Number(rawPurchaseUnitCostMinor)
+        : rawPurchaseUnitCostMinor;
+
+    if (
+      typeof parsedCost !== "number" ||
+      !Number.isSafeInteger(parsedCost) ||
+      parsedCost < 0 ||
+      parsedCost > 2_147_483_647
+    ) {
+      return json(
+        { error: "تكلفة الشراء غير صالحة" },
+        400,
+      );
+    }
+
+    purchaseUnitCostMinor =
+      parsedCost;
+  }
+
+  const purchaseBusinessDate =
+    typeof rawPurchaseBusinessDate === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
+      ? rawPurchaseBusinessDate
+      : new Date().toISOString().slice(0, 10);
+
+  if (
+    purchaseSupplierId === null &&
+    rawPurchaseUnitCostMinor !== undefined
+  ) {
+    return json(
+      { error: "لا يمكن ربط تكلفة شراء بدون اختيار مورد" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    openingUnitCostMinor !== null
+  ) {
+    return json(
+      {
+        error:
+          "الكمية المرتبطة بمورد تُسجل في مسودة المشتريات، ولا تُسجل كبضاعة افتتاحية في نفس الوقت",
+      },
+      400,
+    );
+  }
+
   const productBody =
     body &&
     typeof body === "object" &&
@@ -475,9 +588,13 @@ async function handleCreateProduct(
     typeof productBody === "object" &&
     !Array.isArray(productBody)
   ) {
-    delete (
-      productBody as Record<string, unknown>
-    ).openingUnitCostMinor;
+    const cleanProductBody =
+      productBody as Record<string, unknown>;
+
+    delete cleanProductBody.openingUnitCostMinor;
+    delete cleanProductBody.purchaseSupplierId;
+    delete cleanProductBody.purchaseUnitCostMinor;
+    delete cleanProductBody.purchaseBusinessDate;
   }
 
   const parsed =
@@ -522,6 +639,19 @@ async function handleCreateProduct(
   ) {
     return json(
       { error: "لا يمكن تسجيل تكلفة افتتاحية بدون كمية مخزون" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    (
+      openingQuantity === null ||
+      openingQuantity <= 0
+    )
+  ) {
+    return json(
+      { error: "اختيار المورد يتطلب إدخال كمية للصنف" },
       400,
     );
   }
@@ -571,7 +701,10 @@ async function handleCreateProduct(
     );
   }
 
-  const product = await db.transaction(async (tx) => {
+  let product: typeof productsTable.$inferSelect;
+
+  try {
+    product = await db.transaction(async (tx) => {
     const rows = await tx
       .insert(productsTable)
       .values({
@@ -708,6 +841,34 @@ async function handleCreateProduct(
 
     if (
       actor.isOwner &&
+      purchaseSupplierId !== null &&
+      openingQuantity !== null &&
+      openingQuantity > 0
+    ) {
+      await appendProductToSupplierDraft(
+        tx,
+        {
+          userId: actor.id,
+          supplierId:
+            purchaseSupplierId,
+          productId:
+            created.id,
+          quantity:
+            openingQuantity,
+          unitCostMinor:
+            purchaseUnitCostMinor,
+          businessDate:
+            purchaseBusinessDate,
+          warehouseKey:
+            "main",
+          currencyCode:
+            "ILS",
+        },
+      );
+    }
+
+    if (
+      actor.isOwner &&
       openingQuantity !== null &&
       openingQuantity > 0 &&
       openingUnitCostMinor !== null &&
@@ -742,7 +903,17 @@ async function handleCreateProduct(
     }
 
     return created;
-  });
+    });
+  } catch (error) {
+    if (error instanceof PurchaseDraftServiceError) {
+      return json(
+        { error: error.message },
+        error.status,
+      );
+    }
+
+    throw error;
+  }
 
   return json(
     toProduct(product, additionalBarcodes),
@@ -773,6 +944,107 @@ async function handleUpdateProduct(
   const body =
     await request.json().catch(() => null);
 
+  const bodyRecord =
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
+
+  const rawPurchaseSupplierId =
+    bodyRecord?.purchaseSupplierId;
+
+  const rawPurchaseUnitCostMinor =
+    bodyRecord?.purchaseUnitCostMinor;
+
+  const rawPurchaseBusinessDate =
+    bodyRecord?.purchaseBusinessDate;
+
+  if (
+    (
+      rawPurchaseSupplierId !== undefined ||
+      rawPurchaseUnitCostMinor !== undefined ||
+      rawPurchaseBusinessDate !== undefined
+    ) &&
+    !actor.isOwner
+  ) {
+    return json(
+      { error: "ربط الكمية الجديدة بالمورد متاح للمالك فقط" },
+      403,
+    );
+  }
+
+  let purchaseSupplierId: number | null = null;
+
+  if (
+    rawPurchaseSupplierId !== undefined &&
+    rawPurchaseSupplierId !== null &&
+    rawPurchaseSupplierId !== ""
+  ) {
+    const parsedSupplierId =
+      typeof rawPurchaseSupplierId === "string"
+        ? Number(rawPurchaseSupplierId)
+        : rawPurchaseSupplierId;
+
+    if (
+      typeof parsedSupplierId !== "number" ||
+      !Number.isSafeInteger(parsedSupplierId) ||
+      parsedSupplierId <= 0
+    ) {
+      return json(
+        { error: "المورد المحدد غير صالح" },
+        400,
+      );
+    }
+
+    purchaseSupplierId =
+      parsedSupplierId;
+  }
+
+  let purchaseUnitCostMinor: number | null = null;
+
+  if (
+    rawPurchaseUnitCostMinor !== undefined &&
+    rawPurchaseUnitCostMinor !== null &&
+    rawPurchaseUnitCostMinor !== ""
+  ) {
+    const parsedCost =
+      typeof rawPurchaseUnitCostMinor === "string"
+        ? Number(rawPurchaseUnitCostMinor)
+        : rawPurchaseUnitCostMinor;
+
+    if (
+      typeof parsedCost !== "number" ||
+      !Number.isSafeInteger(parsedCost) ||
+      parsedCost < 0 ||
+      parsedCost > 2_147_483_647
+    ) {
+      return json(
+        { error: "تكلفة الشراء غير صالحة" },
+        400,
+      );
+    }
+
+    purchaseUnitCostMinor =
+      parsedCost;
+  }
+
+  const purchaseBusinessDate =
+    typeof rawPurchaseBusinessDate === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
+      ? rawPurchaseBusinessDate
+      : new Date().toISOString().slice(0, 10);
+
+  if (
+    purchaseSupplierId === null &&
+    rawPurchaseUnitCostMinor !== undefined
+  ) {
+    return json(
+      { error: "لا يمكن ربط تكلفة شراء بدون اختيار مورد" },
+      400,
+    );
+  }
+
   const costInput =
     body &&
     typeof body === "object" &&
@@ -790,9 +1062,40 @@ async function handleUpdateProduct(
     return costInputError;
   }
 
+  if (
+    purchaseSupplierId !== null &&
+    costInput?.costMode !== undefined
+  ) {
+    return json(
+      {
+        error:
+          "عند اختيار مورد، تُسجل تكلفة الكمية الجديدة على مسودة المشتريات وليس كتعديل تكلفة يدوي",
+      },
+      400,
+    );
+  }
+
+  const productBody =
+    bodyRecord
+      ? { ...bodyRecord }
+      : body;
+
+  if (
+    productBody &&
+    typeof productBody === "object" &&
+    !Array.isArray(productBody)
+  ) {
+    const cleanProductBody =
+      productBody as Record<string, unknown>;
+
+    delete cleanProductBody.purchaseSupplierId;
+    delete cleanProductBody.purchaseUnitCostMinor;
+    delete cleanProductBody.purchaseBusinessDate;
+  }
+
   const parsed =
     updateProductRequestSchema.safeParse(
-      body,
+      productBody,
     );
 
   if (!parsed.success) {
@@ -868,9 +1171,28 @@ async function handleUpdateProduct(
     );
   }
 
-  const updateResult =
-    await db.transaction(
-      async (tx) => {
+  let updateResult:
+    | { kind: "not_found" }
+    | {
+        kind: "cost_error";
+        reason: string;
+      }
+    | {
+        kind: "purchase_link_error";
+        reason: string;
+      }
+    | {
+        kind: "updated";
+        product:
+          typeof productsTable.$inferSelect;
+        previousProduct:
+          typeof productsTable.$inferSelect;
+      };
+
+  try {
+    updateResult =
+      await db.transaction(
+        async (tx) => {
         const lockedRows =
           await tx
             .select()
@@ -925,52 +1247,76 @@ async function handleUpdateProduct(
               predictedProduct,
             );
 
+          const purchaseQuantityDelta =
+            effectiveQuantityBefore !== null &&
+            effectiveQuantityAfter !== null
+              ? effectiveQuantityAfter -
+                effectiveQuantityBefore
+              : null;
+
+          if (
+            purchaseSupplierId !== null &&
+            (
+              purchaseQuantityDelta === null ||
+              purchaseQuantityDelta <= 0
+            )
+          ) {
+            return {
+              kind:
+                "purchase_link_error",
+              reason:
+                "supplier_requires_increase",
+            } as const;
+          }
+
           const costSync =
-            await syncManualProductCostQuantity(
-              tx,
-              {
-                productId:
-                  lockedCurrent.id,
+            purchaseSupplierId === null
+              ? await syncManualProductCostQuantity(
+                  tx,
+                  {
+                    productId:
+                      lockedCurrent.id,
 
-                quantityBefore:
-                  effectiveQuantityBefore,
+                    quantityBefore:
+                      effectiveQuantityBefore,
 
-                quantityAfter:
-                  effectiveQuantityAfter,
+                    quantityAfter:
+                      effectiveQuantityAfter,
 
-                explicitUnitCostMinor:
-                  actor.isOwner &&
-                  costInput?.costMode ===
-                    "new"
-                    ? costInput.unitCostMinor
-                    : null,
+                    explicitUnitCostMinor:
+                      actor.isOwner &&
+                      costInput?.costMode ===
+                        "new"
+                        ? costInput.unitCostMinor
+                        : null,
 
-                sameCostConfirmed:
-                  actor.isOwner &&
-                  costInput?.costMode ===
-                    "same",
+                    sameCostConfirmed:
+                      actor.isOwner &&
+                      costInput?.costMode ===
+                        "same",
 
-                requireExplicitIncreaseCost:
-                  actor.isOwner,
+                    requireExplicitIncreaseCost:
+                      actor.isOwner,
 
-                sourceType:
-                  "manual_stock",
+                    sourceType:
+                      "manual_stock",
 
-                sourceRef:
-                  String(
-                    lockedCurrent.id,
-                  ),
+                    sourceRef:
+                      String(
+                        lockedCurrent.id,
+                      ),
 
-                sourceItemRef:
-                  "product-edit",
+                    sourceItemRef:
+                      "product-edit",
 
-                note:
-                  "Manual full product stock adjustment",
+                    note:
+                      "Manual full product stock adjustment",
 
-                createdByUserId:
-                  actor.id,
-              },
-            );
+                    createdByUserId:
+                      actor.id,
+                  },
+                )
+              : null;
 
           if (
             costSync &&
@@ -1219,6 +1565,34 @@ async function handleUpdateProduct(
           .insert(inventoryMovementsTable)
           .values(adjustmentMovements);
       }
+
+      if (
+        purchaseSupplierId !== null &&
+        purchaseQuantityDelta !== null &&
+        purchaseQuantityDelta > 0
+      ) {
+        await appendProductToSupplierDraft(
+          tx,
+          {
+            userId:
+              actor.id,
+            supplierId:
+              purchaseSupplierId,
+            productId:
+              updated.id,
+            quantity:
+              purchaseQuantityDelta,
+            unitCostMinor:
+              purchaseUnitCostMinor,
+            businessDate:
+              purchaseBusinessDate,
+            warehouseKey:
+              "main",
+            currencyCode:
+              "ILS",
+          },
+        );
+      }
     }
 
     if (rawAdditionalBarcodes !== undefined) {
@@ -1244,8 +1618,18 @@ async function handleUpdateProduct(
           previousProduct:
             lockedCurrent,
         } as const;
-      },
-    );
+        },
+      );
+  } catch (error) {
+    if (error instanceof PurchaseDraftServiceError) {
+      return json(
+        { error: error.message },
+        error.status,
+      );
+    }
+
+    throw error;
+  }
 
   if (
     updateResult.kind ===
@@ -1254,6 +1638,19 @@ async function handleUpdateProduct(
     return json(
       { error: "المنتج غير موجود" },
       404,
+    );
+  }
+
+  if (
+    updateResult.kind ===
+    "purchase_link_error"
+  ) {
+    return json(
+      {
+        error:
+          "اختيار المورد مسموح فقط عند زيادة كمية المخزون فعليًا",
+      },
+      400,
     );
   }
 

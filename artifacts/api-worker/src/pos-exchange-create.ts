@@ -40,6 +40,9 @@ import {
   restoreExactProductCost,
   type CostQuality,
 } from "./inventory-cost-engine";
+import {
+  getPendingPurchaseQuantityForProduct,
+} from "./purchase-draft-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -4654,6 +4657,31 @@ export async function handleCreatePosExchange(
             if (
               !consumedCost.tracked
             ) {
+              if (
+                consumedCost.reason ===
+                  "insufficient_accounting_quantity" ||
+                consumedCost.reason ===
+                  "uninitialized"
+              ) {
+                const pendingPurchaseQuantity =
+                  await getPendingPurchaseQuantityForProduct(
+                    tx,
+                    {
+                      productId,
+                    },
+                  );
+
+                if (
+                  pendingPurchaseQuantity >
+                  0
+                ) {
+                  throw new PosExchangeError(
+                    "يوجد لهذا المنتج كمية مشتريات غير معتمدة محاسبيًا. اعتمد فاتورة المورد أولًا قبل استخدام هذه الكمية في التبديل.",
+                    409,
+                  );
+                }
+              }
+
               console.warn(
                 "POS_EXCHANGE_SALE_COST_UNTRACKED",
                 {

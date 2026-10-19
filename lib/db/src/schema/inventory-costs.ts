@@ -15,6 +15,7 @@ import { ordersTable } from "./orders";
 import { posSaleReturnItemsTable } from "./pos-sale-returns";
 import { posSaleRevisionsTable } from "./pos-sale-revisions";
 import { posSaleItemsTable } from "./pos-sales";
+import { posPurchaseItemsTable } from "./pos-purchases";
 import { productsTable } from "./products";
 import { usersTable } from "./users";
 
@@ -277,6 +278,67 @@ export const productHistoricalCostsTable = pgTable(
     index("product_historical_costs_product_period_idx").on(
       table.productId,
       table.effectiveFrom,
+    ),
+  ],
+).enableRLS();
+
+export const posPurchaseItemCostsTable = pgTable(
+  "pos_purchase_item_costs",
+  {
+    purchaseItemId: integer("purchase_item_id")
+      .primaryKey()
+      .references(() => posPurchaseItemsTable.id, {
+        onDelete: "cascade",
+      }),
+
+    productId: integer("product_id")
+      .notNull()
+      .references(() => productsTable.id, {
+        onDelete: "restrict",
+      }),
+
+    receivedQuantity: integer("received_quantity").notNull(),
+
+    unitCostMinor: integer("unit_cost_minor").notNull(),
+
+    costTotalMinor: integer("cost_total_minor").notNull(),
+
+    invoiceDiscountAllocatedMinor: integer(
+      "invoice_discount_allocated_minor",
+    )
+      .notNull()
+      .default(0),
+
+    costQuality: text("cost_quality").notNull(),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "pos_purchase_item_costs_quantity_valid",
+      sql`${table.receivedQuantity} > 0`,
+    ),
+
+    check(
+      "pos_purchase_item_costs_values_valid",
+      sql`
+        ${table.unitCostMinor} >= 0
+        and ${table.costTotalMinor} >= 0
+        and ${table.invoiceDiscountAllocatedMinor} >= 0
+      `,
+    ),
+
+    check(
+      "pos_purchase_item_costs_quality_valid",
+      sql`${table.costQuality} in ('confirmed', 'estimated', 'mixed')`,
+    ),
+
+    index("pos_purchase_item_costs_product_idx").on(
+      table.productId,
     ),
   ],
 ).enableRLS();
@@ -560,6 +622,9 @@ export type ProductCostLedgerEntry =
 
 export type ProductHistoricalCost =
   typeof productHistoricalCostsTable.$inferSelect;
+
+export type PosPurchaseItemCost =
+  typeof posPurchaseItemCostsTable.$inferSelect;
 
 export type PosSaleItemCost =
   typeof posSaleItemCostsTable.$inferSelect;

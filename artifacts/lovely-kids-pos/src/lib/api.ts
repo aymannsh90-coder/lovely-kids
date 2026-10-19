@@ -3199,12 +3199,12 @@ export interface PosPurchaseItemResult {
   size: string | null;
   quantity: number;
   freeQuantity: number;
-  unitCostMinor: number;
-  unitCost: number;
+  unitCostMinor: number | null;
+  unitCost: number | null;
   lineDiscountMinor: number;
   lineDiscount: number;
-  lineTotalMinor: number;
-  lineTotal: number;
+  lineTotalMinor: number | null;
+  lineTotal: number | null;
   generalStockBefore: number | null;
   generalStockAfter: number | null;
   variantStockBefore: number | null;
@@ -3213,6 +3213,7 @@ export interface PosPurchaseItemResult {
 
 export interface PosPurchaseResult {
   alreadyCreated: boolean;
+  hasUnknownCost?: boolean;
   navigation?: {
     previousPublicId: string | null;
     nextPublicId: string | null;
@@ -3231,7 +3232,7 @@ export interface PosPurchaseResult {
     warehouseKey: string;
     currencyCode: string;
     enteredByUserId: string;
-    status: "completed" | "voided";
+    status: "draft" | "completed" | "voided";
     paymentMethod: "cash" | "credit" | "mixed";
     subtotalMinor: number;
     subtotal: number;
@@ -3275,11 +3276,81 @@ export function getLatestPosPurchase(
   );
 }
 
+export async function getOpenPosPurchaseDraft(
+  token: string,
+  supplierId: string,
+  warehouseKey = "main",
+) {
+  const result = await apiRequest<
+    PosPurchaseResult | { purchase: null }
+  >(
+    `/api/pos/purchases/draft?supplierId=${encodeURIComponent(supplierId)}&warehouseKey=${encodeURIComponent(warehouseKey)}`,
+    {},
+    token,
+  );
+
+  if (result.purchase === null) {
+    return null;
+  }
+
+  return result as PosPurchaseResult;
+}
+
+export function savePosPurchaseDraft(
+  token: string,
+  input: {
+    supplierId: string;
+    draftPublicId?: string;
+    draftUpdatedAt?: string;
+    supplierInvoiceNumber?: string;
+    businessDate: string;
+    warehouseKey: string;
+    currencyCode: string;
+    paymentMethod: "cash" | "credit" | "mixed";
+    invoiceDiscount: string;
+    paid: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      barcode?: string;
+      quantity: number;
+      freeQuantity?: number;
+      unitCost: string;
+      lineDiscount?: string;
+    }>;
+  },
+) {
+  return apiRequest<PosPurchaseResult>(
+    "/api/pos/purchases/draft",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
+export function discardOpenPosPurchaseDraft(
+  token: string,
+  supplierId: string,
+  warehouseKey = "main",
+) {
+  return apiRequest<{ ok: true }>(
+    `/api/pos/purchases/draft?supplierId=${encodeURIComponent(supplierId)}&warehouseKey=${encodeURIComponent(warehouseKey)}`,
+    {
+      method: "DELETE",
+    },
+    token,
+  );
+}
+
 export function createPosPurchase(
   token: string,
   input: {
     supplierId: string;
     idempotencyKey: string;
+    draftPublicId?: string;
+    draftUpdatedAt?: string;
     supplierInvoiceNumber?: string;
     businessDate: string;
     warehouseKey: string;

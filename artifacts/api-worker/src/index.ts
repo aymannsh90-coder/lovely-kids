@@ -41,6 +41,7 @@ import { handleSupplierRequest } from "./supplier-routes";
 import { handleDeliveryCompanyRequest } from "./delivery-company-routes";
 import { handleDeliverySettlementRequest } from "./delivery-settlement-routes";
 import { handlePosPurchaseRequest } from "./pos-purchase-routes";
+import { handlePurchaseDraftRequest } from "./purchase-draft-routes";
 import {
   isPurchaseApiEnabled,
   isPurchaseWriteEnabled,
@@ -542,6 +543,17 @@ export default {
 
       if (deliverySettlementResponse) {
         return deliverySettlementResponse;
+      }
+
+      const purchaseDraftResponse =
+        await handlePurchaseDraftRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (purchaseDraftResponse) {
+        return purchaseDraftResponse;
       }
 
       const posPurchaseResponse =

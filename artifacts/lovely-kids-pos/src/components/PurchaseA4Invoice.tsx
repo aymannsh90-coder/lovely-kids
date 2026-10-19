@@ -19,8 +19,10 @@ function paymentMethodLabel(value: string) {
   return value;
 }
 
-function money(value: number) {
-  return `${value.toFixed(2)} ₪`;
+function money(value: number | null) {
+  return value === null
+    ? "غير مدخل"
+    : `${value.toFixed(2)} ₪`;
 }
 
 export default function PurchaseA4Invoice({
@@ -57,6 +59,15 @@ export default function PurchaseA4Invoice({
           <strong>{purchase.businessDate}</strong>
         </div>
       </header>
+
+      {purchase.status === "draft" && (
+        <div className="purchase-a4-voided">
+          <strong>مسودة غير معتمدة</strong>
+          <span>
+            هذه المسودة لا تنشئ ذمة مورد ولا قيدًا ماليًا حتى اعتمادها.
+          </span>
+        </div>
+      )}
 
       {purchase.status === "voided" && (
         <div className="purchase-a4-voided">
@@ -113,8 +124,6 @@ export default function PurchaseA4Invoice({
             <th>#</th>
             <th>رقم الصنف</th>
             <th>اسم الصنف</th>
-            <th>اللون</th>
-            <th>المقاس</th>
             <th>الكمية</th>
             <th>مجاني</th>
             <th>تكلفة الوحدة</th>
@@ -129,8 +138,6 @@ export default function PurchaseA4Invoice({
               <td>{index + 1}</td>
               <td dir="ltr">{item.productCode ?? "—"}</td>
               <td>{item.productNameAr}</td>
-              <td>{item.color ?? "—"}</td>
-              <td>{item.size ?? "—"}</td>
               <td>{item.quantity}</td>
               <td>{item.freeQuantity}</td>
               <td dir="ltr">{money(item.unitCost)}</td>

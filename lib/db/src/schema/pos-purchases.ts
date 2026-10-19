@@ -100,7 +100,7 @@ export const posPurchasesTable = pgTable(
 
     check(
       "pos_purchases_status_valid",
-      sql`${table.status} in ('completed', 'voided')`,
+      sql`${table.status} in ('draft', 'completed', 'voided')`,
     ),
 
     check(
@@ -145,7 +145,7 @@ export const posPurchasesTable = pgTable(
       "pos_purchases_void_state_valid",
       sql`
         (
-          ${table.status} = 'completed'
+          ${table.status} in ('draft', 'completed')
           and ${table.voidedAt} is null
           and ${table.voidedByUserId} is null
           and ${table.voidReason} is null
@@ -173,13 +173,26 @@ export const posPurchasesTable = pgTable(
         table.supplierId,
         table.supplierInvoiceNumber,
       )
-      .where(sql`${table.supplierInvoiceNumber} is not null`),
+      .where(
+        sql`
+          ${table.supplierInvoiceNumber} is not null
+          and ${table.status} = 'completed'
+        `,
+      ),
 
     index("pos_purchases_business_date_idx").on(table.businessDate),
 
     index("pos_purchases_entered_by_idx").on(table.enteredByUserId),
 
     index("pos_purchases_created_at_idx").on(table.createdAt),
+
+    uniqueIndex("pos_purchases_one_open_draft_per_supplier_user_warehouse_idx")
+      .on(
+        table.supplierId,
+        table.enteredByUserId,
+        table.warehouseKey,
+      )
+      .where(sql`${table.status} = \'draft\'`),
   ],
 ).enableRLS();
 
@@ -211,9 +224,9 @@ export const posPurchaseItemsTable = pgTable(
     quantity: integer("quantity").notNull(),
     freeQuantity: integer("free_quantity").notNull().default(0),
 
-    unitCostMinor: integer("unit_cost_minor").notNull(),
+    unitCostMinor: integer("unit_cost_minor"),
     lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
-    lineTotalMinor: integer("line_total_minor").notNull(),
+    lineTotalMinor: integer("line_total_minor"),
 
     generalStockBefore: integer("general_stock_before"),
     generalStockAfter: integer("general_stock_after"),
