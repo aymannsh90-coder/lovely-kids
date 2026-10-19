@@ -2017,6 +2017,13 @@ export default function AddProductScreen() {
     );
   };
 
+  const selectedPurchaseSupplier =
+    purchaseSuppliers.find(
+      (supplier) =>
+        supplier.id ===
+        purchaseSupplierId,
+    ) ?? null;
+
   const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
@@ -3575,8 +3582,248 @@ export default function AddProductScreen() {
                 textAlign: "right",
               }}
             >
-              تكلفة المخزون — للمالك فقط
+              المورد والتكلفة — للمالك فقط
             </Text>
+
+            <Text
+              style={{
+                color:
+                  colors.foreground,
+                fontSize: 13,
+                fontWeight: "800",
+                textAlign: "right",
+              }}
+            >
+              المورد (اختياري)
+            </Text>
+
+            <Text
+              style={{
+                color:
+                  colors.mutedForeground,
+                fontSize: 12,
+                lineHeight: 19,
+                textAlign: "right",
+              }}
+            >
+              اختر المورد فقط إذا كانت هذه الكمية شراء جديد. اتركه بدون مورد للبضاعة التاريخية أو بضاعة أول المدة.
+            </Text>
+
+            <Pressable
+              disabled={
+                purchaseSuppliersLoading
+              }
+              onPress={() =>
+                setPurchaseSupplierPickerOpen(
+                  true,
+                )
+              }
+              style={{
+                borderWidth: 1,
+                borderColor:
+                  purchaseSupplierId
+                    ? colors.primary
+                    : colors.border,
+                borderRadius: 10,
+                paddingVertical: 12,
+                paddingHorizontal: 12,
+                backgroundColor:
+                  colors.background,
+              }}
+            >
+              <Text
+                style={{
+                  color:
+                    colors.foreground,
+                  fontWeight: "800",
+                  textAlign: "right",
+                }}
+              >
+                {purchaseSuppliersLoading
+                  ? "جاري تحميل الموردين…"
+                  : selectedPurchaseSupplier
+                    ? `${selectedPurchaseSupplier.code} — ${selectedPurchaseSupplier.name}`
+                    : "بدون مورد — بضاعة تاريخية / أول المدة"}
+              </Text>
+            </Pressable>
+
+            {!!purchaseSupplierLoadError && (
+              <Text
+                style={{
+                  color:
+                    colors.destructive,
+                  fontSize: 12,
+                  textAlign: "right",
+                }}
+              >
+                {purchaseSupplierLoadError}
+              </Text>
+            )}
+
+            <Modal
+              visible={
+                purchaseSupplierPickerOpen
+              }
+              transparent
+              animationType="fade"
+              onRequestClose={() =>
+                setPurchaseSupplierPickerOpen(
+                  false,
+                )
+              }
+            >
+              <Pressable
+                onPress={() =>
+                  setPurchaseSupplierPickerOpen(
+                    false,
+                  )
+                }
+                style={{
+                  flex: 1,
+                  backgroundColor:
+                    "rgba(0,0,0,0.45)",
+                  justifyContent:
+                    "center",
+                  padding: 20,
+                }}
+              >
+                <Pressable
+                  onPress={() => {}}
+                  style={{
+                    width: "100%",
+                    maxWidth: 520,
+                    maxHeight: "75%",
+                    alignSelf: "center",
+                    backgroundColor:
+                      colors.card,
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor:
+                      colors.border,
+                    padding: 14,
+                    gap: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.foreground,
+                      fontSize: 17,
+                      fontWeight: "900",
+                      textAlign: "right",
+                      marginBottom: 4,
+                    }}
+                  >
+                    اختيار المورد
+                  </Text>
+
+                  <ScrollView
+                    style={{
+                      maxHeight: 420,
+                    }}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <Pressable
+                      onPress={() => {
+                        setPurchaseSupplierId(
+                          "",
+                        );
+                        setEditStockCostMode(
+                          null,
+                        );
+                        setEditNewBatchCostInput(
+                          "",
+                        );
+                        setPurchaseSupplierPickerOpen(
+                          false,
+                        );
+                      }}
+                      style={{
+                        borderWidth: 1,
+                        borderColor:
+                          !purchaseSupplierId
+                            ? colors.primary
+                            : colors.border,
+                        backgroundColor:
+                          !purchaseSupplierId
+                            ? colors.primary +
+                              "12"
+                            : colors.background,
+                        borderRadius: 10,
+                        padding: 12,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color:
+                            colors.foreground,
+                          fontWeight: "800",
+                          textAlign:
+                            "right",
+                        }}
+                      >
+                        بدون مورد — بضاعة تاريخية / أول المدة
+                      </Text>
+                    </Pressable>
+
+                    {purchaseSuppliers.map(
+                      (supplier) => (
+                        <Pressable
+                          key={
+                            supplier.id
+                          }
+                          onPress={() => {
+                            setPurchaseSupplierId(
+                              supplier.id,
+                            );
+                            setEditStockCostMode(
+                              null,
+                            );
+                            setEditNewBatchCostInput(
+                              "",
+                            );
+                            setPurchaseSupplierPickerOpen(
+                              false,
+                            );
+                          }}
+                          style={{
+                            borderWidth: 1,
+                            borderColor:
+                              purchaseSupplierId ===
+                              supplier.id
+                                ? colors.primary
+                                : colors.border,
+                            backgroundColor:
+                              purchaseSupplierId ===
+                              supplier.id
+                                ? colors.primary +
+                                  "12"
+                                : colors.background,
+                            borderRadius: 10,
+                            padding: 12,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                colors.foreground,
+                              fontWeight:
+                                "800",
+                              textAlign:
+                                "right",
+                            }}
+                          >
+                            {supplier.code} — {supplier.name}
+                          </Text>
+                        </Pressable>
+                      ),
+                    )}
+                  </ScrollView>
+                </Pressable>
+              </Pressable>
+            </Modal>
 
             {!isEdit ? (
               <>
@@ -3589,7 +3836,9 @@ export default function AddProductScreen() {
                     textAlign: "right",
                   }}
                 >
-                  تكلفة القطعة الافتتاحية اختيارية. إذا تركتها فارغة سيُحفظ المنتج والمخزون وتظهر التكلفة كغير مدخلة حتى تضيفها لاحقاً. لن تظهر هذه البيانات للمشرف.
+                  {purchaseSupplierId
+                    ? "تكلفة الشراء اختيارية في المسودة. إذا تركتها فارغة تبقى التكلفة غير مدخلة حتى تكملها قبل اعتماد فاتورة المورد."
+                    : "تكلفة القطعة الافتتاحية اختيارية. إذا تركتها فارغة سيُحفظ المنتج والمخزون وتظهر التكلفة كغير مدخلة حتى تضيفها لاحقاً. بدون مورد لن تُنشأ فاتورة مشتريات."}
                 </Text>
 
                 <TextInput
@@ -3599,7 +3848,11 @@ export default function AddProductScreen() {
                   onChangeText={
                     setOpeningCostInput
                   }
-                  placeholder="التكلفة الافتتاحية للقطعة بالشيكل"
+                  placeholder={
+                    purchaseSupplierId
+                      ? "تكلفة الشراء للقطعة بالشيكل — اختياري"
+                      : "التكلفة الافتتاحية للقطعة بالشيكل"
+                  }
                   placeholderTextColor={
                     colors.mutedForeground
                   }
@@ -3629,10 +3882,39 @@ export default function AddProductScreen() {
                     textAlign: "right",
                   }}
                 >
-                  إذا زدت كمية المخزون أثناء تعديل المنتج، اختر تكلفة الكمية الجديدة.
+                  {purchaseSupplierId
+                    ? "عند زيادة الكمية، ستُضاف الزيادة فقط إلى مسودة المورد. تكلفة الشراء اختيارية الآن ويمكن إكمالها قبل اعتماد الفاتورة."
+                    : "إذا زدت كمية المخزون بدون مورد، اختر تكلفة الكمية الجديدة حسب منطق المخزون اليدوي."}
                 </Text>
 
-                <View
+                {purchaseSupplierId ? (
+                  <TextInput
+                    value={
+                      editNewBatchCostInput
+                    }
+                    onChangeText={
+                      setEditNewBatchCostInput
+                    }
+                    placeholder="تكلفة الشراء للقطعة بالشيكل — اختياري"
+                    placeholderTextColor={
+                      colors.mutedForeground
+                    }
+                    keyboardType="decimal-pad"
+                    style={{
+                      borderWidth: 1,
+                      borderColor:
+                        colors.border,
+                      borderRadius: 10,
+                      padding: 11,
+                      color:
+                        colors.foreground,
+                      backgroundColor:
+                        colors.background,
+                      textAlign: "right",
+                    }}
+                  />
+                ) : (
+                  <View
                   style={{
                     flexDirection:
                       Platform.OS === "web"
@@ -3747,6 +4029,7 @@ export default function AddProductScreen() {
                     }}
                   />
                 )}
+                </>}
               </>
             )}
           </View>
