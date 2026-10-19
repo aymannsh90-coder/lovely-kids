@@ -9,6 +9,39 @@ type Db = Awaited<
   ReturnType<typeof openDb>
 >["db"];
 
+export function sanitizePublicSettingsData(
+  data: Record<string, unknown>,
+) {
+  const shippingZones =
+    Array.isArray(data.shippingZones)
+      ? data.shippingZones.map(
+          (zone) => {
+            if (
+              !zone ||
+              typeof zone !== "object" ||
+              Array.isArray(zone)
+            ) {
+              return zone;
+            }
+
+            const {
+              companyCost: _companyCost,
+              ...publicZone
+            } = zone as Record<string, unknown>;
+
+            return publicZone;
+          },
+        )
+      : data.shippingZones;
+
+  return {
+    ...data,
+    ...(shippingZones === undefined
+      ? {}
+      : { shippingZones }),
+  };
+}
+
 const json = (data: unknown, status = 200) =>
   Response.json(rewriteMediaUrlsForPublic(data), {
     status,
@@ -16,6 +49,32 @@ const json = (data: unknown, status = 200) =>
       "Access-Control-Allow-Origin": "*",
     },
   });
+
+async function handleGetSettings(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const rows = await db
+    .select()
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.id, 1));
+
+  const data =
+    (rows[0]?.data as Record<string, unknown>) ?? {};
+
+  const user = await getCurrentUser(
+    db,
+    request,
+    env,
+  );
+
+  return json(
+    user?.isAdmin
+      ? data
+      : sanitizePublicSettingsData(data),
+  );
+}
 
 async function handleUpdateSettings(
   request: Request,
@@ -75,6 +134,17 @@ export async function handleSettingsRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "GET" &&
+    path === "/api/settings"
+  ) {
+    return handleGetSettings(
+      request,
+      db,
+      env,
+    );
+  }
 
   if (
     request.method === "PUT" &&
