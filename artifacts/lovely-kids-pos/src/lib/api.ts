@@ -337,8 +337,8 @@ export interface PosSaleItemResult {
   soldUnitPrice: number;
   lineDiscountMinor: number;
   lineDiscount: number;
-  lineTotalMinor: number;
-  lineTotal: number;
+  lineTotalMinor: number | null;
+  lineTotal: number | null;
   generalStockBefore: number | null;
   generalStockAfter: number | null;
   variantStockBefore: number | null;
@@ -3199,8 +3199,8 @@ export interface PosPurchaseItemResult {
   size: string | null;
   quantity: number;
   freeQuantity: number;
-  unitCostMinor: number;
-  unitCost: number;
+  unitCostMinor: number | null;
+  unitCost: number | null;
   lineDiscountMinor: number;
   lineDiscount: number;
   lineTotalMinor: number;
@@ -3213,6 +3213,7 @@ export interface PosPurchaseItemResult {
 
 export interface PosPurchaseResult {
   alreadyCreated: boolean;
+  hasUnknownCost?: boolean;
   navigation?: {
     previousPublicId: string | null;
     nextPublicId: string | null;
