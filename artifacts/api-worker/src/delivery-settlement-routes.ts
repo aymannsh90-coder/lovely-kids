@@ -676,11 +676,13 @@ async function handleCreateSettlement(
           }
         }
 
-        const alreadySettled =
+        const postedSettlementItems =
           await tx
             .select({
               orderId:
                 deliveryCompanySettlementItemsTable.orderId,
+              amountMinor:
+                deliveryCompanySettlementItemsTable.amountMinor,
             })
             .from(
               deliveryCompanySettlementItemsTable,
@@ -699,10 +701,20 @@ async function handleCreateSettlement(
             )
             .for("update");
 
-        if (alreadySettled[0]) {
-          throw new DeliverySettlementError(
-            `الطلب #${alreadySettled[0].orderId} تمت تسويته مسبقًا`,
-            409,
+        const settledMinorByOrderId =
+          new Map<number, number>();
+
+        for (
+          const item of
+          postedSettlementItems
+        ) {
+          settledMinorByOrderId.set(
+            item.orderId,
+            (
+              settledMinorByOrderId.get(
+                item.orderId,
+              ) ?? 0
+            ) + item.amountMinor,
           );
         }
 
@@ -712,6 +724,8 @@ async function handleCreateSettlement(
               financeTransactionsTable.id,
             sourceId:
               financeTransactionsTable.sourceId,
+            sourceEvent:
+              financeTransactionsTable.sourceEvent,
           })
           .from(financeTransactionsTable)
           .where(
@@ -720,9 +734,12 @@ async function handleCreateSettlement(
                 financeTransactionsTable.sourceType,
                 "web_order",
               ),
-              eq(
+              inArray(
                 financeTransactionsTable.sourceEvent,
-                "done",
+                [
+                  "done",
+                  "delivery_cost_correction_20261019",
+                ],
               ),
               eq(
                 financeTransactionsTable.status,
@@ -739,6 +756,9 @@ async function handleCreateSettlement(
         const sourceByFinanceId =
           new Map<number, number>();
 
+        const doneOrderIds =
+          new Set<number>();
+
         for (const finance of financeRows) {
           const orderId =
             Number(finance.sourceId);
@@ -750,12 +770,25 @@ async function handleCreateSettlement(
               finance.id,
               orderId,
             );
+
+            if (
+              finance.sourceEvent ===
+              "done"
+            ) {
+              doneOrderIds.add(
+                orderId,
+              );
+            }
           }
         }
 
         if (
-          sourceByFinanceId.size !==
-          orderIds.length
+          orderIds.some(
+            (orderId) =>
+              !doneOrderIds.has(
+                orderId,
+              ),
+          )
         ) {
           throw new DeliverySettlementError(
             "بعض الطلبات لا تحتوي قيد تسليم مالي صالح",
@@ -839,18 +872,35 @@ async function handleCreateSettlement(
             line.accountId;
         }
 
+        const outstandingByOrderId =
+          new Map<number, number>();
+
         for (const orderId of orderIds) {
-          const amount =
+          const grossAmount =
             amountByOrderId.get(
               orderId,
             ) ?? 0;
 
-          if (amount <= 0) {
+          const settledAmount =
+            settledMinorByOrderId.get(
+              orderId,
+            ) ?? 0;
+
+          const outstandingAmount =
+            grossAmount -
+            settledAmount;
+
+          if (outstandingAmount <= 0) {
             throw new DeliverySettlementError(
-              `الطلب #${orderId} لا يحتوي مبلغًا مستحقًا على شركة التوصيل`,
+              `الطلب #${orderId} لا يحتوي مبلغًا متبقيًا على شركة التوصيل`,
               409,
             );
           }
+
+          outstandingByOrderId.set(
+            orderId,
+            outstandingAmount,
+          );
         }
 
         if (
@@ -866,7 +916,7 @@ async function handleCreateSettlement(
           orderIds.reduce(
             (sum, orderId) =>
               sum +
-              (amountByOrderId.get(
+              (outstandingByOrderId.get(
                 orderId,
               ) ?? 0),
             0,
@@ -1160,7 +1210,7 @@ async function handleCreateSettlement(
                 settlement.id,
               orderId,
               amountMinor:
-                amountByOrderId.get(
+                outstandingByOrderId.get(
                   orderId,
                 )!,
               status: "posted",
