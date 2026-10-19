@@ -49,4 +49,58 @@ CREATE UNIQUE INDEX pos_purchases_supplier_invoice_unique_idx
   WHERE supplier_invoice_number IS NOT NULL
     AND status = 'completed';
 
+CREATE TABLE IF NOT EXISTS public.pos_purchase_item_costs (
+  purchase_item_id integer PRIMARY KEY
+    REFERENCES public.pos_purchase_items(id)
+    ON DELETE CASCADE,
+
+  product_id integer NOT NULL
+    REFERENCES public.products(id)
+    ON DELETE RESTRICT,
+
+  received_quantity integer NOT NULL,
+
+  unit_cost_minor integer NOT NULL,
+  cost_total_minor integer NOT NULL,
+
+  invoice_discount_allocated_minor integer
+    NOT NULL
+    DEFAULT 0,
+
+  cost_quality text NOT NULL,
+
+  created_at timestamptz
+    NOT NULL
+    DEFAULT now(),
+
+  CONSTRAINT pos_purchase_item_costs_quantity_valid
+    CHECK (received_quantity > 0),
+
+  CONSTRAINT pos_purchase_item_costs_values_valid
+    CHECK (
+      unit_cost_minor >= 0
+      AND cost_total_minor >= 0
+      AND invoice_discount_allocated_minor >= 0
+    ),
+
+  CONSTRAINT pos_purchase_item_costs_quality_valid
+    CHECK (
+      cost_quality IN ('confirmed', 'estimated', 'mixed')
+    )
+);
+
+CREATE INDEX IF NOT EXISTS pos_purchase_item_costs_product_idx
+  ON public.pos_purchase_item_costs (product_id);
+
+ALTER TABLE public.pos_purchase_item_costs
+  ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE
+  public.pos_purchase_item_costs
+FROM anon, authenticated;
+
+GRANT ALL ON TABLE
+  public.pos_purchase_item_costs
+TO service_role;
+
 COMMIT;
