@@ -454,10 +454,18 @@ async function handleCreateProduct(
   const rawPurchaseBusinessDate =
     bodyRecord?.purchaseBusinessDate;
 
+  const rawPurchaseEntryMode =
+    bodyRecord?.purchaseEntryMode;
+
+  const rawPurchaseQuantity =
+    bodyRecord?.purchaseQuantity;
+
   const hasPurchaseDraftMetadata =
     rawPurchaseSupplierId !== undefined ||
     rawPurchaseUnitCostMinor !== undefined ||
-    rawPurchaseBusinessDate !== undefined;
+    rawPurchaseBusinessDate !== undefined ||
+    rawPurchaseEntryMode !== undefined ||
+    rawPurchaseQuantity !== undefined;
 
   if (
     hasPurchaseDraftMetadata &&
@@ -495,11 +503,7 @@ async function handleCreateProduct(
   }
 
   if (
-    (
-      rawPurchaseSupplierId !== undefined ||
-      rawPurchaseUnitCostMinor !== undefined ||
-      rawPurchaseBusinessDate !== undefined
-    ) &&
+    hasPurchaseDraftMetadata &&
     !actor.isOwner
   ) {
     return json(
@@ -563,6 +567,50 @@ async function handleCreateProduct(
       parsedCost;
   }
 
+  const purchaseEntryMode =
+    rawPurchaseEntryMode === undefined
+      ? "stock_receipt"
+      : rawPurchaseEntryMode;
+
+  if (
+    purchaseEntryMode !== "stock_receipt" &&
+    purchaseEntryMode !== "historical"
+  ) {
+    return json(
+      { error: "نوع تسجيل الشراء غير صالح" },
+      400,
+    );
+  }
+
+  let purchaseQuantity:
+    number | null = null;
+
+  if (
+    rawPurchaseQuantity !== undefined &&
+    rawPurchaseQuantity !== null &&
+    rawPurchaseQuantity !== ""
+  ) {
+    const parsedQuantity =
+      typeof rawPurchaseQuantity === "string"
+        ? Number(rawPurchaseQuantity)
+        : rawPurchaseQuantity;
+
+    if (
+      typeof parsedQuantity !== "number" ||
+      !Number.isSafeInteger(parsedQuantity) ||
+      parsedQuantity <= 0 ||
+      parsedQuantity > 99_999
+    ) {
+      return json(
+        { error: "كمية الشراء السابق غير صالحة" },
+        400,
+      );
+    }
+
+    purchaseQuantity =
+      parsedQuantity;
+  }
+
   const purchaseBusinessDate =
     typeof rawPurchaseBusinessDate === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
@@ -571,10 +619,36 @@ async function handleCreateProduct(
 
   if (
     purchaseSupplierId === null &&
-    rawPurchaseUnitCostMinor !== undefined
+    (
+      rawPurchaseUnitCostMinor !== undefined ||
+      rawPurchaseEntryMode !== undefined ||
+      rawPurchaseQuantity !== undefined
+    )
   ) {
     return json(
-      { error: "لا يمكن ربط تكلفة شراء بدون اختيار مورد" },
+      { error: "لا يمكن تسجيل بيانات شراء بدون اختيار مورد" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    purchaseEntryMode === "historical" &&
+    purchaseQuantity === null
+  ) {
+    return json(
+      { error: "أدخل الكمية الأصلية للشراء السابق" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    purchaseEntryMode === "stock_receipt" &&
+    purchaseQuantity !== null
+  ) {
+    return json(
+      { error: "كمية الشراء اليدوية متاحة فقط للشراء السابق" },
       400,
     );
   }
@@ -611,6 +685,10 @@ async function handleCreateProduct(
     delete cleanProductBody.purchaseSupplierId;
     delete cleanProductBody.purchaseUnitCostMinor;
     delete cleanProductBody.purchaseBusinessDate;
+    delete cleanProductBody.purchaseEntryMode;
+    delete cleanProductBody.purchaseQuantity;
+    delete cleanProductBody.purchaseEntryMode;
+    delete cleanProductBody.purchaseQuantity;
   }
 
   const parsed =
@@ -661,13 +739,14 @@ async function handleCreateProduct(
 
   if (
     purchaseSupplierId !== null &&
+    purchaseEntryMode === "stock_receipt" &&
     (
       openingQuantity === null ||
       openingQuantity <= 0
     )
   ) {
     return json(
-      { error: "اختيار المورد يتطلب إدخال كمية للصنف" },
+      { error: "الاستلام الجديد يتطلب إدخال كمية للصنف" },
       400,
     );
   }
@@ -857,10 +936,23 @@ async function handleCreateProduct(
 
     if (
       actor.isOwner &&
-      purchaseSupplierId !== null &&
-      openingQuantity !== null &&
-      openingQuantity > 0
+      purchaseSupplierId !== null
     ) {
+      const linkedPurchaseQuantity =
+        purchaseEntryMode === "historical"
+          ? purchaseQuantity
+          : openingQuantity;
+
+      if (
+        linkedPurchaseQuantity === null ||
+        linkedPurchaseQuantity <= 0
+      ) {
+        throw new PurchaseDraftServiceError(
+          "كمية الشراء المرتبطة بالمورد غير صالحة",
+          400,
+        );
+      }
+
       await appendProductToSupplierDraft(
         tx,
         {
@@ -870,9 +962,11 @@ async function handleCreateProduct(
           productId:
             created.id,
           quantity:
-            openingQuantity,
+            linkedPurchaseQuantity,
           unitCostMinor:
             purchaseUnitCostMinor,
+          entryMode:
+            purchaseEntryMode,
           businessDate:
             purchaseBusinessDate,
           warehouseKey:
@@ -976,10 +1070,18 @@ async function handleUpdateProduct(
   const rawPurchaseBusinessDate =
     bodyRecord?.purchaseBusinessDate;
 
+  const rawPurchaseEntryMode =
+    bodyRecord?.purchaseEntryMode;
+
+  const rawPurchaseQuantity =
+    bodyRecord?.purchaseQuantity;
+
   const hasPurchaseDraftMetadata =
     rawPurchaseSupplierId !== undefined ||
     rawPurchaseUnitCostMinor !== undefined ||
-    rawPurchaseBusinessDate !== undefined;
+    rawPurchaseBusinessDate !== undefined ||
+    rawPurchaseEntryMode !== undefined ||
+    rawPurchaseQuantity !== undefined;
 
   if (
     hasPurchaseDraftMetadata &&
@@ -1053,6 +1155,50 @@ async function handleUpdateProduct(
       parsedCost;
   }
 
+  const purchaseEntryMode =
+    rawPurchaseEntryMode === undefined
+      ? "stock_receipt"
+      : rawPurchaseEntryMode;
+
+  if (
+    purchaseEntryMode !== "stock_receipt" &&
+    purchaseEntryMode !== "historical"
+  ) {
+    return json(
+      { error: "نوع تسجيل الشراء غير صالح" },
+      400,
+    );
+  }
+
+  let purchaseQuantity:
+    number | null = null;
+
+  if (
+    rawPurchaseQuantity !== undefined &&
+    rawPurchaseQuantity !== null &&
+    rawPurchaseQuantity !== ""
+  ) {
+    const parsedQuantity =
+      typeof rawPurchaseQuantity === "string"
+        ? Number(rawPurchaseQuantity)
+        : rawPurchaseQuantity;
+
+    if (
+      typeof parsedQuantity !== "number" ||
+      !Number.isSafeInteger(parsedQuantity) ||
+      parsedQuantity <= 0 ||
+      parsedQuantity > 99_999
+    ) {
+      return json(
+        { error: "كمية الشراء السابق غير صالحة" },
+        400,
+      );
+    }
+
+    purchaseQuantity =
+      parsedQuantity;
+  }
+
   const purchaseBusinessDate =
     typeof rawPurchaseBusinessDate === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
@@ -1061,10 +1207,36 @@ async function handleUpdateProduct(
 
   if (
     purchaseSupplierId === null &&
-    rawPurchaseUnitCostMinor !== undefined
+    (
+      rawPurchaseUnitCostMinor !== undefined ||
+      rawPurchaseEntryMode !== undefined ||
+      rawPurchaseQuantity !== undefined
+    )
   ) {
     return json(
-      { error: "لا يمكن ربط تكلفة شراء بدون اختيار مورد" },
+      { error: "لا يمكن تسجيل بيانات شراء بدون اختيار مورد" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    purchaseEntryMode === "historical" &&
+    purchaseQuantity === null
+  ) {
+    return json(
+      { error: "أدخل الكمية الأصلية للشراء السابق" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    purchaseEntryMode === "stock_receipt" &&
+    purchaseQuantity !== null
+  ) {
+    return json(
+      { error: "كمية الشراء اليدوية متاحة فقط للشراء السابق" },
       400,
     );
   }
@@ -1280,6 +1452,7 @@ async function handleUpdateProduct(
 
           if (
             purchaseSupplierId !== null &&
+            purchaseEntryMode === "stock_receipt" &&
             (
               purchaseQuantityDelta === null ||
               purchaseQuantityDelta <= 0
@@ -1290,6 +1463,22 @@ async function handleUpdateProduct(
                 "purchase_link_error",
               reason:
                 "supplier_requires_increase",
+            } as const;
+          }
+
+          if (
+            purchaseSupplierId !== null &&
+            purchaseEntryMode === "historical" &&
+            (
+              purchaseQuantityDelta === null ||
+              purchaseQuantityDelta !== 0
+            )
+          ) {
+            return {
+              kind:
+                "purchase_link_error",
+              reason:
+                "historical_requires_unchanged_stock",
             } as const;
           }
 
@@ -1591,10 +1780,23 @@ async function handleUpdateProduct(
       }
 
       if (
-        purchaseSupplierId !== null &&
-        purchaseQuantityDelta !== null &&
-        purchaseQuantityDelta > 0
+        purchaseSupplierId !== null
       ) {
+        const linkedPurchaseQuantity =
+          purchaseEntryMode === "historical"
+            ? purchaseQuantity
+            : purchaseQuantityDelta;
+
+        if (
+          linkedPurchaseQuantity === null ||
+          linkedPurchaseQuantity <= 0
+        ) {
+          throw new PurchaseDraftServiceError(
+            "كمية الشراء المرتبطة بالمورد غير صالحة",
+            400,
+          );
+        }
+
         await appendProductToSupplierDraft(
           tx,
           {
@@ -1605,9 +1807,11 @@ async function handleUpdateProduct(
             productId:
               updated.id,
             quantity:
-              purchaseQuantityDelta,
+              linkedPurchaseQuantity,
             unitCostMinor:
               purchaseUnitCostMinor,
+            entryMode:
+              purchaseEntryMode,
             businessDate:
               purchaseBusinessDate,
             warehouseKey:
