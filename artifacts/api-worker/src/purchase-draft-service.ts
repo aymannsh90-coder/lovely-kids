@@ -326,6 +326,21 @@ export async function appendProductToSupplierDraft(
       ),
     );
 
+  if (
+    currentItems.some(
+      (
+        item: typeof posPurchaseItemsTable.$inferSelect,
+      ) =>
+        item.entryMode !==
+        input.entryMode,
+    )
+  ) {
+    throw new PurchaseDraftServiceError(
+      "لا يمكن جمع شراء سابق واستلام جديد في نفس مسودة المورد. اعتمد أو احذف المسودة الحالية أولًا.",
+      409,
+    );
+  }
+
   const existing =
     currentItems.find(
       (
