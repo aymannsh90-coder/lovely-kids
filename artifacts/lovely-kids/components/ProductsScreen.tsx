@@ -152,10 +152,31 @@ export default function ProductsScreen({
   offersOnly?: boolean;
   newOnly?: boolean;
 }) {
-  const { category, fromMenu } = useLocalSearchParams<{
+  const {
+    category,
+    fromMenu,
+    orderEdit,
+    orderId,
+    orderToken,
+  } = useLocalSearchParams<{
     category?: string;
     fromMenu?: string;
+    orderEdit?: string;
+    orderId?: string;
+    orderToken?: string;
   }>();
+
+  const orderEditParams =
+    orderEdit === "1" &&
+    typeof orderId === "string"
+      ? {
+          orderId,
+          token:
+            typeof orderToken === "string"
+              ? orderToken
+              : undefined,
+        }
+      : null;
   const colors = useColors();
   const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -370,6 +391,23 @@ const topPadding = getResponsiveTopPadding(insets.top);
         <View style={styles.headerRow}>
           <Pressable
             onPress={() => {
+              if (orderEditParams) {
+                router.replace({
+                  pathname: "/edit-order",
+                  params: {
+                    id:
+                      orderEditParams.orderId,
+                    ...(orderEditParams.token
+                      ? {
+                          token:
+                            orderEditParams.token,
+                        }
+                      : {}),
+                  },
+                });
+                return;
+              }
+
               if (isSpecialView) {
                 router.back();
                 return;
@@ -829,6 +867,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 <ProductCard
                   key={product.id}
                   product={product}
+                  orderEdit={orderEditParams}
                   style={{ width: desktopCardWidth }}
                   imageHeight={isDesktopWeb ? 300 : undefined}
                 />
@@ -911,8 +950,9 @@ const topPadding = getResponsiveTopPadding(insets.top);
         renderItem={({ item }) => (
           <ProductCard
             product={item}
+            orderEdit={orderEditParams}
             style={{ width: desktopCardWidth }}
-                  imageHeight={isDesktopWeb ? 300 : undefined}
+            imageHeight={isDesktopWeb ? 300 : undefined}
           />
         )}
         ListEmptyComponent={

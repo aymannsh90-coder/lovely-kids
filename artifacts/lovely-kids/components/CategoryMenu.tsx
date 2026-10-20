@@ -184,10 +184,32 @@ export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
   const colors = useColors();
   const categories = useProductCategories(offersOnly);
   const { width } = useWindowDimensions();
-  const { openCategories, category } = useLocalSearchParams<{
+  const {
+    openCategories,
+    category,
+    orderEdit,
+    orderId,
+    orderToken,
+  } = useLocalSearchParams<{
     openCategories?: string;
     category?: string;
+    orderEdit?: string;
+    orderId?: string;
+    orderToken?: string;
   }>();
+
+  const orderEditNavigationParams =
+    orderEdit === "1" &&
+    typeof orderId === "string"
+      ? {
+          orderEdit: "1",
+          orderId,
+          ...(typeof orderToken ===
+          "string"
+            ? { orderToken }
+            : {}),
+        }
+      : {};
 
   const [visible, setVisible] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
@@ -236,7 +258,11 @@ export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
 
       router.push({
         pathname: "/(tabs)/products",
-        params: { category: categoryId, fromMenu: "1" },
+        params: {
+          category: categoryId,
+          fromMenu: "1",
+          ...orderEditNavigationParams,
+        },
       });
     });
   };
@@ -506,9 +532,30 @@ export function CategoryMenu({ offersOnly = false }: { offersOnly?: boolean }) {
 
 export function DesktopCategorySidebar({ offersOnly = false }: { offersOnly?: boolean }) {
   const categories = useProductCategories(offersOnly);
-  const { category } = useLocalSearchParams<{
+  const {
+    category,
+    orderEdit,
+    orderId,
+    orderToken,
+  } = useLocalSearchParams<{
     category?: string;
+    orderEdit?: string;
+    orderId?: string;
+    orderToken?: string;
   }>();
+
+  const orderEditNavigationParams =
+    orderEdit === "1" &&
+    typeof orderId === "string"
+      ? {
+          orderEdit: "1",
+          orderId,
+          ...(typeof orderToken ===
+          "string"
+            ? { orderToken }
+            : {}),
+        }
+      : {};
 
   const activeCategory =
     typeof category === "string" ? category : "all";
@@ -524,7 +571,10 @@ export function DesktopCategorySidebar({ offersOnly = false }: { offersOnly?: bo
 
     router.push({
       pathname: "/(tabs)/products",
-      params: { category: categoryId },
+      params: {
+        category: categoryId,
+        ...orderEditNavigationParams,
+      },
     });
   };
 
