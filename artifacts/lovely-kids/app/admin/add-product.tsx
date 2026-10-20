@@ -150,6 +150,18 @@ export default function AddProductScreen() {
   ] = useState("");
 
   const [
+    purchaseEntryMode,
+    setPurchaseEntryMode,
+  ] = useState<
+    "stock_receipt" | "historical"
+  >("stock_receipt");
+
+  const [
+    historicalPurchaseQuantityInput,
+    setHistoricalPurchaseQuantityInput,
+  ] = useState("");
+
+  const [
     purchaseSupplierPickerOpen,
     setPurchaseSupplierPickerOpen,
   ] = useState(false);
@@ -313,6 +325,12 @@ export default function AddProductScreen() {
     if (!user?.isOwner) {
       setPurchaseSuppliers([]);
       setPurchaseSupplierId("");
+      setPurchaseEntryMode(
+        "stock_receipt",
+      );
+      setHistoricalPurchaseQuantityInput(
+        "",
+      );
       return;
     }
 
@@ -2096,24 +2114,44 @@ export default function AddProductScreen() {
               supplierId: string;
               unitCostMinor: number | null;
               businessDate: string;
+              entryMode:
+                | "stock_receipt"
+                | "historical";
+              quantity?: number;
             }
           | undefined;
 
         if (
           user?.isOwner &&
-          purchaseSupplierId &&
-          !increased
-        ) {
-          throw new Error(
-            "اختر المورد فقط عند إدخال كمية جديدة للصنف.",
-          );
-        }
-
-        if (
-          user?.isOwner &&
-          increased &&
           purchaseSupplierId
         ) {
+          const quantityChanged =
+            nextQuantity === null ||
+            previousQuantity === null
+              ? true
+              : nextQuantity !==
+                previousQuantity;
+
+          if (
+            purchaseEntryMode ===
+              "stock_receipt" &&
+            !increased
+          ) {
+            throw new Error(
+              "الاستلام الجديد مع مورد يتطلب زيادة كمية المخزون.",
+            );
+          }
+
+          if (
+            purchaseEntryMode ===
+              "historical" &&
+            quantityChanged
+          ) {
+            throw new Error(
+              "الشراء السابق يجب تسجيله بدون تعديل كمية المخزون الحالية.",
+            );
+          }
+
           let unitCostMinor:
             number | null = null;
 
@@ -2144,12 +2182,50 @@ export default function AddProductScreen() {
               );
           }
 
+          let historicalQuantity:
+            number | undefined;
+
+          if (
+            purchaseEntryMode ===
+            "historical"
+          ) {
+            const parsedQuantity =
+              Number(
+                historicalPurchaseQuantityInput
+                  .trim(),
+              );
+
+            if (
+              !Number.isSafeInteger(
+                parsedQuantity,
+              ) ||
+              parsedQuantity <= 0 ||
+              parsedQuantity > 99_999
+            ) {
+              throw new Error(
+                "أدخل الكمية الأصلية التي اشتريتها سابقًا.",
+              );
+            }
+
+            historicalQuantity =
+              parsedQuantity;
+          }
+
           purchaseDraftLink = {
             supplierId:
               purchaseSupplierId,
             unitCostMinor,
             businessDate:
               localBusinessDate(),
+            entryMode:
+              purchaseEntryMode,
+            ...(historicalQuantity !==
+            undefined
+              ? {
+                  quantity:
+                    historicalQuantity,
+                }
+              : {}),
           };
         } else if (
           user?.isOwner &&
@@ -2218,6 +2294,10 @@ export default function AddProductScreen() {
               supplierId: string;
               unitCostMinor: number | null;
               businessDate: string;
+              entryMode:
+                | "stock_receipt"
+                | "historical";
+              quantity?: number;
             }
           | undefined;
 
@@ -2226,11 +2306,15 @@ export default function AddProductScreen() {
           purchaseSupplierId
         ) {
           if (
-            nextQuantity === null ||
-            nextQuantity <= 0
+            purchaseEntryMode ===
+              "stock_receipt" &&
+            (
+              nextQuantity === null ||
+              nextQuantity <= 0
+            )
           ) {
             throw new Error(
-              "اختيار المورد يتطلب إدخال كمية للصنف.",
+              "الاستلام الجديد مع مورد يتطلب إدخال كمية للصنف.",
             );
           }
 
@@ -2248,12 +2332,50 @@ export default function AddProductScreen() {
             );
           }
 
+          let historicalQuantity:
+            number | undefined;
+
+          if (
+            purchaseEntryMode ===
+            "historical"
+          ) {
+            const parsedQuantity =
+              Number(
+                historicalPurchaseQuantityInput
+                  .trim(),
+              );
+
+            if (
+              !Number.isSafeInteger(
+                parsedQuantity,
+              ) ||
+              parsedQuantity <= 0 ||
+              parsedQuantity > 99_999
+            ) {
+              throw new Error(
+                "أدخل الكمية الأصلية التي اشتريتها سابقًا.",
+              );
+            }
+
+            historicalQuantity =
+              parsedQuantity;
+          }
+
           purchaseDraftLink = {
             supplierId:
               purchaseSupplierId,
             unitCostMinor,
             businessDate:
               localBusinessDate(),
+            entryMode:
+              purchaseEntryMode,
+            ...(historicalQuantity !==
+            undefined
+              ? {
+                  quantity:
+                    historicalQuantity,
+                }
+              : {}),
           };
         } else if (
           user?.isOwner &&
@@ -3606,7 +3728,7 @@ export default function AddProductScreen() {
                 textAlign: "right",
               }}
             >
-              اختر المورد فقط إذا كانت هذه الكمية شراء جديد. اتركه بدون مورد للبضاعة التاريخية أو بضاعة أول المدة.
+              اختر المورد ثم حدد: استلام جديد يزيد المخزون، أو شراء سابق يسجل الفاتورة بدون تغيير مخزون اليوم.
             </Text>
 
             <Pressable
@@ -3728,6 +3850,12 @@ export default function AddProductScreen() {
                         setPurchaseSupplierId(
                           "",
                         );
+                        setPurchaseEntryMode(
+                          "stock_receipt",
+                        );
+                        setHistoricalPurchaseQuantityInput(
+                          "",
+                        );
                         setEditStockCostMode(
                           null,
                         );
@@ -3777,6 +3905,12 @@ export default function AddProductScreen() {
                             setPurchaseSupplierId(
                               supplier.id,
                             );
+                            setPurchaseEntryMode(
+                              "stock_receipt",
+                            );
+                            setHistoricalPurchaseQuantityInput(
+                              "",
+                            );
                             setEditStockCostMode(
                               null,
                             );
@@ -3825,6 +3959,154 @@ export default function AddProductScreen() {
               </Pressable>
             </Modal>
 
+            {purchaseSupplierId && (
+              <>
+                <Text
+                  style={{
+                    color:
+                      colors.foreground,
+                    fontSize: 13,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  طريقة تسجيل الشراء
+                </Text>
+
+                <View
+                  style={{
+                    flexDirection:
+                      Platform.OS === "web"
+                        ? "row-reverse"
+                        : "row",
+                    gap: 8,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => {
+                      setPurchaseEntryMode(
+                        "stock_receipt",
+                      );
+                      setHistoricalPurchaseQuantityInput(
+                        "",
+                      );
+                    }}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor:
+                        purchaseEntryMode ===
+                        "stock_receipt"
+                          ? colors.primary
+                          : colors.border,
+                      borderRadius: 10,
+                      padding: 10,
+                      backgroundColor:
+                        purchaseEntryMode ===
+                        "stock_receipt"
+                          ? colors.primary +
+                            "18"
+                          : colors.card,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          colors.foreground,
+                        fontWeight: "800",
+                        textAlign:
+                          "center",
+                      }}
+                    >
+                      استلام جديد
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() =>
+                      setPurchaseEntryMode(
+                        "historical",
+                      )
+                    }
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor:
+                        purchaseEntryMode ===
+                        "historical"
+                          ? colors.primary
+                          : colors.border,
+                      borderRadius: 10,
+                      padding: 10,
+                      backgroundColor:
+                        purchaseEntryMode ===
+                        "historical"
+                          ? colors.primary +
+                            "18"
+                          : colors.card,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          colors.foreground,
+                        fontWeight: "800",
+                        textAlign:
+                          "center",
+                      }}
+                    >
+                      شراء سابق — بدون تعديل المخزون
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {purchaseEntryMode ===
+                  "historical" && (
+                  <>
+                    <Text
+                      style={{
+                        color:
+                          colors.mutedForeground,
+                        fontSize: 12,
+                        lineHeight: 19,
+                        textAlign:
+                          "right",
+                      }}
+                    >
+                      أدخل الكمية الأصلية التي اشتريتها من المورد. لن يغيّر النظام كمية المخزون الحالية.
+                    </Text>
+
+                    <TextInput
+                      value={
+                        historicalPurchaseQuantityInput
+                      }
+                      onChangeText={
+                        setHistoricalPurchaseQuantityInput
+                      }
+                      placeholder="الكمية الأصلية للشراء السابق"
+                      placeholderTextColor={
+                        colors.mutedForeground
+                      }
+                      keyboardType="number-pad"
+                      style={{
+                        borderWidth: 1,
+                        borderColor:
+                          colors.border,
+                        borderRadius: 10,
+                        padding: 11,
+                        color:
+                          colors.foreground,
+                        backgroundColor:
+                          colors.background,
+                        textAlign:
+                          "right",
+                      }}
+                    />
+                  </>
+                )}
+              </>
+            )}
+
             {!isEdit ? (
               <>
                 <Text
@@ -3837,7 +4119,9 @@ export default function AddProductScreen() {
                   }}
                 >
                   {purchaseSupplierId
-                    ? "تكلفة الشراء اختيارية في المسودة. إذا تركتها فارغة تبقى التكلفة غير مدخلة حتى تكملها قبل اعتماد فاتورة المورد."
+                    ? purchaseEntryMode === "historical"
+                      ? "تكلفة الشراء السابق اختيارية الآن. الكمية الحالية للمنتج لن تتغير."
+                      : "تكلفة الشراء اختيارية في المسودة. إذا تركتها فارغة تبقى التكلفة غير مدخلة حتى تكملها قبل اعتماد فاتورة المورد."
                     : "تكلفة القطعة الافتتاحية اختيارية. إذا تركتها فارغة سيُحفظ المنتج والمخزون وتظهر التكلفة كغير مدخلة حتى تضيفها لاحقاً. بدون مورد لن تُنشأ فاتورة مشتريات."}
                 </Text>
 
@@ -3883,7 +4167,9 @@ export default function AddProductScreen() {
                   }}
                 >
                   {purchaseSupplierId
-                    ? "عند زيادة الكمية، ستُضاف الزيادة فقط إلى مسودة المورد. تكلفة الشراء اختيارية الآن ويمكن إكمالها قبل اعتماد الفاتورة."
+                    ? purchaseEntryMode === "historical"
+                      ? "سيُسجل الشراء السابق على مسودة المورد بدون تعديل مخزون اليوم. أدخل الكمية الأصلية أعلاه."
+                      : "عند زيادة الكمية، ستُضاف الزيادة فقط إلى مسودة المورد. تكلفة الشراء اختيارية الآن ويمكن إكمالها قبل اعتماد الفاتورة."
                     : "إذا زدت كمية المخزون بدون مورد، اختر تكلفة الكمية الجديدة حسب منطق المخزون اليدوي."}
                 </Text>
 
