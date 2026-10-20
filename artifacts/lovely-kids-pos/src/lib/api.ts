@@ -3199,6 +3199,7 @@ export interface PosPurchaseItemResult {
   size: string | null;
   quantity: number;
   freeQuantity: number;
+  entryMode: "stock_receipt" | "historical";
   unitCostMinor: number | null;
   unitCost: number | null;
   lineDiscountMinor: number;
@@ -3315,6 +3316,7 @@ export function savePosPurchaseDraft(
       barcode?: string;
       quantity: number;
       freeQuantity?: number;
+      entryMode?: "stock_receipt" | "historical";
       unitCost: string;
       lineDiscount?: string;
     }>;
@@ -3364,6 +3366,7 @@ export function createPosPurchase(
       barcode?: string;
       quantity: number;
       freeQuantity?: number;
+      entryMode?: "stock_receipt" | "historical";
       unitCost: string;
       lineDiscount?: string;
       color?: string;
