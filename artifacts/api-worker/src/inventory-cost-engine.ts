@@ -904,6 +904,80 @@ export async function restoreExactProductCost(
 }
 
 /**
+ * Initialize Cost Engine for a product whose current physical quantity is
+ * zero, while preserving a confirmed historical reference cost.
+ *
+ * This is used after a fully sold historical purchase is reconciled. Keeping
+ * an empty state is important: a later return of an old sale can restore its
+ * exact frozen cost instead of failing as "uninitialized".
+ */
+export async function initializeEmptyProductCostState(
+  tx: Tx,
+  input: {
+    productId: number;
+    referenceUnitCostMinor: number;
+    costQuality: CostQuality;
+  } & LedgerMetadata,
+): Promise<void> {
+  assertPositiveInteger(
+    input.productId,
+    "productId",
+  );
+
+  assertNonNegativeDbInteger(
+    input.referenceUnitCostMinor,
+    "referenceUnitCostMinor",
+  );
+
+  const existing =
+    await lockCostState(
+      tx,
+      input.productId,
+    );
+
+  if (existing) {
+    if (
+      existing.quantityOnHand !== 0 ||
+      existing.inventoryValueMinor !== 0
+    ) {
+      throw new InventoryCostError(
+        "Cannot initialize empty cost state over a non-empty state",
+      );
+    }
+
+    return;
+  }
+
+  await tx
+    .insert(productCostStateTable)
+    .values({
+      productId:
+        input.productId,
+      quantityOnHand: 0,
+      inventoryValueMinor: 0,
+      referenceUnitCostMinor:
+        input.referenceUnitCostMinor,
+      costQuality:
+        input.costQuality,
+    });
+
+  await writeLedger(
+    tx,
+    {
+      productId:
+        input.productId,
+      quantityDelta: 0,
+      inventoryValueDeltaMinor: 0,
+      quantityAfter: 0,
+      inventoryValueAfterMinor: 0,
+      costQuality:
+        input.costQuality,
+    },
+    input,
+  );
+}
+
+/**
  * Add an exact acquisition value to inventory and initialize cost
  * accounting when this is the first approved cost movement.
  *
