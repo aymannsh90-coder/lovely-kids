@@ -1,5 +1,5 @@
 import { productsTable } from "@workspace/db/schema";
-import { inArray } from "drizzle-orm";
+import { and, inArray, isNull } from "drizzle-orm";
 
 import type { openDb } from "./db";
 
@@ -35,9 +35,14 @@ export async function getCurrentProductImageMap(
       })
       .from(productsTable)
       .where(
-        inArray(
-          productsTable.id,
-          ids,
+        and(
+          inArray(
+            productsTable.id,
+            ids,
+          ),
+          isNull(
+            productsTable.deletedAt,
+          ),
         ),
       );
 
