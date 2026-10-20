@@ -22,6 +22,35 @@ ALTER TABLE public.pos_purchase_items
   ADD CONSTRAINT pos_purchase_items_entry_mode_valid
   CHECK (entry_mode IN ('stock_receipt', 'historical'));
 
+-- historical_settled: a historical supplier purchase that was already paid
+-- before the current bookkeeping period. It must not touch today's cash or
+-- create a new supplier payable.
+ALTER TABLE public.pos_purchases
+  DROP CONSTRAINT IF EXISTS pos_purchases_payment_method_valid;
+
+ALTER TABLE public.pos_purchases
+  ADD CONSTRAINT pos_purchases_payment_method_valid
+  CHECK (payment_method IN ('cash', 'credit', 'mixed', 'historical_settled'));
+
+ALTER TABLE public.pos_purchases
+  DROP CONSTRAINT IF EXISTS pos_purchases_settlement_matches;
+
+ALTER TABLE public.pos_purchases
+  ADD CONSTRAINT pos_purchases_settlement_matches
+  CHECK (
+    (
+      payment_method = 'historical_settled'
+      AND paid_minor = 0
+      AND due_minor = 0
+    )
+    OR
+    (
+      payment_method <> 'historical_settled'
+      AND paid_minor <= total_minor
+      AND due_minor = total_minor - paid_minor
+    )
+  );
+
 ALTER TABLE public.pos_purchase_item_costs
   ADD COLUMN IF NOT EXISTS stock_quantity_applied integer
     NOT NULL
