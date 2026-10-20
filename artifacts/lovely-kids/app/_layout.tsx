@@ -26,6 +26,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { NewOrdersProvider } from "@/context/NewOrdersContext";
 import { NotificationOptInProvider } from "@/context/NotificationOptInContext";
+import { OrderEditSelectionProvider } from "@/context/OrderEditSelectionContext";
 import { ProductsProvider } from "@/context/ProductsContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -163,7 +164,8 @@ export default function RootLayout() {
               <AppSettingsProvider>
                 <ProductsProvider>
                   <CartProvider>
-                    <WishlistProvider>
+                    <OrderEditSelectionProvider>
+                      <WishlistProvider>
                       <NewOrdersProvider>
                         <GestureHandlerRootView style={{ flex: 1, backgroundColor: Platform.OS === "web" ? "#FFFFFF" : "#E91E8C" }}>
                           {Platform.OS !== "web" ? (
@@ -192,7 +194,8 @@ export default function RootLayout() {
                           )}
                         </GestureHandlerRootView>
                       </NewOrdersProvider>
-                    </WishlistProvider>
+                      </WishlistProvider>
+                    </OrderEditSelectionProvider>
                   </CartProvider>
                 </ProductsProvider>
               </AppSettingsProvider>
