@@ -2872,14 +2872,19 @@ async function handleCreatePurchase(
               })
             : null;
 
-        const historicalCogsAccount =
+        // Gross profit / COGS is sourced from frozen cost snapshots,
+        // not from GL expense accounts. Historical sold cost therefore uses
+        // an equity bridge so the trial balance stays balanced without
+        // double-counting COGS in the income statement.
+        const historicalCostBridgeAccount =
           historicalSoldValueMinor > 0
             ? await ensureAccount({
-                code: "HISTORICAL_PURCHASE_COGS",
+                code:
+                  "HISTORICAL_PURCHASE_COST_BRIDGE",
                 name:
-                  "تكلفة بضاعة مباعة — مشتريات سابقة",
+                  "تسوية تكلفة مبيعات سابقة — جسر القوائم",
                 accountType:
-                  "expense",
+                  "equity",
               })
             : null;
 
@@ -2935,16 +2940,16 @@ async function handleCreatePurchase(
 
         if (
           historicalSoldValueMinor > 0 &&
-          historicalCogsAccount
+          historicalCostBridgeAccount
         ) {
           financeLines.push({
             accountId:
-              historicalCogsAccount.id,
+              historicalCostBridgeAccount.id,
             debitMinor:
               historicalSoldValueMinor,
             creditMinor: 0,
             memo:
-              `تكلفة مبيعات سابقة من فاتورة ${purchase.publicId}`,
+              `جسر تكلفة مبيعات سابقة من فاتورة ${purchase.publicId} — COGS محسوب من نظام التكلفة`,
           });
         }
 
