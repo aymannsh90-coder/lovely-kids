@@ -224,6 +224,8 @@ export const posPurchaseItemsTable = pgTable(
     quantity: integer("quantity").notNull(),
     freeQuantity: integer("free_quantity").notNull().default(0),
 
+    entryMode: text("entry_mode").notNull().default("stock_receipt"),
+
     unitCostMinor: integer("unit_cost_minor"),
     lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
     lineTotalMinor: integer("line_total_minor"),
@@ -255,6 +257,11 @@ export const posPurchaseItemsTable = pgTable(
         and ${table.freeQuantity} <= 99999
         and ${table.quantity} + ${table.freeQuantity} <= 99999
       `,
+    ),
+
+    check(
+      "pos_purchase_items_entry_mode_valid",
+      sql`${table.entryMode} in ('stock_receipt', 'historical')`,
     ),
 
     check(
