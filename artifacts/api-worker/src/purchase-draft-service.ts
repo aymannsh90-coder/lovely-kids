@@ -287,7 +287,10 @@ export async function appendProductToSupplierDraft(
         enteredByUserId:
           input.userId,
         status: "draft",
-        paymentMethod: "credit",
+        paymentMethod:
+          input.entryMode === "historical"
+            ? "historical_settled"
+            : "credit",
         subtotalMinor: 0,
         discountMinor: 0,
         totalMinor: 0,
@@ -467,6 +470,19 @@ export async function appendProductToSupplierDraft(
     subtotalMinor -
     discountMinor;
 
+  const allHistorical =
+    items.length > 0 &&
+    items.every(
+      (item) =>
+        item.entryMode ===
+        "historical",
+    );
+
+  const automaticPaymentMethod =
+    allHistorical
+      ? "historical_settled"
+      : "credit";
+
   const updatedRows = await tx
     .update(posPurchasesTable)
     .set({
@@ -474,13 +490,17 @@ export async function appendProductToSupplierDraft(
         input.businessDate,
       currencyCode:
         input.currencyCode,
-      paymentMethod: "credit",
+      paymentMethod:
+        automaticPaymentMethod,
       subtotalMinor,
       discountMinor,
       totalMinor,
       paidMinor: 0,
       dueMinor:
-        totalMinor,
+        automaticPaymentMethod ===
+          "historical_settled"
+          ? 0
+          : totalMinor,
       updatedAt:
         new Date(),
     })
