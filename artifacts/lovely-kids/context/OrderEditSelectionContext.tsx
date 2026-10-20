@@ -26,7 +26,10 @@ type OrderEditSelectionSession = {
 
 type AddSelectionItemInput = Omit<
   OrderEditSelectionItem,
-  "quantity"
+  | "quantity"
+  | "clientKey"
+  | "originalColor"
+  | "originalSize"
 >;
 
 type OrderEditSelectionContextValue = {
