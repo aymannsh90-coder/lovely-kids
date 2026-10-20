@@ -999,6 +999,7 @@ export async function editOrderItemsAndAdjustStock(
   options?: {
     allowedStatuses?: readonly string[];
     preserveExistingProductPrice?: boolean;
+    restrictToPublicCatalog?: boolean;
   },
 ) {
   const requestedItems = parseEditOrderItems(rawItems);
@@ -1157,6 +1158,69 @@ export async function editOrderItemsAndAdjustStock(
         "أحد المنتجات لم يعد موجودًا",
         409,
       );
+    }
+
+    if (options?.restrictToPublicCatalog) {
+      const oldQuantityByProduct =
+        new Map<number, number>();
+
+      for (const item of oldItems) {
+        const productId =
+          Number(item.id);
+        const quantity =
+          Number(item.quantity);
+
+        oldQuantityByProduct.set(
+          productId,
+          (oldQuantityByProduct.get(
+            productId,
+          ) ?? 0) + quantity,
+        );
+      }
+
+      const requestedQuantityByProduct =
+        new Map<number, number>();
+
+      for (const item of requestedItems) {
+        requestedQuantityByProduct.set(
+          item.id,
+          (requestedQuantityByProduct.get(
+            item.id,
+          ) ?? 0) +
+            item.quantity,
+        );
+      }
+
+      for (const product of products) {
+        const unavailableToCustomers =
+          product.isHidden ||
+          product.deletedAt !== null;
+
+        if (!unavailableToCustomers) {
+          continue;
+        }
+
+        const oldQuantity =
+          oldQuantityByProduct.get(
+            product.id,
+          ) ?? 0;
+
+        const requestedQuantity =
+          requestedQuantityByProduct.get(
+            product.id,
+          ) ?? 0;
+
+        if (
+          oldQuantity === 0 ||
+          requestedQuantity >
+            oldQuantity
+        ) {
+          throw new OrderEditError(
+            `المنتج ${product.nameAr} غير متاح حاليًا للإضافة`,
+            409,
+          );
+        }
+      }
     }
 
     const states = new Map<number, EditableProductState>();
