@@ -16,6 +16,10 @@ import {
 
 import { getCurrentUser } from "./auth";
 import {
+  getCurrentProductImageMap,
+  resolveCurrentProductImage,
+} from "./current-product-image";
+import {
   openDb,
   type Env,
 } from "./db";
@@ -253,6 +257,15 @@ export async function handleListPosExchanges(
         String(
           exchange.id,
         ),
+    );
+
+  const currentProductImages =
+    await getCurrentProductImageMap(
+      db,
+      [
+        ...returnItems.map((item) => item.productId),
+        ...saleItems.map((item) => item.productId),
+      ],
     );
 
   const cardFinanceRows =
@@ -532,7 +545,19 @@ export async function handleGetPosExchangeByPublicId(
       ...exchange,
       cardProcessor,
     },
-    returnItems,
-    saleItems,
+    returnItems: returnItems.map((item) => ({
+      ...item,
+      productImage: resolveCurrentProductImage(
+        currentProductImages,
+        item.productId,
+      ),
+    })),
+    saleItems: saleItems.map((item) => ({
+      ...item,
+      productImage: resolveCurrentProductImage(
+        currentProductImages,
+        item.productId,
+      ),
+    })),
   });
 }
