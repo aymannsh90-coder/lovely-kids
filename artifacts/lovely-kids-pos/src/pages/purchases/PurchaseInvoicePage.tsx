@@ -1464,13 +1464,16 @@ export default function PurchaseInvoicePage() {
         `قيمة الفاتورة: ${formatMinor(totalMinor)}`,
         `إجمالي المستلم: ${paidQuantity + freeQuantity}`,
         "",
-        lines.some(
-          (line) =>
-            line.entryMode ===
-            "historical",
-        )
-          ? "تحتوي الفاتورة على شراء سابق: لن تتغير كمية المخزون الحالية، وسيتم فصل تكلفة الكمية المباعة سابقًا عن قيمة المخزون المتبقي."
-          : "سيتم تسجيل الفاتورة محاسبيًا وتثبيت تكلفة البضاعة على الكمية التي أُدخلت مسبقًا، دون زيادة المخزون مرة ثانية.",
+        paymentMethod ===
+          "historical_settled"
+          ? "هذه فاتورة شراء سابق مدفوعة قبل النظام: لن تتغير كمية المخزون الحالية، ولن يتحرك صندوق اليوم، ولن تُنشأ ذمة جديدة على المورد."
+          : lines.some(
+                (line) =>
+                  line.entryMode ===
+                  "historical",
+              )
+            ? "تحتوي الفاتورة على شراء سابق: لن تتغير كمية المخزون الحالية، وسيتم فصل تكلفة الكمية المباعة سابقًا عن قيمة المخزون المتبقي."
+            : "سيتم تسجيل الفاتورة محاسبيًا وتثبيت تكلفة البضاعة على الكمية التي أُدخلت مسبقًا، دون زيادة المخزون مرة ثانية.",
         "هل تريد المتابعة؟",
       ].join("\n"),
     );
@@ -2506,7 +2509,11 @@ export default function PurchaseInvoicePage() {
               </label>
 
               <label>
-                <span>المبلغ المدفوع</span>
+                <span>
+                  {paymentMethod === "historical_settled"
+                    ? "دفعة حالية"
+                    : "المبلغ المدفوع"}
+                </span>
                 <input
                   type="number"
                   min="0"
@@ -2520,7 +2527,11 @@ export default function PurchaseInvoicePage() {
               </label>
 
               <label>
-                <span>المبلغ المستحق</span>
+                <span>
+                  {paymentMethod === "historical_settled"
+                    ? "ذمة حالية"
+                    : "المبلغ المستحق"}
+                </span>
                 <strong dir="ltr">
                   {formatMinor(dueMinor)}
                 </strong>
