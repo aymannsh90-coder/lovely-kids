@@ -15,6 +15,7 @@ import {
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useCart } from "@/context/CartContext";
 import { useNotificationOptIn } from "@/context/NotificationOptInContext";
+import { useOrderEditSelection } from "@/context/OrderEditSelectionContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
@@ -27,6 +28,10 @@ interface Props {
   product: Product;
   style?: object;
   imageHeight?: number;
+  orderEdit?: {
+    orderId: string;
+    token?: string;
+  } | null;
 }
 
 function calcDiscount(price: number, originalPrice?: number | null): number | null {
@@ -35,12 +40,19 @@ function calcDiscount(price: number, originalPrice?: number | null): number | nu
   return pct > 0 ? Math.min(pct, 99) : null;
 }
 
-export function ProductCard({ product, style, imageHeight }: Props) {
+export function ProductCard({
+  product,
+  style,
+  imageHeight,
+  orderEdit = null,
+}: Props) {
   const colors = useColors();
   const { settings } = useAppSettings();
   const { addItem, items } = useCart();
   const { requestGeneralPrompt } =
     useNotificationOptIn();
+  const { addSelectionItem } =
+    useOrderEditSelection();
   const { toggleItem, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(product.id);
 
@@ -54,11 +66,69 @@ export function ProductCard({ product, style, imageHeight }: Props) {
     (product.colorVariants && product.colorVariants.length > 0) ||
     (product.sizes && product.sizes.length > 0);
 
+  const productRoute = {
+    pathname: "/product/[id]" as const,
+    params: {
+      id: product.id,
+      ...(orderEdit
+        ? {
+            orderEdit: "1",
+            orderId:
+              orderEdit.orderId,
+            ...(orderEdit.token
+              ? {
+                  orderToken:
+                    orderEdit.token,
+                }
+              : {}),
+          }
+        : {}),
+    },
+  };
+
+  const returnToOrder = () => {
+    if (!orderEdit) return;
+
+    router.replace({
+      pathname: "/edit-order",
+      params: {
+        id: orderEdit.orderId,
+        ...(orderEdit.token
+          ? {
+              token:
+                orderEdit.token,
+            }
+          : {}),
+      },
+    });
+  };
+
   const handleAddToCart = () => {
     if (isOutOfStock) return;
 
+    if (orderEdit) {
+      if (hasVariants) {
+        router.push(productRoute);
+        return;
+      }
+
+      Haptics.impactAsync(
+        Haptics.ImpactFeedbackStyle.Light,
+      ).catch(() => {});
+
+      addSelectionItem({
+        id: product.id,
+        name: product.nameAr,
+        price: product.price,
+        image: product.image,
+      });
+
+      returnToOrder();
+      return;
+    }
+
     if (hasVariants) {
-      router.push({ pathname: "/product/[id]", params: { id: product.id } });
+      router.push(productRoute);
       return;
     }
 
@@ -145,7 +215,7 @@ export function ProductCard({ product, style, imageHeight }: Props) {
 
   return (
     <Pressable
-      onPress={() => router.push({ pathname: "/product/[id]", params: { id: product.id } })}
+      onPress={() => router.push(productRoute)}
       style={({ pressed }) => [
         styles.container,
         { backgroundColor: colors.card, borderColor: isOutOfStock ? colors.border : colors.border },
