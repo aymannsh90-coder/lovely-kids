@@ -47,6 +47,7 @@ type Order = {
   notes: string | null;
   shippingZone?: string | null;
   shippingCost?: number | null;
+  trackingToken?: string;
   createdAt: string;
 };
 
@@ -422,6 +423,43 @@ export default function MyOrdersScreen() {
           </Pressable>
         )}
 
+        {item.status === "new" && (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/edit-order",
+                params: {
+                  id: String(item.id),
+                  ...(item.trackingToken
+                    ? { token: item.trackingToken }
+                    : {}),
+                },
+              })
+            }
+            style={[
+              styles.editBtn,
+              {
+                borderColor: colors.primary,
+                backgroundColor: colors.primary + "10",
+              },
+            ]}
+          >
+            <Ionicons
+              name="create-outline"
+              size={17}
+              color={colors.primary}
+            />
+            <Text
+              style={[
+                styles.editBtnText,
+                { color: colors.primary },
+              ]}
+            >
+              تعديل الطلب
+            </Text>
+          </Pressable>
+        )}
+
 
         {/* Items list */}
         <View style={styles.itemsBox}>
@@ -731,6 +769,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   emptyBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  editBtn: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  editBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
   guestContent: {
     padding: 16,
     gap: 16,
