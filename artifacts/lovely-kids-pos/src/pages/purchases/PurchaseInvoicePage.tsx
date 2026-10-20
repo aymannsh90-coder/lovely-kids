@@ -947,6 +947,10 @@ export default function PurchaseInvoicePage() {
     );
 
     setLines((current) => {
+      const entryMode =
+        current[0]?.entryMode ??
+        "stock_receipt";
+
       const existing = current.find(
         (line) =>
           line.product.productId === product.productId,
@@ -983,7 +987,7 @@ export default function PurchaseInvoicePage() {
           size: null,
           quantity: quantityToAdd,
           freeQuantity: 0,
-          entryMode: "stock_receipt",
+          entryMode,
           unitCost: initialUnitCost,
           lineDiscount: "0.00",
         },
