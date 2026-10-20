@@ -2591,7 +2591,7 @@ export default function SalePanel({
 
                   <td>{item.productNameAr.trim().split(/\s+/)[0] || "صنف"}</td>
 
-                  <td dir="ltr">{item.productCode ?? "—"}</td>
+                  <td dir="ltr">{item.productCode?.trim() || item.barcode?.trim() || "—"}</td>
 
                   <td>{item.quantity}</td>
 
