@@ -4649,17 +4649,17 @@ export default function ExchangePage() {
                               <td>
                                 <div className="sales-return-product">
                                   <img
-                                  src={
-                                    item.productImage ||
-                                    PRODUCT_IMAGE_PLACEHOLDER
-                                  }
-                                  alt=""
-                                  onError={(event) => {
-                                    event.currentTarget.onerror = null;
-                                    event.currentTarget.src =
-                                      PRODUCT_IMAGE_PLACEHOLDER;
-                                  }}
-                                />
+                                    src={
+                                      item.productImage ||
+                                      PRODUCT_IMAGE_PLACEHOLDER
+                                    }
+                                    alt=""
+                                    onError={(event) => {
+                                      event.currentTarget.onerror = null;
+                                      event.currentTarget.src =
+                                        PRODUCT_IMAGE_PLACEHOLDER;
+                                    }}
+                                  />
 
                                   <div>
                                     <strong>
