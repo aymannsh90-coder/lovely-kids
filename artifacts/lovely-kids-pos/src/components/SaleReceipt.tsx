@@ -152,7 +152,7 @@ export default function SaleReceipt({
 
               <td>{shortProductName(item.productNameAr)}</td>
 
-              <td dir="ltr">{item.productCode ?? "—"}</td>
+              <td dir="ltr">{item.productCode?.trim() || item.barcode?.trim() || "—"}</td>
 
               <td>{item.quantity}</td>
 

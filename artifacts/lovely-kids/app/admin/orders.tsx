@@ -2606,10 +2606,39 @@ export default function AdminOrdersScreen() {
     try {
       const productCodeById = new Map<string, string | null>();
 
-      // Product codes improve the receipt, but a temporary API/network
-      // failure must never prevent an already-loaded order from printing.
+      // Thermal receipts are printed from the admin screen, so use the
+      // authenticated catalog. The public catalog intentionally excludes
+      // hidden / trashed products, which can make an order lose its printed
+      // code as soon as the sold item becomes hidden after stock reaches zero.
+      //
+      // A catalog lookup failure must never block printing an already-loaded
+      // order, so we keep a public-catalog fallback and finally print "—".
       try {
-        const productsResponse = await fetch(`${API_BASE}/api/products`);
+        const authToken = await getAuthToken();
+
+        let productsResponse: Response | null = null;
+
+        if (authToken) {
+          productsResponse = await fetch(
+            `${API_BASE}/api/products/admin`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${authToken}`,
+              },
+              cache: "no-store",
+            },
+          );
+        }
+
+        if (!productsResponse?.ok) {
+          productsResponse = await fetch(
+            `${API_BASE}/api/products`,
+            {
+              cache: "no-store",
+            },
+          );
+        }
 
         if (productsResponse.ok) {
           const productsPayload = await productsResponse.json();
@@ -2621,11 +2650,18 @@ export default function AdminOrdersScreen() {
               : [];
 
           productList.forEach((product: any) => {
+            const productCode =
+              typeof product.productCode === "string" &&
+              product.productCode.trim()
+                ? product.productCode.trim()
+                : typeof product.barcode === "string" &&
+                    product.barcode.trim()
+                  ? product.barcode.trim()
+                  : null;
+
             productCodeById.set(
               String(product.id),
-              typeof product.productCode === "string"
-                ? product.productCode
-                : null,
+              productCode,
             );
           });
         } else {
