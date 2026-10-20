@@ -1547,7 +1547,23 @@ export default function PurchaseInvoicePage() {
       setPaymentMethod(result.purchase.paymentMethod);
     }
 
-    setInvoiceDiscount(result.purchase.discount.toFixed(2));
+    const storedLineDiscountMinor =
+      result.purchase.items.reduce(
+        (total, item) =>
+          total + item.lineDiscountMinor,
+        0,
+      );
+
+    const storedInvoiceDiscountMinor =
+      Math.max(
+        0,
+        result.purchase.discountMinor -
+          storedLineDiscountMinor,
+      );
+
+    setInvoiceDiscount(
+      (storedInvoiceDiscountMinor / 100).toFixed(2),
+    );
     setPaid(result.purchase.paid.toFixed(2));
 
     setLines(
