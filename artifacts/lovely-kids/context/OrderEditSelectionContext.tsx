@@ -34,20 +34,24 @@ type AddSelectionItemInput = Omit<
 
 type OrderEditSelectionContextValue = {
   session: OrderEditSelectionSession | null;
+  storeSelectionActive: boolean;
   startSelection: (
     session: OrderEditSelectionSession,
   ) => void;
   addSelectionItem: (
     item: AddSelectionItemInput,
   ) => void;
+  endStoreSelection: () => void;
   clearSelection: () => void;
 };
 
 const OrderEditSelectionContext =
   createContext<OrderEditSelectionContextValue>({
     session: null,
+    storeSelectionActive: false,
     startSelection: () => {},
     addSelectionItem: () => {},
+    endStoreSelection: () => {},
     clearSelection: () => {},
   });
 
@@ -73,6 +77,10 @@ export function OrderEditSelectionProvider({
     useState<OrderEditSelectionSession | null>(
       null,
     );
+  const [
+    storeSelectionActive,
+    setStoreSelectionActive,
+  ] = useState(false);
 
   const startSelection = useCallback(
     (
@@ -84,6 +92,7 @@ export function OrderEditSelectionProvider({
           (item) => ({ ...item }),
         ),
       });
+      setStoreSelectionActive(true);
     },
     [],
   );
@@ -131,21 +140,30 @@ export function OrderEditSelectionProvider({
           items,
         };
       });
+      setStoreSelectionActive(false);
     },
     [],
   );
 
+  const endStoreSelection =
+    useCallback(() => {
+      setStoreSelectionActive(false);
+    }, []);
+
   const clearSelection =
     useCallback(() => {
       setSession(null);
+      setStoreSelectionActive(false);
     }, []);
 
   return (
     <OrderEditSelectionContext.Provider
       value={{
         session,
+        storeSelectionActive,
         startSelection,
         addSelectionItem,
+        endStoreSelection,
         clearSelection,
       }}
     >
