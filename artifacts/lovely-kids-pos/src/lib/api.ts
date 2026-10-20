@@ -3234,7 +3234,7 @@ export interface PosPurchaseResult {
     currencyCode: string;
     enteredByUserId: string;
     status: "draft" | "completed" | "voided";
-    paymentMethod: "cash" | "credit" | "mixed";
+    paymentMethod: "cash" | "credit" | "mixed" | "historical_settled";
     subtotalMinor: number;
     subtotal: number;
     discountMinor: number;
@@ -3307,7 +3307,7 @@ export function savePosPurchaseDraft(
     businessDate: string;
     warehouseKey: string;
     currencyCode: string;
-    paymentMethod: "cash" | "credit" | "mixed";
+    paymentMethod: "cash" | "credit" | "mixed" | "historical_settled";
     invoiceDiscount: string;
     paid: string;
     notes?: string;
@@ -3357,7 +3357,7 @@ export function createPosPurchase(
     businessDate: string;
     warehouseKey: string;
     currencyCode: string;
-    paymentMethod: "cash" | "credit" | "mixed";
+    paymentMethod: "cash" | "credit" | "mixed" | "historical_settled";
     invoiceDiscount: string;
     paid: string;
     notes?: string;
