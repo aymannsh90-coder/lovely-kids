@@ -124,6 +124,7 @@ export default function PurchaseA4Invoice({
             <th>#</th>
             <th>رقم الصنف</th>
             <th>اسم الصنف</th>
+            <th>نوع الشراء</th>
             <th>الكمية</th>
             <th>مجاني</th>
             <th>تكلفة الوحدة</th>
@@ -138,6 +139,11 @@ export default function PurchaseA4Invoice({
               <td>{index + 1}</td>
               <td dir="ltr">{item.productCode ?? "—"}</td>
               <td>{item.productNameAr}</td>
+              <td>
+                {item.entryMode === "historical"
+                  ? "شراء سابق"
+                  : "استلام جديد"}
+              </td>
               <td>{item.quantity}</td>
               <td>{item.freeQuantity}</td>
               <td dir="ltr">{money(item.unitCost)}</td>
