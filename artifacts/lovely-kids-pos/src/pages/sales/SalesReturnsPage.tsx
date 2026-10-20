@@ -32,6 +32,9 @@ import {
   createScannerKeyboardBuffer,
 } from "../../lib/scannerKeyboard";
 
+const PRODUCT_IMAGE_PLACEHOLDER =
+  "/mobile-pos-icon-192.png";
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "حدث خطأ غير متوقع";
 }
@@ -1595,9 +1598,18 @@ export default function SalesReturnsPage() {
 
                         <td>
                           <div className="sales-return-product">
-                            {item.productImage && (
-                              <img src={item.productImage} alt="" />
-                            )}
+                            <img
+                              src={
+                                item.productImage ||
+                                PRODUCT_IMAGE_PLACEHOLDER
+                              }
+                              alt=""
+                              onError={(event) => {
+                                event.currentTarget.onerror = null;
+                                event.currentTarget.src =
+                                  PRODUCT_IMAGE_PLACEHOLDER;
+                              }}
+                            />
 
                             <div>
                               <strong>{item.productNameAr}</strong>

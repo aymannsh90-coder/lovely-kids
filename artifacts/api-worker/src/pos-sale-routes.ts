@@ -20,6 +20,10 @@ import {
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import {
+  getCurrentProductImageMap,
+  resolveCurrentProductImage,
+} from "./current-product-image";
 import { openDb, type Env } from "./db";
 import {
   customerReceivableBalanceMinor,
@@ -822,6 +826,7 @@ function toSaleResponse(
   customerBalanceMinor: number | null = null,
   cardProcessor: PosCardProcessor | null = null,
   cashTender: PosSaleCashTender | null = null,
+  currentProductImages: ReadonlyMap<number, string | null> | null = null,
 ) {
   return {
     alreadyCreated,
@@ -901,7 +906,13 @@ function toSaleResponse(
       barcode: item.barcode,
       productCode: item.productCode,
       productNameAr: item.productNameAr,
-      productImage: item.productImage,
+      productImage:
+        currentProductImages === null
+          ? item.productImage
+          : resolveCurrentProductImage(
+              currentProductImages,
+              item.productId,
+            ),
 
       color: item.color,
       size: item.size,
@@ -4619,6 +4630,12 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
           )
       : [];
 
+  const currentProductImages =
+    await getCurrentProductImageMap(
+      db,
+      items.map((item) => item.productId),
+    );
+
   const itemsBySale = new Map<number, typeof items>();
 
   for (const item of items) {
@@ -4750,6 +4767,8 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
           cardProcessorBySaleId.get(
             sale.id,
           ) ?? null,
+          null,
+          currentProductImages,
         ),
 
         returnSummary: {
@@ -4997,6 +5016,12 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
         )
       : null;
 
+  const currentProductImages =
+    await getCurrentProductImageMap(
+      db,
+      items.map((item) => item.productId),
+    );
+
   return json(
     toSaleResponse(
       sale,
@@ -5006,6 +5031,7 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       customerBalanceMinor,
       cardProcessor,
       cashTender,
+      currentProductImages,
     ),
   );
 }

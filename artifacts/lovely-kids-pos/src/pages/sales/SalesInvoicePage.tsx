@@ -34,6 +34,9 @@ import {
 const ACCOUNTING_WRITES_ENABLED =
   import.meta.env.VITE_ACCOUNTING_INVOICE_WRITES === "true";
 
+const PRODUCT_IMAGE_PLACEHOLDER =
+  "/mobile-pos-icon-192.png";
+
 interface InvoiceLine {
   id: string;
   barcode: string;
@@ -2105,7 +2108,14 @@ export default function SalesInvoicePage() {
                       onMouseEnter={() => setActiveSearchIndex(index)}
                       onClick={() => addProduct(product)}
                     >
-                      <img src={product.image} alt="" />
+                      <img
+                        src={product.image || PRODUCT_IMAGE_PLACEHOLDER}
+                        alt=""
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = PRODUCT_IMAGE_PLACEHOLDER;
+                        }}
+                      />
 
                       <div>
                         <strong>{product.nameAr}</strong>
@@ -2189,7 +2199,18 @@ export default function SalesInvoicePage() {
                       <td>{line.product.productCode ?? "—"}</td>
 
                       <td className="accounting-product-cell">
-                        <img src={line.product.image} alt="" />
+                        <img
+                          src={
+                            line.product.image ||
+                            PRODUCT_IMAGE_PLACEHOLDER
+                          }
+                          alt=""
+                          onError={(event) => {
+                            event.currentTarget.onerror = null;
+                            event.currentTarget.src =
+                              PRODUCT_IMAGE_PLACEHOLDER;
+                          }}
+                        />
 
                         <div>
                           <strong>{line.product.nameAr}</strong>
