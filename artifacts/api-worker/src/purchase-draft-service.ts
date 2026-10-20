@@ -473,7 +473,9 @@ export async function appendProductToSupplierDraft(
   const allHistorical =
     items.length > 0 &&
     items.every(
-      (item) =>
+      (
+        item: typeof posPurchaseItemsTable.$inferSelect,
+      ) =>
         item.entryMode ===
         "historical",
     );
