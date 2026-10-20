@@ -1,0 +1,25 @@
+name: Customer Order Edit Typecheck
+
+on:
+  push:
+    branches:
+      - feature/customer-order-editing
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @workspace/api-worker typecheck
+      - run: pnpm --filter @workspace/lovely-kids typecheck
