@@ -2333,6 +2333,30 @@ async function handleCreatePurchase(
         }
       }
 
+      const invoiceHasHistorical =
+        costAllocations.some(
+          (allocation) =>
+            allocation.item.entryMode ===
+            "historical",
+        );
+
+      const invoiceHasStockReceipt =
+        costAllocations.some(
+          (allocation) =>
+            allocation.item.entryMode ===
+            "stock_receipt",
+        );
+
+      if (
+        invoiceHasHistorical &&
+        invoiceHasStockReceipt
+      ) {
+        throw new PurchaseError(
+          "لا يمكن جمع شراء سابق واستلام جديد في فاتورة واحدة. اعتمد كل نوع بفاتورة مستقلة حتى تبقى حركة الصندوق والذمم والتكلفة واضحة.",
+          409,
+        );
+      }
+
       for (
         const [
           productId,
