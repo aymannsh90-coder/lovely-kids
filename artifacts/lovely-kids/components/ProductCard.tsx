@@ -53,6 +53,7 @@ export function ProductCard({
     useNotificationOptIn();
   const {
     session: orderEditSelection,
+    storeSelectionActive,
     addSelectionItem,
   } = useOrderEditSelection();
   const { toggleItem, isWishlisted } = useWishlist();
@@ -68,19 +69,35 @@ export function ProductCard({
     (product.colorVariants && product.colorVariants.length > 0) ||
     (product.sizes && product.sizes.length > 0);
 
+  const activeOrderEdit =
+    orderEdit ??
+    (
+      storeSelectionActive &&
+      orderEditSelection
+        ? {
+            orderId:
+              String(
+                orderEditSelection.orderId,
+              ),
+            token:
+              orderEditSelection.trackingToken,
+          }
+        : null
+    );
+
   const productRoute = {
     pathname: "/product/[id]" as const,
     params: {
       id: product.id,
-      ...(orderEdit
+      ...(activeOrderEdit
         ? {
             orderEdit: "1",
             orderId:
-              orderEdit.orderId,
-            ...(orderEdit.token
+              activeOrderEdit.orderId,
+            ...(activeOrderEdit.token
               ? {
                   orderToken:
-                    orderEdit.token,
+                    activeOrderEdit.token,
                 }
               : {}),
           }
@@ -89,16 +106,16 @@ export function ProductCard({
   };
 
   const returnToOrder = () => {
-    if (!orderEdit) return;
+    if (!activeOrderEdit) return;
 
     router.replace({
       pathname: "/edit-order",
       params: {
-        id: orderEdit.orderId,
-        ...(orderEdit.token
+        id: activeOrderEdit.orderId,
+        ...(activeOrderEdit.token
           ? {
               token:
-                orderEdit.token,
+                activeOrderEdit.token,
             }
           : {}),
       },
@@ -108,11 +125,11 @@ export function ProductCard({
   const handleAddToCart = () => {
     if (isOutOfStock) return;
 
-    if (orderEdit) {
+    if (activeOrderEdit) {
       if (
         !orderEditSelection ||
         orderEditSelection.orderId !==
-          Number(orderEdit.orderId)
+          Number(activeOrderEdit.orderId)
       ) {
         returnToOrder();
         return;
