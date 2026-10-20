@@ -687,8 +687,6 @@ async function handleCreateProduct(
     delete cleanProductBody.purchaseBusinessDate;
     delete cleanProductBody.purchaseEntryMode;
     delete cleanProductBody.purchaseQuantity;
-    delete cleanProductBody.purchaseEntryMode;
-    delete cleanProductBody.purchaseQuantity;
   }
 
   const parsed =
@@ -1287,6 +1285,8 @@ async function handleUpdateProduct(
     delete cleanProductBody.purchaseSupplierId;
     delete cleanProductBody.purchaseUnitCostMinor;
     delete cleanProductBody.purchaseBusinessDate;
+    delete cleanProductBody.purchaseEntryMode;
+    delete cleanProductBody.purchaseQuantity;
   }
 
   const parsed =
@@ -1876,7 +1876,10 @@ async function handleUpdateProduct(
     return json(
       {
         error:
-          "اختيار المورد مسموح فقط عند زيادة كمية المخزون فعليًا",
+          updateResult.reason ===
+            "historical_requires_unchanged_stock"
+            ? "الشراء السابق يجب تسجيله بدون تعديل كمية المخزون الحالية."
+            : "الاستلام الجديد مع مورد يتطلب زيادة كمية المخزون فعليًا.",
       },
       400,
     );
