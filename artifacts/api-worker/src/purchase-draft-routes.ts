@@ -437,6 +437,21 @@ function parseFinancials(
   payload: Record<string, unknown>,
   items: DraftItem[],
 ) {
+  const entryModes =
+    new Set(
+      items.map(
+        (item) =>
+          item.entryMode,
+      ),
+    );
+
+  if (entryModes.size > 1) {
+    throw new PurchaseDraftError(
+      "لا يمكن جمع شراء سابق واستلام جديد في نفس فاتورة المشتريات. استخدم فاتورتين منفصلتين.",
+      409,
+    );
+  }
+
   const paymentMethod =
     typeof payload.paymentMethod === "string"
       ? payload.paymentMethod.trim().toLowerCase()
