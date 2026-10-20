@@ -1277,6 +1277,7 @@ async function handleCustomerEditOrderItems(
         {
           allowedStatuses: ["new"],
           preserveExistingProductPrice: true,
+          restrictToPublicCatalog: true,
         },
       );
 
