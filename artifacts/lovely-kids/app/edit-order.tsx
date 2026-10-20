@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
+import { useOrderEditSelection } from "@/context/OrderEditSelectionContext";
 import { useProducts } from "@/context/ProductsContext";
 import {
   isSizeOutOfStock,
@@ -136,6 +137,11 @@ export default function EditOrderScreen() {
     loading: productsLoading,
     refreshProducts,
   } = useProducts();
+  const {
+    session: orderEditSelection,
+    startSelection,
+    clearSelection,
+  } = useOrderEditSelection();
 
   const params = useLocalSearchParams<{
     id?: string | string[];
@@ -296,11 +302,25 @@ export default function EditOrderScreen() {
         }
 
         setOrder(found);
-        setItems(
-          editableFromOrder(
-            found.items,
-          ),
-        );
+
+        if (
+          orderEditSelection?.orderId ===
+          found.id
+        ) {
+          setItems(
+            orderEditSelection.items.map(
+              (item) => ({
+                ...item,
+              }),
+            ),
+          );
+        } else {
+          setItems(
+            editableFromOrder(
+              found.items,
+            ),
+          );
+        }
 
         if (found.status !== "new") {
           setError(
@@ -323,6 +343,7 @@ export default function EditOrderScreen() {
       authLoading,
       getAuthToken,
       id,
+      orderEditSelection,
       trackingToken,
     ],
   );
@@ -387,13 +408,36 @@ export default function EditOrderScreen() {
   );
 
   const openPicker = useCallback(() => {
-    setSearch("");
-    setPickerProduct(null);
-    setPickerColor(undefined);
-    setPickerSize(undefined);
-    setPickerOpen(true);
-    void refreshProducts();
-  }, [refreshProducts]);
+    if (!order) return;
+
+    startSelection({
+      orderId: order.id,
+      trackingToken:
+        trackingToken || undefined,
+      items: items.map((item) => ({
+        ...item,
+      })),
+    });
+
+    router.push({
+      pathname: "/(tabs)/products",
+      params: {
+        orderEdit: "1",
+        orderId: String(order.id),
+        ...(trackingToken
+          ? {
+              orderToken:
+                trackingToken,
+            }
+          : {}),
+      },
+    });
+  }, [
+    items,
+    order,
+    startSelection,
+    trackingToken,
+  ]);
 
   const choosePickerProduct =
     useCallback((product: Product) => {
@@ -661,6 +705,13 @@ export default function EditOrderScreen() {
           "تم حفظ تعديلات الطلب بنجاح",
         );
 
+        if (
+          orderEditSelection?.orderId ===
+          updated.id
+        ) {
+          clearSelection();
+        }
+
         await refreshProducts();
       } catch (saveError) {
         setError(
@@ -673,9 +724,11 @@ export default function EditOrderScreen() {
       }
     },
     [
+      clearSelection,
       getAuthToken,
       items,
       order,
+      orderEditSelection,
       refreshProducts,
       saving,
       trackingToken,
