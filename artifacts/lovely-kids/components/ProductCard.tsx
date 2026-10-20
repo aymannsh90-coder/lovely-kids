@@ -51,8 +51,10 @@ export function ProductCard({
   const { addItem, items } = useCart();
   const { requestGeneralPrompt } =
     useNotificationOptIn();
-  const { addSelectionItem } =
-    useOrderEditSelection();
+  const {
+    session: orderEditSelection,
+    addSelectionItem,
+  } = useOrderEditSelection();
   const { toggleItem, isWishlisted } = useWishlist();
   const wishlisted = isWishlisted(product.id);
 
@@ -107,6 +109,15 @@ export function ProductCard({
     if (isOutOfStock) return;
 
     if (orderEdit) {
+      if (
+        !orderEditSelection ||
+        orderEditSelection.orderId !==
+          Number(orderEdit.orderId)
+      ) {
+        returnToOrder();
+        return;
+      }
+
       if (hasVariants) {
         router.push(productRoute);
         return;
