@@ -666,6 +666,7 @@ async function handleGetOrders(
 async function handleLookupOrder(
   request: Request,
   db: Db,
+  env: Env,
 ) {
   const body = await request.json().catch(() => null) as {
     orderId?: number;
@@ -721,15 +722,38 @@ async function handleLookupOrder(
       .limit(1);
 
     if (masterRows[0]) {
+      const master = masterRows[0];
+      const trackingToken =
+        createOrderTrackingToken(
+          master.id,
+          master.customerPhone,
+          env,
+        );
+
       return json({
-        ...masterRows[0],
+        ...master,
         mergedFromOrderId:
           order.id,
+        ...(trackingToken
+          ? { trackingToken }
+          : {}),
       });
     }
   }
 
-  return json(order);
+  const trackingToken =
+    createOrderTrackingToken(
+      order.id,
+      order.customerPhone,
+      env,
+    );
+
+  return json({
+    ...order,
+    ...(trackingToken
+      ? { trackingToken }
+      : {}),
+  });
 }
 
 async function handleTrackOrder(
@@ -908,7 +932,11 @@ export async function handleOrderRequest(
     request.method === "POST" &&
     path === "/api/orders/lookup"
   ) {
-    return handleLookupOrder(request, db);
+    return handleLookupOrder(
+      request,
+      db,
+      env,
+    );
   }
 
   const trackingMatch = path.match(
@@ -986,6 +1014,22 @@ export async function handleOrderRequest(
       db,
       env,
       Number(confirmPaymentMatch[1]),
+    );
+  }
+
+  const customerEditItemsMatch = path.match(
+    /^\/api\/orders\/(\d+)\/customer-items$/,
+  );
+
+  if (
+    request.method === "PATCH" &&
+    customerEditItemsMatch
+  ) {
+    return handleCustomerEditOrderItems(
+      request,
+      db,
+      env,
+      Number(customerEditItemsMatch[1]),
     );
   }
 
@@ -1070,6 +1114,191 @@ export async function handleOrderRequest(
   }
 
   return null;
+}
+
+async function handleCustomerEditOrderItems(
+  request: Request,
+  db: Db,
+  env: Env,
+  id: number,
+) {
+  const body = await request.json().catch(() => null) as
+    | {
+        items?: unknown;
+        trackingToken?: unknown;
+      }
+    | null;
+
+  if (!body || body.items === undefined) {
+    return json({ error: "المنتجات مطلوبة" }, 400);
+  }
+
+  const currentRows = await db
+    .select({
+      id: ordersTable.id,
+      status: ordersTable.status,
+      userId: ordersTable.userId,
+      customerPhone: ordersTable.customerPhone,
+      mergedIntoOrderId:
+        ordersTable.mergedIntoOrderId,
+    })
+    .from(ordersTable)
+    .where(eq(ordersTable.id, id))
+    .limit(1);
+
+  const current = currentRows[0];
+
+  if (!current) {
+    return json({ error: "الطلب غير موجود" }, 404);
+  }
+
+  const mergeRelation =
+    await getOrderMergeRelation(
+      db,
+      id,
+    );
+
+  if (
+    current.mergedIntoOrderId !== null
+  ) {
+    return json(
+      {
+        error:
+          `هذا الطلب مدمج داخل الطلب #${current.mergedIntoOrderId} ولا يمكن تعديله منفردًا`,
+      },
+      409,
+    );
+  }
+
+  if (
+    mergeRelation.hasMergedChildren
+  ) {
+    return json(
+      {
+        error:
+          "لا يمكن تعديل الطلب بعد دمجه مع طلبات أخرى",
+      },
+      409,
+    );
+  }
+
+  const user = await getCurrentUser(
+    db,
+    request,
+    env,
+  );
+
+  const ownerAccess =
+    !!user &&
+    (
+      current.userId === user.id ||
+      (
+        current.userId === null &&
+        !!user.phone &&
+        current.customerPhone === user.phone
+      )
+    );
+
+  const providedTrackingToken =
+    typeof body.trackingToken === "string"
+      ? body.trackingToken.trim()
+      : "";
+
+  const expectedTrackingToken =
+    createOrderTrackingToken(
+      current.id,
+      current.customerPhone,
+      env,
+    );
+
+  const trackingAccess =
+    !!providedTrackingToken &&
+    !!expectedTrackingToken &&
+    trackingTokensMatch(
+      providedTrackingToken,
+      expectedTrackingToken,
+    );
+
+  if (!ownerAccess && !trackingAccess) {
+    return json(
+      { error: "لا يمكنك تعديل هذا الطلب" },
+      403,
+    );
+  }
+
+  if (current.status !== "new") {
+    return json(
+      {
+        error:
+          "تم تأكيد الطلب أو بدأت معالجته ولم يعد بالإمكان تعديله",
+      },
+      409,
+    );
+  }
+
+  // Never trust prices or order details supplied by the customer.
+  // Customer editing is limited to product, variant, size and quantity.
+  const safeItems =
+    Array.isArray(body.items)
+      ? body.items.map((raw) => {
+          if (
+            !raw ||
+            typeof raw !== "object" ||
+            Array.isArray(raw)
+          ) {
+            return raw;
+          }
+
+          const item =
+            raw as Record<string, unknown>;
+
+          return {
+            id:
+              item.id ??
+              item.productId,
+            quantity:
+              item.quantity,
+            color:
+              item.color,
+            size:
+              item.size,
+          };
+        })
+      : body.items;
+
+  try {
+    const updated =
+      await editOrderItemsAndAdjustStock(
+        db,
+        id,
+        safeItems,
+        undefined,
+        user?.id ?? null,
+        {
+          allowedStatuses: ["new"],
+          preserveExistingProductPrice: true,
+        },
+      );
+
+    return json(updated);
+  } catch (error) {
+    if (error instanceof OrderEditError) {
+      return json(
+        { error: error.message },
+        error.status,
+      );
+    }
+
+    console.error(
+      "Customer edit order items failed:",
+      error,
+    );
+
+    return json(
+      { error: "تعذر تعديل الطلب" },
+      500,
+    );
+  }
 }
 
 async function handleEditOrderItems(
