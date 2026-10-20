@@ -105,7 +105,7 @@ export const posPurchasesTable = pgTable(
 
     check(
       "pos_purchases_payment_method_valid",
-      sql`${table.paymentMethod} in ('cash', 'credit', 'mixed')`,
+      sql`${table.paymentMethod} in ('cash', 'credit', 'mixed', 'historical_settled')`,
     ),
 
     check(
@@ -135,9 +135,18 @@ export const posPurchasesTable = pgTable(
     check(
       "pos_purchases_settlement_matches",
       sql`
-        ${table.paidMinor} <= ${table.totalMinor}
-        and ${table.dueMinor} =
-          ${table.totalMinor} - ${table.paidMinor}
+        (
+          ${table.paymentMethod} = 'historical_settled'
+          and ${table.paidMinor} = 0
+          and ${table.dueMinor} = 0
+        )
+        or
+        (
+          ${table.paymentMethod} <> 'historical_settled'
+          and ${table.paidMinor} <= ${table.totalMinor}
+          and ${table.dueMinor} =
+            ${table.totalMinor} - ${table.paidMinor}
+        )
       `,
     ),
 
