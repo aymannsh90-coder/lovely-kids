@@ -1347,6 +1347,20 @@ async function handleAppendDraftItem(
       99_999,
     );
 
+    const entryMode =
+      payload.entryMode === undefined
+        ? "stock_receipt"
+        : payload.entryMode;
+
+    if (
+      entryMode !== "stock_receipt" &&
+      entryMode !== "historical"
+    ) {
+      throw new PurchaseDraftError(
+        "نوع تسجيل الشراء غير صالح",
+      );
+    }
+
     const businessDate =
       normalizeBusinessDate(
         payload.businessDate,
