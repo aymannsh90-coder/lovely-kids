@@ -30,6 +30,7 @@ import {
 } from "./purchase-feature";
 import {
   addExactProductCostOrInitialize,
+  allocateProportionalCostMinor,
   deriveUnitCostMinor,
   InventoryCostError,
 } from "./inventory-cost-engine";
@@ -98,6 +99,7 @@ interface ParsedPurchaseItem {
   size: string | null;
   quantity: number;
   freeQuantity: number;
+  entryMode: "stock_receipt" | "historical";
   unitCostMinor: number;
   lineDiscountMinor: number;
   lineTotalMinor: number;
@@ -515,6 +517,20 @@ function parseItems(value: unknown): ParsedPurchaseItem[] {
       );
     }
 
+    const entryMode =
+      item.entryMode === undefined
+        ? "stock_receipt"
+        : item.entryMode;
+
+    if (
+      entryMode !== "stock_receipt" &&
+      entryMode !== "historical"
+    ) {
+      throw new PurchaseError(
+        "نوع تسجيل أحد أصناف المشتريات غير صالح",
+      );
+    }
+
     const unitCostMinor = parseMoneyToMinor(
       item.unitCost ?? item.cost,
     );
@@ -556,6 +572,7 @@ function parseItems(value: unknown): ParsedPurchaseItem[] {
       size: optionalText(item.size, "المقاس", 100),
       quantity,
       freeQuantity,
+      entryMode,
       unitCostMinor,
       lineDiscountMinor,
       lineTotalMinor: grossMinor - lineDiscountMinor,
@@ -630,6 +647,7 @@ function toPurchaseResponse(
         size: item.size,
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
+        entryMode: item.entryMode,
         unitCostMinor: item.unitCostMinor,
         unitCost:
           item.unitCostMinor === null
@@ -2060,6 +2078,8 @@ async function handleCreatePurchase(
             current.quantity ||
           saved.freeQuantity !==
             current.freeQuantity ||
+          saved.entryMode !==
+            current.entryMode ||
           saved.unitCostMinor !==
             current.unitCostMinor ||
           saved.lineDiscountMinor !==
@@ -2139,6 +2159,7 @@ async function handleCreatePurchase(
           size,
           quantity: item.quantity,
           freeQuantity: item.freeQuantity,
+          entryMode: item.entryMode,
           unitCostMinor: item.unitCostMinor,
           lineDiscountMinor: item.lineDiscountMinor,
           lineTotalMinor: item.lineTotalMinor,
@@ -2246,6 +2267,9 @@ async function handleCreatePurchase(
           left - right,
       );
 
+      const historicalGapByProduct =
+        new Map<number, number>();
+
       for (
         const productId
         of approvedProductIds
@@ -2276,7 +2300,7 @@ async function handleCreatePurchase(
           );
         }
 
-        const pendingPurchaseQuantity =
+        const pendingStockReceiptQuantity =
           await getPendingPurchaseQuantityForProduct(
             tx,
             {
@@ -2302,32 +2326,73 @@ async function handleCreatePurchase(
             .limit(1);
 
         const currentCostQuantity =
-          costStateRows[0]?.quantityOnHand ??
-          null;
+          costStateRows[0]
+            ?.quantityOnHand ??
+          0;
+
+        const explainedPhysicalQuantity =
+          currentCostQuantity +
+          pendingStockReceiptQuantity;
 
         if (
-          currentCostQuantity === null
-        ) {
-          if (
-            physicalQuantity !==
-            pendingPurchaseQuantity
-          ) {
-            throw new PurchaseError(
-              `الصنف ${product.nameAr} لديه مخزون سابق غير ممثل في محرك التكلفة. أدخل تكلفة أول المدة قبل اعتماد فاتورة المورد.`,
-              409,
-            );
-          }
-        } else if (
-          currentCostQuantity +
-            pendingPurchaseQuantity !==
+          explainedPhysicalQuantity >
           physicalQuantity
         ) {
           throw new PurchaseError(
-            `مخزون الصنف ${product.nameAr} لا يطابق محرك التكلفة ومسودات المشتريات المفتوحة. راجع المخزون قبل الاعتماد.`,
+            `مخزون الصنف ${product.nameAr} أقل من الكمية الممثلة في محرك التكلفة ومسودات الاستلام الجديدة. راجع المخزون قبل الاعتماد.`,
             409,
           );
         }
+
+        const historicalGap =
+          physicalQuantity -
+          explainedPhysicalQuantity;
+
+        const historicalPurchaseQuantity =
+          costAllocations
+            .filter(
+              (entry) =>
+                entry.item.productId ===
+                  productId &&
+                entry.item.entryMode ===
+                  "historical",
+            )
+            .reduce(
+              (sum, entry) =>
+                sum +
+                entry.receivedQuantity,
+              0,
+            );
+
+        if (
+          historicalGap > 0 &&
+          historicalPurchaseQuantity <
+            historicalGap
+        ) {
+          throw new PurchaseError(
+            `الشراء السابق للصنف ${product.nameAr} لا يغطي كامل المخزون القديم غير الممثل محاسبيًا. الكمية المطلوبة لتسوية المخزون الحالي: ${historicalGap}.`,
+            409,
+          );
+        }
+
+        if (
+          historicalGap > 0 &&
+          historicalPurchaseQuantity === 0
+        ) {
+          throw new PurchaseError(
+            `الصنف ${product.nameAr} لديه مخزون سابق غير ممثل في محرك التكلفة. سجله كشراء سابق أو أدخل تكلفة أول المدة قبل اعتماد الفاتورة.`,
+            409,
+          );
+        }
+
+        historicalGapByProduct.set(
+          productId,
+          historicalGap,
+        );
       }
+
+      let inventoryPurchaseValueMinor = 0;
+      let historicalSoldValueMinor = 0;
 
       for (
         const allocation
@@ -2343,61 +2408,144 @@ async function handleCreatePurchase(
           );
         }
 
-        let costResult;
+        let stockQuantityApplied =
+          allocation.receivedQuantity;
 
-        try {
-          costResult =
-            await addExactProductCostOrInitialize(
-              tx,
-              {
-                productId,
+        if (
+          allocation.item.entryMode ===
+          "historical"
+        ) {
+          const remainingGap =
+            historicalGapByProduct.get(
+              productId,
+            ) ?? 0;
 
-                quantity:
-                  allocation.receivedQuantity,
+          stockQuantityApplied =
+            Math.min(
+              allocation.receivedQuantity,
+              remainingGap,
+            );
 
-                costTotalMinor:
+          historicalGapByProduct.set(
+            productId,
+            remainingGap -
+              stockQuantityApplied,
+          );
+        }
+
+        const historicalSoldQuantity =
+          allocation.receivedQuantity -
+          stockQuantityApplied;
+
+        const stockCostTotalMinor =
+          stockQuantityApplied <= 0
+            ? 0
+            : stockQuantityApplied ===
+                allocation.receivedQuantity
+              ? allocation.costTotalMinor
+              : allocateProportionalCostMinor(
                   allocation.costTotalMinor,
+                  stockQuantityApplied,
+                  allocation.receivedQuantity,
+                );
 
-                costQuality:
-                  "confirmed",
+        const historicalSoldCostTotalMinor =
+          allocation.costTotalMinor -
+          stockCostTotalMinor;
 
-                eventType:
-                  "purchase",
+        let costQuality:
+          | "confirmed"
+          | "estimated"
+          | "mixed" =
+          "confirmed";
 
-                sourceType:
-                  "pos_purchase",
+        if (
+          stockQuantityApplied > 0
+        ) {
+          try {
+            const costResult =
+              await addExactProductCostOrInitialize(
+                tx,
+                {
+                  productId,
 
-                sourceRef:
-                  String(
-                    purchase.id,
-                  ),
+                  quantity:
+                    stockQuantityApplied,
 
-                sourceItemRef:
-                  String(
-                    allocation.item.id,
-                  ),
+                  costTotalMinor:
+                    stockCostTotalMinor,
 
-                businessDate,
+                  costQuality:
+                    "confirmed",
 
-                note:
-                  `Approved purchase ${purchase.publicId}`,
+                  eventType:
+                    "purchase",
 
-                createdByUserId:
-                  auth.user.id,
-              },
-            );
-        } catch (error) {
-          if (
-            error instanceof
-            InventoryCostError
-          ) {
-            throw new PurchaseError(
-              "تعذر تحديث تكلفة المخزون لفاتورة المشتريات",
-              409,
-            );
+                  sourceType:
+                    "pos_purchase",
+
+                  sourceRef:
+                    String(
+                      purchase.id,
+                    ),
+
+                  sourceItemRef:
+                    String(
+                      allocation.item.id,
+                    ),
+
+                  businessDate,
+
+                  note:
+                    allocation.item.entryMode ===
+                      "historical"
+                      ? `Approved historical purchase ${purchase.publicId}`
+                      : `Approved purchase ${purchase.publicId}`,
+
+                  createdByUserId:
+                    auth.user.id,
+                },
+              );
+
+            costQuality =
+              costResult.costQuality;
+          } catch (error) {
+            if (
+              error instanceof
+              InventoryCostError
+            ) {
+              throw new PurchaseError(
+                "تعذر تحديث تكلفة المخزون لفاتورة المشتريات",
+                409,
+              );
+            }
+
+            throw error;
           }
+        }
 
-          throw error;
+        inventoryPurchaseValueMinor +=
+          stockCostTotalMinor;
+
+        historicalSoldValueMinor +=
+          historicalSoldCostTotalMinor;
+
+        if (
+          !Number.isSafeInteger(
+            inventoryPurchaseValueMinor,
+          ) ||
+          !Number.isSafeInteger(
+            historicalSoldValueMinor,
+          ) ||
+          inventoryPurchaseValueMinor >
+            MAX_MINOR ||
+          historicalSoldValueMinor >
+            MAX_MINOR
+        ) {
+          throw new PurchaseError(
+            "قيمة توزيع المشتريات تتجاوز الحد المسموح",
+            409,
+          );
         }
 
         await tx
@@ -2422,12 +2570,50 @@ async function handleCreatePurchase(
             costTotalMinor:
               allocation.costTotalMinor,
 
+            stockQuantityApplied,
+
+            historicalSoldQuantity,
+
+            stockCostTotalMinor,
+
+            historicalSoldCostTotalMinor,
+
             invoiceDiscountAllocatedMinor:
               allocation.invoiceDiscountAllocatedMinor,
 
-            costQuality:
-              costResult.costQuality,
+            costQuality,
           });
+      }
+
+      for (
+        const [
+          productId,
+          remainingGap,
+        ]
+        of historicalGapByProduct
+      ) {
+        if (remainingGap > 0) {
+          const product =
+            lockedProductsById.get(
+              productId,
+            );
+
+          throw new PurchaseError(
+            `بقي فرق مخزون قديم غير مسوى للصنف ${product?.nameAr ?? productId}. راجع كمية الشراء السابق.`,
+            409,
+          );
+        }
+      }
+
+      if (
+        inventoryPurchaseValueMinor +
+          historicalSoldValueMinor !==
+        totalMinor
+      ) {
+        throw new PurchaseError(
+          "توزيع تكلفة فاتورة المشتريات لا يطابق إجمالي الفاتورة",
+          409,
+        );
       }
 
       if (totalMinor > 0) {
@@ -2479,11 +2665,25 @@ async function handleCreatePurchase(
           return retryRows[0];
         };
 
-        const purchaseAccount = await ensureAccount({
-          code: "PURCHASE_INVENTORY",
-          name: "المشتريات / المخزون",
-          accountType: "asset",
-        });
+        const purchaseAccount =
+          inventoryPurchaseValueMinor > 0
+            ? await ensureAccount({
+                code: "PURCHASE_INVENTORY",
+                name: "المشتريات / المخزون",
+                accountType: "asset",
+              })
+            : null;
+
+        const historicalCogsAccount =
+          historicalSoldValueMinor > 0
+            ? await ensureAccount({
+                code: "HISTORICAL_PURCHASE_COGS",
+                name:
+                  "تكلفة بضاعة مباعة — مشتريات سابقة",
+                accountType:
+                  "expense",
+              })
+            : null;
 
         const cashAccount =
           paidMinor > 0
@@ -2505,17 +2705,37 @@ async function handleCreatePurchase(
             : null;
 
         const financeLines:
-          FinancePostingLineInput[] = [
-            {
-              accountId:
-                purchaseAccount.id,
-              debitMinor:
-                totalMinor,
-              creditMinor: 0,
-              memo:
-                `فاتورة مشتريات ${purchase.publicId}`,
-            },
-          ];
+          FinancePostingLineInput[] = [];
+
+        if (
+          inventoryPurchaseValueMinor > 0 &&
+          purchaseAccount
+        ) {
+          financeLines.push({
+            accountId:
+              purchaseAccount.id,
+            debitMinor:
+              inventoryPurchaseValueMinor,
+            creditMinor: 0,
+            memo:
+              `مخزون من فاتورة مشتريات ${purchase.publicId}`,
+          });
+        }
+
+        if (
+          historicalSoldValueMinor > 0 &&
+          historicalCogsAccount
+        ) {
+          financeLines.push({
+            accountId:
+              historicalCogsAccount.id,
+            debitMinor:
+              historicalSoldValueMinor,
+            creditMinor: 0,
+            memo:
+              `تكلفة مبيعات سابقة من فاتورة ${purchase.publicId}`,
+          });
+        }
 
         if (paidMinor > 0 && cashAccount) {
           financeLines.push({
