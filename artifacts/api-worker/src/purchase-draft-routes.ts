@@ -278,6 +278,7 @@ type DraftItem = {
   barcode: string | null;
   quantity: number;
   freeQuantity: number;
+  entryMode: "stock_receipt" | "historical";
   unitCostMinor: number | null;
   lineDiscountMinor: number;
   lineTotalMinor: number | null;
@@ -401,12 +402,27 @@ function parseItems(value: unknown): DraftItem[] {
       );
     }
 
+    const entryMode =
+      item.entryMode === undefined
+        ? "stock_receipt"
+        : item.entryMode;
+
+    if (
+      entryMode !== "stock_receipt" &&
+      entryMode !== "historical"
+    ) {
+      throw new PurchaseDraftError(
+        "نوع تسجيل أحد أصناف المشتريات غير صالح",
+      );
+    }
+
     return {
       lineNumber: index + 1,
       productId,
       barcode: normalizeBarcode(item.barcode),
       quantity,
       freeQuantity,
+      entryMode,
       unitCostMinor,
       lineDiscountMinor,
       lineTotalMinor:
@@ -643,6 +659,7 @@ function toResponse(
         size: item.size,
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
+        entryMode: item.entryMode,
         unitCostMinor: item.unitCostMinor,
         unitCost:
           item.unitCostMinor === null
@@ -752,6 +769,7 @@ async function resolveLines(
 
       quantity: item.quantity,
       freeQuantity: item.freeQuantity,
+      entryMode: item.entryMode,
       unitCostMinor: item.unitCostMinor,
       lineDiscountMinor:
         item.lineDiscountMinor,
@@ -961,6 +979,20 @@ async function handleSaveDraft(
         "رقم فاتورة المورد",
         100,
       );
+
+    const entryMode =
+      payload.entryMode === undefined
+        ? "stock_receipt"
+        : payload.entryMode;
+
+    if (
+      entryMode !== "stock_receipt" &&
+      entryMode !== "historical"
+    ) {
+      throw new PurchaseDraftError(
+        "نوع تسجيل الشراء غير صالح",
+      );
+    }
 
     const businessDate =
       normalizeBusinessDate(
@@ -1385,6 +1417,7 @@ async function handleAppendDraftItem(
             productId,
             quantity,
             unitCostMinor,
+            entryMode,
             businessDate,
             warehouseKey,
             currencyCode,
