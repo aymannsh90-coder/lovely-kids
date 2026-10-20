@@ -1578,7 +1578,8 @@ async function handleCreatePurchase(
     if (
       paymentMethod !== "cash" &&
       paymentMethod !== "credit" &&
-      paymentMethod !== "mixed"
+      paymentMethod !== "mixed" &&
+      paymentMethod !== "historical_settled"
     ) {
       throw new PurchaseError("طريقة الدفع غير صالحة");
     }
@@ -1590,6 +1591,19 @@ async function handleCreatePurchase(
     );
 
     const items = parseItems(payload.items);
+
+    if (
+      paymentMethod === "historical_settled" &&
+      items.some(
+        (item) =>
+          item.entryMode !==
+          "historical",
+      )
+    ) {
+      throw new PurchaseError(
+        "خيار مدفوع سابقًا متاح فقط لفاتورة شراء سابق بالكامل",
+      );
+    }
 
     let subtotalMinor = 0;
     let itemDiscountMinor = 0;
@@ -1678,7 +1692,22 @@ async function handleCreatePurchase(
       );
     }
 
-    const dueMinor = totalMinor - paidMinor;
+    if (
+      paymentMethod ===
+        "historical_settled" &&
+      paidMinor !== 0
+    ) {
+      throw new PurchaseError(
+        "الشراء المدفوع سابقًا لا يسجل دفعة على صندوق اليوم",
+      );
+    }
+
+    const dueMinor =
+      paymentMethod ===
+        "historical_settled"
+        ? 0
+        : totalMinor -
+          paidMinor;
 
     const result = await db.transaction(async (tx) => {
       let lockedDraftItems: Array<
@@ -2704,6 +2733,19 @@ async function handleCreatePurchase(
               )
             : null;
 
+        const historicalSettlementAccount =
+          paymentMethod ===
+            "historical_settled"
+            ? await ensureAccount({
+                code:
+                  "HISTORICAL_PURCHASE_OPENING_CLEARING",
+                name:
+                  "تسوية افتتاحية — مشتريات مدفوعة سابقًا",
+                accountType:
+                  "equity",
+              })
+            : null;
+
         const financeLines:
           FinancePostingLineInput[] = [];
 
@@ -2760,6 +2802,22 @@ async function handleCreatePurchase(
           });
         }
 
+        if (
+          paymentMethod ===
+            "historical_settled" &&
+          historicalSettlementAccount
+        ) {
+          financeLines.push({
+            accountId:
+              historicalSettlementAccount.id,
+            debitMinor: 0,
+            creditMinor:
+              totalMinor,
+            memo:
+              "تسوية شراء سابق مدفوع قبل النظام — بدون حركة صندوق أو ذمة مورد",
+          });
+        }
+
         await postFinanceTransaction(
           tx,
           {
@@ -2777,9 +2835,14 @@ async function handleCreatePurchase(
             cashSessionId:
               cashSession?.id ?? null,
             notes:
-              supplierInvoiceNumber
-                ? `فاتورة مورد ${supplierInvoiceNumber}`
-                : `فاتورة مشتريات ${purchase.publicId}`,
+              paymentMethod ===
+                "historical_settled"
+                ? supplierInvoiceNumber
+                  ? `فاتورة مورد سابقة مدفوعة ${supplierInvoiceNumber}`
+                  : `شراء سابق مدفوع ${purchase.publicId}`
+                : supplierInvoiceNumber
+                  ? `فاتورة مورد ${supplierInvoiceNumber}`
+                  : `فاتورة مشتريات ${purchase.publicId}`,
             createdByUserId:
               auth.user.id,
             lines: financeLines,
