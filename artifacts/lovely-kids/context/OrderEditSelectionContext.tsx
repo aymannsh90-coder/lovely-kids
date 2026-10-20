@@ -13,6 +13,9 @@ export type OrderEditSelectionItem = {
   image?: string;
   size?: string;
   color?: string;
+  clientKey: string;
+  originalColor?: string;
+  originalSize?: string;
 };
 
 type OrderEditSelectionSession = {
@@ -115,6 +118,8 @@ export function OrderEditSelectionProvider({
               {
                 ...item,
                 quantity: 1,
+                clientKey:
+                  `store-${item.id}-${Date.now()}`,
               },
             ];
 
