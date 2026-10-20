@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
 import { useNotificationOptIn } from "@/context/NotificationOptInContext";
+import { useOrderEditSelection } from "@/context/OrderEditSelectionContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
@@ -210,13 +211,27 @@ function similarityScore(current: Product, candidate: Product): number {
 }
 
 export default function ProductDetailScreen() {
-  const { id, cartEdit, cartSize, cartColor } = useLocalSearchParams<{
+  const {
+    id,
+    cartEdit,
+    cartSize,
+    cartColor,
+    orderEdit,
+    orderId,
+    orderToken,
+  } = useLocalSearchParams<{
     id: string;
     cartEdit?: string;
     cartSize?: string;
     cartColor?: string;
+    orderEdit?: string;
+    orderId?: string;
+    orderToken?: string;
   }>();
   const isCartEditMode = cartEdit === "1";
+  const isOrderEditMode =
+    orderEdit === "1" &&
+    typeof orderId === "string";
   const originalCartSize = cartSize || undefined;
   const originalCartColor = cartColor || undefined;
   const colors = useColors();
@@ -243,6 +258,10 @@ export default function ProductDetailScreen() {
     ? desktopGalleryWidth
     : SCREEN_WIDTH;
   const { addItem, replaceItemVariant, items } = useCart();
+  const {
+    session: orderEditSelection,
+    addSelectionItem,
+  } = useOrderEditSelection();
   const {
     requestGeneralPrompt,
     setGeneralPromptBlocked,
@@ -442,7 +461,9 @@ export default function ProductDetailScreen() {
           )
         : Array.isArray(product.sizes) && product.sizes.length > 0;
 
-      let message = "يرجى إكمال الاختيارات المطلوبة قبل إضافة المنتج إلى السلة.";
+      let message = isOrderEditMode
+        ? "يرجى إكمال الاختيارات المطلوبة قبل إضافة المنتج إلى الطلب."
+        : "يرجى إكمال الاختيارات المطلوبة قبل إضافة المنتج إلى السلة.";
 
       if (needsColor && productHasSizes) {
         message = "يرجى اختيار اللون والمقاس أولاً.";
@@ -466,6 +487,58 @@ export default function ProductDetailScreen() {
       selectedSize,
       selectedColor,
     );
+
+    if (isOrderEditMode) {
+      if (
+        !orderEditSelection ||
+        orderEditSelection.orderId !==
+          Number(orderId)
+      ) {
+        setSelectionAlert(
+          "انتهت جلسة تعديل الطلب. ارجع إلى الطلب واضغط «إضافة منتج» مرة أخرى.",
+        );
+        return;
+      }
+
+      if (
+        availableStock !== null &&
+        availableStock <= 0
+      ) {
+        showStockLimit(
+          availableStock,
+        );
+        return;
+      }
+
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      ).catch(() => {});
+
+      addSelectionItem({
+        id: product.id,
+        name: product.nameAr,
+        price: product.price,
+        image:
+          activeColorVariant?.image ??
+          product.image,
+        size: selectedSize,
+        color: selectedColor,
+      });
+
+      router.replace({
+        pathname: "/edit-order",
+        params: {
+          id: orderId!,
+          ...(orderToken
+            ? {
+                token:
+                  orderToken,
+              }
+            : {}),
+        },
+      });
+      return;
+    }
 
     const existing = items.find(
       (item) =>
@@ -1113,6 +1186,16 @@ export default function ProductDetailScreen() {
                   <ProductCard
                     key={item.id}
                     product={item}
+                    orderEdit={
+                      isOrderEditMode
+                        ? {
+                            orderId: orderId!,
+                            token:
+                              orderToken ||
+                              undefined,
+                          }
+                        : null
+                    }
                     style={styles.similarCard}
                   />
                 ))}
@@ -1164,7 +1247,13 @@ export default function ProductDetailScreen() {
               ]}
             >
               <Ionicons
-                name={isCartEditMode ? "checkmark-circle-outline" : "bag-add-outline"}
+                name={
+                  isCartEditMode
+                    ? "checkmark-circle-outline"
+                    : isOrderEditMode
+                      ? "add-circle-outline"
+                      : "bag-add-outline"
+                }
                 size={20}
                 color="#fff"
               />
@@ -1174,7 +1263,11 @@ export default function ProductDetailScreen() {
                   { color: "#fff" },
                 ]}
               >
-                {isCartEditMode ? "تم التعديل" : "أضف إلى السلة"}
+                {isCartEditMode
+                  ? "تم التعديل"
+                  : isOrderEditMode
+                    ? "إضافة للطلب"
+                    : "أضف إلى السلة"}
               </Text>
             </Pressable>
           </>
