@@ -52,6 +52,21 @@ WHERE
   AND historical_sold_cost_total_minor = 0;
 
 ALTER TABLE public.pos_purchase_item_costs
+  DROP CONSTRAINT IF EXISTS pos_purchase_item_costs_values_valid;
+
+ALTER TABLE public.pos_purchase_item_costs
+  ADD CONSTRAINT pos_purchase_item_costs_values_valid
+  CHECK (
+    unit_cost_minor >= 0
+    AND cost_total_minor >= 0
+    AND stock_quantity_applied >= 0
+    AND historical_sold_quantity >= 0
+    AND stock_cost_total_minor >= 0
+    AND historical_sold_cost_total_minor >= 0
+    AND invoice_discount_allocated_minor >= 0
+  );
+
+ALTER TABLE public.pos_purchase_item_costs
   DROP CONSTRAINT IF EXISTS pos_purchase_item_costs_split_valid;
 
 ALTER TABLE public.pos_purchase_item_costs
