@@ -259,15 +259,6 @@ export async function handleListPosExchanges(
         ),
     );
 
-  const currentProductImages =
-    await getCurrentProductImageMap(
-      db,
-      [
-        ...returnItems.map((item) => item.productId),
-        ...saleItems.map((item) => item.productId),
-      ],
-    );
-
   const cardFinanceRows =
     exchangeIds.length > 0
       ? await db
@@ -489,6 +480,15 @@ export async function handleGetPosExchangeByPublicId(
           ),
         ),
     ]);
+
+  const currentProductImages =
+    await getCurrentProductImageMap(
+      db,
+      [
+        ...returnItems.map((item) => item.productId),
+        ...saleItems.map((item) => item.productId),
+      ],
+    );
 
   const cardFinanceRows =
     exchange.settlementType ===
