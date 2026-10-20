@@ -7,6 +7,10 @@ import {
 import { and, asc, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import {
+  getCurrentProductImageMap,
+  resolveCurrentProductImage,
+} from "./current-product-image";
 import { openDb, type Env } from "./db";
 import { handleCreatePosSaleReturn } from "./pos-sale-return-create";
 import { handleCreateMobileEmergencyReturn } from "./pos-mobile-return-create";
@@ -200,6 +204,12 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
     .where(eq(posSaleItemsTable.saleId, sale.id))
     .orderBy(asc(posSaleItemsTable.lineNumber));
 
+  const currentProductImages =
+    await getCurrentProductImageMap(
+      db,
+      saleItems.map((item) => item.productId),
+    );
+
   const completedReturnRows = await db
     .select({
       id: posSaleReturnsTable.id,
@@ -255,7 +265,10 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
       barcode: item.barcode,
       productCode: item.productCode,
       productNameAr: item.productNameAr,
-      productImage: item.productImage,
+      productImage: resolveCurrentProductImage(
+        currentProductImages,
+        item.productId,
+      ),
 
       color: item.color,
       size: item.size,
