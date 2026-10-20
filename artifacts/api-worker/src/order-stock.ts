@@ -996,8 +996,16 @@ export async function editOrderItemsAndAdjustStock(
   rawItems: unknown,
   rawDetails?: EditOrderDetailsInput,
   actorUserId?: number | null,
+  options?: {
+    allowedStatuses?: readonly string[];
+    preserveExistingProductPrice?: boolean;
+    restrictToPublicCatalog?: boolean;
+  },
 ) {
   const requestedItems = parseEditOrderItems(rawItems);
+  const allowedStatuses =
+    options?.allowedStatuses ??
+    ["new", "confirmed", "delivering"];
 
   return db.transaction(async (tx) => {
     const orderRows = await tx
@@ -1012,13 +1020,12 @@ export async function editOrderItemsAndAdjustStock(
       throw new OrderEditError("الطلب غير موجود", 404);
     }
 
-    if (
-      order.status !== "new" &&
-      order.status !== "confirmed" &&
-      order.status !== "delivering"
-    ) {
+    if (!allowedStatuses.includes(order.status)) {
       throw new OrderEditError(
-        "يمكن تعديل الطلبات الجديدة أو المؤكدة أو قيد التوصيل فقط",
+        allowedStatuses.length === 1 &&
+          allowedStatuses[0] === "new"
+          ? "تم تأكيد الطلب أو بدأت معالجته ولم يعد بالإمكان تعديله"
+          : "يمكن تعديل الطلبات الجديدة أو المؤكدة أو قيد التوصيل فقط",
         409,
       );
     }
@@ -1153,6 +1160,69 @@ export async function editOrderItemsAndAdjustStock(
       );
     }
 
+    if (options?.restrictToPublicCatalog) {
+      const oldQuantityByProduct =
+        new Map<number, number>();
+
+      for (const item of oldItems) {
+        const productId =
+          Number(item.id);
+        const quantity =
+          Number(item.quantity);
+
+        oldQuantityByProduct.set(
+          productId,
+          (oldQuantityByProduct.get(
+            productId,
+          ) ?? 0) + quantity,
+        );
+      }
+
+      const requestedQuantityByProduct =
+        new Map<number, number>();
+
+      for (const item of requestedItems) {
+        requestedQuantityByProduct.set(
+          item.id,
+          (requestedQuantityByProduct.get(
+            item.id,
+          ) ?? 0) +
+            item.quantity,
+        );
+      }
+
+      for (const product of products) {
+        const unavailableToCustomers =
+          product.isHidden ||
+          product.deletedAt !== null;
+
+        if (!unavailableToCustomers) {
+          continue;
+        }
+
+        const oldQuantity =
+          oldQuantityByProduct.get(
+            product.id,
+          ) ?? 0;
+
+        const requestedQuantity =
+          requestedQuantityByProduct.get(
+            product.id,
+          ) ?? 0;
+
+        if (
+          oldQuantity === 0 ||
+          requestedQuantity >
+            oldQuantity
+        ) {
+          throw new OrderEditError(
+            `المنتج ${product.nameAr} غير متاح حاليًا للإضافة`,
+            409,
+          );
+        }
+      }
+    }
+
     const states = new Map<number, EditableProductState>();
 
     for (const product of products) {
@@ -1191,6 +1261,8 @@ export async function editOrderItemsAndAdjustStock(
       crypto.randomUUID();
 
     const oldUnitPrices = new Map<string, number>();
+    const oldProductUnitPrices =
+      new Map<number, number | null>();
 
     for (const oldItem of oldItems) {
       const stored = oldItem as StoredOrderItem & {
@@ -1218,6 +1290,20 @@ export async function editOrderItemsAndAdjustStock(
 
       if (!oldUnitPrices.has(key)) {
         oldUnitPrices.set(key, stored.price);
+      }
+
+      if (!oldProductUnitPrices.has(productId)) {
+        oldProductUnitPrices.set(
+          productId,
+          stored.price,
+        );
+      } else if (
+        oldProductUnitPrices.get(productId) !==
+        stored.price
+      ) {
+        // If historical lines of the same product carry
+        // different prices, do not guess which one to preserve.
+        oldProductUnitPrices.set(productId, null);
       }
     }
 
@@ -1257,6 +1343,12 @@ export async function editOrderItemsAndAdjustStock(
               item.color,
               item.size,
             ),
+          ) ??
+          (
+            options?.preserveExistingProductPrice
+              ? oldProductUnitPrices.get(item.id) ??
+                undefined
+              : undefined
           ),
       );
       trustedItems.push(trustedItem);
