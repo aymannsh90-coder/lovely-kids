@@ -579,7 +579,10 @@ export async function backfillHistoricalPurchaseCosts(
   const positiveMovements:
     PositiveMovement[] = [
       ...posSales.map(
-        (item) => ({
+        (item: {
+          saleItemId: number;
+          quantity: number;
+        }) => ({
           kind:
             "pos_sale" as const,
           quantity:
@@ -590,7 +593,10 @@ export async function backfillHistoricalPurchaseCosts(
       ),
 
       ...exchangeSales.map(
-        (item) => ({
+        (item: {
+          saleItemId: number;
+          quantity: number;
+        }) => ({
           kind:
             "exchange_sale" as const,
           quantity:
@@ -604,7 +610,12 @@ export async function backfillHistoricalPurchaseCosts(
   const returnMovements:
     ReturnMovement[] = [
       ...posReturns.map(
-        (item) => ({
+        (item: {
+          returnItemId: number;
+          originalSaleItemId:
+            number | null;
+          quantity: number;
+        }) => ({
           kind:
             "pos_return" as const,
           quantity:
@@ -617,7 +628,10 @@ export async function backfillHistoricalPurchaseCosts(
       ),
 
       ...exchangeReturns.map(
-        (item) => ({
+        (item: {
+          returnItemId: number;
+          quantity: number;
+        }) => ({
           kind:
             "exchange_return" as const,
           quantity:
