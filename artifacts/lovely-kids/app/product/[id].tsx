@@ -229,7 +229,7 @@ export default function ProductDetailScreen() {
     orderToken?: string;
   }>();
   const isCartEditMode = cartEdit === "1";
-  const isOrderEditMode =
+  const routeOrderEditMode =
     orderEdit === "1" &&
     typeof orderId === "string";
   const originalCartSize = cartSize || undefined;
@@ -260,6 +260,7 @@ export default function ProductDetailScreen() {
   const { addItem, replaceItemVariant, items } = useCart();
   const {
     session: orderEditSelection,
+    storeSelectionActive,
     addSelectionItem,
   } = useOrderEditSelection();
   const {
@@ -269,6 +270,29 @@ export default function ProductDetailScreen() {
   const { toggleItem, isWishlisted } = useWishlist();
   const { settings } = useAppSettings();
   const { products, loading } = useVisibleProducts();
+
+  const activeOrderEdit =
+    routeOrderEditMode
+      ? {
+          orderId: orderId!,
+          token:
+            orderToken ||
+            undefined,
+        }
+      : storeSelectionActive &&
+          orderEditSelection
+        ? {
+            orderId:
+              String(
+                orderEditSelection.orderId,
+              ),
+            token:
+              orderEditSelection.trackingToken,
+          }
+        : null;
+
+  const isOrderEditMode =
+    !!activeOrderEdit;
 
   const product = products.find((p) => p.id === id);
 
@@ -492,7 +516,9 @@ export default function ProductDetailScreen() {
       if (
         !orderEditSelection ||
         orderEditSelection.orderId !==
-          Number(orderId)
+          Number(
+            activeOrderEdit?.orderId,
+          )
       ) {
         setSelectionAlert(
           "انتهت جلسة تعديل الطلب. ارجع إلى الطلب واضغط «إضافة منتج» مرة أخرى.",
@@ -528,11 +554,11 @@ export default function ProductDetailScreen() {
       router.replace({
         pathname: "/edit-order",
         params: {
-          id: orderId!,
-          ...(orderToken
+          id: activeOrderEdit!.orderId,
+          ...(activeOrderEdit!.token
             ? {
                 token:
-                  orderToken,
+                  activeOrderEdit!.token,
               }
             : {}),
         },
@@ -1187,14 +1213,7 @@ export default function ProductDetailScreen() {
                     key={item.id}
                     product={item}
                     orderEdit={
-                      isOrderEditMode
-                        ? {
-                            orderId: orderId!,
-                            token:
-                              orderToken ||
-                              undefined,
-                          }
-                        : null
+                      activeOrderEdit
                     }
                     style={styles.similarCard}
                   />
