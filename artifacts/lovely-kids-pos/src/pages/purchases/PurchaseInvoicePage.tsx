@@ -150,6 +150,7 @@ interface PurchaseLine {
   size: string | null;
   quantity: number;
   freeQuantity: number;
+  entryMode: "stock_receipt" | "historical";
   unitCost: string;
   lineDiscount: string;
 }
@@ -943,6 +944,7 @@ export default function PurchaseInvoicePage() {
           size: null,
           quantity: quantityToAdd,
           freeQuantity: 0,
+          entryMode: "stock_receipt",
           unitCost: initialUnitCost,
           lineDiscount: "0.00",
         },
@@ -1348,6 +1350,7 @@ export default function PurchaseInvoicePage() {
             barcode: line.barcode || undefined,
             quantity: line.quantity,
             freeQuantity: line.freeQuantity,
+            entryMode: line.entryMode,
             unitCost: line.unitCost,
             lineDiscount: line.lineDiscount,
           })),
@@ -1405,7 +1408,13 @@ export default function PurchaseInvoicePage() {
         `قيمة الفاتورة: ${formatMinor(totalMinor)}`,
         `إجمالي المستلم: ${paidQuantity + freeQuantity}`,
         "",
-        "سيتم تسجيل الفاتورة محاسبيًا وتثبيت تكلفة البضاعة على الكمية التي أُدخلت مسبقًا، دون زيادة المخزون مرة ثانية.",
+        lines.some(
+          (line) =>
+            line.entryMode ===
+            "historical",
+        )
+          ? "تحتوي الفاتورة على شراء سابق: لن تتغير كمية المخزون الحالية، وسيتم فصل تكلفة الكمية المباعة سابقًا عن قيمة المخزون المتبقي."
+          : "سيتم تسجيل الفاتورة محاسبيًا وتثبيت تكلفة البضاعة على الكمية التي أُدخلت مسبقًا، دون زيادة المخزون مرة ثانية.",
         "هل تريد المتابعة؟",
       ].join("\n"),
     );
@@ -1502,7 +1511,7 @@ export default function PurchaseInvoicePage() {
       setMessage(
         result.alreadyCreated
           ? `تم تحميل الفاتورة ${result.purchase.publicId} دون تكرارها.`
-          : `تم اعتماد الفاتورة ${result.purchase.publicId} وتثبيت ذمة المورد وتكلفة المخزون دون زيادة الكمية مرة ثانية.`,
+          : `تم اعتماد الفاتورة ${result.purchase.publicId} وتثبيت ذمة المورد والتكلفة دون تغيير المخزون الفعلي مرة ثانية.`,
       );
     } catch (caught) {
       if (
@@ -1562,6 +1571,7 @@ export default function PurchaseInvoicePage() {
         size: item.size,
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
+        entryMode: item.entryMode,
         unitCost:
           item.unitCost === null
             ? ""
@@ -2237,6 +2247,7 @@ export default function PurchaseInvoicePage() {
                 <th>الباركود</th>
                 <th>رقم الصنف</th>
                 <th>اسم الصنف</th>
+                <th>نوع الشراء</th>
                 <th>الكمية</th>
                 <th>مجاني</th>
                 <th>تكلفة الوحدة</th>
@@ -2249,7 +2260,7 @@ export default function PurchaseInvoicePage() {
             <tbody>
               {lines.length === 0 ? (
                 <tr className="accounting-empty-row">
-                  <td colSpan={10}>
+                  <td colSpan={11}>
                     امسح باركود صنف أو استخدم البحث
                     لإضافته.
                   </td>
@@ -2278,6 +2289,15 @@ export default function PurchaseInvoicePage() {
                       <td className="accounting-product-cell">
                         <img src={line.product.image} alt="" />
                         <strong>{line.product.nameAr}</strong>
+                      </td>
+
+                      <td>
+                        <strong>
+                          {line.entryMode ===
+                          "historical"
+                            ? "شراء سابق"
+                            : "استلام جديد"}
+                        </strong>
                       </td>
 
                       <td>
