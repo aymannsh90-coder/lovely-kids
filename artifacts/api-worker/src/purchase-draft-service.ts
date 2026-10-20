@@ -24,6 +24,7 @@ export type AppendProductToSupplierDraftInput = {
   productId: number;
   quantity: number;
   unitCostMinor: number | null;
+  entryMode: "stock_receipt" | "historical";
   businessDate: string;
   warehouseKey: string;
   currencyCode: string;
@@ -82,6 +83,8 @@ export async function getPendingPurchaseQuantityForProduct(
         posPurchaseItemsTable.freeQuantity,
       warehouseKey:
         posPurchasesTable.warehouseKey,
+      entryMode:
+        posPurchaseItemsTable.entryMode,
     })
     .from(posPurchaseItemsTable)
     .innerJoin(
@@ -111,6 +114,13 @@ export async function getPendingPurchaseQuantityForProduct(
       input.warehouseKey &&
       row.warehouseKey !==
         input.warehouseKey
+    ) {
+      continue;
+    }
+
+    if (
+      row.entryMode !==
+        "stock_receipt"
     ) {
       continue;
     }
@@ -157,6 +167,15 @@ export async function appendProductToSupplierDraft(
   assertOptionalMoneyMinor(
     input.unitCostMinor,
   );
+
+  if (
+    input.entryMode !== "stock_receipt" &&
+    input.entryMode !== "historical"
+  ) {
+    throw new PurchaseDraftServiceError(
+      "نوع تسجيل الشراء غير صالح",
+    );
+  }
 
   const supplierRows = await tx
     .select()
@@ -309,7 +328,8 @@ export async function appendProductToSupplierDraft(
       (
         item: typeof posPurchaseItemsTable.$inferSelect,
       ) =>
-        item.productId === product.id,
+        item.productId === product.id &&
+        item.entryMode === input.entryMode,
     ) ?? null;
 
   if (existing) {
@@ -396,6 +416,8 @@ export async function appendProductToSupplierDraft(
         quantity:
           input.quantity,
         freeQuantity: 0,
+        entryMode:
+          input.entryMode,
         unitCostMinor:
           input.unitCostMinor,
         lineDiscountMinor: 0,
