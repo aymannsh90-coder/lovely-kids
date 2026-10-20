@@ -3765,7 +3765,7 @@ export default function AddProductScreen() {
                   ? "جاري تحميل الموردين…"
                   : selectedPurchaseSupplier
                     ? `${selectedPurchaseSupplier.code} — ${selectedPurchaseSupplier.name}`
-                    : "بدون مورد — بضاعة تاريخية / أول المدة"}
+                    : "بدون مورد — أول المدة / بدون فاتورة مورد"}
               </Text>
             </Pressable>
 
@@ -3891,7 +3891,7 @@ export default function AddProductScreen() {
                             "right",
                         }}
                       >
-                        بدون مورد — بضاعة تاريخية / أول المدة
+                        بدون مورد — أول المدة / بدون فاتورة مورد
                       </Text>
                     </Pressable>
 
