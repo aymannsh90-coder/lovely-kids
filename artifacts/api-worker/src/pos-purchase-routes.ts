@@ -32,6 +32,7 @@ import {
   addExactProductCostOrInitialize,
   allocateProportionalCostMinor,
   deriveUnitCostMinor,
+  initializeEmptyProductCostState,
   InventoryCostError,
 } from "./inventory-cost-engine";
 import {
@@ -2649,6 +2650,57 @@ async function handleCreatePurchase(
             ) {
               throw new PurchaseError(
                 error.message,
+                409,
+              );
+            }
+
+            throw error;
+          }
+        }
+
+        if (
+          allocation.item.entryMode ===
+            "historical" &&
+          stockQuantityApplied === 0
+        ) {
+          try {
+            await initializeEmptyProductCostState(
+              tx,
+              {
+                productId,
+                referenceUnitCostMinor:
+                  deriveUnitCostMinor(
+                    allocation.costTotalMinor,
+                    allocation.receivedQuantity,
+                  ),
+                costQuality:
+                  "confirmed",
+                eventType:
+                  "purchase",
+                sourceType:
+                  "pos_purchase",
+                sourceRef:
+                  String(
+                    purchase.id,
+                  ),
+                sourceItemRef:
+                  String(
+                    allocation.item.id,
+                  ),
+                businessDate,
+                note:
+                  `Historical purchase cost anchor ${purchase.publicId}`,
+                createdByUserId:
+                  auth.user.id,
+              },
+            );
+          } catch (error) {
+            if (
+              error instanceof
+              InventoryCostError
+            ) {
+              throw new PurchaseError(
+                "تعذر تثبيت مرجع تكلفة الشراء السابق للصنف المباع بالكامل",
                 409,
               );
             }
