@@ -38,6 +38,10 @@ import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
 import {
+  backfillHistoricalPurchaseCosts,
+  HistoricalPurchaseCostBackfillError,
+} from "./historical-purchase-cost-backfill";
+import {
   getProductQuantity,
 } from "./product-quantity";
 
@@ -2273,6 +2277,95 @@ async function handleCreatePurchase(
         );
       }
 
+      const historicalLineCounts =
+        new Map<number, number>();
+
+      const entryModesByProduct =
+        new Map<
+          number,
+          Set<
+            "stock_receipt" |
+            "historical"
+          >
+        >();
+
+      for (
+        const allocation
+        of costAllocations
+      ) {
+        const productId =
+          allocation.item.productId;
+
+        if (productId === null) {
+          continue;
+        }
+
+        const modes =
+          entryModesByProduct.get(
+            productId,
+          ) ??
+          new Set<
+            "stock_receipt" |
+            "historical"
+          >();
+
+        modes.add(
+          allocation.item.entryMode,
+        );
+
+        entryModesByProduct.set(
+          productId,
+          modes,
+        );
+
+        if (
+          allocation.item.entryMode ===
+          "historical"
+        ) {
+          historicalLineCounts.set(
+            productId,
+            (
+              historicalLineCounts.get(
+                productId,
+              ) ?? 0
+            ) + 1,
+          );
+        }
+      }
+
+      for (
+        const [
+          productId,
+          modes,
+        ]
+        of entryModesByProduct
+      ) {
+        const product =
+          lockedProductsById.get(
+            productId,
+          );
+
+        if (modes.size > 1) {
+          throw new PurchaseError(
+            `لا يمكن جمع استلام جديد وشراء سابق لنفس الصنف ${product?.nameAr ?? productId} في نفس الفاتورة. افصل الحركتين.`,
+            409,
+          );
+        }
+
+        if (
+          (
+            historicalLineCounts.get(
+              productId,
+            ) ?? 0
+          ) > 1
+        ) {
+          throw new PurchaseError(
+            `الصنف ${product?.nameAr ?? productId} مكرر بأكثر من سطر شراء سابق. اجمع الكمية في سطر واحد قبل الاعتماد.`,
+            409,
+          );
+        }
+      }
+
       const approvedProductIds = [
         ...new Set(
           costAllocations.map(
@@ -2487,6 +2580,58 @@ async function handleCreatePurchase(
           | "estimated"
           | "mixed" =
           "confirmed";
+
+        if (
+          allocation.item.entryMode ===
+          "historical"
+        ) {
+          const product =
+            lockedProductsById.get(
+              productId,
+            );
+
+          if (!product) {
+            throw new PurchaseError(
+              "تعذر تحديد المنتج لتسوية التكلفة التاريخية",
+              409,
+            );
+          }
+
+          try {
+            await backfillHistoricalPurchaseCosts(
+              tx,
+              {
+                productId,
+                productName:
+                  product.nameAr,
+                productCreatedAt:
+                  product.createdAt,
+                purchasePublicId:
+                  purchase.publicId,
+                receivedQuantity:
+                  allocation.receivedQuantity,
+                purchaseCostTotalMinor:
+                  allocation.costTotalMinor,
+                historicalSoldQuantity,
+                historicalSoldCostTotalMinor,
+                createdByUserId:
+                  auth.user.id,
+              },
+            );
+          } catch (error) {
+            if (
+              error instanceof
+              HistoricalPurchaseCostBackfillError
+            ) {
+              throw new PurchaseError(
+                error.message,
+                409,
+              );
+            }
+
+            throw error;
+          }
+        }
 
         if (
           stockQuantityApplied > 0
