@@ -21,6 +21,10 @@ import { handleVoidPosExchange } from "./pos-exchange-void";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import {
+  getCurrentProductImageMap,
+  resolveCurrentProductImage,
+} from "./current-product-image";
 import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -176,6 +180,12 @@ async function handleExchangePreview(
     .from(posSaleItemsTable)
     .where(eq(posSaleItemsTable.saleId, sale.id))
     .orderBy(asc(posSaleItemsTable.lineNumber));
+
+  const currentProductImages =
+    await getCurrentProductImageMap(
+      db,
+      saleItems.map((item) => item.productId),
+    );
 
   const completedReturns = await db
     .select({
@@ -364,7 +374,10 @@ async function handleExchangePreview(
       barcode: item.barcode,
       productCode: item.productCode,
       productNameAr: item.productNameAr,
-      productImage: item.productImage,
+      productImage: resolveCurrentProductImage(
+        currentProductImages,
+        item.productId,
+      ),
 
       color: item.color,
       size: item.size,
@@ -605,6 +618,12 @@ async function handleOnlineOrderExchangePreview(
     );
   }
 
+  const currentProductImages =
+    await getCurrentProductImageMap(
+      db,
+      storedItems.map((item) => Number(item.id)),
+    );
+
   const completedExchanges =
     await db
       .select({
@@ -764,10 +783,10 @@ async function handleOnlineOrderExchangePreview(
             `صنف ${lineNumber}`,
 
           productImage:
-            typeof item.image ===
-            "string"
-              ? item.image
-              : null,
+            resolveCurrentProductImage(
+              currentProductImages,
+              productId,
+            ),
 
           color:
             typeof item.color ===
