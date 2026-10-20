@@ -140,7 +140,11 @@ function parseInventoryPurchaseHandoff(
   }
 }
 
-type PaymentMethod = "cash" | "credit" | "mixed";
+type PaymentMethod =
+  | "cash"
+  | "credit"
+  | "mixed"
+  | "historical_settled";
 
 interface PurchaseLine {
   id: string;
@@ -344,7 +348,24 @@ export default function PurchaseInvoicePage() {
   );
 
   const paidMinor = safeMoneyToMinor(paid);
-  const dueMinor = Math.max(0, totalMinor - paidMinor);
+
+  const allLinesHistorical =
+    lines.length > 0 &&
+    lines.every(
+      (line) =>
+        line.entryMode ===
+        "historical",
+    );
+
+  const dueMinor =
+    paymentMethod ===
+      "historical_settled"
+      ? 0
+      : Math.max(
+          0,
+          totalMinor -
+            paidMinor,
+        );
 
   const selectedSupplier = suppliers.find(
     (supplier) => supplier.id === supplierId,
@@ -371,10 +392,28 @@ export default function PurchaseInvoicePage() {
       setPaid((totalMinor / 100).toFixed(2));
     }
 
-    if (paymentMethod === "credit") {
+    if (
+      paymentMethod === "credit" ||
+      paymentMethod ===
+        "historical_settled"
+    ) {
       setPaid("0.00");
     }
   }, [paymentMethod, totalMinor]);
+
+  useEffect(() => {
+    if (
+      paymentMethod ===
+        "historical_settled" &&
+      !allLinesHistorical
+    ) {
+      setPaymentMethod("credit");
+      setPaid("0.00");
+    }
+  }, [
+    allLinesHistorical,
+    paymentMethod,
+  ]);
 
   useEffect(() => {
     if (
@@ -1184,10 +1223,14 @@ export default function PurchaseInvoicePage() {
       }
 
       if (
-        paymentMethod !== "credit" ||
+        (
+          paymentMethod !== "credit" &&
+          paymentMethod !==
+            "historical_settled"
+        ) ||
         strictPaidMinor !== 0
       ) {
-        return "المسودة التي تحتوي تكلفة غير مدخلة تُحفظ آجل بدون دفعة حتى اكتمال التكلفة.";
+        return "المسودة التي تحتوي تكلفة غير مدخلة تُحفظ آجل أو مدفوع سابقًا بدون دفعة حتى اكتمال التكلفة.";
       }
 
       return null;
@@ -1224,6 +1267,19 @@ export default function PurchaseInvoicePage() {
         strictPaidMinor >= finalTotal)
     ) {
       return "الدفع المختلط يحتاج دفعة جزئية";
+    }
+
+    if (
+      paymentMethod ===
+        "historical_settled"
+    ) {
+      if (!allLinesHistorical) {
+        return "مدفوع سابقًا متاح فقط عندما تكون كل أصناف الفاتورة شراء سابق.";
+      }
+
+      if (strictPaidMinor !== 0) {
+        return "الشراء المدفوع سابقًا لا يسجل دفعة على صندوق اليوم.";
+      }
     }
 
     return null;
@@ -1513,7 +1569,10 @@ export default function PurchaseInvoicePage() {
       setMessage(
         result.alreadyCreated
           ? `تم تحميل الفاتورة ${result.purchase.publicId} دون تكرارها.`
-          : `تم اعتماد الفاتورة ${result.purchase.publicId} وتثبيت ذمة المورد والتكلفة دون تغيير المخزون الفعلي مرة ثانية.`,
+          : paymentMethod ===
+              "historical_settled"
+            ? `تم اعتماد الفاتورة ${result.purchase.publicId} كشراء سابق مدفوع: تم توثيق التكلفة بدون حركة صندوق وبدون إنشاء ذمة جديدة على المورد.`
+            : `تم اعتماد الفاتورة ${result.purchase.publicId} وتثبيت ذمة المورد والتكلفة دون تغيير المخزون الفعلي مرة ثانية.`,
       );
     } catch (caught) {
       if (
@@ -1542,7 +1601,9 @@ export default function PurchaseInvoicePage() {
     if (
       result.purchase.paymentMethod === "cash" ||
       result.purchase.paymentMethod === "credit" ||
-      result.purchase.paymentMethod === "mixed"
+      result.purchase.paymentMethod === "mixed" ||
+      result.purchase.paymentMethod ===
+        "historical_settled"
     ) {
       setPaymentMethod(result.purchase.paymentMethod);
     }
@@ -2099,8 +2160,14 @@ export default function PurchaseInvoicePage() {
                     )
                   }
                 >
+                  <option
+                    value="historical_settled"
+                    disabled={!allLinesHistorical}
+                  >
+                    مدفوع سابقًا — توثيق فقط
+                  </option>
                   <option value="credit">آجل</option>
-                  <option value="cash">نقدي</option>
+                  <option value="cash">نقدي الآن</option>
                   <option value="mixed">مختلط</option>
                 </select>
               </label>
@@ -2426,8 +2493,14 @@ export default function PurchaseInvoicePage() {
                     )
                   }
                 >
+                  <option
+                    value="historical_settled"
+                    disabled={!allLinesHistorical}
+                  >
+                    مدفوع سابقًا — توثيق فقط
+                  </option>
                   <option value="credit">آجل</option>
-                  <option value="cash">نقدي</option>
+                  <option value="cash">نقدي الآن</option>
                   <option value="mixed">مختلط</option>
                 </select>
               </label>
