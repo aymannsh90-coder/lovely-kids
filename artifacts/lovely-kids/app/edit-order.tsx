@@ -1,5 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import {
+  router,
+  useFocusEffect,
+  useLocalSearchParams,
+} from "expo-router";
 import React, {
   useCallback,
   useEffect,
@@ -140,6 +144,7 @@ export default function EditOrderScreen() {
   const {
     session: orderEditSelection,
     startSelection,
+    endStoreSelection,
     clearSelection,
   } = useOrderEditSelection();
 
@@ -151,6 +156,12 @@ export default function EditOrderScreen() {
   const id = Number(oneParam(params.id));
   const trackingToken =
     oneParam(params.token).trim();
+
+  useFocusEffect(
+    useCallback(() => {
+      endStoreSelection();
+    }, [endStoreSelection]),
+  );
 
   const [order, setOrder] =
     useState<Order | null>(null);
@@ -419,19 +430,7 @@ export default function EditOrderScreen() {
       })),
     });
 
-    router.push({
-      pathname: "/(tabs)/products",
-      params: {
-        orderEdit: "1",
-        orderId: String(order.id),
-        ...(trackingToken
-          ? {
-              orderToken:
-                trackingToken,
-            }
-          : {}),
-      },
-    });
+    router.push("/(tabs)");
   }, [
     items,
     order,
