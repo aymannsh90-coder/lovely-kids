@@ -445,9 +445,23 @@ function parseFinancials(
   if (
     paymentMethod !== "cash" &&
     paymentMethod !== "credit" &&
-    paymentMethod !== "mixed"
+    paymentMethod !== "mixed" &&
+    paymentMethod !== "historical_settled"
   ) {
     throw new PurchaseDraftError("طريقة الدفع غير صالحة");
+  }
+
+  if (
+    paymentMethod === "historical_settled" &&
+    items.some(
+      (item) =>
+        item.entryMode !==
+        "historical",
+    )
+  ) {
+    throw new PurchaseDraftError(
+      "خيار مدفوع سابقًا متاح فقط لفاتورة شراء سابق بالكامل",
+    );
   }
 
   let subtotalMinor = 0;
@@ -537,12 +551,16 @@ function parseFinancials(
   if (
     hasUnknownCost &&
     (
-      paymentMethod !== "credit" ||
+      (
+        paymentMethod !== "credit" &&
+        paymentMethod !==
+          "historical_settled"
+      ) ||
       paidMinor !== 0
     )
   ) {
     throw new PurchaseDraftError(
-      "المسودة التي تحتوي تكلفة غير مدخلة تحفظ آجل بدون دفعة حتى اكتمال التكلفة",
+      "المسودة التي تحتوي تكلفة غير مدخلة تحفظ آجل أو مدفوع سابقًا بدون دفعة حتى اكتمال التكلفة",
     );
   }
 
@@ -579,13 +597,28 @@ function parseFinancials(
     );
   }
 
+  if (
+    paymentMethod ===
+      "historical_settled" &&
+    paidMinor !== 0
+  ) {
+    throw new PurchaseDraftError(
+      "الشراء المدفوع سابقًا لا يسجل دفعة على صندوق اليوم",
+    );
+  }
+
   return {
     paymentMethod,
     subtotalMinor,
     discountMinor,
     totalMinor,
     paidMinor,
-    dueMinor: totalMinor - paidMinor,
+    dueMinor:
+      paymentMethod ===
+        "historical_settled"
+        ? 0
+        : totalMinor -
+          paidMinor,
   } as const;
 }
 
