@@ -587,9 +587,9 @@ export async function getHistoricalPurchasePreview(
             posPurchaseItemsTable.entryMode,
             "historical",
           ),
-          inArray(
+          eq(
             posPurchasesTable.status,
-            ["draft", "completed"],
+            "completed",
           ),
         ),
       ),
