@@ -45,6 +45,35 @@ type PurchaseSupplierOption = {
   name: string;
 };
 
+type HistoricalPurchaseBatchPreview = {
+  sourceKey: string;
+  quantity: number;
+  unitCostMinor: number | null;
+  totalCostMinor: number | null;
+  occurredAt: string | null;
+  documentationOnly: boolean;
+  sourceType:
+    | "opening"
+    | "repeat_purchase"
+    | "untracked";
+};
+
+type HistoricalPurchasePreview = {
+  physicalQuantity: number;
+  pendingStockReceiptQuantity: number;
+  soldQuantity: number;
+  returnedQuantity: number;
+  netSoldQuantity: number;
+  totalHistoricalQuantity: number;
+  currentCost: {
+    quantityOnHand: number;
+    inventoryValueMinor: number;
+    referenceUnitCostMinor: number | null;
+    costQuality: string;
+  } | null;
+  batches: HistoricalPurchaseBatchPreview[];
+};
+
 function localBusinessDate() {
   const now = new Date();
   const offset =
@@ -159,6 +188,28 @@ export default function AddProductScreen() {
   const [
     historicalPurchaseQuantityInput,
     setHistoricalPurchaseQuantityInput,
+  ] = useState("");
+
+  const [
+    historicalPurchasePreview,
+    setHistoricalPurchasePreview,
+  ] = useState<HistoricalPurchasePreview | null>(
+    null,
+  );
+
+  const [
+    historicalPurchasePreviewLoading,
+    setHistoricalPurchasePreviewLoading,
+  ] = useState(false);
+
+  const [
+    historicalPurchasePreviewError,
+    setHistoricalPurchasePreviewError,
+  ] = useState("");
+
+  const [
+    selectedHistoricalBatchKey,
+    setSelectedHistoricalBatchKey,
   ] = useState("");
 
   const [
@@ -410,6 +461,145 @@ export default function AddProductScreen() {
       active = false;
     };
   }, [getAuthToken, user?.isOwner]);
+
+  useEffect(() => {
+    if (
+      !user?.isOwner ||
+      !isEdit ||
+      !editProduct?.id ||
+      !purchaseSupplierId ||
+      purchaseEntryMode !== "historical"
+    ) {
+      setHistoricalPurchasePreview(
+        null,
+      );
+      setHistoricalPurchasePreviewError(
+        "",
+      );
+      setHistoricalPurchasePreviewLoading(
+        false,
+      );
+      setSelectedHistoricalBatchKey(
+        "",
+      );
+      return;
+    }
+
+    let active = true;
+
+    void (async () => {
+      setHistoricalPurchasePreviewLoading(
+        true,
+      );
+      setHistoricalPurchasePreviewError(
+        "",
+      );
+
+      try {
+        const token =
+          await getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            "تعذر التحقق من جلسة المالك",
+          );
+        }
+
+        const response =
+          await fetch(
+            `${API_BASE}/api/products/${editProduct.id}/purchase-history-preview`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            },
+          );
+
+        const data =
+          (await response
+            .json()
+            .catch(() => ({}))) as
+            | HistoricalPurchasePreview
+            | {
+                error?: string;
+              };
+
+        if (!response.ok) {
+          throw new Error(
+            "error" in data &&
+            data.error
+              ? data.error
+              : "تعذر حساب دفعات الشراء السابق",
+          );
+        }
+
+        const preview =
+          data as HistoricalPurchasePreview;
+
+        if (!active) {
+          return;
+        }
+
+        setHistoricalPurchasePreview(
+          preview,
+        );
+
+        setSelectedHistoricalBatchKey(
+          (current) => {
+            if (
+              preview.batches.some(
+                (batch) =>
+                  batch.sourceKey ===
+                  current,
+              )
+            ) {
+              return current;
+            }
+
+            return preview.batches
+              .length === 1
+              ? preview.batches[0]!
+                  .sourceKey
+              : "";
+          },
+        );
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setHistoricalPurchasePreview(
+          null,
+        );
+        setSelectedHistoricalBatchKey(
+          "",
+        );
+        setHistoricalPurchasePreviewError(
+          error instanceof Error
+            ? error.message
+            : "تعذر حساب دفعات الشراء السابق",
+        );
+      } finally {
+        if (active) {
+          setHistoricalPurchasePreviewLoading(
+            false,
+          );
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    editProduct?.id,
+    getAuthToken,
+    isEdit,
+    purchaseEntryMode,
+    purchaseSupplierId,
+    user?.isOwner,
+  ]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
