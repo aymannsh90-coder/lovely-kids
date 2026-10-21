@@ -16,12 +16,14 @@ import {
   getPosCustomers,
   getPosEmployees,
   getPosExpenseCategories,
+  getPosFinanceStatementReference,
   getPosSuppliers,
   type PosBankAccount,
   type PosCustomer,
   type PosDeliveryCompany,
   type PosEmployee,
   type PosExpenseCategory,
+  type PosFinanceStatementReference,
   type PosSupplier,
   type PosUnifiedVoucherAccountRef,
 } from "../../lib/api";
@@ -34,7 +36,8 @@ type RefKind =
   | "employee_payable"
   | "supplier"
   | "delivery_company"
-  | "expense";
+  | "expense"
+  | "finance_account";
 
 interface DraftRef {
   kind: RefKind;
@@ -108,6 +111,15 @@ export default function JournalVoucherPage() {
     >([]);
   const [bankAccounts, setBankAccounts] =
     useState<PosBankAccount[]>([]);
+  const [
+    journalAccounts,
+    setJournalAccounts,
+  ] =
+    useState<
+      PosFinanceStatementReference[
+        "journalAccounts"
+      ]
+    >([]);
 
   const [from, setFrom] =
     useState<DraftRef>({
@@ -145,6 +157,7 @@ export default function JournalVoucherPage() {
         deliveryResult,
         categoryResult,
         bankResult,
+        statementReference,
       ] =
         await Promise.all([
           getPosCustomers(
@@ -175,6 +188,9 @@ export default function JournalVoucherPage() {
             token,
           ),
           getPosBankAccounts(
+            token,
+          ),
+          getPosFinanceStatementReference(
             token,
           ),
         ]);
@@ -210,6 +226,10 @@ export default function JournalVoucherPage() {
             item.currencyCode ===
               "ILS",
         ),
+      );
+      setJournalAccounts(
+        statementReference
+          .journalAccounts,
       );
     } catch (caught) {
       if (
@@ -299,6 +319,15 @@ export default function JournalVoucherPage() {
                 item.name,
             }),
           ),
+        finance_account:
+          journalAccounts.map(
+            (item) => ({
+              id:
+                String(item.id),
+              label:
+                item.name,
+            }),
+          ),
       };
     }, [
       bankAccounts,
@@ -307,6 +336,7 @@ export default function JournalVoucherPage() {
       suppliers,
       deliveryCompanies,
       expenseCategories,
+      journalAccounts,
     ]);
 
   function toApiRef(
@@ -388,6 +418,18 @@ export default function JournalVoucherPage() {
         kind:
           "delivery_company",
         deliveryCompanyId:
+          id,
+      };
+    }
+
+    if (
+      draft.kind ===
+        "finance_account"
+    ) {
+      return {
+        kind:
+          "finance_account",
+        financeAccountId:
           id,
       };
     }
@@ -547,6 +589,9 @@ export default function JournalVoucherPage() {
           </option>
           <option value="expense">
             حساب مصروف
+          </option>
+          <option value="finance_account">
+            حساب محاسبي
           </option>
         </select>
 
