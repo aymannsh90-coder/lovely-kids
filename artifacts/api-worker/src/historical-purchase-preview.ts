@@ -295,6 +295,7 @@ async function getInventoryMovementSummary(
         : Number(row.sourcePublicId);
 
     if (
+      publicNumericId !== null &&
       Number.isSafeInteger(
         publicNumericId,
       ) &&
