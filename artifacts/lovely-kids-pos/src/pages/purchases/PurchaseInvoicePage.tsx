@@ -283,6 +283,13 @@ export default function PurchaseInvoicePage() {
 
   const [lines, setLines] = useState<PurchaseLine[]>([]);
 
+  const [
+    invoiceEntryMode,
+    setInvoiceEntryMode,
+  ] = useState<
+    "stock_receipt" | "historical"
+  >("stock_receipt");
+
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("credit");
   const [invoiceDiscount, setInvoiceDiscount] =
@@ -913,6 +920,45 @@ export default function PurchaseInvoicePage() {
     );
   }
 
+  function changeInvoiceEntryMode(
+    nextMode:
+      | "stock_receipt"
+      | "historical",
+  ) {
+    setInvoiceEntryMode(
+      nextMode,
+    );
+
+    setLines((current) =>
+      current.map(
+        (line) => ({
+          ...line,
+          entryMode:
+            nextMode,
+        }),
+      ),
+    );
+
+    if (
+      nextMode ===
+        "stock_receipt" &&
+      paymentMethod ===
+        "historical_settled"
+    ) {
+      setPaymentMethod(
+        "credit",
+      );
+      setPaid("0.00");
+    }
+
+    setMessage(
+      nextMode ===
+        "historical"
+        ? "نوع الفاتورة: شراء سابق — لن يتم تعديل المخزون الحالي."
+        : "نوع الفاتورة: استلام جديد — سيتم تثبيت التكلفة فقط دون زيادة المخزون مرة ثانية.",
+    );
+  }
+
   function changeColor(
     line: PurchaseLine,
     nextColor: string,
@@ -948,8 +994,7 @@ export default function PurchaseInvoicePage() {
 
     setLines((current) => {
       const entryMode =
-        current[0]?.entryMode ??
-        "stock_receipt";
+        invoiceEntryMode;
 
       const existing = current.find(
         (line) =>
@@ -1349,6 +1394,9 @@ export default function PurchaseInvoicePage() {
     setSupplierInvoiceNumber("");
     setNotes("");
     setLines([]);
+    setInvoiceEntryMode(
+      "stock_receipt",
+    );
     setPaymentMethod("credit");
     setInvoiceDiscount("0.00");
     setPaid("0.00");
@@ -1476,7 +1524,7 @@ export default function PurchaseInvoicePage() {
                   line.entryMode ===
                   "historical",
               )
-            ? "تحتوي الفاتورة على شراء سابق: لن تتغير كمية المخزون الحالية، وسيتم فصل تكلفة الكمية المباعة سابقًا عن قيمة المخزون المتبقي."
+            ? "تحتوي الفاتورة على شراء سابق: لن تتغير كمية المخزون الحالية. إذا لم تكتمل كل فواتير الصنف القديمة بعد، ستبقى التكلفة في تسوية معلقة آمنة حتى اكتمالها، ثم تُوزع على المخزون المتبقي والمبيعات القديمة."
             : "سيتم تسجيل الفاتورة محاسبيًا وتثبيت تكلفة البضاعة على الكمية التي أُدخلت مسبقًا، دون زيادة المخزون مرة ثانية.",
         "هل تريد المتابعة؟",
       ].join("\n"),
@@ -1578,7 +1626,7 @@ export default function PurchaseInvoicePage() {
           ? `تم تحميل الفاتورة ${result.purchase.publicId} دون تكرارها.`
           : paymentMethod ===
               "historical_settled"
-            ? `تم اعتماد الفاتورة ${result.purchase.publicId} كشراء سابق مدفوع: تم توثيق التكلفة بدون حركة صندوق وبدون إنشاء ذمة جديدة على المورد.`
+            ? `تم اعتماد الفاتورة ${result.purchase.publicId} كشراء سابق مدفوع: بدون حركة صندوق وبدون ذمة جديدة. إذا كان تجميع فواتير الصنف غير مكتمل ستبقى التكلفة معلقة حتى اكتماله.`
             : `تم اعتماد الفاتورة ${result.purchase.publicId} وتثبيت ذمة المورد والتكلفة دون تغيير المخزون الفعلي مرة ثانية.`,
       );
     } catch (caught) {
@@ -1633,6 +1681,14 @@ export default function PurchaseInvoicePage() {
       (storedInvoiceDiscountMinor / 100).toFixed(2),
     );
     setPaid(result.purchase.paid.toFixed(2));
+
+    setInvoiceEntryMode(
+      result.purchase.items[0]
+        ?.entryMode ===
+        "historical"
+        ? "historical"
+        : "stock_receipt",
+    );
 
     setLines(
       result.purchase.items.map((item) => ({
@@ -1890,6 +1946,9 @@ export default function PurchaseInvoicePage() {
     setNotes("");
     setQuery("");
     setLines([]);
+    setInvoiceEntryMode(
+      "stock_receipt",
+    );
     setPaymentMethod("credit");
     setInvoiceDiscount("0.00");
     setPaid("0.00");
@@ -2153,6 +2212,30 @@ export default function PurchaseInvoicePage() {
                 >
                   <option value="main">
                     المستودع الرئيسي
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>نوع الفاتورة</span>
+                <select
+                  value={
+                    invoiceEntryMode
+                  }
+                  onChange={(event) =>
+                    changeInvoiceEntryMode(
+                      event.target
+                        .value as
+                        | "stock_receipt"
+                        | "historical",
+                    )
+                  }
+                >
+                  <option value="stock_receipt">
+                    استلام جديد
+                  </option>
+                  <option value="historical">
+                    شراء سابق — بدون تعديل المخزون
                   </option>
                 </select>
               </label>
