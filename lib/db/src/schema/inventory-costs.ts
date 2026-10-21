@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   date,
   index,
@@ -321,6 +322,12 @@ export const posPurchaseItemCostsTable = pgTable(
       .notNull()
       .default(0),
 
+    historicalAllocationPending: boolean(
+      "historical_allocation_pending",
+    )
+      .notNull()
+      .default(false),
+
     invoiceDiscountAllocatedMinor: integer(
       "invoice_discount_allocated_minor",
     )
@@ -357,12 +364,23 @@ export const posPurchaseItemCostsTable = pgTable(
     check(
       "pos_purchase_item_costs_split_valid",
       sql`
-        ${table.stockQuantityApplied}
-          + ${table.historicalSoldQuantity}
-          = ${table.receivedQuantity}
-        and ${table.stockCostTotalMinor}
-          + ${table.historicalSoldCostTotalMinor}
-          = ${table.costTotalMinor}
+        (
+          ${table.historicalAllocationPending} = true
+          and ${table.stockQuantityApplied} = 0
+          and ${table.historicalSoldQuantity} = 0
+          and ${table.stockCostTotalMinor} = 0
+          and ${table.historicalSoldCostTotalMinor} = 0
+        )
+        or
+        (
+          ${table.historicalAllocationPending} = false
+          and ${table.stockQuantityApplied}
+            + ${table.historicalSoldQuantity}
+            = ${table.receivedQuantity}
+          and ${table.stockCostTotalMinor}
+            + ${table.historicalSoldCostTotalMinor}
+            = ${table.costTotalMinor}
+        )
       `,
     ),
 
