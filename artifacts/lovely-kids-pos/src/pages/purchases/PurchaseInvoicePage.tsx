@@ -12,7 +12,6 @@ import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
   ApiError,
   createPosPurchase,
-  discardOpenPosPurchaseDraft,
   getCurrentCashSession,
   getLatestPosPurchase,
   getOpenPosPurchaseDraft,
@@ -34,6 +33,10 @@ const PURCHASE_API_ENABLED =
 const PURCHASE_WRITES_ENABLED =
   PURCHASE_API_ENABLED &&
   import.meta.env.VITE_PURCHASE_WRITES === "true";
+
+// Purchase quantities and line identity are sourced only from the product page.
+// This screen may review cost/payment data, but it must not create inventory lines.
+const DIRECT_PURCHASE_LINE_EDITING_ENABLED = false;
 
 const INVENTORY_PURCHASE_HANDOFF_KEY =
   "lovely_kids_inventory_purchase_handoff_v1";
@@ -437,6 +440,28 @@ export default function PurchaseInvoicePage() {
     const fromInventoryUrl =
       url.searchParams.get("source") ===
       "inventory-intelligence";
+
+    if (
+      fromInventoryUrl &&
+      !DIRECT_PURCHASE_LINE_EDITING_ENABLED
+    ) {
+      inventoryPrefillHandled.current =
+        true;
+
+      try {
+        window.sessionStorage.removeItem(
+          INVENTORY_PURCHASE_HANDOFF_KEY,
+        );
+      } catch {
+        // Ignore storage cleanup failures.
+      }
+
+      setMessage(
+        "تم إيقاف الإضافة المباشرة من مركز المخزون. أدخل أو عدّل كمية المنتج واختر المورد من صفحة المنتج، وستصل الكمية تلقائيًا إلى فاتورة المورد المفتوحة.",
+      );
+
+      return;
+    }
 
     if (!fromInventoryUrl) {
       try {
@@ -1356,6 +1381,10 @@ export default function PurchaseInvoicePage() {
         setMessage(
           `تم استرجاع فاتورة المشتريات المفتوحة ${result.purchase.publicId}.`,
         );
+      } else {
+        setMessage(
+          "لا توجد فاتورة مشتريات مفتوحة لهذا المورد. أضف أو عدّل المنتج واختر المورد من صفحة المنتج أولًا.",
+        );
       }
     } catch (caught) {
       if (
@@ -1909,37 +1938,7 @@ export default function PurchaseInvoicePage() {
   }
 
   async function resetInvoice() {
-    if (
-      savedPurchase?.purchase.status === "draft"
-    ) {
-      const confirmed = window.confirm(
-        "سيتم إلغاء المسودة المفتوحة وبدء فاتورة جديدة. هل تريد المتابعة؟",
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        await discardOpenPosPurchaseDraft(
-          token,
-          savedPurchase.purchase.supplierId,
-          warehouseKey,
-        );
-      } catch (caught) {
-        if (
-          caught instanceof ApiError &&
-          caught.status === 401
-        ) {
-          clearAuthentication();
-          return;
-        }
-
-        setError(errorMessage(caught));
-        return;
-      }
-    }
-
+    setSupplierId("");
     setSupplierInvoiceNumber("");
     setBusinessDate(localBusinessDate());
     setWarehouseKey("main");
@@ -1954,7 +1953,9 @@ export default function PurchaseInvoicePage() {
     setPaid("0.00");
     setSavedPurchase(null);
     setError("");
-    setMessage("");
+    setMessage(
+      "اختر المورد لفتح فاتورته المجمعة من صفحة المنتجات. لم يتم حذف أي مسودة.",
+    );
     clearSearchResults();
     requestKey.current = null;
   }
@@ -1966,8 +1967,8 @@ export default function PurchaseInvoicePage() {
           <span>المشتريات والموردون</span>
           <h1>فاتورة مشتريات</h1>
           <p>
-            مراجعة فاتورة المورد واعتماد الذمة وتكلفة
-            المخزون دون زيادة الكمية مرة ثانية.
+            الأصناف والكميات تأتي من صفحة المنتج فقط.
+            هنا تراجع التكلفة والدفع ثم تعتمد الفاتورة دون تعديل المخزون.
           </p>
         </div>
 
@@ -2062,8 +2063,7 @@ export default function PurchaseInvoicePage() {
           disabled={
             invoiceBusy ||
             !PURCHASE_WRITES_ENABLED ||
-            (savedPurchase !== null &&
-              savedPurchase.purchase.status !== "draft")
+            savedPurchase?.purchase.status !== "draft"
           }
           onClick={() => void handleSaveDraft()}
         >
@@ -2076,8 +2076,7 @@ export default function PurchaseInvoicePage() {
           disabled={
             invoiceBusy ||
             !PURCHASE_WRITES_ENABLED ||
-            (savedPurchase !== null &&
-              savedPurchase.purchase.status !== "draft")
+            savedPurchase?.purchase.status !== "draft"
           }
           onClick={() => void handleSaveInvoice()}
         >
@@ -2089,8 +2088,7 @@ export default function PurchaseInvoicePage() {
           disabled={
             invoiceBusy ||
             !PURCHASE_WRITES_ENABLED ||
-            (savedPurchase !== null &&
-              savedPurchase.purchase.status !== "draft")
+            savedPurchase?.purchase.status !== "draft"
           }
           onClick={() => void handleSaveInvoice(true)}
         >
@@ -2217,11 +2215,13 @@ export default function PurchaseInvoicePage() {
               </label>
 
               <label>
-                <span>نوع الفاتورة</span>
+                <span>نوع التسجيل — من المنتج</span>
                 <select
                   value={
                     invoiceEntryMode
                   }
+                  disabled
+                  title="نوع الشراء يأتي من صفحة المنتج ولا يُعدّل من الفاتورة"
                   onChange={(event) =>
                     changeInvoiceEntryMode(
                       event.target
@@ -2325,7 +2325,10 @@ export default function PurchaseInvoicePage() {
           </div>
         </section>
 
-        <section className="accounting-item-entry">
+        <section
+          className="accounting-item-entry"
+          hidden={!DIRECT_PURCHASE_LINE_EDITING_ENABLED}
+        >
           <form
             className="accounting-item-form"
             onSubmit={handleProductSearch}
@@ -2414,6 +2417,11 @@ export default function PurchaseInvoicePage() {
           )}
         </section>
 
+        <div className="alert supplier-protection-alert">
+          الأصناف والكميات ونوع الشراء مقفلة لأنها تأتي من صفحة المنتج.
+          لتصحيح كمية أو إضافة صنف، عدّل المنتج واختر المورد هناك ثم أعد تحميل المسودة.
+        </div>
+
         <div className="accounting-invoice-table-wrap">
           <table className="accounting-invoice-table purchase-invoice-table">
             <thead>
@@ -2428,7 +2436,7 @@ export default function PurchaseInvoicePage() {
                 <th>تكلفة الوحدة</th>
                 <th>الخصم</th>
                 <th>المجموع</th>
-                <th>حذف</th>
+                <th>المصدر</th>
               </tr>
             </thead>
 
@@ -2436,8 +2444,8 @@ export default function PurchaseInvoicePage() {
               {lines.length === 0 ? (
                 <tr className="accounting-empty-row">
                   <td colSpan={11}>
-                    امسح باركود صنف أو استخدم البحث
-                    لإضافته.
+                    لا توجد أصناف في مسودة المورد.
+                    أضف أو عدّل المنتجات واختر المورد من صفحة المنتج.
                   </td>
                 </tr>
               ) : (
@@ -2481,6 +2489,8 @@ export default function PurchaseInvoicePage() {
                           min="1"
                           max="99999"
                           value={line.quantity}
+                          disabled
+                          title="الكمية تأتي من صفحة المنتج"
                           onChange={(event) =>
                             updateLine(line.id, {
                               quantity: Math.max(
@@ -2499,6 +2509,8 @@ export default function PurchaseInvoicePage() {
                           min="0"
                           max="99999"
                           value={line.freeQuantity}
+                          disabled
+                          title="الكمية تأتي من صفحة المنتج"
                           onChange={(event) =>
                             updateLine(line.id, {
                               freeQuantity: Math.max(
@@ -2545,20 +2557,11 @@ export default function PurchaseInvoicePage() {
                       </td>
 
                       <td>
-                        <button
-                          className="accounting-remove-line"
-                          type="button"
-                          onClick={() =>
-                            setLines((current) =>
-                              current.filter(
-                                (item) =>
-                                  item.id !== line.id,
-                              ),
-                            )
-                          }
+                        <span
+                          title="الصنف والكمية مرتبطان بصفحة المنتج"
                         >
-                          ×
-                        </button>
+                          🔒 من المنتج
+                        </span>
                       </td>
                     </tr>
                   );
