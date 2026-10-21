@@ -6,7 +6,6 @@ import {
   suppliersTable,
 } from "@workspace/db/schema";
 import { and, asc, eq } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
