@@ -1,7 +1,15 @@
 import {
+  exchangeDocumentsTable,
+  exchangeReturnItemsTable,
+  exchangeSaleItemsTable,
   inventoryMovementsTable,
+  ordersTable,
   posPurchaseItemsTable,
   posPurchasesTable,
+  posSaleItemsTable,
+  posSaleReturnItemsTable,
+  posSaleReturnsTable,
+  posSalesTable,
   productCostLedgerTable,
   productCostStateTable,
   productsTable,
@@ -21,6 +29,32 @@ import {
 } from "./product-quantity";
 
 export class HistoricalPurchasePreviewError extends Error {}
+
+function parseProductId(value: unknown): number | null {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isSafeInteger(numeric) && numeric > 0
+    ? numeric
+    : null;
+}
+
+function parseQuantity(value: unknown): number | null {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isSafeInteger(numeric) && numeric > 0
+    ? numeric
+    : null;
+}
 
 function deriveUnitCostMinor(
   totalMinor: number,
@@ -58,13 +92,24 @@ async function getInventoryMovementSummary(
   tx: any,
   productId: number,
 ) {
-  const rows =
-    await tx
+  const [
+    movementRows,
+    posSales,
+    posReturns,
+    exchangeSales,
+    exchangeReturns,
+    orders,
+  ] = await Promise.all([
+    tx
       .select({
         movementType:
           inventoryMovementsTable.movementType,
         sourceType:
           inventoryMovementsTable.sourceType,
+        sourceId:
+          inventoryMovementsTable.sourceId,
+        sourcePublicId:
+          inventoryMovementsTable.sourcePublicId,
         quantityDelta:
           inventoryMovementsTable.quantityDelta,
       })
@@ -74,14 +119,152 @@ async function getInventoryMovementSummary(
           inventoryMovementsTable.productId,
           productId,
         ),
-      );
+      ),
+
+    tx
+      .select({
+        sourceId:
+          posSalesTable.id,
+        quantity:
+          posSaleItemsTable.quantity,
+      })
+      .from(posSaleItemsTable)
+      .innerJoin(
+        posSalesTable,
+        eq(
+          posSalesTable.id,
+          posSaleItemsTable.saleId,
+        ),
+      )
+      .where(
+        and(
+          eq(
+            posSaleItemsTable.productId,
+            productId,
+          ),
+          eq(
+            posSalesTable.status,
+            "completed",
+          ),
+        ),
+      ),
+
+    tx
+      .select({
+        sourceId:
+          posSaleReturnsTable.id,
+        quantity:
+          posSaleReturnItemsTable.quantity,
+      })
+      .from(posSaleReturnItemsTable)
+      .innerJoin(
+        posSaleReturnsTable,
+        eq(
+          posSaleReturnsTable.id,
+          posSaleReturnItemsTable.returnId,
+        ),
+      )
+      .where(
+        and(
+          eq(
+            posSaleReturnItemsTable.productId,
+            productId,
+          ),
+          eq(
+            posSaleReturnsTable.status,
+            "completed",
+          ),
+        ),
+      ),
+
+    tx
+      .select({
+        sourceId:
+          exchangeDocumentsTable.id,
+        quantity:
+          exchangeSaleItemsTable.quantity,
+      })
+      .from(exchangeSaleItemsTable)
+      .innerJoin(
+        exchangeDocumentsTable,
+        eq(
+          exchangeDocumentsTable.id,
+          exchangeSaleItemsTable.exchangeId,
+        ),
+      )
+      .where(
+        and(
+          eq(
+            exchangeSaleItemsTable.productId,
+            productId,
+          ),
+          eq(
+            exchangeDocumentsTable.status,
+            "completed",
+          ),
+          inArray(
+            exchangeDocumentsTable.sourceType,
+            ["pos_sale", "pos_no_receipt"],
+          ),
+        ),
+      ),
+
+    tx
+      .select({
+        sourceId:
+          exchangeDocumentsTable.id,
+        quantity:
+          exchangeReturnItemsTable.quantity,
+      })
+      .from(exchangeReturnItemsTable)
+      .innerJoin(
+        exchangeDocumentsTable,
+        eq(
+          exchangeDocumentsTable.id,
+          exchangeReturnItemsTable.exchangeId,
+        ),
+      )
+      .where(
+        and(
+          eq(
+            exchangeReturnItemsTable.productId,
+            productId,
+          ),
+          eq(
+            exchangeDocumentsTable.status,
+            "completed",
+          ),
+          inArray(
+            exchangeDocumentsTable.sourceType,
+            ["pos_sale", "pos_no_receipt"],
+          ),
+        ),
+      ),
+
+    tx
+      .select({
+        id:
+          ordersTable.id,
+        items:
+          ordersTable.items,
+      })
+      .from(ordersTable)
+      .where(
+        eq(
+          ordersTable.status,
+          "done",
+        ),
+      ),
+  ]);
 
   let outboundQuantity = 0;
   let inboundQuantity = 0;
-  let customerNetDelta = 0;
   let manualAdjustmentOutQuantity = 0;
 
-  for (const row of rows) {
+  const coveredSources =
+    new Set<string>();
+
+  for (const row of movementRows) {
     if (
       row.movementType === "adjustment" &&
       row.sourceType === "manual" &&
@@ -100,8 +283,27 @@ async function getInventoryMovementSummary(
       continue;
     }
 
-    customerNetDelta +=
-      row.quantityDelta;
+    if (row.sourceId !== null) {
+      coveredSources.add(
+        `${row.sourceType}:${row.sourceId}`,
+      );
+    }
+
+    const publicNumericId =
+      row.sourcePublicId === null
+        ? null
+        : Number(row.sourcePublicId);
+
+    if (
+      Number.isSafeInteger(
+        publicNumericId,
+      ) &&
+      publicNumericId > 0
+    ) {
+      coveredSources.add(
+        `${row.sourceType}:${publicNumericId}`,
+      );
+    }
 
     if (row.quantityDelta < 0) {
       outboundQuantity +=
@@ -112,8 +314,132 @@ async function getInventoryMovementSummary(
     }
   }
 
+  // Stock-card coverage predates some older transactions. Reconcile only
+  // completed legacy transactions that have no inventory movement source.
+  for (const row of posSales) {
+    if (
+      !coveredSources.has(
+        `pos_sale:${row.sourceId}`,
+      )
+    ) {
+      outboundQuantity +=
+        row.quantity;
+    }
+  }
+
+  for (const row of posReturns) {
+    if (
+      !coveredSources.has(
+        `pos_sale_return:${row.sourceId}`,
+      )
+    ) {
+      inboundQuantity +=
+        row.quantity;
+    }
+  }
+
+  const exchangeIds =
+    new Set([
+      ...exchangeSales.map(
+        (row: { sourceId: number }) =>
+          row.sourceId,
+      ),
+      ...exchangeReturns.map(
+        (row: { sourceId: number }) =>
+          row.sourceId,
+      ),
+    ]);
+
+  for (const sourceId of exchangeIds) {
+    if (
+      coveredSources.has(
+        `exchange:${sourceId}`,
+      )
+    ) {
+      continue;
+    }
+
+    outboundQuantity +=
+      exchangeSales
+        .filter(
+          (row: { sourceId: number }) =>
+            row.sourceId ===
+            sourceId,
+        )
+        .reduce(
+          (
+            sum: number,
+            row: { quantity: number },
+          ) =>
+            sum +
+            row.quantity,
+          0,
+        );
+
+    inboundQuantity +=
+      exchangeReturns
+        .filter(
+          (row: { sourceId: number }) =>
+            row.sourceId ===
+            sourceId,
+        )
+        .reduce(
+          (
+            sum: number,
+            row: { quantity: number },
+          ) =>
+            sum +
+            row.quantity,
+          0,
+        );
+  }
+
+  for (const order of orders) {
+    if (
+      coveredSources.has(
+        `online_order:${order.id}`,
+      ) ||
+      !Array.isArray(order.items)
+    ) {
+      continue;
+    }
+
+    for (const rawItem of order.items) {
+      if (
+        !rawItem ||
+        typeof rawItem !== "object" ||
+        Array.isArray(rawItem)
+      ) {
+        continue;
+      }
+
+      const item =
+        rawItem as Record<string, unknown>;
+
+      if (
+        parseProductId(item.id) !==
+        productId
+      ) {
+        continue;
+      }
+
+      const quantity =
+        parseQuantity(item.quantity);
+
+      if (quantity === null) {
+        throw new HistoricalPurchasePreviewError(
+          "تعذر قراءة كمية إحدى المبيعات القديمة",
+        );
+      }
+
+      outboundQuantity +=
+        quantity;
+    }
+  }
+
   const netSoldQuantity =
-    -customerNetDelta;
+    outboundQuantity -
+    inboundQuantity;
 
   if (
     !Number.isSafeInteger(
