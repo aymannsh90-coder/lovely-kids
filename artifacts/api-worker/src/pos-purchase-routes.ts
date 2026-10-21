@@ -2735,7 +2735,12 @@ async function handleCreatePurchase(
           );
         }
 
-        let movementSummary;
+        let movementSummary:
+          Awaited<
+            ReturnType<
+              typeof inspectHistoricalPurchaseMovements
+            >
+          >;
 
         try {
           movementSummary =
