@@ -207,7 +207,7 @@ function adjustPositiveCosts(
 
     if (remaining !== 0) {
       throw new HistoricalPurchaseCostBackfillError(
-        "تعذر مطابقة تكلفة المبيعات التاريخية مع فاتورة الشراء",
+        "تعذر مطابقة تكلفة المبيعات التاريخية مع فواتير الشراء السابقة",
       );
     }
   }
@@ -231,18 +231,11 @@ function adjustPositiveCosts(
   return totals;
 }
 
-export async function backfillHistoricalPurchaseCosts(
+async function loadHistoricalMovements(
   tx: any,
   input: {
     productId: number;
     productName: string;
-    productCreatedAt: Date;
-    purchasePublicId: string;
-    receivedQuantity: number;
-    purchaseCostTotalMinor: number;
-    historicalSoldQuantity: number;
-    historicalSoldCostTotalMinor: number;
-    createdByUserId: number;
   },
 ) {
   const [
@@ -380,7 +373,7 @@ export async function backfillHistoricalPurchaseCosts(
     existingOnlineCostRows[0]
   ) {
     throw new HistoricalPurchaseCostBackfillError(
-      `الصنف ${input.productName} لديه تكلفة أو تاريخ تكلفة مسجل مسبقًا. لا يمكن إدخاله كشراء سابق تلقائيًا حتى لا تتكرر التكلفة.`,
+      `الصنف ${input.productName} لديه تكلفة أو تاريخ تكلفة مسجل مسبقًا. لا يمكن فتح تجميع شراء سابق جديد تلقائيًا حتى لا تتكرر التكلفة.`,
     );
   }
 
@@ -754,23 +747,135 @@ export async function backfillHistoricalPurchaseCosts(
     );
   }
 
+  return {
+    positiveMovements,
+    returnMovements,
+    positiveQuantity,
+    returnQuantity,
+    netHistoricalSoldQuantity,
+    posSaleRows:
+      posSales.length,
+    posReturnRows:
+      posReturns.length,
+    exchangeSaleRows:
+      exchangeSales.length,
+    exchangeReturnRows:
+      exchangeReturns.length,
+    onlineOrderRows:
+      positiveMovements.filter(
+        (movement) =>
+          movement.kind ===
+          "online_order",
+      ).length,
+  };
+}
+
+export async function inspectHistoricalPurchaseMovements(
+  tx: any,
+  input: {
+    productId: number;
+    productName: string;
+  },
+) {
+  const movements =
+    await loadHistoricalMovements(
+      tx,
+      input,
+    );
+
+  return {
+    positiveQuantity:
+      movements.positiveQuantity,
+    returnQuantity:
+      movements.returnQuantity,
+    netHistoricalSoldQuantity:
+      movements.netHistoricalSoldQuantity,
+    posSaleRows:
+      movements.posSaleRows,
+    posReturnRows:
+      movements.posReturnRows,
+    exchangeSaleRows:
+      movements.exchangeSaleRows,
+    exchangeReturnRows:
+      movements.exchangeReturnRows,
+    onlineOrderRows:
+      movements.onlineOrderRows,
+  };
+}
+
+export async function backfillHistoricalPurchaseCosts(
+  tx: any,
+  input: {
+    productId: number;
+    productName: string;
+    productCreatedAt: Date;
+    purchasePublicId: string;
+    historicalPurchaseQuantity: number;
+    historicalPurchaseCostTotalMinor: number;
+    historicalSoldQuantity: number;
+    historicalSoldCostTotalMinor: number;
+    createdByUserId: number;
+  },
+) {
   if (
-    netHistoricalSoldQuantity !==
+    !Number.isSafeInteger(
+      input.historicalPurchaseQuantity,
+    ) ||
+    input.historicalPurchaseQuantity <=
+      0 ||
+    !Number.isSafeInteger(
+      input.historicalPurchaseCostTotalMinor,
+    ) ||
+    input.historicalPurchaseCostTotalMinor <
+      0 ||
+    !Number.isSafeInteger(
+      input.historicalSoldQuantity,
+    ) ||
+    input.historicalSoldQuantity <
+      0 ||
+    input.historicalSoldQuantity >
+      input.historicalPurchaseQuantity ||
+    !Number.isSafeInteger(
+      input.historicalSoldCostTotalMinor,
+    ) ||
+    input.historicalSoldCostTotalMinor <
+      0 ||
+    input.historicalSoldCostTotalMinor >
+      input.historicalPurchaseCostTotalMinor
+  ) {
+    throw new HistoricalPurchaseCostBackfillError(
+      "بيانات تجميع تكلفة الشراء السابق غير صالحة",
+    );
+  }
+
+  const movements =
+    await loadHistoricalMovements(
+      tx,
+      {
+        productId:
+          input.productId,
+        productName:
+          input.productName,
+      },
+    );
+
+  if (
+    movements.netHistoricalSoldQuantity !==
     input.historicalSoldQuantity
   ) {
     throw new HistoricalPurchaseCostBackfillError(
-      `كمية الشراء السابق للصنف ${input.productName} لا تطابق الحركات القديمة غير المسعرة. المطلوب للمبيعات القديمة: ${netHistoricalSoldQuantity}، بينما الفاتورة تحاول تسوية ${input.historicalSoldQuantity}. لم يتم اعتماد الفاتورة حتى لا تُحسب التكلفة بشكل خاطئ.`,
+      `كمية الشراء السابق للصنف ${input.productName} لا تطابق الحركات القديمة غير المسعرة. المطلوب للمبيعات القديمة: ${movements.netHistoricalSoldQuantity}، بينما تجميع الفواتير يحاول تسوية ${input.historicalSoldQuantity}. لم يتم اعتماد التسوية حتى لا تُحسب التكلفة بشكل خاطئ.`,
     );
   }
 
   const unitCostMinor =
     deriveUnitCostMinor(
-      input.purchaseCostTotalMinor,
-      input.receivedQuantity,
+      input.historicalPurchaseCostTotalMinor,
+      input.historicalPurchaseQuantity,
     );
 
   const returnCosts =
-    returnMovements.map(
+    movements.returnMovements.map(
       (movement) =>
         safeMultiply(
           unitCostMinor,
@@ -799,7 +904,7 @@ export async function backfillHistoricalPurchaseCosts(
 
   const positiveCosts =
     adjustPositiveCosts(
-      positiveMovements.map(
+      movements.positiveMovements.map(
         (movement) =>
           safeMultiply(
             unitCostMinor,
@@ -813,11 +918,11 @@ export async function backfillHistoricalPurchaseCosts(
   for (
     let index = 0;
     index <
-    positiveMovements.length;
+      movements.positiveMovements.length;
     index += 1
   ) {
     const movement =
-      positiveMovements[index]!;
+      movements.positiveMovements[index]!;
 
     const costTotalMinor =
       positiveCosts[index]!;
@@ -909,11 +1014,11 @@ export async function backfillHistoricalPurchaseCosts(
   for (
     let index = 0;
     index <
-    returnMovements.length;
+      movements.returnMovements.length;
     index += 1
   ) {
     const movement =
-      returnMovements[index]!;
+      movements.returnMovements[index]!;
 
     const costTotalMinor =
       returnCosts[index]!;
@@ -991,29 +1096,28 @@ export async function backfillHistoricalPurchaseCosts(
       costQuality:
         "confirmed",
       note:
-        `Historical supplier purchase ${input.purchasePublicId}`,
+        `Historical supplier purchase batches finalized by ${input.purchasePublicId}`,
       createdByUserId:
         input.createdByUserId,
     });
 
   return {
     unitCostMinor,
-    positiveQuantity,
-    returnQuantity,
-    netHistoricalSoldQuantity,
+    positiveQuantity:
+      movements.positiveQuantity,
+    returnQuantity:
+      movements.returnQuantity,
+    netHistoricalSoldQuantity:
+      movements.netHistoricalSoldQuantity,
     posSaleRows:
-      posSales.length,
+      movements.posSaleRows,
     posReturnRows:
-      posReturns.length,
+      movements.posReturnRows,
     exchangeSaleRows:
-      exchangeSales.length,
+      movements.exchangeSaleRows,
     exchangeReturnRows:
-      exchangeReturns.length,
+      movements.exchangeReturnRows,
     onlineOrderRows:
-      positiveMovements.filter(
-        (movement) =>
-          movement.kind ===
-          "online_order",
-      ).length,
+      movements.onlineOrderRows,
   };
 }
