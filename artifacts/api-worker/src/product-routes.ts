@@ -25,6 +25,10 @@ import {
   isPurchaseWriteEnabled,
   purchaseWritesDisabledResponse,
 } from "./purchase-feature";
+import {
+  getHistoricalPurchasePreview,
+  HistoricalPurchasePreviewError,
+} from "./historical-purchase-preview";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -2298,6 +2302,69 @@ export async function handleProductRequest(
         size: row.size ?? null,
       })),
     );
+  }
+
+  const purchaseHistoryPreviewMatch =
+    path.match(
+      /^\/api\/products\/(\d+)\/purchase-history-preview$/,
+    );
+
+  if (
+    request.method === "GET" &&
+    purchaseHistoryPreviewMatch
+  ) {
+    const auth =
+      await requireAdminActor(
+        request,
+        db,
+        env,
+      );
+
+    if (!auth.ok) {
+      return auth.response;
+    }
+
+    if (!auth.user.isOwner) {
+      return json(
+        {
+          error:
+            "بيانات تكلفة المشتريات متاحة للمالك فقط",
+        },
+        403,
+      );
+    }
+
+    try {
+      const preview =
+        await getHistoricalPurchasePreview(
+          db,
+          {
+            productId:
+              Number(
+                purchaseHistoryPreviewMatch[1],
+              ),
+            warehouseKey:
+              "main",
+          },
+        );
+
+      return json(preview);
+    } catch (error) {
+      if (
+        error instanceof
+        HistoricalPurchasePreviewError
+      ) {
+        return json(
+          {
+            error:
+              error.message,
+          },
+          409,
+        );
+      }
+
+      throw error;
+    }
   }
 
   if (
