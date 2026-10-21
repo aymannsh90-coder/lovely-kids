@@ -27,6 +27,7 @@ export type PurchaseDraftLinkInput = {
   businessDate: string;
   entryMode: "stock_receipt" | "historical";
   quantity?: number;
+  historicalSourceKey?: string;
 };
 
 function purchaseDraftLinkBody(
@@ -47,6 +48,12 @@ function purchaseDraftLinkBody(
       ? {
           purchaseQuantity:
             input.quantity,
+        }
+      : {}),
+    ...(input.historicalSourceKey
+      ? {
+          purchaseHistoricalSourceKey:
+            input.historicalSourceKey,
         }
       : {}),
   };
