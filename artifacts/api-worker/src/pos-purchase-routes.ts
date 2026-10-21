@@ -3115,6 +3115,8 @@ async function handleCreatePurchase(
       let inventoryPurchaseValueMinor = 0;
       let historicalSoldValueMinor = 0;
       let historicalPendingValueMinor = 0;
+      let documentationOnlyHistoricalValueMinor =
+        0;
 
       const historicalFinalizations:
         HistoricalFinalization[] = [];
@@ -3137,6 +3139,32 @@ async function handleCreatePurchase(
           allocation.item.entryMode ===
           "historical"
         ) {
+          if (
+            allocation.item
+              .historicalDocumentationOnly
+          ) {
+            documentationOnlyHistoricalValueMinor +=
+              allocation.costTotalMinor;
+
+            if (
+              !Number.isSafeInteger(
+                documentationOnlyHistoricalValueMinor,
+              ) ||
+              documentationOnlyHistoricalValueMinor >
+                MAX_MINOR
+            ) {
+              throw new PurchaseError(
+                "قيمة المشتريات السابقة الموثقة تتجاوز الحد المسموح",
+                409,
+              );
+            }
+
+            // The cost engine already contains this historical batch.
+            // Keep the supplier invoice for documentation, but do not
+            // re-apply inventory cost, COGS, or historical backfill.
+            continue;
+          }
+
           const plan =
             historicalPlansByProduct.get(
               productId,
@@ -3626,11 +3654,28 @@ async function handleCreatePurchase(
       if (
         inventoryPurchaseValueMinor +
           historicalSoldValueMinor +
-          historicalPendingValueMinor !==
+          historicalPendingValueMinor +
+          documentationOnlyHistoricalValueMinor !==
         totalMinor
       ) {
         throw new PurchaseError(
           "توزيع تكلفة فاتورة المشتريات لا يطابق إجمالي الفاتورة",
+          409,
+        );
+      }
+
+      const accountingAppliedTotalMinor =
+        totalMinor -
+        documentationOnlyHistoricalValueMinor;
+
+      if (
+        !Number.isSafeInteger(
+          accountingAppliedTotalMinor,
+        ) ||
+        accountingAppliedTotalMinor < 0
+      ) {
+        throw new PurchaseError(
+          "قيمة فاتورة المشتريات المحاسبية غير صالحة",
           409,
         );
       }
@@ -3772,7 +3817,8 @@ async function handleCreatePurchase(
 
         const historicalSettlementAccount =
           paymentMethod ===
-            "historical_settled"
+            "historical_settled" &&
+          accountingAppliedTotalMinor > 0
             ? await ensureAccount({
                 code:
                   "HISTORICAL_PURCHASE_OPENING_CLEARING",
@@ -3864,42 +3910,44 @@ async function handleCreatePurchase(
               historicalSettlementAccount.id,
             debitMinor: 0,
             creditMinor:
-              totalMinor,
+              accountingAppliedTotalMinor,
             memo:
               "تسوية شراء سابق مدفوع قبل النظام — بدون حركة صندوق أو ذمة مورد",
           });
         }
 
-        await postFinanceTransaction(
-          tx,
-          {
-            publicId:
-              `FIN-${businessDate.replaceAll("-", "")}-` +
-              randomUUID().slice(0, 8).toUpperCase(),
-            idempotencyKey:
-              `purchase:${purchase.id}:completed`,
-            businessDate,
-            transactionType: "purchase",
-            sourceType: "pos_purchase",
-            sourceId:
-              String(purchase.id),
-            sourceEvent: "completed",
-            cashSessionId:
-              cashSession?.id ?? null,
-            notes:
-              paymentMethod ===
-                "historical_settled"
-                ? supplierInvoiceNumber
-                  ? `فاتورة مورد سابقة مدفوعة ${supplierInvoiceNumber}`
-                  : `شراء سابق مدفوع ${purchase.publicId}`
-                : supplierInvoiceNumber
-                  ? `فاتورة مورد ${supplierInvoiceNumber}`
-                  : `فاتورة مشتريات ${purchase.publicId}`,
-            createdByUserId:
-              auth.user.id,
-            lines: financeLines,
-          },
-        );
+        if (financeLines.length > 0) {
+          await postFinanceTransaction(
+            tx,
+            {
+              publicId:
+                `FIN-${businessDate.replaceAll("-", "")}-` +
+                randomUUID().slice(0, 8).toUpperCase(),
+              idempotencyKey:
+                `purchase:${purchase.id}:completed`,
+              businessDate,
+              transactionType: "purchase",
+              sourceType: "pos_purchase",
+              sourceId:
+                String(purchase.id),
+              sourceEvent: "completed",
+              cashSessionId:
+                cashSession?.id ?? null,
+              notes:
+                paymentMethod ===
+                  "historical_settled"
+                  ? supplierInvoiceNumber
+                    ? `فاتورة مورد سابقة مدفوعة ${supplierInvoiceNumber}`
+                    : `شراء سابق مدفوع ${purchase.publicId}`
+                  : supplierInvoiceNumber
+                    ? `فاتورة مورد ${supplierInvoiceNumber}`
+                    : `فاتورة مشتريات ${purchase.publicId}`,
+              createdByUserId:
+                auth.user.id,
+              lines: financeLines,
+            },
+          );
+        }
 
         for (
           const finalization
