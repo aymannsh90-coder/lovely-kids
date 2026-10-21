@@ -1995,7 +1995,7 @@ async function handleUpdateProduct(
       ) {
         const linkedPurchaseQuantity =
           purchaseEntryMode === "historical"
-            ? purchaseQuantity
+            ? resolvedPurchaseQuantity
             : purchaseQuantityDelta;
 
         if (
@@ -2020,9 +2020,19 @@ async function handleUpdateProduct(
             quantity:
               linkedPurchaseQuantity,
             unitCostMinor:
-              purchaseUnitCostMinor,
+              resolvedPurchaseUnitCostMinor,
             entryMode:
               purchaseEntryMode,
+            historicalSourceKey:
+              purchaseEntryMode ===
+                "historical"
+                ? resolvedHistoricalSourceKey
+                : null,
+            historicalDocumentationOnly:
+              purchaseEntryMode ===
+                "historical"
+                ? historicalDocumentationOnly
+                : false,
             businessDate:
               purchaseBusinessDate,
             warehouseKey:
@@ -2090,7 +2100,16 @@ async function handleUpdateProduct(
           updateResult.reason ===
             "historical_requires_unchanged_stock"
             ? "الشراء السابق يجب تسجيله بدون تعديل كمية المخزون الحالية."
-            : "الاستلام الجديد مع مورد يتطلب زيادة كمية المخزون فعليًا.",
+            : updateResult.reason ===
+                "historical_batch_required"
+              ? "اختر دفعة الشراء السابق المحسوبة تلقائيًا."
+              : updateResult.reason ===
+                  "historical_batch_unavailable"
+                ? "دفعة الشراء السابق لم تعد متاحة أو تم ربطها بفاتورة أخرى. أعد تحميل بيانات المنتج."
+                : updateResult.reason ===
+                    "purchase_cost_required"
+                  ? "أدخل تكلفة الشراء لأن المنتج لا يملك تكلفة مسجلة يمكن استخدامها."
+                  : "الاستلام الجديد مع مورد يتطلب زيادة كمية المخزون فعليًا.",
       },
       400,
     );
