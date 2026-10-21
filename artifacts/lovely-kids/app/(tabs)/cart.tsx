@@ -37,7 +37,7 @@ import { confirmRemoveFromCart, showStockLimit } from "@/utils/cartPrompts";
 import { API_BASE } from "@/constants/api";
 import GuestOrderNotificationPrompt from "@/components/GuestOrderNotificationPrompt";
 
-import { trackMetaEvent } from "@/utils/metaPixel";
+import { setMetaAdvancedMatching, trackMetaEvent } from "@/utils/metaPixel";
 
 type Step = "cart" | "checkout" | "payment" | "success";
 
@@ -405,6 +405,13 @@ export default function CartScreen() {
 
     // Improve Meta Event Match Quality using customer-provided checkout data.
     // This does not fire an additional event; it only enriches subsequent events.
+    setMetaAdvancedMatching({
+      email: user?.email,
+      phone: phone.trim(),
+      fullName: name.trim(),
+      externalId: user?.id,
+    });
+
     setLoading(true);
 
     const allowShippingPromotion =
@@ -687,6 +694,15 @@ export default function CartScreen() {
           );
           return;
         }
+      }
+
+      if (user) {
+        setMetaAdvancedMatching({
+          email: user.email,
+          phone: user.phone,
+          fullName: user.name,
+          externalId: user.id,
+        });
       }
 
       trackMetaEvent("InitiateCheckout", {

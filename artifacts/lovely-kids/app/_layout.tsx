@@ -31,6 +31,7 @@ import { ProductsProvider } from "@/context/ProductsContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useVisitorAnalytics } from "@/hooks/useVisitorAnalytics";
+import { setMetaAdvancedMatching } from "@/utils/metaPixel";
 
 SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({
@@ -50,6 +51,17 @@ function RootLayoutNav() {
   const { user, getAuthToken } = useAuth();
   usePushNotifications(user?.phone, getAuthToken);
   useVisitorAnalytics();
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !user) return;
+
+    setMetaAdvancedMatching({
+      email: user.email,
+      phone: user.phone,
+      fullName: user.name,
+      externalId: user.id,
+    });
+  }, [user?.email, user?.id, user?.name, user?.phone]);
 
   return (
     <NotificationOptInProvider
