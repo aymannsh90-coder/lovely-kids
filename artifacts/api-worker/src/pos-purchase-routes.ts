@@ -2473,7 +2473,9 @@ async function handleCreatePurchase(
 
         if (
           allocation.item.entryMode ===
-          "historical"
+            "historical" &&
+          !allocation.item
+            .historicalDocumentationOnly
         ) {
           historicalLineCounts.set(
             productId,
@@ -2680,13 +2682,26 @@ async function handleCreatePurchase(
           physicalQuantity -
           explainedPhysicalQuantity;
 
+        const documentationOnlyHistoricalAllocations =
+          costAllocations.filter(
+            (entry) =>
+              entry.item.productId ===
+                productId &&
+              entry.item.entryMode ===
+                "historical" &&
+              entry.item
+                .historicalDocumentationOnly,
+          );
+
         const currentHistoricalAllocations =
           costAllocations.filter(
             (entry) =>
               entry.item.productId ===
                 productId &&
               entry.item.entryMode ===
-                "historical",
+                "historical" &&
+              !entry.item
+                .historicalDocumentationOnly,
           );
 
         const priorHistoricalCostRows =
@@ -2761,6 +2776,15 @@ async function handleCreatePurchase(
             (row) =>
               !row.historicalAllocationPending,
           );
+
+        if (
+          currentHistoricalAllocations.length ===
+            0 &&
+          documentationOnlyHistoricalAllocations.length >
+            0
+        ) {
+          continue;
+        }
 
         if (
           currentHistoricalAllocations.length ===
