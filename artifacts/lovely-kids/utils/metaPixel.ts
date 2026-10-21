@@ -114,8 +114,13 @@ export function setMetaAdvancedMatching(
   // Meta Pixel hashes supported advanced-matching values with SHA-256
   // before transmission. Re-initializing with customer data updates the
   // matching context for subsequent browser events without firing a new event.
-  root.fbq("init", META_PIXEL_ID, params);
-  lastAdvancedMatchingSignature = signature;
+  // Analytics must always remain best-effort and must never block checkout.
+  try {
+    root.fbq("init", META_PIXEL_ID, params);
+    lastAdvancedMatchingSignature = signature;
+  } catch {
+    // Ignore third-party tracking failures.
+  }
 }
 
 export function trackMetaEvent(
