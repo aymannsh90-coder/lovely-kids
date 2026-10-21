@@ -2310,8 +2310,23 @@ async function handleCreatePurchase(
             "historical"
           >();
 
+        const entryMode =
+          allocation.item.entryMode;
+
+        if (
+          entryMode !==
+            "stock_receipt" &&
+          entryMode !==
+            "historical"
+        ) {
+          throw new PurchaseError(
+            "نوع تسجيل أحد أصناف المشتريات غير صالح",
+            409,
+          );
+        }
+
         modes.add(
-          allocation.item.entryMode,
+          entryMode,
         );
 
         entryModesByProduct.set(
