@@ -370,9 +370,8 @@ export const posPurchaseItemsTable = pgTable(
     index("pos_purchase_items_product_idx").on(table.productId),
     index("pos_purchase_items_barcode_idx").on(table.barcode),
 
-    uniqueIndex("pos_purchase_items_historical_source_key_idx")
-      .on(table.historicalSourceKey)
-      .where(sql`${table.historicalSourceKey} is not null`),
+    index("pos_purchase_items_historical_source_key_idx")
+      .on(table.historicalSourceKey),
   ],
 ).enableRLS();
 
