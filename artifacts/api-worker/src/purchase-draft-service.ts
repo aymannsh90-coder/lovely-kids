@@ -348,6 +348,42 @@ export async function appendProductToSupplierDraft(
     }
   }
 
+  if (
+    historicalSourceKey !== null
+  ) {
+    const sourceRows =
+      await tx
+        .select({
+          purchaseId:
+            posPurchaseItemsTable.purchaseId,
+        })
+        .from(posPurchaseItemsTable)
+        .where(
+          eq(
+            posPurchaseItemsTable.historicalSourceKey,
+            historicalSourceKey,
+          ),
+        )
+        .for("update");
+
+    if (
+      sourceRows.some(
+        (
+          row: {
+            purchaseId: number;
+          },
+        ) =>
+          row.purchaseId !==
+          purchase!.id,
+      )
+    ) {
+      throw new PurchaseDraftServiceError(
+        "دفعة الشراء السابق مرتبطة مسبقًا بمسودة أو فاتورة أخرى",
+        409,
+      );
+    }
+  }
+
   const currentItems = await tx
     .select()
     .from(posPurchaseItemsTable)
