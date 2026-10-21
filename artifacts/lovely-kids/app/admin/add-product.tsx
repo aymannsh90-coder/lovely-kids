@@ -2308,6 +2308,7 @@ export default function AddProductScreen() {
                 | "stock_receipt"
                 | "historical";
               quantity?: number;
+              historicalSourceKey?: string;
             }
           | undefined;
 
@@ -2345,7 +2346,84 @@ export default function AddProductScreen() {
           let unitCostMinor:
             number | null = null;
 
+          let historicalQuantity:
+            number | undefined;
+
+          let historicalSourceKey:
+            string | undefined;
+
           if (
+            purchaseEntryMode ===
+              "historical"
+          ) {
+            if (
+              historicalPurchasePreviewLoading
+            ) {
+              throw new Error(
+                "انتظر حتى يكتمل حساب دفعات الشراء السابق.",
+              );
+            }
+
+            if (
+              historicalPurchasePreviewError
+            ) {
+              throw new Error(
+                historicalPurchasePreviewError,
+              );
+            }
+
+            const selectedBatch =
+              historicalPurchasePreview
+                ?.batches.find(
+                  (batch) =>
+                    batch.sourceKey ===
+                    selectedHistoricalBatchKey,
+                );
+
+            if (!selectedBatch) {
+              throw new Error(
+                "اختر دفعة الشراء السابق التي تريد ربطها بالمورد.",
+              );
+            }
+
+            historicalQuantity =
+              selectedBatch.quantity;
+
+            historicalSourceKey =
+              selectedBatch.sourceKey;
+
+            if (
+              selectedBatch.unitCostMinor !==
+              null
+            ) {
+              unitCostMinor =
+                selectedBatch.unitCostMinor;
+            } else {
+              const shekels =
+                Number(
+                  editNewBatchCostInput
+                    .trim()
+                    .replace(",", "."),
+                );
+
+              if (
+                !editNewBatchCostInput.trim() ||
+                !Number.isFinite(
+                  shekels,
+                ) ||
+                shekels < 0
+              ) {
+                throw new Error(
+                  "تكلفة هذه الدفعة غير مسجلة. أدخل تكلفة الشراء للقطعة.",
+                );
+              }
+
+              unitCostMinor =
+                Math.round(
+                  shekels * 100,
+                );
+            }
+          } else if (
             editNewBatchCostInput.trim()
           ) {
             const shekels =
@@ -2372,35 +2450,6 @@ export default function AddProductScreen() {
               );
           }
 
-          let historicalQuantity:
-            number | undefined;
-
-          if (
-            purchaseEntryMode ===
-            "historical"
-          ) {
-            const parsedQuantity =
-              Number(
-                historicalPurchaseQuantityInput
-                  .trim(),
-              );
-
-            if (
-              !Number.isSafeInteger(
-                parsedQuantity,
-              ) ||
-              parsedQuantity <= 0 ||
-              parsedQuantity > 99_999
-            ) {
-              throw new Error(
-                "أدخل الكمية الأصلية التي اشتريتها سابقًا.",
-              );
-            }
-
-            historicalQuantity =
-              parsedQuantity;
-          }
-
           purchaseDraftLink = {
             supplierId:
               purchaseSupplierId,
@@ -2414,6 +2463,11 @@ export default function AddProductScreen() {
               ? {
                   quantity:
                     historicalQuantity,
+                }
+              : {}),
+            ...(historicalSourceKey
+              ? {
+                  historicalSourceKey,
                 }
               : {}),
           };
@@ -2488,6 +2542,7 @@ export default function AddProductScreen() {
                 | "stock_receipt"
                 | "historical";
               quantity?: number;
+              historicalSourceKey?: string;
             }
           | undefined;
 
@@ -2514,11 +2569,10 @@ export default function AddProductScreen() {
               : null;
 
           if (
-            openingCostInput.trim() &&
             unitCostMinor === null
           ) {
             throw new Error(
-              "أدخل تكلفة شراء صحيحة أو اتركها فارغة.",
+              "أدخل تكلفة الشراء للقطعة لأن المنتج لا يملك تكلفة مسجلة مسبقًا.",
             );
           }
 
