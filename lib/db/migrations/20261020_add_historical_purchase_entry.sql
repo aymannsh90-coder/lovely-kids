@@ -63,7 +63,10 @@ ALTER TABLE public.pos_purchase_item_costs
     DEFAULT 0,
   ADD COLUMN IF NOT EXISTS historical_sold_cost_total_minor integer
     NOT NULL
-    DEFAULT 0;
+    DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS historical_allocation_pending boolean
+    NOT NULL
+    DEFAULT false;
 
 -- Existing approved purchase snapshots predate historical entry mode.
 -- They are normal stock receipts, so preserve their full quantity/value
@@ -75,7 +78,8 @@ SET
   stock_cost_total_minor = cost_total_minor,
   historical_sold_cost_total_minor = 0
 WHERE
-  stock_quantity_applied = 0
+  historical_allocation_pending = false
+  AND stock_quantity_applied = 0
   AND historical_sold_quantity = 0
   AND stock_cost_total_minor = 0
   AND historical_sold_cost_total_minor = 0;
@@ -105,10 +109,23 @@ ALTER TABLE public.pos_purchase_item_costs
     AND historical_sold_quantity >= 0
     AND stock_cost_total_minor >= 0
     AND historical_sold_cost_total_minor >= 0
-    AND stock_quantity_applied + historical_sold_quantity
-      = received_quantity
-    AND stock_cost_total_minor + historical_sold_cost_total_minor
-      = cost_total_minor
+    AND (
+      (
+        historical_allocation_pending = true
+        AND stock_quantity_applied = 0
+        AND historical_sold_quantity = 0
+        AND stock_cost_total_minor = 0
+        AND historical_sold_cost_total_minor = 0
+      )
+      OR
+      (
+        historical_allocation_pending = false
+        AND stock_quantity_applied + historical_sold_quantity
+          = received_quantity
+        AND stock_cost_total_minor + historical_sold_cost_total_minor
+          = cost_total_minor
+      )
+    )
   );
 
 COMMIT;
