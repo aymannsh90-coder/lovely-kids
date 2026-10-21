@@ -2216,6 +2216,43 @@ async function handleCreatePurchase(
         }
       }
 
+      const historicalMetadataByLineNumber =
+        new Map<
+          number,
+          {
+            sourceKey: string | null;
+            documentationOnly: boolean;
+          }
+        >();
+
+      for (
+        let index = 0;
+        index < resolvedItems.length;
+        index += 1
+      ) {
+        const current =
+          resolvedItems[index];
+
+        const saved =
+          comparableDraftItems[index];
+
+        if (!current || !saved) {
+          continue;
+        }
+
+        historicalMetadataByLineNumber.set(
+          current.lineNumber,
+          {
+            sourceKey:
+              saved.historicalSourceKey ??
+              null,
+            documentationOnly:
+              saved.historicalDocumentationOnly ??
+              false,
+          },
+        );
+      }
+
       const purchaseLines: Array<
         typeof posPurchaseItemsTable.$inferInsert
       > = [];
@@ -2284,6 +2321,16 @@ async function handleCreatePurchase(
           quantity: item.quantity,
           freeQuantity: item.freeQuantity,
           entryMode: item.entryMode,
+          historicalSourceKey:
+            historicalMetadataByLineNumber.get(
+              item.lineNumber,
+            )?.sourceKey ??
+            null,
+          historicalDocumentationOnly:
+            historicalMetadataByLineNumber.get(
+              item.lineNumber,
+            )?.documentationOnly ??
+            false,
           unitCostMinor: item.unitCostMinor,
           lineDiscountMinor: item.lineDiscountMinor,
           lineTotalMinor: item.lineTotalMinor,
