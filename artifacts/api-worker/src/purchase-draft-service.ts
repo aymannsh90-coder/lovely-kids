@@ -25,6 +25,8 @@ export type AppendProductToSupplierDraftInput = {
   quantity: number;
   unitCostMinor: number | null;
   entryMode: "stock_receipt" | "historical";
+  historicalSourceKey?: string | null;
+  historicalDocumentationOnly?: boolean;
   businessDate: string;
   warehouseKey: string;
   currencyCode: string;
@@ -177,6 +179,41 @@ export async function appendProductToSupplierDraft(
     );
   }
 
+  const historicalSourceKey =
+    typeof input.historicalSourceKey ===
+      "string" &&
+    input.historicalSourceKey.trim()
+      ? input.historicalSourceKey.trim()
+      : null;
+
+  if (
+    historicalSourceKey !== null &&
+    (
+      historicalSourceKey.length < 8 ||
+      historicalSourceKey.length > 160
+    )
+  ) {
+    throw new PurchaseDraftServiceError(
+      "مرجع دفعة الشراء السابق غير صالح",
+    );
+  }
+
+  const historicalDocumentationOnly =
+    input.historicalDocumentationOnly ===
+      true;
+
+  if (
+    input.entryMode !== "historical" &&
+    (
+      historicalSourceKey !== null ||
+      historicalDocumentationOnly
+    )
+  ) {
+    throw new PurchaseDraftServiceError(
+      "مرجع الدفعة التاريخية متاح للشراء السابق فقط",
+    );
+  }
+
   const supplierRows = await tx
     .select()
     .from(suppliersTable)
@@ -311,6 +348,42 @@ export async function appendProductToSupplierDraft(
     }
   }
 
+  if (
+    historicalSourceKey !== null
+  ) {
+    const sourceRows =
+      await tx
+        .select({
+          purchaseId:
+            posPurchaseItemsTable.purchaseId,
+        })
+        .from(posPurchaseItemsTable)
+        .where(
+          eq(
+            posPurchaseItemsTable.historicalSourceKey,
+            historicalSourceKey,
+          ),
+        )
+        .for("update");
+
+    if (
+      sourceRows.some(
+        (
+          row: {
+            purchaseId: number;
+          },
+        ) =>
+          row.purchaseId !==
+          purchase!.id,
+      )
+    ) {
+      throw new PurchaseDraftServiceError(
+        "دفعة الشراء السابق مرتبطة مسبقًا بمسودة أو فاتورة أخرى",
+        409,
+      );
+    }
+  }
+
   const currentItems = await tx
     .select()
     .from(posPurchaseItemsTable)
@@ -341,16 +414,84 @@ export async function appendProductToSupplierDraft(
     );
   }
 
-  const existing =
-    currentItems.find(
-      (
-        item: typeof posPurchaseItemsTable.$inferSelect,
-      ) =>
-        item.productId === product.id &&
-        item.entryMode === input.entryMode,
-    ) ?? null;
+  const historicalSourceMatch =
+    historicalSourceKey === null
+      ? null
+      : currentItems.find(
+          (
+            item: typeof posPurchaseItemsTable.$inferSelect,
+          ) =>
+            item.historicalSourceKey ===
+              historicalSourceKey,
+        ) ?? null;
 
-  if (existing) {
+  const legacyHistoricalMatch =
+    historicalSourceKey === null ||
+    historicalSourceMatch
+      ? null
+      : currentItems.find(
+          (
+            item: typeof posPurchaseItemsTable.$inferSelect,
+          ) =>
+            item.productId ===
+              product.id &&
+            item.entryMode ===
+              "historical" &&
+            item.historicalSourceKey ===
+              null,
+        ) ?? null;
+
+  const mergeableStockReceipt =
+    input.entryMode === "stock_receipt"
+      ? currentItems.find(
+          (
+            item: typeof posPurchaseItemsTable.$inferSelect,
+          ) =>
+            item.productId ===
+              product.id &&
+            item.entryMode ===
+              "stock_receipt" &&
+            item.historicalSourceKey ===
+              null,
+        ) ?? null
+      : null;
+
+  const existing =
+    historicalSourceMatch ??
+    legacyHistoricalMatch ??
+    mergeableStockReceipt;
+
+  if (
+    existing &&
+    input.entryMode === "historical" &&
+    historicalSourceKey !== null
+  ) {
+    const nextLineTotalMinor =
+      input.unitCostMinor === null
+        ? null
+        : input.unitCostMinor *
+            input.quantity -
+          existing.lineDiscountMinor;
+
+    await tx
+      .update(posPurchaseItemsTable)
+      .set({
+        quantity:
+          input.quantity,
+        unitCostMinor:
+          input.unitCostMinor,
+        lineTotalMinor:
+          nextLineTotalMinor,
+        historicalSourceKey,
+        historicalDocumentationOnly,
+      })
+      .where(
+        eq(
+          posPurchaseItemsTable.id,
+          existing.id,
+        ),
+      );
+  } else if (existing) {
     const nextQuantity =
       existing.quantity +
       input.quantity;
@@ -436,6 +577,8 @@ export async function appendProductToSupplierDraft(
         freeQuantity: 0,
         entryMode:
           input.entryMode,
+        historicalSourceKey,
+        historicalDocumentationOnly,
         unitCostMinor:
           input.unitCostMinor,
         lineDiscountMinor: 0,

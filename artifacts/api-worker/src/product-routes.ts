@@ -25,6 +25,10 @@ import {
   isPurchaseWriteEnabled,
   purchaseWritesDisabledResponse,
 } from "./purchase-feature";
+import {
+  getHistoricalPurchasePreview,
+  HistoricalPurchasePreviewError,
+} from "./historical-purchase-preview";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -460,12 +464,16 @@ async function handleCreateProduct(
   const rawPurchaseQuantity =
     bodyRecord?.purchaseQuantity;
 
+  const rawPurchaseHistoricalSourceKey =
+    bodyRecord?.purchaseHistoricalSourceKey;
+
   const hasPurchaseDraftMetadata =
     rawPurchaseSupplierId !== undefined ||
     rawPurchaseUnitCostMinor !== undefined ||
     rawPurchaseBusinessDate !== undefined ||
     rawPurchaseEntryMode !== undefined ||
-    rawPurchaseQuantity !== undefined;
+    rawPurchaseQuantity !== undefined ||
+    rawPurchaseHistoricalSourceKey !== undefined;
 
   if (
     hasPurchaseDraftMetadata &&
@@ -611,6 +619,25 @@ async function handleCreateProduct(
       parsedQuantity;
   }
 
+  const purchaseHistoricalSourceKey =
+    typeof rawPurchaseHistoricalSourceKey === "string" &&
+    rawPurchaseHistoricalSourceKey.trim()
+      ? rawPurchaseHistoricalSourceKey.trim()
+      : null;
+
+  if (
+    purchaseHistoricalSourceKey !== null &&
+    (
+      purchaseHistoricalSourceKey.length < 8 ||
+      purchaseHistoricalSourceKey.length > 160
+    )
+  ) {
+    return json(
+      { error: "مرجع دفعة الشراء السابق غير صالح" },
+      400,
+    );
+  }
+
   const purchaseBusinessDate =
     typeof rawPurchaseBusinessDate === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
@@ -622,7 +649,8 @@ async function handleCreateProduct(
     (
       rawPurchaseUnitCostMinor !== undefined ||
       rawPurchaseEntryMode !== undefined ||
-      rawPurchaseQuantity !== undefined
+      rawPurchaseQuantity !== undefined ||
+      rawPurchaseHistoricalSourceKey !== undefined
     )
   ) {
     return json(
@@ -634,10 +662,14 @@ async function handleCreateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "historical" &&
-    purchaseQuantity === null
+    purchaseQuantity === null &&
+    purchaseHistoricalSourceKey === null
   ) {
     return json(
-      { error: "أدخل الكمية الأصلية للشراء السابق" },
+      {
+        error:
+          "اختر دفعة الشراء السابق المحسوبة تلقائيًا",
+      },
       400,
     );
   }
@@ -645,10 +677,26 @@ async function handleCreateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "stock_receipt" &&
-    purchaseQuantity !== null
+    (
+      purchaseQuantity !== null ||
+      purchaseHistoricalSourceKey !== null
+    )
   ) {
     return json(
-      { error: "كمية الشراء اليدوية متاحة فقط للشراء السابق" },
+      { error: "مرجع أو كمية الشراء السابق متاحان فقط للشراء السابق" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    purchaseUnitCostMinor === null
+  ) {
+    return json(
+      {
+        error:
+          "أدخل تكلفة الشراء لأن المنتج لا يملك تكلفة مسجلة مسبقًا",
+      },
       400,
     );
   }
@@ -687,6 +735,7 @@ async function handleCreateProduct(
     delete cleanProductBody.purchaseBusinessDate;
     delete cleanProductBody.purchaseEntryMode;
     delete cleanProductBody.purchaseQuantity;
+    delete cleanProductBody.purchaseHistoricalSourceKey;
   }
 
   const parsed =
@@ -965,6 +1014,10 @@ async function handleCreateProduct(
             purchaseUnitCostMinor,
           entryMode:
             purchaseEntryMode,
+          historicalSourceKey:
+            purchaseHistoricalSourceKey,
+          historicalDocumentationOnly:
+            false,
           businessDate:
             purchaseBusinessDate,
           warehouseKey:
@@ -1074,12 +1127,16 @@ async function handleUpdateProduct(
   const rawPurchaseQuantity =
     bodyRecord?.purchaseQuantity;
 
+  const rawPurchaseHistoricalSourceKey =
+    bodyRecord?.purchaseHistoricalSourceKey;
+
   const hasPurchaseDraftMetadata =
     rawPurchaseSupplierId !== undefined ||
     rawPurchaseUnitCostMinor !== undefined ||
     rawPurchaseBusinessDate !== undefined ||
     rawPurchaseEntryMode !== undefined ||
-    rawPurchaseQuantity !== undefined;
+    rawPurchaseQuantity !== undefined ||
+    rawPurchaseHistoricalSourceKey !== undefined;
 
   if (
     hasPurchaseDraftMetadata &&
@@ -1197,6 +1254,25 @@ async function handleUpdateProduct(
       parsedQuantity;
   }
 
+  const purchaseHistoricalSourceKey =
+    typeof rawPurchaseHistoricalSourceKey === "string" &&
+    rawPurchaseHistoricalSourceKey.trim()
+      ? rawPurchaseHistoricalSourceKey.trim()
+      : null;
+
+  if (
+    purchaseHistoricalSourceKey !== null &&
+    (
+      purchaseHistoricalSourceKey.length < 8 ||
+      purchaseHistoricalSourceKey.length > 160
+    )
+  ) {
+    return json(
+      { error: "مرجع دفعة الشراء السابق غير صالح" },
+      400,
+    );
+  }
+
   const purchaseBusinessDate =
     typeof rawPurchaseBusinessDate === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
@@ -1208,7 +1284,8 @@ async function handleUpdateProduct(
     (
       rawPurchaseUnitCostMinor !== undefined ||
       rawPurchaseEntryMode !== undefined ||
-      rawPurchaseQuantity !== undefined
+      rawPurchaseQuantity !== undefined ||
+      rawPurchaseHistoricalSourceKey !== undefined
     )
   ) {
     return json(
@@ -1220,10 +1297,14 @@ async function handleUpdateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "historical" &&
-    purchaseQuantity === null
+    purchaseQuantity === null &&
+    purchaseHistoricalSourceKey === null
   ) {
     return json(
-      { error: "أدخل الكمية الأصلية للشراء السابق" },
+      {
+        error:
+          "اختر دفعة الشراء السابق المحسوبة تلقائيًا",
+      },
       400,
     );
   }
@@ -1231,10 +1312,13 @@ async function handleUpdateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "stock_receipt" &&
-    purchaseQuantity !== null
+    (
+      purchaseQuantity !== null ||
+      purchaseHistoricalSourceKey !== null
+    )
   ) {
     return json(
-      { error: "كمية الشراء اليدوية متاحة فقط للشراء السابق" },
+      { error: "مرجع أو كمية الشراء السابق متاحان فقط للشراء السابق" },
       400,
     );
   }
@@ -1287,6 +1371,7 @@ async function handleUpdateProduct(
     delete cleanProductBody.purchaseBusinessDate;
     delete cleanProductBody.purchaseEntryMode;
     delete cleanProductBody.purchaseQuantity;
+    delete cleanProductBody.purchaseHistoricalSourceKey;
   }
 
   const parsed =
@@ -1449,6 +1534,132 @@ async function handleUpdateProduct(
               ? effectiveQuantityAfter -
                 effectiveQuantityBefore
               : null;
+
+          let resolvedPurchaseQuantity =
+            purchaseQuantity;
+
+          let resolvedPurchaseUnitCostMinor =
+            purchaseUnitCostMinor;
+
+          let resolvedHistoricalSourceKey:
+            string | null =
+              purchaseHistoricalSourceKey;
+
+          let historicalDocumentationOnly =
+            false;
+
+          if (
+            purchaseSupplierId !== null &&
+            purchaseEntryMode === "historical"
+          ) {
+            if (
+              !resolvedHistoricalSourceKey
+            ) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "historical_batch_required",
+              } as const;
+            }
+
+            let preview;
+
+            try {
+              preview =
+                await getHistoricalPurchasePreview(
+                  tx,
+                  {
+                    productId:
+                      lockedCurrent.id,
+                    warehouseKey:
+                      "main",
+                  },
+                );
+            } catch (error) {
+              if (
+                error instanceof
+                HistoricalPurchasePreviewError
+              ) {
+                throw new PurchaseDraftServiceError(
+                  error.message,
+                  409,
+                );
+              }
+
+              throw error;
+            }
+
+            const batch =
+              preview.batches.find(
+                (item) =>
+                  item.sourceKey ===
+                  resolvedHistoricalSourceKey,
+              );
+
+            if (!batch) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "historical_batch_unavailable",
+              } as const;
+            }
+
+            resolvedPurchaseQuantity =
+              batch.quantity;
+
+            historicalDocumentationOnly =
+              batch.documentationOnly;
+
+            if (
+              batch.unitCostMinor !==
+              null
+            ) {
+              resolvedPurchaseUnitCostMinor =
+                batch.unitCostMinor;
+            } else if (
+              resolvedPurchaseUnitCostMinor ===
+              null
+            ) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "purchase_cost_required",
+              } as const;
+            }
+          }
+
+          if (
+            purchaseSupplierId !== null &&
+            purchaseEntryMode === "stock_receipt" &&
+            resolvedPurchaseUnitCostMinor === null
+          ) {
+            const costRows =
+              await tx
+                .select({
+                  productId:
+                    productCostStateTable.productId,
+                })
+                .from(productCostStateTable)
+                .where(
+                  eq(
+                    productCostStateTable.productId,
+                    lockedCurrent.id,
+                  ),
+                )
+                .limit(1);
+
+            if (!costRows[0]) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "purchase_cost_required",
+              } as const;
+            }
+          }
 
           if (
             purchaseSupplierId !== null &&
@@ -1784,7 +1995,7 @@ async function handleUpdateProduct(
       ) {
         const linkedPurchaseQuantity =
           purchaseEntryMode === "historical"
-            ? purchaseQuantity
+            ? resolvedPurchaseQuantity
             : purchaseQuantityDelta;
 
         if (
@@ -1809,9 +2020,19 @@ async function handleUpdateProduct(
             quantity:
               linkedPurchaseQuantity,
             unitCostMinor:
-              purchaseUnitCostMinor,
+              resolvedPurchaseUnitCostMinor,
             entryMode:
               purchaseEntryMode,
+            historicalSourceKey:
+              purchaseEntryMode ===
+                "historical"
+                ? resolvedHistoricalSourceKey
+                : null,
+            historicalDocumentationOnly:
+              purchaseEntryMode ===
+                "historical"
+                ? historicalDocumentationOnly
+                : false,
             businessDate:
               purchaseBusinessDate,
             warehouseKey:
@@ -1879,7 +2100,16 @@ async function handleUpdateProduct(
           updateResult.reason ===
             "historical_requires_unchanged_stock"
             ? "الشراء السابق يجب تسجيله بدون تعديل كمية المخزون الحالية."
-            : "الاستلام الجديد مع مورد يتطلب زيادة كمية المخزون فعليًا.",
+            : updateResult.reason ===
+                "historical_batch_required"
+              ? "اختر دفعة الشراء السابق المحسوبة تلقائيًا."
+              : updateResult.reason ===
+                  "historical_batch_unavailable"
+                ? "دفعة الشراء السابق لم تعد متاحة أو تم ربطها بفاتورة أخرى. أعد تحميل بيانات المنتج."
+                : updateResult.reason ===
+                    "purchase_cost_required"
+                  ? "أدخل تكلفة الشراء لأن المنتج لا يملك تكلفة مسجلة يمكن استخدامها."
+                  : "الاستلام الجديد مع مورد يتطلب زيادة كمية المخزون فعليًا.",
       },
       400,
     );
@@ -2298,6 +2528,69 @@ export async function handleProductRequest(
         size: row.size ?? null,
       })),
     );
+  }
+
+  const purchaseHistoryPreviewMatch =
+    path.match(
+      /^\/api\/products\/(\d+)\/purchase-history-preview$/,
+    );
+
+  if (
+    request.method === "GET" &&
+    purchaseHistoryPreviewMatch
+  ) {
+    const auth =
+      await requireAdminActor(
+        request,
+        db,
+        env,
+      );
+
+    if (!auth.ok) {
+      return auth.response;
+    }
+
+    if (!auth.user.isOwner) {
+      return json(
+        {
+          error:
+            "بيانات تكلفة المشتريات متاحة للمالك فقط",
+        },
+        403,
+      );
+    }
+
+    try {
+      const preview =
+        await getHistoricalPurchasePreview(
+          db,
+          {
+            productId:
+              Number(
+                purchaseHistoryPreviewMatch[1],
+              ),
+            warehouseKey:
+              "main",
+          },
+        );
+
+      return json(preview);
+    } catch (error) {
+      if (
+        error instanceof
+        HistoricalPurchasePreviewError
+      ) {
+        return json(
+          {
+            error:
+              error.message,
+          },
+          409,
+        );
+      }
+
+      throw error;
+    }
   }
 
   if (

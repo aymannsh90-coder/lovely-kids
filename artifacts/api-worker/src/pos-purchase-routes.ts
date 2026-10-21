@@ -2216,6 +2216,106 @@ async function handleCreatePurchase(
         }
       }
 
+      const historicalSourceKeys =
+        [
+          ...new Set(
+            comparableDraftItems
+              .map(
+                (item) =>
+                  item.historicalSourceKey,
+              )
+              .filter(
+                (
+                  value,
+                ): value is string =>
+                  typeof value ===
+                    "string" &&
+                  value.length > 0,
+              ),
+          ),
+        ];
+
+      for (
+        const sourceKey
+        of historicalSourceKeys
+      ) {
+        const sourceRows =
+          await tx
+            .select({
+              purchaseId:
+                posPurchaseItemsTable.purchaseId,
+            })
+            .from(
+              posPurchaseItemsTable,
+            )
+            .where(
+              eq(
+                posPurchaseItemsTable.historicalSourceKey,
+                sourceKey,
+              ),
+            )
+            .for("update");
+
+        const expectedDraftPurchaseId =
+          comparableDraftItems.find(
+            (item) =>
+              item.historicalSourceKey ===
+              sourceKey,
+          )?.purchaseId;
+
+        if (
+          expectedDraftPurchaseId ===
+            undefined ||
+          sourceRows.some(
+            (row) =>
+              row.purchaseId !==
+              expectedDraftPurchaseId,
+          )
+        ) {
+          throw new PurchaseError(
+            "إحدى دفعات الشراء السابق مرتبطة مسبقًا بفاتورة أخرى",
+            409,
+          );
+        }
+      }
+
+      const historicalMetadataByLineNumber =
+        new Map<
+          number,
+          {
+            sourceKey: string | null;
+            documentationOnly: boolean;
+          }
+        >();
+
+      for (
+        let index = 0;
+        index < resolvedItems.length;
+        index += 1
+      ) {
+        const current =
+          resolvedItems[index];
+
+        const saved =
+          comparableDraftItems[index];
+
+        if (!current || !saved) {
+          continue;
+        }
+
+        historicalMetadataByLineNumber.set(
+          current.lineNumber,
+          {
+            sourceKey:
+              saved.historicalSourceKey ??
+              null,
+            documentationOnly:
+              saved.historicalDocumentationOnly ??
+              false,
+          },
+        );
+      }
+
       const purchaseLines: Array<
         typeof posPurchaseItemsTable.$inferInsert
       > = [];
@@ -2284,6 +2384,16 @@ async function handleCreatePurchase(
           quantity: item.quantity,
           freeQuantity: item.freeQuantity,
           entryMode: item.entryMode,
+          historicalSourceKey:
+            historicalMetadataByLineNumber.get(
+              item.lineNumber,
+            )?.sourceKey ??
+            null,
+          historicalDocumentationOnly:
+            historicalMetadataByLineNumber.get(
+              item.lineNumber,
+            )?.documentationOnly ??
+            false,
           unitCostMinor: item.unitCostMinor,
           lineDiscountMinor: item.lineDiscountMinor,
           lineTotalMinor: item.lineTotalMinor,
@@ -2426,7 +2536,9 @@ async function handleCreatePurchase(
 
         if (
           allocation.item.entryMode ===
-          "historical"
+            "historical" &&
+          !allocation.item
+            .historicalDocumentationOnly
         ) {
           historicalLineCounts.set(
             productId,
@@ -2633,13 +2745,26 @@ async function handleCreatePurchase(
           physicalQuantity -
           explainedPhysicalQuantity;
 
+        const documentationOnlyHistoricalAllocations =
+          costAllocations.filter(
+            (entry) =>
+              entry.item.productId ===
+                productId &&
+              entry.item.entryMode ===
+                "historical" &&
+              entry.item
+                .historicalDocumentationOnly,
+          );
+
         const currentHistoricalAllocations =
           costAllocations.filter(
             (entry) =>
               entry.item.productId ===
                 productId &&
               entry.item.entryMode ===
-                "historical",
+                "historical" &&
+              !entry.item
+                .historicalDocumentationOnly,
           );
 
         const priorHistoricalCostRows =
@@ -2714,6 +2839,15 @@ async function handleCreatePurchase(
             (row) =>
               !row.historicalAllocationPending,
           );
+
+        if (
+          currentHistoricalAllocations.length ===
+            0 &&
+          documentationOnlyHistoricalAllocations.length >
+            0
+        ) {
+          continue;
+        }
 
         if (
           currentHistoricalAllocations.length ===
@@ -3044,6 +3178,8 @@ async function handleCreatePurchase(
       let inventoryPurchaseValueMinor = 0;
       let historicalSoldValueMinor = 0;
       let historicalPendingValueMinor = 0;
+      let documentationOnlyHistoricalValueMinor =
+        0;
 
       const historicalFinalizations:
         HistoricalFinalization[] = [];
@@ -3066,6 +3202,32 @@ async function handleCreatePurchase(
           allocation.item.entryMode ===
           "historical"
         ) {
+          if (
+            allocation.item
+              .historicalDocumentationOnly
+          ) {
+            documentationOnlyHistoricalValueMinor +=
+              allocation.costTotalMinor;
+
+            if (
+              !Number.isSafeInteger(
+                documentationOnlyHistoricalValueMinor,
+              ) ||
+              documentationOnlyHistoricalValueMinor >
+                MAX_MINOR
+            ) {
+              throw new PurchaseError(
+                "قيمة المشتريات السابقة الموثقة تتجاوز الحد المسموح",
+                409,
+              );
+            }
+
+            // The cost engine already contains this historical batch.
+            // Keep the supplier invoice for documentation, but do not
+            // re-apply inventory cost, COGS, or historical backfill.
+            continue;
+          }
+
           const plan =
             historicalPlansByProduct.get(
               productId,
@@ -3555,11 +3717,28 @@ async function handleCreatePurchase(
       if (
         inventoryPurchaseValueMinor +
           historicalSoldValueMinor +
-          historicalPendingValueMinor !==
+          historicalPendingValueMinor +
+          documentationOnlyHistoricalValueMinor !==
         totalMinor
       ) {
         throw new PurchaseError(
           "توزيع تكلفة فاتورة المشتريات لا يطابق إجمالي الفاتورة",
+          409,
+        );
+      }
+
+      const accountingAppliedTotalMinor =
+        totalMinor -
+        documentationOnlyHistoricalValueMinor;
+
+      if (
+        !Number.isSafeInteger(
+          accountingAppliedTotalMinor,
+        ) ||
+        accountingAppliedTotalMinor < 0
+      ) {
+        throw new PurchaseError(
+          "قيمة فاتورة المشتريات المحاسبية غير صالحة",
           409,
         );
       }
@@ -3701,7 +3880,8 @@ async function handleCreatePurchase(
 
         const historicalSettlementAccount =
           paymentMethod ===
-            "historical_settled"
+            "historical_settled" &&
+          accountingAppliedTotalMinor > 0
             ? await ensureAccount({
                 code:
                   "HISTORICAL_PURCHASE_OPENING_CLEARING",
@@ -3793,42 +3973,44 @@ async function handleCreatePurchase(
               historicalSettlementAccount.id,
             debitMinor: 0,
             creditMinor:
-              totalMinor,
+              accountingAppliedTotalMinor,
             memo:
               "تسوية شراء سابق مدفوع قبل النظام — بدون حركة صندوق أو ذمة مورد",
           });
         }
 
-        await postFinanceTransaction(
-          tx,
-          {
-            publicId:
-              `FIN-${businessDate.replaceAll("-", "")}-` +
-              randomUUID().slice(0, 8).toUpperCase(),
-            idempotencyKey:
-              `purchase:${purchase.id}:completed`,
-            businessDate,
-            transactionType: "purchase",
-            sourceType: "pos_purchase",
-            sourceId:
-              String(purchase.id),
-            sourceEvent: "completed",
-            cashSessionId:
-              cashSession?.id ?? null,
-            notes:
-              paymentMethod ===
-                "historical_settled"
-                ? supplierInvoiceNumber
-                  ? `فاتورة مورد سابقة مدفوعة ${supplierInvoiceNumber}`
-                  : `شراء سابق مدفوع ${purchase.publicId}`
-                : supplierInvoiceNumber
-                  ? `فاتورة مورد ${supplierInvoiceNumber}`
-                  : `فاتورة مشتريات ${purchase.publicId}`,
-            createdByUserId:
-              auth.user.id,
-            lines: financeLines,
-          },
-        );
+        if (financeLines.length > 0) {
+          await postFinanceTransaction(
+            tx,
+            {
+              publicId:
+                `FIN-${businessDate.replaceAll("-", "")}-` +
+                randomUUID().slice(0, 8).toUpperCase(),
+              idempotencyKey:
+                `purchase:${purchase.id}:completed`,
+              businessDate,
+              transactionType: "purchase",
+              sourceType: "pos_purchase",
+              sourceId:
+                String(purchase.id),
+              sourceEvent: "completed",
+              cashSessionId:
+                cashSession?.id ?? null,
+              notes:
+                paymentMethod ===
+                  "historical_settled"
+                  ? supplierInvoiceNumber
+                    ? `فاتورة مورد سابقة مدفوعة ${supplierInvoiceNumber}`
+                    : `شراء سابق مدفوع ${purchase.publicId}`
+                  : supplierInvoiceNumber
+                    ? `فاتورة مورد ${supplierInvoiceNumber}`
+                    : `فاتورة مشتريات ${purchase.publicId}`,
+              createdByUserId:
+                auth.user.id,
+              lines: financeLines,
+            },
+          );
+        }
 
         for (
           const finalization

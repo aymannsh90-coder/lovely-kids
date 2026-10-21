@@ -45,6 +45,35 @@ type PurchaseSupplierOption = {
   name: string;
 };
 
+type HistoricalPurchaseBatchPreview = {
+  sourceKey: string;
+  quantity: number;
+  unitCostMinor: number | null;
+  totalCostMinor: number | null;
+  occurredAt: string | null;
+  documentationOnly: boolean;
+  sourceType:
+    | "opening"
+    | "repeat_purchase"
+    | "untracked";
+};
+
+type HistoricalPurchasePreview = {
+  physicalQuantity: number;
+  pendingStockReceiptQuantity: number;
+  soldQuantity: number;
+  returnedQuantity: number;
+  netSoldQuantity: number;
+  totalHistoricalQuantity: number;
+  currentCost: {
+    quantityOnHand: number;
+    inventoryValueMinor: number;
+    referenceUnitCostMinor: number | null;
+    costQuality: string;
+  } | null;
+  batches: HistoricalPurchaseBatchPreview[];
+};
+
 function localBusinessDate() {
   const now = new Date();
   const offset =
@@ -159,6 +188,28 @@ export default function AddProductScreen() {
   const [
     historicalPurchaseQuantityInput,
     setHistoricalPurchaseQuantityInput,
+  ] = useState("");
+
+  const [
+    historicalPurchasePreview,
+    setHistoricalPurchasePreview,
+  ] = useState<HistoricalPurchasePreview | null>(
+    null,
+  );
+
+  const [
+    historicalPurchasePreviewLoading,
+    setHistoricalPurchasePreviewLoading,
+  ] = useState(false);
+
+  const [
+    historicalPurchasePreviewError,
+    setHistoricalPurchasePreviewError,
+  ] = useState("");
+
+  const [
+    selectedHistoricalBatchKey,
+    setSelectedHistoricalBatchKey,
   ] = useState("");
 
   const [
@@ -410,6 +461,145 @@ export default function AddProductScreen() {
       active = false;
     };
   }, [getAuthToken, user?.isOwner]);
+
+  useEffect(() => {
+    if (
+      !user?.isOwner ||
+      !isEdit ||
+      !editProduct?.id ||
+      !purchaseSupplierId ||
+      purchaseEntryMode !== "historical"
+    ) {
+      setHistoricalPurchasePreview(
+        null,
+      );
+      setHistoricalPurchasePreviewError(
+        "",
+      );
+      setHistoricalPurchasePreviewLoading(
+        false,
+      );
+      setSelectedHistoricalBatchKey(
+        "",
+      );
+      return;
+    }
+
+    let active = true;
+
+    void (async () => {
+      setHistoricalPurchasePreviewLoading(
+        true,
+      );
+      setHistoricalPurchasePreviewError(
+        "",
+      );
+
+      try {
+        const token =
+          await getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            "تعذر التحقق من جلسة المالك",
+          );
+        }
+
+        const response =
+          await fetch(
+            `${API_BASE}/api/products/${editProduct.id}/purchase-history-preview`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            },
+          );
+
+        const data =
+          (await response
+            .json()
+            .catch(() => ({}))) as
+            | HistoricalPurchasePreview
+            | {
+                error?: string;
+              };
+
+        if (!response.ok) {
+          throw new Error(
+            "error" in data &&
+            data.error
+              ? data.error
+              : "تعذر حساب دفعات الشراء السابق",
+          );
+        }
+
+        const preview =
+          data as HistoricalPurchasePreview;
+
+        if (!active) {
+          return;
+        }
+
+        setHistoricalPurchasePreview(
+          preview,
+        );
+
+        setSelectedHistoricalBatchKey(
+          (current) => {
+            if (
+              preview.batches.some(
+                (batch) =>
+                  batch.sourceKey ===
+                  current,
+              )
+            ) {
+              return current;
+            }
+
+            return preview.batches
+              .length === 1
+              ? preview.batches[0]!
+                  .sourceKey
+              : "";
+          },
+        );
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setHistoricalPurchasePreview(
+          null,
+        );
+        setSelectedHistoricalBatchKey(
+          "",
+        );
+        setHistoricalPurchasePreviewError(
+          error instanceof Error
+            ? error.message
+            : "تعذر حساب دفعات الشراء السابق",
+        );
+      } finally {
+        if (active) {
+          setHistoricalPurchasePreviewLoading(
+            false,
+          );
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    editProduct?.id,
+    getAuthToken,
+    isEdit,
+    purchaseEntryMode,
+    purchaseSupplierId,
+    user?.isOwner,
+  ]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -2042,6 +2232,14 @@ export default function AddProductScreen() {
         purchaseSupplierId,
     ) ?? null;
 
+  const selectedHistoricalBatch =
+    historicalPurchasePreview
+      ?.batches.find(
+        (batch) =>
+          batch.sourceKey ===
+          selectedHistoricalBatchKey,
+      ) ?? null;
+
   const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
@@ -2118,6 +2316,7 @@ export default function AddProductScreen() {
                 | "stock_receipt"
                 | "historical";
               quantity?: number;
+              historicalSourceKey?: string;
             }
           | undefined;
 
@@ -2155,7 +2354,84 @@ export default function AddProductScreen() {
           let unitCostMinor:
             number | null = null;
 
+          let historicalQuantity:
+            number | undefined;
+
+          let historicalSourceKey:
+            string | undefined;
+
           if (
+            purchaseEntryMode ===
+              "historical"
+          ) {
+            if (
+              historicalPurchasePreviewLoading
+            ) {
+              throw new Error(
+                "انتظر حتى يكتمل حساب دفعات الشراء السابق.",
+              );
+            }
+
+            if (
+              historicalPurchasePreviewError
+            ) {
+              throw new Error(
+                historicalPurchasePreviewError,
+              );
+            }
+
+            const selectedBatch =
+              historicalPurchasePreview
+                ?.batches.find(
+                  (batch) =>
+                    batch.sourceKey ===
+                    selectedHistoricalBatchKey,
+                );
+
+            if (!selectedBatch) {
+              throw new Error(
+                "اختر دفعة الشراء السابق التي تريد ربطها بالمورد.",
+              );
+            }
+
+            historicalQuantity =
+              selectedBatch.quantity;
+
+            historicalSourceKey =
+              selectedBatch.sourceKey;
+
+            if (
+              selectedBatch.unitCostMinor !==
+              null
+            ) {
+              unitCostMinor =
+                selectedBatch.unitCostMinor;
+            } else {
+              const shekels =
+                Number(
+                  editNewBatchCostInput
+                    .trim()
+                    .replace(",", "."),
+                );
+
+              if (
+                !editNewBatchCostInput.trim() ||
+                !Number.isFinite(
+                  shekels,
+                ) ||
+                shekels < 0
+              ) {
+                throw new Error(
+                  "تكلفة هذه الدفعة غير مسجلة. أدخل تكلفة الشراء للقطعة.",
+                );
+              }
+
+              unitCostMinor =
+                Math.round(
+                  shekels * 100,
+                );
+            }
+          } else if (
             editNewBatchCostInput.trim()
           ) {
             const shekels =
@@ -2182,35 +2458,6 @@ export default function AddProductScreen() {
               );
           }
 
-          let historicalQuantity:
-            number | undefined;
-
-          if (
-            purchaseEntryMode ===
-            "historical"
-          ) {
-            const parsedQuantity =
-              Number(
-                historicalPurchaseQuantityInput
-                  .trim(),
-              );
-
-            if (
-              !Number.isSafeInteger(
-                parsedQuantity,
-              ) ||
-              parsedQuantity <= 0 ||
-              parsedQuantity > 99_999
-            ) {
-              throw new Error(
-                "أدخل الكمية الأصلية التي اشتريتها سابقًا.",
-              );
-            }
-
-            historicalQuantity =
-              parsedQuantity;
-          }
-
           purchaseDraftLink = {
             supplierId:
               purchaseSupplierId,
@@ -2224,6 +2471,11 @@ export default function AddProductScreen() {
               ? {
                   quantity:
                     historicalQuantity,
+                }
+              : {}),
+            ...(historicalSourceKey
+              ? {
+                  historicalSourceKey,
                 }
               : {}),
           };
@@ -2298,6 +2550,7 @@ export default function AddProductScreen() {
                 | "stock_receipt"
                 | "historical";
               quantity?: number;
+              historicalSourceKey?: string;
             }
           | undefined;
 
@@ -2324,11 +2577,10 @@ export default function AddProductScreen() {
               : null;
 
           if (
-            openingCostInput.trim() &&
             unitCostMinor === null
           ) {
             throw new Error(
-              "أدخل تكلفة شراء صحيحة أو اتركها فارغة.",
+              "أدخل تكلفة الشراء للقطعة لأن المنتج لا يملك تكلفة مسجلة مسبقًا.",
             );
           }
 
@@ -4063,45 +4315,242 @@ export default function AddProductScreen() {
                 {purchaseEntryMode ===
                   "historical" && (
                   <>
-                    <Text
-                      style={{
-                        color:
-                          colors.mutedForeground,
-                        fontSize: 12,
-                        lineHeight: 19,
-                        textAlign:
-                          "right",
-                      }}
-                    >
-                      أدخل كامل الكمية الأصلية التي اشتريتها من المورد: الكمية المتبقية حاليًا + ما تم بيعه سابقًا. لن يغيّر النظام مخزون اليوم، وعند اعتماد الفاتورة سيطابق الكمية مع المبيعات القديمة قبل تثبيت التكلفة.
-                    </Text>
+                    {isEdit ? (
+                      <>
+                        <Text
+                          style={{
+                            color:
+                              colors.mutedForeground,
+                            fontSize: 12,
+                            lineHeight: 19,
+                            textAlign:
+                              "right",
+                          }}
+                        >
+                          الكمية التاريخية تُحسب تلقائيًا من المخزون والمبيعات وسجل الدفعات. اختر الدفعة التي تخص هذا المورد؛ لن يتغير مخزون اليوم.
+                        </Text>
 
-                    <TextInput
-                      value={
-                        historicalPurchaseQuantityInput
-                      }
-                      onChangeText={
-                        setHistoricalPurchaseQuantityInput
-                      }
-                      placeholder="الكمية الأصلية للشراء السابق"
-                      placeholderTextColor={
-                        colors.mutedForeground
-                      }
-                      keyboardType="number-pad"
-                      style={{
-                        borderWidth: 1,
-                        borderColor:
-                          colors.border,
-                        borderRadius: 10,
-                        padding: 11,
-                        color:
-                          colors.foreground,
-                        backgroundColor:
-                          colors.background,
-                        textAlign:
-                          "right",
-                      }}
-                    />
+                        {historicalPurchasePreviewLoading ? (
+                          <Text
+                            style={{
+                              color:
+                                colors.primary,
+                              fontWeight:
+                                "800",
+                              textAlign:
+                                "right",
+                            }}
+                          >
+                            جاري حساب دفعات الشراء السابق…
+                          </Text>
+                        ) : historicalPurchasePreviewError ? (
+                          <Text
+                            style={{
+                              color:
+                                colors.destructive,
+                              fontWeight:
+                                "700",
+                              textAlign:
+                                "right",
+                            }}
+                          >
+                            {historicalPurchasePreviewError}
+                          </Text>
+                        ) : historicalPurchasePreview ? (
+                          <>
+                            <View
+                              style={{
+                                borderWidth: 1,
+                                borderColor:
+                                  colors.border,
+                                borderRadius: 10,
+                                padding: 10,
+                                gap: 4,
+                                backgroundColor:
+                                  colors.background,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color:
+                                    colors.foreground,
+                                  fontWeight:
+                                    "800",
+                                  textAlign:
+                                    "right",
+                                }}
+                              >
+                                الكمية التاريخية المحسوبة: {historicalPurchasePreview.totalHistoricalQuantity}
+                              </Text>
+                              <Text
+                                style={{
+                                  color:
+                                    colors.mutedForeground,
+                                  fontSize: 12,
+                                  textAlign:
+                                    "right",
+                                }}
+                              >
+                                المتبقي: {historicalPurchasePreview.physicalQuantity} — المبيعات: {historicalPurchasePreview.soldQuantity} — المرتجعات: {historicalPurchasePreview.returnedQuantity}
+                              </Text>
+                            </View>
+
+                            {historicalPurchasePreview.batches.length ===
+                            0 ? (
+                              <Text
+                                style={{
+                                  color:
+                                    colors.mutedForeground,
+                                  fontWeight:
+                                    "700",
+                                  textAlign:
+                                    "right",
+                                }}
+                              >
+                                لا توجد دفعة شراء سابقة غير مرتبطة بفاتورة لهذا الصنف.
+                              </Text>
+                            ) : (
+                              historicalPurchasePreview.batches.map(
+                                (
+                                  batch,
+                                  index,
+                                ) => {
+                                  const selected =
+                                    batch.sourceKey ===
+                                    selectedHistoricalBatchKey;
+
+                                  const batchLabel =
+                                    batch.sourceType ===
+                                    "opening"
+                                      ? "الدفعة الأولى"
+                                      : batch.sourceType ===
+                                          "repeat_purchase"
+                                        ? `دفعة شراء إضافية ${index + 1}`
+                                        : "دفعة قديمة غير مسعّرة";
+
+                                  return (
+                                    <Pressable
+                                      key={
+                                        batch.sourceKey
+                                      }
+                                      onPress={() => {
+                                        setSelectedHistoricalBatchKey(
+                                          batch.sourceKey,
+                                        );
+
+                                        if (
+                                          batch.unitCostMinor !==
+                                          null
+                                        ) {
+                                          setEditNewBatchCostInput(
+                                            "",
+                                          );
+                                        }
+                                      }}
+                                      style={{
+                                        borderWidth: 1,
+                                        borderColor:
+                                          selected
+                                            ? colors.primary
+                                            : colors.border,
+                                        backgroundColor:
+                                          selected
+                                            ? colors.primary +
+                                              "12"
+                                            : colors.card,
+                                        borderRadius: 10,
+                                        padding: 11,
+                                        gap: 4,
+                                      }}
+                                    >
+                                      <Text
+                                        style={{
+                                          color:
+                                            colors.foreground,
+                                          fontWeight:
+                                            "900",
+                                          textAlign:
+                                            "right",
+                                        }}
+                                      >
+                                        {batchLabel} — الكمية {batch.quantity}
+                                      </Text>
+
+                                      <Text
+                                        style={{
+                                          color:
+                                            batch.unitCostMinor ===
+                                            null
+                                              ? colors.destructive
+                                              : colors.mutedForeground,
+                                          fontSize: 12,
+                                          fontWeight:
+                                            "700",
+                                          textAlign:
+                                            "right",
+                                        }}
+                                      >
+                                        {batch.unitCostMinor ===
+                                        null
+                                          ? "التكلفة غير مدخلة — سيُطلب إدخالها"
+                                          : `تكلفة القطعة المسجلة: ${(
+                                              batch.unitCostMinor /
+                                              100
+                                            ).toFixed(
+                                              2,
+                                            )} ₪`}
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                },
+                              )
+                            )}
+                          </>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <Text
+                          style={{
+                            color:
+                              colors.mutedForeground,
+                            fontSize: 12,
+                            lineHeight: 19,
+                            textAlign:
+                              "right",
+                          }}
+                        >
+                          لمنتج جديد لا يوجد تاريخ مبيعات داخل النظام لحسابه تلقائيًا؛ أدخل الكمية الأصلية للبضاعة القديمة.
+                        </Text>
+
+                        <TextInput
+                          value={
+                            historicalPurchaseQuantityInput
+                          }
+                          onChangeText={
+                            setHistoricalPurchaseQuantityInput
+                          }
+                          placeholder="الكمية الأصلية للشراء السابق"
+                          placeholderTextColor={
+                            colors.mutedForeground
+                          }
+                          keyboardType="number-pad"
+                          style={{
+                            borderWidth: 1,
+                            borderColor:
+                              colors.border,
+                            borderRadius: 10,
+                            padding: 11,
+                            color:
+                              colors.foreground,
+                            backgroundColor:
+                              colors.background,
+                            textAlign:
+                              "right",
+                          }}
+                        />
+                      </>
+                    )}
                   </>
                 )}
               </>
@@ -4120,8 +4569,8 @@ export default function AddProductScreen() {
                 >
                   {purchaseSupplierId
                     ? purchaseEntryMode === "historical"
-                      ? "تكلفة الشراء السابق اختيارية الآن. الكمية الحالية للمنتج لن تتغير."
-                      : "تكلفة الشراء اختيارية في المسودة. إذا تركتها فارغة تبقى التكلفة غير مدخلة حتى تكملها قبل اعتماد فاتورة المورد."
+                      ? "تكلفة الشراء مطلوبة للمنتج الجديد لأن النظام لا يملك تكلفة سابقة يعتمد عليها."
+                      : "تكلفة الشراء مطلوبة عند إدخال منتج جديد مع مورد."
                     : "تكلفة القطعة الافتتاحية اختيارية. إذا تركتها فارغة سيُحفظ المنتج والمخزون وتظهر التكلفة كغير مدخلة حتى تضيفها لاحقاً. بدون مورد لن تُنشأ فاتورة مشتريات."}
                 </Text>
 
@@ -4134,7 +4583,7 @@ export default function AddProductScreen() {
                   }
                   placeholder={
                     purchaseSupplierId
-                      ? "تكلفة الشراء للقطعة بالشيكل — اختياري"
+                      ? "تكلفة الشراء للقطعة بالشيكل — مطلوبة"
                       : "التكلفة الافتتاحية للقطعة بالشيكل"
                   }
                   placeholderTextColor={
@@ -4168,37 +4617,112 @@ export default function AddProductScreen() {
                 >
                   {purchaseSupplierId
                     ? purchaseEntryMode === "historical"
-                      ? "سيُسجل الشراء السابق على مسودة المورد بدون تعديل مخزون اليوم. أدخل كامل الكمية الأصلية (المتبقي + المباع سابقًا)، وسيتم التحقق منها عند اعتماد الفاتورة."
-                      : "عند زيادة الكمية، ستُضاف الزيادة فقط إلى مسودة المورد. تكلفة الشراء اختيارية الآن ويمكن إكمالها قبل اعتماد الفاتورة."
+                      ? "النظام يحسب دفعات الشراء السابق تلقائيًا. إذا كانت تكلفة الدفعة مسجلة سيستخدمها، وإذا لم تكن مسجلة سيطلب إدخالها."
+                      : "عند زيادة الكمية، ستُضاف الزيادة فقط إلى مسودة المورد. أدخل تكلفة الدفعة الجديدة إذا كانت معروفة، ويمكن إكمالها من الفاتورة إذا كان للمنتج تكلفة سابقة."
                     : "إذا زدت كمية المخزون بدون مورد، اختر تكلفة الكمية الجديدة حسب منطق المخزون اليدوي."}
                 </Text>
 
                 {purchaseSupplierId ? (
-                  <TextInput
-                    value={
-                      editNewBatchCostInput
-                    }
-                    onChangeText={
-                      setEditNewBatchCostInput
-                    }
-                    placeholder="تكلفة الشراء للقطعة بالشيكل — اختياري"
-                    placeholderTextColor={
-                      colors.mutedForeground
-                    }
-                    keyboardType="decimal-pad"
-                    style={{
-                      borderWidth: 1,
-                      borderColor:
-                        colors.border,
-                      borderRadius: 10,
-                      padding: 11,
-                      color:
-                        colors.foreground,
-                      backgroundColor:
-                        colors.background,
-                      textAlign: "right",
-                    }}
-                  />
+                  purchaseEntryMode ===
+                  "historical" ? (
+                    selectedHistoricalBatch?.unitCostMinor !==
+                    null &&
+                    selectedHistoricalBatch ? (
+                      <View
+                        style={{
+                          borderWidth: 1,
+                          borderColor:
+                            colors.border,
+                          borderRadius: 10,
+                          padding: 11,
+                          backgroundColor:
+                            colors.background,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              colors.foreground,
+                            fontWeight:
+                              "800",
+                            textAlign:
+                              "right",
+                          }}
+                        >
+                          تكلفة القطعة المسجلة: {(
+                            selectedHistoricalBatch.unitCostMinor /
+                            100
+                          ).toFixed(2)} ₪
+                        </Text>
+                        <Text
+                          style={{
+                            color:
+                              colors.mutedForeground,
+                            fontSize: 12,
+                            marginTop: 3,
+                            textAlign:
+                              "right",
+                          }}
+                        >
+                          سيتم استخدامها تلقائيًا بدون إعادة تسجيل التكلفة.
+                        </Text>
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={
+                          editNewBatchCostInput
+                        }
+                        onChangeText={
+                          setEditNewBatchCostInput
+                        }
+                        placeholder="تكلفة الشراء للقطعة — مطلوبة"
+                        placeholderTextColor={
+                          colors.mutedForeground
+                        }
+                        keyboardType="decimal-pad"
+                        style={{
+                          borderWidth: 1,
+                          borderColor:
+                            colors.destructive,
+                          borderRadius: 10,
+                          padding: 11,
+                          color:
+                            colors.foreground,
+                          backgroundColor:
+                            colors.background,
+                          textAlign:
+                            "right",
+                        }}
+                      />
+                    )
+                  ) : (
+                    <TextInput
+                      value={
+                        editNewBatchCostInput
+                      }
+                      onChangeText={
+                        setEditNewBatchCostInput
+                      }
+                      placeholder="تكلفة الدفعة الجديدة بالشيكل — اتركها فارغة لإكمالها من الفاتورة"
+                      placeholderTextColor={
+                        colors.mutedForeground
+                      }
+                      keyboardType="decimal-pad"
+                      style={{
+                        borderWidth: 1,
+                        borderColor:
+                          colors.border,
+                        borderRadius: 10,
+                        padding: 11,
+                        color:
+                          colors.foreground,
+                        backgroundColor:
+                          colors.background,
+                        textAlign:
+                          "right",
+                      }}
+                    />
+                  )
                 ) : (
                   <>
                   <View

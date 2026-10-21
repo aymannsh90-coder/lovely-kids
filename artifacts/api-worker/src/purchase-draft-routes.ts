@@ -1210,31 +1210,23 @@ async function handleSaveDraft(
           );
         }
 
-        const currentByProduct =
-          new Map(
-            currentItems.map(
-              (item) => [
-                item.productId,
-                item,
-              ],
-            ),
-          );
-
-        for (const item of items) {
-          if (item.productId === null) {
-            throw new PurchaseDraftError(
-              "أصناف فاتورة المشتريات يجب أن تأتي من صفحة المنتج.",
-              409,
-            );
-          }
+        for (
+          let index = 0;
+          index < items.length;
+          index += 1
+        ) {
+          const item =
+            items[index];
 
           const current =
-            currentByProduct.get(
-              item.productId,
-            );
+            currentItems[index];
 
           if (
+            !item ||
+            item.productId === null ||
             !current ||
+            current.productId !==
+              item.productId ||
             current.quantity !==
               item.quantity ||
             current.freeQuantity !==
@@ -1251,6 +1243,21 @@ async function handleSaveDraft(
 
         const resolvedLines =
           await resolveLines(tx, items);
+
+        const resolvedLinesWithSource =
+          resolvedLines.map(
+            (line, index) => ({
+              ...line,
+              historicalSourceKey:
+                currentItems[index]
+                  ?.historicalSourceKey ??
+                null,
+              historicalDocumentationOnly:
+                currentItems[index]
+                  ?.historicalDocumentationOnly ??
+                false,
+            }),
+          );
 
         const updatedRows = await tx
           .update(posPurchasesTable)
@@ -1310,7 +1317,7 @@ async function handleSaveDraft(
         const insertedItems = await tx
           .insert(posPurchaseItemsTable)
           .values(
-            resolvedLines.map((line) => ({
+            resolvedLinesWithSource.map((line) => ({
               ...line,
               purchaseId: purchase.id,
             })),
