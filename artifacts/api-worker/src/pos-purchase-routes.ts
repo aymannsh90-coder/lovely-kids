@@ -2216,6 +2216,69 @@ async function handleCreatePurchase(
         }
       }
 
+      const historicalSourceKeys =
+        [
+          ...new Set(
+            comparableDraftItems
+              .map(
+                (item) =>
+                  item.historicalSourceKey,
+              )
+              .filter(
+                (
+                  value,
+                ): value is string =>
+                  typeof value ===
+                    "string" &&
+                  value.length > 0,
+              ),
+          ),
+        ];
+
+      for (
+        const sourceKey
+        of historicalSourceKeys
+      ) {
+        const sourceRows =
+          await tx
+            .select({
+              purchaseId:
+                posPurchaseItemsTable.purchaseId,
+            })
+            .from(
+              posPurchaseItemsTable,
+            )
+            .where(
+              eq(
+                posPurchaseItemsTable.historicalSourceKey,
+                sourceKey,
+              ),
+            )
+            .for("update");
+
+        const expectedDraftPurchaseId =
+          comparableDraftItems.find(
+            (item) =>
+              item.historicalSourceKey ===
+              sourceKey,
+          )?.purchaseId;
+
+        if (
+          expectedDraftPurchaseId ===
+            undefined ||
+          sourceRows.some(
+            (row) =>
+              row.purchaseId !==
+              expectedDraftPurchaseId,
+          )
+        ) {
+          throw new PurchaseError(
+            "إحدى دفعات الشراء السابق مرتبطة مسبقًا بفاتورة أخرى",
+            409,
+          );
+        }
+      }
+
       const historicalMetadataByLineNumber =
         new Map<
           number,
