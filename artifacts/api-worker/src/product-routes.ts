@@ -464,12 +464,16 @@ async function handleCreateProduct(
   const rawPurchaseQuantity =
     bodyRecord?.purchaseQuantity;
 
+  const rawPurchaseHistoricalSourceKey =
+    bodyRecord?.purchaseHistoricalSourceKey;
+
   const hasPurchaseDraftMetadata =
     rawPurchaseSupplierId !== undefined ||
     rawPurchaseUnitCostMinor !== undefined ||
     rawPurchaseBusinessDate !== undefined ||
     rawPurchaseEntryMode !== undefined ||
-    rawPurchaseQuantity !== undefined;
+    rawPurchaseQuantity !== undefined ||
+    rawPurchaseHistoricalSourceKey !== undefined;
 
   if (
     hasPurchaseDraftMetadata &&
@@ -615,6 +619,25 @@ async function handleCreateProduct(
       parsedQuantity;
   }
 
+  const purchaseHistoricalSourceKey =
+    typeof rawPurchaseHistoricalSourceKey === "string" &&
+    rawPurchaseHistoricalSourceKey.trim()
+      ? rawPurchaseHistoricalSourceKey.trim()
+      : null;
+
+  if (
+    purchaseHistoricalSourceKey !== null &&
+    (
+      purchaseHistoricalSourceKey.length < 8 ||
+      purchaseHistoricalSourceKey.length > 160
+    )
+  ) {
+    return json(
+      { error: "مرجع دفعة الشراء السابق غير صالح" },
+      400,
+    );
+  }
+
   const purchaseBusinessDate =
     typeof rawPurchaseBusinessDate === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
@@ -626,7 +649,8 @@ async function handleCreateProduct(
     (
       rawPurchaseUnitCostMinor !== undefined ||
       rawPurchaseEntryMode !== undefined ||
-      rawPurchaseQuantity !== undefined
+      rawPurchaseQuantity !== undefined ||
+      rawPurchaseHistoricalSourceKey !== undefined
     )
   ) {
     return json(
@@ -638,10 +662,14 @@ async function handleCreateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "historical" &&
-    purchaseQuantity === null
+    purchaseQuantity === null &&
+    purchaseHistoricalSourceKey === null
   ) {
     return json(
-      { error: "أدخل الكمية الأصلية للشراء السابق" },
+      {
+        error:
+          "اختر دفعة الشراء السابق المحسوبة تلقائيًا",
+      },
       400,
     );
   }
@@ -649,10 +677,26 @@ async function handleCreateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "stock_receipt" &&
-    purchaseQuantity !== null
+    (
+      purchaseQuantity !== null ||
+      purchaseHistoricalSourceKey !== null
+    )
   ) {
     return json(
-      { error: "كمية الشراء اليدوية متاحة فقط للشراء السابق" },
+      { error: "مرجع أو كمية الشراء السابق متاحان فقط للشراء السابق" },
+      400,
+    );
+  }
+
+  if (
+    purchaseSupplierId !== null &&
+    purchaseUnitCostMinor === null
+  ) {
+    return json(
+      {
+        error:
+          "أدخل تكلفة الشراء لأن المنتج لا يملك تكلفة مسجلة مسبقًا",
+      },
       400,
     );
   }
@@ -691,6 +735,7 @@ async function handleCreateProduct(
     delete cleanProductBody.purchaseBusinessDate;
     delete cleanProductBody.purchaseEntryMode;
     delete cleanProductBody.purchaseQuantity;
+    delete cleanProductBody.purchaseHistoricalSourceKey;
   }
 
   const parsed =
@@ -969,6 +1014,10 @@ async function handleCreateProduct(
             purchaseUnitCostMinor,
           entryMode:
             purchaseEntryMode,
+          historicalSourceKey:
+            purchaseHistoricalSourceKey,
+          historicalDocumentationOnly:
+            false,
           businessDate:
             purchaseBusinessDate,
           warehouseKey:
@@ -1078,12 +1127,16 @@ async function handleUpdateProduct(
   const rawPurchaseQuantity =
     bodyRecord?.purchaseQuantity;
 
+  const rawPurchaseHistoricalSourceKey =
+    bodyRecord?.purchaseHistoricalSourceKey;
+
   const hasPurchaseDraftMetadata =
     rawPurchaseSupplierId !== undefined ||
     rawPurchaseUnitCostMinor !== undefined ||
     rawPurchaseBusinessDate !== undefined ||
     rawPurchaseEntryMode !== undefined ||
-    rawPurchaseQuantity !== undefined;
+    rawPurchaseQuantity !== undefined ||
+    rawPurchaseHistoricalSourceKey !== undefined;
 
   if (
     hasPurchaseDraftMetadata &&
@@ -1201,6 +1254,25 @@ async function handleUpdateProduct(
       parsedQuantity;
   }
 
+  const purchaseHistoricalSourceKey =
+    typeof rawPurchaseHistoricalSourceKey === "string" &&
+    rawPurchaseHistoricalSourceKey.trim()
+      ? rawPurchaseHistoricalSourceKey.trim()
+      : null;
+
+  if (
+    purchaseHistoricalSourceKey !== null &&
+    (
+      purchaseHistoricalSourceKey.length < 8 ||
+      purchaseHistoricalSourceKey.length > 160
+    )
+  ) {
+    return json(
+      { error: "مرجع دفعة الشراء السابق غير صالح" },
+      400,
+    );
+  }
+
   const purchaseBusinessDate =
     typeof rawPurchaseBusinessDate === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(rawPurchaseBusinessDate)
@@ -1212,7 +1284,8 @@ async function handleUpdateProduct(
     (
       rawPurchaseUnitCostMinor !== undefined ||
       rawPurchaseEntryMode !== undefined ||
-      rawPurchaseQuantity !== undefined
+      rawPurchaseQuantity !== undefined ||
+      rawPurchaseHistoricalSourceKey !== undefined
     )
   ) {
     return json(
@@ -1224,10 +1297,14 @@ async function handleUpdateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "historical" &&
-    purchaseQuantity === null
+    purchaseQuantity === null &&
+    purchaseHistoricalSourceKey === null
   ) {
     return json(
-      { error: "أدخل الكمية الأصلية للشراء السابق" },
+      {
+        error:
+          "اختر دفعة الشراء السابق المحسوبة تلقائيًا",
+      },
       400,
     );
   }
@@ -1235,10 +1312,13 @@ async function handleUpdateProduct(
   if (
     purchaseSupplierId !== null &&
     purchaseEntryMode === "stock_receipt" &&
-    purchaseQuantity !== null
+    (
+      purchaseQuantity !== null ||
+      purchaseHistoricalSourceKey !== null
+    )
   ) {
     return json(
-      { error: "كمية الشراء اليدوية متاحة فقط للشراء السابق" },
+      { error: "مرجع أو كمية الشراء السابق متاحان فقط للشراء السابق" },
       400,
     );
   }
@@ -1291,6 +1371,7 @@ async function handleUpdateProduct(
     delete cleanProductBody.purchaseBusinessDate;
     delete cleanProductBody.purchaseEntryMode;
     delete cleanProductBody.purchaseQuantity;
+    delete cleanProductBody.purchaseHistoricalSourceKey;
   }
 
   const parsed =
