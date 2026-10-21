@@ -1,14 +1,7 @@
 import {
-  exchangeDocumentsTable,
-  exchangeReturnItemsTable,
-  exchangeSaleItemsTable,
-  ordersTable,
+  inventoryMovementsTable,
   posPurchaseItemsTable,
   posPurchasesTable,
-  posSaleItemsTable,
-  posSaleReturnItemsTable,
-  posSaleReturnsTable,
-  posSalesTable,
   productCostLedgerTable,
   productCostStateTable,
   productsTable,
@@ -29,32 +22,6 @@ import {
 
 export class HistoricalPurchasePreviewError extends Error {}
 
-function parseProductId(value: unknown): number | null {
-  const numeric =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : Number.NaN;
-
-  return Number.isSafeInteger(numeric) && numeric > 0
-    ? numeric
-    : null;
-}
-
-function parseQuantity(value: unknown): number | null {
-  const numeric =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : Number.NaN;
-
-  return Number.isSafeInteger(numeric) && numeric > 0
-    ? numeric
-    : null;
-}
-
 function deriveUnitCostMinor(
   totalMinor: number,
   quantity: number,
@@ -71,223 +38,104 @@ function deriveUnitCostMinor(
   return Math.round(totalMinor / quantity);
 }
 
-async function getNetCompletedSoldQuantity(
+const CUSTOMER_MOVEMENT_TYPES = [
+  "pos_sale",
+  "pos_sale_void",
+  "pos_sale_edit",
+  "pos_sale_return",
+  "pos_sale_return_void",
+  "online_order",
+  "online_order_cancel",
+  "online_order_restore",
+  "online_order_edit",
+  "exchange_return",
+  "exchange_sale",
+  "exchange_return_void",
+  "exchange_sale_void",
+] as const;
+
+async function getInventoryMovementSummary(
   tx: any,
   productId: number,
 ) {
-  const [
-    posSales,
-    posReturns,
-    exchangeSales,
-    exchangeReturns,
-    orders,
-  ] = await Promise.all([
-    tx
+  const rows =
+    await tx
       .select({
-        quantity: posSaleItemsTable.quantity,
+        movementType:
+          inventoryMovementsTable.movementType,
+        sourceType:
+          inventoryMovementsTable.sourceType,
+        quantityDelta:
+          inventoryMovementsTable.quantityDelta,
       })
-      .from(posSaleItemsTable)
-      .innerJoin(
-        posSalesTable,
+      .from(inventoryMovementsTable)
+      .where(
         eq(
-          posSalesTable.id,
-          posSaleItemsTable.saleId,
+          inventoryMovementsTable.productId,
+          productId,
         ),
+      );
+
+  let outboundQuantity = 0;
+  let inboundQuantity = 0;
+  let customerNetDelta = 0;
+  let manualAdjustmentOutQuantity = 0;
+
+  for (const row of rows) {
+    if (
+      row.movementType === "adjustment" &&
+      row.sourceType === "manual" &&
+      row.quantityDelta < 0
+    ) {
+      manualAdjustmentOutQuantity +=
+        Math.abs(row.quantityDelta);
+    }
+
+    if (
+      !CUSTOMER_MOVEMENT_TYPES.includes(
+        row.movementType as
+          (typeof CUSTOMER_MOVEMENT_TYPES)[number],
       )
-      .where(
-        and(
-          eq(
-            posSaleItemsTable.productId,
-            productId,
-          ),
-          eq(
-            posSalesTable.status,
-            "completed",
-          ),
-        ),
-      ),
-
-    tx
-      .select({
-        quantity:
-          posSaleReturnItemsTable.quantity,
-      })
-      .from(posSaleReturnItemsTable)
-      .innerJoin(
-        posSaleReturnsTable,
-        eq(
-          posSaleReturnsTable.id,
-          posSaleReturnItemsTable.returnId,
-        ),
-      )
-      .where(
-        and(
-          eq(
-            posSaleReturnItemsTable.productId,
-            productId,
-          ),
-          eq(
-            posSaleReturnsTable.status,
-            "completed",
-          ),
-        ),
-      ),
-
-    tx
-      .select({
-        quantity:
-          exchangeSaleItemsTable.quantity,
-      })
-      .from(exchangeSaleItemsTable)
-      .innerJoin(
-        exchangeDocumentsTable,
-        eq(
-          exchangeDocumentsTable.id,
-          exchangeSaleItemsTable.exchangeId,
-        ),
-      )
-      .where(
-        and(
-          eq(
-            exchangeSaleItemsTable.productId,
-            productId,
-          ),
-          eq(
-            exchangeDocumentsTable.status,
-            "completed",
-          ),
-          inArray(
-            exchangeDocumentsTable.sourceType,
-            ["pos_sale", "pos_no_receipt"],
-          ),
-        ),
-      ),
-
-    tx
-      .select({
-        quantity:
-          exchangeReturnItemsTable.quantity,
-      })
-      .from(exchangeReturnItemsTable)
-      .innerJoin(
-        exchangeDocumentsTable,
-        eq(
-          exchangeDocumentsTable.id,
-          exchangeReturnItemsTable.exchangeId,
-        ),
-      )
-      .where(
-        and(
-          eq(
-            exchangeReturnItemsTable.productId,
-            productId,
-          ),
-          eq(
-            exchangeDocumentsTable.status,
-            "completed",
-          ),
-          inArray(
-            exchangeDocumentsTable.sourceType,
-            ["pos_sale", "pos_no_receipt"],
-          ),
-        ),
-      ),
-
-    tx
-      .select({
-        items:
-          ordersTable.items,
-      })
-      .from(ordersTable)
-      .where(
-        eq(
-          ordersTable.status,
-          "done",
-        ),
-      ),
-  ]);
-
-  let onlineSold = 0;
-
-  for (const order of orders) {
-    if (!Array.isArray(order.items)) {
+    ) {
       continue;
     }
 
-    for (const rawItem of order.items) {
-      if (
-        !rawItem ||
-        typeof rawItem !== "object" ||
-        Array.isArray(rawItem)
-      ) {
-        continue;
-      }
+    customerNetDelta +=
+      row.quantityDelta;
 
-      const item =
-        rawItem as Record<string, unknown>;
-
-      if (
-        parseProductId(item.id) !==
-        productId
-      ) {
-        continue;
-      }
-
-      const quantity =
-        parseQuantity(item.quantity);
-
-      if (quantity === null) {
-        throw new HistoricalPurchasePreviewError(
-          "تعذر قراءة كمية إحدى المبيعات القديمة",
-        );
-      }
-
-      onlineSold += quantity;
+    if (row.quantityDelta < 0) {
+      outboundQuantity +=
+        Math.abs(row.quantityDelta);
+    } else {
+      inboundQuantity +=
+        row.quantityDelta;
     }
   }
 
-  const positiveQuantity =
-    posSales.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    ) +
-    exchangeSales.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    ) +
-    onlineSold;
-
-  const returnQuantity =
-    posReturns.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    ) +
-    exchangeReturns.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    );
-
-  const net =
-    positiveQuantity -
-    returnQuantity;
+  const netSoldQuantity =
+    -customerNetDelta;
 
   if (
-    !Number.isSafeInteger(net) ||
-    net < 0
+    !Number.isSafeInteger(
+      netSoldQuantity,
+    ) ||
+    netSoldQuantity < 0 ||
+    !Number.isSafeInteger(
+      manualAdjustmentOutQuantity,
+    )
   ) {
     throw new HistoricalPurchasePreviewError(
-      "صافي المبيعات القديمة غير صالح للحساب التلقائي",
+      "صافي حركات البيع القديمة غير صالح للحساب التلقائي",
     );
   }
 
   return {
-    positiveQuantity,
-    returnQuantity,
-    netSoldQuantity: net,
+    positiveQuantity:
+      outboundQuantity,
+    returnQuantity:
+      inboundQuantity,
+    netSoldQuantity,
+    manualAdjustmentOutQuantity,
   };
 }
 
@@ -385,7 +233,7 @@ export async function getHistoricalPurchasePreview(
       )
       .limit(1),
 
-    getNetCompletedSoldQuantity(
+    getInventoryMovementSummary(
       tx,
       input.productId,
     ),
@@ -494,34 +342,11 @@ export async function getHistoricalPurchasePreview(
       0,
     );
 
-  const manualAdjustmentOutQuantity =
-    ledgerRows.reduce(
-      (
-        sum: number,
-        row: {
-          eventType: string;
-          sourceType: string | null;
-          quantityDelta: number;
-        },
-      ) =>
-        row.quantityDelta < 0 &&
-        row.eventType ===
-          "adjustment_out" &&
-        row.sourceType ===
-          "manual_stock"
-          ? sum +
-            Math.abs(
-              row.quantityDelta,
-            )
-          : sum,
-      0,
-    );
-
   const totalHistoricalQuantity =
     physicalQuantity -
     pendingStockReceiptQuantity +
     sold.netSoldQuantity +
-    manualAdjustmentOutQuantity -
+    sold.manualAdjustmentOutQuantity -
     purchaseBackedQuantity;
 
   if (
