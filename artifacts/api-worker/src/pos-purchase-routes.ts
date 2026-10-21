@@ -41,6 +41,7 @@ import {
 import {
   backfillHistoricalPurchaseCosts,
   HistoricalPurchaseCostBackfillError,
+  inspectHistoricalPurchaseMovements,
 } from "./historical-purchase-cost-backfill";
 import {
   getProductQuantity,
@@ -255,6 +256,95 @@ function allocateApprovedPurchaseCosts(
 
   return allocations;
 }
+
+function allocateIntegerTarget(
+  weights: number[],
+  target: number,
+) {
+  const totalWeight =
+    weights.reduce(
+      (sum, value) =>
+        sum + value,
+      0,
+    );
+
+  if (
+    !Number.isSafeInteger(
+      totalWeight,
+    ) ||
+    totalWeight < 0 ||
+    !Number.isSafeInteger(
+      target,
+    ) ||
+    target < 0 ||
+    target > totalWeight
+  ) {
+    throw new PurchaseError(
+      "تعذر توزيع تجميع الشراء السابق بدقة",
+      409,
+    );
+  }
+
+  if (totalWeight === 0) {
+    if (target !== 0) {
+      throw new PurchaseError(
+        "تعذر توزيع تجميع الشراء السابق بدقة",
+        409,
+      );
+    }
+
+    return weights.map(
+      () => 0,
+    );
+  }
+
+  let cumulativeWeight = 0;
+  let allocatedSoFar = 0;
+
+  return weights.map(
+    (weight) => {
+      if (
+        !Number.isSafeInteger(
+          weight,
+        ) ||
+        weight < 0
+      ) {
+        throw new PurchaseError(
+          "تعذر توزيع تجميع الشراء السابق بدقة",
+          409,
+        );
+      }
+
+      cumulativeWeight +=
+        weight;
+
+      const targetAllocated =
+        Number(
+          (
+            BigInt(
+              cumulativeWeight,
+            ) *
+            BigInt(
+              target,
+            )
+          ) /
+            BigInt(
+              totalWeight,
+            ),
+        );
+
+      const allocated =
+        targetAllocated -
+        allocatedSoFar;
+
+      allocatedSoFar =
+        targetAllocated;
+
+      return allocated;
+    },
+  );
+}
+
 async function requirePurchaseOwner(
   request: Request,
   db: Db,
@@ -2429,8 +2519,41 @@ async function handleCreatePurchase(
           left - right,
       );
 
-      const historicalGapByProduct =
-        new Map<number, number>();
+      type HistoricalSplit = {
+        stockQuantityApplied: number;
+        historicalSoldQuantity: number;
+        stockCostTotalMinor: number;
+        historicalSoldCostTotalMinor: number;
+      };
+
+      type HistoricalFinalization = {
+        productId: number;
+        productName: string;
+        totalReceivedQuantity: number;
+        totalCostTotalMinor: number;
+        stockQuantityApplied: number;
+        historicalSoldQuantity: number;
+        stockCostTotalMinor: number;
+        historicalSoldCostTotalMinor: number;
+        priorSplits: Array<
+          HistoricalSplit & {
+            purchaseItemId: number;
+          }
+        >;
+        currentSplits:
+          Map<number, HistoricalSplit>;
+      };
+
+      const historicalPlansByProduct =
+        new Map<
+          number,
+          {
+            pending: boolean;
+            finalization:
+              HistoricalFinalization |
+              null;
+          }
+        >();
 
       for (
         const productId
@@ -2510,51 +2633,401 @@ async function handleCreatePurchase(
           physicalQuantity -
           explainedPhysicalQuantity;
 
-        const historicalPurchaseQuantity =
-          costAllocations
-            .filter(
-              (entry) =>
-                entry.item.productId ===
-                  productId &&
-                entry.item.entryMode ===
-                  "historical",
+        const currentHistoricalAllocations =
+          costAllocations.filter(
+            (entry) =>
+              entry.item.productId ===
+                productId &&
+              entry.item.entryMode ===
+                "historical",
+          );
+
+        const priorHistoricalCostRows =
+          await tx
+            .select({
+              purchaseItemId:
+                posPurchaseItemCostsTable.purchaseItemId,
+              receivedQuantity:
+                posPurchaseItemCostsTable.receivedQuantity,
+              costTotalMinor:
+                posPurchaseItemCostsTable.costTotalMinor,
+              historicalAllocationPending:
+                posPurchaseItemCostsTable.historicalAllocationPending,
+            })
+            .from(
+              posPurchaseItemCostsTable,
             )
-            .reduce(
-              (sum, entry) =>
-                sum +
-                entry.receivedQuantity,
-              0,
+            .innerJoin(
+              posPurchaseItemsTable,
+              eq(
+                posPurchaseItemsTable.id,
+                posPurchaseItemCostsTable.purchaseItemId,
+              ),
+            )
+            .innerJoin(
+              posPurchasesTable,
+              eq(
+                posPurchasesTable.id,
+                posPurchaseItemsTable.purchaseId,
+              ),
+            )
+            .where(
+              and(
+                eq(
+                  posPurchaseItemCostsTable.productId,
+                  productId,
+                ),
+                eq(
+                  posPurchaseItemsTable.entryMode,
+                  "historical",
+                ),
+                eq(
+                  posPurchasesTable.status,
+                  "completed",
+                ),
+              ),
+            )
+            .for("update");
+
+        const priorPendingRows =
+          priorHistoricalCostRows.filter(
+            (row) =>
+              row.historicalAllocationPending,
+          );
+
+        const priorFinalizedRows =
+          priorHistoricalCostRows.filter(
+            (row) =>
+              !row.historicalAllocationPending,
+          );
+
+        if (
+          currentHistoricalAllocations.length ===
+          0
+        ) {
+          if (
+            priorPendingRows.length >
+            0
+          ) {
+            throw new PurchaseError(
+              `الصنف ${product.nameAr} لديه تجميع شراء سابق غير مكتمل. أكمل فواتير الشراء السابقة قبل اعتماد استلام جديد.`,
+              409,
             );
+          }
+
+          if (historicalGap > 0) {
+            throw new PurchaseError(
+              `الصنف ${product.nameAr} لديه مخزون سابق غير ممثل في محرك التكلفة. سجله كشراء سابق أو أدخل تكلفة أول المدة قبل اعتماد الفاتورة.`,
+              409,
+            );
+          }
+
+          continue;
+        }
 
         if (
-          historicalGap > 0 &&
-          historicalPurchaseQuantity <
-            historicalGap
+          priorFinalizedRows.length >
+          0
         ) {
           throw new PurchaseError(
-            `الشراء السابق للصنف ${product.nameAr} لا يغطي كامل المخزون القديم غير الممثل محاسبيًا. الكمية المطلوبة لتسوية المخزون الحالي: ${historicalGap}.`,
+            `تم إنهاء تسوية الشراء السابق للصنف ${product.nameAr} مسبقًا. أي فاتورة تاريخية إضافية تحتاج مسار تصحيح منفصل حتى لا تتكرر التكلفة.`,
+            409,
+          );
+        }
+
+        let movementSummary;
+
+        try {
+          movementSummary =
+            await inspectHistoricalPurchaseMovements(
+              tx,
+              {
+                productId,
+                productName:
+                  product.nameAr,
+              },
+            );
+        } catch (error) {
+          if (
+            error instanceof
+            HistoricalPurchaseCostBackfillError
+          ) {
+            throw new PurchaseError(
+              error.message,
+              409,
+            );
+          }
+
+          throw error;
+        }
+
+        const requiredHistoricalQuantity =
+          historicalGap +
+          movementSummary
+            .netHistoricalSoldQuantity;
+
+        if (
+          !Number.isSafeInteger(
+            requiredHistoricalQuantity,
+          ) ||
+          requiredHistoricalQuantity <
+            0
+        ) {
+          throw new PurchaseError(
+            `تعذر حساب إجمالي الشراء السابق المطلوب للصنف ${product.nameAr}`,
+            409,
+          );
+        }
+
+        const priorReceivedQuantity =
+          priorPendingRows.reduce(
+            (sum, row) =>
+              sum +
+              row.receivedQuantity,
+            0,
+          );
+
+        const priorCostTotalMinor =
+          priorPendingRows.reduce(
+            (sum, row) =>
+              sum +
+              row.costTotalMinor,
+            0,
+          );
+
+        const currentReceivedQuantity =
+          currentHistoricalAllocations.reduce(
+            (sum, entry) =>
+              sum +
+              entry.receivedQuantity,
+            0,
+          );
+
+        const currentCostTotalMinor =
+          currentHistoricalAllocations.reduce(
+            (sum, entry) =>
+              sum +
+              entry.costTotalMinor,
+            0,
+          );
+
+        const totalReceivedQuantity =
+          priorReceivedQuantity +
+          currentReceivedQuantity;
+
+        const totalCostTotalMinor =
+          priorCostTotalMinor +
+          currentCostTotalMinor;
+
+        if (
+          !Number.isSafeInteger(
+            totalReceivedQuantity,
+          ) ||
+          totalReceivedQuantity <
+            0 ||
+          !Number.isSafeInteger(
+            totalCostTotalMinor,
+          ) ||
+          totalCostTotalMinor <
+            0 ||
+          totalCostTotalMinor >
+            MAX_MINOR
+        ) {
+          throw new PurchaseError(
+            `تجميع الشراء السابق للصنف ${product.nameAr} غير صالح`,
             409,
           );
         }
 
         if (
-          historicalGap > 0 &&
-          historicalPurchaseQuantity === 0
+          totalReceivedQuantity >
+          requiredHistoricalQuantity
         ) {
           throw new PurchaseError(
-            `الصنف ${product.nameAr} لديه مخزون سابق غير ممثل في محرك التكلفة. سجله كشراء سابق أو أدخل تكلفة أول المدة قبل اعتماد الفاتورة.`,
+            `إجمالي فواتير الشراء السابق للصنف ${product.nameAr} أكبر من الكمية التي يثبتها المخزون والحركات القديمة. المطلوب الكلي: ${requiredHistoricalQuantity}، والمسجل بعد هذه الفاتورة: ${totalReceivedQuantity}.`,
             409,
           );
         }
 
-        historicalGapByProduct.set(
+        if (
+          totalReceivedQuantity <
+          requiredHistoricalQuantity
+        ) {
+          historicalPlansByProduct.set(
+            productId,
+            {
+              pending: true,
+              finalization: null,
+            },
+          );
+
+          continue;
+        }
+
+        const historicalSoldQuantity =
+          movementSummary
+            .netHistoricalSoldQuantity;
+
+        const stockQuantityApplied =
+          historicalGap;
+
+        if (
+          stockQuantityApplied +
+            historicalSoldQuantity !==
+          totalReceivedQuantity
+        ) {
+          throw new PurchaseError(
+            `تجميع الشراء السابق للصنف ${product.nameAr} لا يتوازن مع المخزون والمبيعات القديمة`,
+            409,
+          );
+        }
+
+        const stockCostTotalMinor =
+          stockQuantityApplied <= 0
+            ? 0
+            : stockQuantityApplied ===
+                totalReceivedQuantity
+              ? totalCostTotalMinor
+              : allocateProportionalCostMinor(
+                  totalCostTotalMinor,
+                  stockQuantityApplied,
+                  totalReceivedQuantity,
+                );
+
+        const historicalSoldCostTotalMinor =
+          totalCostTotalMinor -
+          stockCostTotalMinor;
+
+        const batches = [
+          ...priorPendingRows.map(
+            (row) => ({
+              purchaseItemId:
+                row.purchaseItemId,
+              receivedQuantity:
+                row.receivedQuantity,
+              costTotalMinor:
+                row.costTotalMinor,
+              current:
+                false,
+            }),
+          ),
+          ...currentHistoricalAllocations.map(
+            (entry) => ({
+              purchaseItemId:
+                entry.item.id,
+              receivedQuantity:
+                entry.receivedQuantity,
+              costTotalMinor:
+                entry.costTotalMinor,
+              current:
+                true,
+            }),
+          ),
+        ];
+
+        const batchStockQuantities =
+          allocateIntegerTarget(
+            batches.map(
+              (batch) =>
+                batch.receivedQuantity,
+            ),
+            stockQuantityApplied,
+          );
+
+        const batchStockCosts =
+          allocateIntegerTarget(
+            batches.map(
+              (batch) =>
+                batch.costTotalMinor,
+            ),
+            stockCostTotalMinor,
+          );
+
+        const priorSplits:
+          HistoricalFinalization[
+            "priorSplits"
+          ] = [];
+
+        const currentSplits =
+          new Map<
+            number,
+            HistoricalSplit
+          >();
+
+        for (
+          let index = 0;
+          index <
+            batches.length;
+          index += 1
+        ) {
+          const batch =
+            batches[index]!;
+
+          const batchStockQuantity =
+            batchStockQuantities[
+              index
+            ] ?? 0;
+
+          const batchStockCost =
+            batchStockCosts[
+              index
+            ] ?? 0;
+
+          const split:
+            HistoricalSplit = {
+              stockQuantityApplied:
+                batchStockQuantity,
+              historicalSoldQuantity:
+                batch.receivedQuantity -
+                batchStockQuantity,
+              stockCostTotalMinor:
+                batchStockCost,
+              historicalSoldCostTotalMinor:
+                batch.costTotalMinor -
+                batchStockCost,
+            };
+
+          if (batch.current) {
+            currentSplits.set(
+              batch.purchaseItemId,
+              split,
+            );
+          } else {
+            priorSplits.push({
+              purchaseItemId:
+                batch.purchaseItemId,
+              ...split,
+            });
+          }
+        }
+
+        historicalPlansByProduct.set(
           productId,
-          historicalGap,
+          {
+            pending: false,
+            finalization: {
+              productId,
+              productName:
+                product.nameAr,
+              totalReceivedQuantity,
+              totalCostTotalMinor,
+              stockQuantityApplied,
+              historicalSoldQuantity,
+              stockCostTotalMinor,
+              historicalSoldCostTotalMinor,
+              priorSplits,
+              currentSplits,
+            },
+          },
         );
       }
 
       let inventoryPurchaseValueMinor = 0;
       let historicalSoldValueMinor = 0;
+      let historicalPendingValueMinor = 0;
+
+      const historicalFinalizations:
+        HistoricalFinalization[] = [];
 
       for (
         const allocation
@@ -2570,159 +3043,170 @@ async function handleCreatePurchase(
           );
         }
 
-        let stockQuantityApplied =
-          allocation.receivedQuantity;
-
         if (
           allocation.item.entryMode ===
           "historical"
         ) {
-          const remainingGap =
-            historicalGapByProduct.get(
+          const plan =
+            historicalPlansByProduct.get(
               productId,
-            ) ?? 0;
-
-          stockQuantityApplied =
-            Math.min(
-              allocation.receivedQuantity,
-              remainingGap,
             );
 
-          historicalGapByProduct.set(
-            productId,
-            remainingGap -
-              stockQuantityApplied,
-          );
+          if (!plan) {
+            throw new PurchaseError(
+              "تعذر تحديد خطة تجميع الشراء السابق",
+              409,
+            );
+          }
+
+          historicalPendingValueMinor +=
+            allocation.costTotalMinor;
+
+          if (
+            !Number.isSafeInteger(
+              historicalPendingValueMinor,
+            ) ||
+            historicalPendingValueMinor >
+              MAX_MINOR
+          ) {
+            throw new PurchaseError(
+              "قيمة المشتريات السابقة المعلقة تتجاوز الحد المسموح",
+              409,
+            );
+          }
+
+          if (plan.pending) {
+            await tx
+              .insert(
+                posPurchaseItemCostsTable,
+              )
+              .values({
+                purchaseItemId:
+                  allocation.item.id,
+
+                productId,
+
+                receivedQuantity:
+                  allocation.receivedQuantity,
+
+                unitCostMinor:
+                  deriveUnitCostMinor(
+                    allocation.costTotalMinor,
+                    allocation.receivedQuantity,
+                  ),
+
+                costTotalMinor:
+                  allocation.costTotalMinor,
+
+                stockQuantityApplied:
+                  0,
+
+                historicalSoldQuantity:
+                  0,
+
+                stockCostTotalMinor:
+                  0,
+
+                historicalSoldCostTotalMinor:
+                  0,
+
+                historicalAllocationPending:
+                  true,
+
+                invoiceDiscountAllocatedMinor:
+                  allocation.invoiceDiscountAllocatedMinor,
+
+                costQuality:
+                  "confirmed",
+              });
+
+            continue;
+          }
+
+          const finalization =
+            plan.finalization;
+
+          if (!finalization) {
+            throw new PurchaseError(
+              "تعذر إنهاء تجميع الشراء السابق",
+              409,
+            );
+          }
+
+          const split =
+            finalization
+              .currentSplits
+              .get(
+                allocation.item.id,
+              );
+
+          if (!split) {
+            throw new PurchaseError(
+              "تعذر توزيع أحد بنود الشراء السابق",
+              409,
+            );
+          }
+
+          await tx
+            .insert(
+              posPurchaseItemCostsTable,
+            )
+            .values({
+              purchaseItemId:
+                allocation.item.id,
+
+              productId,
+
+              receivedQuantity:
+                allocation.receivedQuantity,
+
+              unitCostMinor:
+                deriveUnitCostMinor(
+                  allocation.costTotalMinor,
+                  allocation.receivedQuantity,
+                ),
+
+              costTotalMinor:
+                allocation.costTotalMinor,
+
+              ...split,
+
+              historicalAllocationPending:
+                false,
+
+              invoiceDiscountAllocatedMinor:
+                allocation.invoiceDiscountAllocatedMinor,
+
+              costQuality:
+                "confirmed",
+            });
+
+          if (
+            !historicalFinalizations.some(
+              (entry) =>
+                entry.productId ===
+                productId,
+            )
+          ) {
+            historicalFinalizations.push(
+              finalization,
+            );
+          }
+
+          continue;
         }
 
-        const historicalSoldQuantity =
-          allocation.receivedQuantity -
-          stockQuantityApplied;
+        const stockQuantityApplied =
+          allocation.receivedQuantity;
 
         const stockCostTotalMinor =
-          stockQuantityApplied <= 0
-            ? 0
-            : stockQuantityApplied ===
-                allocation.receivedQuantity
-              ? allocation.costTotalMinor
-              : allocateProportionalCostMinor(
-                  allocation.costTotalMinor,
-                  stockQuantityApplied,
-                  allocation.receivedQuantity,
-                );
-
-        const historicalSoldCostTotalMinor =
-          allocation.costTotalMinor -
-          stockCostTotalMinor;
+          allocation.costTotalMinor;
 
         let costQuality:
           | "confirmed"
           | "estimated"
           | "mixed" =
           "confirmed";
-
-        if (
-          allocation.item.entryMode ===
-          "historical"
-        ) {
-          const product =
-            lockedProductsById.get(
-              productId,
-            );
-
-          if (!product) {
-            throw new PurchaseError(
-              "تعذر تحديد المنتج لتسوية التكلفة التاريخية",
-              409,
-            );
-          }
-
-          try {
-            await backfillHistoricalPurchaseCosts(
-              tx,
-              {
-                productId,
-                productName:
-                  product.nameAr,
-                productCreatedAt:
-                  product.createdAt,
-                purchasePublicId:
-                  purchase.publicId,
-                receivedQuantity:
-                  allocation.receivedQuantity,
-                purchaseCostTotalMinor:
-                  allocation.costTotalMinor,
-                historicalSoldQuantity,
-                historicalSoldCostTotalMinor,
-                createdByUserId:
-                  auth.user.id,
-              },
-            );
-          } catch (error) {
-            if (
-              error instanceof
-              HistoricalPurchaseCostBackfillError
-            ) {
-              throw new PurchaseError(
-                error.message,
-                409,
-              );
-            }
-
-            throw error;
-          }
-        }
-
-        if (
-          allocation.item.entryMode ===
-            "historical" &&
-          stockQuantityApplied === 0
-        ) {
-          try {
-            await initializeEmptyProductCostState(
-              tx,
-              {
-                productId,
-                referenceUnitCostMinor:
-                  deriveUnitCostMinor(
-                    allocation.costTotalMinor,
-                    allocation.receivedQuantity,
-                  ),
-                costQuality:
-                  "confirmed",
-                eventType:
-                  "purchase",
-                sourceType:
-                  "pos_purchase",
-                sourceRef:
-                  String(
-                    purchase.id,
-                  ),
-                sourceItemRef:
-                  String(
-                    allocation.item.id,
-                  ),
-                businessDate,
-                note:
-                  `Historical purchase cost anchor ${purchase.publicId}`,
-                createdByUserId:
-                  auth.user.id,
-              },
-            );
-          } catch (error) {
-            if (
-              error instanceof
-              InventoryCostError
-            ) {
-              throw new PurchaseError(
-                "تعذر تثبيت مرجع تكلفة الشراء السابق للصنف المباع بالكامل",
-                409,
-              );
-            }
-
-            throw error;
-          }
-        }
 
         if (
           stockQuantityApplied > 0
@@ -2762,10 +3246,7 @@ async function handleCreatePurchase(
                   businessDate,
 
                   note:
-                    allocation.item.entryMode ===
-                      "historical"
-                      ? `Approved historical purchase ${purchase.publicId}`
-                      : `Approved purchase ${purchase.publicId}`,
+                    `Approved purchase ${purchase.publicId}`,
 
                   createdByUserId:
                     auth.user.id,
@@ -2792,19 +3273,11 @@ async function handleCreatePurchase(
         inventoryPurchaseValueMinor +=
           stockCostTotalMinor;
 
-        historicalSoldValueMinor +=
-          historicalSoldCostTotalMinor;
-
         if (
           !Number.isSafeInteger(
             inventoryPurchaseValueMinor,
           ) ||
-          !Number.isSafeInteger(
-            historicalSoldValueMinor,
-          ) ||
           inventoryPurchaseValueMinor >
-            MAX_MINOR ||
-          historicalSoldValueMinor >
             MAX_MINOR
         ) {
           throw new PurchaseError(
@@ -2837,11 +3310,16 @@ async function handleCreatePurchase(
 
             stockQuantityApplied,
 
-            historicalSoldQuantity,
+            historicalSoldQuantity:
+              0,
 
             stockCostTotalMinor,
 
-            historicalSoldCostTotalMinor,
+            historicalSoldCostTotalMinor:
+              0,
+
+            historicalAllocationPending:
+              false,
 
             invoiceDiscountAllocatedMinor:
               allocation.invoiceDiscountAllocatedMinor,
@@ -2851,28 +3329,214 @@ async function handleCreatePurchase(
       }
 
       for (
-        const [
-          productId,
-          remainingGap,
-        ]
-        of historicalGapByProduct
+        const finalization
+        of historicalFinalizations
       ) {
-        if (remainingGap > 0) {
-          const product =
-            lockedProductsById.get(
-              productId,
-            );
+        const product =
+          lockedProductsById.get(
+            finalization.productId,
+          );
 
+        if (!product) {
           throw new PurchaseError(
-            `بقي فرق مخزون قديم غير مسوى للصنف ${product?.nameAr ?? productId}. راجع كمية الشراء السابق.`,
+            "تعذر تحديد المنتج عند إنهاء تجميع الشراء السابق",
             409,
           );
+        }
+
+        try {
+          await backfillHistoricalPurchaseCosts(
+            tx,
+            {
+              productId:
+                finalization.productId,
+              productName:
+                finalization.productName,
+              productCreatedAt:
+                product.createdAt,
+              purchasePublicId:
+                purchase.publicId,
+              historicalPurchaseQuantity:
+                finalization.totalReceivedQuantity,
+              historicalPurchaseCostTotalMinor:
+                finalization.totalCostTotalMinor,
+              historicalSoldQuantity:
+                finalization.historicalSoldQuantity,
+              historicalSoldCostTotalMinor:
+                finalization.historicalSoldCostTotalMinor,
+              createdByUserId:
+                auth.user.id,
+            },
+          );
+        } catch (error) {
+          if (
+            error instanceof
+            HistoricalPurchaseCostBackfillError
+          ) {
+            throw new PurchaseError(
+              error.message,
+              409,
+            );
+          }
+
+          throw error;
+        }
+
+        for (
+          const priorSplit
+          of finalization.priorSplits
+        ) {
+          const updatedRows =
+            await tx
+              .update(
+                posPurchaseItemCostsTable,
+              )
+              .set({
+                stockQuantityApplied:
+                  priorSplit.stockQuantityApplied,
+                historicalSoldQuantity:
+                  priorSplit.historicalSoldQuantity,
+                stockCostTotalMinor:
+                  priorSplit.stockCostTotalMinor,
+                historicalSoldCostTotalMinor:
+                  priorSplit.historicalSoldCostTotalMinor,
+                historicalAllocationPending:
+                  false,
+                costQuality:
+                  "confirmed",
+              })
+              .where(
+                and(
+                  eq(
+                    posPurchaseItemCostsTable.purchaseItemId,
+                    priorSplit.purchaseItemId,
+                  ),
+                  eq(
+                    posPurchaseItemCostsTable.historicalAllocationPending,
+                    true,
+                  ),
+                ),
+              )
+              .returning({
+                purchaseItemId:
+                  posPurchaseItemCostsTable.purchaseItemId,
+              });
+
+          if (!updatedRows[0]) {
+            throw new PurchaseError(
+              "تم تغيير إحدى فواتير الشراء السابق أثناء إنهاء التجميع",
+              409,
+            );
+          }
+        }
+
+        if (
+          finalization.stockQuantityApplied >
+          0
+        ) {
+          try {
+            await addExactProductCostOrInitialize(
+              tx,
+              {
+                productId:
+                  finalization.productId,
+
+                quantity:
+                  finalization.stockQuantityApplied,
+
+                costTotalMinor:
+                  finalization.stockCostTotalMinor,
+
+                costQuality:
+                  "confirmed",
+
+                eventType:
+                  "purchase",
+
+                sourceType:
+                  "pos_purchase",
+
+                sourceRef:
+                  String(
+                    purchase.id,
+                  ),
+
+                sourceItemRef:
+                  `historical-batch:${finalization.productId}`,
+
+                businessDate,
+
+                note:
+                  `Finalized historical purchase batches by ${purchase.publicId}`,
+
+                createdByUserId:
+                  auth.user.id,
+              },
+            );
+          } catch (error) {
+            if (
+              error instanceof
+              InventoryCostError
+            ) {
+              throw new PurchaseError(
+                "تعذر تثبيت تكلفة المخزون بعد اكتمال فواتير الشراء السابق",
+                409,
+              );
+            }
+
+            throw error;
+          }
+        } else {
+          try {
+            await initializeEmptyProductCostState(
+              tx,
+              {
+                productId:
+                  finalization.productId,
+                referenceUnitCostMinor:
+                  deriveUnitCostMinor(
+                    finalization.totalCostTotalMinor,
+                    finalization.totalReceivedQuantity,
+                  ),
+                costQuality:
+                  "confirmed",
+                eventType:
+                  "purchase",
+                sourceType:
+                  "pos_purchase",
+                sourceRef:
+                  String(
+                    purchase.id,
+                  ),
+                sourceItemRef:
+                  `historical-batch:${finalization.productId}`,
+                businessDate,
+                note:
+                  `Historical purchase batch cost anchor ${purchase.publicId}`,
+                createdByUserId:
+                  auth.user.id,
+              },
+            );
+          } catch (error) {
+            if (
+              error instanceof
+              InventoryCostError
+            ) {
+              throw new PurchaseError(
+                "تعذر تثبيت مرجع تكلفة الشراء السابق للصنف المباع بالكامل",
+                409,
+              );
+            }
+
+            throw error;
+          }
         }
       }
 
       if (
         inventoryPurchaseValueMinor +
-          historicalSoldValueMinor !==
+          historicalSoldValueMinor +
+          historicalPendingValueMinor !==
         totalMinor
       ) {
         throw new PurchaseError(
