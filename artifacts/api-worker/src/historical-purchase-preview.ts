@@ -2,6 +2,7 @@ import {
   exchangeDocumentsTable,
   exchangeReturnItemsTable,
   exchangeSaleItemsTable,
+  inventoryMovementsTable,
   ordersTable,
   posPurchaseItemsTable,
   posPurchasesTable,
@@ -71,11 +72,28 @@ function deriveUnitCostMinor(
   return Math.round(totalMinor / quantity);
 }
 
-async function getNetCompletedSoldQuantity(
+const CUSTOMER_MOVEMENT_TYPES = [
+  "pos_sale",
+  "pos_sale_void",
+  "pos_sale_edit",
+  "pos_sale_return",
+  "pos_sale_return_void",
+  "online_order",
+  "online_order_cancel",
+  "online_order_restore",
+  "online_order_edit",
+  "exchange_return",
+  "exchange_sale",
+  "exchange_return_void",
+  "exchange_sale_void",
+] as const;
+
+async function getInventoryMovementSummary(
   tx: any,
   productId: number,
 ) {
   const [
+    movementRows,
     posSales,
     posReturns,
     exchangeSales,
@@ -84,7 +102,31 @@ async function getNetCompletedSoldQuantity(
   ] = await Promise.all([
     tx
       .select({
-        quantity: posSaleItemsTable.quantity,
+        movementType:
+          inventoryMovementsTable.movementType,
+        sourceType:
+          inventoryMovementsTable.sourceType,
+        sourceId:
+          inventoryMovementsTable.sourceId,
+        sourcePublicId:
+          inventoryMovementsTable.sourcePublicId,
+        quantityDelta:
+          inventoryMovementsTable.quantityDelta,
+      })
+      .from(inventoryMovementsTable)
+      .where(
+        eq(
+          inventoryMovementsTable.productId,
+          productId,
+        ),
+      ),
+
+    tx
+      .select({
+        sourceId:
+          posSalesTable.id,
+        quantity:
+          posSaleItemsTable.quantity,
       })
       .from(posSaleItemsTable)
       .innerJoin(
@@ -109,6 +151,8 @@ async function getNetCompletedSoldQuantity(
 
     tx
       .select({
+        sourceId:
+          posSaleReturnsTable.id,
         quantity:
           posSaleReturnItemsTable.quantity,
       })
@@ -135,6 +179,8 @@ async function getNetCompletedSoldQuantity(
 
     tx
       .select({
+        sourceId:
+          exchangeDocumentsTable.id,
         quantity:
           exchangeSaleItemsTable.quantity,
       })
@@ -165,6 +211,8 @@ async function getNetCompletedSoldQuantity(
 
     tx
       .select({
+        sourceId:
+          exchangeDocumentsTable.id,
         quantity:
           exchangeReturnItemsTable.quantity,
       })
@@ -195,6 +243,8 @@ async function getNetCompletedSoldQuantity(
 
     tx
       .select({
+        id:
+          ordersTable.id,
         items:
           ordersTable.items,
       })
@@ -207,10 +257,151 @@ async function getNetCompletedSoldQuantity(
       ),
   ]);
 
-  let onlineSold = 0;
+  let outboundQuantity = 0;
+  let inboundQuantity = 0;
+  let manualAdjustmentOutQuantity = 0;
+
+  const coveredSources =
+    new Set<string>();
+
+  for (const row of movementRows) {
+    if (
+      row.movementType === "adjustment" &&
+      row.sourceType === "manual" &&
+      row.quantityDelta < 0
+    ) {
+      manualAdjustmentOutQuantity +=
+        Math.abs(row.quantityDelta);
+    }
+
+    if (
+      !CUSTOMER_MOVEMENT_TYPES.includes(
+        row.movementType as
+          (typeof CUSTOMER_MOVEMENT_TYPES)[number],
+      )
+    ) {
+      continue;
+    }
+
+    if (row.sourceId !== null) {
+      coveredSources.add(
+        `${row.sourceType}:${row.sourceId}`,
+      );
+    }
+
+    const publicNumericId =
+      row.sourcePublicId === null
+        ? null
+        : Number(row.sourcePublicId);
+
+    if (
+      publicNumericId !== null &&
+      Number.isSafeInteger(
+        publicNumericId,
+      ) &&
+      publicNumericId > 0
+    ) {
+      coveredSources.add(
+        `${row.sourceType}:${publicNumericId}`,
+      );
+    }
+
+    if (row.quantityDelta < 0) {
+      outboundQuantity +=
+        Math.abs(row.quantityDelta);
+    } else {
+      inboundQuantity +=
+        row.quantityDelta;
+    }
+  }
+
+  // Stock-card coverage predates some older transactions. Reconcile only
+  // completed legacy transactions that have no inventory movement source.
+  for (const row of posSales) {
+    if (
+      !coveredSources.has(
+        `pos_sale:${row.sourceId}`,
+      )
+    ) {
+      outboundQuantity +=
+        row.quantity;
+    }
+  }
+
+  for (const row of posReturns) {
+    if (
+      !coveredSources.has(
+        `pos_sale_return:${row.sourceId}`,
+      )
+    ) {
+      inboundQuantity +=
+        row.quantity;
+    }
+  }
+
+  const exchangeIds =
+    new Set([
+      ...exchangeSales.map(
+        (row: { sourceId: number }) =>
+          row.sourceId,
+      ),
+      ...exchangeReturns.map(
+        (row: { sourceId: number }) =>
+          row.sourceId,
+      ),
+    ]);
+
+  for (const sourceId of exchangeIds) {
+    if (
+      coveredSources.has(
+        `exchange:${sourceId}`,
+      )
+    ) {
+      continue;
+    }
+
+    outboundQuantity +=
+      exchangeSales
+        .filter(
+          (row: { sourceId: number }) =>
+            row.sourceId ===
+            sourceId,
+        )
+        .reduce(
+          (
+            sum: number,
+            row: { quantity: number },
+          ) =>
+            sum +
+            row.quantity,
+          0,
+        );
+
+    inboundQuantity +=
+      exchangeReturns
+        .filter(
+          (row: { sourceId: number }) =>
+            row.sourceId ===
+            sourceId,
+        )
+        .reduce(
+          (
+            sum: number,
+            row: { quantity: number },
+          ) =>
+            sum +
+            row.quantity,
+          0,
+        );
+  }
 
   for (const order of orders) {
-    if (!Array.isArray(order.items)) {
+    if (
+      coveredSources.has(
+        `online_order:${order.id}`,
+      ) ||
+      !Array.isArray(order.items)
+    ) {
       continue;
     }
 
@@ -242,52 +433,36 @@ async function getNetCompletedSoldQuantity(
         );
       }
 
-      onlineSold += quantity;
+      outboundQuantity +=
+        quantity;
     }
   }
 
-  const positiveQuantity =
-    posSales.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    ) +
-    exchangeSales.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    ) +
-    onlineSold;
-
-  const returnQuantity =
-    posReturns.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    ) +
-    exchangeReturns.reduce(
-      (sum: number, row: { quantity: number }) =>
-        sum + row.quantity,
-      0,
-    );
-
-  const net =
-    positiveQuantity -
-    returnQuantity;
+  const netSoldQuantity =
+    outboundQuantity -
+    inboundQuantity;
 
   if (
-    !Number.isSafeInteger(net) ||
-    net < 0
+    !Number.isSafeInteger(
+      netSoldQuantity,
+    ) ||
+    netSoldQuantity < 0 ||
+    !Number.isSafeInteger(
+      manualAdjustmentOutQuantity,
+    )
   ) {
     throw new HistoricalPurchasePreviewError(
-      "صافي المبيعات القديمة غير صالح للحساب التلقائي",
+      "صافي حركات البيع القديمة غير صالح للحساب التلقائي",
     );
   }
 
   return {
-    positiveQuantity,
-    returnQuantity,
-    netSoldQuantity: net,
+    positiveQuantity:
+      outboundQuantity,
+    returnQuantity:
+      inboundQuantity,
+    netSoldQuantity,
+    manualAdjustmentOutQuantity,
   };
 }
 
@@ -385,7 +560,7 @@ export async function getHistoricalPurchasePreview(
       )
       .limit(1),
 
-    getNetCompletedSoldQuantity(
+    getInventoryMovementSummary(
       tx,
       input.productId,
     ),
@@ -413,9 +588,9 @@ export async function getHistoricalPurchasePreview(
             posPurchaseItemsTable.entryMode,
             "historical",
           ),
-          inArray(
+          eq(
             posPurchasesTable.status,
-            ["draft", "completed"],
+            "completed",
           ),
         ),
       ),
@@ -494,34 +669,11 @@ export async function getHistoricalPurchasePreview(
       0,
     );
 
-  const manualAdjustmentOutQuantity =
-    ledgerRows.reduce(
-      (
-        sum: number,
-        row: {
-          eventType: string;
-          sourceType: string | null;
-          quantityDelta: number;
-        },
-      ) =>
-        row.quantityDelta < 0 &&
-        row.eventType ===
-          "adjustment_out" &&
-        row.sourceType ===
-          "manual_stock"
-          ? sum +
-            Math.abs(
-              row.quantityDelta,
-            )
-          : sum,
-      0,
-    );
-
   const totalHistoricalQuantity =
     physicalQuantity -
     pendingStockReceiptQuantity +
     sold.netSoldQuantity +
-    manualAdjustmentOutQuantity -
+    sold.manualAdjustmentOutQuantity -
     purchaseBackedQuantity;
 
   if (
