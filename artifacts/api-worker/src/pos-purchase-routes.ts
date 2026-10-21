@@ -3594,8 +3594,33 @@ async function handleCreatePurchase(
           return retryRows[0];
         };
 
+        const finalizedInventoryValueMinor =
+          historicalFinalizations.reduce(
+            (sum, entry) =>
+              sum +
+              entry.stockCostTotalMinor,
+            0,
+          );
+
+        const finalizedHistoricalSoldValueMinor =
+          historicalFinalizations.reduce(
+            (sum, entry) =>
+              sum +
+              entry.historicalSoldCostTotalMinor,
+            0,
+          );
+
+        const finalizedHistoricalTotalMinor =
+          historicalFinalizations.reduce(
+            (sum, entry) =>
+              sum +
+              entry.totalCostTotalMinor,
+            0,
+          );
+
         const purchaseAccount =
-          inventoryPurchaseValueMinor > 0
+          inventoryPurchaseValueMinor > 0 ||
+          finalizedInventoryValueMinor > 0
             ? await ensureAccount({
                 code: "PURCHASE_INVENTORY",
                 name: "المشتريات / المخزون",
@@ -3608,7 +3633,8 @@ async function handleCreatePurchase(
         // an equity bridge so the trial balance stays balanced without
         // double-counting COGS in the income statement.
         const historicalCostBridgeAccount =
-          historicalSoldValueMinor > 0
+          historicalSoldValueMinor > 0 ||
+          finalizedHistoricalSoldValueMinor > 0
             ? await ensureAccount({
                 code:
                   "HISTORICAL_PURCHASE_COST_BRIDGE",
@@ -3616,6 +3642,22 @@ async function handleCreatePurchase(
                   "تسوية تكلفة مبيعات سابقة — جسر القوائم",
                 accountType:
                   "equity",
+              })
+            : null;
+
+        // Historical batches are accumulated here until the product's
+        // full old quantity (current stock + old net sales) is documented.
+        // Finalization reclassifies this account to inventory + history bridge.
+        const historicalPendingAccount =
+          historicalPendingValueMinor > 0 ||
+          finalizedHistoricalTotalMinor > 0
+            ? await ensureAccount({
+                code:
+                  "HISTORICAL_PURCHASE_PENDING",
+                name:
+                  "تسوية معلقة — مشتريات سابقة",
+                accountType:
+                  "asset",
               })
             : null;
 
@@ -3681,6 +3723,21 @@ async function handleCreatePurchase(
             creditMinor: 0,
             memo:
               `جسر تكلفة مبيعات سابقة من فاتورة ${purchase.publicId} — COGS محسوب من نظام التكلفة`,
+          });
+        }
+
+        if (
+          historicalPendingValueMinor > 0 &&
+          historicalPendingAccount
+        ) {
+          financeLines.push({
+            accountId:
+              historicalPendingAccount.id,
+            debitMinor:
+              historicalPendingValueMinor,
+            creditMinor: 0,
+            memo:
+              `تجميع تكلفة شراء سابق من فاتورة ${purchase.publicId} حتى اكتمال دفعات الصنف`,
           });
         }
 
@@ -3753,6 +3810,117 @@ async function handleCreatePurchase(
             lines: financeLines,
           },
         );
+
+        for (
+          const finalization
+          of historicalFinalizations
+        ) {
+          if (
+            finalization.totalCostTotalMinor <=
+            0
+          ) {
+            continue;
+          }
+
+          if (!historicalPendingAccount) {
+            throw new PurchaseError(
+              "تعذر العثور على حساب تجميع المشتريات السابقة",
+              409,
+            );
+          }
+
+          const finalizationLines:
+            FinancePostingLineInput[] = [];
+
+          if (
+            finalization.stockCostTotalMinor >
+            0
+          ) {
+            if (!purchaseAccount) {
+              throw new PurchaseError(
+                "تعذر العثور على حساب المخزون عند إنهاء تجميع الشراء السابق",
+                409,
+              );
+            }
+
+            finalizationLines.push({
+              accountId:
+                purchaseAccount.id,
+              debitMinor:
+                finalization.stockCostTotalMinor,
+              creditMinor:
+                0,
+              memo:
+                `إعادة تصنيف مخزون تاريخي للصنف ${finalization.productName}`,
+            });
+          }
+
+          if (
+            finalization.historicalSoldCostTotalMinor >
+            0
+          ) {
+            if (
+              !historicalCostBridgeAccount
+            ) {
+              throw new PurchaseError(
+                "تعذر العثور على جسر تكلفة المبيعات السابقة",
+                409,
+              );
+            }
+
+            finalizationLines.push({
+              accountId:
+                historicalCostBridgeAccount.id,
+              debitMinor:
+                finalization.historicalSoldCostTotalMinor,
+              creditMinor:
+                0,
+              memo:
+                `إعادة تصنيف تكلفة مبيعات تاريخية للصنف ${finalization.productName}`,
+            });
+          }
+
+          finalizationLines.push({
+            accountId:
+              historicalPendingAccount.id,
+            debitMinor:
+              0,
+            creditMinor:
+              finalization.totalCostTotalMinor,
+            memo:
+              `إغلاق تجميع المشتريات السابقة للصنف ${finalization.productName}`,
+          });
+
+          await postFinanceTransaction(
+            tx,
+            {
+              publicId:
+                `FIN-${businessDate.replaceAll("-", "")}-` +
+                randomUUID().slice(0, 8).toUpperCase(),
+              idempotencyKey:
+                `purchase:${purchase.id}:historical-finalize:${finalization.productId}`,
+              businessDate,
+              transactionType:
+                "adjustment",
+              sourceType:
+                "pos_purchase",
+              sourceId:
+                String(
+                  purchase.id,
+                ),
+              sourceEvent:
+                `historical-finalize:${finalization.productId}`,
+              cashSessionId:
+                null,
+              notes:
+                `إنهاء تجميع فواتير الشراء السابق للصنف ${finalization.productName} بواسطة ${purchase.publicId}`,
+              createdByUserId:
+                auth.user.id,
+              lines:
+                finalizationLines,
+            },
+          );
+        }
       }
 
       if (
