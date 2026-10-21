@@ -1337,6 +1337,16 @@ async function resolveAccountRef(
     );
   }
 
+  if (
+    account.code !==
+      "OPENING_BALANCE_EQUITY"
+  ) {
+    throw new VoucherError(
+      "هذا الحساب يُدار من مسار محاسبي مخصص ولا يمكن استخدامه كحساب عام في سند القيد",
+      409,
+    );
+  }
+
   return {
     account,
     lineDimensions: {},
