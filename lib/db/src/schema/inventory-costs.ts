@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   date,
   index,
@@ -303,6 +304,30 @@ export const posPurchaseItemCostsTable = pgTable(
 
     costTotalMinor: integer("cost_total_minor").notNull(),
 
+    stockQuantityApplied: integer("stock_quantity_applied")
+      .notNull()
+      .default(0),
+
+    historicalSoldQuantity: integer("historical_sold_quantity")
+      .notNull()
+      .default(0),
+
+    stockCostTotalMinor: integer("stock_cost_total_minor")
+      .notNull()
+      .default(0),
+
+    historicalSoldCostTotalMinor: integer(
+      "historical_sold_cost_total_minor",
+    )
+      .notNull()
+      .default(0),
+
+    historicalAllocationPending: boolean(
+      "historical_allocation_pending",
+    )
+      .notNull()
+      .default(false),
+
     invoiceDiscountAllocatedMinor: integer(
       "invoice_discount_allocated_minor",
     )
@@ -328,7 +353,34 @@ export const posPurchaseItemCostsTable = pgTable(
       sql`
         ${table.unitCostMinor} >= 0
         and ${table.costTotalMinor} >= 0
+        and ${table.stockQuantityApplied} >= 0
+        and ${table.historicalSoldQuantity} >= 0
+        and ${table.stockCostTotalMinor} >= 0
+        and ${table.historicalSoldCostTotalMinor} >= 0
         and ${table.invoiceDiscountAllocatedMinor} >= 0
+      `,
+    ),
+
+    check(
+      "pos_purchase_item_costs_split_valid",
+      sql`
+        (
+          ${table.historicalAllocationPending} = true
+          and ${table.stockQuantityApplied} = 0
+          and ${table.historicalSoldQuantity} = 0
+          and ${table.stockCostTotalMinor} = 0
+          and ${table.historicalSoldCostTotalMinor} = 0
+        )
+        or
+        (
+          ${table.historicalAllocationPending} = false
+          and ${table.stockQuantityApplied}
+            + ${table.historicalSoldQuantity}
+            = ${table.receivedQuantity}
+          and ${table.stockCostTotalMinor}
+            + ${table.historicalSoldCostTotalMinor}
+            = ${table.costTotalMinor}
+        )
       `,
     ),
 

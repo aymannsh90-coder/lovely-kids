@@ -105,7 +105,7 @@ export const posPurchasesTable = pgTable(
 
     check(
       "pos_purchases_payment_method_valid",
-      sql`${table.paymentMethod} in ('cash', 'credit', 'mixed')`,
+      sql`${table.paymentMethod} in ('cash', 'credit', 'mixed', 'historical_settled')`,
     ),
 
     check(
@@ -135,9 +135,18 @@ export const posPurchasesTable = pgTable(
     check(
       "pos_purchases_settlement_matches",
       sql`
-        ${table.paidMinor} <= ${table.totalMinor}
-        and ${table.dueMinor} =
-          ${table.totalMinor} - ${table.paidMinor}
+        (
+          ${table.paymentMethod} = 'historical_settled'
+          and ${table.paidMinor} = 0
+          and ${table.dueMinor} = 0
+        )
+        or
+        (
+          ${table.paymentMethod} <> 'historical_settled'
+          and ${table.paidMinor} <= ${table.totalMinor}
+          and ${table.dueMinor} =
+            ${table.totalMinor} - ${table.paidMinor}
+        )
       `,
     ),
 
@@ -224,6 +233,8 @@ export const posPurchaseItemsTable = pgTable(
     quantity: integer("quantity").notNull(),
     freeQuantity: integer("free_quantity").notNull().default(0),
 
+    entryMode: text("entry_mode").notNull().default("stock_receipt"),
+
     unitCostMinor: integer("unit_cost_minor"),
     lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
     lineTotalMinor: integer("line_total_minor"),
@@ -255,6 +266,11 @@ export const posPurchaseItemsTable = pgTable(
         and ${table.freeQuantity} <= 99999
         and ${table.quantity} + ${table.freeQuantity} <= 99999
       `,
+    ),
+
+    check(
+      "pos_purchase_items_entry_mode_valid",
+      sql`${table.entryMode} in ('stock_receipt', 'historical')`,
     ),
 
     check(

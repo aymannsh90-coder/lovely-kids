@@ -25,6 +25,8 @@ export type PurchaseDraftLinkInput = {
   supplierId: string;
   unitCostMinor: number | null;
   businessDate: string;
+  entryMode: "stock_receipt" | "historical";
+  quantity?: number;
 };
 
 function purchaseDraftLinkBody(
@@ -39,6 +41,14 @@ function purchaseDraftLinkBody(
       input.unitCostMinor,
     purchaseBusinessDate:
       input.businessDate,
+    purchaseEntryMode:
+      input.entryMode,
+    ...(input.quantity !== undefined
+      ? {
+          purchaseQuantity:
+            input.quantity,
+        }
+      : {}),
   };
 }
 

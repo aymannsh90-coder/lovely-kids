@@ -278,6 +278,7 @@ type DraftItem = {
   barcode: string | null;
   quantity: number;
   freeQuantity: number;
+  entryMode: "stock_receipt" | "historical";
   unitCostMinor: number | null;
   lineDiscountMinor: number;
   lineTotalMinor: number | null;
@@ -401,12 +402,27 @@ function parseItems(value: unknown): DraftItem[] {
       );
     }
 
+    const entryMode =
+      item.entryMode === undefined
+        ? "stock_receipt"
+        : item.entryMode;
+
+    if (
+      entryMode !== "stock_receipt" &&
+      entryMode !== "historical"
+    ) {
+      throw new PurchaseDraftError(
+        "نوع تسجيل أحد أصناف المشتريات غير صالح",
+      );
+    }
+
     return {
       lineNumber: index + 1,
       productId,
       barcode: normalizeBarcode(item.barcode),
       quantity,
       freeQuantity,
+      entryMode,
       unitCostMinor,
       lineDiscountMinor,
       lineTotalMinor:
@@ -421,6 +437,21 @@ function parseFinancials(
   payload: Record<string, unknown>,
   items: DraftItem[],
 ) {
+  const entryModes =
+    new Set(
+      items.map(
+        (item) =>
+          item.entryMode,
+      ),
+    );
+
+  if (entryModes.size > 1) {
+    throw new PurchaseDraftError(
+      "لا يمكن جمع شراء سابق واستلام جديد في نفس فاتورة المشتريات. استخدم فاتورتين منفصلتين.",
+      409,
+    );
+  }
+
   const paymentMethod =
     typeof payload.paymentMethod === "string"
       ? payload.paymentMethod.trim().toLowerCase()
@@ -429,9 +460,23 @@ function parseFinancials(
   if (
     paymentMethod !== "cash" &&
     paymentMethod !== "credit" &&
-    paymentMethod !== "mixed"
+    paymentMethod !== "mixed" &&
+    paymentMethod !== "historical_settled"
   ) {
     throw new PurchaseDraftError("طريقة الدفع غير صالحة");
+  }
+
+  if (
+    paymentMethod === "historical_settled" &&
+    items.some(
+      (item) =>
+        item.entryMode !==
+        "historical",
+    )
+  ) {
+    throw new PurchaseDraftError(
+      "خيار مدفوع سابقًا متاح فقط لفاتورة شراء سابق بالكامل",
+    );
   }
 
   let subtotalMinor = 0;
@@ -521,12 +566,16 @@ function parseFinancials(
   if (
     hasUnknownCost &&
     (
-      paymentMethod !== "credit" ||
+      (
+        paymentMethod !== "credit" &&
+        paymentMethod !==
+          "historical_settled"
+      ) ||
       paidMinor !== 0
     )
   ) {
     throw new PurchaseDraftError(
-      "المسودة التي تحتوي تكلفة غير مدخلة تحفظ آجل بدون دفعة حتى اكتمال التكلفة",
+      "المسودة التي تحتوي تكلفة غير مدخلة تحفظ آجل أو مدفوع سابقًا بدون دفعة حتى اكتمال التكلفة",
     );
   }
 
@@ -563,13 +612,28 @@ function parseFinancials(
     );
   }
 
+  if (
+    paymentMethod ===
+      "historical_settled" &&
+    paidMinor !== 0
+  ) {
+    throw new PurchaseDraftError(
+      "الشراء المدفوع سابقًا لا يسجل دفعة على صندوق اليوم",
+    );
+  }
+
   return {
     paymentMethod,
     subtotalMinor,
     discountMinor,
     totalMinor,
     paidMinor,
-    dueMinor: totalMinor - paidMinor,
+    dueMinor:
+      paymentMethod ===
+        "historical_settled"
+        ? 0
+        : totalMinor -
+          paidMinor,
   } as const;
 }
 
@@ -643,6 +707,7 @@ function toResponse(
         size: item.size,
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
+        entryMode: item.entryMode,
         unitCostMinor: item.unitCostMinor,
         unitCost:
           item.unitCostMinor === null
@@ -752,6 +817,7 @@ async function resolveLines(
 
       quantity: item.quantity,
       freeQuantity: item.freeQuantity,
+      entryMode: item.entryMode,
       unitCostMinor: item.unitCostMinor,
       lineDiscountMinor:
         item.lineDiscountMinor,
@@ -961,6 +1027,20 @@ async function handleSaveDraft(
         "رقم فاتورة المورد",
         100,
       );
+
+    const entryMode =
+      payload.entryMode === undefined
+        ? "stock_receipt"
+        : payload.entryMode;
+
+    if (
+      entryMode !== "stock_receipt" &&
+      entryMode !== "historical"
+    ) {
+      throw new PurchaseDraftError(
+        "نوع تسجيل الشراء غير صالح",
+      );
+    }
 
     const businessDate =
       normalizeBusinessDate(
@@ -1315,6 +1395,20 @@ async function handleAppendDraftItem(
       99_999,
     );
 
+    const entryMode =
+      payload.entryMode === undefined
+        ? "stock_receipt"
+        : payload.entryMode;
+
+    if (
+      entryMode !== "stock_receipt" &&
+      entryMode !== "historical"
+    ) {
+      throw new PurchaseDraftError(
+        "نوع تسجيل الشراء غير صالح",
+      );
+    }
+
     const businessDate =
       normalizeBusinessDate(
         payload.businessDate,
@@ -1385,6 +1479,7 @@ async function handleAppendDraftItem(
             productId,
             quantity,
             unitCostMinor,
+            entryMode,
             businessDate,
             warehouseKey,
             currencyCode,

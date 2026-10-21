@@ -3199,6 +3199,7 @@ export interface PosPurchaseItemResult {
   size: string | null;
   quantity: number;
   freeQuantity: number;
+  entryMode: "stock_receipt" | "historical";
   unitCostMinor: number | null;
   unitCost: number | null;
   lineDiscountMinor: number;
@@ -3233,7 +3234,7 @@ export interface PosPurchaseResult {
     currencyCode: string;
     enteredByUserId: string;
     status: "draft" | "completed" | "voided";
-    paymentMethod: "cash" | "credit" | "mixed";
+    paymentMethod: "cash" | "credit" | "mixed" | "historical_settled";
     subtotalMinor: number;
     subtotal: number;
     discountMinor: number;
@@ -3306,7 +3307,7 @@ export function savePosPurchaseDraft(
     businessDate: string;
     warehouseKey: string;
     currencyCode: string;
-    paymentMethod: "cash" | "credit" | "mixed";
+    paymentMethod: "cash" | "credit" | "mixed" | "historical_settled";
     invoiceDiscount: string;
     paid: string;
     notes?: string;
@@ -3315,6 +3316,7 @@ export function savePosPurchaseDraft(
       barcode?: string;
       quantity: number;
       freeQuantity?: number;
+      entryMode?: "stock_receipt" | "historical";
       unitCost: string;
       lineDiscount?: string;
     }>;
@@ -3355,7 +3357,7 @@ export function createPosPurchase(
     businessDate: string;
     warehouseKey: string;
     currencyCode: string;
-    paymentMethod: "cash" | "credit" | "mixed";
+    paymentMethod: "cash" | "credit" | "mixed" | "historical_settled";
     invoiceDiscount: string;
     paid: string;
     notes?: string;
@@ -3364,6 +3366,7 @@ export function createPosPurchase(
       barcode?: string;
       quantity: number;
       freeQuantity?: number;
+      entryMode?: "stock_receipt" | "historical";
       unitCost: string;
       lineDiscount?: string;
       color?: string;

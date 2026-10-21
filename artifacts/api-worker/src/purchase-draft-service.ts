@@ -24,6 +24,7 @@ export type AppendProductToSupplierDraftInput = {
   productId: number;
   quantity: number;
   unitCostMinor: number | null;
+  entryMode: "stock_receipt" | "historical";
   businessDate: string;
   warehouseKey: string;
   currencyCode: string;
@@ -82,6 +83,8 @@ export async function getPendingPurchaseQuantityForProduct(
         posPurchaseItemsTable.freeQuantity,
       warehouseKey:
         posPurchasesTable.warehouseKey,
+      entryMode:
+        posPurchaseItemsTable.entryMode,
     })
     .from(posPurchaseItemsTable)
     .innerJoin(
@@ -111,6 +114,13 @@ export async function getPendingPurchaseQuantityForProduct(
       input.warehouseKey &&
       row.warehouseKey !==
         input.warehouseKey
+    ) {
+      continue;
+    }
+
+    if (
+      row.entryMode !==
+        "stock_receipt"
     ) {
       continue;
     }
@@ -157,6 +167,15 @@ export async function appendProductToSupplierDraft(
   assertOptionalMoneyMinor(
     input.unitCostMinor,
   );
+
+  if (
+    input.entryMode !== "stock_receipt" &&
+    input.entryMode !== "historical"
+  ) {
+    throw new PurchaseDraftServiceError(
+      "نوع تسجيل الشراء غير صالح",
+    );
+  }
 
   const supplierRows = await tx
     .select()
@@ -268,7 +287,10 @@ export async function appendProductToSupplierDraft(
         enteredByUserId:
           input.userId,
         status: "draft",
-        paymentMethod: "credit",
+        paymentMethod:
+          input.entryMode === "historical"
+            ? "historical_settled"
+            : "credit",
         subtotalMinor: 0,
         discountMinor: 0,
         totalMinor: 0,
@@ -304,12 +326,28 @@ export async function appendProductToSupplierDraft(
       ),
     );
 
+  if (
+    currentItems.some(
+      (
+        item: typeof posPurchaseItemsTable.$inferSelect,
+      ) =>
+        item.entryMode !==
+        input.entryMode,
+    )
+  ) {
+    throw new PurchaseDraftServiceError(
+      "لا يمكن جمع شراء سابق واستلام جديد في نفس مسودة المورد. اعتمد أو احذف المسودة الحالية أولًا.",
+      409,
+    );
+  }
+
   const existing =
     currentItems.find(
       (
         item: typeof posPurchaseItemsTable.$inferSelect,
       ) =>
-        item.productId === product.id,
+        item.productId === product.id &&
+        item.entryMode === input.entryMode,
     ) ?? null;
 
   if (existing) {
@@ -396,6 +434,8 @@ export async function appendProductToSupplierDraft(
         quantity:
           input.quantity,
         freeQuantity: 0,
+        entryMode:
+          input.entryMode,
         unitCostMinor:
           input.unitCostMinor,
         lineDiscountMinor: 0,
@@ -445,6 +485,21 @@ export async function appendProductToSupplierDraft(
     subtotalMinor -
     discountMinor;
 
+  const allHistorical =
+    items.length > 0 &&
+    items.every(
+      (
+        item: typeof posPurchaseItemsTable.$inferSelect,
+      ) =>
+        item.entryMode ===
+        "historical",
+    );
+
+  const automaticPaymentMethod =
+    allHistorical
+      ? "historical_settled"
+      : "credit";
+
   const updatedRows = await tx
     .update(posPurchasesTable)
     .set({
@@ -452,13 +507,17 @@ export async function appendProductToSupplierDraft(
         input.businessDate,
       currencyCode:
         input.currencyCode,
-      paymentMethod: "credit",
+      paymentMethod:
+        automaticPaymentMethod,
       subtotalMinor,
       discountMinor,
       totalMinor,
       paidMinor: 0,
       dueMinor:
-        totalMinor,
+        automaticPaymentMethod ===
+          "historical_settled"
+          ? 0
+          : totalMinor,
       updatedAt:
         new Date(),
     })

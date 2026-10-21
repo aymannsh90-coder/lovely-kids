@@ -16,6 +16,9 @@ function paymentMethodLabel(value: string) {
   if (value === "cash") return "نقدي";
   if (value === "credit") return "آجل";
   if (value === "mixed") return "مختلط";
+  if (value === "historical_settled") {
+    return "مدفوع سابقًا — توثيق فقط";
+  }
   return value;
 }
 
@@ -124,6 +127,7 @@ export default function PurchaseA4Invoice({
             <th>#</th>
             <th>رقم الصنف</th>
             <th>اسم الصنف</th>
+            <th>نوع الشراء</th>
             <th>الكمية</th>
             <th>مجاني</th>
             <th>تكلفة الوحدة</th>
@@ -138,6 +142,11 @@ export default function PurchaseA4Invoice({
               <td>{index + 1}</td>
               <td dir="ltr">{item.productCode ?? "—"}</td>
               <td>{item.productNameAr}</td>
+              <td>
+                {item.entryMode === "historical"
+                  ? "شراء سابق"
+                  : "استلام جديد"}
+              </td>
               <td>{item.quantity}</td>
               <td>{item.freeQuantity}</td>
               <td dir="ltr">{money(item.unitCost)}</td>
@@ -161,7 +170,7 @@ export default function PurchaseA4Invoice({
           </div>
 
           <div>
-            <span>إجمالي القطع المستلمة</span>
+            <span>إجمالي القطع بالفاتورة</span>
             <strong>{paidQuantity + freeQuantity}</strong>
           </div>
         </div>
@@ -183,12 +192,20 @@ export default function PurchaseA4Invoice({
           </div>
 
           <div>
-            <span>المدفوع</span>
+            <span>
+              {purchase.paymentMethod === "historical_settled"
+                ? "دفعة حالية"
+                : "المدفوع"}
+            </span>
             <strong dir="ltr">{money(purchase.paid)}</strong>
           </div>
 
           <div>
-            <span>المستحق</span>
+            <span>
+              {purchase.paymentMethod === "historical_settled"
+                ? "ذمة حالية"
+                : "المستحق"}
+            </span>
             <strong dir="ltr">{money(purchase.due)}</strong>
           </div>
         </div>
