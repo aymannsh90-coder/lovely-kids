@@ -36,9 +36,8 @@ ALTER TABLE public.pos_purchase_items
     OR entry_mode = 'historical'
   );
 
-CREATE UNIQUE INDEX IF NOT EXISTS
+CREATE INDEX IF NOT EXISTS
   pos_purchase_items_historical_source_key_idx
-ON public.pos_purchase_items (historical_source_key)
-WHERE historical_source_key IS NOT NULL;
+ON public.pos_purchase_items (historical_source_key);
 
 COMMIT;
