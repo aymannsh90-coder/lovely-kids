@@ -1535,6 +1535,132 @@ async function handleUpdateProduct(
                 effectiveQuantityBefore
               : null;
 
+          let resolvedPurchaseQuantity =
+            purchaseQuantity;
+
+          let resolvedPurchaseUnitCostMinor =
+            purchaseUnitCostMinor;
+
+          let resolvedHistoricalSourceKey:
+            string | null =
+              purchaseHistoricalSourceKey;
+
+          let historicalDocumentationOnly =
+            false;
+
+          if (
+            purchaseSupplierId !== null &&
+            purchaseEntryMode === "historical"
+          ) {
+            if (
+              !resolvedHistoricalSourceKey
+            ) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "historical_batch_required",
+              } as const;
+            }
+
+            let preview;
+
+            try {
+              preview =
+                await getHistoricalPurchasePreview(
+                  tx,
+                  {
+                    productId:
+                      lockedCurrent.id,
+                    warehouseKey:
+                      "main",
+                  },
+                );
+            } catch (error) {
+              if (
+                error instanceof
+                HistoricalPurchasePreviewError
+              ) {
+                throw new PurchaseDraftServiceError(
+                  error.message,
+                  409,
+                );
+              }
+
+              throw error;
+            }
+
+            const batch =
+              preview.batches.find(
+                (item) =>
+                  item.sourceKey ===
+                  resolvedHistoricalSourceKey,
+              );
+
+            if (!batch) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "historical_batch_unavailable",
+              } as const;
+            }
+
+            resolvedPurchaseQuantity =
+              batch.quantity;
+
+            historicalDocumentationOnly =
+              batch.documentationOnly;
+
+            if (
+              batch.unitCostMinor !==
+              null
+            ) {
+              resolvedPurchaseUnitCostMinor =
+                batch.unitCostMinor;
+            } else if (
+              resolvedPurchaseUnitCostMinor ===
+              null
+            ) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "purchase_cost_required",
+              } as const;
+            }
+          }
+
+          if (
+            purchaseSupplierId !== null &&
+            purchaseEntryMode === "stock_receipt" &&
+            resolvedPurchaseUnitCostMinor === null
+          ) {
+            const costRows =
+              await tx
+                .select({
+                  productId:
+                    productCostStateTable.productId,
+                })
+                .from(productCostStateTable)
+                .where(
+                  eq(
+                    productCostStateTable.productId,
+                    lockedCurrent.id,
+                  ),
+                )
+                .limit(1);
+
+            if (!costRows[0]) {
+              return {
+                kind:
+                  "purchase_link_error",
+                reason:
+                  "purchase_cost_required",
+              } as const;
+            }
+          }
+
           if (
             purchaseSupplierId !== null &&
             purchaseEntryMode === "stock_receipt" &&
