@@ -1989,7 +1989,7 @@ export default function PurchaseInvoicePage() {
                 ? `مسودة مفتوحة — ${savedPurchase.purchase.publicId}`
                 : savedPurchase.purchase.publicId
             : PURCHASE_WRITES_ENABLED
-              ? "مسودة فاتورة جديدة"
+              ? "اختر موردًا لفتح مسودته"
               : "واجهة تطوير — الحفظ محمي"}
         </strong>
       </header>
@@ -2000,7 +2000,7 @@ export default function PurchaseInvoicePage() {
           disabled={invoiceBusy}
           onClick={() => void resetInvoice()}
         >
-          فاتورة جديدة
+          فتح مسودة مورد
         </button>
 
         <button
