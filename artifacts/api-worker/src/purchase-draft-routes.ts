@@ -6,7 +6,6 @@ import {
   suppliersTable,
 } from "@workspace/db/schema";
 import { and, asc, eq } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
@@ -1157,149 +1156,156 @@ async function handleSaveDraft(
         const existing =
           existingRows[0] ?? null;
 
-        if (existing) {
-          if (
-            !expectedDraftPublicId ||
-            expectedDraftUpdatedAtMs === null
-          ) {
+        if (!existing) {
+          throw new PurchaseDraftError(
+            "لا يمكن إنشاء فاتورة مشتريات من شاشة الفاتورة. أدخل الكمية واختر المورد من صفحة المنتج أولًا.",
+            409,
+          );
+        }
+
+        if (
+          !expectedDraftPublicId ||
+          expectedDraftUpdatedAtMs === null
+        ) {
+          throw new PurchaseDraftError(
+            "تم إنشاء أو تحديث مسودة لهذا المورد من مكان آخر. أعد تحميل المسودة قبل الحفظ.",
+            409,
+          );
+        }
+
+        if (
+          existing.publicId !==
+            expectedDraftPublicId ||
+          existing.updatedAt.getTime() !==
+            expectedDraftUpdatedAtMs
+        ) {
+          throw new PurchaseDraftError(
+            "تم تحديث مسودة هذا المورد من مكان آخر. أعد تحميلها قبل الحفظ حتى لا تضيع أصناف جديدة.",
+            409,
+          );
+        }
+
+        const currentItems = await tx
+          .select()
+          .from(posPurchaseItemsTable)
+          .where(
+            eq(
+              posPurchaseItemsTable.purchaseId,
+              existing.id,
+            ),
+          )
+          .orderBy(
+            asc(
+              posPurchaseItemsTable.lineNumber,
+            ),
+          );
+
+        if (
+          currentItems.length !==
+          items.length
+        ) {
+          throw new PurchaseDraftError(
+            "أصناف وكميات فاتورة المشتريات تأتي من صفحة المنتج ولا يمكن إضافتها أو حذفها من شاشة الفاتورة.",
+            409,
+          );
+        }
+
+        const currentByProduct =
+          new Map(
+            currentItems.map(
+              (item) => [
+                item.productId,
+                item,
+              ],
+            ),
+          );
+
+        for (const item of items) {
+          if (item.productId === null) {
             throw new PurchaseDraftError(
-              "تم إنشاء أو تحديث مسودة لهذا المورد من مكان آخر. أعد تحميل المسودة قبل الحفظ.",
+              "أصناف فاتورة المشتريات يجب أن تأتي من صفحة المنتج.",
               409,
             );
           }
 
+          const current =
+            currentByProduct.get(
+              item.productId,
+            );
+
           if (
-            existing.publicId !==
-              expectedDraftPublicId ||
-            existing.updatedAt.getTime() !==
-              expectedDraftUpdatedAtMs
+            !current ||
+            current.quantity !==
+              item.quantity ||
+            current.freeQuantity !==
+              item.freeQuantity ||
+            current.entryMode !==
+              item.entryMode
           ) {
             throw new PurchaseDraftError(
-              "تم تحديث مسودة هذا المورد من مكان آخر. أعد تحميلها قبل الحفظ حتى لا تضيع أصناف جديدة.",
+              "هوية الصنف والكمية ونوع الشراء تُحدد من صفحة المنتج ولا يمكن تعديلها من فاتورة المشتريات.",
               409,
             );
           }
-        } else if (
-          expectedDraftPublicId
-        ) {
-          throw new PurchaseDraftError(
-            "المسودة التي تحاول تعديلها لم تعد موجودة. أعد تحميل الصفحة.",
-            409,
-          );
         }
 
         const resolvedLines =
           await resolveLines(tx, items);
 
-        let purchase:
-          typeof posPurchasesTable.$inferSelect;
-
-        if (existing) {
-          const updatedRows = await tx
-            .update(posPurchasesTable)
-            .set({
-              supplierId,
-              supplierInvoiceNumber,
-              businessDate,
-              currencyCode,
-              paymentMethod:
-                financials.paymentMethod,
-              subtotalMinor:
-                financials.subtotalMinor,
-              discountMinor:
-                financials.discountMinor,
-              totalMinor:
-                financials.totalMinor,
-              paidMinor:
-                financials.paidMinor,
-              dueMinor:
-                financials.dueMinor,
-              notes,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(
-                  posPurchasesTable.id,
-                  existing.id,
-                ),
-                eq(
-                  posPurchasesTable.status,
-                  "draft",
-                ),
-              ),
-            )
-            .returning();
-
-          if (!updatedRows[0]) {
-            throw new PurchaseDraftError(
-              "تعذر تحديث فاتورة المشتريات المفتوحة",
-              409,
-            );
-          }
-
-          purchase = updatedRows[0];
-
-          await tx
-            .delete(posPurchaseItemsTable)
-            .where(
+        const updatedRows = await tx
+          .update(posPurchasesTable)
+          .set({
+            supplierId,
+            supplierInvoiceNumber,
+            businessDate,
+            currencyCode,
+            paymentMethod:
+              financials.paymentMethod,
+            subtotalMinor:
+              financials.subtotalMinor,
+            discountMinor:
+              financials.discountMinor,
+            totalMinor:
+              financials.totalMinor,
+            paidMinor:
+              financials.paidMinor,
+            dueMinor:
+              financials.dueMinor,
+            notes,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
               eq(
-                posPurchaseItemsTable.purchaseId,
-                purchase.id,
+                posPurchasesTable.id,
+                existing.id,
               ),
-            );
-        } else {
-          const publicId =
-            "DRAFT-" +
-            businessDate.replaceAll("-", "") +
-            "-" +
-            randomUUID()
-              .slice(0, 8)
-              .toUpperCase();
+              eq(
+                posPurchasesTable.status,
+                "draft",
+              ),
+            ),
+          )
+          .returning();
 
-          const insertedRows = await tx
-            .insert(posPurchasesTable)
-            .values({
-              publicId,
-              idempotencyKey:
-                "purchase-draft:" +
-                auth.user.id +
-                ":" +
-                supplierId +
-                ":" +
-                warehouseKey,
-              supplierId,
-              supplierInvoiceNumber,
-              businessDate,
-              warehouseKey,
-              currencyCode,
-              enteredByUserId:
-                auth.user.id,
-              status: "draft",
-              paymentMethod:
-                financials.paymentMethod,
-              subtotalMinor:
-                financials.subtotalMinor,
-              discountMinor:
-                financials.discountMinor,
-              totalMinor:
-                financials.totalMinor,
-              paidMinor:
-                financials.paidMinor,
-              dueMinor:
-                financials.dueMinor,
-              notes,
-            })
-            .returning();
+        const purchase =
+          updatedRows[0];
 
-          if (!insertedRows[0]) {
-            throw new Error(
-              "PURCHASE_DRAFT_INSERT_FAILED",
-            );
-          }
-
-          purchase = insertedRows[0];
+        if (!purchase) {
+          throw new PurchaseDraftError(
+            "تعذر تحديث فاتورة المشتريات المفتوحة",
+            409,
+          );
         }
+
+        await tx
+          .delete(posPurchaseItemsTable)
+          .where(
+            eq(
+              posPurchaseItemsTable.purchaseId,
+              purchase.id,
+            ),
+          );
 
         const insertedItems = await tx
           .insert(posPurchaseItemsTable)
