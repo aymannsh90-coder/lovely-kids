@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   date,
   index,
@@ -235,6 +236,11 @@ export const posPurchaseItemsTable = pgTable(
 
     entryMode: text("entry_mode").notNull().default("stock_receipt"),
 
+    historicalSourceKey: text("historical_source_key"),
+    historicalDocumentationOnly: boolean("historical_documentation_only")
+      .notNull()
+      .default(false),
+
     unitCostMinor: integer("unit_cost_minor"),
     lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
     lineTotalMinor: integer("line_total_minor"),
@@ -271,6 +277,22 @@ export const posPurchaseItemsTable = pgTable(
     check(
       "pos_purchase_items_entry_mode_valid",
       sql`${table.entryMode} in ('stock_receipt', 'historical')`,
+    ),
+
+    check(
+      "pos_purchase_items_historical_source_key_valid",
+      sql`
+        ${table.historicalSourceKey} is null
+        or length(btrim(${table.historicalSourceKey})) between 8 and 160
+      `,
+    ),
+
+    check(
+      "pos_purchase_items_historical_documentation_valid",
+      sql`
+        ${table.historicalDocumentationOnly} = false
+        or ${table.entryMode} = 'historical'
+      `,
     ),
 
     check(
@@ -347,6 +369,10 @@ export const posPurchaseItemsTable = pgTable(
     index("pos_purchase_items_purchase_idx").on(table.purchaseId),
     index("pos_purchase_items_product_idx").on(table.productId),
     index("pos_purchase_items_barcode_idx").on(table.barcode),
+
+    uniqueIndex("pos_purchase_items_historical_source_key_idx")
+      .on(table.historicalSourceKey)
+      .where(sql`${table.historicalSourceKey} is not null`),
   ],
 ).enableRLS();
 
