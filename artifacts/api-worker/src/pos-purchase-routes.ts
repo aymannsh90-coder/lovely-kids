@@ -2653,6 +2653,8 @@ async function handleCreatePurchase(
                 posPurchaseItemCostsTable.costTotalMinor,
               historicalAllocationPending:
                 posPurchaseItemCostsTable.historicalAllocationPending,
+              purchaseId:
+                posPurchasesTable.id,
             })
             .from(
               posPurchaseItemCostsTable,
@@ -2685,6 +2687,18 @@ async function handleCreatePurchase(
                   posPurchasesTable.status,
                   "completed",
                 ),
+                eq(
+                  posPurchasesTable.warehouseKey,
+                  warehouseKey,
+                ),
+              ),
+            )
+            .orderBy(
+              asc(
+                posPurchasesTable.id,
+              ),
+              asc(
+                posPurchaseItemsTable.id,
               ),
             )
             .for("update");
