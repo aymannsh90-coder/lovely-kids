@@ -61,7 +61,7 @@ function deriveUnitCostMinor(
 ): number | null {
   if (
     !Number.isSafeInteger(totalMinor) ||
-    totalMinor < 0 ||
+    totalMinor <= 0 ||
     !Number.isSafeInteger(quantity) ||
     quantity <= 0
   ) {
@@ -650,8 +650,20 @@ export async function getHistoricalPurchasePreview(
   } else if (
     totalHistoricalQuantity > 0
   ) {
+    const currentReferenceCost =
+      costStateRows[0]
+        ?.referenceUnitCostMinor ??
+      null;
+
+    const hasKnownCurrentCost =
+      typeof currentReferenceCost ===
+        "number" &&
+      currentReferenceCost > 0;
+
     const sourceKey =
-      `product:${input.productId}:untracked:v1`;
+      hasKnownCurrentCost
+        ? `product:${input.productId}:cost-state:v1`
+        : `product:${input.productId}:untracked:v1`;
 
     if (!documentedKeys.has(sourceKey)) {
       batches.push({
@@ -659,15 +671,22 @@ export async function getHistoricalPurchasePreview(
         quantity:
           totalHistoricalQuantity,
         unitCostMinor:
-          null,
+          hasKnownCurrentCost
+            ? currentReferenceCost
+            : null,
         totalCostMinor:
-          null,
+          hasKnownCurrentCost
+            ? currentReferenceCost *
+              totalHistoricalQuantity
+            : null,
         occurredAt:
           null,
         documentationOnly:
-          false,
+          hasKnownCurrentCost,
         sourceType:
-          "untracked",
+          hasKnownCurrentCost
+            ? "opening"
+            : "untracked",
       });
     }
   }
