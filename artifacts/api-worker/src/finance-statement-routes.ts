@@ -181,6 +181,7 @@ async function handleReference(
     cashAccounts,
     bankAccounts,
     expenseCategories,
+    journalAccounts,
   ] = await Promise.all([
     db
       .select({
@@ -279,12 +280,51 @@ async function handleReference(
           expenseCategoriesTable.name,
         ),
       ),
+
+    db
+      .select({
+        id:
+          financeAccountsTable.id,
+        code:
+          financeAccountsTable.code,
+        name:
+          financeAccountsTable.name,
+        currencyCode:
+          financeAccountsTable.currencyCode,
+        accountType:
+          financeAccountsTable.accountType,
+      })
+      .from(
+        financeAccountsTable,
+      )
+      .where(
+        and(
+          eq(
+            financeAccountsTable.status,
+            "active",
+          ),
+          eq(
+            financeAccountsTable.currencyCode,
+            "ILS",
+          ),
+          eq(
+            financeAccountsTable.code,
+            "OPENING_BALANCE_EQUITY",
+          ),
+        ),
+      )
+      .orderBy(
+        asc(
+          financeAccountsTable.name,
+        ),
+      ),
   ]);
 
   return json({
     cashAccounts,
     bankAccounts,
     expenseCategories,
+    journalAccounts,
   });
 }
 

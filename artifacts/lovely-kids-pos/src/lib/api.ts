@@ -1391,6 +1391,10 @@ export type PosUnifiedVoucherAccountRef =
   | {
       kind: "expense";
       expenseCategoryId: number;
+    }
+  | {
+      kind: "finance_account";
+      financeAccountId: number;
     };
 
 export interface PosUnifiedVoucherResult {
@@ -2041,6 +2045,14 @@ export interface PosFinanceStatementReference {
     code: string;
     name: string;
     financeAccountId: number;
+  }>;
+
+  journalAccounts: Array<{
+    id: number;
+    code: string;
+    name: string;
+    currencyCode: string;
+    accountType: string;
   }>;
 }
 
