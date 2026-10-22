@@ -11,7 +11,9 @@ import { usePosRuntime } from "../../app/pos-context";
 import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
   ApiError,
+  appendHistoricalProductToPurchaseDraft,
   createPosPurchase,
+  getProductHistoricalPurchasePreview,
   getCurrentCashSession,
   getLatestPosPurchase,
   getOpenPosPurchaseDraft,
@@ -34,9 +36,9 @@ const PURCHASE_WRITES_ENABLED =
   PURCHASE_API_ENABLED &&
   import.meta.env.VITE_PURCHASE_WRITES === "true";
 
-// Purchase quantities and line identity are sourced only from the product page.
-// This screen may review cost/payment data, but it must not create inventory lines.
-const DIRECT_PURCHASE_LINE_EDITING_ENABLED = false;
+// New stock receipts remain product-page sourced only.
+// Historical purchases may be linked safely from this screen through the
+// historical batch preview/source-key flow without changing physical stock.
 
 const INVENTORY_PURCHASE_HANDOFF_KEY =
   "lovely_kids_inventory_purchase_handoff_v1";
@@ -1074,6 +1076,254 @@ export default function PurchaseInvoicePage() {
     }, 0);
   }
 
+  async function addHistoricalProduct(
+    product: PosProductLookup,
+  ) {
+    if (!supplierId) {
+      setError(
+        "اختر المورد أولًا قبل إضافة شراء سابق.",
+      );
+      return;
+    }
+
+    if (
+      invoiceEntryMode !==
+      "historical"
+    ) {
+      setError(
+        "الإضافة المباشرة من الفاتورة متاحة للشراء السابق فقط. الاستلام الجديد يبقى من صفحة المنتج.",
+      );
+      return;
+    }
+
+    const preview =
+      await getProductHistoricalPurchasePreview(
+        token,
+        product.productId,
+      );
+
+    if (
+      preview.batches.length === 0
+    ) {
+      setError(
+        "لا توجد دفعة شراء سابق متاحة لهذا الصنف، أو تم توثيق دفعاته السابقة بالفعل.",
+      );
+      return;
+    }
+
+    let selectedBatch =
+      preview.batches[0]!;
+
+    if (
+      preview.batches.length > 1
+    ) {
+      const choices =
+        preview.batches
+          .map(
+            (batch, index) => {
+              const costText =
+                batch.unitCostMinor ===
+                  null
+                  ? "التكلفة غير مدخلة"
+                  : `تكلفة ${(batch.unitCostMinor / 100)} ₪`;
+
+              const typeText =
+                batch.sourceType ===
+                  "repeat_purchase"
+                  ? "دفعة شراء متكررة"
+                  : batch.sourceType ===
+                      "opening"
+                    ? "دفعة افتتاحية"
+                    : "دفعة غير موثقة";
+
+              return `${index + 1}) كمية ${batch.quantity} — ${costText} — ${typeText}`;
+            },
+          )
+          .join("
+");
+
+      const rawChoice =
+        window.prompt(
+          [
+            "يوجد أكثر من دفعة شراء سابق لهذا الصنف.",
+            "اختر رقم الدفعة المطابقة للفاتورة الموجودة معك:",
+            "",
+            choices,
+          ].join("
+"),
+          "1",
+        );
+
+      if (rawChoice === null) {
+        return;
+      }
+
+      const choiceIndex =
+        Number(rawChoice) - 1;
+
+      if (
+        !Number.isSafeInteger(
+          choiceIndex,
+        ) ||
+        choiceIndex < 0 ||
+        choiceIndex >=
+          preview.batches.length
+      ) {
+        setError(
+          "اختيار دفعة الشراء السابق غير صالح.",
+        );
+        return;
+      }
+
+      selectedBatch =
+        preview.batches[
+          choiceIndex
+        ]!;
+    }
+
+    let currentDraft =
+      savedPurchase;
+
+    if (
+      currentDraft?.purchase.status ===
+        "draft" &&
+      lines.length > 0
+    ) {
+      currentDraft =
+        await savePosPurchaseDraft(
+          token,
+          {
+            supplierId,
+            draftPublicId:
+              currentDraft.purchase.publicId,
+            draftUpdatedAt:
+              currentDraft.purchase.updatedAt,
+            supplierInvoiceNumber:
+              supplierInvoiceNumber.trim() ||
+              undefined,
+            businessDate,
+            warehouseKey,
+            currencyCode:
+              "ILS",
+            paymentMethod,
+            invoiceDiscount,
+            paid,
+            notes:
+              notes.trim() ||
+              undefined,
+            items:
+              lines.map(
+                (line) => ({
+                  productId:
+                    line.product.productId,
+                  barcode:
+                    line.barcode ||
+                    undefined,
+                  quantity:
+                    line.quantity,
+                  freeQuantity:
+                    line.freeQuantity,
+                  entryMode:
+                    line.entryMode,
+                  unitCost:
+                    line.unitCost,
+                  lineDiscount:
+                    line.lineDiscount,
+                }),
+              ),
+          },
+        );
+    }
+
+    const appended =
+      await appendHistoricalProductToPurchaseDraft(
+        token,
+        {
+          supplierId,
+          productId:
+            product.productId,
+          historicalSourceKey:
+            selectedBatch.sourceKey,
+          businessDate,
+          warehouseKey,
+          currencyCode:
+            "ILS",
+        },
+      );
+
+    const restored =
+      await savePosPurchaseDraft(
+        token,
+        {
+          supplierId,
+          draftPublicId:
+            appended.purchase.publicId,
+          draftUpdatedAt:
+            appended.purchase.updatedAt,
+          supplierInvoiceNumber:
+            supplierInvoiceNumber.trim() ||
+            undefined,
+          businessDate,
+          warehouseKey,
+          currencyCode:
+            "ILS",
+          paymentMethod,
+          invoiceDiscount,
+          paid,
+          notes:
+            notes.trim() ||
+            undefined,
+          items:
+            appended.purchase.items.map(
+              (item) => ({
+                productId:
+                  item.productId ??
+                  product.productId,
+                barcode:
+                  item.barcode ??
+                  undefined,
+                quantity:
+                  item.quantity,
+                freeQuantity:
+                  item.freeQuantity,
+                entryMode:
+                  item.entryMode,
+                unitCost:
+                  item.unitCost ===
+                    null
+                    ? ""
+                    : item.unitCost.toFixed(
+                        2,
+                      ),
+                lineDiscount:
+                  item.lineDiscount.toFixed(
+                    2,
+                  ),
+              }),
+            ),
+        },
+      );
+
+    applyStoredPurchase(
+      restored,
+    );
+
+    setQuery("");
+    clearSearchResults();
+    setError("");
+
+    setMessage(
+      selectedBatch.unitCostMinor ===
+        null
+        ? `تمت إضافة ${product.nameAr} بكمية ${selectedBatch.quantity}. التكلفة غير مسجلة سابقًا، أدخلها من الفاتورة قبل الاعتماد.`
+        : `تمت إضافة ${product.nameAr} بكمية الشراء السابق ${selectedBatch.quantity} وتكلفته المسجلة تلقائيًا.`,
+    );
+
+    window.setTimeout(() => {
+      searchInput.current?.focus();
+    }, 0);
+  }
+
   async function searchProducts(value: string) {
     const result = await searchPosProducts(
       token,
@@ -1091,7 +1341,9 @@ export default function PurchaseInvoicePage() {
       const product = result.results[0];
 
       if (product) {
-        addProduct(product);
+        await addHistoricalProduct(
+          product,
+        );
       }
 
       return;
@@ -1125,7 +1377,9 @@ export default function PurchaseInvoicePage() {
           value,
         );
 
-        addProduct(product);
+        await addHistoricalProduct(
+          product,
+        );
       } catch (caught) {
         if (
           caught instanceof ApiError &&
@@ -1182,7 +1436,9 @@ export default function PurchaseInvoicePage() {
       const product = searchResults[activeSearchIndex];
 
       if (product) {
-        addProduct(product);
+        void addHistoricalProduct(
+          product,
+        );
       }
     }
 
@@ -2327,7 +2583,10 @@ export default function PurchaseInvoicePage() {
 
         <section
           className="accounting-item-entry"
-          hidden={!DIRECT_PURCHASE_LINE_EDITING_ENABLED}
+          hidden={
+            invoiceEntryMode !==
+            "historical"
+          }
         >
           <form
             className="accounting-item-form"
@@ -2393,7 +2652,11 @@ export default function PurchaseInvoicePage() {
                     }
                     type="button"
                     key={`${product.productId}-${product.barcode}`}
-                    onClick={() => addProduct(product)}
+                    onClick={() =>
+                      void addHistoricalProduct(
+                        product,
+                      )
+                    }
                   >
                     <img src={product.image} alt="" />
 
@@ -2418,8 +2681,10 @@ export default function PurchaseInvoicePage() {
         </section>
 
         <div className="alert supplier-protection-alert">
-          الأصناف والكميات ونوع الشراء مقفلة لأنها تأتي من صفحة المنتج.
-          لتصحيح كمية أو إضافة صنف، عدّل المنتج واختر المورد هناك ثم أعد تحميل المسودة.
+          {invoiceEntryMode ===
+          "historical"
+            ? "الشراء السابق: يمكنك البحث عن الصنف من هذه الفاتورة، والنظام يحسب الدفعة والكمية التاريخية تلقائيًا. إذا كانت التكلفة غير معروفة ستبقى مطلوبة قبل الاعتماد."
+            : "الاستلام الجديد يبقى من صفحة المنتج: زِد الكمية هناك واختر المورد، وسيتم إنشاء أو تحديث مسودة الفاتورة تلقائيًا."}
         </div>
 
         <div className="accounting-invoice-table-wrap">
