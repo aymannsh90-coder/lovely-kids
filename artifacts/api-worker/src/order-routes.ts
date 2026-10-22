@@ -452,8 +452,8 @@ async function handleCreateOrder(
       creation.order;
 
     if (creation.created) {
-    try {
-      const metaResult =
+      try {
+        const metaResult =
         await sendMetaPurchaseEvent(
           env,
           request,
@@ -477,18 +477,18 @@ async function handleCreateOrder(
         orderId: newOrder.id,
         ...metaResult,
       });
-    } catch (metaError) {
-      console.error("META_CAPI_PURCHASE_FAILED", {
+      } catch (metaError) {
+        console.error("META_CAPI_PURCHASE_FAILED", {
         orderId: newOrder.id,
         error:
           metaError instanceof Error
             ? metaError.message
             : String(metaError),
       });
-    }
+      }
 
-    try {
-      const notificationResult =
+      try {
+        const notificationResult =
         await sendNewOrderNotification(db, {
           id: newOrder.id,
           customerName: newOrder.customerName,
@@ -499,12 +499,12 @@ async function handleCreateOrder(
         "NEW_ORDER_NOTIFICATION",
         notificationResult,
       );
-    } catch (notificationError) {
-      console.error(
-        "NEW_ORDER_NOTIFICATION_FAILED",
+      } catch (notificationError) {
+        console.error(
+          "NEW_ORDER_NOTIFICATION_FAILED",
         notificationError,
       );
-    }
+      }
     }
 
     const trackingToken = createOrderTrackingToken(
