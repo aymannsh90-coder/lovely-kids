@@ -400,6 +400,10 @@ async function handleCreateOrder(
 ) {
   const body = await request.json().catch(() => null);
   const metaAttribution = getMetaAttribution(body);
+  const clientRequestId =
+    request.headers
+      .get("Idempotency-Key")
+      ?.trim() || null;
   const parsed = insertOrderSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -419,10 +423,11 @@ async function handleCreateOrder(
       env,
     );
 
-    const newOrder = await createTrustedOrder(
+    const creation = await createTrustedOrder(
       db,
       {
         userId: authUser?.id ?? null,
+        clientRequestId,
         customerName: parsed.data.customerName,
         customerPhone:
           authUser?.phone ??
@@ -443,6 +448,10 @@ async function handleCreateOrder(
       },
     );
 
+    const newOrder =
+      creation.order;
+
+    if (creation.created) {
     try {
       const metaResult =
         await sendMetaPurchaseEvent(
@@ -496,6 +505,7 @@ async function handleCreateOrder(
         notificationError,
       );
     }
+    }
 
     const trackingToken = createOrderTrackingToken(
       newOrder.id,
@@ -507,7 +517,7 @@ async function handleCreateOrder(
       trackingToken
         ? { ...newOrder, trackingToken }
         : newOrder,
-      201,
+      creation.created ? 201 : 200,
     );
   } catch (error) {
     if (error instanceof OrderValidationError) {
