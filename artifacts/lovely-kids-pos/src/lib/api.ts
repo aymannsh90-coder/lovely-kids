@@ -3393,6 +3393,24 @@ export function appendHistoricalProductToPurchaseDraft(
   );
 }
 
+export function removeHistoricalPurchaseDraftItem(
+  token: string,
+  input: {
+    draftPublicId: string;
+    draftUpdatedAt: string;
+    itemId: string;
+  },
+) {
+  return apiRequest<PosPurchaseResult>(
+    "/api/pos/purchases/draft/remove-historical-item",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token,
+  );
+}
+
 export function savePosPurchaseDraft(
   token: string,
   input: {
