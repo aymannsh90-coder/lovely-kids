@@ -14,6 +14,10 @@ import {
   PurchaseDraftServiceError,
 } from "./purchase-draft-service";
 import {
+  getHistoricalPurchasePreview,
+  HistoricalPurchasePreviewError,
+} from "./historical-purchase-preview";
+import {
   isPurchaseApiEnabled,
   isPurchaseWriteEnabled,
   purchaseFeatureDisabledResponse,
@@ -1533,6 +1537,174 @@ async function handleAppendDraftItem(
   }
 }
 
+async function handleAppendHistoricalProduct(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    await request.json().catch(() => null);
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return json(
+      { error: "بيانات الصنف غير صالحة" },
+      400,
+    );
+  }
+
+  const payload =
+    body as Record<string, unknown>;
+
+  try {
+    const supplierId =
+      parsePositiveInteger(
+        payload.supplierId,
+        "رقم المورد",
+      );
+
+    const productId =
+      parsePositiveInteger(
+        payload.productId,
+        "رقم المنتج",
+      );
+
+    const sourceKey =
+      optionalText(
+        payload.historicalSourceKey,
+        "مرجع دفعة الشراء السابق",
+        160,
+      );
+
+    if (
+      !sourceKey ||
+      sourceKey.length < 8
+    ) {
+      throw new PurchaseDraftError(
+        "اختر دفعة الشراء السابق المطلوبة",
+      );
+    }
+
+    const businessDate =
+      normalizeBusinessDate(
+        payload.businessDate,
+      );
+
+    const warehouseKey =
+      normalizeWarehouseKey(
+        payload.warehouseKey,
+      );
+
+    const currencyCode =
+      normalizeCurrencyCode(
+        payload.currencyCode,
+      );
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const preview =
+            await getHistoricalPurchasePreview(
+              tx,
+              {
+                productId,
+                warehouseKey,
+              },
+            );
+
+          const batch =
+            preview.batches.find(
+              (item) =>
+                item.sourceKey ===
+                sourceKey,
+            );
+
+          if (!batch) {
+            throw new PurchaseDraftError(
+              "دفعة الشراء السابق لم تعد متاحة. أعد البحث عن الصنف.",
+              409,
+            );
+          }
+
+          return appendProductToSupplierDraft(
+            tx,
+            {
+              userId:
+                auth.user.id,
+              supplierId,
+              productId,
+              quantity:
+                batch.quantity,
+              unitCostMinor:
+                batch.unitCostMinor,
+              entryMode:
+                "historical",
+              historicalSourceKey:
+                batch.sourceKey,
+              historicalDocumentationOnly:
+                batch.documentationOnly,
+              businessDate,
+              warehouseKey,
+              currencyCode,
+            },
+          );
+        },
+      );
+
+    return json(
+      toResponse(
+        result.purchase,
+        result.items,
+        result.supplier,
+      ),
+    );
+  } catch (error) {
+    if (
+      error instanceof
+        PurchaseDraftError ||
+      error instanceof
+        PurchaseDraftServiceError ||
+      error instanceof
+        HistoricalPurchasePreviewError
+    ) {
+      const status =
+        "status" in error &&
+        typeof error.status ===
+          "number"
+          ? error.status
+          : 409;
+
+      return json(
+        { error: error.message },
+        status,
+      );
+    }
+
+    console.error(
+      "POS_PURCHASE_DRAFT_APPEND_HISTORICAL_FAILED",
+      error,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر إضافة دفعة الشراء السابق إلى مسودة المورد",
+      },
+      500,
+    );
+  }
+}
+
 async function handleDiscardDraft(
   request: Request,
   db: Db,
@@ -1592,9 +1764,14 @@ export async function handlePurchaseDraftRequest(
   const isAppendItemPath =
     path === "/api/pos/purchases/draft/append-item";
 
+  const isAppendHistoricalProductPath =
+    path ===
+      "/api/pos/purchases/draft/append-historical-product";
+
   if (
     !isDraftPath &&
-    !isAppendItemPath
+    !isAppendItemPath &&
+    !isAppendHistoricalProductPath
   ) {
     return null;
   }
@@ -1623,6 +1800,21 @@ export async function handlePurchaseDraftRequest(
     }
 
     return handleAppendDraftItem(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    isAppendHistoricalProductPath &&
+    request.method === "POST"
+  ) {
+    if (!isPurchaseWriteEnabled(env)) {
+      return purchaseWritesDisabledResponse();
+    }
+
+    return handleAppendHistoricalProduct(
       request,
       db,
       env,

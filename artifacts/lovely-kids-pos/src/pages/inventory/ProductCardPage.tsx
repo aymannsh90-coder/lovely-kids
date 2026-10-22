@@ -840,6 +840,57 @@ export default function ProductCardPage() {
             <div
               style={{
                 display: "flex",
+                alignItems:
+                  "center",
+                gap: 8,
+                flexWrap:
+                  "wrap",
+                marginBottom: 16,
+                padding:
+                  "10px 12px",
+                border:
+                  "1px solid rgba(127,127,127,.22)",
+                borderRadius: 10,
+              }}
+            >
+              <strong>
+                {card.suppliers.length ===
+                1
+                  ? "المورد:"
+                  : "الموردون:"}
+              </strong>
+
+              {card.suppliers.length >
+              0 ? (
+                card.suppliers.map(
+                  (supplier) => (
+                    <span
+                      key={
+                        supplier.id
+                      }
+                      style={{
+                        padding:
+                          "4px 9px",
+                        borderRadius:
+                          999,
+                        background:
+                          "rgba(127,127,127,.10)",
+                      }}
+                    >
+                      {supplier.name}
+                    </span>
+                  ),
+                )
+              ) : (
+                <span>
+                  لا يوجد مورد مسجل
+                </span>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
                 gap: 10,
                 flexWrap: "wrap",
                 marginBottom: 16,
