@@ -18,6 +18,7 @@ import {
   getLatestPosPurchase,
   getOpenPosPurchaseDraft,
   getPosPurchaseByPublicId,
+  removeHistoricalPurchaseDraftItem,
   savePosPurchaseDraft,
   voidPosPurchase,
   getPosSuppliers,
@@ -1764,6 +1765,181 @@ export default function PurchaseInvoicePage() {
     }
   }
 
+  async function handleRemoveHistoricalLine(
+    line: PurchaseLine,
+  ) {
+    if (
+      line.entryMode !==
+      "historical"
+    ) {
+      setError(
+        "الاستلام الجديد يُدار من صفحة المنتج ولا يُحذف من فاتورة المشتريات.",
+      );
+      return;
+    }
+
+    const current =
+      savedPurchase;
+
+    if (
+      !current ||
+      current.purchase.status !==
+        "draft"
+    ) {
+      setError(
+        "يمكن حذف الصنف فقط من مسودة غير معتمدة.",
+      );
+      return;
+    }
+
+    const targetIndex =
+      lines.findIndex(
+        (item) =>
+          item.id === line.id,
+      );
+
+    if (targetIndex < 0) {
+      setError(
+        "تعذر تحديد سطر الصنف المطلوب حذفه.",
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        [
+          "حذف " +
+            line.product.nameAr +
+            " من مسودة فاتورة المشتريات؟",
+          "",
+          "سيتم حذف السطر من المسودة فقط.",
+          "لن يتغير المخزون ولن تُحذف تكلفة أو حركة بيع سابقة.",
+        ].join("\n"),
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const validationError =
+      validateInvoice({
+        allowUnknownCost: true,
+      });
+
+    if (validationError) {
+      setError(
+        validationError,
+      );
+      return;
+    }
+
+    setInvoiceBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const saved =
+        await savePosPurchaseDraft(
+          token,
+          {
+            supplierId,
+            draftPublicId:
+              current.purchase.publicId,
+            draftUpdatedAt:
+              current.purchase.updatedAt,
+            supplierInvoiceNumber:
+              supplierInvoiceNumber.trim() ||
+              undefined,
+            businessDate,
+            warehouseKey,
+            currencyCode:
+              "ILS",
+            paymentMethod,
+            invoiceDiscount,
+            paid,
+            notes:
+              notes.trim() ||
+              undefined,
+            items:
+              lines.map(
+                (item) => ({
+                  productId:
+                    item.product.productId,
+                  barcode:
+                    item.barcode ||
+                    undefined,
+                  quantity:
+                    item.quantity,
+                  freeQuantity:
+                    item.freeQuantity,
+                  entryMode:
+                    item.entryMode,
+                  unitCost:
+                    item.unitCost,
+                  lineDiscount:
+                    item.lineDiscount,
+                }),
+              ),
+          },
+        );
+
+      const savedTarget =
+        saved.purchase.items[
+          targetIndex
+        ];
+
+      if (
+        !savedTarget ||
+        savedTarget.entryMode !==
+          "historical"
+      ) {
+        throw new Error(
+          "تعذر مطابقة سطر الشراء السابق بعد حفظ المسودة.",
+        );
+      }
+
+      const result =
+        await removeHistoricalPurchaseDraftItem(
+          token,
+          {
+            draftPublicId:
+              saved.purchase.publicId,
+            draftUpdatedAt:
+              saved.purchase.updatedAt,
+            itemId:
+              savedTarget.id,
+          },
+        );
+
+      applyStoredPurchase(
+        result,
+      );
+
+      setMessage(
+        "تم حذف " +
+          line.product.nameAr +
+          " من المسودة فقط، بدون أي تغيير على المخزون.",
+      );
+    } catch (caught) {
+      if (
+        caught instanceof
+          ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        errorMessage(
+          caught,
+        ),
+      );
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
   async function refreshCashSession() {
     const current = await getCurrentCashSession(
       token,
@@ -2707,13 +2883,14 @@ export default function PurchaseInvoicePage() {
                 <th>الخصم</th>
                 <th>المجموع</th>
                 <th>المصدر</th>
+                <th>حذف</th>
               </tr>
             </thead>
 
             <tbody>
               {lines.length === 0 ? (
                 <tr className="accounting-empty-row">
-                  <td colSpan={11}>
+                  <td colSpan={12}>
                     {invoiceEntryMode ===
                     "historical"
                       ? "لا توجد أصناف بعد. ابحث عن الصنف أعلاه ليحسب النظام دفعة الشراء السابق تلقائيًا."
@@ -2852,6 +3029,31 @@ export default function PurchaseInvoicePage() {
                             ? "🔒 حساب تاريخي"
                             : "🔒 من المنتج"}
                         </span>
+                      </td>
+
+                      <td>
+                        {line.entryMode ===
+                        "historical" &&
+                        savedPurchase?.purchase.status ===
+                          "draft" ? (
+                          <button
+                            type="button"
+                            className="is-danger-action"
+                            disabled={
+                              invoiceBusy
+                            }
+                            onClick={() =>
+                              void handleRemoveHistoricalLine(
+                                line,
+                              )
+                            }
+                            title="حذف الصنف من مسودة الشراء السابق فقط"
+                          >
+                            حذف
+                          </button>
+                        ) : (
+                          <span>—</span>
+                        )}
                       </td>
                     </tr>
                   );

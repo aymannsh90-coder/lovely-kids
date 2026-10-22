@@ -1705,6 +1705,384 @@ async function handleAppendHistoricalProduct(
   }
 }
 
+async function handleRemoveHistoricalItem(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  const auth =
+    await requireOwner(request, db, env);
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  const body =
+    await request.json().catch(() => null);
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return json(
+      { error: "بيانات الحذف غير صالحة" },
+      400,
+    );
+  }
+
+  const payload =
+    body as Record<string, unknown>;
+
+  try {
+    const draftPublicId =
+      optionalText(
+        payload.draftPublicId,
+        "رقم المسودة",
+        80,
+      );
+
+    const draftUpdatedAt =
+      optionalText(
+        payload.draftUpdatedAt,
+        "إصدار المسودة",
+        80,
+      );
+
+    const itemId =
+      parsePositiveInteger(
+        payload.itemId,
+        "رقم سطر الصنف",
+      );
+
+    if (
+      !draftPublicId ||
+      !draftUpdatedAt
+    ) {
+      throw new PurchaseDraftError(
+        "رقم المسودة وإصدارها مطلوبان للحذف",
+      );
+    }
+
+    const expectedUpdatedAtMs =
+      Date.parse(
+        draftUpdatedAt,
+      );
+
+    if (
+      !Number.isFinite(
+        expectedUpdatedAtMs,
+      )
+    ) {
+      throw new PurchaseDraftError(
+        "إصدار المسودة غير صالح",
+      );
+    }
+
+    const result =
+      await db.transaction(
+        async (tx) => {
+          const purchaseRows =
+            await tx
+              .select()
+              .from(
+                posPurchasesTable,
+              )
+              .where(
+                and(
+                  eq(
+                    posPurchasesTable.publicId,
+                    draftPublicId,
+                  ),
+                  eq(
+                    posPurchasesTable.status,
+                    "draft",
+                  ),
+                  eq(
+                    posPurchasesTable.enteredByUserId,
+                    auth.user.id,
+                  ),
+                ),
+              )
+              .for("update")
+              .limit(1);
+
+          const purchase =
+            purchaseRows[0] ??
+            null;
+
+          if (!purchase) {
+            throw new PurchaseDraftError(
+              "مسودة فاتورة المشتريات غير موجودة",
+              404,
+            );
+          }
+
+          if (
+            purchase.updatedAt.getTime() !==
+              expectedUpdatedAtMs
+          ) {
+            throw new PurchaseDraftError(
+              "تم تحديث المسودة من مكان آخر. أعد تحميلها قبل الحذف.",
+              409,
+            );
+          }
+
+          const itemRows =
+            await tx
+              .select()
+              .from(
+                posPurchaseItemsTable,
+              )
+              .where(
+                and(
+                  eq(
+                    posPurchaseItemsTable.id,
+                    itemId,
+                  ),
+                  eq(
+                    posPurchaseItemsTable.purchaseId,
+                    purchase.id,
+                  ),
+                ),
+              )
+              .for("update")
+              .limit(1);
+
+          const item =
+            itemRows[0] ??
+            null;
+
+          if (!item) {
+            throw new PurchaseDraftError(
+              "سطر الصنف غير موجود في المسودة",
+              404,
+            );
+          }
+
+          if (
+            item.entryMode !==
+            "historical"
+          ) {
+            throw new PurchaseDraftError(
+              "الاستلام الجديد مرتبط بصفحة المنتج ولا يُحذف من فاتورة المشتريات.",
+              409,
+            );
+          }
+
+          await tx
+            .delete(
+              posPurchaseItemsTable,
+            )
+            .where(
+              eq(
+                posPurchaseItemsTable.id,
+                item.id,
+              ),
+            );
+
+          const remainingItems =
+            await tx
+              .select()
+              .from(
+                posPurchaseItemsTable,
+              )
+              .where(
+                eq(
+                  posPurchaseItemsTable.purchaseId,
+                  purchase.id,
+                ),
+              )
+              .orderBy(
+                asc(
+                  posPurchaseItemsTable.lineNumber,
+                ),
+              );
+
+          let subtotalMinor = 0;
+          let discountMinor = 0;
+
+          for (
+            const remaining
+            of remainingItems
+          ) {
+            if (
+              remaining.unitCostMinor !==
+              null
+            ) {
+              subtotalMinor +=
+                remaining.unitCostMinor *
+                remaining.quantity;
+              discountMinor +=
+                remaining.lineDiscountMinor;
+            }
+          }
+
+          const totalMinor =
+            Math.max(
+              0,
+              subtotalMinor -
+                discountMinor,
+            );
+
+          let paymentMethod =
+            purchase.paymentMethod;
+          let paidMinor =
+            purchase.paidMinor;
+          let dueMinor = 0;
+
+          if (
+            remainingItems.length ===
+            0
+          ) {
+            paymentMethod =
+              "credit";
+            paidMinor = 0;
+            dueMinor = 0;
+          } else if (
+            paymentMethod ===
+            "historical_settled"
+          ) {
+            paidMinor = 0;
+            dueMinor = 0;
+          } else if (
+            paymentMethod ===
+            "credit"
+          ) {
+            paidMinor = 0;
+            dueMinor =
+              totalMinor;
+          } else if (
+            paymentMethod ===
+            "cash"
+          ) {
+            paidMinor =
+              totalMinor;
+            dueMinor = 0;
+          } else {
+            if (
+              paidMinor <= 0 ||
+              paidMinor >=
+                totalMinor
+            ) {
+              throw new PurchaseDraftError(
+                "بعد حذف الصنف تصبح الدفعة المختلطة غير صالحة. عدّل طريقة الدفع أو الدفعة أولًا ثم أعد الحذف.",
+                409,
+              );
+            }
+
+            dueMinor =
+              totalMinor -
+              paidMinor;
+          }
+
+          const updatedRows =
+            await tx
+              .update(
+                posPurchasesTable,
+              )
+              .set({
+                paymentMethod,
+                subtotalMinor,
+                discountMinor,
+                totalMinor,
+                paidMinor,
+                dueMinor,
+                updatedAt:
+                  new Date(),
+              })
+              .where(
+                and(
+                  eq(
+                    posPurchasesTable.id,
+                    purchase.id,
+                  ),
+                  eq(
+                    posPurchasesTable.status,
+                    "draft",
+                  ),
+                ),
+              )
+              .returning();
+
+          const updatedPurchase =
+            updatedRows[0];
+
+          if (!updatedPurchase) {
+            throw new PurchaseDraftError(
+              "تعذر تحديث المسودة بعد حذف الصنف",
+              409,
+            );
+          }
+
+          const supplierRows =
+            await tx
+              .select()
+              .from(
+                suppliersTable,
+              )
+              .where(
+                eq(
+                  suppliersTable.id,
+                  updatedPurchase.supplierId,
+                ),
+              )
+              .limit(1);
+
+          const supplier =
+            supplierRows[0] ??
+            null;
+
+          if (!supplier) {
+            throw new PurchaseDraftError(
+              "مورد المسودة غير موجود",
+              409,
+            );
+          }
+
+          return {
+            purchase:
+              updatedPurchase,
+            items:
+              remainingItems,
+            supplier,
+          };
+        },
+      );
+
+    return json(
+      toResponse(
+        result.purchase,
+        result.items,
+        result.supplier,
+      ),
+    );
+  } catch (error) {
+    if (
+      error instanceof
+      PurchaseDraftError
+    ) {
+      return json(
+        { error: error.message },
+        error.status,
+      );
+    }
+
+    console.error(
+      "POS_PURCHASE_DRAFT_REMOVE_HISTORICAL_ITEM_FAILED",
+      error,
+    );
+
+    return json(
+      {
+        error:
+          "تعذر حذف الصنف من مسودة المشتريات",
+      },
+      500,
+    );
+  }
+}
+
 async function handleDiscardDraft(
   request: Request,
   db: Db,
@@ -1768,10 +2146,15 @@ export async function handlePurchaseDraftRequest(
     path ===
       "/api/pos/purchases/draft/append-historical-product";
 
+  const isRemoveHistoricalItemPath =
+    path ===
+      "/api/pos/purchases/draft/remove-historical-item";
+
   if (
     !isDraftPath &&
     !isAppendItemPath &&
-    !isAppendHistoricalProductPath
+    !isAppendHistoricalProductPath &&
+    !isRemoveHistoricalItemPath
   ) {
     return null;
   }
@@ -1815,6 +2198,21 @@ export async function handlePurchaseDraftRequest(
     }
 
     return handleAppendHistoricalProduct(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    isRemoveHistoricalItemPath &&
+    request.method === "POST"
+  ) {
+    if (!isPurchaseWriteEnabled(env)) {
+      return purchaseWritesDisabledResponse();
+    }
+
+    return handleRemoveHistoricalItem(
       request,
       db,
       env,
