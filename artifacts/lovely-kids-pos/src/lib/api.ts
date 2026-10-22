@@ -488,6 +488,11 @@ export interface PosInventoryMovement {
 export interface PosProductCardResult {
   product: PosProductLookup;
   movements: PosInventoryMovement[];
+  suppliers: Array<{
+    id: string;
+    code: string;
+    name: string;
+  }>;
 }
 
 export function getPosProductCard(
@@ -3307,6 +3312,85 @@ export async function getOpenPosPurchaseDraft(
   }
 
   return result as PosPurchaseResult;
+}
+
+export interface ProductHistoricalPurchasePreview {
+  product: {
+    id: string;
+    productCode: string | null;
+    nameAr: string;
+  };
+  physicalQuantity: number;
+  pendingStockReceiptQuantity: number;
+  soldQuantity: number;
+  returnedQuantity: number;
+  netSoldQuantity: number;
+  totalHistoricalQuantity: number;
+  currentCost: {
+    quantityOnHand: number;
+    inventoryValueMinor: number;
+    referenceUnitCostMinor: number | null;
+    costQuality: string;
+  } | null;
+  batches: Array<{
+    sourceKey: string;
+    quantity: number;
+    unitCostMinor: number | null;
+    totalCostMinor: number | null;
+    occurredAt: string | null;
+    documentationOnly: boolean;
+    sourceType:
+      | "opening"
+      | "repeat_purchase"
+      | "untracked";
+  }>;
+}
+
+export function getProductHistoricalPurchasePreview(
+  token: string,
+  productId: string,
+) {
+  return apiRequest<ProductHistoricalPurchasePreview>(
+    `/api/products/${encodeURIComponent(productId)}/purchase-history-preview`,
+    {},
+    token,
+  );
+}
+
+export function appendHistoricalProductToPurchaseDraft(
+  token: string,
+  input: {
+    supplierId: string;
+    productId: string;
+    historicalSourceKey: string;
+    businessDate: string;
+    warehouseKey?: string;
+    currencyCode?: string;
+  },
+) {
+  return apiRequest<PosPurchaseResult>(
+    "/api/pos/purchases/draft/append-historical-product",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        supplierId:
+          input.supplierId,
+        productId:
+          input.productId,
+        historicalSourceKey:
+          input.historicalSourceKey,
+        businessDate:
+          input.businessDate,
+        warehouseKey:
+          input.warehouseKey ??
+          "main",
+        currencyCode:
+          input.currencyCode ??
+          "ILS",
+      }),
+    },
+    token,
+  );
 }
 
 export function savePosPurchaseDraft(
