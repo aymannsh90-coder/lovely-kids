@@ -7,6 +7,8 @@ import {
   financeExchangeRatesTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
+  posPurchaseItemsTable,
+  posPurchasesTable,
   posSaleItemCostsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
@@ -15,6 +17,7 @@ import {
   productBarcodesTable,
   productCostStateTable,
   productsTable,
+  suppliersTable,
   type ColorVariant,
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
@@ -1331,8 +1334,10 @@ async function handleInventoryProductCard(
     );
   }
 
-  const movements = await db
-    .select({
+  const [movements, supplierRows] =
+    await Promise.all([
+      db
+        .select({
       id: inventoryMovementsTable.id,
 
       productId:
@@ -1396,14 +1401,79 @@ async function handleInventoryProductCard(
         productId,
       ),
     )
-    .orderBy(
-      desc(
-        inventoryMovementsTable.occurredAt,
+        .orderBy(
+          desc(
+            inventoryMovementsTable.occurredAt,
+          ),
+          desc(
+            inventoryMovementsTable.id,
+          ),
+        ),
+
+      db
+        .select({
+          id:
+            suppliersTable.id,
+          code:
+            suppliersTable.code,
+          name:
+            suppliersTable.name,
+          purchaseId:
+            posPurchasesTable.id,
+        })
+        .from(
+          posPurchaseItemsTable,
+        )
+        .innerJoin(
+          posPurchasesTable,
+          eq(
+            posPurchasesTable.id,
+            posPurchaseItemsTable.purchaseId,
+          ),
+        )
+        .innerJoin(
+          suppliersTable,
+          eq(
+            suppliersTable.id,
+            posPurchasesTable.supplierId,
+          ),
+        )
+        .where(
+          and(
+            eq(
+              posPurchaseItemsTable.productId,
+              productId,
+            ),
+            inArray(
+              posPurchasesTable.status,
+              ["draft", "completed"],
+            ),
+          ),
+        )
+        .orderBy(
+          desc(
+            posPurchasesTable.id,
+          ),
+        ),
+    ]);
+
+  const suppliers = [
+    ...new Map(
+      supplierRows.map(
+        (row) => [
+          row.id,
+          {
+            id:
+              String(row.id),
+            code:
+              row.code,
+            name:
+              row.name,
+          },
+        ],
       ),
-      desc(
-        inventoryMovementsTable.id,
-      ),
-    );
+    ).values(),
+  ];
 
   return json({
     product: toPosProductLookup(
@@ -1413,6 +1483,7 @@ async function handleInventoryProductCard(
       null,
     ),
     movements,
+    suppliers,
   });
 }
 
