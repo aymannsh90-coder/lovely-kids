@@ -85,9 +85,11 @@ export const ordersTable = pgTable("orders", {
     "orders_client_request_id_valid",
     sql`${table.clientRequestId} is null or length(btrim(${table.clientRequestId})) between 16 and 100`,
   ),
-  uniqueIndex("orders_client_request_id_idx").on(
-    table.clientRequestId,
-  ),
+  uniqueIndex("orders_client_request_id_idx")
+    .on(table.clientRequestId)
+    .where(
+      sql`${table.clientRequestId} is not null`,
+    ),
 ]).enableRLS();
 
 export const insertOrderSchema = createInsertSchema(ordersTable).omit({
