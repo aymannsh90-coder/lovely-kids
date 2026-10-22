@@ -400,6 +400,10 @@ async function handleCreateOrder(
 ) {
   const body = await request.json().catch(() => null);
   const metaAttribution = getMetaAttribution(body);
+  const clientRequestId =
+    request.headers
+      .get("Idempotency-Key")
+      ?.trim() || null;
   const parsed = insertOrderSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -419,10 +423,11 @@ async function handleCreateOrder(
       env,
     );
 
-    const newOrder = await createTrustedOrder(
+    const creation = await createTrustedOrder(
       db,
       {
         userId: authUser?.id ?? null,
+        clientRequestId,
         customerName: parsed.data.customerName,
         customerPhone:
           authUser?.phone ??
@@ -443,8 +448,12 @@ async function handleCreateOrder(
       },
     );
 
-    try {
-      const metaResult =
+    const newOrder =
+      creation.order;
+
+    if (creation.created) {
+      try {
+        const metaResult =
         await sendMetaPurchaseEvent(
           env,
           request,
@@ -468,18 +477,18 @@ async function handleCreateOrder(
         orderId: newOrder.id,
         ...metaResult,
       });
-    } catch (metaError) {
-      console.error("META_CAPI_PURCHASE_FAILED", {
+      } catch (metaError) {
+        console.error("META_CAPI_PURCHASE_FAILED", {
         orderId: newOrder.id,
         error:
           metaError instanceof Error
             ? metaError.message
             : String(metaError),
       });
-    }
+      }
 
-    try {
-      const notificationResult =
+      try {
+        const notificationResult =
         await sendNewOrderNotification(db, {
           id: newOrder.id,
           customerName: newOrder.customerName,
@@ -490,11 +499,12 @@ async function handleCreateOrder(
         "NEW_ORDER_NOTIFICATION",
         notificationResult,
       );
-    } catch (notificationError) {
-      console.error(
-        "NEW_ORDER_NOTIFICATION_FAILED",
+      } catch (notificationError) {
+        console.error(
+          "NEW_ORDER_NOTIFICATION_FAILED",
         notificationError,
       );
+      }
     }
 
     const trackingToken = createOrderTrackingToken(
@@ -507,7 +517,7 @@ async function handleCreateOrder(
       trackingToken
         ? { ...newOrder, trackingToken }
         : newOrder,
-      201,
+      creation.created ? 201 : 200,
     );
   } catch (error) {
     if (error instanceof OrderValidationError) {

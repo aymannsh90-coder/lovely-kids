@@ -7,7 +7,8 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import {
   discountCodesEnabled,
   isDiscountCodeActiveNow,
@@ -54,6 +55,7 @@ export interface TrustedOrderItem {
 
 export interface TrustedOrderInput {
   userId?: number | null;
+  clientRequestId?: string | null;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -458,14 +460,69 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
   const customerAddress = input.customerAddress.trim();
   const notes = input.notes?.trim() || null;
   const paymentMethod = input.paymentMethod ?? "cod";
+  const clientRequestId =
+    input.clientRequestId?.trim() || null;
+
+  if (
+    clientRequestId !== null &&
+    (
+      clientRequestId.length < 16 ||
+      clientRequestId.length > 100 ||
+      !/^[A-Za-z0-9._:-]+$/.test(
+        clientRequestId,
+      )
+    )
+  ) {
+    throw new OrderValidationError(
+      "معرّف محاولة الطلب غير صالح",
+    );
+  }
 
   if (!customerName || !customerPhone) {
     throw new OrderValidationError("الاسم ورقم الهاتف مطلوبان");
   }
 
+  const clientRequestIdHash =
+    clientRequestId
+      ? createHash("sha256")
+          .update(clientRequestId)
+          .digest("hex")
+      : null;
+
   const groupedItems = groupItems(input.items);
 
   return db.transaction(async (tx) => {
+    if (clientRequestIdHash) {
+      // Serialize retries of the same logical checkout before touching
+      // product stock. If the first request committed but its response
+      // was lost, the retry returns the original order unchanged.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${clientRequestIdHash}, 0))`,
+      );
+
+      const existingRows =
+        await tx
+          .select()
+          .from(ordersTable)
+          .where(
+            eq(
+              ordersTable.clientRequestId,
+              clientRequestIdHash,
+            ),
+          )
+          .limit(1);
+
+      const existing =
+        existingRows[0];
+
+      if (existing) {
+        return {
+          order: existing,
+          created: false,
+        } as const;
+      }
+    }
+
     const settingsRows = await tx
       .select({ data: appSettingsTable.data })
       .from(appSettingsTable)
@@ -877,6 +934,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         customerName,
         customerPhone,
         customerAddress: trustedCustomerAddress,
+        clientRequestId:
+          clientRequestIdHash,
         notes,
         items: trustedItems,
         totalPrice,
@@ -1144,6 +1203,9 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         );
     }
 
-    return order;
+    return {
+      order,
+      created: true,
+    } as const;
   });
 }
