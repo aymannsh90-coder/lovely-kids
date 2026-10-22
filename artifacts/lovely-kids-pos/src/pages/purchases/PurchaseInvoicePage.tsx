@@ -1139,7 +1139,7 @@ export default function PurchaseInvoicePage() {
               return `${index + 1}) كمية ${batch.quantity} — ${costText} — ${typeText}`;
             },
           )
-          .join("\\n");
+          .join("\n");
 
       const rawChoice =
         window.prompt(
@@ -1148,8 +1148,7 @@ export default function PurchaseInvoicePage() {
             "اختر رقم الدفعة المطابقة للفاتورة الموجودة معك:",
             "",
             choices,
-          ].join("
-"),
+          ].join("\n"),
           "1",
         );
 
