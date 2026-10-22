@@ -3892,6 +3892,20 @@ async function handleCreatePurchase(
               })
             : null;
 
+        const historicalDocumentationClearingAccount =
+          paymentMethod !==
+            "historical_settled" &&
+          documentationOnlyHistoricalValueMinor > 0
+            ? await ensureAccount({
+                code:
+                  "HISTORICAL_PURCHASE_DOCUMENTATION_CLEARING",
+                name:
+                  "تسوية افتتاحية — مشتريات سابقة موثقة",
+                accountType:
+                  "equity",
+              })
+            : null;
+
         const financeLines:
           FinancePostingLineInput[] = [];
 
@@ -3937,6 +3951,38 @@ async function handleCreatePurchase(
             creditMinor: 0,
             memo:
               `تجميع تكلفة شراء سابق من فاتورة ${purchase.publicId} حتى اكتمال دفعات الصنف`,
+          });
+        }
+
+        if (
+          documentationOnlyHistoricalValueMinor > 0 &&
+          paymentMethod !==
+            "historical_settled"
+        ) {
+          if (
+            !historicalDocumentationClearingAccount
+          ) {
+            throw new PurchaseError(
+              "تعذر العثور على حساب تسوية المشتريات السابقة الموثقة",
+              409,
+            );
+          }
+
+          // These historical batches are already represented by the cost
+          // engine and frozen sale-cost snapshots, so they must never be
+          // applied to inventory cost again. When the user intentionally
+          // reconstructs a payable/cash settlement for the old supplier
+          // invoice, use an opening-equity clearing debit to balance the
+          // full historical liability/payment without duplicating COGS or
+          // inventory value.
+          financeLines.push({
+            accountId:
+              historicalDocumentationClearingAccount.id,
+            debitMinor:
+              documentationOnlyHistoricalValueMinor,
+            creditMinor: 0,
+            memo:
+              `تسوية افتتاحية لقيمة شراء سابق موثقة في محرك التكلفة — ${purchase.publicId}`,
           });
         }
 
