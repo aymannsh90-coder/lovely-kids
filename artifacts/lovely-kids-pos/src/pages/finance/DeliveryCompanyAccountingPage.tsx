@@ -26,6 +26,379 @@ function errorMessage(error: unknown) {
     : "حدث خطأ غير متوقع";
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function statementMoney(
+  minor: number,
+  forExcel: boolean,
+) {
+  const amount = (minor / 100).toFixed(2);
+
+  return forExcel ? amount : `${amount} ₪`;
+}
+
+function statementDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10);
+  }
+
+  return date.toLocaleDateString("ar-PS", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function buildDeliveryCompanyStatementDocument(
+  summary: PosDeliverySettlementSummary,
+  forExcel: boolean,
+) {
+  const generatedAt = new Date().toLocaleString("ar-PS", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const totals =
+    summary.unsettledOrders.reduce(
+      (current, order) => ({
+        orderTotalMinor:
+          current.orderTotalMinor +
+          Math.round(order.totalPrice * 100),
+        shippingChargedMinor:
+          current.shippingChargedMinor +
+          order.shippingChargedMinor,
+        deliveryCompanyCostMinor:
+          current.deliveryCompanyCostMinor +
+          order.deliveryCompanyCostMinor,
+        deliveryMarginMinor:
+          current.deliveryMarginMinor +
+          order.deliveryMarginMinor,
+        amountMinor:
+          current.amountMinor +
+          order.amountMinor,
+      }),
+      {
+        orderTotalMinor: 0,
+        shippingChargedMinor: 0,
+        deliveryCompanyCostMinor: 0,
+        deliveryMarginMinor: 0,
+        amountMinor: 0,
+      },
+    );
+
+  const money = (minor: number) =>
+    statementMoney(minor, forExcel);
+
+  const orderRows =
+    summary.unsettledOrders.length === 0
+      ? `
+          <tr>
+            <td colspan="9">لا توجد طلبات غير مسوّاة.</td>
+          </tr>
+        `
+      : summary.unsettledOrders
+          .map(
+            (order) => `
+              <tr>
+                <td>${order.id}</td>
+                <td>${escapeHtml(statementDate(order.createdAt))}</td>
+                <td>${escapeHtml(order.customerName || "—")}</td>
+                <td>${escapeHtml(order.shippingZone || "—")}</td>
+                <td class="money">${money(
+                  Math.round(order.totalPrice * 100),
+                )}</td>
+                <td class="money">${money(
+                  order.shippingChargedMinor,
+                )}</td>
+                <td class="money">${money(
+                  order.deliveryCompanyCostMinor,
+                )}</td>
+                <td class="money">${money(
+                  order.deliveryMarginMinor,
+                )}</td>
+                <td class="money strong">${money(
+                  order.amountMinor,
+                )}</td>
+              </tr>
+            `,
+          )
+          .join("");
+
+  const settlementRows =
+    summary.settlements.length === 0
+      ? `
+          <tr>
+            <td colspan="7">لا توجد تسويات سابقة.</td>
+          </tr>
+        `
+      : summary.settlements
+          .map(
+            (settlement) => `
+              <tr>
+                <td>${escapeHtml(settlement.publicId)}</td>
+                <td>${escapeHtml(settlement.businessDate)}</td>
+                <td>${
+                  settlement.receiptMethod === "cash"
+                    ? "نقدي"
+                    : "بنك"
+                }</td>
+                <td>${settlement.orders.length}</td>
+                <td class="money strong">${money(
+                  settlement.totalMinor,
+                )}</td>
+                <td>${escapeHtml(
+                  settlement.orders
+                    .map((item) => `#${item.orderId}`)
+                    .join("، "),
+                )}</td>
+                <td>${
+                  settlement.status === "posted"
+                    ? "فعّالة"
+                    : "معكوسة"
+                }</td>
+              </tr>
+            `,
+          )
+          .join("");
+
+  const excelNamespaces = forExcel
+    ? ' xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"'
+    : "";
+
+  return `<!doctype html>
+<html${excelNamespaces} lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>كشف حساب شركة التوصيل - ${escapeHtml(
+    summary.company.name,
+  )}</title>
+  <style>
+    body {
+      font-family: Arial, Tahoma, sans-serif;
+      direction: rtl;
+      color: #111827;
+      margin: 24px;
+      font-size: 12px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 22px;
+    }
+
+    h2 {
+      margin: 24px 0 8px;
+      font-size: 16px;
+    }
+
+    .brand {
+      color: #E91E8C;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .meta {
+      margin: 3px 0;
+      color: #4b5563;
+    }
+
+    .summary {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+
+    .summary td {
+      border: 1px solid #d1d5db;
+      padding: 8px;
+    }
+
+    .summary .label {
+      font-weight: 700;
+      background: #f3f4f6;
+    }
+
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    table.data th,
+    table.data td {
+      border: 1px solid #9ca3af;
+      padding: 6px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    table.data th {
+      background: #f3f4f6;
+      font-weight: 700;
+    }
+
+    .money {
+      direction: ltr;
+      white-space: nowrap;
+    }
+
+    .strong {
+      font-weight: 700;
+    }
+
+    .total-row td {
+      font-weight: 700;
+      background: #f9fafb;
+    }
+
+    .footer {
+      margin-top: 24px;
+      color: #6b7280;
+      font-size: 10px;
+    }
+
+    @page {
+      size: A4 landscape;
+      margin: 10mm;
+    }
+
+    @media print {
+      body {
+        margin: 0;
+      }
+
+      h2,
+      table,
+      tr {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="brand">Lovely Kids</div>
+  <h1>كشف حساب شركة التوصيل</h1>
+  <div class="meta">
+    الشركة: <strong>${escapeHtml(summary.company.name)}</strong>
+  </div>
+  <div class="meta">
+    تاريخ إصدار الكشف: ${escapeHtml(generatedAt)}
+  </div>
+
+  <table class="summary">
+    <tbody>
+      <tr>
+        <td class="label">المبلغ غير المسوّى</td>
+        <td class="money strong">${money(
+          summary.outstandingMinor,
+        )}</td>
+        <td class="label">طلبات غير مسوّاة</td>
+        <td>${summary.unsettledOrders.length}</td>
+      </tr>
+      <tr>
+        <td class="label">إيراد التوصيل من الزبائن</td>
+        <td class="money">${money(
+          summary.shippingChargedMinor,
+        )}</td>
+        <td class="label">تكلفة شركة التوصيل</td>
+        <td class="money">${money(
+          summary.deliveryCompanyCostMinor,
+        )}</td>
+      </tr>
+      <tr>
+        <td class="label">صافي ربح/خسارة التوصيل</td>
+        <td class="money">${money(
+          summary.deliveryMarginMinor,
+        )}</td>
+        <td class="label">عدد التسويات السابقة</td>
+        <td>${summary.settlements.length}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>الطلبات غير المسوّاة</h2>
+
+  <table class="data">
+    <thead>
+      <tr>
+        <th>رقم الطلب</th>
+        <th>تاريخ الطلب</th>
+        <th>الزبون</th>
+        <th>المنطقة</th>
+        <th>إجمالي الطلب${forExcel ? " (₪)" : ""}</th>
+        <th>التوصيل على الزبون${forExcel ? " (₪)" : ""}</th>
+        <th>تكلفة الشركة${forExcel ? " (₪)" : ""}</th>
+        <th>ربح/خسارة التوصيل${forExcel ? " (₪)" : ""}</th>
+        <th>المستحق لنا${forExcel ? " (₪)" : ""}</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${orderRows}
+      ${
+        summary.unsettledOrders.length > 0
+          ? `
+            <tr class="total-row">
+              <td colspan="4">الإجمالي</td>
+              <td class="money">${money(
+                totals.orderTotalMinor,
+              )}</td>
+              <td class="money">${money(
+                totals.shippingChargedMinor,
+              )}</td>
+              <td class="money">${money(
+                totals.deliveryCompanyCostMinor,
+              )}</td>
+              <td class="money">${money(
+                totals.deliveryMarginMinor,
+              )}</td>
+              <td class="money">${money(
+                totals.amountMinor,
+              )}</td>
+            </tr>
+          `
+          : ""
+      }
+    </tbody>
+  </table>
+
+  <h2>سجل التسويات</h2>
+
+  <table class="data">
+    <thead>
+      <tr>
+        <th>رقم التسوية</th>
+        <th>التاريخ</th>
+        <th>الطريقة</th>
+        <th>عدد الطلبات</th>
+        <th>المبلغ${forExcel ? " (₪)" : ""}</th>
+        <th>الطلبات</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${settlementRows}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    كشف صادر من نظام Lovely Kids — للمطابقة والمراجعة.
+  </div>
+</body>
+</html>`;
+}
+
 export default function DeliveryCompanyAccountingPage() {
   const {
     token,
@@ -334,6 +707,94 @@ export default function DeliveryCompanyAccountingPage() {
     }
   }
 
+
+  function printStatement() {
+    if (!summary) {
+      return;
+    }
+
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=1200,height=850",
+    );
+
+    if (!printWindow) {
+      setError(
+        "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة.",
+      );
+      return;
+    }
+
+    printWindow.opener = null;
+    printWindow.document.open();
+    printWindow.document.write(
+      buildDeliveryCompanyStatementDocument(
+        summary,
+        false,
+      ),
+    );
+    printWindow.document.close();
+
+    const runPrint = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+
+    if (printWindow.document.readyState === "complete") {
+      window.setTimeout(runPrint, 100);
+    } else {
+      printWindow.addEventListener(
+        "load",
+        () => window.setTimeout(runPrint, 100),
+        { once: true },
+      );
+    }
+  }
+
+  function exportStatementToExcel() {
+    if (!summary) {
+      return;
+    }
+
+    const documentHtml =
+      buildDeliveryCompanyStatementDocument(
+        summary,
+        true,
+      );
+
+    const blob = new Blob(
+      ["\ufeff", documentHtml],
+      {
+        type: "application/vnd.ms-excel;charset=utf-8",
+      },
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeCompanyName =
+      summary.company.name
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "-")
+        .replace(/\s+/g, "-") ||
+      "delivery-company";
+    const today =
+      new Date().toISOString().slice(0, 10);
+
+    link.href = url;
+    link.download =
+      `كشف-حساب-${safeCompanyName}-${today}.xls`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(
+      () => URL.revokeObjectURL(url),
+      0,
+    );
+  }
+
   return (
     <section className="accounting-invoice-page delivery-company-scroll-page">
       <div className="panel-heading">
@@ -388,13 +849,39 @@ export default function DeliveryCompanyAccountingPage() {
           </select>
         </label>
 
-        <button
-          type="button"
-          disabled={!companyId || loading}
-          onClick={() => void loadSummary()}
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
         >
-          {loading ? "جارٍ التحديث..." : "تحديث الحساب"}
-        </button>
+          <button
+            type="button"
+            disabled={!companyId || loading}
+            onClick={() => void loadSummary()}
+          >
+            {loading ? "جارٍ التحديث..." : "تحديث الحساب"}
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!summary || loading}
+            onClick={printStatement}
+          >
+            🖨️ طباعة الكشف
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!summary || loading}
+            onClick={exportStatementToExcel}
+          >
+            📊 Excel
+          </button>
+        </div>
       </section>
 
       {summary && (
