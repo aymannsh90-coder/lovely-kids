@@ -1,4 +1,5 @@
-import { boolean, pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, pgTable, serial, text, integer, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -11,6 +12,12 @@ export const ordersTable = pgTable("orders", {
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerAddress: text("customer_address").notNull(),
+
+  // Stable client-generated key for retry-safe checkout.
+  // A retry with the same key must return the original order
+  // instead of deducting stock again.
+  clientRequestId: text("client_request_id"),
+
   items: jsonb("items").notNull(),
   totalPrice: integer("total_price").notNull(),
   shippingZone: text("shipping_zone"),
@@ -73,11 +80,20 @@ export const ordersTable = pgTable("orders", {
   printedAt: timestamp("printed_at"),
   printCount: integer("print_count").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-}).enableRLS();
+}, (table) => [
+  check(
+    "orders_client_request_id_valid",
+    sql`${table.clientRequestId} is null or length(btrim(${table.clientRequestId})) between 16 and 100`,
+  ),
+  uniqueIndex("orders_client_request_id_idx").on(
+    table.clientRequestId,
+  ),
+]).enableRLS();
 
 export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   id: true,
   userId: true,
+  clientRequestId: true,
   printedAt: true,
   printCount: true,
   fulfillmentMethod: true,
