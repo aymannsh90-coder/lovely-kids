@@ -280,7 +280,6 @@ function buildDeliveryCompanyStatementDocument(
       }
 
       h2,
-      table,
       tr {
         break-inside: avoid;
       }
@@ -833,6 +832,7 @@ export default function DeliveryCompanyAccountingPage() {
               );
 
               setSelectedIds([]);
+              setSummary(null);
             }}
           >
             {companies.map((company) => (
