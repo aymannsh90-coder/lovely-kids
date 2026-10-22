@@ -1139,8 +1139,7 @@ export default function PurchaseInvoicePage() {
               return `${index + 1}) كمية ${batch.quantity} — ${costText} — ${typeText}`;
             },
           )
-          .join("
-");
+          .join("\\n");
 
       const rawChoice =
         window.prompt(
