@@ -8,6 +8,7 @@ import {
   type ColorVariant,
 } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import {
   discountCodesEnabled,
   isDiscountCodeActiveNow,
@@ -481,15 +482,22 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
     throw new OrderValidationError("الاسم ورقم الهاتف مطلوبان");
   }
 
+  const clientRequestIdHash =
+    clientRequestId
+      ? createHash("sha256")
+          .update(clientRequestId)
+          .digest("hex")
+      : null;
+
   const groupedItems = groupItems(input.items);
 
   return db.transaction(async (tx) => {
-    if (clientRequestId) {
+    if (clientRequestIdHash) {
       // Serialize retries of the same logical checkout before touching
       // product stock. If the first request committed but its response
       // was lost, the retry returns the original order unchanged.
       await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${clientRequestId}, 0))`,
+        sql`select pg_advisory_xact_lock(hashtextextended(${clientRequestIdHash}, 0))`,
       );
 
       const existingRows =
@@ -499,7 +507,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
           .where(
             eq(
               ordersTable.clientRequestId,
-              clientRequestId,
+              clientRequestIdHash,
             ),
           )
           .limit(1);
@@ -926,7 +934,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         customerName,
         customerPhone,
         customerAddress: trustedCustomerAddress,
-        clientRequestId,
+        clientRequestId:
+          clientRequestIdHash,
         notes,
         items: trustedItems,
         totalPrice,
