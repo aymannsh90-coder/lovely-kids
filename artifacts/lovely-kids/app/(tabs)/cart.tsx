@@ -111,6 +111,15 @@ function getMetaBrowserAttribution(): MetaBrowserAttribution {
   };
 }
 
+function createCheckoutRequestId(): string {
+  return [
+    "checkout",
+    Date.now().toString(36),
+    Math.random().toString(36).slice(2),
+    Math.random().toString(36).slice(2),
+  ].join("-");
+}
+
 function getStoreDate(): string {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
@@ -254,6 +263,8 @@ export default function CartScreen() {
   const [cartStockSnapshot, setCartStockSnapshot] = useState<Product[] | null>(null);
   const [cartStockChecking, setCartStockChecking] = useState(false);
   const checkoutSubmitLock = useRef(false);
+  const checkoutRequestIdRef =
+    useRef<string | null>(null);
 
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 84 + 8 : insets.bottom + 49 + 8;
@@ -444,8 +455,19 @@ export default function CartScreen() {
     let createdTrackingToken: string | null = null;
 
     try {
+        const checkoutRequestId =
+          checkoutRequestIdRef.current ??
+          createCheckoutRequestId();
+
+        checkoutRequestIdRef.current =
+          checkoutRequestId;
+
         const token = await getAuthToken();
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "Idempotency-Key":
+            checkoutRequestId,
+        };
         if (token) headers.Authorization = `Bearer ${token}`;
 
         const metaAttribution = getMetaBrowserAttribution();
@@ -547,6 +569,9 @@ export default function CartScreen() {
         }, {
           eventId: `order-${order.id}`,
         });
+
+        checkoutRequestIdRef.current =
+          null;
       } catch (error) {
         const errorMessage =
           error instanceof Error
