@@ -2469,13 +2469,23 @@ export default function PurchaseInvoicePage() {
               </label>
 
               <label>
-                <span>نوع التسجيل — من المنتج</span>
+                <span>نوع التسجيل</span>
                 <select
                   value={
                     invoiceEntryMode
                   }
-                  disabled
-                  title="نوع الشراء يأتي من صفحة المنتج ولا يُعدّل من الفاتورة"
+                  disabled={
+                    lines.length > 0 ||
+                    savedPurchase?.purchase.status ===
+                      "draft"
+                  }
+                  title={
+                    lines.length > 0 ||
+                    savedPurchase?.purchase.status ===
+                      "draft"
+                      ? "نوع الشراء مقفول بعد إنشاء المسودة"
+                      : "يمكن بدء شراء سابق من هنا. الاستلام الجديد يبقى مرتبطًا بصفحة المنتج."
+                  }
                   onChange={(event) =>
                     changeInvoiceEntryMode(
                       event.target
@@ -2707,8 +2717,10 @@ export default function PurchaseInvoicePage() {
               {lines.length === 0 ? (
                 <tr className="accounting-empty-row">
                   <td colSpan={11}>
-                    لا توجد أصناف في مسودة المورد.
-                    أضف أو عدّل المنتجات واختر المورد من صفحة المنتج.
+                    {invoiceEntryMode ===
+                    "historical"
+                      ? "لا توجد أصناف بعد. ابحث عن الصنف أعلاه ليحسب النظام دفعة الشراء السابق تلقائيًا."
+                      : "لا توجد أصناف في مسودة المورد. للاستلام الجديد، أضف أو عدّل المنتج واختر المورد من صفحة المنتج."}
                   </td>
                 </tr>
               ) : (
@@ -2753,7 +2765,12 @@ export default function PurchaseInvoicePage() {
                           max="99999"
                           value={line.quantity}
                           disabled
-                          title="الكمية تأتي من صفحة المنتج"
+                          title={
+                            line.entryMode ===
+                            "historical"
+                              ? "الكمية محسوبة تلقائيًا من المخزون والحركات التاريخية"
+                              : "الكمية تأتي من صفحة المنتج"
+                          }
                           onChange={(event) =>
                             updateLine(line.id, {
                               quantity: Math.max(
@@ -2773,7 +2790,12 @@ export default function PurchaseInvoicePage() {
                           max="99999"
                           value={line.freeQuantity}
                           disabled
-                          title="الكمية تأتي من صفحة المنتج"
+                          title={
+                            line.entryMode ===
+                            "historical"
+                              ? "الكمية المجانية غير مستخدمة في الشراء السابق"
+                              : "الكمية تأتي من صفحة المنتج"
+                          }
                           onChange={(event) =>
                             updateLine(line.id, {
                               freeQuantity: Math.max(
@@ -2821,9 +2843,17 @@ export default function PurchaseInvoicePage() {
 
                       <td>
                         <span
-                          title="الصنف والكمية مرتبطان بصفحة المنتج"
+                          title={
+                            line.entryMode ===
+                            "historical"
+                              ? "الكمية مرتبطة بدفعة شراء سابق محسوبة ومحمية بمفتاح مصدر"
+                              : "الصنف والكمية مرتبطان بصفحة المنتج"
+                          }
                         >
-                          🔒 من المنتج
+                          {line.entryMode ===
+                          "historical"
+                            ? "🔒 حساب تاريخي"
+                            : "🔒 من المنتج"}
                         </span>
                       </td>
                     </tr>
