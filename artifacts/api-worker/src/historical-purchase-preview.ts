@@ -110,6 +110,8 @@ async function getInventoryMovementSummary(
           inventoryMovementsTable.sourceId,
         sourcePublicId:
           inventoryMovementsTable.sourcePublicId,
+        eventKey:
+          inventoryMovementsTable.eventKey,
         quantityDelta:
           inventoryMovementsTable.quantityDelta,
       })
@@ -245,14 +247,18 @@ async function getInventoryMovementSummary(
       .select({
         id:
           ordersTable.id,
+        status:
+          ordersTable.status,
+        mergedIntoOrderId:
+          ordersTable.mergedIntoOrderId,
         items:
           ordersTable.items,
       })
       .from(ordersTable)
       .where(
-        eq(
+        inArray(
           ordersTable.status,
-          "done",
+          ["done", "merged"],
         ),
       ),
   ]);
@@ -264,14 +270,29 @@ async function getInventoryMovementSummary(
   const coveredSources =
     new Set<string>();
 
+  const manualAdjustmentNetByOperation =
+    new Map<string, number>();
+
   for (const row of movementRows) {
     if (
       row.movementType === "adjustment" &&
-      row.sourceType === "manual" &&
-      row.quantityDelta < 0
+      row.sourceType === "manual"
     ) {
-      manualAdjustmentOutQuantity +=
-        Math.abs(row.quantityDelta);
+      const operationKey =
+        row.eventKey.replace(
+          /:(?:general|variant:\d+)$/,
+          "",
+        );
+
+      manualAdjustmentNetByOperation.set(
+        operationKey,
+        (
+          manualAdjustmentNetByOperation.get(
+            operationKey,
+          ) ?? 0
+        ) +
+          row.quantityDelta,
+      );
     }
 
     if (
@@ -312,6 +333,53 @@ async function getInventoryMovementSummary(
     } else {
       inboundQuantity +=
         row.quantityDelta;
+    }
+  }
+
+  for (
+    const netDelta
+    of manualAdjustmentNetByOperation.values()
+  ) {
+    if (netDelta < 0) {
+      manualAdjustmentOutQuantity +=
+        Math.abs(netDelta);
+    }
+  }
+
+  // When a source online order is merged into a surviving order, stock is
+  // intentionally not moved again. A movement recorded on the source order
+  // therefore also covers the surviving order (and any later merge chain).
+  let mergeCoverageChanged = true;
+
+  while (mergeCoverageChanged) {
+    mergeCoverageChanged = false;
+
+    for (const order of orders) {
+      if (
+        order.status !== "merged" ||
+        order.mergedIntoOrderId ===
+          null ||
+        !coveredSources.has(
+          `online_order:${order.id}`,
+        )
+      ) {
+        continue;
+      }
+
+      const targetKey =
+        `online_order:${order.mergedIntoOrderId}`;
+
+      if (
+        !coveredSources.has(
+          targetKey,
+        )
+      ) {
+        coveredSources.add(
+          targetKey,
+        );
+        mergeCoverageChanged =
+          true;
+      }
     }
   }
 
@@ -397,6 +465,7 @@ async function getInventoryMovementSummary(
 
   for (const order of orders) {
     if (
+      order.status !== "done" ||
       coveredSources.has(
         `online_order:${order.id}`,
       ) ||
