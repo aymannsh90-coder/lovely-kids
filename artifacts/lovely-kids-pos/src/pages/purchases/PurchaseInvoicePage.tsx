@@ -443,10 +443,7 @@ export default function PurchaseInvoicePage() {
       url.searchParams.get("source") ===
       "inventory-intelligence";
 
-    if (
-      fromInventoryUrl &&
-      !DIRECT_PURCHASE_LINE_EDITING_ENABLED
-    ) {
+    if (fromInventoryUrl) {
       inventoryPrefillHandled.current =
         true;
 
