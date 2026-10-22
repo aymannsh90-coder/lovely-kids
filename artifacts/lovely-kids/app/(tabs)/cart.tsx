@@ -502,6 +502,13 @@ export default function CartScreen() {
         }),
       });
         if (!res.ok) {
+          // A concrete HTTP error means the server answered and the
+          // creation transaction did not succeed. A new logical attempt
+          // may safely use a new key. Network/response-loss errors never
+          // reach this branch, so their key is intentionally preserved.
+          checkoutRequestIdRef.current =
+            null;
+
           const errorData = await res.json().catch(() => ({}));
           throw new Error(
             (errorData as { error?: string }).error ??
