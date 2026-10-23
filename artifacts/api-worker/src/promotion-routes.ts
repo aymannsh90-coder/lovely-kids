@@ -991,7 +991,24 @@ async function activePromotions(
 async function previewPromotions(
   request: Request,
   db: Db,
+  channel: "web" | "pos",
+  env?: Env,
 ) {
+  if (channel === "pos") {
+    if (!env) {
+      return json({ error: "تعذر التحقق من مستخدم نقطة البيع" }, 500);
+    }
+
+    const user = await getCurrentUser(
+      db,
+      request,
+      env,
+    );
+
+    if (!user) {
+      return json({ error: "يجب تسجيل الدخول" }, 401);
+    }
+  }
   const body = asObject(
     await request.json().catch(() => null),
   );
@@ -1019,6 +1036,21 @@ async function previewPromotions(
         return null;
       }
 
+      const unitPriceMinor =
+        channel === "pos"
+          ? Number(item.unitPriceMinor)
+          : null;
+
+      if (
+        channel === "pos" &&
+        (
+          !Number.isSafeInteger(unitPriceMinor) ||
+          Number(unitPriceMinor) < 0
+        )
+      ) {
+        return null;
+      }
+
       return {
         key:
           typeof item.key === "string" && item.key.trim()
@@ -1026,6 +1058,10 @@ async function previewPromotions(
             : `${productId}:${index}`,
         productId,
         quantity,
+        unitPriceMinor:
+          unitPriceMinor === null
+            ? null
+            : Number(unitPriceMinor),
         rewardForPromotionId:
           Number.isSafeInteger(item.rewardForPromotionId) &&
           Number(item.rewardForPromotionId) > 0
@@ -1080,7 +1116,10 @@ async function previewPromotions(
       key: item.key,
       productId: item.productId,
       quantity: item.quantity,
-      unitPriceMinor: product.price * 100,
+      unitPriceMinor:
+        channel === "pos"
+          ? item.unitPriceMinor!
+          : product.price * 100,
       rewardForPromotionId:
         item.rewardForPromotionId,
     });
@@ -1088,18 +1127,20 @@ async function previewPromotions(
 
   const promotions = await loadActivePromotions(
     db,
-    "web",
+    channel,
   );
 
   const calculation = calculatePromotions({
     lines,
     promotions,
-    channel: "web",
+    channel,
 
-    // Online order totals currently use whole ILS.
-    // Keeping promotion allocations on the same boundary prevents a
-    // half-shekel difference between checkout and historical accounting.
-    roundingIncrementMinor: 100,
+    // Online order totals currently use whole ILS while POS already uses
+    // minor ILS. The same engine supports both without changing legacy totals.
+    roundingIncrementMinor:
+      channel === "web"
+        ? 100
+        : 1,
   });
 
   const originalTotalMinor = lines.reduce(
@@ -1138,7 +1179,23 @@ export async function handlePromotionRequest(
     request.method === "POST" &&
     path === "/api/promotions/preview"
   ) {
-    return previewPromotions(request, db);
+    return previewPromotions(
+      request,
+      db,
+      "web",
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/promotions/preview"
+  ) {
+    return previewPromotions(
+      request,
+      db,
+      "pos",
+      env,
+    );
   }
 
   if (
