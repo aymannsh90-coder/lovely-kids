@@ -523,7 +523,7 @@ function applyBuyXGetY(
     const rewardCandidates = units.filter(
       (unit) =>
         inScope(unit, promotion, "reward") &&
-        unit.exclusivePromotionId === null,
+        unitCanJoinPromotion(unit, promotion),
     );
 
     applicationCount = maxApplications(
@@ -787,7 +787,7 @@ function applyBundlePrice(
     .filter(
       (unit) =>
         inScope(unit, promotion, "qualifying") &&
-        unit.exclusivePromotionId === null,
+        unitCanJoinPromotion(unit, promotion),
     )
     .sort((left, right) => {
       if (left.priceMinor === right.priceMinor) {
