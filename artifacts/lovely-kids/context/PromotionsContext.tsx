@@ -342,8 +342,9 @@ export function PromotionsProvider({
           return [];
         }
 
-        return promotions.filter(
-          (promotion) => {
+        return promotions
+          .filter(
+            (promotion) => {
             if (
               promotion.excludedProductIds.includes(
                 id,
@@ -359,16 +360,23 @@ export function PromotionsProvider({
               return true;
             }
 
-            return (
-              promotion.qualifyingProductIds.includes(
-                id,
-              ) ||
-              promotion.rewardProductIds.includes(
-                id,
-              )
-            );
-          },
-        );
+              return (
+                promotion.qualifyingProductIds.includes(
+                  id,
+                ) ||
+                promotion.rewardProductIds.includes(
+                  id,
+                )
+              );
+            },
+          )
+          .sort(
+            (left, right) =>
+              right.priority -
+                left.priority ||
+              left.id -
+                right.id,
+          );
       },
       [promotions],
     );
