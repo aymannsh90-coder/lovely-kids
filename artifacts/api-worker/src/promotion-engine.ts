@@ -286,7 +286,7 @@ function addGroupAllocation(
 
     units[index]!.allocations.push({
       promotionId: promotion.id,
-      promotionName: promotion.name,
+      promotionName: promotion.publicLabel,
       groupKey,
       discountMinor,
     });
