@@ -23,6 +23,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DateField } from "@/components/DateField";
 import { API_BASE } from "@/constants/api";
+import {
+  DEFAULT_CATEGORY_LABELS,
+} from "@/data/products";
 import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
@@ -1270,6 +1273,36 @@ export default function PromotionsAdminScreen() {
     const [query, setQuery] =
       useState("");
 
+    const [
+      category,
+      setCategory,
+    ] = useState("all");
+
+    const categories =
+      useMemo(
+        () => [
+          "all",
+          ...[
+            ...new Set(
+              products
+                .filter(
+                  (product) =>
+                    !product.deletedAt,
+                )
+                .map(
+                  (product) =>
+                    product.category,
+                )
+                .filter(
+                  (value) =>
+                    Boolean(value),
+                ),
+            ),
+          ].sort(),
+        ],
+        [products],
+      );
+
     const visible =
       useMemo(() => {
         const q =
@@ -1281,6 +1314,13 @@ export default function PromotionsAdminScreen() {
           .filter(
             (product) =>
               !product.deletedAt,
+          )
+          .filter(
+            (product) =>
+              category ===
+                "all" ||
+              product.category ===
+                category,
           )
           .filter(
             (product) =>
@@ -1304,6 +1344,7 @@ export default function PromotionsAdminScreen() {
           .slice(0, 120);
       }, [
         query,
+        category,
         products,
       ]);
 
@@ -1384,6 +1425,58 @@ export default function PromotionsAdminScreen() {
           ]}
           textAlign="right"
         />
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            gap: 8,
+            paddingVertical: 4,
+          }}
+        >
+          {categories.map((value) => {
+            const active = category === value;
+
+            return (
+              <Pressable
+                key={value}
+                onPress={() => setCategory(value)}
+                style={{
+                  borderWidth: 1,
+                  borderColor: active ? colors.primary : colors.border,
+                  backgroundColor: active ? colors.primary + "12" : colors.background,
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                }}
+              >
+                <Text
+                  style={{
+                    color: active ? colors.primary : colors.foreground,
+                    fontWeight: active ? "800" : "600",
+                    fontSize: 12,
+                  }}
+                >
+                  {value === "all"
+                    ? "كل الأقسام"
+                    : DEFAULT_CATEGORY_LABELS[value] ?? value}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <Text
+          style={{
+            color: colors.mutedForeground,
+            fontSize: 11,
+            textAlign: "right",
+          }}
+        >
+          {category === "all"
+            ? "النتائج الظاهرة: " + visible.length
+            : "قسم " + (DEFAULT_CATEGORY_LABELS[category] ?? category) + " · " + visible.length + " صنف"}
+        </Text>
 
         <View
           style={
