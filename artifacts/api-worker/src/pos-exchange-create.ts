@@ -6,6 +6,7 @@ import {
   exchangeReturnItemsTable,
   exchangeSaleItemCostsTable,
   exchangeSaleItemsTable,
+  exchangeSalePromotionsTable,
   financeTransactionsTable,
   inventoryMovementsTable,
   posSaleItemCostsTable,
@@ -45,11 +46,16 @@ import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
 import {
+  calculatePromotions,
+} from "./promotion-engine";
+import {
   allocateReturnDiscountMinor,
   calculatePromotionReturnRequalification,
 } from "./promotion-return-requalification";
 import {
+  loadActivePromotions,
   promotionDefinitionFromSnapshot,
+  serializePromotionSnapshot,
 } from "./promotion-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -2913,6 +2919,52 @@ export async function handleCreatePosExchange(
             });
           }
 
+          const activeNewPromotions =
+            await loadActivePromotions(
+              tx as Db,
+              "pos",
+            );
+
+          const newPromotionCalculation =
+            calculatePromotions({
+              lines:
+                resolvedNewItems.map(
+                  (item) => ({
+                    key:
+                      String(
+                        item.lineNumber,
+                      ),
+                    productId:
+                      item.productId,
+                    unitPriceMinor:
+                      item.soldUnitPriceMinor,
+                    quantity:
+                      item.quantity,
+                  }),
+                ),
+              promotions:
+                activeNewPromotions,
+              channel:
+                "pos",
+              roundingIncrementMinor:
+                1,
+            });
+
+          const newPromotionLineByNumber =
+            new Map(
+              newPromotionCalculation.lines.map(
+                (line) => [
+                  Number(
+                    line.key,
+                  ),
+                  line,
+                ],
+              ),
+            );
+
+          const newPromotionDiscountMinor =
+            newPromotionCalculation.totalDiscountMinor;
+
           const newStockPlans = [];
 
           let newSubtotalMinor = 0;
@@ -3197,9 +3249,16 @@ export async function handleCreatePosExchange(
             const lineDiscountMinor =
               item.lineDiscountMinor;
 
+            const linePromotionDiscountMinor =
+              newPromotionLineByNumber.get(
+                item.lineNumber,
+              )?.promotionDiscountMinor ??
+              0;
+
             const lineTotalMinor =
               lineGrossMinor -
-              lineDiscountMinor;
+              lineDiscountMinor -
+              linePromotionDiscountMinor;
 
             if (
               !Number.isSafeInteger(
@@ -3216,7 +3275,13 @@ export async function handleCreatePosExchange(
                 lineDiscountMinor,
               ) ||
               lineDiscountMinor < 0 ||
-              lineDiscountMinor >
+              !Number.isSafeInteger(
+                linePromotionDiscountMinor,
+              ) ||
+              linePromotionDiscountMinor <
+                0 ||
+              lineDiscountMinor +
+                  linePromotionDiscountMinor >
                 lineGrossMinor ||
               !Number.isSafeInteger(
                 lineTotalMinor,
@@ -3286,6 +3351,9 @@ export async function handleCreatePosExchange(
 
               lineDiscountMinor,
 
+              promotionDiscountMinor:
+                linePromotionDiscountMinor,
+
               lineTotalMinor,
 
               generalStockBefore,
@@ -3300,7 +3368,8 @@ export async function handleCreatePosExchange(
 
           const newItemsNetMinor =
             newSubtotalMinor -
-            newItemDiscountMinor;
+            newItemDiscountMinor -
+            newPromotionDiscountMinor;
 
           if (
             payload.newInvoiceDiscountMinor >
@@ -3313,6 +3382,7 @@ export async function handleCreatePosExchange(
 
           const newDiscountMinor =
             newItemDiscountMinor +
+            newPromotionDiscountMinor +
             payload.newInvoiceDiscountMinor;
 
           const newNetMinor =
@@ -3639,6 +3709,7 @@ export async function handleCreatePosExchange(
 
                 const allocatedDiscountMinor =
                   line.lineDiscountMinor +
+                  line.promotionDiscountMinor +
                   invoiceDiscountMinor;
 
                 const lineNetMinor =
@@ -3969,6 +4040,61 @@ export async function handleCreatePosExchange(
             );
           }
 
+          if (
+            newPromotionCalculation.promotions.length >
+            0
+          ) {
+            const promotionById =
+              new Map(
+                activeNewPromotions.map(
+                  (promotion) => [
+                    promotion.id,
+                    promotion,
+                  ],
+                ),
+              );
+
+            await tx
+              .insert(
+                exchangeSalePromotionsTable,
+              )
+              .values(
+                newPromotionCalculation.promotions.map(
+                  (applied) => {
+                    const definition =
+                      promotionById.get(
+                        applied.promotionId,
+                      );
+
+                    if (!definition) {
+                      throw new Error(
+                        "POS_EXCHANGE_PROMOTION_SNAPSHOT_MISSING",
+                      );
+                    }
+
+                    return {
+                      exchangeId:
+                        exchange.id,
+                      promotionId:
+                        definition.id,
+                      promotionName:
+                        definition.name,
+                      promotionKind:
+                        definition.kind,
+                      discountMinor:
+                        applied.discountMinor,
+                      applicationCount:
+                        applied.applicationCount,
+                      snapshot:
+                        serializePromotionSnapshot(
+                          definition,
+                        ),
+                    };
+                  },
+                ),
+              );
+          }
+
           // -------------------------------------------------
           // Insert return lines.
           // -------------------------------------------------
@@ -4035,6 +4161,9 @@ export async function handleCreatePosExchange(
 
                         lineDiscountMinor:
                           line.lineDiscountMinor,
+
+                        promotionDiscountMinor:
+                          line.promotionDiscountMinor,
 
                         invoiceDiscountMinor:
                           line.invoiceDiscountMinor,
