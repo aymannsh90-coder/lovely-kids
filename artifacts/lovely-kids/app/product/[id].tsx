@@ -591,12 +591,6 @@ export default function ProductDetailScreen() {
           product.image,
         size: selectedSize,
         color: selectedColor,
-        ...(isPromotionRewardSelection
-          ? {
-              rewardForPromotionId:
-                rewardPromotion!.id,
-            }
-          : {}),
       });
 
       router.replace({
@@ -696,6 +690,12 @@ export default function ProductDetailScreen() {
         category: product.category,
         size: selectedSize,
         color: selectedColor,
+        ...(isPromotionRewardSelection
+          ? {
+              rewardForPromotionId:
+                rewardPromotion!.id,
+            }
+          : {}),
       });
       trackMetaEvent("AddToCart", {
         content_ids: [product.id],
