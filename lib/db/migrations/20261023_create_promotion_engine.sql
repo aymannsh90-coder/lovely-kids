@@ -188,6 +188,18 @@ alter table public.pos_sale_items
         - promotion_discount_minor
     );
 
+alter table public.pos_sale_returns
+  drop constraint if exists pos_sale_returns_amounts_nonnegative;
+
+alter table public.pos_sale_returns
+  add constraint pos_sale_returns_amounts_nonnegative
+    check (
+      gross_amount_minor >= 0
+      and discount_amount_minor >= 0
+      and promotion_discount_minor >= 0
+      and refund_amount_minor >= 0
+    );
+
 alter table public.pos_sale_return_items
   drop constraint if exists pos_sale_return_items_amounts_nonnegative,
   drop constraint if exists pos_sale_return_items_discount_breakdown_matches,
