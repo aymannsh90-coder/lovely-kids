@@ -95,6 +95,11 @@ export interface PromotionEntitlement {
   earnedRewardQuantity: number;
   selectedRewardQuantity: number;
   remainingRewardQuantity: number;
+
+  // Auto/cheapest mode progress toward the NEXT complete bundle.
+  // Kept separate from reward selection so Web customer-choice flows
+  // never mistake POS-style progress for an unselected gift.
+  nextBundleRemainingQuantity?: number;
 }
 
 export interface PromotionCalculationResult {
@@ -483,22 +488,38 @@ function applyBuyXGetY(
     );
 
     if (applicationCount <= 0) {
+      const bundleSize =
+        buyQuantity +
+        rewardQuantity;
+
+      const nextBundleRemainingQuantity =
+        eligible.length > 0 &&
+        promotion.repeatable
+          ? bundleSize -
+            (
+              eligible.length %
+              bundleSize
+            )
+          : undefined;
+
       return {
         applied: null,
         entitlement: {
           promotionId: promotion.id,
           promotionName: promotion.name,
-          earnedRewardQuantity:
-            maxApplications(
-              promotion,
-              Math.floor(eligible.length / buyQuantity),
-            ) * rewardQuantity,
+          earnedRewardQuantity: 0,
           selectedRewardQuantity: 0,
-          remainingRewardQuantity:
-            maxApplications(
-              promotion,
-              Math.floor(eligible.length / buyQuantity),
-            ) * rewardQuantity,
+          remainingRewardQuantity: 0,
+          ...(
+            nextBundleRemainingQuantity !==
+              undefined &&
+            nextBundleRemainingQuantity <
+              bundleSize
+              ? {
+                  nextBundleRemainingQuantity,
+                }
+              : {}
+          ),
         },
       };
     }
@@ -519,6 +540,59 @@ function applyBuyXGetY(
     qualifierUnits = eligible
       .filter((unit) => !rewardIds.has(unit.id))
       .slice(0, applicationCount * buyQuantity);
+
+    const bundleSize =
+      buyQuantity +
+      rewardQuantity;
+
+    const remainder =
+      eligible.length %
+      bundleSize;
+
+    const maxReached =
+      validPositiveInteger(
+        promotion.maxApplicationsPerOrder,
+      ) &&
+      applicationCount >=
+        promotion.maxApplicationsPerOrder!;
+
+    const nextBundleRemainingQuantity =
+      promotion.repeatable &&
+      !maxReached &&
+      remainder > 0
+        ? bundleSize -
+          remainder
+        : undefined;
+
+    return {
+      applied: buildBuyXGetYResult(
+        promotion,
+        qualifierUnits,
+        rewardUnits,
+        buyQuantity,
+        rewardQuantity,
+        roundingIncrementMinor,
+      ),
+      entitlement:
+        nextBundleRemainingQuantity ===
+        undefined
+          ? null
+          : {
+              promotionId:
+                promotion.id,
+              promotionName:
+                promotion.name,
+              earnedRewardQuantity:
+                applicationCount *
+                rewardQuantity,
+              selectedRewardQuantity:
+                applicationCount *
+                rewardQuantity,
+              remainingRewardQuantity:
+                0,
+              nextBundleRemainingQuantity,
+            },
+    };
   } else {
     const rewardCandidates = units.filter(
       (unit) =>
