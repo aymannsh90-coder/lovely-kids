@@ -10,7 +10,9 @@ import {
   posPurchaseItemsTable,
   posPurchasesTable,
   posSaleItemCostsTable,
+  posSaleItemPromotionAllocationsTable,
   posSaleItemsTable,
+  posSalePromotionsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
@@ -42,6 +44,13 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import {
+  calculatePromotions,
+} from "./promotion-engine";
+import {
+  loadActivePromotions,
+  serializePromotionSnapshot,
+} from "./promotion-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -873,6 +882,9 @@ function toSaleResponse(
       itemDiscountMinor: sale.itemDiscountMinor,
       itemDiscount: sale.itemDiscountMinor / 100,
 
+      promotionDiscountMinor: sale.promotionDiscountMinor,
+      promotionDiscount: sale.promotionDiscountMinor / 100,
+
       invoiceDiscountMinor: sale.invoiceDiscountMinor,
       invoiceDiscount: sale.invoiceDiscountMinor / 100,
 
@@ -931,6 +943,9 @@ function toSaleResponse(
 
       lineDiscountMinor: item.lineDiscountMinor,
       lineDiscount: item.lineDiscountMinor / 100,
+
+      promotionDiscountMinor: item.promotionDiscountMinor,
+      promotionDiscount: item.promotionDiscountMinor / 100,
 
       lineTotalMinor: item.lineTotalMinor,
 
@@ -2240,6 +2255,47 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         customer?.phone ??
         customerPhone;
 
+      const activePromotions =
+        await loadActivePromotions(
+          tx as Db,
+          "pos",
+        );
+
+      const promotionCalculation =
+        calculatePromotions({
+          lines: resolvedItems.map(
+            (item) => ({
+              key:
+                String(
+                  item.lineNumber,
+                ),
+              productId:
+                item.productId,
+              unitPriceMinor:
+                item.soldUnitPriceMinor,
+              quantity:
+                item.quantity,
+            }),
+          ),
+          promotions:
+            activePromotions,
+          channel: "pos",
+          roundingIncrementMinor: 1,
+        });
+
+      const promotionLineByNumber =
+        new Map(
+          promotionCalculation.lines.map(
+            (line) => [
+              Number(line.key),
+              line,
+            ],
+          ),
+        );
+
+      const promotionDiscountMinor =
+        promotionCalculation.totalDiscountMinor;
+
       const saleLines: Array<typeof posSaleItemsTable.$inferInsert> = [];
 
       let subtotalMinor = 0;
@@ -2416,7 +2472,19 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
         const lineDiscountMinor = item.lineDiscountMinor;
 
-        const lineTotalMinor = lineGrossMinor - lineDiscountMinor;
+        const promotionLine =
+          promotionLineByNumber.get(
+            item.lineNumber,
+          );
+
+        const linePromotionDiscountMinor =
+          promotionLine?.promotionDiscountMinor ??
+          0;
+
+        const lineTotalMinor =
+          lineGrossMinor -
+          lineDiscountMinor -
+          linePromotionDiscountMinor;
 
         if (
           !Number.isSafeInteger(websiteUnitPriceMinor) ||
@@ -2425,7 +2493,11 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           lineGrossMinor > MAX_MINOR ||
           !Number.isSafeInteger(lineDiscountMinor) ||
           lineDiscountMinor < 0 ||
-          lineDiscountMinor > lineGrossMinor ||
+          !Number.isSafeInteger(linePromotionDiscountMinor) ||
+          linePromotionDiscountMinor < 0 ||
+          lineDiscountMinor +
+            linePromotionDiscountMinor >
+            lineGrossMinor ||
           !Number.isSafeInteger(lineTotalMinor) ||
           lineTotalMinor < 0 ||
           lineTotalMinor > MAX_MINOR
@@ -2459,6 +2531,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           websiteUnitPriceMinor,
           soldUnitPriceMinor: item.soldUnitPriceMinor,
           lineDiscountMinor,
+          promotionDiscountMinor:
+            linePromotionDiscountMinor,
           lineTotalMinor,
           generalStockBefore,
           generalStockAfter,
@@ -2467,13 +2541,19 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         });
       }
 
-      const itemsNetMinor = subtotalMinor - itemDiscountMinor;
+      const itemsNetMinor =
+        subtotalMinor -
+        itemDiscountMinor -
+        promotionDiscountMinor;
 
       if (invoiceDiscountMinor > itemsNetMinor) {
         throw new PosSaleError("خصم الفاتورة أكبر من صافي قيمة الأصناف");
       }
 
-      const discountMinor = itemDiscountMinor + invoiceDiscountMinor;
+      const discountMinor =
+        itemDiscountMinor +
+        promotionDiscountMinor +
+        invoiceDiscountMinor;
 
       if (
         !Number.isSafeInteger(discountMinor) ||
@@ -2652,6 +2732,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           subtotalMinor,
           discountMinor,
           itemDiscountMinor,
+          promotionDiscountMinor,
           invoiceDiscountMinor,
           totalMinor,
           paidMinor,
@@ -3023,6 +3104,111 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
             })),
         )
         .returning();
+
+      if (
+        promotionCalculation.promotions.length >
+        0
+      ) {
+        const promotionById =
+          new Map(
+            activePromotions.map(
+              (promotion) => [
+                promotion.id,
+                promotion,
+              ],
+            ),
+          );
+
+        await tx
+          .insert(posSalePromotionsTable)
+          .values(
+            promotionCalculation.promotions.map(
+              (applied) => {
+                const definition =
+                  promotionById.get(
+                    applied.promotionId,
+                  );
+
+                if (!definition) {
+                  throw new Error(
+                    "POS_PROMOTION_SNAPSHOT_MISSING",
+                  );
+                }
+
+                return {
+                  saleId: sale.id,
+                  promotionId:
+                    definition.id,
+                  promotionName:
+                    definition.name,
+                  promotionKind:
+                    definition.kind,
+                  discountMinor:
+                    applied.discountMinor,
+                  applicationCount:
+                    applied.applicationCount,
+                  snapshot:
+                    serializePromotionSnapshot(
+                      definition,
+                    ),
+                };
+              },
+            ),
+          );
+
+        const insertedByLineNumber =
+          new Map(
+            insertedItems.map(
+              (item) => [
+                item.lineNumber,
+                item,
+              ],
+            ),
+          );
+
+        const allocationRows =
+          promotionCalculation.lines.flatMap(
+            (line) => {
+              const saleItem =
+                insertedByLineNumber.get(
+                  Number(line.key),
+                );
+
+              if (!saleItem) {
+                throw new Error(
+                  "POS_PROMOTION_LINE_MAPPING_MISSING",
+                );
+              }
+
+              return line.allocations.map(
+                (allocation) => ({
+                  saleId:
+                    sale.id,
+                  saleItemId:
+                    saleItem.id,
+                  promotionId:
+                    allocation.promotionId,
+                  promotionName:
+                    allocation.promotionName,
+                  groupKey:
+                    allocation.groupKey,
+                  discountMinor:
+                    allocation.discountMinor,
+                }),
+              );
+            },
+          );
+
+        if (allocationRows.length > 0) {
+          await tx
+            .insert(
+              posSaleItemPromotionAllocationsTable,
+            )
+            .values(
+              allocationRows,
+            );
+        }
+      }
 
       // stock-card:pos-sale:completed
       const saleMovementItems = insertedItems.filter(
