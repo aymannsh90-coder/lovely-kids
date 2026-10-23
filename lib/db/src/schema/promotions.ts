@@ -12,6 +12,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { exchangeDocumentsTable } from "./exchanges";
 import { ordersTable } from "./orders";
 import { posSaleItemsTable, posSalesTable } from "./pos-sales";
 import { productsTable } from "./products";
@@ -271,6 +272,48 @@ export const posSalePromotionsTable = pgTable(
     ),
     index("pos_sale_promotions_sale_idx").on(table.saleId),
     index("pos_sale_promotions_promotion_idx").on(table.promotionId),
+  ],
+).enableRLS();
+
+export const exchangeSalePromotionsTable = pgTable(
+  "exchange_sale_promotions",
+  {
+    id: serial("id").primaryKey(),
+
+    exchangeId: integer("exchange_id")
+      .notNull()
+      .references(() => exchangeDocumentsTable.id, {
+        onDelete: "cascade",
+      }),
+
+    promotionId: integer("promotion_id").references(
+      () => promotionsTable.id,
+      { onDelete: "set null" },
+    ),
+
+    promotionName: text("promotion_name").notNull(),
+    promotionKind: text("promotion_kind").notNull(),
+
+    discountMinor: integer("discount_minor").notNull(),
+    applicationCount: integer("application_count").notNull(),
+
+    snapshot: jsonb("snapshot").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "exchange_sale_promotions_discount_valid",
+      sql`${table.discountMinor} >= 0`,
+    ),
+    check(
+      "exchange_sale_promotions_application_count_valid",
+      sql`${table.applicationCount} > 0`,
+    ),
+    index("exchange_sale_promotions_exchange_idx").on(table.exchangeId),
+    index("exchange_sale_promotions_promotion_idx").on(table.promotionId),
   ],
 ).enableRLS();
 
