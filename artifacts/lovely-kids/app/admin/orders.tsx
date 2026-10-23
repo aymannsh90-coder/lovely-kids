@@ -58,6 +58,7 @@ interface OrderItem {
   image?: string;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
 }
 
 interface AdminOrderEditSize {
@@ -1528,7 +1529,8 @@ export default function AdminOrdersScreen() {
         (item) =>
           item.id === product.id &&
           (item.color ?? "") === (color ?? "") &&
-          (item.size ?? "") === (size ?? ""),
+          (item.size ?? "") === (size ?? "") &&
+          !item.rewardForPromotionId,
       );
 
       if (existingIndex >= 0) {
@@ -1670,6 +1672,12 @@ export default function AdminOrdersScreen() {
               price: item.price,
               color: item.color,
               size: item.size,
+              ...(item.rewardForPromotionId
+                ? {
+                    rewardForPromotionId:
+                      item.rewardForPromotionId,
+                  }
+                : {}),
             })),
           }),
         },
