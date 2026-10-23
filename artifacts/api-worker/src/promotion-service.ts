@@ -13,6 +13,11 @@ import type {
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
+type PromotionReadDb = Pick<
+  Db,
+  "select"
+>;
+
 function toDefinition(
   row: Promotion,
   productRows: Array<{
@@ -67,7 +72,7 @@ function toDefinition(
 }
 
 export async function loadActivePromotions(
-  db: Db,
+  db: PromotionReadDb,
   channel: PromotionChannel,
   now = new Date(),
 ): Promise<PromotionDefinition[]> {
