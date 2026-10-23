@@ -1975,14 +1975,31 @@ export async function editOrderItemsAndAdjustStock(
       );
     }
 
+    if (
+      hasDiscountCodeSnapshot &&
+      promotionCalculation.promotions.some(
+        (promotion) =>
+          !promotion.stackWithDiscountCodes,
+      )
+    ) {
+      throw new OrderEditError(
+        "كود الخصم القديم لا يمكن جمعه مع العرض بعد تعديل الطلب",
+        409,
+      );
+    }
+
+    const invoiceDiscountBase =
+      productsTotal -
+      promotionDiscountAmount;
+
     // Existing code-discount orders keep the original campaign percentage
-    // when an admin edits their items. The discount is recalculated from
-    // the new merchandise total and always rounded down to whole ILS.
+    // when an admin edits their items. The percentage applies after
+    // merchandise promotions, matching trusted checkout.
     const invoiceDiscount =
       hasDiscountCodeSnapshot
         ? Math.floor(
             (
-              productsTotal *
+              invoiceDiscountBase *
               Number(order.discountCodePercent)
             ) /
               100,
@@ -1993,9 +2010,12 @@ export async function editOrderItemsAndAdjustStock(
               details.invoiceDiscount,
             );
 
-    if (invoiceDiscount > productsTotal) {
+    if (
+      invoiceDiscount >
+      invoiceDiscountBase
+    ) {
       throw new OrderEditError(
-        "الخصم العام أكبر من إجمالي المنتجات",
+        "الخصم العام أكبر من صافي المنتجات بعد العرض",
       );
     }
 
@@ -2014,15 +2034,29 @@ export async function editOrderItemsAndAdjustStock(
         invoiceDiscountAllocations[index];
     });
 
+    const promotionAllowsShipping =
+      promotionCalculation.promotions.every(
+        (promotion) =>
+          promotion.stackWithShippingPromotion,
+      );
+
+    const shippingPromotionProductsTotal =
+      productsTotal -
+      promotionDiscountAmount -
+      invoiceDiscount;
+
     let shippingCost =
-      hasDiscountCodeSnapshot &&
-      order.discountCodeStacksWithShippingPromotion ===
-        false
+      (
+        hasDiscountCodeSnapshot &&
+        order.discountCodeStacksWithShippingPromotion ===
+          false
+      ) ||
+      !promotionAllowsShipping
         ? shipping.cost
         : resolveShippingCost(
             settingsData,
             shipping,
-            productsTotal,
+            shippingPromotionProductsTotal,
           );
 
     let exchangeDeliveryBaseChargeMinor:
@@ -2114,6 +2148,7 @@ export async function editOrderItemsAndAdjustStock(
 
     const totalPrice =
       productsTotal -
+      promotionDiscountAmount -
       invoiceDiscount +
       shippingCost;
 
@@ -2699,6 +2734,7 @@ export async function editOrderItemsAndAdjustStock(
         shippingCost,
         shippingOriginalCost,
         shippingPromotionDiscount,
+        promotionDiscountAmount,
         discountCodeAmount:
           hasDiscountCodeSnapshot
             ? invoiceDiscount
@@ -2732,6 +2768,77 @@ export async function editOrderItemsAndAdjustStock(
       .where(eq(ordersTable.id, orderId))
       .returning();
 
+    if (
+      historicalPromotionRows.length >
+        0
+    ) {
+      await tx
+        .delete(
+          orderPromotionsTable,
+        )
+        .where(
+          eq(
+            orderPromotionsTable.orderId,
+            orderId,
+          ),
+        );
+
+      const historicalById =
+        new Map(
+          historicalPromotions.map(
+            (promotion) => [
+              promotion.id,
+              promotion,
+            ],
+          ),
+        );
+
+      if (
+        promotionCalculation.promotions.length >
+        0
+      ) {
+        await tx
+          .insert(
+            orderPromotionsTable,
+          )
+          .values(
+            promotionCalculation.promotions.map(
+              (applied) => {
+                const definition =
+                  historicalById.get(
+                    applied.promotionId,
+                  );
+
+                if (!definition) {
+                  throw new OrderEditError(
+                    "تعذر حفظ Snapshot العرض بعد تعديل الطلب",
+                    409,
+                  );
+                }
+
+                return {
+                  orderId,
+                  promotionId:
+                    definition.id,
+                  promotionName:
+                    definition.name,
+                  promotionKind:
+                    definition.kind,
+                  discountMinor:
+                    applied.discountMinor,
+                  applicationCount:
+                    applied.applicationCount,
+                  snapshot:
+                    serializePromotionSnapshot(
+                      definition,
+                    ),
+                };
+              },
+            ),
+          );
+      }
+    }
+
     if (linkedOnlineExchange) {
       if (
         exchangeDeliveryBaseChargeMinor === null ||
@@ -2747,7 +2854,11 @@ export async function editOrderItemsAndAdjustStock(
         productsTotal * 100;
 
       const newDiscountMinor =
-        invoiceDiscount * 100;
+        (
+          promotionDiscountAmount +
+          invoiceDiscount
+        ) *
+        100;
 
       const newNetMinor =
         newGrossMinor -
