@@ -221,6 +221,7 @@ export default function ProductDetailScreen() {
     cartEdit,
     cartSize,
     cartColor,
+    cartRewardForPromotionId,
     orderEdit,
     orderId,
     orderToken,
@@ -230,6 +231,7 @@ export default function ProductDetailScreen() {
     cartEdit?: string;
     cartSize?: string;
     cartColor?: string;
+    cartRewardForPromotionId?: string;
     orderEdit?: string;
     orderId?: string;
     orderToken?: string;
@@ -241,6 +243,19 @@ export default function ProductDetailScreen() {
     typeof orderId === "string";
   const originalCartSize = cartSize || undefined;
   const originalCartColor = cartColor || undefined;
+  const originalCartRewardForPromotionId =
+    Number.isSafeInteger(
+      Number(
+        cartRewardForPromotionId,
+      ),
+    ) &&
+    Number(
+      cartRewardForPromotionId,
+    ) > 0
+      ? Number(
+          cartRewardForPromotionId,
+        )
+      : undefined;
   const colors = useColors();
   const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -626,7 +641,9 @@ export default function ProductDetailScreen() {
         (item) =>
           item.id === product.id &&
           item.size === originalCartSize &&
-          item.color === originalCartColor,
+          item.color === originalCartColor &&
+          item.rewardForPromotionId ===
+            originalCartRewardForPromotionId,
       );
 
       if (!sourceItem) {
@@ -661,6 +678,8 @@ export default function ProductDetailScreen() {
           id: product.id,
           size: originalCartSize,
           color: originalCartColor,
+          rewardForPromotionId:
+            originalCartRewardForPromotionId,
         },
         {
           id: product.id,
@@ -670,6 +689,8 @@ export default function ProductDetailScreen() {
           category: product.category,
           size: selectedSize,
           color: selectedColor,
+          rewardForPromotionId:
+            originalCartRewardForPromotionId,
         },
         sourceItem.quantity,
       );
