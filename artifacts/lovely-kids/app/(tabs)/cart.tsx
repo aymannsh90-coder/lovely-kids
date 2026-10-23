@@ -490,6 +490,12 @@ export default function CartScreen() {
             image: i.image,
             size: i.size,
             color: i.color,
+            ...(i.rewardForPromotionId
+              ? {
+                  rewardForPromotionId:
+                    i.rewardForPromotionId,
+                }
+              : {}),
           })),
           totalPrice: currentTotal,
           shippingZone: selectedZone.label,
