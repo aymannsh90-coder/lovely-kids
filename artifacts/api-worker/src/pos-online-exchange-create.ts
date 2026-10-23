@@ -2,6 +2,7 @@ import {
   appSettingsTable,
   exchangeDocumentsTable,
   exchangeReturnItemsTable,
+  orderPromotionsTable,
   ordersTable,
 } from "@workspace/db/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -14,6 +15,13 @@ import {
   resolveShippingZone,
   STORE_PICKUP_LABEL,
 } from "./order-service";
+import {
+  allocateReturnDiscountMinor,
+  calculatePromotionReturnRequalification,
+} from "./promotion-return-requalification";
+import {
+  promotionDefinitionFromSnapshot,
+} from "./promotion-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type OrderRow = typeof ordersTable.$inferSelect;
@@ -46,6 +54,7 @@ interface StoredOnlineOrderItem {
   image?: string;
   size?: string;
   color?: string;
+  rewardForPromotionId?: unknown;
   promotionDiscountMinor?: unknown;
   invoiceDiscountMinor?: unknown;
 }
@@ -934,6 +943,81 @@ export async function handleCreateOnlineOrderExchange(
             );
           }
 
+          const orderPromotionRows =
+            await tx
+              .select()
+              .from(
+                orderPromotionsTable,
+              )
+              .where(
+                eq(
+                  orderPromotionsTable.orderId,
+                  originalOrder.id,
+                ),
+              );
+
+          const originalPromotions =
+            orderPromotionRows
+              .map((row) =>
+                promotionDefinitionFromSnapshot(
+                  row.snapshot,
+                ),
+              )
+              .filter(
+                (
+                  promotion,
+                ): promotion is NonNullable<
+                  ReturnType<
+                    typeof promotionDefinitionFromSnapshot
+                  >
+                > =>
+                  promotion !== null,
+              );
+
+          const originalPromotionDiscountMinor =
+            originalOrder.promotionDiscountAmount *
+            100;
+
+          const originalInvoiceDiscountMinor =
+            (
+              originalOrder.discountCodeAmount ??
+              0
+            ) * 100;
+
+          if (
+            !Number.isSafeInteger(
+              originalPromotionDiscountMinor,
+            ) ||
+            originalPromotionDiscountMinor <
+              0 ||
+            !Number.isSafeInteger(
+              originalInvoiceDiscountMinor,
+            ) ||
+            originalInvoiceDiscountMinor <
+              0
+          ) {
+            throw new OnlineExchangeError(
+              "بيانات خصومات الطلب القديم غير صالحة",
+              409,
+            );
+          }
+
+          if (
+            originalPromotionDiscountMinor >
+              0 &&
+            (
+              originalPromotions.length ===
+                0 ||
+              originalPromotions.length !==
+                orderPromotionRows.length
+            )
+          ) {
+            throw new OnlineExchangeError(
+              "تعذر قراءة تفاصيل العرض الأصلي للطلب",
+              409,
+            );
+          }
+
           const completedExchanges =
             await tx
               .select({
@@ -988,6 +1072,11 @@ export async function handleCreateOnlineOrderExchange(
 
           const priorPromotionDiscountByLine =
             new Map<number, number>();
+
+          let priorPromotionDiscountMinor =
+            0;
+          let priorInvoiceDiscountMinor =
+            0;
 
           for (
             const item of priorItems
@@ -1059,6 +1148,11 @@ export async function handleCreateOnlineOrderExchange(
               lineNumber,
               nextPromotionDiscount,
             );
+
+            priorPromotionDiscountMinor +=
+              item.promotionDiscountMinor;
+            priorInvoiceDiscountMinor +=
+              item.invoiceDiscountMinor;
           }
 
           const requested =
@@ -1068,6 +1162,197 @@ export async function handleCreateOnlineOrderExchange(
                   left.originalOrderLineNumber -
                   right.originalOrderLineNumber,
               );
+
+          const requestedByLine =
+            new Map(
+              requested.map(
+                (item) => [
+                  item.originalOrderLineNumber,
+                  item.quantity,
+                ],
+              ),
+            );
+
+          const cumulativeReturnedQuantityByKey =
+            new Map<string, number>();
+
+          const sourceLines =
+            storedItems.map(
+              (item, index) => {
+                const productId =
+                  Number(
+                    item.id,
+                  );
+
+                const quantity =
+                  Number(
+                    item.quantity,
+                  );
+
+                const price =
+                  Number(
+                    item.price,
+                  );
+
+                if (
+                  !Number.isSafeInteger(
+                    productId,
+                  ) ||
+                  productId <= 0 ||
+                  !Number.isSafeInteger(
+                    quantity,
+                  ) ||
+                  quantity <= 0 ||
+                  !Number.isSafeInteger(
+                    price,
+                  ) ||
+                  price < 0
+                ) {
+                  throw new OnlineExchangeError(
+                    `بيانات السطر ${index + 1} في الطلب القديم غير صالحة`,
+                    409,
+                  );
+                }
+
+                const lineNumber =
+                  index + 1;
+
+                const priorQuantity =
+                  priorQuantityByLine.get(
+                    lineNumber,
+                  ) ?? 0;
+
+                const requestedQuantity =
+                  requestedByLine.get(
+                    lineNumber,
+                  ) ?? 0;
+
+                const cumulativeQuantity =
+                  priorQuantity +
+                  requestedQuantity;
+
+                if (
+                  !Number.isSafeInteger(
+                    cumulativeQuantity,
+                  ) ||
+                  cumulativeQuantity <
+                    0 ||
+                  cumulativeQuantity >
+                    quantity
+                ) {
+                  throw new OnlineExchangeError(
+                    `الكمية المرتجعة من السطر ${lineNumber} غير صالحة`,
+                    409,
+                  );
+                }
+
+                cumulativeReturnedQuantityByKey.set(
+                  String(
+                    lineNumber,
+                  ),
+                  cumulativeQuantity,
+                );
+
+                const rewardForPromotionId =
+                  Number(
+                    item.rewardForPromotionId,
+                  );
+
+                return {
+                  key:
+                    String(
+                      lineNumber,
+                    ),
+                  productId,
+                  unitPriceMinor:
+                    price * 100,
+                  quantity,
+                  lineDiscountMinor:
+                    0,
+                  ...(
+                    Number.isSafeInteger(
+                      rewardForPromotionId,
+                    ) &&
+                    rewardForPromotionId >
+                      0
+                      ? {
+                          rewardForPromotionId,
+                        }
+                      : {}
+                  ),
+                };
+              },
+            );
+
+          let requalification:
+            ReturnType<
+              typeof calculatePromotionReturnRequalification
+            >;
+
+          try {
+            requalification =
+              calculatePromotionReturnRequalification({
+                lines:
+                  sourceLines,
+                returnedQuantityByKey:
+                  cumulativeReturnedQuantityByKey,
+                promotions:
+                  originalPromotions,
+                channel:
+                  "web",
+                originalPromotionDiscountMinor,
+                originalInvoiceDiscountMinor,
+                roundingIncrementMinor:
+                  100,
+              });
+          } catch (error) {
+            console.warn(
+              "ONLINE_EXCHANGE_PROMOTION_REQUALIFICATION_FAILED",
+              {
+                orderId:
+                  originalOrder.id,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : String(
+                        error,
+                      ),
+              },
+            );
+
+            throw new OnlineExchangeError(
+              "هذا التبديل يغيّر استحقاق عرض سابق بطريقة لا يمكن تسويتها تلقائيًا. أعد أصناف العرض المرتبطة معًا.",
+              409,
+            );
+          }
+
+          const currentPromotionDiscountTarget =
+            requalification
+              .targetReturnedPromotionDiscountMinor -
+            priorPromotionDiscountMinor;
+
+          const currentInvoiceDiscountTarget =
+            requalification
+              .targetReturnedInvoiceDiscountMinor -
+            priorInvoiceDiscountMinor;
+
+          if (
+            !Number.isSafeInteger(
+              currentPromotionDiscountTarget,
+            ) ||
+            currentPromotionDiscountTarget <
+              0 ||
+            !Number.isSafeInteger(
+              currentInvoiceDiscountTarget,
+            ) ||
+            currentInvoiceDiscountTarget <
+              0
+          ) {
+            throw new OnlineExchangeError(
+              "تعذر احتساب أثر العرض على التبديل",
+              409,
+            );
+          }
 
           const returnLines:
             Array<
@@ -1154,30 +1439,8 @@ export async function handleCreateOnlineOrderExchange(
               );
             }
 
-            const originalDiscountMinor =
-              getOriginalInvoiceDiscountMinor(
-                originalItem,
-                originalGrossMinor,
-              );
-
-            const originalPromotionDiscountMinor =
-              getOriginalPromotionDiscountMinor(
-                originalItem,
-                originalGrossMinor,
-              );
-
             const previouslyReserved =
               priorQuantityByLine.get(
-                requestedItem.originalOrderLineNumber,
-              ) ?? 0;
-
-            const previouslyAllocatedDiscount =
-              priorDiscountByLine.get(
-                requestedItem.originalOrderLineNumber,
-              ) ?? 0;
-
-            const previouslyAllocatedPromotionDiscount =
-              priorPromotionDiscountByLine.get(
                 requestedItem.originalOrderLineNumber,
               ) ?? 0;
 
@@ -1199,90 +1462,30 @@ export async function handleCreateOnlineOrderExchange(
               );
             }
 
-            const targetDiscountMinor =
-              reservedAfter ===
-              soldQuantity
-                ? originalDiscountMinor
-                : Number(
-                    (
-                      BigInt(
-                        originalDiscountMinor,
-                      ) *
-                      BigInt(
-                        reservedAfter,
-                      )
-                    ) /
-                      BigInt(
-                        soldQuantity,
-                      ),
-                  );
-
-            const invoiceDiscountMinor =
-              targetDiscountMinor -
-              previouslyAllocatedDiscount;
-
-            const targetPromotionDiscountMinor =
-              reservedAfter ===
-              soldQuantity
-                ? originalPromotionDiscountMinor
-                : Number(
-                    (
-                      BigInt(
-                        originalPromotionDiscountMinor,
-                      ) *
-                      BigInt(
-                        reservedAfter,
-                      )
-                    ) /
-                      BigInt(
-                        soldQuantity,
-                      ),
-                  );
-
-            const promotionDiscountMinor =
-              targetPromotionDiscountMinor -
-              previouslyAllocatedPromotionDiscount;
-
             const grossAmountMinor =
               soldUnitPriceMinor *
               requestedItem.quantity;
 
             if (
               !Number.isSafeInteger(
-                targetDiscountMinor,
-              ) ||
-              !Number.isSafeInteger(
-                invoiceDiscountMinor,
-              ) ||
-              !Number.isSafeInteger(
-                targetPromotionDiscountMinor,
-              ) ||
-              !Number.isSafeInteger(
-                promotionDiscountMinor,
-              ) ||
-              !Number.isSafeInteger(
                 grossAmountMinor,
               ) ||
-              invoiceDiscountMinor < 0 ||
-              promotionDiscountMinor < 0 ||
-              invoiceDiscountMinor +
-                promotionDiscountMinor >
-                grossAmountMinor ||
-              targetDiscountMinor >
-                originalDiscountMinor ||
-              targetPromotionDiscountMinor >
-                originalPromotionDiscountMinor
+              grossAmountMinor < 0
             ) {
               throw new OnlineExchangeError(
-                "تعذر احتساب خصم الصنف المرتجع",
+                "قيمة الصنف المرتجع غير صالحة",
                 409,
               );
             }
 
+            const promotionDiscountMinor =
+              0;
+
+            const invoiceDiscountMinor =
+              0;
+
             const returnNetMinor =
-              grossAmountMinor -
-              promotionDiscountMinor -
-              invoiceDiscountMinor;
+              grossAmountMinor;
 
             returnLines.push({
               exchangeId: 0,
@@ -1363,8 +1566,92 @@ export async function handleCreateOnlineOrderExchange(
             });
           }
 
+          try {
+            const promotionAllocations =
+              allocateReturnDiscountMinor(
+                currentPromotionDiscountTarget,
+                returnLines.map(
+                  (line) => ({
+                    grossAmountMinor:
+                      line.grossAmountMinor,
+                    alreadyAllocatedMinor:
+                      line.lineDiscountMinor,
+                    weightMinor:
+                      line.grossAmountMinor,
+                  }),
+                ),
+              );
+
+            returnLines.forEach(
+              (line, index) => {
+                line.promotionDiscountMinor =
+                  promotionAllocations[
+                    index
+                  ] ?? 0;
+              },
+            );
+
+            const invoiceAllocations =
+              allocateReturnDiscountMinor(
+                currentInvoiceDiscountTarget,
+                returnLines.map(
+                  (line) => ({
+                    grossAmountMinor:
+                      line.grossAmountMinor,
+                    alreadyAllocatedMinor:
+                      line.lineDiscountMinor +
+                      line.promotionDiscountMinor,
+                    weightMinor:
+                      Math.max(
+                        0,
+                        line.grossAmountMinor -
+                          line.lineDiscountMinor -
+                          line.promotionDiscountMinor,
+                      ),
+                  }),
+                ),
+              );
+
+            returnLines.forEach(
+              (line, index) => {
+                line.invoiceDiscountMinor =
+                  invoiceAllocations[
+                    index
+                  ] ?? 0;
+
+                line.allocatedDiscountMinor =
+                  line.lineDiscountMinor +
+                  line.promotionDiscountMinor +
+                  line.invoiceDiscountMinor;
+
+                line.returnNetMinor =
+                  line.grossAmountMinor -
+                  line.allocatedDiscountMinor;
+              },
+            );
+          } catch (error) {
+            console.warn(
+              "ONLINE_EXCHANGE_PROMOTION_ALLOCATION_FAILED",
+              {
+                orderId:
+                  originalOrder.id,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : String(
+                        error,
+                      ),
+              },
+            );
+
+            throw new OnlineExchangeError(
+              "هذا التبديل يلغي جزءًا من العرض أكبر من قيمة الأصناف المرتجعة. أعد أصناف العرض المرتبطة معًا.",
+              409,
+            );
+          }
+
           const returnGrossMinor =
-            returnLines.reduce(
+            returnLines.reduce
               (sum, line) =>
                 sum +
                 line.grossAmountMinor,
