@@ -2765,6 +2765,8 @@ function SettingSwitch({
           onChange
         }
         trackColor={{
+          false:
+            colors.border,
           true:
             colors.primary,
         }}
