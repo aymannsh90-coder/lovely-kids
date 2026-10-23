@@ -47,6 +47,13 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: Array<{
+    promotionId: number;
+    promotionName: string;
+    groupKey: string;
+    discountMinor: number;
+  }>;
   invoiceDiscountMinor?: number;
   image?: string;
   size?: string;
@@ -113,6 +120,7 @@ interface Order {
   shippingCost?: number;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
+  promotionDiscountAmount?: number;
   discountCode?: string | null;
   discountCodeLabel?: string | null;
   discountCodePercent?: number | null;
