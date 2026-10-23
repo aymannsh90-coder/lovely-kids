@@ -4766,6 +4766,12 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           )
         : null;
 
+    const promotionMap =
+      await getPosSalePromotionSummaries(
+        db,
+        [result.sale.id],
+      );
+
     return json(
       toSaleResponse(
         result.sale,
@@ -4775,6 +4781,10 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         null,
         cardProcessor,
         cashTender,
+        null,
+        promotionMap.get(
+          result.sale.id,
+        ) ?? [],
       ),
     );
   } catch (error) {
@@ -5089,6 +5099,12 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     originalSales.map((sale) => [sale.id, sale.publicId]),
   );
 
+  const salePromotionMap =
+    await getPosSalePromotionSummaries(
+      db,
+      sales.map((sale) => sale.id),
+    );
+
   return json({
     session:
       session && session.businessDate === businessDate
@@ -5122,6 +5138,9 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
           ) ?? null,
           null,
           currentProductImages,
+          salePromotionMap.get(
+            sale.id,
+          ) ?? [],
         ),
 
         returnSummary: {
