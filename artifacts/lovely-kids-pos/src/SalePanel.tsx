@@ -24,12 +24,14 @@ import {
   getPosCustomers,
   getPosSaleCashCurrencies,
   lookupPosProductByBarcode,
+  previewPosPromotions,
   searchPosProducts,
   type CashSession,
   type PosCustomer,
   type PosProductLookup,
   type PosSaleCashCurrency,
   type PosSaleResult,
+  type PromotionPreviewResult,
 } from "./lib/api";
 
 interface CartLine {
@@ -314,6 +316,21 @@ export default function SalePanel({
 
   const [cart, setCart] = useState<CartLine[]>([]);
 
+  const [
+    promotionPreview,
+    setPromotionPreview,
+  ] = useState<PromotionPreviewResult | null>(null);
+
+  const [
+    promotionPreviewBusy,
+    setPromotionPreviewBusy,
+  ] = useState(false);
+
+  const [
+    promotionPreviewError,
+    setPromotionPreviewError,
+  ] = useState("");
+
   const [discountAmount, setDiscountAmount] = useState("");
 
   const [paidAmount, setPaidAmount] = useState("0.00");
@@ -433,9 +450,94 @@ export default function SalePanel({
     [cart],
   );
 
+  useEffect(() => {
+    if (cart.length === 0) {
+      setPromotionPreview(null);
+      setPromotionPreviewError("");
+      setPromotionPreviewBusy(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const timer = window.setTimeout(() => {
+      const previewItems = cart.map((line) => ({
+        key: line.id,
+        productId: line.product.productId,
+        quantity: line.quantity,
+        unitPriceMinor:
+          moneyToMinor(line.soldUnitPrice) ?? 0,
+      }));
+
+      setPromotionPreviewBusy(true);
+      setPromotionPreviewError("");
+
+      void previewPosPromotions(
+        token,
+        previewItems,
+      )
+        .then((result) => {
+          if (cancelled) return;
+          setPromotionPreview(result);
+        })
+        .catch((caught) => {
+          if (cancelled) return;
+
+          if (
+            caught instanceof ApiError &&
+            caught.status === 401
+          ) {
+            onUnauthorized();
+            return;
+          }
+
+          setPromotionPreview(null);
+          setPromotionPreviewError(
+            errorMessage(caught),
+          );
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setPromotionPreviewBusy(false);
+          }
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    cart,
+    token,
+    onUnauthorized,
+  ]);
+
+  const promotionDiscountMinor =
+    promotionPreview?.totalDiscountMinor ?? 0;
+
+  const promotionLineByKey =
+    useMemo(
+      () =>
+        new Map(
+          (promotionPreview?.lines ?? []).map(
+            (line) => [
+              line.key,
+              line,
+            ],
+          ),
+        ),
+      [promotionPreview],
+    );
+
   const discountMinor = moneyToMinor(discountAmount) ?? 0;
 
-  const totalMinor = Math.max(0, subtotalMinor - discountMinor);
+  const totalMinor = Math.max(
+    0,
+    subtotalMinor -
+      promotionDiscountMinor -
+      discountMinor,
+  );
 
   const tenderPaidMinor =
     moneyToMinor(
@@ -1151,8 +1253,14 @@ export default function SalePanel({
       }
     }
 
-    if (discountMinor > subtotalMinor) {
-      setError("الخصم أكبر من مجموع الفاتورة");
+    if (
+      discountMinor >
+      subtotalMinor -
+        promotionDiscountMinor
+    ) {
+      setError(
+        "الخصم اليدوي أكبر من صافي الفاتورة بعد عروض المتجر",
+      );
       return;
     }
 
@@ -1629,6 +1737,32 @@ export default function SalePanel({
                           <small>
                             المخزون: {availability.stock ?? "غير محدد"}
                           </small>
+
+                          {(() => {
+                            const promoLine =
+                              promotionLineByKey.get(
+                                line.id,
+                              );
+
+                            const names = [
+                              ...new Set(
+                                (promoLine?.allocations ?? []).map(
+                                  (allocation) =>
+                                    allocation.promotionName,
+                                ),
+                              ),
+                            ];
+
+                            return names.length > 0 ? (
+                              <small
+                                style={{
+                                  fontWeight: 800,
+                                }}
+                              >
+                                🎁 {names.join(" + ")}
+                              </small>
+                            ) : null;
+                          })()}
                         </div>
                       </td>
 
@@ -1816,8 +1950,66 @@ export default function SalePanel({
               <strong>{formatMinor(subtotalMinor)}</strong>
             </div>
 
+            {promotionPreviewBusy && (
+              <div>
+                <span>العروض</span>
+                <strong>جاري الاحتساب…</strong>
+              </div>
+            )}
+
+            {promotionDiscountMinor > 0 && (
+              <>
+                {(promotionPreview?.promotions ?? []).map(
+                  (promotion) => (
+                    <div
+                      key={promotion.promotionId}
+                    >
+                      <span>
+                        خصم {promotion.publicLabel}
+                      </span>
+
+                      <strong>
+                        -{formatMinor(
+                          promotion.discountMinor,
+                        )}
+                      </strong>
+                    </div>
+                  ),
+                )}
+              </>
+            )}
+
+            {(promotionPreview?.entitlements ?? [])
+              .filter(
+                (item) =>
+                  item.remainingRewardQuantity >
+                  0,
+              )
+              .map((item) => (
+                <div
+                  key={`entitlement-${item.promotionId}`}
+                >
+                  <span>
+                    🎁 {item.promotionName}
+                  </span>
+
+                  <strong>
+                    أضف {item.remainingRewardQuantity} قطعة للاستفادة
+                  </strong>
+                </div>
+              ))}
+
+            {promotionPreviewError && (
+              <div>
+                <span>العروض</span>
+                <strong>
+                  {promotionPreviewError}
+                </strong>
+              </div>
+            )}
+
             <label>
-              <span>الخصم</span>
+              <span>الخصم اليدوي</span>
 
               <div className="money-input">
                 <input
