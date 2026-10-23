@@ -643,8 +643,13 @@ async function findConflict(
   return null;
 }
 
+type PromotionWriteDb = Pick<
+  Db,
+  "insert"
+>;
+
 async function insertMembership(
-  tx: Db,
+  tx: PromotionWriteDb,
   promotionId: number,
   input: AdminInput,
 ) {
@@ -831,7 +836,7 @@ async function createPromotion(
     }
 
     await insertMembership(
-      tx as Db,
+      tx,
       promotion.id,
       parsed.data,
     );
@@ -914,7 +919,7 @@ async function updatePromotion(
       .where(eq(promotionProductsTable.promotionId, id));
 
     await insertMembership(
-      tx as Db,
+      tx,
       id,
       parsed.data,
     );
@@ -1166,12 +1171,11 @@ async function previewPromotions(
   );
 
   return json({
+    ...calculation,
     originalTotalMinor,
-    totalDiscountMinor: calculation.totalDiscountMinor,
     netTotalMinor:
       originalTotalMinor -
       calculation.totalDiscountMinor,
-    ...calculation,
   });
 }
 
