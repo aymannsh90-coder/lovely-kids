@@ -98,6 +98,7 @@ interface PlannedExchangeReturnLine {
     quantity: number;
     soldUnitPriceMinor: number;
     lineDiscountMinor: number;
+    promotionDiscountMinor: number;
     generalStockBefore: number | null;
     generalStockAfter: number | null;
     variantStockBefore: number | null;
@@ -107,6 +108,7 @@ interface PlannedExchangeReturnLine {
   quantity: number;
   grossAmountMinor: number;
   lineDiscountMinor: number;
+  promotionDiscountMinor: number;
   netBeforeInvoiceMinor: number;
   invoiceDiscountMinor: number;
   allocatedDiscountMinor: number;
@@ -1497,8 +1499,12 @@ export async function handleCreatePosExchange(
             const consumedLineDiscountByOriginalItem =
               new Map<number, number>();
 
+            const consumedPromotionDiscountByOriginalItem =
+              new Map<number, number>();
+
             let priorGrossMinor = 0;
             let priorLineDiscountMinor = 0;
+            let priorPromotionDiscountMinor = 0;
             let priorInvoiceDiscountMinor = 0;
 
             for (
@@ -1534,11 +1540,24 @@ export async function handleCreatePosExchange(
                   item.lineDiscountMinor,
               );
 
+              consumedPromotionDiscountByOriginalItem.set(
+                id,
+                (
+                  consumedPromotionDiscountByOriginalItem.get(
+                    id,
+                  ) ?? 0
+                ) +
+                  item.promotionDiscountMinor,
+              );
+
               priorGrossMinor +=
                 item.grossAmountMinor;
 
               priorLineDiscountMinor +=
                 item.lineDiscountMinor;
+
+              priorPromotionDiscountMinor +=
+                item.promotionDiscountMinor;
 
               priorInvoiceDiscountMinor +=
                 item.invoiceDiscountMinor;
@@ -1599,7 +1618,8 @@ export async function handleCreatePosExchange(
 
             const invoiceBaseMinor =
               originalSale.subtotalMinor -
-              originalSale.itemDiscountMinor;
+              originalSale.itemDiscountMinor -
+              originalSale.promotionDiscountMinor;
 
             if (
               !Number.isSafeInteger(
@@ -1607,6 +1627,9 @@ export async function handleCreatePosExchange(
               ) ||
               !Number.isSafeInteger(
                 priorLineDiscountMinor,
+              ) ||
+              !Number.isSafeInteger(
+                priorPromotionDiscountMinor,
               ) ||
               !Number.isSafeInteger(
                 priorInvoiceDiscountMinor,
@@ -1619,12 +1642,16 @@ export async function handleCreatePosExchange(
                 originalSale.subtotalMinor ||
               priorLineDiscountMinor >
                 originalSale.itemDiscountMinor ||
+              priorPromotionDiscountMinor >
+                originalSale.promotionDiscountMinor ||
               priorInvoiceDiscountMinor >
                 originalSale.invoiceDiscountMinor ||
               priorGrossMinor -
-                  priorLineDiscountMinor >
+                  priorLineDiscountMinor -
+                  priorPromotionDiscountMinor >
                 invoiceBaseMinor ||
               priorLineDiscountMinor +
+                  priorPromotionDiscountMinor +
                   priorInvoiceDiscountMinor >
                 originalSale.discountMinor
             ) {
@@ -1659,6 +1686,11 @@ export async function handleCreatePosExchange(
 
                   const previouslyConsumedLineDiscount =
                     consumedLineDiscountByOriginalItem.get(
+                      originalItem.id,
+                    ) ?? 0;
+
+                  const previouslyConsumedPromotionDiscount =
+                    consumedPromotionDiscountByOriginalItem.get(
                       originalItem.id,
                     ) ?? 0;
 
@@ -1747,6 +1779,50 @@ export async function handleCreatePosExchange(
                     );
                   }
 
+                  const targetPromotionDiscountMinor =
+                    consumedAfter ===
+                    originalItem.quantity
+                      ? originalItem.promotionDiscountMinor
+                      : Number(
+                          (
+                            BigInt(
+                              originalItem.promotionDiscountMinor,
+                            ) *
+                            BigInt(
+                              consumedAfter,
+                            )
+                          ) /
+                            BigInt(
+                              originalItem.quantity,
+                            ),
+                        );
+
+                  const promotionDiscountMinor =
+                    targetPromotionDiscountMinor -
+                    previouslyConsumedPromotionDiscount;
+
+                  if (
+                    !Number.isSafeInteger(
+                      targetPromotionDiscountMinor,
+                    ) ||
+                    !Number.isSafeInteger(
+                      promotionDiscountMinor,
+                    ) ||
+                    targetPromotionDiscountMinor <
+                      previouslyConsumedPromotionDiscount ||
+                    targetPromotionDiscountMinor >
+                      originalItem.promotionDiscountMinor ||
+                    promotionDiscountMinor < 0 ||
+                    lineDiscountMinor +
+                        promotionDiscountMinor >
+                      grossAmountMinor
+                  ) {
+                    throw new PosExchangeError(
+                      `تعذر احتساب خصم العرض للمنتج ${originalItem.productNameAr}`,
+                      409,
+                    );
+                  }
+
                   return {
                     lineNumber:
                       index + 1,
@@ -1757,10 +1833,12 @@ export async function handleCreatePosExchange(
                     grossAmountMinor,
 
                     lineDiscountMinor,
+                    promotionDiscountMinor,
 
                     netBeforeInvoiceMinor:
                       grossAmountMinor -
-                      lineDiscountMinor,
+                      lineDiscountMinor -
+                      promotionDiscountMinor,
 
                     invoiceDiscountMinor:
                       0,
@@ -1776,7 +1854,8 @@ export async function handleCreatePosExchange(
 
             let runningNetBeforeInvoiceMinor =
               priorGrossMinor -
-              priorLineDiscountMinor;
+              priorLineDiscountMinor -
+              priorPromotionDiscountMinor;
 
             let runningInvoiceDiscountMinor =
               priorInvoiceDiscountMinor;
@@ -1850,6 +1929,7 @@ export async function handleCreatePosExchange(
 
               line.allocatedDiscountMinor =
                 line.lineDiscountMinor +
+                line.promotionDiscountMinor +
                 line.invoiceDiscountMinor;
 
               line.returnNetMinor =
@@ -2382,6 +2462,7 @@ export async function handleCreatePosExchange(
                 quantity: item.quantity,
                 grossAmountMinor,
                 lineDiscountMinor: 0,
+                promotionDiscountMinor: 0,
                 netBeforeInvoiceMinor:
                   grossAmountMinor,
                 invoiceDiscountMinor: 0,
@@ -2640,6 +2721,9 @@ export async function handleCreatePosExchange(
 
               lineDiscountMinor:
                 line.lineDiscountMinor,
+
+              promotionDiscountMinor:
+                line.promotionDiscountMinor,
 
               invoiceDiscountMinor:
                 line.invoiceDiscountMinor,
