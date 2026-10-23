@@ -349,6 +349,14 @@ export interface PosSaleItemResult {
 
 export interface PosSaleResult {
   alreadyCreated: boolean;
+  promotions: Array<{
+    promotionId: number | null;
+    promotionName: string;
+    publicLabel: string;
+    promotionKind: string;
+    discountMinor: number;
+    applicationCount: number;
+  }>;
   sale: {
     id: string;
     publicId: string;
