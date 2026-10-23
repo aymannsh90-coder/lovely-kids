@@ -186,8 +186,28 @@ export function ProductCard({
     }
 
     const existing = items.find(
-      (item) => item.id === product.id && !item.size && !item.color,
+      (item) =>
+        item.id === product.id &&
+        !item.size &&
+        !item.color &&
+        item.rewardForPromotionId ===
+          rewardForPromotionId,
     );
+
+    const cartVariantQuantity =
+      items
+        .filter(
+          (item) =>
+            item.id === product.id &&
+            !item.size &&
+            !item.color,
+        )
+        .reduce(
+          (total, item) =>
+            total + item.quantity,
+          0,
+        );
+
     const availableStock = getAvailableStock(product);
 
     const performAdd = () => {
@@ -198,6 +218,11 @@ export function ProductCard({
         price: product.price,
         image: product.image,
         category: product.category,
+        ...(rewardForPromotionId
+          ? {
+              rewardForPromotionId,
+            }
+          : {}),
       });
 
       trackMetaEvent("AddToCart", {
@@ -223,7 +248,7 @@ export function ProductCard({
 
     if (
       availableStock !== null &&
-      (existing?.quantity ?? 0) >= availableStock
+      cartVariantQuantity >= availableStock
     ) {
       showStockLimit(availableStock);
       return;
