@@ -2329,7 +2329,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
       const activePromotions =
         await loadActivePromotions(
-          tx as Db,
+          tx,
           "pos",
         );
 
