@@ -493,8 +493,7 @@ function applyBuyXGetY(
         rewardQuantity;
 
       const nextBundleRemainingQuantity =
-        eligible.length > 0 &&
-        promotion.repeatable
+        eligible.length > 0
           ? bundleSize -
             (
               eligible.length %
