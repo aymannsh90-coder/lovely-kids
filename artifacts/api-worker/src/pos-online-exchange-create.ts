@@ -46,6 +46,7 @@ interface StoredOnlineOrderItem {
   image?: string;
   size?: string;
   color?: string;
+  promotionDiscountMinor?: unknown;
   invoiceDiscountMinor?: unknown;
 }
 
@@ -383,13 +384,11 @@ function parseStoredItems(
   return order.items as StoredOnlineOrderItem[];
 }
 
-function getOriginalLineDiscountMinor(
-  item: StoredOnlineOrderItem,
+function getStoredLineDiscountMinor(
+  raw: unknown,
   grossLineMinor: number,
+  label: string,
 ): number {
-  const raw =
-    item.invoiceDiscountMinor;
-
   if (raw === undefined) {
     return 0;
   }
@@ -400,12 +399,34 @@ function getOriginalLineDiscountMinor(
     Number(raw) > grossLineMinor
   ) {
     throw new OnlineExchangeError(
-      "بيانات خصم الطلب القديم غير صالحة",
+      `بيانات ${label} في الطلب القديم غير صالحة`,
       409,
     );
   }
 
   return Number(raw);
+}
+
+function getOriginalInvoiceDiscountMinor(
+  item: StoredOnlineOrderItem,
+  grossLineMinor: number,
+): number {
+  return getStoredLineDiscountMinor(
+    item.invoiceDiscountMinor,
+    grossLineMinor,
+    "خصم الفاتورة",
+  );
+}
+
+function getOriginalPromotionDiscountMinor(
+  item: StoredOnlineOrderItem,
+  grossLineMinor: number,
+): number {
+  return getStoredLineDiscountMinor(
+    item.promotionDiscountMinor,
+    grossLineMinor,
+    "خصم العرض",
+  );
 }
 
 function calculateReplacementSnapshot(
@@ -965,6 +986,9 @@ export async function handleCreateOnlineOrderExchange(
           const priorDiscountByLine =
             new Map<number, number>();
 
+          const priorPromotionDiscountByLine =
+            new Map<number, number>();
+
           for (
             const item of priorItems
           ) {
@@ -993,6 +1017,14 @@ export async function handleCreateOnlineOrderExchange(
               ) +
               item.invoiceDiscountMinor;
 
+            const nextPromotionDiscount =
+              (
+                priorPromotionDiscountByLine.get(
+                  lineNumber,
+                ) ?? 0
+              ) +
+              item.promotionDiscountMinor;
+
             if (
               !Number.isSafeInteger(
                 nextQuantity,
@@ -1000,8 +1032,12 @@ export async function handleCreateOnlineOrderExchange(
               !Number.isSafeInteger(
                 nextDiscount,
               ) ||
+              !Number.isSafeInteger(
+                nextPromotionDiscount,
+              ) ||
               nextQuantity < 0 ||
-              nextDiscount < 0
+              nextDiscount < 0 ||
+              nextPromotionDiscount < 0
             ) {
               throw new OnlineExchangeError(
                 "بيانات التبديلات السابقة غير صالحة",
@@ -1017,6 +1053,11 @@ export async function handleCreateOnlineOrderExchange(
             priorDiscountByLine.set(
               lineNumber,
               nextDiscount,
+            );
+
+            priorPromotionDiscountByLine.set(
+              lineNumber,
+              nextPromotionDiscount,
             );
           }
 
@@ -1114,7 +1155,13 @@ export async function handleCreateOnlineOrderExchange(
             }
 
             const originalDiscountMinor =
-              getOriginalLineDiscountMinor(
+              getOriginalInvoiceDiscountMinor(
+                originalItem,
+                originalGrossMinor,
+              );
+
+            const originalPromotionDiscountMinor =
+              getOriginalPromotionDiscountMinor(
                 originalItem,
                 originalGrossMinor,
               );
@@ -1126,6 +1173,11 @@ export async function handleCreateOnlineOrderExchange(
 
             const previouslyAllocatedDiscount =
               priorDiscountByLine.get(
+                requestedItem.originalOrderLineNumber,
+              ) ?? 0;
+
+            const previouslyAllocatedPromotionDiscount =
+              priorPromotionDiscountByLine.get(
                 requestedItem.originalOrderLineNumber,
               ) ?? 0;
 
@@ -1169,6 +1221,28 @@ export async function handleCreateOnlineOrderExchange(
               targetDiscountMinor -
               previouslyAllocatedDiscount;
 
+            const targetPromotionDiscountMinor =
+              reservedAfter ===
+              soldQuantity
+                ? originalPromotionDiscountMinor
+                : Number(
+                    (
+                      BigInt(
+                        originalPromotionDiscountMinor,
+                      ) *
+                      BigInt(
+                        reservedAfter,
+                      )
+                    ) /
+                      BigInt(
+                        soldQuantity,
+                      ),
+                  );
+
+            const promotionDiscountMinor =
+              targetPromotionDiscountMinor -
+              previouslyAllocatedPromotionDiscount;
+
             const grossAmountMinor =
               soldUnitPriceMinor *
               requestedItem.quantity;
@@ -1181,13 +1255,23 @@ export async function handleCreateOnlineOrderExchange(
                 invoiceDiscountMinor,
               ) ||
               !Number.isSafeInteger(
+                targetPromotionDiscountMinor,
+              ) ||
+              !Number.isSafeInteger(
+                promotionDiscountMinor,
+              ) ||
+              !Number.isSafeInteger(
                 grossAmountMinor,
               ) ||
               invoiceDiscountMinor < 0 ||
-              invoiceDiscountMinor >
+              promotionDiscountMinor < 0 ||
+              invoiceDiscountMinor +
+                promotionDiscountMinor >
                 grossAmountMinor ||
               targetDiscountMinor >
-                originalDiscountMinor
+                originalDiscountMinor ||
+              targetPromotionDiscountMinor >
+                originalPromotionDiscountMinor
             ) {
               throw new OnlineExchangeError(
                 "تعذر احتساب خصم الصنف المرتجع",
@@ -1197,6 +1281,7 @@ export async function handleCreateOnlineOrderExchange(
 
             const returnNetMinor =
               grossAmountMinor -
+              promotionDiscountMinor -
               invoiceDiscountMinor;
 
             returnLines.push({
@@ -1255,9 +1340,12 @@ export async function handleCreateOnlineOrderExchange(
               lineDiscountMinor:
                 0,
 
+              promotionDiscountMinor,
+
               invoiceDiscountMinor,
 
               allocatedDiscountMinor:
+                promotionDiscountMinor +
                 invoiceDiscountMinor,
 
               returnNetMinor,
