@@ -1983,7 +1983,11 @@ export default function SalePanel({
               .filter(
                 (item) =>
                   item.remainingRewardQuantity >
-                  0,
+                    0 ||
+                  (
+                    item.nextBundleRemainingQuantity ??
+                    0
+                  ) > 0,
               )
               .map((item) => (
                 <div
@@ -1994,7 +1998,7 @@ export default function SalePanel({
                   </span>
 
                   <strong>
-                    أضف {item.remainingRewardQuantity} قطعة للاستفادة
+                    أضف {item.nextBundleRemainingQuantity ?? item.remainingRewardQuantity} قطعة للاستفادة
                   </strong>
                 </div>
               ))}
