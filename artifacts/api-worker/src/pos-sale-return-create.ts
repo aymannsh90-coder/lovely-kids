@@ -1,5 +1,7 @@
 import {
   customersTable,
+  exchangeDocumentsTable,
+  exchangeReturnItemsTable,
   financeAccountsTable,
   inventoryMovementsTable,
   cashSessionsTable,
@@ -810,6 +812,52 @@ export async function handleCreatePosSaleReturn(
           .where(inArray(posSaleReturnItemsTable.returnId, completedReturnIds));
       }
 
+      const completedExchanges =
+        await tx
+          .select({
+            id:
+              exchangeDocumentsTable.id,
+          })
+          .from(
+            exchangeDocumentsTable,
+          )
+          .where(
+            and(
+              eq(
+                exchangeDocumentsTable.sourceType,
+                "pos_sale",
+              ),
+              eq(
+                exchangeDocumentsTable.originalPosSaleId,
+                sale.id,
+              ),
+              eq(
+                exchangeDocumentsTable.status,
+                "completed",
+              ),
+            ),
+          );
+
+      const completedExchangeIds =
+        completedExchanges.map(
+          (row) => row.id,
+        );
+
+      const priorExchangeItems =
+        completedExchangeIds.length > 0
+          ? await tx
+              .select()
+              .from(
+                exchangeReturnItemsTable,
+              )
+              .where(
+                inArray(
+                  exchangeReturnItemsTable.exchangeId,
+                  completedExchangeIds,
+                ),
+              )
+          : [];
+
       const returnedByOriginalItem = new Map<number, number>();
 
       const returnedLineDiscountByOriginalItem = new Map<number, number>();
@@ -891,6 +939,86 @@ export async function handleCreatePosSaleReturn(
         priorPromotionDiscountMinor +=
           returnedItem.promotionDiscountMinor;
         priorInvoiceDiscountMinor += returnedItem.invoiceDiscountMinor;
+      }
+
+      for (
+        const returnedItem of
+        priorExchangeItems
+      ) {
+        if (
+          returnedItem.originalPosSaleItemId ===
+          null
+        ) {
+          continue;
+        }
+
+        const id =
+          returnedItem.originalPosSaleItemId;
+
+        const nextQuantity =
+          (
+            returnedByOriginalItem.get(
+              id,
+            ) ?? 0
+          ) +
+          returnedItem.quantity;
+
+        const nextLineDiscount =
+          (
+            returnedLineDiscountByOriginalItem.get(
+              id,
+            ) ?? 0
+          ) +
+          returnedItem.lineDiscountMinor;
+
+        const nextPromotionDiscount =
+          (
+            returnedPromotionDiscountByOriginalItem.get(
+              id,
+            ) ?? 0
+          ) +
+          returnedItem.promotionDiscountMinor;
+
+        if (
+          !Number.isSafeInteger(
+            nextQuantity,
+          ) ||
+          !Number.isSafeInteger(
+            nextLineDiscount,
+          ) ||
+          !Number.isSafeInteger(
+            nextPromotionDiscount,
+          )
+        ) {
+          throw new PosSaleReturnError(
+            "بيانات التبديلات السابقة غير صالحة",
+            409,
+          );
+        }
+
+        returnedByOriginalItem.set(
+          id,
+          nextQuantity,
+        );
+
+        returnedLineDiscountByOriginalItem.set(
+          id,
+          nextLineDiscount,
+        );
+
+        returnedPromotionDiscountByOriginalItem.set(
+          id,
+          nextPromotionDiscount,
+        );
+
+        priorGrossMinor +=
+          returnedItem.grossAmountMinor;
+        priorLineDiscountMinor +=
+          returnedItem.lineDiscountMinor;
+        priorPromotionDiscountMinor +=
+          returnedItem.promotionDiscountMinor;
+        priorInvoiceDiscountMinor +=
+          returnedItem.invoiceDiscountMinor;
       }
 
       const invoiceBaseMinor =
