@@ -83,6 +83,7 @@ export interface PromotionPreviewEntitlement {
   earnedRewardQuantity: number;
   selectedRewardQuantity: number;
   remainingRewardQuantity: number;
+  nextBundleRemainingQuantity?: number;
 }
 
 export interface PromotionPreviewResult {
