@@ -16,6 +16,7 @@ export interface CartItem {
   size?: string;
   color?: string;
   category: string;
+  rewardForPromotionId?: number;
 }
 
 interface CartContextType {
@@ -59,8 +60,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const matchesVariant = useCallback(
-    (i: CartItem, item: { id: string; size?: string; color?: string }) =>
-      i.id === item.id && i.size === item.size && i.color === item.color,
+    (
+      i: CartItem,
+      item: {
+        id: string;
+        size?: string;
+        color?: string;
+        rewardForPromotionId?: number;
+      },
+    ) =>
+      i.id === item.id &&
+      i.size === item.size &&
+      i.color === item.color &&
+      i.rewardForPromotionId ===
+        item.rewardForPromotionId,
     []
   );
 
