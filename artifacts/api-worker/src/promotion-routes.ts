@@ -1,4 +1,5 @@
 import {
+  exchangeSalePromotionsTable,
   orderPromotionsTable,
   posSalePromotionsTable,
   productsTable,
@@ -934,7 +935,11 @@ async function deletePromotion(
 
   if (!auth.ok) return auth.response;
 
-  const [orderUse, posUse] = await Promise.all([
+  const [
+    orderUse,
+    posUse,
+    exchangeUse,
+  ] = await Promise.all([
     db
       .select({ id: orderPromotionsTable.id })
       .from(orderPromotionsTable)
@@ -945,9 +950,18 @@ async function deletePromotion(
       .from(posSalePromotionsTable)
       .where(eq(posSalePromotionsTable.promotionId, id))
       .limit(1),
+    db
+      .select({ id: exchangeSalePromotionsTable.id })
+      .from(exchangeSalePromotionsTable)
+      .where(eq(exchangeSalePromotionsTable.promotionId, id))
+      .limit(1),
   ]);
 
-  if (orderUse[0] || posUse[0]) {
+  if (
+    orderUse[0] ||
+    posUse[0] ||
+    exchangeUse[0]
+  ) {
     return json(
       {
         error:
