@@ -28,6 +28,10 @@ import type { ShippingZone } from "@/context/AppSettingsContext";
 import { getProductShareUrl } from "@/utils/productShare";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import {
+  usePromotions,
+  type PromotionPreviewResult,
+} from "@/context/PromotionsContext";
 import { useColors } from "@/hooks/useColors";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { type Product, getAvailableStock } from "@/data/products";
@@ -236,6 +240,10 @@ export default function CartScreen() {
   const { user, updateProfile, getAuthToken } = useAuth();
   const { items, updateQuantity, removeItem, totalPrice, totalItems, clearCart } = useCart();
   const { products, refreshProducts } = useVisibleProducts();
+  const {
+    previewCart,
+    getPromotionById,
+  } = usePromotions();
 
   const [step, setStep] = useState<Step>("cart");
   const [loading, setLoading] = useState(false);
@@ -252,6 +260,19 @@ export default function CartScreen() {
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUploaded, setProofUploaded] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
+
+  const [
+    promotionPreview,
+    setPromotionPreview,
+  ] = useState<PromotionPreviewResult | null>(null);
+  const [
+    promotionPreviewLoading,
+    setPromotionPreviewLoading,
+  ] = useState(false);
+  const [
+    promotionPreviewError,
+    setPromotionPreviewError,
+  ] = useState<string | null>(null);
 
   const [discountCodeInput, setDiscountCodeInput] = useState("");
   const [appliedDiscountCode, setAppliedDiscountCode] =
@@ -295,15 +316,104 @@ export default function CartScreen() {
     setDiscountCodeError(null);
   }, [settings.discountCodesEnabled]);
 
+  useEffect(() => {
+    if (items.length === 0) {
+      setPromotionPreview(null);
+      setPromotionPreviewError(null);
+      setPromotionPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const timer = setTimeout(() => {
+      setPromotionPreviewLoading(true);
+      setPromotionPreviewError(null);
+
+      void previewCart(items)
+        .then((preview) => {
+          if (cancelled) return;
+          setPromotionPreview(preview);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+
+          setPromotionPreview(null);
+          setPromotionPreviewError(
+            error instanceof Error
+              ? error.message
+              : "تعذر احتساب عروض السلة",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setPromotionPreviewLoading(false);
+          }
+        });
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [items, previewCart]);
+
+  const promotionDiscountAmount =
+    (promotionPreview?.totalDiscountMinor ?? 0) /
+    100;
+
+  const promotionBlocksDiscountCodes =
+    (promotionPreview?.promotions ?? []).some(
+      (promotion) =>
+        !promotion.stackWithDiscountCodes,
+    );
+
+  useEffect(() => {
+    if (
+      !promotionBlocksDiscountCodes ||
+      !appliedDiscountCode
+    ) {
+      return;
+    }
+
+    setAppliedDiscountCode(null);
+    setDiscountCodeInput("");
+    setCheckoutCouponExpanded(false);
+    setDiscountCodeError(
+      "أحد عروض السلة لا يسمح بالجمع مع كود خصم.",
+    );
+  }, [
+    promotionBlocksDiscountCodes,
+    appliedDiscountCode,
+  ]);
+
+  const discountCodeBase = Math.max(
+    0,
+    totalPrice -
+      promotionDiscountAmount,
+  );
+
   const appliedDiscountAmount =
     appliedDiscountCode
       ? Math.floor(
-          (totalPrice * appliedDiscountCode.discountPercent) / 100,
+          (
+            discountCodeBase *
+            appliedDiscountCode.discountPercent
+          ) /
+            100,
         )
       : 0;
 
   const handleApplyDiscountCode = async () => {
     const rawCode = discountCodeInput.trim();
+
+    if (promotionBlocksDiscountCodes) {
+      setAppliedDiscountCode(null);
+      setDiscountCodeError(
+        "العرض المطبق على السلة لا يسمح باستخدام كود خصم معه.",
+      );
+      return;
+    }
 
     if (!rawCode) {
       setAppliedDiscountCode(null);
