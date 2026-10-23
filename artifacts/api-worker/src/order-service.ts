@@ -60,6 +60,7 @@ export interface TrustedOrderItem {
   quantity: number;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
 }
 
 export interface TrustedOrderInput {
@@ -80,6 +81,7 @@ interface GroupedItem {
   quantity: number;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
 }
 
 function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
@@ -94,6 +96,8 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
     const quantity = Number(item.quantity);
     const size = item.size?.trim() || undefined;
     const color = item.color?.trim() || undefined;
+    const rewardForPromotionId =
+      item.rewardForPromotionId;
 
     if (!Number.isInteger(productId) || productId <= 0) {
       throw new OrderValidationError("معرّف أحد المنتجات غير صالح");
@@ -103,7 +107,26 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
       throw new OrderValidationError("كمية أحد المنتجات غير صالحة");
     }
 
-    const key = JSON.stringify([productId, color ?? "", size ?? ""]);
+    if (
+      rewardForPromotionId !== undefined &&
+      (
+        !Number.isSafeInteger(
+          rewardForPromotionId,
+        ) ||
+        rewardForPromotionId <= 0
+      )
+    ) {
+      throw new OrderValidationError(
+        "معرّف عرض المكافأة غير صالح",
+      );
+    }
+
+    const key = JSON.stringify([
+      productId,
+      color ?? "",
+      size ?? "",
+      rewardForPromotionId ?? null,
+    ]);
     const current = grouped.get(key);
 
     if (current) {
@@ -112,7 +135,13 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
         throw new OrderValidationError("كمية أحد المنتجات تتجاوز الحد المسموح");
       }
     } else {
-      grouped.set(key, { productId, quantity, size, color });
+      grouped.set(key, {
+        productId,
+        quantity,
+        size,
+        color,
+        rewardForPromotionId,
+      });
     }
   }
 
@@ -329,6 +358,7 @@ interface TrustedStoredItem {
   image?: string;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
   promotionDiscountMinor?: number;
   promotionAllocations?: PromotionAllocation[];
   invoiceDiscountMinor?: number;
@@ -780,6 +810,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         image: selectedImage,
         size: item.size,
         color: item.color,
+        rewardForPromotionId:
+          item.rewardForPromotionId,
       });
 
       if (
@@ -822,6 +854,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
               item.price * 100,
             quantity:
               item.quantity,
+            rewardForPromotionId:
+              item.rewardForPromotionId,
           }),
         ),
         promotions:
