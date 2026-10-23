@@ -3062,6 +3062,9 @@ export interface PosSaleReturnItemResult {
   lineDiscountMinor: number;
   lineDiscount: number;
 
+  promotionDiscountMinor: number;
+  promotionDiscount: number;
+
   invoiceDiscountMinor: number;
   invoiceDiscount: number;
 
@@ -4838,6 +4841,7 @@ export interface PosExchangeReturnItemResult {
 
   grossAmountMinor: number;
   lineDiscountMinor: number;
+  promotionDiscountMinor: number;
   invoiceDiscountMinor: number;
   allocatedDiscountMinor: number;
   returnNetMinor: number;
@@ -4871,6 +4875,7 @@ export interface PosExchangeSaleItemResult {
 
   grossAmountMinor: number;
   lineDiscountMinor: number;
+  promotionDiscountMinor: number;
   invoiceDiscountMinor: number;
   allocatedDiscountMinor: number;
   lineNetMinor: number;
