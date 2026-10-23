@@ -824,6 +824,75 @@ export async function financeAssetBalanceMinor(
   );
 }
 
+interface PosSalePromotionSummary {
+  promotionId: number | null;
+  promotionName: string;
+  publicLabel: string;
+  promotionKind: string;
+  discountMinor: number;
+  applicationCount: number;
+}
+
+async function getPosSalePromotionSummaries(
+  db: Db,
+  saleIds: number[],
+) {
+  if (saleIds.length === 0) {
+    return new Map<number, PosSalePromotionSummary[]>();
+  }
+
+  const rows = await db
+    .select()
+    .from(posSalePromotionsTable)
+    .where(
+      inArray(
+        posSalePromotionsTable.saleId,
+        saleIds,
+      ),
+    );
+
+  const result =
+    new Map<number, PosSalePromotionSummary[]>();
+
+  for (const row of rows) {
+    const snapshot =
+      typeof row.snapshot === "object" &&
+      row.snapshot !== null
+        ? row.snapshot as Record<string, unknown>
+        : {};
+
+    const publicLabel =
+      typeof snapshot.publicLabel === "string" &&
+      snapshot.publicLabel.trim()
+        ? snapshot.publicLabel.trim()
+        : row.promotionName;
+
+    const list =
+      result.get(row.saleId) ?? [];
+
+    list.push({
+      promotionId:
+        row.promotionId,
+      promotionName:
+        row.promotionName,
+      publicLabel,
+      promotionKind:
+        row.promotionKind,
+      discountMinor:
+        row.discountMinor,
+      applicationCount:
+        row.applicationCount,
+    });
+
+    result.set(
+      row.saleId,
+      list,
+    );
+  }
+
+  return result;
+}
+
 function toSaleResponse(
   sale: typeof posSalesTable.$inferSelect,
   items: Array<typeof posSaleItemsTable.$inferSelect>,
@@ -839,10 +908,13 @@ function toSaleResponse(
   cardProcessor: PosCardProcessor | null = null,
   cashTender: PosSaleCashTender | null = null,
   currentProductImages: ReadonlyMap<number, string | null> | null = null,
+  promotionSummaries: PosSalePromotionSummary[] = [],
 ) {
   return {
     alreadyCreated,
     navigation,
+    promotions:
+      promotionSummaries,
 
     sale: {
       id: String(sale.id),
@@ -3477,6 +3549,17 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           )
         : null;
 
+    const salePromotionMap =
+      await getPosSalePromotionSummaries(
+        db,
+        [result.sale.id],
+      );
+
+    const salePromotionSummaries =
+      salePromotionMap.get(
+        result.sale.id,
+      ) ?? [];
+
     if (
       result.alreadyCreated &&
       paymentMethod === "cash" &&
@@ -3518,6 +3601,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         customerBalanceMinor,
         savedCardProcessor,
         savedCashTender,
+        null,
+        salePromotionSummaries,
       ),
       result.alreadyCreated ? 200 : 201,
     );
@@ -3556,6 +3641,12 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
                 )
               : null;
 
+          const promotionMap =
+            await getPosSalePromotionSummaries(
+              db,
+              [existing.sale.id],
+            );
+
           return json(
             toSaleResponse(
               existing.sale,
@@ -3564,6 +3655,11 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
               undefined,
               customerBalanceMinor,
               savedCardProcessor,
+              null,
+              null,
+              promotionMap.get(
+                existing.sale.id,
+              ) ?? [],
             ),
           );
         }
@@ -5279,6 +5375,12 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       items.map((item) => item.productId),
     );
 
+  const promotionMap =
+    await getPosSalePromotionSummaries(
+      db,
+      [sale.id],
+    );
+
   return json(
     toSaleResponse(
       sale,
@@ -5289,6 +5391,9 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       cardProcessor,
       cashTender,
       currentProductImages,
+      promotionMap.get(
+        sale.id,
+      ) ?? [],
     ),
   );
 }
