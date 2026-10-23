@@ -335,6 +335,31 @@ create index if not exists pos_sale_promotions_sale_idx
 create index if not exists pos_sale_promotions_promotion_idx
   on public.pos_sale_promotions(promotion_id);
 
+create table if not exists public.exchange_sale_promotions (
+  id serial primary key,
+  exchange_id integer not null
+    references public.exchange_documents(id) on delete cascade,
+  promotion_id integer
+    references public.promotions(id) on delete set null,
+  promotion_name text not null,
+  promotion_kind text not null,
+  discount_minor integer not null,
+  application_count integer not null,
+  snapshot jsonb not null,
+  created_at timestamptz not null default now(),
+
+  constraint exchange_sale_promotions_discount_valid
+    check (discount_minor >= 0),
+  constraint exchange_sale_promotions_application_count_valid
+    check (application_count > 0)
+);
+
+create index if not exists exchange_sale_promotions_exchange_idx
+  on public.exchange_sale_promotions(exchange_id);
+
+create index if not exists exchange_sale_promotions_promotion_idx
+  on public.exchange_sale_promotions(promotion_id);
+
 create table if not exists public.pos_sale_item_promotion_allocations (
   id serial primary key,
   sale_id integer not null
@@ -366,17 +391,20 @@ alter table public.promotion_products enable row level security;
 alter table public.order_promotions enable row level security;
 alter table public.pos_sale_promotions enable row level security;
 alter table public.pos_sale_item_promotion_allocations enable row level security;
+alter table public.exchange_sale_promotions enable row level security;
 
 revoke all on table public.promotions from anon, authenticated;
 revoke all on table public.promotion_products from anon, authenticated;
 revoke all on table public.order_promotions from anon, authenticated;
 revoke all on table public.pos_sale_promotions from anon, authenticated;
 revoke all on table public.pos_sale_item_promotion_allocations from anon, authenticated;
+revoke all on table public.exchange_sale_promotions from anon, authenticated;
 
 revoke all on sequence public.promotions_id_seq from anon, authenticated;
 revoke all on sequence public.promotion_products_id_seq from anon, authenticated;
 revoke all on sequence public.order_promotions_id_seq from anon, authenticated;
 revoke all on sequence public.pos_sale_promotions_id_seq from anon, authenticated;
 revoke all on sequence public.pos_sale_item_promotion_allocations_id_seq from anon, authenticated;
+revoke all on sequence public.exchange_sale_promotions_id_seq from anon, authenticated;
 
 commit;
