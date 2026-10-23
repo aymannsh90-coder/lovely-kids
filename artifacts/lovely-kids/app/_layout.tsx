@@ -28,6 +28,7 @@ import { NewOrdersProvider } from "@/context/NewOrdersContext";
 import { NotificationOptInProvider } from "@/context/NotificationOptInContext";
 import { OrderEditSelectionProvider } from "@/context/OrderEditSelectionContext";
 import { ProductsProvider } from "@/context/ProductsContext";
+import { PromotionsProvider } from "@/context/PromotionsContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useVisitorAnalytics } from "@/hooks/useVisitorAnalytics";
@@ -87,6 +88,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/promo-popup" />
       <Stack.Screen name="admin/offers" />
       <Stack.Screen name="admin/product-offers" />
+      <Stack.Screen name="admin/promotions" />
       <Stack.Screen name="admin/offers-category-order" />
       <Stack.Screen name="admin/orders" />
       <Stack.Screen name="admin/categories" />
@@ -175,7 +177,8 @@ export default function RootLayout() {
             <AuthProvider>
               <AppSettingsProvider>
                 <ProductsProvider>
-                  <CartProvider>
+                  <PromotionsProvider>
+                    <CartProvider>
                     <OrderEditSelectionProvider>
                       <WishlistProvider>
                       <NewOrdersProvider>
@@ -208,7 +211,8 @@ export default function RootLayout() {
                       </NewOrdersProvider>
                       </WishlistProvider>
                     </OrderEditSelectionProvider>
-                  </CartProvider>
+                    </CartProvider>
+                  </PromotionsProvider>
                 </ProductsProvider>
               </AppSettingsProvider>
             </AuthProvider>
