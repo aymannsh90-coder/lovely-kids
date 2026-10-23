@@ -3878,6 +3878,9 @@ export async function handleCreatePosExchange(
                     lineDiscountMinor:
                       line.lineDiscountMinor,
 
+                    promotionDiscountMinor:
+                      line.promotionDiscountMinor,
+
                     invoiceDiscountMinor:
                       line.invoiceDiscountMinor,
 
@@ -3930,6 +3933,9 @@ export async function handleCreatePosExchange(
 
                     lineDiscountMinor:
                       line.lineDiscountMinor,
+
+                    promotionDiscountMinor:
+                      line.promotionDiscountMinor,
 
                     invoiceDiscountMinor:
                       line.invoiceDiscountMinor,
@@ -4244,6 +4250,9 @@ export async function handleCreatePosExchange(
 
                         lineDiscountMinor:
                           line.lineDiscountMinor,
+
+                        promotionDiscountMinor:
+                          line.promotionDiscountMinor,
 
                         invoiceDiscountMinor:
                           line.invoiceDiscountMinor,
