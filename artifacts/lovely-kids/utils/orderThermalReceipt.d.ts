@@ -3,6 +3,13 @@ export interface ThermalOrderItem {
   name: string;
   price: number;
   quantity: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: Array<{
+    promotionId: number;
+    promotionName: string;
+    groupKey: string;
+    discountMinor: number;
+  }>;
   invoiceDiscountMinor?: number;
   size?: string;
   color?: string;
