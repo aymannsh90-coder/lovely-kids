@@ -526,13 +526,88 @@ function applyBuyXGetY(
         unitCanJoinPromotion(unit, promotion),
     );
 
-    applicationCount = maxApplications(
-      promotion,
-      Math.min(
-        Math.floor(qualifying.length / buyQuantity),
-        Math.floor(rewardCandidates.length / rewardQuantity),
-      ),
-    );
+    const maximumApplications =
+      maxApplications(
+        promotion,
+        Math.min(
+          Math.floor(
+            qualifying.length /
+              buyQuantity,
+          ),
+          Math.floor(
+            rewardCandidates.length /
+              rewardQuantity,
+          ),
+        ),
+      );
+
+    const sortedRewardCandidates =
+      [...rewardCandidates].sort(
+        (left, right) => {
+          if (
+            left.priceMinor ===
+            right.priceMinor
+          ) {
+            return left.id.localeCompare(
+              right.id,
+            );
+          }
+
+          return (
+            left.priceMinor -
+            right.priceMinor
+          );
+        },
+      );
+
+    for (
+      let candidateApplications =
+        maximumApplications;
+      candidateApplications > 0;
+      candidateApplications -= 1
+    ) {
+      const candidateRewards =
+        sortedRewardCandidates.slice(
+          0,
+          candidateApplications *
+            rewardQuantity,
+        );
+
+      const rewardIds =
+        new Set(
+          candidateRewards.map(
+            (unit) => unit.id,
+          ),
+        );
+
+      const candidateQualifiers =
+        qualifying
+          .filter(
+            (unit) =>
+              !rewardIds.has(
+                unit.id,
+              ),
+          )
+          .slice(
+            0,
+            candidateApplications *
+              buyQuantity,
+          );
+
+      if (
+        candidateQualifiers.length ===
+        candidateApplications *
+          buyQuantity
+      ) {
+        applicationCount =
+          candidateApplications;
+        rewardUnits =
+          candidateRewards;
+        qualifierUnits =
+          candidateQualifiers;
+        break;
+      }
+    }
 
     if (applicationCount <= 0) {
       return {
@@ -543,31 +618,25 @@ function applyBuyXGetY(
           earnedRewardQuantity:
             maxApplications(
               promotion,
-              Math.floor(qualifying.length / buyQuantity),
-            ) * rewardQuantity,
+              Math.floor(
+                qualifying.length /
+                  buyQuantity,
+              ),
+            ) *
+            rewardQuantity,
           selectedRewardQuantity: 0,
           remainingRewardQuantity:
             maxApplications(
               promotion,
-              Math.floor(qualifying.length / buyQuantity),
-            ) * rewardQuantity,
+              Math.floor(
+                qualifying.length /
+                  buyQuantity,
+              ),
+            ) *
+            rewardQuantity,
         },
       };
     }
-
-    qualifierUnits = qualifying.slice(
-      0,
-      applicationCount * buyQuantity,
-    );
-
-    rewardUnits = [...rewardCandidates]
-      .sort((left, right) => {
-        if (left.priceMinor === right.priceMinor) {
-          return left.id.localeCompare(right.id);
-        }
-        return left.priceMinor - right.priceMinor;
-      })
-      .slice(0, applicationCount * rewardQuantity);
   }
 
   return {
