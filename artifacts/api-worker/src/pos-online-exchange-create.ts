@@ -1575,7 +1575,8 @@ export async function handleCreateOnlineOrderExchange(
                     grossAmountMinor:
                       line.grossAmountMinor,
                     alreadyAllocatedMinor:
-                      line.lineDiscountMinor,
+                      line.lineDiscountMinor ??
+                      0,
                     weightMinor:
                       line.grossAmountMinor,
                   }),
@@ -1599,14 +1600,26 @@ export async function handleCreateOnlineOrderExchange(
                     grossAmountMinor:
                       line.grossAmountMinor,
                     alreadyAllocatedMinor:
-                      line.lineDiscountMinor +
-                      line.promotionDiscountMinor,
+                      (
+                        line.lineDiscountMinor ??
+                        0
+                      ) +
+                      (
+                        line.promotionDiscountMinor ??
+                        0
+                      ),
                     weightMinor:
                       Math.max(
                         0,
                         line.grossAmountMinor -
-                          line.lineDiscountMinor -
-                          line.promotionDiscountMinor,
+                          (
+                            line.lineDiscountMinor ??
+                            0
+                          ) -
+                          (
+                            line.promotionDiscountMinor ??
+                            0
+                          ),
                       ),
                   }),
                 ),
@@ -1620,9 +1633,18 @@ export async function handleCreateOnlineOrderExchange(
                   ] ?? 0;
 
                 line.allocatedDiscountMinor =
-                  line.lineDiscountMinor +
-                  line.promotionDiscountMinor +
-                  line.invoiceDiscountMinor;
+                  (
+                    line.lineDiscountMinor ??
+                    0
+                  ) +
+                  (
+                    line.promotionDiscountMinor ??
+                    0
+                  ) +
+                  (
+                    line.invoiceDiscountMinor ??
+                    0
+                  );
 
                 line.returnNetMinor =
                   line.grossAmountMinor -
