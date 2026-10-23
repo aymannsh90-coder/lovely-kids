@@ -129,6 +129,30 @@ function promotionSupportsChannel(
   return promotion.channel === "both" || promotion.channel === channel;
 }
 
+function unitCanJoinPromotion(
+  unit: Unit,
+  promotion: PromotionDefinition,
+) {
+  if (
+    unit.exclusivePromotionId !== null &&
+    unit.exclusivePromotionId !== promotion.id
+  ) {
+    return false;
+  }
+
+  if (
+    !promotion.stackWithOtherPromotions &&
+    unit.allocations.some(
+      (allocation) =>
+        allocation.promotionId !== promotion.id,
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 function inScope(
   unit: Unit,
   promotion: PromotionDefinition,
@@ -351,14 +375,14 @@ function applyBuyXGetY(
   const qualifying = units.filter(
     (unit) =>
       inScope(unit, promotion, "qualifying") &&
-      unit.exclusivePromotionId === null,
+      unitCanJoinPromotion(unit, promotion),
   );
 
   const explicitRewards = units.filter(
     (unit) =>
       unit.rewardForPromotionId === promotion.id &&
       inScope(unit, promotion, "reward") &&
-      unit.exclusivePromotionId === null,
+      unitCanJoinPromotion(unit, promotion),
   );
 
   const samePool =
@@ -620,9 +644,13 @@ function buildBuyXGetYResult(
       continue;
     }
 
-    groupUnits.forEach((unit) => {
-      unit.exclusivePromotionId = promotion.id;
-    });
+    if (
+      !promotion.stackWithOtherPromotions
+    ) {
+      groupUnits.forEach((unit) => {
+        unit.exclusivePromotionId = promotion.id;
+      });
+    }
 
     groups.push({
       groupKey,
@@ -668,8 +696,10 @@ function applyPercentOff(
     }
 
     if (
-      !promotion.stackWithOtherPromotions &&
-      unit.allocations.length > 0
+      !unitCanJoinPromotion(
+        unit,
+        promotion,
+      )
     ) {
       return false;
     }
@@ -707,6 +737,15 @@ function applyPercentOff(
 
   if (allocated <= 0) {
     return null;
+  }
+
+  if (
+    !promotion.stackWithOtherPromotions
+  ) {
+    eligible.forEach((unit) => {
+      unit.exclusivePromotionId =
+        promotion.id;
+    });
   }
 
   return {
@@ -798,9 +837,13 @@ function applyBundlePrice(
       continue;
     }
 
-    groupUnits.forEach((unit) => {
-      unit.exclusivePromotionId = promotion.id;
-    });
+    if (
+      !promotion.stackWithOtherPromotions
+    ) {
+      groupUnits.forEach((unit) => {
+        unit.exclusivePromotionId = promotion.id;
+      });
+    }
 
     groups.push({
       groupKey,
