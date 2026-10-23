@@ -129,6 +129,8 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
       image: z.string().optional(),
       size: z.string().optional(),
       color: z.string().optional(),
+      rewardForPromotionId:
+        z.number().int().positive().optional(),
     })
   ),
   paymentMethod: z.enum(["cod", "bank_transfer"]).optional(),
