@@ -22,10 +22,26 @@ export interface CartItem {
 interface CartContextType {
   items: CartItem[];
   addItem: (item: Omit<CartItem, "quantity">) => void;
-  removeItem: (id: string, size?: string, color?: string) => void;
-  updateQuantity: (id: string, quantity: number, size?: string, color?: string) => void;
+  removeItem: (
+    id: string,
+    size?: string,
+    color?: string,
+    rewardForPromotionId?: number,
+  ) => void;
+  updateQuantity: (
+    id: string,
+    quantity: number,
+    size?: string,
+    color?: string,
+    rewardForPromotionId?: number,
+  ) => void;
   replaceItemVariant: (
-    original: { id: string; size?: string; color?: string },
+    original: {
+      id: string;
+      size?: string;
+      color?: string;
+      rewardForPromotionId?: number;
+    },
     replacement: Omit<CartItem, "quantity">,
     quantity?: number,
   ) => void;
@@ -94,9 +110,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 
   const removeItem = useCallback(
-    (id: string, size?: string, color?: string) => {
+    (
+      id: string,
+      size?: string,
+      color?: string,
+      rewardForPromotionId?: number,
+    ) => {
       setItems((prev) => {
-        const updated = prev.filter((i) => !matchesVariant(i, { id, size, color }));
+        const updated = prev.filter((i) =>
+          !matchesVariant(i, {
+            id,
+            size,
+            color,
+            rewardForPromotionId,
+          }),
+        );
         AsyncStorage.setItem("cart", JSON.stringify(updated));
         return updated;
       });
@@ -105,12 +133,29 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateQuantity = useCallback(
-    (id: string, quantity: number, size?: string, color?: string) => {
+    (
+      id: string,
+      quantity: number,
+      size?: string,
+      color?: string,
+      rewardForPromotionId?: number,
+    ) => {
       setItems((prev) => {
+        const target = {
+          id,
+          size,
+          color,
+          rewardForPromotionId,
+        };
+
         const updated =
           quantity === 0
-            ? prev.filter((i) => !matchesVariant(i, { id, size, color }))
-            : prev.map((i) => (matchesVariant(i, { id, size, color }) ? { ...i, quantity } : i));
+            ? prev.filter((i) => !matchesVariant(i, target))
+            : prev.map((i) =>
+                matchesVariant(i, target)
+                  ? { ...i, quantity }
+                  : i,
+              );
         AsyncStorage.setItem("cart", JSON.stringify(updated));
         return updated;
       });
@@ -120,7 +165,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const replaceItemVariant = useCallback(
     (
-      original: { id: string; size?: string; color?: string },
+      original: {
+        id: string;
+        size?: string;
+        color?: string;
+        rewardForPromotionId?: number;
+      },
       replacement: Omit<CartItem, "quantity">,
       quantity?: number,
     ) => {
