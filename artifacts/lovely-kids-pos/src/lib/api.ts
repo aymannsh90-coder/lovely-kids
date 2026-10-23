@@ -337,6 +337,8 @@ export interface PosSaleItemResult {
   soldUnitPrice: number;
   lineDiscountMinor: number;
   lineDiscount: number;
+  promotionDiscountMinor: number;
+  promotionDiscount: number;
   lineTotalMinor: number;
   lineTotal: number;
   generalStockBefore: number | null;
@@ -384,6 +386,8 @@ export interface PosSaleResult {
     discount: number;
     itemDiscountMinor: number;
     itemDiscount: number;
+    promotionDiscountMinor: number;
+    promotionDiscount: number;
     invoiceDiscountMinor: number;
     invoiceDiscount: number;
     totalMinor: number;
@@ -2707,6 +2711,69 @@ export function getPosSaleCashCurrencies(
   }>(
     "/api/pos/sales/cash-currencies",
     {},
+    token,
+  );
+}
+
+export interface PromotionPreviewAllocation {
+  promotionId: number;
+  promotionName: string;
+  groupKey: string;
+  discountMinor: number;
+}
+
+export interface PromotionPreviewLine {
+  key: string;
+  promotionDiscountMinor: number;
+  allocations: PromotionPreviewAllocation[];
+}
+
+export interface PromotionPreviewApplied {
+  promotionId: number;
+  promotionName: string;
+  publicLabel: string;
+  kind: "buy_x_get_y" | "percent_off" | "bundle_price";
+  discountMinor: number;
+  applicationCount: number;
+  stackWithDiscountCodes: boolean;
+  stackWithShippingPromotion: boolean;
+}
+
+export interface PromotionPreviewEntitlement {
+  promotionId: number;
+  promotionName: string;
+  earnedRewardQuantity: number;
+  selectedRewardQuantity: number;
+  remainingRewardQuantity: number;
+}
+
+export interface PromotionPreviewResult {
+  originalTotalMinor: number;
+  totalDiscountMinor: number;
+  netTotalMinor: number;
+  lines: PromotionPreviewLine[];
+  promotions: PromotionPreviewApplied[];
+  entitlements: PromotionPreviewEntitlement[];
+}
+
+export function previewPosPromotions(
+  token: string,
+  items: Array<{
+    key: string;
+    productId: string | number;
+    quantity: number;
+    unitPriceMinor: number;
+    rewardForPromotionId?: number;
+  }>,
+) {
+  return apiRequest<PromotionPreviewResult>(
+    "/api/pos/promotions/preview",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        items,
+      }),
+    },
     token,
   );
 }
