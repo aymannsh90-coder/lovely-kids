@@ -1104,6 +1104,62 @@ export async function editOrderItemsAndAdjustStock(
       );
     }
 
+    const historicalPromotionRows =
+      await tx
+        .select()
+        .from(orderPromotionsTable)
+        .where(
+          eq(
+            orderPromotionsTable.orderId,
+            orderId,
+          ),
+        )
+        .orderBy(
+          asc(orderPromotionsTable.id),
+        );
+
+    const historicalPromotions = [
+      ...new Map(
+        historicalPromotionRows
+          .map((row) => {
+            const definition =
+              promotionDefinitionFromSnapshot(
+                row.snapshot,
+              );
+
+            return definition
+              ? [
+                  definition.id,
+                  definition,
+                ] as const
+              : null;
+          })
+          .filter(
+            (
+              entry,
+            ): entry is readonly [
+              number,
+              NonNullable<
+                ReturnType<
+                  typeof promotionDefinitionFromSnapshot
+                >
+              >,
+            ] =>
+              entry !== null,
+          ),
+      ).values(),
+    ];
+
+    if (
+      historicalPromotionRows.length > 0 &&
+      historicalPromotions.length === 0
+    ) {
+      throw new OrderEditError(
+        "تعذر قراءة Snapshot العرض القديم لهذا الطلب",
+        409,
+      );
+    }
+
     const linkedExchangeRows =
       await tx
         .select()
@@ -1356,10 +1412,11 @@ export async function editOrderItemsAndAdjustStock(
         );
       }
 
-      const key = editableOrderItemKey(
+      const key = editableOrderItemIdentityKey(
         productId,
         stored.color,
         stored.size,
+        stored.rewardForPromotionId,
       );
 
       if (!oldUnitPrices.has(key)) {
@@ -1412,10 +1469,11 @@ export async function editOrderItemsAndAdjustStock(
         item,
         item.price ??
           oldUnitPrices.get(
-            editableOrderItemKey(
+            editableOrderItemIdentityKey(
               item.id,
               item.color,
               item.size,
+              item.rewardForPromotionId,
             ),
           ) ??
           (
@@ -1433,6 +1491,62 @@ export async function editOrderItemsAndAdjustStock(
         throw new OrderEditError("إجمالي الطلب غير صالح");
       }
     }
+
+    const promotionCalculation =
+      calculatePromotions({
+        lines:
+          trustedItems.map(
+            (item, index) => ({
+              key:
+                String(index),
+              productId:
+                Number(item.id),
+              unitPriceMinor:
+                item.price * 100,
+              quantity:
+                item.quantity,
+              rewardForPromotionId:
+                item.rewardForPromotionId,
+            }),
+          ),
+        promotions:
+          historicalPromotions,
+        channel: "web",
+        roundingIncrementMinor:
+          100,
+      });
+
+    if (
+      promotionCalculation.totalDiscountMinor %
+        100 !==
+      0
+    ) {
+      throw new OrderEditError(
+        "تعذر تثبيت خصم العرض بعد تعديل الطلب",
+        409,
+      );
+    }
+
+    const promotionDiscountAmount =
+      promotionCalculation.totalDiscountMinor /
+      100;
+
+    trustedItems.forEach(
+      (item, index) => {
+        const line =
+          promotionCalculation.lines.find(
+            (candidate) =>
+              candidate.key ===
+              String(index),
+          );
+
+        item.promotionDiscountMinor =
+          line?.promotionDiscountMinor ??
+          0;
+        item.promotionAllocations =
+          line?.allocations ?? [];
+      },
+    );
 
     const oldQuantities = new Map<
       string,
