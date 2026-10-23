@@ -2921,7 +2921,7 @@ export async function handleCreatePosExchange(
 
           const activeNewPromotions =
             await loadActivePromotions(
-              tx as Db,
+              tx,
               "pos",
             );
 
