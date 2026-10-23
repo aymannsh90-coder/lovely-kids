@@ -246,7 +246,7 @@ export default function ExchangeReceipt({
 
                 <td dir="ltr">
                   {formatMinor(
-                    item.returnNetMinor,
+                    item.grossAmountMinor,
                   )}
                 </td>
               </tr>
@@ -323,7 +323,7 @@ export default function ExchangeReceipt({
 
                 <td dir="ltr">
                   {formatMinor(
-                    item.lineNetMinor,
+                    item.grossAmountMinor,
                   )}
                 </td>
               </tr>
@@ -337,6 +337,32 @@ export default function ExchangeReceipt({
       <div className="receipt-totals">
         <div>
           <span>
+            قيمة الأصناف المرتجعة
+          </span>
+
+          <strong dir="ltr">
+            {formatMinor(
+              exchange.returnGrossMinor,
+            )}
+          </strong>
+        </div>
+
+        {exchange.returnDiscountMinor > 0 && (
+          <div>
+            <span>
+              خصومات مرتبطة بالفاتورة الأصلية
+            </span>
+
+            <strong dir="ltr">
+              -{formatMinor(
+                exchange.returnDiscountMinor,
+              )}
+            </strong>
+          </div>
+        )}
+
+        <div>
+          <span>
             صافي قيمة المرتجع
           </span>
 
@@ -346,6 +372,32 @@ export default function ExchangeReceipt({
             )}
           </strong>
         </div>
+
+        <div>
+          <span>
+            قيمة الأصناف الجديدة
+          </span>
+
+          <strong dir="ltr">
+            {formatMinor(
+              exchange.newGrossMinor,
+            )}
+          </strong>
+        </div>
+
+        {exchange.newDiscountMinor > 0 && (
+          <div>
+            <span>
+              خصومات الأصناف الجديدة
+            </span>
+
+            <strong dir="ltr">
+              -{formatMinor(
+                exchange.newDiscountMinor,
+              )}
+            </strong>
+          </div>
+        )}
 
         <div>
           <span>

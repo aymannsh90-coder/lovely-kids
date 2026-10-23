@@ -22,6 +22,7 @@ import {
 } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
 import { handleDiscountCodeRequest } from "./discount-code-routes";
+import { handlePromotionRequest } from "./promotion-routes";
 import { handleImageRequest } from "./image-routes";
 import { handleHeroMediaRequest } from "./hero-media-routes";
 import { handleNotificationRequest } from "./notification-routes";
@@ -630,6 +631,17 @@ export default {
 
       if (discountCodeResponse) {
         return discountCodeResponse;
+      }
+
+      const promotionResponse =
+        await handlePromotionRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (promotionResponse) {
+        return promotionResponse;
       }
 
       const orderResponse =

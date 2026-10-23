@@ -18,6 +18,10 @@ import { useNotificationOptIn } from "@/context/NotificationOptInContext";
 import { useOrderEditSelection } from "@/context/OrderEditSelectionContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  promotionShortLabel,
+  usePromotions,
+} from "@/context/PromotionsContext";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
 import { getProductShareUrl } from "@/utils/productShare";
 import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
@@ -32,6 +36,7 @@ interface Props {
     orderId: string;
     token?: string;
   } | null;
+  rewardForPromotionId?: number;
 }
 
 function calcDiscount(price: number, originalPrice?: number | null): number | null {
@@ -45,6 +50,7 @@ export function ProductCard({
   style,
   imageHeight,
   orderEdit = null,
+  rewardForPromotionId,
 }: Props) {
   const colors = useColors();
   const { settings } = useAppSettings();
@@ -57,7 +63,18 @@ export function ProductCard({
     addSelectionItem,
   } = useOrderEditSelection();
   const { toggleItem, isWishlisted } = useWishlist();
+  const {
+    getPromotionsForProduct,
+  } = usePromotions();
   const wishlisted = isWishlisted(product.id);
+
+  const productPromotions =
+    getPromotionsForProduct(
+      product.id,
+    );
+
+  const primaryPromotion =
+    productPromotions[0] ?? null;
 
   const variantSizes = product.colorVariants?.flatMap((cv) => cv.sizes ?? []) ?? [];
   const isOutOfStock =
@@ -89,6 +106,14 @@ export function ProductCard({
     pathname: "/product/[id]" as const,
     params: {
       id: product.id,
+      ...(rewardForPromotionId
+        ? {
+            rewardForPromotionId:
+              String(
+                rewardForPromotionId,
+              ),
+          }
+        : {}),
       ...(activeOrderEdit
         ? {
             orderEdit: "1",
@@ -161,8 +186,28 @@ export function ProductCard({
     }
 
     const existing = items.find(
-      (item) => item.id === product.id && !item.size && !item.color,
+      (item) =>
+        item.id === product.id &&
+        !item.size &&
+        !item.color &&
+        item.rewardForPromotionId ===
+          rewardForPromotionId,
     );
+
+    const cartVariantQuantity =
+      items
+        .filter(
+          (item) =>
+            item.id === product.id &&
+            !item.size &&
+            !item.color,
+        )
+        .reduce(
+          (total, item) =>
+            total + item.quantity,
+          0,
+        );
+
     const availableStock = getAvailableStock(product);
 
     const performAdd = () => {
@@ -173,6 +218,11 @@ export function ProductCard({
         price: product.price,
         image: product.image,
         category: product.category,
+        ...(rewardForPromotionId
+          ? {
+              rewardForPromotionId,
+            }
+          : {}),
       });
 
       trackMetaEvent("AddToCart", {
@@ -198,7 +248,7 @@ export function ProductCard({
 
     if (
       availableStock !== null &&
-      (existing?.quantity ?? 0) >= availableStock
+      cartVariantQuantity >= availableStock
     ) {
       showStockLimit(availableStock);
       return;
@@ -304,6 +354,35 @@ export function ProductCard({
         <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={2}>
           {product.nameAr}
         </Text>
+
+        {primaryPromotion ? (
+          <View
+            style={[
+              styles.promotionPill,
+              {
+                backgroundColor:
+                  colors.primary + "12",
+                borderColor:
+                  colors.primary + "35",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.promotionPillText,
+                {
+                  color:
+                    colors.primary,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {promotionShortLabel(
+                primaryPromotion,
+              )}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.priceRow}>
           <View>
@@ -430,6 +509,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "right",
     lineHeight: 20,
+  },
+  promotionPill: {
+    alignSelf: "flex-end",
+    maxWidth: "100%",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  promotionPillText: {
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "800",
+    textAlign: "right",
   },
   priceRow: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",

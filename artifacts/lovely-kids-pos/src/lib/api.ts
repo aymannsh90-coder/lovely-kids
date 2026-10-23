@@ -337,6 +337,8 @@ export interface PosSaleItemResult {
   soldUnitPrice: number;
   lineDiscountMinor: number;
   lineDiscount: number;
+  promotionDiscountMinor: number;
+  promotionDiscount: number;
   lineTotalMinor: number;
   lineTotal: number;
   generalStockBefore: number | null;
@@ -347,6 +349,14 @@ export interface PosSaleItemResult {
 
 export interface PosSaleResult {
   alreadyCreated: boolean;
+  promotions: Array<{
+    promotionId: number | null;
+    promotionName: string;
+    publicLabel: string;
+    promotionKind: string;
+    discountMinor: number;
+    applicationCount: number;
+  }>;
   sale: {
     id: string;
     publicId: string;
@@ -384,6 +394,8 @@ export interface PosSaleResult {
     discount: number;
     itemDiscountMinor: number;
     itemDiscount: number;
+    promotionDiscountMinor: number;
+    promotionDiscount: number;
     invoiceDiscountMinor: number;
     invoiceDiscount: number;
     totalMinor: number;
@@ -2711,6 +2723,70 @@ export function getPosSaleCashCurrencies(
   );
 }
 
+export interface PromotionPreviewAllocation {
+  promotionId: number;
+  promotionName: string;
+  groupKey: string;
+  discountMinor: number;
+}
+
+export interface PromotionPreviewLine {
+  key: string;
+  promotionDiscountMinor: number;
+  allocations: PromotionPreviewAllocation[];
+}
+
+export interface PromotionPreviewApplied {
+  promotionId: number;
+  promotionName: string;
+  publicLabel: string;
+  kind: "buy_x_get_y" | "percent_off" | "bundle_price";
+  discountMinor: number;
+  applicationCount: number;
+  stackWithDiscountCodes: boolean;
+  stackWithShippingPromotion: boolean;
+}
+
+export interface PromotionPreviewEntitlement {
+  promotionId: number;
+  promotionName: string;
+  earnedRewardQuantity: number;
+  selectedRewardQuantity: number;
+  remainingRewardQuantity: number;
+  nextBundleRemainingQuantity?: number;
+}
+
+export interface PromotionPreviewResult {
+  originalTotalMinor: number;
+  totalDiscountMinor: number;
+  netTotalMinor: number;
+  lines: PromotionPreviewLine[];
+  promotions: PromotionPreviewApplied[];
+  entitlements: PromotionPreviewEntitlement[];
+}
+
+export function previewPosPromotions(
+  token: string,
+  items: Array<{
+    key: string;
+    productId: string | number;
+    quantity: number;
+    unitPriceMinor: number;
+    rewardForPromotionId?: number;
+  }>,
+) {
+  return apiRequest<PromotionPreviewResult>(
+    "/api/pos/promotions/preview",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        items,
+      }),
+    },
+    token,
+  );
+}
+
 export function createPosSale(
   token: string,
   input: {
@@ -2986,6 +3062,9 @@ export interface PosSaleReturnItemResult {
 
   lineDiscountMinor: number;
   lineDiscount: number;
+
+  promotionDiscountMinor: number;
+  promotionDiscount: number;
 
   invoiceDiscountMinor: number;
   invoiceDiscount: number;
@@ -4763,6 +4842,7 @@ export interface PosExchangeReturnItemResult {
 
   grossAmountMinor: number;
   lineDiscountMinor: number;
+  promotionDiscountMinor: number;
   invoiceDiscountMinor: number;
   allocatedDiscountMinor: number;
   returnNetMinor: number;
@@ -4796,6 +4876,7 @@ export interface PosExchangeSaleItemResult {
 
   grossAmountMinor: number;
   lineDiscountMinor: number;
+  promotionDiscountMinor: number;
   invoiceDiscountMinor: number;
   allocatedDiscountMinor: number;
   lineNetMinor: number;

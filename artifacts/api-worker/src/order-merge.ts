@@ -2,6 +2,7 @@ import {
   appSettingsTable,
   exchangeDocumentsTable,
   orderItemCostsTable,
+  orderPromotionsTable,
   ordersTable,
   securityAuditLogsTable,
 } from "@workspace/db/schema";
@@ -28,6 +29,14 @@ type StoredOrderItem = {
   name: string;
   price: number;
   quantity: number;
+  rewardForPromotionId?: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: Array<{
+    promotionId: number;
+    promotionName: string;
+    groupKey: string;
+    discountMinor: number;
+  }>;
   invoiceDiscountMinor?: number;
   image?: string;
   size?: string;
@@ -97,6 +106,11 @@ function parseStoredItems(
         ? undefined
         : Number(item.invoiceDiscountMinor);
 
+    const promotionDiscountMinor =
+      item.promotionDiscountMinor === undefined
+        ? undefined
+        : Number(item.promotionDiscountMinor);
+
     if (
       invoiceDiscountMinor !== undefined &&
       (
@@ -110,11 +124,107 @@ function parseStoredItems(
       );
     }
 
+    if (
+      promotionDiscountMinor !== undefined &&
+      (
+        !Number.isSafeInteger(promotionDiscountMinor) ||
+        promotionDiscountMinor < 0 ||
+        promotionDiscountMinor >
+          price * quantity * 100
+      )
+    ) {
+      throw new OrderMergeError(
+        `خصم العرض للصنف رقم ${index + 1} في الطلب #${orderId} غير صالح`,
+        409,
+      );
+    }
+
+    const rewardForPromotionId =
+      item.rewardForPromotionId === undefined
+        ? undefined
+        : Number(item.rewardForPromotionId);
+
+    if (
+      rewardForPromotionId !== undefined &&
+      (
+        !Number.isSafeInteger(rewardForPromotionId) ||
+        rewardForPromotionId <= 0
+      )
+    ) {
+      throw new OrderMergeError(
+        `بيانات مكافأة الصنف رقم ${index + 1} في الطلب #${orderId} غير صالحة`,
+        409,
+      );
+    }
+
+    const promotionAllocations =
+      Array.isArray(item.promotionAllocations)
+        ? item.promotionAllocations
+            .map((rawAllocation) => {
+              if (
+                !rawAllocation ||
+                typeof rawAllocation !== "object" ||
+                Array.isArray(rawAllocation)
+              ) {
+                return null;
+              }
+
+              const allocation =
+                rawAllocation as Record<string, unknown>;
+
+              const promotionId =
+                Number(allocation.promotionId);
+              const discountMinor =
+                Number(allocation.discountMinor);
+              const promotionName =
+                typeof allocation.promotionName === "string"
+                  ? allocation.promotionName.trim()
+                  : "";
+              const groupKey =
+                typeof allocation.groupKey === "string"
+                  ? allocation.groupKey.trim()
+                  : "";
+
+              if (
+                !Number.isSafeInteger(promotionId) ||
+                promotionId <= 0 ||
+                !promotionName ||
+                !groupKey ||
+                !Number.isSafeInteger(discountMinor) ||
+                discountMinor < 0
+              ) {
+                return null;
+              }
+
+              return {
+                promotionId,
+                promotionName,
+                groupKey,
+                discountMinor,
+              };
+            })
+            .filter(
+              (
+                allocation,
+              ): allocation is NonNullable<typeof allocation> =>
+                allocation !== null,
+            )
+        : undefined;
+
     return {
       id,
       name,
       price,
       quantity,
+      ...(rewardForPromotionId === undefined
+        ? {}
+        : { rewardForPromotionId }),
+      ...(promotionDiscountMinor === undefined
+        ? {}
+        : { promotionDiscountMinor }),
+      ...(promotionAllocations === undefined
+        ? {}
+        : { promotionAllocations }),
       ...(invoiceDiscountMinor === undefined
         ? {}
         : { invoiceDiscountMinor }),
@@ -143,7 +253,8 @@ function allocateDiscountMinor(
     const grossMinor =
       item.price *
       item.quantity *
-      100;
+      100 -
+      (item.promotionDiscountMinor ?? 0);
 
     if (!Number.isSafeInteger(grossMinor) || grossMinor < 0) {
       throw new OrderMergeError(
@@ -388,6 +499,21 @@ export async function mergeOnlineOrders(
         ]),
       );
 
+    const sourcePromotionRows =
+      await tx
+        .select()
+        .from(orderPromotionsTable)
+        .where(
+          inArray(
+            orderPromotionsTable.orderId,
+            orderIds,
+          ),
+        )
+        .orderBy(
+          asc(orderPromotionsTable.orderId),
+          asc(orderPromotionsTable.id),
+        );
+
     const mergedItems: StoredOrderItem[] = [];
     const mergedCostRows: Array<{
       lineNumber: number;
@@ -404,6 +530,7 @@ export async function mergeOnlineOrders(
       new Map<number, number>();
 
     let mergedProductsNet = 0;
+    let mergedPromotionDiscountMinor = 0;
     let nextLineNumber = 1;
 
     for (const order of orders) {
@@ -480,7 +607,29 @@ export async function mergeOnlineOrders(
       const expectedDiscountMinor =
         discount * 100;
 
-      const currentDiscountMinor =
+      const sourcePromotionDiscountMinor =
+        items.reduce(
+          (sum, item) =>
+            sum +
+            (item.promotionDiscountMinor ?? 0),
+          0,
+        );
+
+      if (
+        sourcePromotionDiscountMinor >
+        expectedDiscountMinor
+      ) {
+        throw new OrderMergeError(
+          `خصم العرض في الطلب #${order.id} أكبر من الخصم الفعلي`,
+          409,
+        );
+      }
+
+      const expectedInvoiceDiscountMinor =
+        expectedDiscountMinor -
+        sourcePromotionDiscountMinor;
+
+      const currentInvoiceDiscountMinor =
         items.reduce(
           (sum, item) =>
             sum +
@@ -489,8 +638,8 @@ export async function mergeOnlineOrders(
         );
 
       const discountAllocations =
-        currentDiscountMinor ===
-        expectedDiscountMinor
+        currentInvoiceDiscountMinor ===
+        expectedInvoiceDiscountMinor
           ? items.map(
               (item) =>
                 item.invoiceDiscountMinor ??
@@ -498,8 +647,22 @@ export async function mergeOnlineOrders(
             )
           : allocateDiscountMinor(
               items,
-              expectedDiscountMinor,
+              expectedInvoiceDiscountMinor,
             );
+
+      mergedPromotionDiscountMinor +=
+        sourcePromotionDiscountMinor;
+
+      if (
+        !Number.isSafeInteger(
+          mergedPromotionDiscountMinor,
+        )
+      ) {
+        throw new OrderMergeError(
+          "إجمالي خصومات العروض في الطلب المدمج غير صالح",
+          409,
+        );
+      }
 
       sourceProductNetById.set(
         order.id,
@@ -567,6 +730,20 @@ export async function mergeOnlineOrders(
           order.discountCode.trim().length > 0 &&
           order.discountCodeStacksWithShippingPromotion ===
             false,
+      ) ||
+      sourcePromotionRows.some(
+        (row) => {
+          const snapshot =
+            typeof row.snapshot === "object" &&
+            row.snapshot !== null
+              ? row.snapshot as Record<string, unknown>
+              : {};
+
+          return (
+            snapshot.stackWithShippingPromotion ===
+            false
+          );
+        },
       );
 
     const mergedShippingCost =
@@ -640,6 +817,9 @@ export async function mergeOnlineOrders(
           mergedShippingCost,
         shippingOriginalCost,
         shippingPromotionDiscount,
+        promotionDiscountAmount:
+          mergedPromotionDiscountMinor /
+          100,
 
         // The source orders keep their original coupon snapshots
         // for campaign reporting. The master preserves the actual
@@ -690,6 +870,56 @@ export async function mergeOnlineOrders(
       throw new Error(
         "ORDER_MERGE_MASTER_INSERT_FAILED",
       );
+    }
+
+    if (
+      mergedPromotionDiscountMinor %
+        100 !==
+      0
+    ) {
+      throw new OrderMergeError(
+        "خصم العرض في الطلب المدمج يجب أن يبقى بقيمة شيكل كاملة",
+        409,
+      );
+    }
+
+    if (
+      sourcePromotionRows.length >
+      0
+    ) {
+      await tx
+        .insert(orderPromotionsTable)
+        .values(
+          sourcePromotionRows.map(
+            (row) => {
+              const snapshot =
+                typeof row.snapshot === "object" &&
+                row.snapshot !== null
+                  ? row.snapshot as Record<string, unknown>
+                  : {};
+
+              return {
+                orderId:
+                  master.id,
+                promotionId:
+                  row.promotionId,
+                promotionName:
+                  row.promotionName,
+                promotionKind:
+                  row.promotionKind,
+                discountMinor:
+                  row.discountMinor,
+                applicationCount:
+                  row.applicationCount,
+                snapshot: {
+                  ...snapshot,
+                  mergedFromOrderId:
+                    row.orderId,
+                },
+              };
+            },
+          ),
+        );
     }
 
     if (mergedCostRows.length > 0) {

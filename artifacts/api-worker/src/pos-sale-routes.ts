@@ -10,7 +10,9 @@ import {
   posPurchaseItemsTable,
   posPurchasesTable,
   posSaleItemCostsTable,
+  posSaleItemPromotionAllocationsTable,
   posSaleItemsTable,
+  posSalePromotionsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
@@ -42,6 +44,13 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import {
+  calculatePromotions,
+} from "./promotion-engine";
+import {
+  loadActivePromotions,
+  serializePromotionSnapshot,
+} from "./promotion-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -815,6 +824,75 @@ export async function financeAssetBalanceMinor(
   );
 }
 
+interface PosSalePromotionSummary {
+  promotionId: number | null;
+  promotionName: string;
+  publicLabel: string;
+  promotionKind: string;
+  discountMinor: number;
+  applicationCount: number;
+}
+
+async function getPosSalePromotionSummaries(
+  db: Db,
+  saleIds: number[],
+) {
+  if (saleIds.length === 0) {
+    return new Map<number, PosSalePromotionSummary[]>();
+  }
+
+  const rows = await db
+    .select()
+    .from(posSalePromotionsTable)
+    .where(
+      inArray(
+        posSalePromotionsTable.saleId,
+        saleIds,
+      ),
+    );
+
+  const result =
+    new Map<number, PosSalePromotionSummary[]>();
+
+  for (const row of rows) {
+    const snapshot =
+      typeof row.snapshot === "object" &&
+      row.snapshot !== null
+        ? row.snapshot as Record<string, unknown>
+        : {};
+
+    const publicLabel =
+      typeof snapshot.publicLabel === "string" &&
+      snapshot.publicLabel.trim()
+        ? snapshot.publicLabel.trim()
+        : row.promotionName;
+
+    const list =
+      result.get(row.saleId) ?? [];
+
+    list.push({
+      promotionId:
+        row.promotionId,
+      promotionName:
+        row.promotionName,
+      publicLabel,
+      promotionKind:
+        row.promotionKind,
+      discountMinor:
+        row.discountMinor,
+      applicationCount:
+        row.applicationCount,
+    });
+
+    result.set(
+      row.saleId,
+      list,
+    );
+  }
+
+  return result;
+}
+
 function toSaleResponse(
   sale: typeof posSalesTable.$inferSelect,
   items: Array<typeof posSaleItemsTable.$inferSelect>,
@@ -830,10 +908,13 @@ function toSaleResponse(
   cardProcessor: PosCardProcessor | null = null,
   cashTender: PosSaleCashTender | null = null,
   currentProductImages: ReadonlyMap<number, string | null> | null = null,
+  promotionSummaries: PosSalePromotionSummary[] = [],
 ) {
   return {
     alreadyCreated,
     navigation,
+    promotions:
+      promotionSummaries,
 
     sale: {
       id: String(sale.id),
@@ -872,6 +953,9 @@ function toSaleResponse(
 
       itemDiscountMinor: sale.itemDiscountMinor,
       itemDiscount: sale.itemDiscountMinor / 100,
+
+      promotionDiscountMinor: sale.promotionDiscountMinor,
+      promotionDiscount: sale.promotionDiscountMinor / 100,
 
       invoiceDiscountMinor: sale.invoiceDiscountMinor,
       invoiceDiscount: sale.invoiceDiscountMinor / 100,
@@ -931,6 +1015,9 @@ function toSaleResponse(
 
       lineDiscountMinor: item.lineDiscountMinor,
       lineDiscount: item.lineDiscountMinor / 100,
+
+      promotionDiscountMinor: item.promotionDiscountMinor,
+      promotionDiscount: item.promotionDiscountMinor / 100,
 
       lineTotalMinor: item.lineTotalMinor,
 
@@ -2240,6 +2327,47 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         customer?.phone ??
         customerPhone;
 
+      const activePromotions =
+        await loadActivePromotions(
+          tx as Db,
+          "pos",
+        );
+
+      const promotionCalculation =
+        calculatePromotions({
+          lines: resolvedItems.map(
+            (item) => ({
+              key:
+                String(
+                  item.lineNumber,
+                ),
+              productId:
+                item.productId,
+              unitPriceMinor:
+                item.soldUnitPriceMinor,
+              quantity:
+                item.quantity,
+            }),
+          ),
+          promotions:
+            activePromotions,
+          channel: "pos",
+          roundingIncrementMinor: 1,
+        });
+
+      const promotionLineByNumber =
+        new Map(
+          promotionCalculation.lines.map(
+            (line) => [
+              Number(line.key),
+              line,
+            ],
+          ),
+        );
+
+      const promotionDiscountMinor =
+        promotionCalculation.totalDiscountMinor;
+
       const saleLines: Array<typeof posSaleItemsTable.$inferInsert> = [];
 
       let subtotalMinor = 0;
@@ -2416,7 +2544,19 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
 
         const lineDiscountMinor = item.lineDiscountMinor;
 
-        const lineTotalMinor = lineGrossMinor - lineDiscountMinor;
+        const promotionLine =
+          promotionLineByNumber.get(
+            item.lineNumber,
+          );
+
+        const linePromotionDiscountMinor =
+          promotionLine?.promotionDiscountMinor ??
+          0;
+
+        const lineTotalMinor =
+          lineGrossMinor -
+          lineDiscountMinor -
+          linePromotionDiscountMinor;
 
         if (
           !Number.isSafeInteger(websiteUnitPriceMinor) ||
@@ -2425,7 +2565,11 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           lineGrossMinor > MAX_MINOR ||
           !Number.isSafeInteger(lineDiscountMinor) ||
           lineDiscountMinor < 0 ||
-          lineDiscountMinor > lineGrossMinor ||
+          !Number.isSafeInteger(linePromotionDiscountMinor) ||
+          linePromotionDiscountMinor < 0 ||
+          lineDiscountMinor +
+            linePromotionDiscountMinor >
+            lineGrossMinor ||
           !Number.isSafeInteger(lineTotalMinor) ||
           lineTotalMinor < 0 ||
           lineTotalMinor > MAX_MINOR
@@ -2459,6 +2603,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           websiteUnitPriceMinor,
           soldUnitPriceMinor: item.soldUnitPriceMinor,
           lineDiscountMinor,
+          promotionDiscountMinor:
+            linePromotionDiscountMinor,
           lineTotalMinor,
           generalStockBefore,
           generalStockAfter,
@@ -2467,13 +2613,19 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         });
       }
 
-      const itemsNetMinor = subtotalMinor - itemDiscountMinor;
+      const itemsNetMinor =
+        subtotalMinor -
+        itemDiscountMinor -
+        promotionDiscountMinor;
 
       if (invoiceDiscountMinor > itemsNetMinor) {
         throw new PosSaleError("خصم الفاتورة أكبر من صافي قيمة الأصناف");
       }
 
-      const discountMinor = itemDiscountMinor + invoiceDiscountMinor;
+      const discountMinor =
+        itemDiscountMinor +
+        promotionDiscountMinor +
+        invoiceDiscountMinor;
 
       if (
         !Number.isSafeInteger(discountMinor) ||
@@ -2652,6 +2804,7 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           subtotalMinor,
           discountMinor,
           itemDiscountMinor,
+          promotionDiscountMinor,
           invoiceDiscountMinor,
           totalMinor,
           paidMinor,
@@ -3024,6 +3177,111 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         )
         .returning();
 
+      if (
+        promotionCalculation.promotions.length >
+        0
+      ) {
+        const promotionById =
+          new Map(
+            activePromotions.map(
+              (promotion) => [
+                promotion.id,
+                promotion,
+              ],
+            ),
+          );
+
+        await tx
+          .insert(posSalePromotionsTable)
+          .values(
+            promotionCalculation.promotions.map(
+              (applied) => {
+                const definition =
+                  promotionById.get(
+                    applied.promotionId,
+                  );
+
+                if (!definition) {
+                  throw new Error(
+                    "POS_PROMOTION_SNAPSHOT_MISSING",
+                  );
+                }
+
+                return {
+                  saleId: sale.id,
+                  promotionId:
+                    definition.id,
+                  promotionName:
+                    definition.name,
+                  promotionKind:
+                    definition.kind,
+                  discountMinor:
+                    applied.discountMinor,
+                  applicationCount:
+                    applied.applicationCount,
+                  snapshot:
+                    serializePromotionSnapshot(
+                      definition,
+                    ),
+                };
+              },
+            ),
+          );
+
+        const insertedByLineNumber =
+          new Map(
+            insertedItems.map(
+              (item) => [
+                item.lineNumber,
+                item,
+              ],
+            ),
+          );
+
+        const allocationRows =
+          promotionCalculation.lines.flatMap(
+            (line) => {
+              const saleItem =
+                insertedByLineNumber.get(
+                  Number(line.key),
+                );
+
+              if (!saleItem) {
+                throw new Error(
+                  "POS_PROMOTION_LINE_MAPPING_MISSING",
+                );
+              }
+
+              return line.allocations.map(
+                (allocation) => ({
+                  saleId:
+                    sale.id,
+                  saleItemId:
+                    saleItem.id,
+                  promotionId:
+                    allocation.promotionId,
+                  promotionName:
+                    allocation.promotionName,
+                  groupKey:
+                    allocation.groupKey,
+                  discountMinor:
+                    allocation.discountMinor,
+                }),
+              );
+            },
+          );
+
+        if (allocationRows.length > 0) {
+          await tx
+            .insert(
+              posSaleItemPromotionAllocationsTable,
+            )
+            .values(
+              allocationRows,
+            );
+        }
+      }
+
       // stock-card:pos-sale:completed
       const saleMovementItems = insertedItems.filter(
         (item) => item.productId !== null,
@@ -3291,6 +3549,17 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           )
         : null;
 
+    const salePromotionMap =
+      await getPosSalePromotionSummaries(
+        db,
+        [result.sale.id],
+      );
+
+    const salePromotionSummaries =
+      salePromotionMap.get(
+        result.sale.id,
+      ) ?? [];
+
     if (
       result.alreadyCreated &&
       paymentMethod === "cash" &&
@@ -3332,6 +3601,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
         customerBalanceMinor,
         savedCardProcessor,
         savedCashTender,
+        null,
+        salePromotionSummaries,
       ),
       result.alreadyCreated ? 200 : 201,
     );
@@ -3370,6 +3641,12 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
                 )
               : null;
 
+          const promotionMap =
+            await getPosSalePromotionSummaries(
+              db,
+              [existing.sale.id],
+            );
+
           return json(
             toSaleResponse(
               existing.sale,
@@ -3378,6 +3655,11 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
               undefined,
               customerBalanceMinor,
               savedCardProcessor,
+              null,
+              null,
+              promotionMap.get(
+                existing.sale.id,
+              ) ?? [],
             ),
           );
         }
@@ -4484,6 +4766,12 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           )
         : null;
 
+    const promotionMap =
+      await getPosSalePromotionSummaries(
+        db,
+        [result.sale.id],
+      );
+
     return json(
       toSaleResponse(
         result.sale,
@@ -4493,6 +4781,10 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         null,
         cardProcessor,
         cashTender,
+        null,
+        promotionMap.get(
+          result.sale.id,
+        ) ?? [],
       ),
     );
   } catch (error) {
@@ -4807,6 +5099,12 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     originalSales.map((sale) => [sale.id, sale.publicId]),
   );
 
+  const salePromotionMap =
+    await getPosSalePromotionSummaries(
+      db,
+      sales.map((sale) => sale.id),
+    );
+
   return json({
     session:
       session && session.businessDate === businessDate
@@ -4840,6 +5138,9 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
           ) ?? null,
           null,
           currentProductImages,
+          salePromotionMap.get(
+            sale.id,
+          ) ?? [],
         ),
 
         returnSummary: {
@@ -5093,6 +5394,12 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       items.map((item) => item.productId),
     );
 
+  const promotionMap =
+    await getPosSalePromotionSummaries(
+      db,
+      [sale.id],
+    );
+
   return json(
     toSaleResponse(
       sale,
@@ -5103,6 +5410,9 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       cardProcessor,
       cashTender,
       currentProductImages,
+      promotionMap.get(
+        sale.id,
+      ) ?? [],
     ),
   );
 }

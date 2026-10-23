@@ -47,10 +47,18 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: Array<{
+    promotionId: number;
+    promotionName: string;
+    groupKey: string;
+    discountMinor: number;
+  }>;
   invoiceDiscountMinor?: number;
   image?: string;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
 }
 
 interface AdminOrderEditSize {
@@ -113,6 +121,7 @@ interface Order {
   shippingCost?: number;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
+  promotionDiscountAmount?: number;
   discountCode?: string | null;
   discountCodeLabel?: string | null;
   discountCodePercent?: number | null;
@@ -1520,7 +1529,8 @@ export default function AdminOrdersScreen() {
         (item) =>
           item.id === product.id &&
           (item.color ?? "") === (color ?? "") &&
-          (item.size ?? "") === (size ?? ""),
+          (item.size ?? "") === (size ?? "") &&
+          !item.rewardForPromotionId,
       );
 
       if (existingIndex >= 0) {
@@ -1662,6 +1672,12 @@ export default function AdminOrdersScreen() {
               price: item.price,
               color: item.color,
               size: item.size,
+              ...(item.rewardForPromotionId
+                ? {
+                    rewardForPromotionId:
+                      item.rewardForPromotionId,
+                  }
+                : {}),
             })),
           }),
         },

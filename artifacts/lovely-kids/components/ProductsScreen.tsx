@@ -32,6 +32,11 @@ import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  promotionDetailText,
+  promotionShortLabel,
+  usePromotions,
+} from "@/context/PromotionsContext";
 
 const { width } = Dimensions.get("window");
 
@@ -158,12 +163,16 @@ export default function ProductsScreen({
     orderEdit,
     orderId,
     orderToken,
+    promotionId,
+    rewardForPromotionId,
   } = useLocalSearchParams<{
     category?: string;
     fromMenu?: string;
     orderEdit?: string;
     orderId?: string;
     orderToken?: string;
+    promotionId?: string;
+    rewardForPromotionId?: string;
   }>();
 
   const orderEditParams =
@@ -218,6 +227,27 @@ export default function ProductsScreen({
     : null;
   const { products } = useVisibleProducts();
   const { settings } = useAppSettings();
+  const {
+    getPromotionById,
+  } = usePromotions();
+
+  const selectedPromotion =
+    getPromotionById(
+      promotionId,
+    );
+
+  const rewardPromotionId =
+    Number(
+      rewardForPromotionId,
+    );
+
+  const validRewardPromotionId =
+    Number.isSafeInteger(
+      rewardPromotionId,
+    ) &&
+    rewardPromotionId > 0
+      ? rewardPromotionId
+      : undefined;
   const categories = useProductCategories(offersOnly);
   const seasonLabels = settings.seasonLabels ?? DEFAULT_SEASON_LABELS;
   const seasons = SEASON_IDS.map((id) => ({
@@ -311,7 +341,12 @@ export default function ProductsScreen({
 
   const isOffersView = offersOnly;
   const isNewArrivalsView = newOnly;
-  const isSpecialView = isOffersView || isNewArrivalsView;
+  const isPromotionView =
+    !!selectedPromotion;
+  const isSpecialView =
+    isOffersView ||
+    isNewArrivalsView ||
+    isPromotionView;
   const showCatalogNavigation = !isNewArrivalsView;
 
   const filtered = products.filter((p) => {
@@ -328,9 +363,31 @@ export default function ProductsScreen({
       selectedGender === null ||
       p.gender == null ||
       p.gender === selectedGender;
+    const productId =
+      Number(p.id);
+
+    const matchPromotion =
+      !selectedPromotion ||
+      (
+        !selectedPromotion.excludedProductIds.includes(
+          productId,
+        ) &&
+        (
+          selectedPromotion.scope ===
+            "all_products" ||
+          selectedPromotion.qualifyingProductIds.includes(
+            productId,
+          ) ||
+          selectedPromotion.rewardProductIds.includes(
+            productId,
+          )
+        )
+      );
+
     const matchSearch =
       !search || p.nameAr.includes(search) || p.name.toLowerCase().includes(search.toLowerCase());
     return (
+      matchPromotion &&
       matchOffers &&
       matchNew &&
       matchCat &&
@@ -433,11 +490,15 @@ const topPadding = getResponsiveTopPadding(insets.top);
               />
           </Pressable>
           <Text style={[styles.title, { color: colors.foreground }]}>
-            {isOffersView
-              ? "🔥 قسم العروض 🔥"
-              : isNewArrivalsView
-                ? "وصل حديثاً"
-                : "المنتجات"}
+            {selectedPromotion
+              ? promotionShortLabel(
+                  selectedPromotion,
+                )
+              : isOffersView
+                ? "🔥 قسم العروض 🔥"
+                : isNewArrivalsView
+                  ? "وصل حديثاً"
+                  : "المنتجات"}
           </Text>
 
           {Platform.OS === "web" && showCatalogNavigation && !isDesktopWeb ? (
@@ -565,6 +626,67 @@ const topPadding = getResponsiveTopPadding(insets.top);
         </View>
 
       ) : null}
+      {selectedPromotion ? (
+        <View
+          style={[
+            {
+              marginHorizontal:
+                isDesktopWeb
+                  ? 0
+                  : 16,
+              marginBottom: 12,
+              borderWidth: 1,
+              borderRadius: 16,
+              padding: 13,
+              gap: 5,
+              backgroundColor:
+                colors.primary + "0D",
+              borderColor:
+                colors.primary + "40",
+            },
+            desktopShellStyle,
+          ]}
+        >
+          <Text
+            style={{
+              color: colors.primary,
+              fontSize: 15,
+              fontWeight: "900",
+              textAlign: "right",
+            }}
+          >
+            {selectedPromotion.publicLabel}
+          </Text>
+
+          <Text
+            style={{
+              color: colors.foreground,
+              fontSize: 12,
+              lineHeight: 19,
+              textAlign: "right",
+            }}
+          >
+            {promotionDetailText(
+              selectedPromotion,
+            )}
+          </Text>
+
+          {validRewardPromotionId ===
+          selectedPromotion.id ? (
+            <Text
+              style={{
+                color: colors.primary,
+                fontSize: 12,
+                fontWeight: "800",
+                textAlign: "right",
+              }}
+            >
+              🎁 اختر قطعة المكافأة من الأصناف أدناه.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* Search */}
       <View
         style={[
@@ -868,6 +990,9 @@ const topPadding = getResponsiveTopPadding(insets.top);
                   key={product.id}
                   product={product}
                   orderEdit={orderEditParams}
+                  rewardForPromotionId={
+                    validRewardPromotionId
+                  }
                   style={{ width: desktopCardWidth }}
                   imageHeight={isDesktopWeb ? 300 : undefined}
                 />
@@ -951,6 +1076,9 @@ const topPadding = getResponsiveTopPadding(insets.top);
           <ProductCard
             product={item}
             orderEdit={orderEditParams}
+            rewardForPromotionId={
+              validRewardPromotionId
+            }
             style={{ width: desktopCardWidth }}
             imageHeight={isDesktopWeb ? 300 : undefined}
           />

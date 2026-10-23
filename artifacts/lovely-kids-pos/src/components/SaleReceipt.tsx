@@ -156,7 +156,12 @@ export default function SaleReceipt({
 
               <td>{item.quantity}</td>
 
-              <td dir="ltr">{item.lineTotal.toFixed(2)} ₪</td>
+              <td dir="ltr">
+                {(
+                  item.soldUnitPrice *
+                  item.quantity
+                ).toFixed(2)} ₪
+              </td>
             </tr>
           ))}
         </tbody>
@@ -170,10 +175,34 @@ export default function SaleReceipt({
           <strong>{result.sale.subtotal.toFixed(2)} ₪</strong>
         </div>
 
-        {result.sale.discountMinor > 0 && (
+        {result.sale.itemDiscountMinor > 0 && (
           <div>
-            <span>قيمة الخصم</span>
-            <strong>{result.sale.discount.toFixed(2)} ₪</strong>
+            <span>خصم الأصناف</span>
+            <strong>
+              -{result.sale.itemDiscount.toFixed(2)} ₪
+            </strong>
+          </div>
+        )}
+
+        {result.promotions.map((promotion) => (
+          <div
+            key={`${promotion.promotionId ?? "snapshot"}-${promotion.promotionName}`}
+          >
+            <span>
+              خصم {promotion.publicLabel}
+            </span>
+            <strong>
+              -{(promotion.discountMinor / 100).toFixed(2)} ₪
+            </strong>
+          </div>
+        ))}
+
+        {result.sale.invoiceDiscountMinor > 0 && (
+          <div>
+            <span>خصم يدوي</span>
+            <strong>
+              -{result.sale.invoiceDiscount.toFixed(2)} ₪
+            </strong>
           </div>
         )}
 
