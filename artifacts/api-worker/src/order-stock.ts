@@ -3,6 +3,7 @@ import {
   inventoryMovementsTable,
   appSettingsTable,
   orderItemCostsTable,
+  orderPromotionsTable,
   ordersTable,
   productsTable,
   type ColorVariant,
@@ -27,6 +28,14 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import {
+  calculatePromotions,
+  type PromotionAllocation,
+} from "./promotion-engine";
+import {
+  promotionDefinitionFromSnapshot,
+  serializePromotionSnapshot,
+} from "./promotion-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -35,6 +44,10 @@ interface StoredOrderItem {
   quantity: number;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: PromotionAllocation[];
+  invoiceDiscountMinor?: number;
 }
 
 export async function cancelOrderAndRestoreStock(
@@ -465,6 +478,7 @@ interface EditOrderItemInput {
   color?: string;
   size?: string;
   price?: number;
+  rewardForPromotionId?: number;
 }
 
 interface EditableProductState {
@@ -482,6 +496,10 @@ interface EditedStoredOrderItem {
   image?: string;
   color?: string;
   size?: string;
+  rewardForPromotionId?: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: PromotionAllocation[];
+  invoiceDiscountMinor?: number;
 }
 
 function editableOrderItemKey(
@@ -490,6 +508,20 @@ function editableOrderItemKey(
   size?: string,
 ) {
   return JSON.stringify([id, color ?? "", size ?? ""]);
+}
+
+function editableOrderItemIdentityKey(
+  id: number,
+  color?: string,
+  size?: string,
+  rewardForPromotionId?: number,
+) {
+  return JSON.stringify([
+    id,
+    color ?? "",
+    size ?? "",
+    rewardForPromotionId ?? null,
+  ]);
 }
 
 function cloneColorVariants(value: unknown): ColorVariant[] {
@@ -616,7 +648,29 @@ function parseEditOrderItems(value: unknown): EditOrderItemInput[] {
         ? item.size.trim()
         : undefined;
 
-    const key = editableOrderItemKey(id, color, size);
+    const rewardForPromotionId =
+      item.rewardForPromotionId === undefined
+        ? undefined
+        : Number(item.rewardForPromotionId);
+
+    if (
+      rewardForPromotionId !== undefined &&
+      (
+        !Number.isSafeInteger(rewardForPromotionId) ||
+        rewardForPromotionId <= 0
+      )
+    ) {
+      throw new OrderEditError(
+        "معرّف عرض المكافأة غير صالح",
+      );
+    }
+
+    const key = editableOrderItemIdentityKey(
+      id,
+      color,
+      size,
+      rewardForPromotionId,
+    );
     const existing = grouped.get(key);
 
     if (existing) {
@@ -651,6 +705,7 @@ function parseEditOrderItems(value: unknown): EditOrderItemInput[] {
         price,
         color,
         size,
+        rewardForPromotionId,
       });
     }
   }
@@ -857,6 +912,8 @@ function applyEditedOrderItemStock(
     image: selectedImage,
     color: item.color,
     size: item.size,
+    rewardForPromotionId:
+      item.rewardForPromotionId,
   };
 }
 
@@ -887,22 +944,39 @@ function parseOrderInvoiceDiscount(
 }
 
 function allocateOrderInvoiceDiscount(
-  items: Array<{ price: number; quantity: number }>,
+  items: Array<{
+    price: number;
+    quantity: number;
+    promotionDiscountMinor?: number;
+  }>,
   invoiceDiscount: number,
 ): number[] {
   if (invoiceDiscount === 0) {
     return items.map(() => 0);
   }
 
-  const productsTotal = items.reduce(
-    (sum, item) =>
-      sum + item.price * item.quantity,
-    0,
+  const basesMinor = items.map(
+    (item) =>
+      Math.max(
+        0,
+        item.price *
+          item.quantity *
+          100 -
+          (item.promotionDiscountMinor ?? 0),
+      ),
   );
 
+  const productsTotalMinor =
+    basesMinor.reduce(
+      (sum, value) =>
+        sum + value,
+      0,
+    );
+
   if (
-    productsTotal <= 0 ||
-    invoiceDiscount > productsTotal
+    productsTotalMinor <= 0 ||
+    invoiceDiscount * 100 >
+      productsTotalMinor
   ) {
     throw new OrderEditError(
       "الخصم العام أكبر من إجمالي المنتجات",
@@ -917,16 +991,16 @@ function allocateOrderInvoiceDiscount(
     );
   }
 
-  const denominator = BigInt(productsTotal);
+  const denominator =
+    BigInt(productsTotalMinor);
 
-  const rows = items.map((item, index) => {
-    const gross =
-      item.price * item.quantity;
-    const grossMinor = gross * 100;
+  const rows = items.map((_item, index) => {
+    const grossMinor =
+      basesMinor[index] ?? 0;
 
     const numerator =
       BigInt(discountMinor) *
-      BigInt(gross);
+      BigInt(grossMinor);
 
     return {
       index,
