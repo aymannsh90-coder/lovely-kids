@@ -21,6 +21,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProductCard } from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
+import {
+  promotionDetailText,
+  promotionShortLabel,
+  usePromotions,
+} from "@/context/PromotionsContext";
 import { useNotificationOptIn } from "@/context/NotificationOptInContext";
 import { useOrderEditSelection } from "@/context/OrderEditSelectionContext";
 import { useWishlist } from "@/context/WishlistContext";
@@ -219,6 +224,7 @@ export default function ProductDetailScreen() {
     orderEdit,
     orderId,
     orderToken,
+    rewardForPromotionId,
   } = useLocalSearchParams<{
     id: string;
     cartEdit?: string;
@@ -227,6 +233,7 @@ export default function ProductDetailScreen() {
     orderEdit?: string;
     orderId?: string;
     orderToken?: string;
+    rewardForPromotionId?: string;
   }>();
   const isCartEditMode = cartEdit === "1";
   const routeOrderEditMode =
@@ -270,6 +277,10 @@ export default function ProductDetailScreen() {
   const { toggleItem, isWishlisted } = useWishlist();
   const { settings } = useAppSettings();
   const { products, loading } = useVisibleProducts();
+  const {
+    getPromotionsForProduct,
+    getPromotionById,
+  } = usePromotions();
 
   const activeOrderEdit =
     routeOrderEditMode
@@ -295,6 +306,37 @@ export default function ProductDetailScreen() {
     !!activeOrderEdit;
 
   const product = products.find((p) => p.id === id);
+
+  const productPromotions =
+    product
+      ? getPromotionsForProduct(
+          product.id,
+        )
+      : [];
+
+  const primaryPromotion =
+    productPromotions[0] ??
+    null;
+
+  const rewardPromotion =
+    getPromotionById(
+      rewardForPromotionId,
+    );
+
+  const isPromotionRewardSelection =
+    !!rewardPromotion &&
+    rewardPromotion.rewardSelectionMode ===
+      "customer_choice" &&
+    !!product &&
+    (
+      rewardPromotion.scope ===
+        "all_products" ||
+      rewardPromotion.rewardProductIds.length ===
+        0 ||
+      rewardPromotion.rewardProductIds.includes(
+        Number(product.id),
+      )
+    );
 
   const similarProducts = useMemo(() => {
     if (!product || Platform.OS !== "web") return [];
@@ -549,6 +591,12 @@ export default function ProductDetailScreen() {
           product.image,
         size: selectedSize,
         color: selectedColor,
+        ...(isPromotionRewardSelection
+          ? {
+              rewardForPromotionId:
+                rewardPromotion!.id,
+            }
+          : {}),
       });
 
       router.replace({
@@ -570,7 +618,13 @@ export default function ProductDetailScreen() {
       (item) =>
         item.id === product.id &&
         item.size === selectedSize &&
-        item.color === selectedColor,
+        item.color === selectedColor &&
+        item.rewardForPromotionId ===
+          (
+            isPromotionRewardSelection
+              ? rewardPromotion!.id
+              : undefined
+          ),
     );
 
     if (isCartEditMode) {
@@ -936,6 +990,108 @@ export default function ProductDetailScreen() {
               <Text style={[styles.originalPrice, { color: colors.mutedForeground }]}>{product.originalPrice} شيكل</Text>
             )}
           </View>
+
+          {primaryPromotion ? (
+            <View
+              style={[
+                styles.promotionCard,
+                {
+                  borderColor:
+                    colors.primary + "45",
+                  backgroundColor:
+                    colors.primary + "0D",
+                },
+              ]}
+            >
+              <View
+                style={{
+                  flexDirection:
+                    "row-reverse",
+                  alignItems:
+                    "center",
+                  gap: 7,
+                }}
+              >
+                <Ionicons
+                  name="gift-outline"
+                  size={18}
+                  color={colors.primary}
+                />
+
+                <Text
+                  style={[
+                    styles.promotionTitle,
+                    {
+                      color:
+                        colors.primary,
+                    },
+                  ]}
+                >
+                  {promotionShortLabel(
+                    primaryPromotion,
+                  )}
+                </Text>
+              </View>
+
+              <Text
+                style={[
+                  styles.promotionText,
+                  {
+                    color:
+                      colors.foreground,
+                  },
+                ]}
+              >
+                {promotionDetailText(
+                  primaryPromotion,
+                )}
+              </Text>
+
+              {primaryPromotion.scope ===
+              "selected_products" ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname:
+                        "/(tabs)/products",
+                      params: {
+                        promotionId:
+                          String(
+                            primaryPromotion.id,
+                          ),
+                      },
+                    } as never)
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.promotionLink,
+                      {
+                        color:
+                          colors.primary,
+                      },
+                    ]}
+                  >
+                    مشاهدة الأصناف المشمولة بالعرض
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {isPromotionRewardSelection ? (
+                <Text
+                  style={[
+                    styles.promotionRewardHint,
+                    {
+                      color:
+                        colors.primary,
+                    },
+                  ]}
+                >
+                  🎁 هذه القطعة ستُضاف كاختيار المكافأة لهذا العرض.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
 
           {hasColorVariants && (
             <>
@@ -1485,6 +1641,36 @@ const styles = StyleSheet.create({
     fontSize: 30,
   },
   originalPrice: { fontSize: 12, textDecorationLine: "line-through" },
+  promotionCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 5,
+    marginBottom: 12,
+  },
+  promotionTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  promotionText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "right",
+  },
+  promotionLink: {
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+    textDecorationLine: "underline",
+  },
+  promotionRewardHint: {
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "right",
+    marginTop: 2,
+  },
   sectionTitle: { fontSize: 12, fontWeight: "700", textAlign: "right" },
   description: { fontSize: 13, textAlign: "right", lineHeight: 20 },
   detailCard: {
