@@ -1303,7 +1303,7 @@ export default function PromotionsAdminScreen() {
         [products],
       );
 
-    const visible =
+    const matching =
       useMemo(() => {
         const q =
           query
@@ -1340,13 +1340,22 @@ export default function PromotionsAdminScreen() {
               )
                 .toLowerCase()
                 .includes(q),
-          )
-          .slice(0, 120);
+          );
       }, [
         query,
         category,
         products,
       ]);
+
+    const visible =
+      useMemo(
+        () =>
+          matching.slice(
+            0,
+            120,
+          ),
+        [matching],
+      );
 
     const toggle = (
       id: number,
@@ -1474,8 +1483,8 @@ export default function PromotionsAdminScreen() {
           }}
         >
           {category === "all"
-            ? "النتائج الظاهرة: " + visible.length
-            : "قسم " + (DEFAULT_CATEGORY_LABELS[category] ?? category) + " · " + visible.length + " صنف"}
+            ? "النتائج المطابقة: " + matching.length
+            : "قسم " + (DEFAULT_CATEGORY_LABELS[category] ?? category) + " · " + matching.length + " صنف"}
         </Text>
 
         <View
@@ -1490,7 +1499,7 @@ export default function PromotionsAdminScreen() {
                   selected,
                 );
 
-              visible.forEach(
+              matching.forEach(
                 (product) => {
                   const id =
                     Number(
@@ -1529,7 +1538,7 @@ export default function PromotionsAdminScreen() {
                   selected,
                 );
 
-              visible.forEach(
+              matching.forEach(
                 (product) =>
                   next.delete(
                     Number(
