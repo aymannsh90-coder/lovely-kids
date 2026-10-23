@@ -1651,7 +1651,7 @@ export async function handleCreateOnlineOrderExchange(
           }
 
           const returnGrossMinor =
-            returnLines.reduce
+            returnLines.reduce(
               (sum, line) =>
                 sum +
                 line.grossAmountMinor,
@@ -1673,6 +1673,31 @@ export async function handleCreateOnlineOrderExchange(
                 line.returnNetMinor,
               0,
             );
+
+          const priorRefundMinor =
+            priorItems.reduce(
+              (sum, line) =>
+                sum +
+                line.returnNetMinor,
+              0,
+            );
+
+          const expectedCurrentReturnNetMinor =
+            requalification
+              .targetCumulativeRefundMinor -
+            priorRefundMinor;
+
+          if (
+            expectedCurrentReturnNetMinor <
+              0 ||
+            returnNetMinor !==
+              expectedCurrentReturnNetMinor
+          ) {
+            throw new OnlineExchangeError(
+              "تعذر مطابقة قيمة التبديل مع إعادة احتساب العرض الأصلي",
+              409,
+            );
+          }
 
           if (
             !Number.isSafeInteger(
