@@ -2259,6 +2259,14 @@ export default function CartScreen() {
                                     cartEdit: "1",
                                     cartSize: item.size ?? "",
                                     cartColor: item.color ?? "",
+                                    ...(item.rewardForPromotionId
+                                      ? {
+                                          cartRewardForPromotionId:
+                                            String(
+                                              item.rewardForPromotionId,
+                                            ),
+                                        }
+                                      : {}),
                                   },
                                 })
                               }
@@ -2287,7 +2295,12 @@ export default function CartScreen() {
                     <Pressable
                       onPress={() =>
                         confirmRemoveFromCart(() =>
-                          removeItem(item.id, item.size, item.color),
+                          removeItem(
+                              item.id,
+                              item.size,
+                              item.color,
+                              item.rewardForPromotionId,
+                            ),
                         )
                       }
                       style={styles.deleteBtn}
@@ -2329,6 +2342,7 @@ export default function CartScreen() {
                           item.quantity + 1,
                           item.size,
                           item.color,
+                          item.rewardForPromotionId,
                         );
                       }}
                       style={[
@@ -2355,7 +2369,12 @@ export default function CartScreen() {
                       onPress={() => {
                         if (item.quantity === 1) {
                           confirmRemoveFromCart(() =>
-                            removeItem(item.id, item.size, item.color),
+                            removeItem(
+                              item.id,
+                              item.size,
+                              item.color,
+                              item.rewardForPromotionId,
+                            ),
                           );
                           return;
                         }
@@ -2365,6 +2384,7 @@ export default function CartScreen() {
                           item.quantity - 1,
                           item.size,
                           item.color,
+                          item.rewardForPromotionId,
                         );
                       }}
                       style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
