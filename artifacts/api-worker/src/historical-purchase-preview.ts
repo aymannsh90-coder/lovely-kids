@@ -72,6 +72,137 @@ function deriveUnitCostMinor(
   return Math.round(totalMinor / quantity);
 }
 
+const MANUAL_STOCK_CORRECTION_WINDOW_MS =
+  10 * 60 * 1000;
+
+type HistoricalLedgerRow = {
+  id: number;
+  eventType: string;
+  sourceType: string | null;
+  quantityDelta: number;
+  inventoryValueDeltaMinor: number;
+  costQuality: string;
+  createdAt: Date;
+};
+
+function reconcileManualStockCorrections(
+  ledgerRows: HistoricalLedgerRow[],
+) {
+  const correctedIncreaseQuantityByLedgerId =
+    new Map<number, number>();
+
+  let matchedCorrectionOutQuantity = 0;
+
+  let activeIncrease:
+    | {
+        ledgerId: number;
+        remainingQuantity: number;
+        createdAtMs: number;
+      }
+    | null = null;
+
+  for (const row of ledgerRows) {
+    const isManualIncrease =
+      row.eventType ===
+        "adjustment_in" &&
+      row.sourceType ===
+        "manual_stock" &&
+      row.quantityDelta > 0;
+
+    if (isManualIncrease) {
+      correctedIncreaseQuantityByLedgerId.set(
+        row.id,
+        row.quantityDelta,
+      );
+
+      activeIncrease = {
+        ledgerId: row.id,
+        remainingQuantity:
+          row.quantityDelta,
+        createdAtMs:
+          row.createdAt.getTime(),
+      };
+
+      continue;
+    }
+
+    const isManualDecrease =
+      row.eventType ===
+        "adjustment_out" &&
+      row.sourceType ===
+        "manual_stock" &&
+      row.quantityDelta < 0;
+
+    if (
+      isManualDecrease &&
+      activeIncrease
+    ) {
+      const rowCreatedAtMs =
+        row.createdAt.getTime();
+
+      const withinCorrectionWindow =
+        Number.isFinite(
+          rowCreatedAtMs,
+        ) &&
+        Number.isFinite(
+          activeIncrease.createdAtMs,
+        ) &&
+        rowCreatedAtMs >=
+          activeIncrease.createdAtMs &&
+        rowCreatedAtMs -
+          activeIncrease.createdAtMs <=
+          MANUAL_STOCK_CORRECTION_WINDOW_MS;
+
+      if (withinCorrectionWindow) {
+        const requestedReduction =
+          Math.abs(
+            row.quantityDelta,
+          );
+
+        const matchedReduction =
+          Math.min(
+            activeIncrease
+              .remainingQuantity,
+            requestedReduction,
+          );
+
+        if (matchedReduction > 0) {
+          activeIncrease.remainingQuantity -=
+            matchedReduction;
+
+          matchedCorrectionOutQuantity +=
+            matchedReduction;
+
+          correctedIncreaseQuantityByLedgerId.set(
+            activeIncrease.ledgerId,
+            activeIncrease
+              .remainingQuantity,
+          );
+        }
+
+        if (
+          activeIncrease
+            .remainingQuantity === 0
+        ) {
+          activeIncrease = null;
+        }
+
+        continue;
+      }
+    }
+
+    // A sale, return, purchase, correction, or a later unrelated edit
+    // ends the short correction chain. This keeps genuine stock losses
+    // separate from a just-entered purchase quantity correction.
+    activeIncrease = null;
+  }
+
+  return {
+    correctedIncreaseQuantityByLedgerId,
+    matchedCorrectionOutQuantity,
+  };
+}
+
 const CUSTOMER_MOVEMENT_TYPES = [
   "pos_sale",
   "pos_sale_void",
@@ -693,28 +824,58 @@ export async function getHistoricalPurchasePreview(
         ),
     );
 
+  const {
+    correctedIncreaseQuantityByLedgerId,
+    matchedCorrectionOutQuantity,
+  } =
+    reconcileManualStockCorrections(
+      ledgerRows,
+    );
+
   const acquisitionRows =
-    ledgerRows.filter(
-      (row: {
-        eventType: string;
-        sourceType: string | null;
-        quantityDelta: number;
-      }) =>
-        row.quantityDelta > 0 &&
-        (
-          (
-            row.eventType ===
-              "opening" &&
-            row.sourceType ===
-              "manual_opening"
-          ) ||
-          (
-            row.eventType ===
-              "adjustment_in" &&
-            row.sourceType ===
-              "manual_stock"
-          )
-        ),
+    ledgerRows.flatMap(
+      (row) => {
+        if (
+          row.quantityDelta > 0 &&
+          row.eventType ===
+            "opening" &&
+          row.sourceType ===
+            "manual_opening"
+        ) {
+          return [
+            {
+              ...row,
+              previewQuantity:
+                row.quantityDelta,
+            },
+          ];
+        }
+
+        if (
+          row.quantityDelta > 0 &&
+          row.eventType ===
+            "adjustment_in" &&
+          row.sourceType ===
+            "manual_stock"
+        ) {
+          const previewQuantity =
+            correctedIncreaseQuantityByLedgerId.get(
+              row.id,
+            ) ??
+            row.quantityDelta;
+
+          return previewQuantity > 0
+            ? [
+                {
+                  ...row,
+                  previewQuantity,
+                },
+              ]
+            : [];
+        }
+
+        return [];
+      },
     );
 
   const purchaseBackedQuantity =
@@ -738,11 +899,27 @@ export async function getHistoricalPurchasePreview(
       0,
     );
 
+  const effectiveManualAdjustmentOutQuantity =
+    sold.manualAdjustmentOutQuantity -
+    matchedCorrectionOutQuantity;
+
+  if (
+    !Number.isSafeInteger(
+      effectiveManualAdjustmentOutQuantity,
+    ) ||
+    effectiveManualAdjustmentOutQuantity <
+      0
+  ) {
+    throw new HistoricalPurchasePreviewError(
+      "تعذر موازنة تصحيحات المخزون اليدوية مع سجل التكلفة",
+    );
+  }
+
   const totalHistoricalQuantity =
     physicalQuantity -
     pendingStockReceiptQuantity +
     sold.netSoldQuantity +
-    sold.manualAdjustmentOutQuantity -
+    effectiveManualAdjustmentOutQuantity -
     purchaseBackedQuantity;
 
   if (
@@ -783,10 +960,10 @@ export async function getHistoricalPurchasePreview(
       later.reduce(
         (
           sum: number,
-          row: { quantityDelta: number },
+          row: { previewQuantity: number },
         ) =>
           sum +
-          row.quantityDelta,
+          row.previewQuantity,
         0,
       );
 
@@ -854,10 +1031,13 @@ export async function getHistoricalPurchasePreview(
       batches.push({
         sourceKey,
         quantity:
-          row.quantityDelta,
+          row.previewQuantity,
         unitCostMinor,
         totalCostMinor:
-          row.inventoryValueDeltaMinor,
+          unitCostMinor === null
+            ? null
+            : unitCostMinor *
+              row.previewQuantity,
         occurredAt:
           row.createdAt
             ?.toISOString() ??
