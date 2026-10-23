@@ -1041,19 +1041,7 @@ export default function PromotionsAdminScreen() {
     async (
       row: PromotionRow,
     ) => {
-      editPromotion(row);
-
-      setStatus(
-        "archived",
-      );
-
       try {
-        const body = {
-          ...payload(),
-          status:
-            "archived",
-        };
-
         const response =
           await authorizedFetch(
             `/api/admin/promotions/${row.id}`,
@@ -1061,9 +1049,59 @@ export default function PromotionsAdminScreen() {
               method:
                 "PATCH",
               body:
-                JSON.stringify(
-                  body,
-                ),
+                JSON.stringify({
+                  name: row.name,
+                  publicLabel:
+                    row.publicLabel,
+                  description:
+                    row.description,
+                  kind: row.kind,
+                  scope: row.scope,
+                  channel:
+                    row.channel,
+                  status:
+                    "archived",
+                  buyQuantity:
+                    row.buyQuantity,
+                  rewardQuantity:
+                    row.rewardQuantity,
+                  rewardMode:
+                    row.rewardMode,
+                  rewardPercent:
+                    row.rewardPercent,
+                  rewardPriceMinor:
+                    row.rewardPriceMinor,
+                  rewardSelectionMode:
+                    row.rewardSelectionMode,
+                  percentOff:
+                    row.percentOff,
+                  bundleQuantity:
+                    row.bundleQuantity,
+                  bundlePriceMinor:
+                    row.bundlePriceMinor,
+                  repeatable:
+                    row.repeatable,
+                  maxApplicationsPerOrder:
+                    row.maxApplicationsPerOrder,
+                  stackWithOtherPromotions:
+                    row.stackWithOtherPromotions,
+                  stackWithDiscountCodes:
+                    row.stackWithDiscountCodes,
+                  stackWithShippingPromotion:
+                    row.stackWithShippingPromotion,
+                  priority:
+                    row.priority,
+                  startsAt:
+                    row.startsAt,
+                  endsAt:
+                    row.endsAt,
+                  qualifyingProductIds:
+                    row.qualifyingProductIds,
+                  rewardProductIds:
+                    row.rewardProductIds,
+                  excludedProductIds:
+                    row.excludedProductIds,
+                }),
             },
           );
 
@@ -1085,7 +1123,13 @@ export default function PromotionsAdminScreen() {
           );
         }
 
-        resetEditor();
+        if (
+          editingId ===
+          row.id
+        ) {
+          resetEditor();
+        }
+
         await loadPromotions();
       } catch (error) {
         Alert.alert(
