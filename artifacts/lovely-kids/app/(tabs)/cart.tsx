@@ -2038,8 +2038,11 @@ export default function CartScreen() {
     });
 
   const cartPromotionCanStack =
-    !appliedDiscountCode ||
-    appliedDiscountCode.stackWithShippingPromotion;
+    promotionsAllowShippingPromotion &&
+    (
+      !appliedDiscountCode ||
+      appliedDiscountCode.stackWithShippingPromotion
+    );
   const cartPromotionProductsTotal = Math.max(
     0,
     totalPrice -
