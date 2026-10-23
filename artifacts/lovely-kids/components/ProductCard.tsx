@@ -36,6 +36,7 @@ interface Props {
     orderId: string;
     token?: string;
   } | null;
+  rewardForPromotionId?: number;
 }
 
 function calcDiscount(price: number, originalPrice?: number | null): number | null {
@@ -49,6 +50,7 @@ export function ProductCard({
   style,
   imageHeight,
   orderEdit = null,
+  rewardForPromotionId,
 }: Props) {
   const colors = useColors();
   const { settings } = useAppSettings();
@@ -104,6 +106,14 @@ export function ProductCard({
     pathname: "/product/[id]" as const,
     params: {
       id: product.id,
+      ...(rewardForPromotionId
+        ? {
+            rewardForPromotionId:
+              String(
+                rewardForPromotionId,
+              ),
+          }
+        : {}),
       ...(activeOrderEdit
         ? {
             orderEdit: "1",
