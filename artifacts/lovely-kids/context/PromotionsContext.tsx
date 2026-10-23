@@ -155,7 +155,12 @@ export function promotionShortLabel(
       promotion.rewardMode === "percent_off" &&
       promotion.rewardPercent
     ) {
-      return `الثانية بخصم ${promotion.rewardPercent}%`;
+      return (
+        promotion.buyQuantity === 1 &&
+        promotion.rewardQuantity === 1
+          ? `الثانية بخصم ${promotion.rewardPercent}%`
+          : `عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} · خصم ${promotion.rewardPercent}%`
+      );
     }
 
     if (
@@ -163,9 +168,18 @@ export function promotionShortLabel(
       promotion.rewardPriceMinor !== null &&
       promotion.rewardPriceMinor !== undefined
     ) {
-      return `سعر خاص ${(promotion.rewardPriceMinor / 100).toFixed(
+      const rewardPrice = (
+        promotion.rewardPriceMinor / 100
+      ).toFixed(
         promotion.rewardPriceMinor % 100 === 0 ? 0 : 2,
-      )} ₪`;
+      );
+
+      return (
+        promotion.buyQuantity === 1 &&
+        promotion.rewardQuantity === 1
+          ? `الثانية بـ${rewardPrice} ₪`
+          : `عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} · المكافأة بـ${rewardPrice} ₪`
+      );
     }
   }
 
