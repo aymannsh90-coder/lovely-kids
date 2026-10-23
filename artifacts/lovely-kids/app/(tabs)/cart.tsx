@@ -368,6 +368,12 @@ export default function CartScreen() {
         !promotion.stackWithDiscountCodes,
     );
 
+  const promotionsAllowShippingPromotion =
+    (promotionPreview?.promotions ?? []).every(
+      (promotion) =>
+        promotion.stackWithShippingPromotion,
+    );
+
   useEffect(() => {
     if (
       !promotionBlocksDiscountCodes ||
@@ -536,15 +542,20 @@ export default function CartScreen() {
     setLoading(true);
 
     const allowShippingPromotion =
-      !appliedDiscountCode ||
-      appliedDiscountCode.stackWithShippingPromotion;
+      promotionsAllowShippingPromotion &&
+      (
+        !appliedDiscountCode ||
+        appliedDiscountCode.stackWithShippingPromotion
+      );
 
     let currentDiscountAmount =
       appliedDiscountAmount;
 
     const checkoutProductsTotal = Math.max(
       0,
-      totalPrice - currentDiscountAmount,
+      totalPrice -
+        promotionDiscountAmount -
+        currentDiscountAmount,
     );
 
     let shippingCost = getShippingCost(
@@ -1163,12 +1174,17 @@ export default function CartScreen() {
       ),
     ];
     const allowShippingPromotion =
-      !appliedDiscountCode ||
-      appliedDiscountCode.stackWithShippingPromotion;
+      promotionsAllowShippingPromotion &&
+      (
+        !appliedDiscountCode ||
+        appliedDiscountCode.stackWithShippingPromotion
+      );
 
     const discountedProductsTotal = Math.max(
       0,
-      totalPrice - appliedDiscountAmount,
+      totalPrice -
+      promotionDiscountAmount -
+      appliedDiscountAmount,
     );
 
     const promotionActive = isShippingPromotionActive(
@@ -1354,6 +1370,32 @@ export default function CartScreen() {
                   قيمة المنتجات
                 </Text>
               </View>
+
+              {(promotionPreview?.promotions ?? []).map(
+                (promotion) => (
+                  <View
+                    style={styles.summaryRow}
+                    key={`checkout-promotion-${promotion.promotionId}`}
+                  >
+                    <Text
+                      style={[
+                        styles.summaryValue,
+                        { color: "#16A34A" },
+                      ]}
+                    >
+                      -{promotion.discountMinor / 100}₪
+                    </Text>
+                    <Text
+                      style={[
+                        styles.summaryLabel,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      خصم {promotion.publicLabel}
+                    </Text>
+                  </View>
+                ),
+              )}
 
               {appliedDiscountCode ? (
                 <View style={styles.summaryRow}>
@@ -2000,7 +2042,9 @@ export default function CartScreen() {
     appliedDiscountCode.stackWithShippingPromotion;
   const cartPromotionProductsTotal = Math.max(
     0,
-    totalPrice - appliedDiscountAmount,
+    totalPrice -
+      promotionDiscountAmount -
+      appliedDiscountAmount,
   );
   const cartPromotionWindowActive =
     isShippingPromotionWindowActive(
@@ -2352,7 +2396,151 @@ export default function CartScreen() {
               <Text style={[styles.totalPrice, { color: colors.primary }]}>{totalPrice} ₪</Text>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>الإجمالي</Text>
             </View>
-            {settings.discountCodesEnabled === true ? (
+
+            {promotionPreviewLoading ? (
+              <View style={styles.summaryRow}>
+                <ActivityIndicator
+                  size="small"
+                  color={colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.summaryLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  جاري احتساب عروض السلة...
+                </Text>
+              </View>
+            ) : null}
+
+            {(promotionPreview?.promotions ?? []).map(
+              (promotion) => (
+                <View
+                  style={styles.summaryRow}
+                  key={`cart-promotion-${promotion.promotionId}`}
+                >
+                  <Text
+                    style={{
+                      color: "#16A34A",
+                      fontWeight: "900",
+                    }}
+                  >
+                    -{promotion.discountMinor / 100} ₪
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontWeight: "800",
+                    }}
+                  >
+                    🎁 {promotion.publicLabel}
+                  </Text>
+                </View>
+              ),
+            )}
+
+            {(promotionPreview?.entitlements ?? [])
+              .filter(
+                (entitlement) =>
+                  entitlement.remainingRewardQuantity > 0,
+              )
+              .map((entitlement) => {
+                const promotion =
+                  getPromotionById(
+                    entitlement.promotionId,
+                  );
+
+                if (!promotion) return null;
+
+                const chooseReward =
+                  promotion.rewardSelectionMode ===
+                  "customer_choice";
+
+                return (
+                  <View
+                    key={`promotion-entitlement-${entitlement.promotionId}`}
+                    style={{
+                      borderWidth: 1,
+                      borderColor:
+                        colors.primary + "55",
+                      backgroundColor:
+                        colors.primary + "0D",
+                      borderRadius: 12,
+                      padding: 10,
+                      gap: 7,
+                      marginTop: 5,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "800",
+                        textAlign: "right",
+                      }}
+                    >
+                      {chooseReward
+                        ? "🎁 استحققت مكافأة من العرض"
+                        : `باقي ${entitlement.remainingRewardQuantity} قطعة لإكمال العرض`}
+                    </Text>
+
+                    <Pressable
+                      onPress={() =>
+                        router.push({
+                          pathname:
+                            "/(tabs)/products",
+                          params: {
+                            promotionId:
+                              String(
+                                entitlement.promotionId,
+                              ),
+                            ...(chooseReward
+                              ? {
+                                  rewardForPromotionId:
+                                    String(
+                                      entitlement.promotionId,
+                                    ),
+                                }
+                              : {}),
+                          },
+                        } as never)
+                      }
+                      style={{
+                        alignSelf: "flex-end",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.primary,
+                          fontWeight: "900",
+                          textDecorationLine:
+                            "underline",
+                        }}
+                      >
+                        {chooseReward
+                          ? "اختر قطعتك من الأصناف المشمولة"
+                          : "مشاهدة الأصناف المشمولة"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+
+            {promotionPreviewError ? (
+              <Text
+                style={{
+                  color: "#DC2626",
+                  fontSize: 12,
+                  textAlign: "right",
+                  marginTop: 4,
+                }}
+              >
+                {promotionPreviewError}
+              </Text>
+            ) : null}
+
+            {settings.discountCodesEnabled === true &&
+            !promotionBlocksDiscountCodes ? (
               <View
                 style={{
                   gap: 8,
@@ -2390,7 +2578,9 @@ export default function CartScreen() {
                     </View>
                     <View style={styles.summaryRow}>
                       <Text style={{ color: colors.primary, fontWeight: "900" }}>
-                        {totalPrice - appliedDiscountAmount} ₪
+                        {totalPrice -
+      promotionDiscountAmount -
+      appliedDiscountAmount} ₪
                       </Text>
                       <Text style={{ color: colors.foreground, fontWeight: "800" }}>
                         بعد الخصم
