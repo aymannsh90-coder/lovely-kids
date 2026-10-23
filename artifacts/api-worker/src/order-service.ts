@@ -839,7 +839,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
 
     const activePromotions =
       await loadActivePromotions(
-        tx as Db,
+        tx,
         "web",
       );
 
