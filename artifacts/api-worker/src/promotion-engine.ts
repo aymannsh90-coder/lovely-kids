@@ -871,6 +871,18 @@ export function calculatePromotions(input: {
     .filter((promotion) =>
       promotionSupportsChannel(promotion, input.channel),
     )
+    .map((promotion) =>
+      input.channel === "pos" &&
+      promotion.rewardSelectionMode === "customer_choice"
+        ? {
+            ...promotion,
+            // Store POS has no concept of a customer-side reward picker.
+            // It deterministically applies the eligible reward using the
+            // automatic cheapest-item rule while web keeps explicit choice.
+            rewardSelectionMode: "cheapest" as const,
+          }
+        : promotion,
+    )
     .sort((left, right) => {
       if (left.priority === right.priority) {
         return left.id - right.id;
