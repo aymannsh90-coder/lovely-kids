@@ -2614,6 +2614,7 @@ export async function handleCreatePosExchange(
                   quantity: item.quantity,
                   soldUnitPriceMinor,
                   lineDiscountMinor: 0,
+                  promotionDiscountMinor: 0,
 
                   generalStockBefore:
                     product.stock ?? null,
