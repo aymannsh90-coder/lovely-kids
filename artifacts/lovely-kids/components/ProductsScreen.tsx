@@ -695,7 +695,10 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 textAlign: "right",
               }}
             >
-              🎁 اختر قطعة المكافأة من الأصناف أدناه.
+              {selectedPromotion.kind ===
+              "spend_x_get_gift"
+                ? "🎁 اختر هديتك من الأصناف أدناه — هدية واحدة فقط."
+                : "🎁 اختر قطعة المكافأة من الأصناف أدناه."}
             </Text>
           ) : null}
         </View>
