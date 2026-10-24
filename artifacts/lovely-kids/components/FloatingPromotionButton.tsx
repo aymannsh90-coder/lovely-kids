@@ -20,7 +20,7 @@ import {
   usePromotions,
 } from "@/context/PromotionsContext";
 
-const PROMOTION_RED = "#E53935";
+const PROMOTION_ACCENT = "#7C3AED";
 
 function bidiSafePromotionLabel(label: string) {
   return label.replace(
@@ -39,7 +39,7 @@ export function FloatingPromotionButton() {
     usePromotions();
   const { totalItems } = useCart();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   const primaryPromotion =
     useMemo(() => {
@@ -78,21 +78,28 @@ export function FloatingPromotionButton() {
 
   const compact = width <= 768;
 
-  const bottom =
-    totalItems > 0
-      ? compact
-        ? 176 + insets.bottom
-        : 196 + insets.bottom
-      : compact
-        ? 104 + insets.bottom
-        : 126 + insets.bottom;
+  const top =
+    compact
+      ? Math.max(
+          insets.top + 180,
+          Math.round(height * 0.44),
+        )
+      : Math.max(
+          insets.top + 200,
+          Math.round(height * 0.40),
+        );
+
+  const rawLabel =
+    primaryPromotion.publicLabel?.trim() ||
+    promotionShortLabel(
+      primaryPromotion,
+    );
 
   const label =
     bidiSafePromotionLabel(
-      primaryPromotion.publicLabel?.trim() ||
-        promotionShortLabel(
-          primaryPromotion,
-        ),
+      /^عرض\s/u.test(rawLabel)
+        ? rawLabel
+        : `عرض ${rawLabel}`,
     );
 
   return (
@@ -100,7 +107,7 @@ export function FloatingPromotionButton() {
       pointerEvents="box-none"
       style={[
         styles.wrapper,
-        { bottom },
+        { top },
       ]}
     >
       <Pressable
@@ -135,7 +142,7 @@ export function FloatingPromotionButton() {
             name="gift-outline"
             size={18}
             color={
-              PROMOTION_RED
+              PROMOTION_ACCENT
             }
           />
         </View>
@@ -155,22 +162,22 @@ const styles =
   StyleSheet.create({
     wrapper: {
       position: "absolute",
-      left: 10,
+      left: 8,
       zIndex: 9998,
       elevation: 18,
     },
     button: {
-      minHeight: 44,
-      maxWidth: 156,
-      borderRadius: 22,
+      minHeight: 48,
+      maxWidth: 178,
+      borderRadius: 24,
       borderWidth: 2,
       borderColor:
         "rgba(255,255,255,0.96)",
       backgroundColor:
-        PROMOTION_RED,
-      paddingLeft: 11,
-      paddingRight: 8,
-      paddingVertical: 5,
+        PROMOTION_ACCENT,
+      paddingLeft: 12,
+      paddingRight: 9,
+      paddingVertical: 6,
       flexDirection:
         "row",
       alignItems: "center",
@@ -198,7 +205,7 @@ const styles =
     },
     label: {
       color: "#FFFFFF",
-      fontSize: 12,
+      fontSize: 12.5,
       fontWeight: "900",
       textAlign: "right",
       flexShrink: 1,
