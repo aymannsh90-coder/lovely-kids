@@ -2466,7 +2466,11 @@ export default function CartScreen() {
             {(promotionPreview?.entitlements ?? [])
               .filter(
                 (entitlement) =>
-                  entitlement.remainingRewardQuantity > 0,
+                  entitlement.remainingRewardQuantity > 0 ||
+                  (
+                    entitlement.nextBundleRemainingQuantity ??
+                    0
+                  ) > 0,
               )
               .map((entitlement) => {
                 const promotion =
@@ -2478,7 +2482,13 @@ export default function CartScreen() {
 
                 const chooseReward =
                   promotion.rewardSelectionMode ===
-                  "customer_choice";
+                    "customer_choice" &&
+                  entitlement.remainingRewardQuantity >
+                    0;
+
+                const remainingForNextBundle =
+                  entitlement.nextBundleRemainingQuantity ??
+                  entitlement.remainingRewardQuantity;
 
                 return (
                   <View
@@ -2504,7 +2514,7 @@ export default function CartScreen() {
                     >
                       {chooseReward
                         ? "🎁 استحققت مكافأة من العرض"
-                        : `باقي ${entitlement.remainingRewardQuantity} قطعة لإكمال العرض`}
+                        : `باقي ${remainingForNextBundle} قطعة للاستفادة من العرض`}
                     </Text>
 
                     <Pressable
