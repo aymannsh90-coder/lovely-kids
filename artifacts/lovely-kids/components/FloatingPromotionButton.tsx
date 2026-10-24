@@ -127,6 +127,10 @@ export function FloatingPromotionButton() {
     useRef(false);
   const hasUserMoved =
     useRef(false);
+  const snappedSide =
+    useRef<"left" | "right">(
+      "left",
+    );
 
   useEffect(() => {
     if (!primaryPromotion) {
@@ -177,9 +181,20 @@ export function FloatingPromotionButton() {
   };
 
   useEffect(() => {
+    const snappedX =
+      snappedSide.current ===
+      "right"
+        ? Math.max(
+            EDGE_GAP,
+            width -
+              bubbleSize.width -
+              EDGE_GAP,
+          )
+        : EDGE_GAP;
+
     const target = hasUserMoved.current
       ? clampPosition(
-          currentPosition.current.x,
+          snappedX,
           currentPosition.current.y,
         )
       : clampPosition(
@@ -248,9 +263,19 @@ export function FloatingPromotionButton() {
             return;
           }
 
-          const snappedX =
-            gesture.moveX <
+          const bubbleCenterX =
+            currentPosition.current.x +
+            bubbleSize.width / 2;
+
+          snappedSide.current =
+            bubbleCenterX <
             width / 2
+              ? "left"
+              : "right";
+
+          const snappedX =
+            snappedSide.current ===
+            "left"
               ? EDGE_GAP
               : Math.max(
                   EDGE_GAP,
