@@ -45,6 +45,7 @@ function promotionBadgeText(
     buyQuantity?: number | null;
     rewardQuantity?: number | null;
     percentOff?: number | null;
+    spendThresholdMinor?: number | null;
   },
 ) {
   if (
@@ -60,6 +61,13 @@ function promotionBadgeText(
     promotion.percentOff
   ) {
     return `${promotion.percentOff}%`;
+  }
+
+  if (
+    promotion.kind ===
+      "spend_x_get_gift"
+  ) {
+    return "هدية";
   }
 
   return "عرض";
