@@ -438,8 +438,8 @@ export default function CartScreen() {
             nextItems,
           );
 
-        const lostPromotionId =
-          selectedGiftPromotionIds.find(
+        const lostPromotionIds =
+          selectedGiftPromotionIds.filter(
             (promotionId) => {
               const entitlement =
                 nextPreview.entitlements.find(
@@ -459,7 +459,8 @@ export default function CartScreen() {
           );
 
         if (
-          !lostPromotionId
+          lostPromotionIds.length ===
+          0
         ) {
           if (
             useNormalRemovePrompt
@@ -473,14 +474,24 @@ export default function CartScreen() {
           return;
         }
 
-        const promotion =
-          getPromotionById(
-            lostPromotionId,
-          );
+        const lostLabels =
+          lostPromotionIds
+            .map(
+              (promotionId) =>
+                getPromotionById(
+                  promotionId,
+                )?.publicLabel,
+            )
+            .filter(
+              (
+                label,
+              ): label is string =>
+                !!label,
+            );
 
         Alert.alert(
           "تنبيه",
-          `حذف أو تقليل هذا الصنف سيُلغي استحقاقك${promotion?.publicLabel ? ` لعرض "${promotion.publicLabel}"` : ""}، وسيتم إزالة الهدية من السلة. هل تريد المتابعة؟`,
+          `حذف أو تقليل هذا الصنف سيُلغي استحقاقك للهدية${lostLabels.length > 0 ? ` في ${lostLabels.join("، ")}` : ""}، وسيتم إزالة الهدية غير المستحقة من السلة. هل تريد المتابعة؟`,
           [
             {
               text: "إلغاء",
@@ -492,8 +503,13 @@ export default function CartScreen() {
                 "destructive",
               onPress: () => {
                 action();
-                removeSelectedGiftForPromotion(
-                  lostPromotionId,
+                lostPromotionIds.forEach(
+                  (
+                    promotionId,
+                  ) =>
+                    removeSelectedGiftForPromotion(
+                      promotionId,
+                    ),
                 );
               },
             },
