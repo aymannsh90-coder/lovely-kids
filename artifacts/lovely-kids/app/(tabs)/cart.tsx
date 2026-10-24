@@ -2807,7 +2807,9 @@ export default function CartScreen() {
                     >
                       {chooseReward
                         ? "🎁 استحققت مكافأة من العرض"
-                        : `باقي ${remainingForNextBundle} قطعة للاستفادة من العرض`}
+                        : isSpendGift
+                          ? `باقي ${thresholdRemaining} ₪ للحصول على الهدية`
+                          : `باقي ${remainingForNextBundle} قطعة للاستفادة من العرض`}
                     </Text>
 
                     {chooseReward ||
