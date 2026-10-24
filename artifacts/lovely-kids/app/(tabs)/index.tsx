@@ -34,7 +34,6 @@ import { useProductCategories } from "@/hooks/useProductCategories";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useNotificationOptIn } from "@/context/NotificationOptInContext";
-import { promotionShortLabel, usePromotions } from "@/context/PromotionsContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -47,15 +46,6 @@ type GenderTab = "boys" | "girls" | null;
 
 const { width } = Dimensions.get("window");
 const HOME_NOTIFICATION_PROMPT_DELAY_MS = 8000;
-const PROMOTION_BUTTON_RED = "#E53935";
-
-function bidiSafePromotionLabel(label: string) {
-  return label.replace(
-    /\d+\s*\+\s*\d+/g,
-    (value) => `\u2066${value}\u2069`,
-  );
-}
-
 function getDiverseRandomProducts(products: Product[], limit: number): Product[] {
   const shuffle = <T,>(items: T[]): T[] => {
     const copy = [...items];
@@ -344,25 +334,8 @@ export default function HomeScreen() {
   const { products } = useVisibleProducts();
   const { settings, settingsReady } = useAppSettings();
   const { user, getAuthToken } = useAuth();
-  const { promotions } = usePromotions();
   const { count: wishlistCount } = useWishlist();
 
-  const primaryPromotion =
-    React.useMemo(() => {
-      return [...promotions].sort(
-        (left, right) =>
-          right.priority - left.priority ||
-          left.id - right.id,
-      )[0] ?? null;
-    }, [promotions]);
-
-  const promotionButtonLabel =
-    primaryPromotion
-      ? bidiSafePromotionLabel(
-          primaryPromotion.publicLabel?.trim() ||
-            promotionShortLabel(primaryPromotion),
-        )
-      : "";
   const firstName = user?.name?.trim().split(/\s+/)[0] || "";
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const ageGroups = AGE_GROUP_IDS.map((id) => ({
@@ -819,72 +792,32 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      {/* Search + active promotion shortcut */}
-      <View
+      {/* Search Bar */}
+      <Pressable
+        onPress={() => router.push("/search")}
         style={[
-          styles.searchPromotionRow,
+          styles.searchBar,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
           desktopBannerStyle,
         ]}
       >
-        {primaryPromotion ? (
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/(tabs)/products",
-                params: {
-                  promotionId: String(primaryPromotion.id),
-                },
-              } as never)
-            }
-            accessibilityRole="button"
-            accessibilityLabel={`عرض منتجات ${primaryPromotion.publicLabel}`}
-            style={({ pressed }) => [
-              styles.promotionShortcut,
-              {
-                backgroundColor: PROMOTION_BUTTON_RED,
-                opacity: pressed ? 0.86 : 1,
-              },
-            ]}
-          >
-            <Ionicons
-              name="gift-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-            <Text
-              numberOfLines={1}
-              style={styles.promotionShortcutText}
-            >
-              {promotionButtonLabel}
-            </Text>
-          </Pressable>
-        ) : null}
-
-        <Pressable
-          onPress={() => router.push("/search")}
+        <Ionicons
+          name="search-outline"
+          size={20}
+          color={colors.mutedForeground}
+        />
+        <Text
           style={[
-            styles.searchBar,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
+            styles.searchPlaceholder,
+            { color: colors.mutedForeground },
           ]}
         >
-          <Ionicons
-            name="search-outline"
-            size={20}
-            color={colors.mutedForeground}
-          />
-          <Text
-            style={[
-              styles.searchPlaceholder,
-              { color: colors.mutedForeground },
-            ]}
-          >
-            ابحث عن منتج...
-          </Text>
-        </Pressable>
-      </View>
+          ابحث عن منتج...
+        </Text>
+      </Pressable>
 
       {/* Hero Slider — fall back to the original banner when no active media exists */}
       {(settings.heroSlides ?? []).some(
@@ -1689,37 +1622,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 10,
     fontWeight: "700",
-  },
-  searchPromotionRow: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    flexDirection: "row",
-    direction: "ltr",
-    alignItems: "stretch",
-    gap: 8,
-  },
-  promotionShortcut: {
-    minHeight: 48,
-    direction: "rtl",
-    maxWidth: 132,
-    paddingHorizontal: 11,
-    borderRadius: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    shadowColor: "#000",
-    shadowOpacity: Platform.OS === "web" ? 0.10 : 0.14,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  promotionShortcutText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "900",
-    textAlign: "center",
-    flexShrink: 1,
   },
   searchBar: {
     flex: 1,
