@@ -1093,7 +1093,13 @@ export function calculatePromotions(input: {
 
       if (
         result.entitlement &&
-        result.entitlement.earnedRewardQuantity > 0
+        (
+          result.entitlement.earnedRewardQuantity > 0 ||
+          (
+            result.entitlement
+              .nextBundleRemainingQuantity ?? 0
+          ) > 0
+        )
       ) {
         entitlements.push(result.entitlement);
       }
