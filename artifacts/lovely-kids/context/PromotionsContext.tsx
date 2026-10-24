@@ -15,7 +15,8 @@ import type { CartItem } from "@/context/CartContext";
 export type StorePromotionKind =
   | "buy_x_get_y"
   | "percent_off"
-  | "bundle_price";
+  | "bundle_price"
+  | "spend_x_get_gift";
 
 export interface StorePromotion {
   id: number;
@@ -38,6 +39,8 @@ export interface StorePromotion {
 
   bundleQuantity?: number | null;
   bundlePriceMinor?: number | null;
+
+  spendThresholdMinor?: number | null;
 
   repeatable: boolean;
   maxApplicationsPerOrder?: number | null;
@@ -84,6 +87,9 @@ export interface PromotionPreviewEntitlement {
   selectedRewardQuantity: number;
   remainingRewardQuantity: number;
   nextBundleRemainingQuantity?: number;
+  qualifyingSpendMinor?: number;
+  spendThresholdMinor?: number;
+  thresholdRemainingMinor?: number;
 }
 
 export interface PromotionPreviewResult {
@@ -194,6 +200,40 @@ export function promotionShortLabel(
   }
 
   if (
+    promotion.kind ===
+      "spend_x_get_gift" &&
+    promotion.spendThresholdMinor
+  ) {
+    return `اشتري بـ${(
+      promotion.spendThresholdMinor /
+      100
+    ).toFixed(
+      promotion.spendThresholdMinor %
+          100 ===
+        0
+        ? 0
+        : 2,
+    )} ₪ وخذ هدية 🎁`;
+  }
+
+  if (
+    promotion.kind ===
+      "spend_x_get_gift" &&
+    promotion.spendThresholdMinor
+  ) {
+    return `عند وصول قيمة الأصناف المؤهلة إلى ${(
+      promotion.spendThresholdMinor /
+      100
+    ).toFixed(
+      promotion.spendThresholdMinor %
+          100 ===
+        0
+        ? 0
+        : 2,
+    )} ₪ يمكنك اختيار هدية واحدة من الهدايا المحددة.`;
+  }
+
+  if (
     promotion.kind === "percent_off" &&
     promotion.percentOff
   ) {
@@ -248,6 +288,23 @@ export function promotionCustomerTitle(
 
       return `اشتري ${promotion.buyQuantity} وخذ ${promotion.rewardQuantity} بـ${rewardPrice} ₪`;
     }
+  }
+
+  if (
+    promotion.kind ===
+      "spend_x_get_gift" &&
+    promotion.spendThresholdMinor
+  ) {
+    return `اشتري بقيمة ${(
+      promotion.spendThresholdMinor /
+      100
+    ).toFixed(
+      promotion.spendThresholdMinor %
+          100 ===
+        0
+        ? 0
+        : 2,
+    )} ₪ واختر هديتك 🎁`;
   }
 
   return promotionShortLabel(
