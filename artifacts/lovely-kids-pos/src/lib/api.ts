@@ -2740,7 +2740,11 @@ export interface PromotionPreviewApplied {
   promotionId: number;
   promotionName: string;
   publicLabel: string;
-  kind: "buy_x_get_y" | "percent_off" | "bundle_price";
+  kind:
+    | "buy_x_get_y"
+    | "percent_off"
+    | "bundle_price"
+    | "spend_x_get_gift";
   discountMinor: number;
   applicationCount: number;
   stackWithDiscountCodes: boolean;
@@ -2754,6 +2758,9 @@ export interface PromotionPreviewEntitlement {
   selectedRewardQuantity: number;
   remainingRewardQuantity: number;
   nextBundleRemainingQuantity?: number;
+  qualifyingSpendMinor?: number;
+  spendThresholdMinor?: number;
+  thresholdRemainingMinor?: number;
 }
 
 export interface PromotionPreviewResult {
