@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import React, {
   useCallback,
@@ -10,6 +11,7 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -1350,6 +1352,14 @@ export default function PromotionsAdminScreen() {
       setCategory,
     ] = useState("all");
 
+    const [
+      previewProduct,
+      setPreviewProduct,
+    ] = useState<
+      (typeof products)[number] |
+      null
+    >(null);
+
     const categories =
       useMemo(() => {
         const values = [
@@ -1786,11 +1796,281 @@ export default function PromotionsAdminScreen() {
                         `#${product.id}`}
                     </Text>
                   </View>
+
+                  <Pressable
+                    onPress={(
+                      event,
+                    ) => {
+                      event.stopPropagation();
+                      setPreviewProduct(
+                        product,
+                      );
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`معاينة صورة ${product.nameAr}`}
+                    style={[
+                      styles.productThumbnailButton,
+                      {
+                        borderColor:
+                          colors.border,
+                        backgroundColor:
+                          colors.background,
+                      },
+                    ]}
+                  >
+                    {product.image ? (
+                      <Image
+                        source={
+                          product.image
+                        }
+                        style={
+                          styles.productThumbnail
+                        }
+                        contentFit="cover"
+                        transition={
+                          120
+                        }
+                      />
+                    ) : (
+                      <Ionicons
+                        name="image-outline"
+                        size={22}
+                        color={
+                          colors.mutedForeground
+                        }
+                      />
+                    )}
+                  </Pressable>
                 </Pressable>
               );
             },
           )}
         </ScrollView>
+
+        <Modal
+          visible={
+            previewProduct !==
+            null
+          }
+          transparent
+          animationType="fade"
+          onRequestClose={() =>
+            setPreviewProduct(
+              null,
+            )
+          }
+        >
+          <Pressable
+            style={
+              styles.productPreviewBackdrop
+            }
+            onPress={() =>
+              setPreviewProduct(
+                null,
+              )
+            }
+          >
+            <Pressable
+              onPress={(
+                event,
+              ) =>
+                event.stopPropagation()
+              }
+              style={[
+                styles.productPreviewCard,
+                {
+                  backgroundColor:
+                    colors.card,
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+            >
+              <View
+                style={
+                  styles.productPreviewHeader
+                }
+              >
+                <Pressable
+                  onPress={() =>
+                    setPreviewProduct(
+                      null,
+                    )
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="إغلاق معاينة الصورة"
+                  style={[
+                    styles.productPreviewClose,
+                    {
+                      backgroundColor:
+                        colors.background,
+                      borderColor:
+                        colors.border,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="close"
+                    size={22}
+                    color={
+                      colors.foreground
+                    }
+                  />
+                </Pressable>
+
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.foreground,
+                      fontWeight:
+                        "900",
+                      fontSize:
+                        16,
+                      textAlign:
+                        "right",
+                    }}
+                  >
+                    {
+                      previewProduct
+                        ?.nameAr
+                    }
+                  </Text>
+
+                  <Text
+                    style={{
+                      color:
+                        colors.mutedForeground,
+                      fontSize:
+                        12,
+                      textAlign:
+                        "right",
+                      marginTop: 3,
+                    }}
+                  >
+                    {previewProduct
+                      ? (
+                          previewProduct.productCode ||
+                          previewProduct.barcode ||
+                          `#${previewProduct.id}`
+                        )
+                      : ""}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.productPreviewImageWrap,
+                  {
+                    backgroundColor:
+                      colors.background,
+                    borderColor:
+                      colors.border,
+                  },
+                ]}
+              >
+                {previewProduct
+                  ?.image ? (
+                  <Image
+                    source={
+                      previewProduct.image
+                    }
+                    style={
+                      styles.productPreviewImage
+                    }
+                    contentFit="contain"
+                    transition={
+                      150
+                    }
+                  />
+                ) : (
+                  <View
+                    style={
+                      styles.productPreviewPlaceholder
+                    }
+                  >
+                    <Ionicons
+                      name="image-outline"
+                      size={54}
+                      color={
+                        colors.mutedForeground
+                      }
+                    />
+                    <Text
+                      style={{
+                        color:
+                          colors.mutedForeground,
+                        marginTop: 8,
+                      }}
+                    >
+                      لا توجد صورة للصنف
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {previewProduct ? (
+                <Pressable
+                  onPress={() => {
+                    toggle(
+                      Number(
+                        previewProduct.id,
+                      ),
+                    );
+                    setPreviewProduct(
+                      null,
+                    );
+                  }}
+                  style={[
+                    styles.productPreviewSelectButton,
+                    {
+                      backgroundColor:
+                        selected.has(
+                          Number(
+                            previewProduct.id,
+                          ),
+                        )
+                          ? "#DC2626"
+                          : colors.primary,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      selected.has(
+                        Number(
+                          previewProduct.id,
+                        ),
+                      )
+                        ? "close-circle-outline"
+                        : "checkmark-circle-outline"
+                    }
+                    size={20}
+                    color="#fff"
+                  />
+                  <Text
+                    style={
+                      styles.productPreviewSelectText
+                    }
+                  >
+                    {selected.has(
+                      Number(
+                        previewProduct.id,
+                      ),
+                    )
+                      ? "إلغاء اختيار هذا الصنف"
+                      : "اختيار هذا الصنف للعرض"}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     );
   }
@@ -3169,6 +3449,89 @@ const styles =
         4,
       borderBottomWidth:
         StyleSheet.hairlineWidth,
+    },
+    productThumbnailButton: {
+      width: 50,
+      height: 50,
+      borderRadius: 10,
+      borderWidth: 1,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    productThumbnail: {
+      width: "100%",
+      height: "100%",
+    },
+    productPreviewBackdrop: {
+      flex: 1,
+      backgroundColor:
+        "rgba(0,0,0,0.58)",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 18,
+    },
+    productPreviewCard: {
+      width: "100%",
+      maxWidth: 560,
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 14,
+      gap: 12,
+    },
+    productPreviewHeader: {
+      flexDirection:
+        "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    productPreviewClose: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      flexShrink: 0,
+    },
+    productPreviewImageWrap: {
+      width: "100%",
+      aspectRatio: 1,
+      maxHeight: 520,
+      borderWidth: 1,
+      borderRadius: 14,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+    productPreviewImage: {
+      width: "100%",
+      height: "100%",
+    },
+    productPreviewPlaceholder: {
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+    productPreviewSelectButton: {
+      minHeight: 46,
+      borderRadius: 12,
+      flexDirection:
+        "row-reverse",
+      alignItems: "center",
+      justifyContent:
+        "center",
+      gap: 8,
+      paddingHorizontal:
+        14,
+    },
+    productPreviewSelectText: {
+      color: "#fff",
+      fontWeight: "900",
+      fontSize: 14,
     },
     saveActions: {
       flexDirection:
