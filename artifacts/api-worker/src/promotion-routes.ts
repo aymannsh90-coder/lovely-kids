@@ -582,9 +582,11 @@ async function findConflict(
   input: AdminInput,
   excludePromotionId?: number,
 ) {
+  // Draft promotions may overlap freely while they are being prepared.
+  // Conflict validation is only meaningful when a promotion is activated.
   if (
     input.scope !== "selected_products" ||
-    input.status === "archived"
+    input.status !== "active"
   ) {
     return null;
   }
@@ -638,7 +640,7 @@ async function findConflict(
     .where(
       and(
         inArray(promotionsTable.id, candidatePromotionIds),
-        ne(promotionsTable.status, "archived"),
+        eq(promotionsTable.status, "active"),
       ),
     );
 
