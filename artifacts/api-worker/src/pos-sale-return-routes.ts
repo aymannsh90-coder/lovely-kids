@@ -1,4 +1,6 @@
 import {
+  exchangeDocumentsTable,
+  exchangeReturnItemsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
@@ -271,6 +273,49 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
       .where(inArray(posSaleReturnItemsTable.returnId, completedReturnIds));
   }
 
+  const completedExchangeRows =
+    await db
+      .select({
+        id: exchangeDocumentsTable.id,
+      })
+      .from(exchangeDocumentsTable)
+      .where(
+        and(
+          eq(
+            exchangeDocumentsTable.sourceType,
+            "pos_sale",
+          ),
+          eq(
+            exchangeDocumentsTable.originalPosSaleId,
+            sale.id,
+          ),
+          eq(
+            exchangeDocumentsTable.status,
+            "completed",
+          ),
+        ),
+      );
+
+  const completedExchangeIds =
+    completedExchangeRows.map(
+      (row) => row.id,
+    );
+
+  const completedExchangeItems =
+    completedExchangeIds.length > 0
+      ? await db
+          .select()
+          .from(
+            exchangeReturnItemsTable,
+          )
+          .where(
+            inArray(
+              exchangeReturnItemsTable.exchangeId,
+              completedExchangeIds,
+            ),
+          )
+      : [];
+
   const returnedByOriginalItem = new Map<number, number>();
 
   for (const returnedItem of completedReturnItems) {
@@ -285,6 +330,26 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
     returnedByOriginalItem.set(
       returnedItem.originalSaleItemId,
       current + returnedItem.quantity,
+    );
+  }
+
+  for (const exchangedItem of completedExchangeItems) {
+    if (
+      exchangedItem.originalPosSaleItemId ===
+      null
+    ) {
+      continue;
+    }
+
+    const current =
+      returnedByOriginalItem.get(
+        exchangedItem.originalPosSaleItemId,
+      ) ?? 0;
+
+    returnedByOriginalItem.set(
+      exchangedItem.originalPosSaleItemId,
+      current +
+        exchangedItem.quantity,
     );
   }
 
