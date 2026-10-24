@@ -1994,21 +1994,41 @@ export default function SalePanel({
                   (
                     item.nextBundleRemainingQuantity ??
                     0
-                  ) > 0,
+                  ) > 0 ||
+                  (
+                    item.thresholdRemainingMinor ??
+                    0
+                  ) > 0 ||
+                  item.earnedRewardQuantity > 0,
               )
-              .map((item) => (
-                <div
-                  key={`entitlement-${item.promotionId}`}
-                >
-                  <span>
-                    🎁 {bidiSafePromotionLabel(item.promotionName)}
-                  </span>
+              .map((item) => {
+                const thresholdRemaining =
+                  item.thresholdRemainingMinor;
 
-                  <strong>
-                    أضف {item.nextBundleRemainingQuantity ?? item.remainingRewardQuantity} قطعة للاستفادة
-                  </strong>
-                </div>
-              ))}
+                const spendGift =
+                  item.spendThresholdMinor !==
+                    undefined ||
+                  thresholdRemaining !==
+                    undefined;
+
+                return (
+                  <div
+                    key={`entitlement-${item.promotionId}`}
+                  >
+                    <span>
+                      🎁 {bidiSafePromotionLabel(item.promotionName)}
+                    </span>
+
+                    <strong>
+                      {spendGift
+                        ? item.earnedRewardQuantity > 0
+                          ? "استحق هدية واحدة — اختيار الهدية يتم من قائمة هدايا العرض"
+                          : `باقي ${formatMinor(thresholdRemaining ?? 0)} للحصول على هدية`
+                        : `أضف ${item.nextBundleRemainingQuantity ?? item.remainingRewardQuantity} قطعة للاستفادة`}
+                    </strong>
+                  </div>
+                );
+              })}
 
             {promotionPreviewError && (
               <div>
