@@ -623,6 +623,22 @@ export default function ProductDetailScreen() {
       return;
     }
 
+    if (
+      isPromotionRewardSelection &&
+      rewardPromotion?.kind ===
+        "spend_x_get_gift" &&
+      items.some(
+        (item) =>
+          item.rewardForPromotionId ===
+          rewardPromotion.id,
+      )
+    ) {
+      setSelectionAlert(
+        "تم اختيار هدية لهذا العرض بالفعل. احذف الهدية الحالية من السلة أولًا إذا أردت اختيار هدية مختلفة.",
+      );
+      return;
+    }
+
     const existing = items.find(
       (item) =>
         item.id === product.id &&
