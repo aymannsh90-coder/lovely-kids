@@ -4,7 +4,11 @@ import {
   useGlobalSearchParams,
   usePathname,
 } from "expo-router";
-import React, { useMemo } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   Pressable,
   StyleSheet,
@@ -19,13 +23,41 @@ import {
   usePromotions,
 } from "@/context/PromotionsContext";
 
-const PROMOTION_ACCENT = "#7C3AED";
+const PROMOTION_ACCENT = "#FF8A3D";
+const PROMOTION_DARK = "#0F1E4B";
+const EXPANDED_MS = 4200;
 
 function bidiSafePromotionLabel(label: string) {
   return label.replace(
     /\d+\s*\+\s*\d+/g,
     (value) => `\u2066${value}\u2069`,
   );
+}
+
+function promotionBadgeText(
+  promotion: {
+    kind: string;
+    buyQuantity?: number | null;
+    rewardQuantity?: number | null;
+    percentOff?: number | null;
+  },
+) {
+  if (
+    promotion.kind === "buy_x_get_y" &&
+    promotion.buyQuantity &&
+    promotion.rewardQuantity
+  ) {
+    return `${promotion.buyQuantity}+${promotion.rewardQuantity}`;
+  }
+
+  if (
+    promotion.kind === "percent_off" &&
+    promotion.percentOff
+  ) {
+    return `${promotion.percentOff}%`;
+  }
+
+  return "عرض";
 }
 
 export function FloatingPromotionButton() {
@@ -38,6 +70,8 @@ export function FloatingPromotionButton() {
     usePromotions();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  const [expanded, setExpanded] =
+    useState(true);
 
   const primaryPromotion =
     useMemo(() => {
@@ -48,6 +82,21 @@ export function FloatingPromotionButton() {
           left.id - right.id,
       )[0] ?? null;
     }, [promotions]);
+
+  useEffect(() => {
+    if (!primaryPromotion) {
+      return;
+    }
+
+    setExpanded(true);
+
+    const timer = setTimeout(
+      () => setExpanded(false),
+      EXPANDED_MS,
+    );
+
+    return () => clearTimeout(timer);
+  }, [primaryPromotion?.id]);
 
   const currentPromotionId =
     Number(params.promotionId);
@@ -79,12 +128,12 @@ export function FloatingPromotionButton() {
   const top =
     compact
       ? Math.max(
-          insets.top + 180,
-          Math.round(height * 0.44),
+          insets.top + 220,
+          Math.round(height * 0.50),
         )
       : Math.max(
-          insets.top + 200,
-          Math.round(height * 0.40),
+          insets.top + 240,
+          Math.round(height * 0.46),
         );
 
   const rawLabel =
@@ -93,12 +142,31 @@ export function FloatingPromotionButton() {
       primaryPromotion,
     );
 
-  const label =
+  const shortLabel =
     bidiSafePromotionLabel(
       /^عرض\s/u.test(rawLabel)
         ? rawLabel
         : `عرض ${rawLabel}`,
     );
+
+  const badge =
+    bidiSafePromotionLabel(
+      promotionBadgeText(
+        primaryPromotion,
+      ),
+    );
+
+  const openPromotion = () =>
+    router.push({
+      pathname:
+        "/(tabs)/products",
+      params: {
+        promotionId:
+          String(
+            primaryPromotion.id,
+          ),
+      },
+    } as never);
 
   return (
     <View
@@ -109,22 +177,14 @@ export function FloatingPromotionButton() {
       ]}
     >
       <Pressable
-        onPress={() =>
-          router.push({
-            pathname:
-              "/(tabs)/products",
-            params: {
-              promotionId:
-                String(
-                  primaryPromotion.id,
-                ),
-            },
-          } as never)
-        }
+        onPress={openPromotion}
         accessibilityRole="button"
         accessibilityLabel={`عرض منتجات ${primaryPromotion.publicLabel}`}
         style={({ pressed }) => [
           styles.button,
+          expanded
+            ? styles.expandedButton
+            : styles.compactButton,
           {
             opacity:
               pressed ? 0.86 : 1,
@@ -132,25 +192,52 @@ export function FloatingPromotionButton() {
         ]}
       >
         <View
-          style={
-            styles.iconBubble
-          }
+          style={styles.giftCircle}
         >
           <Ionicons
             name="gift-outline"
-            size={18}
-            color={
-              PROMOTION_ACCENT
-            }
+            size={21}
+            color="#FFFFFF"
           />
         </View>
 
-        <Text
-          numberOfLines={1}
-          style={styles.label}
+        {expanded ? (
+          <View
+            style={
+              styles.expandedCopy
+            }
+          >
+            <Text
+              style={
+                styles.eyebrow
+              }
+            >
+              عرض خاص
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={
+                styles.expandedLabel
+              }
+            >
+              {shortLabel}
+            </Text>
+          </View>
+        ) : null}
+
+        <View
+          style={
+            styles.badge
+          }
         >
-          {label}
-        </Text>
+          <Text
+            style={
+              styles.badgeText
+            }
+          >
+            {badge}
+          </Text>
+        </View>
       </Pressable>
     </View>
   );
@@ -160,28 +247,18 @@ const styles =
   StyleSheet.create({
     wrapper: {
       position: "absolute",
-      left: 8,
+      left: 6,
       zIndex: 9998,
-      elevation: 18,
+      elevation: 20,
     },
     button: {
-      minHeight: 48,
-      maxWidth: 178,
-      borderRadius: 24,
+      backgroundColor:
+        PROMOTION_ACCENT,
       borderWidth: 2,
       borderColor:
         "rgba(255,255,255,0.96)",
-      backgroundColor:
-        PROMOTION_ACCENT,
-      paddingLeft: 12,
-      paddingRight: 9,
-      paddingVertical: 6,
-      flexDirection:
-        "row",
+      flexDirection: "row",
       alignItems: "center",
-      justifyContent:
-        "center",
-      gap: 7,
       shadowColor: "#000",
       shadowOpacity: 0.18,
       shadowRadius: 8,
@@ -190,22 +267,69 @@ const styles =
         height: 3,
       },
     },
-    iconBubble: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
+    compactButton: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      justifyContent: "center",
+    },
+    expandedButton: {
+      minHeight: 56,
+      maxWidth: 190,
+      borderRadius: 28,
+      paddingLeft: 8,
+      paddingRight: 15,
+      paddingVertical: 6,
+      gap: 8,
+    },
+    giftCircle: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       backgroundColor:
-        "#FFFFFF",
+        "rgba(255,255,255,0.16)",
       alignItems: "center",
       justifyContent:
         "center",
       flexShrink: 0,
     },
-    label: {
+    expandedCopy: {
+      flexShrink: 1,
+      gap: 1,
+    },
+    eyebrow: {
+      color:
+        "rgba(255,255,255,0.84)",
+      fontSize: 9,
+      fontWeight: "800",
+      textAlign: "right",
+    },
+    expandedLabel: {
       color: "#FFFFFF",
-      fontSize: 12.5,
+      fontSize: 12,
       fontWeight: "900",
       textAlign: "right",
-      flexShrink: 1,
+    },
+    badge: {
+      position: "absolute",
+      top: -7,
+      right: -7,
+      minWidth: 36,
+      height: 21,
+      borderRadius: 11,
+      paddingHorizontal: 6,
+      backgroundColor:
+        PROMOTION_DARK,
+      borderWidth: 2,
+      borderColor: "#FFFFFF",
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+    badgeText: {
+      color: "#FFFFFF",
+      fontSize: 9,
+      fontWeight: "900",
+      textAlign: "center",
     },
   });
