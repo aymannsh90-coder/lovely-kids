@@ -213,6 +213,13 @@ function selectionIsComplete(line: CartLine) {
   return true;
 }
 
+function bidiSafePromotionLabel(label: string) {
+  return label.replace(
+    /\d+\s*\+\s*\d+/g,
+    (value) => `\u2066${value}\u2069`,
+  );
+}
+
 export default function SalePanel({
   token,
   session,
@@ -1748,7 +1755,7 @@ export default function SalePanel({
                               ...new Set(
                                 (promoLine?.allocations ?? []).map(
                                   (allocation) =>
-                                    allocation.promotionName,
+                                    bidiSafePromotionLabel(allocation.promotionName),
                                 ),
                               ),
                             ];
@@ -1965,7 +1972,7 @@ export default function SalePanel({
                       key={promotion.promotionId}
                     >
                       <span>
-                        خصم {promotion.publicLabel}
+                        خصم {bidiSafePromotionLabel(promotion.publicLabel)}
                       </span>
 
                       <strong>
@@ -1994,7 +2001,7 @@ export default function SalePanel({
                   key={`entitlement-${item.promotionId}`}
                 >
                   <span>
-                    🎁 {item.promotionName}
+                    🎁 {bidiSafePromotionLabel(item.promotionName)}
                   </span>
 
                   <strong>
