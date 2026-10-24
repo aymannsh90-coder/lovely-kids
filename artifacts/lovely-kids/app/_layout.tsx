@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ClerkProviderWrapper } from "@/components/ClerkProviderWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { FloatingPromotionButton } from "@/components/FloatingPromotionButton";
 import { PromotionalPopup } from "@/components/PromotionalPopup";
 import { StoreShareButton } from "@/components/StoreShareButton";
 import { StickyCartBar } from "@/components/StickyCartBar";
@@ -187,6 +188,7 @@ export default function RootLayout() {
                             <KeyboardProvider>
                               <RootLayoutNav />
                               {!showWelcome && <StickyCartBar />}
+                              {!showWelcome && <FloatingPromotionButton />}
                               {showWelcome && (
                                 <WelcomeSplash onFinish={dismissWelcome} />
                               )}
@@ -195,6 +197,7 @@ export default function RootLayout() {
                             <>
                               <RootLayoutNav />
                               {!showWelcome && <StickyCartBar />}
+                              {!showWelcome && <FloatingPromotionButton />}
                               {showWelcome && (
                                 <WelcomeSplash onFinish={dismissWelcome} />
                               )}
