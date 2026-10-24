@@ -26,6 +26,7 @@ import { API_BASE } from "@/constants/api";
 import {
   DEFAULT_CATEGORY_LABELS,
 } from "@/data/products";
+import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
@@ -226,6 +227,40 @@ function numberInput(
     : fallback;
 }
 
+const LTR_ISOLATE = "\u2066";
+const POP_DIRECTIONAL_ISOLATE = "\u2069";
+
+function bidiSafePromotionText(
+  value: string,
+) {
+  return value.replace(
+    /\d+\s*\+\s*\d+/g,
+    (token) =>
+      `${LTR_ISOLATE}${token}${POP_DIRECTIONAL_ISOLATE}`,
+  );
+}
+
+function quantityPair(
+  buyQuantity: number,
+  rewardQuantity: number,
+) {
+  return `${LTR_ISOLATE}${buyQuantity}+${rewardQuantity}${POP_DIRECTIONAL_ISOLATE}`;
+}
+
+function humanChannel(
+  channel: PromotionRow["channel"],
+) {
+  if (channel === "both") {
+    return "المتجر + POS";
+  }
+
+  if (channel === "web") {
+    return "المتجر فقط";
+  }
+
+  return "POS فقط";
+}
+
 function humanKind(
   row: PromotionRow,
 ) {
@@ -249,7 +284,10 @@ function humanKind(
     row.rewardMode ===
     "free"
   ) {
-    return `${row.buyQuantity ?? 0}+${row.rewardQuantity ?? 0} مجانًا`;
+    return `${quantityPair(
+      row.buyQuantity ?? 0,
+      row.rewardQuantity ?? 0,
+    )} مجانًا`;
   }
 
   if (
@@ -276,6 +314,40 @@ export default function PromotionsAdminScreen() {
   const {
     products,
   } = useProducts();
+  const {
+    settings,
+  } = useAppSettings();
+
+  const categoryLabel =
+    useCallback(
+      (value: string) => {
+        if (
+          value ===
+          "all"
+        ) {
+          return "كل الأقسام";
+        }
+
+        return (
+          settings.categoryLabels[
+            value
+          ] ??
+          DEFAULT_CATEGORY_LABELS[
+            value
+          ] ??
+          (
+            value.startsWith(
+              "custom_",
+            )
+              ? "قسم مخصص"
+              : value
+          )
+        );
+      },
+      [
+        settings.categoryLabels,
+      ],
+    );
 
   const [
     promotions,
@@ -1279,29 +1351,92 @@ export default function PromotionsAdminScreen() {
     ] = useState("all");
 
     const categories =
-      useMemo(
-        () => [
-          "all",
-          ...[
-            ...new Set(
-              products
-                .filter(
-                  (product) =>
-                    !product.deletedAt,
-                )
-                .map(
-                  (product) =>
-                    product.category,
-                )
-                .filter(
-                  (value) =>
-                    Boolean(value),
-                ),
+      useMemo(() => {
+        const values = [
+          ...new Set(
+            products
+              .filter(
+                (product) =>
+                  !product.deletedAt,
+              )
+              .map(
+                (product) =>
+                  product.category,
+              )
+              .filter(
+                (value) =>
+                  Boolean(value),
+              ),
+          ),
+        ];
+
+        const configuredOrder =
+          new Map(
+            settings.categoryOrder.map(
+              (value, index) => [
+                value,
+                index,
+              ],
             ),
-          ].sort(),
-        ],
-        [products],
-      );
+          );
+
+        values.sort(
+          (left, right) => {
+            const leftOrder =
+              configuredOrder.get(
+                left,
+              );
+            const rightOrder =
+              configuredOrder.get(
+                right,
+              );
+
+            if (
+              leftOrder !==
+                undefined ||
+              rightOrder !==
+                undefined
+            ) {
+              if (
+                leftOrder ===
+                undefined
+              ) {
+                return 1;
+              }
+
+              if (
+                rightOrder ===
+                undefined
+              ) {
+                return -1;
+              }
+
+              return (
+                leftOrder -
+                rightOrder
+              );
+            }
+
+            return categoryLabel(
+              left,
+            ).localeCompare(
+              categoryLabel(
+                right,
+              ),
+              "ar",
+            );
+          },
+        );
+
+        return [
+          "all",
+          ...values,
+        ];
+      }, [
+        categoryLabel,
+        products,
+        settings.categoryOrder,
+      ]);
 
     const matching =
       useMemo(() => {
@@ -1466,9 +1601,9 @@ export default function PromotionsAdminScreen() {
                     fontSize: 12,
                   }}
                 >
-                  {value === "all"
-                    ? "كل الأقسام"
-                    : DEFAULT_CATEGORY_LABELS[value] ?? value}
+                  {categoryLabel(
+                    value,
+                  )}
                 </Text>
               </Pressable>
             );
@@ -1484,7 +1619,7 @@ export default function PromotionsAdminScreen() {
         >
           {category === "all"
             ? "النتائج المطابقة: " + matching.length
-            : "قسم " + (DEFAULT_CATEGORY_LABELS[category] ?? category) + " · " + matching.length + " صنف"}
+            : "قسم " + categoryLabel(category) + " · " + matching.length + " صنف"}
         </Text>
 
         <View
@@ -1783,7 +1918,9 @@ export default function PromotionsAdminScreen() {
             onChangeText={
               setPublicLabel
             }
-            placeholder="النص الظاهر: عرض 4+1"
+            placeholder={bidiSafePromotionText(
+              "النص الظاهر: عرض 4+1",
+            )}
             placeholderTextColor={
               colors.mutedForeground
             }
@@ -2592,7 +2729,9 @@ export default function PromotionsAdminScreen() {
                         15,
                     }}
                   >
-                    {row.publicLabel}
+                    {bidiSafePromotionText(
+                      row.publicLabel,
+                    )}
                   </Text>
 
                   <Text
@@ -2605,7 +2744,7 @@ export default function PromotionsAdminScreen() {
                         12,
                     }}
                   >
-                    {row.name} · {humanKind(row)} · {row.channel}
+                    {row.name} · {humanKind(row)} · {humanChannel(row.channel)}
                   </Text>
 
                   <Text
