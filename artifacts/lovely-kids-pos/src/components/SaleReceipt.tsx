@@ -70,6 +70,13 @@ function paymentMethodLabel(
   return "نقدي";
 }
 
+function bidiSafePromotionLabel(label: string) {
+  return label.replace(
+    /\d+\s*\+\s*\d+/g,
+    (value) => `\u2066${value}\u2069`,
+  );
+}
+
 export default function SaleReceipt({
   result,
   isReprint = false,
@@ -189,7 +196,7 @@ export default function SaleReceipt({
             key={`${promotion.promotionId ?? "snapshot"}-${promotion.promotionName}`}
           >
             <span>
-              خصم {promotion.publicLabel}
+              خصم {bidiSafePromotionLabel(promotion.publicLabel)}
             </span>
             <strong>
               -{(promotion.discountMinor / 100).toFixed(2)} ₪
