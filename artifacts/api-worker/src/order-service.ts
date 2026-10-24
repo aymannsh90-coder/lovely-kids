@@ -944,6 +944,13 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
               promotion.id,
           );
 
+        const appliedPromotion =
+          promotionCalculation.promotions.find(
+            (item) =>
+              item.promotionId ===
+              promotion.id,
+          );
+
         if (
           !entitlement ||
           entitlement.earnedRewardQuantity <
@@ -951,6 +958,16 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         ) {
           throw new OrderValidationError(
             "قيمة السلة لم تعد مؤهلة للهدية. أزل الهدية أو أضف أصنافًا حتى تصل إلى حد العرض.",
+          );
+        }
+
+        if (
+          !appliedPromotion ||
+          appliedPromotion.applicationCount <
+            1
+        ) {
+          throw new OrderValidationError(
+            "تعذر تطبيق الهدية المختارة مع العروض الحالية في السلة. غيّر الهدية أو راجع العروض المطبقة.",
           );
         }
       }
