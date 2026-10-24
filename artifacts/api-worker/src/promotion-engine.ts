@@ -853,7 +853,10 @@ function applySpendXGetGift(
     };
   }
 
-  const explicitRewards =
+  // A product explicitly marked as this promotion's gift must
+  // never count toward the spend threshold, even if stacking rules later
+  // prevent that gift from receiving the promotion.
+  const markedRewards =
     units.filter(
       (unit) =>
         unit.rewardForPromotionId ===
@@ -863,18 +866,23 @@ function applySpendXGetGift(
         ) &&
         !promotion.excludedProductIds.includes(
           unit.productId,
-        ) &&
-        unitCanJoinPromotion(
-          unit,
-          promotion,
         ),
     );
 
   const explicitRewardIds =
     new Set(
-      explicitRewards.map(
+      markedRewards.map(
         (unit) => unit.id,
       ),
+    );
+
+  const explicitRewards =
+    markedRewards.filter(
+      (unit) =>
+        unitCanJoinPromotion(
+          unit,
+          promotion,
+        ),
     );
 
   const qualifierUnits =
@@ -912,7 +920,7 @@ function applySpendXGetGift(
       : 0;
 
   const selectedRewardQuantity =
-    explicitRewards.length;
+    markedRewards.length;
 
   const entitlement: PromotionEntitlement =
     {
