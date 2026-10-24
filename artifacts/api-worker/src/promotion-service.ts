@@ -48,6 +48,9 @@ function toDefinition(
     bundleQuantity: row.bundleQuantity,
     bundlePriceMinor: row.bundlePriceMinor,
 
+    spendThresholdMinor:
+      row.spendThresholdMinor,
+
     repeatable: row.repeatable,
     maxApplicationsPerOrder: row.maxApplicationsPerOrder,
 
@@ -139,6 +142,8 @@ export function serializePromotionSnapshot(
     percentOff: promotion.percentOff ?? null,
     bundleQuantity: promotion.bundleQuantity ?? null,
     bundlePriceMinor: promotion.bundlePriceMinor ?? null,
+    spendThresholdMinor:
+      promotion.spendThresholdMinor ?? null,
     repeatable: promotion.repeatable,
     maxApplicationsPerOrder:
       promotion.maxApplicationsPerOrder ?? null,
@@ -186,7 +191,8 @@ export function promotionDefinitionFromSnapshot(
   const kind =
     snapshot.kind === "buy_x_get_y" ||
     snapshot.kind === "percent_off" ||
-    snapshot.kind === "bundle_price"
+    snapshot.kind === "bundle_price" ||
+    snapshot.kind === "spend_x_get_gift"
       ? snapshot.kind
       : null;
 
@@ -299,6 +305,11 @@ export function promotionDefinitionFromSnapshot(
     bundlePriceMinor:
       numberOrNull(
         snapshot.bundlePriceMinor,
+      ),
+
+    spendThresholdMinor:
+      numberOrNull(
+        snapshot.spendThresholdMinor,
       ),
 
     repeatable:
