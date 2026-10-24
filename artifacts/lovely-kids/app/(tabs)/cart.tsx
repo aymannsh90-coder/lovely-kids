@@ -29,6 +29,7 @@ import { getProductShareUrl } from "@/utils/productShare";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import {
+  bidiSafePromotionText,
   usePromotions,
   type PromotionPreviewResult,
 } from "@/context/PromotionsContext";
@@ -2457,11 +2458,34 @@ export default function CartScreen() {
                       fontWeight: "800",
                     }}
                   >
-                    🎁 {promotion.publicLabel}
+                    🎁 {bidiSafePromotionText(
+                      promotion.publicLabel,
+                    )}
                   </Text>
                 </View>
               ),
             )}
+
+            {promotionDiscountAmount > 0 ? (
+              <View style={styles.summaryRow}>
+                <Text
+                  style={[
+                    styles.totalPrice,
+                    { color: "#16A34A" },
+                  ]}
+                >
+                  {totalPrice - promotionDiscountAmount} ₪
+                </Text>
+                <Text
+                  style={[
+                    styles.totalLabel,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  الإجمالي بعد العرض
+                </Text>
+              </View>
+            ) : null}
 
             {(promotionPreview?.entitlements ?? [])
               .filter(
