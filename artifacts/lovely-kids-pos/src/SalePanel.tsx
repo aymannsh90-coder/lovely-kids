@@ -2798,7 +2798,17 @@ export default function SalePanel({
 
                   <td>{item.quantity}</td>
 
-                  <td dir="ltr">{item.lineTotal.toFixed(2)} ₪</td>
+                  <td dir="ltr">
+                    {(
+                      lastSale.sale.promotionDiscountMinor > 0
+                        ? (
+                            item.lineTotalMinor +
+                            item.promotionDiscountMinor
+                          ) /
+                          100
+                        : item.lineTotal
+                    ).toFixed(2)} ₪
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -2813,12 +2823,60 @@ export default function SalePanel({
               <strong>{lastSale.sale.subtotal.toFixed(2)} ₪</strong>
             </div>
 
-            {lastSale.sale.discountMinor > 0 && (
-              <div>
-                <span>قيمة الخصم</span>
+            {lastSale.sale.promotionDiscountMinor > 0 ? (
+              <>
+                {lastSale.sale.itemDiscountMinor > 0 && (
+                  <div>
+                    <span>خصم الأصناف</span>
 
-                <strong>{lastSale.sale.discount.toFixed(2)} ₪</strong>
-              </div>
+                    <strong>
+                      -{lastSale.sale.itemDiscount.toFixed(2)} ₪
+                    </strong>
+                  </div>
+                )}
+
+                {lastSale.promotions.length > 0 ? (
+                  lastSale.promotions.map((promotion) => (
+                    <div
+                      key={`direct-receipt-promotion-${promotion.promotionId ?? "snapshot"}-${promotion.promotionName}`}
+                    >
+                      <span>
+                        خصم عرض {bidiSafePromotionLabel(promotion.publicLabel)}
+                      </span>
+
+                      <strong>
+                        -{(promotion.discountMinor / 100).toFixed(2)} ₪
+                      </strong>
+                    </div>
+                  ))
+                ) : (
+                  <div>
+                    <span>خصم العرض</span>
+
+                    <strong>
+                      -{lastSale.sale.promotionDiscount.toFixed(2)} ₪
+                    </strong>
+                  </div>
+                )}
+
+                {lastSale.sale.invoiceDiscountMinor > 0 && (
+                  <div>
+                    <span>خصم يدوي</span>
+
+                    <strong>
+                      -{lastSale.sale.invoiceDiscount.toFixed(2)} ₪
+                    </strong>
+                  </div>
+                )}
+              </>
+            ) : (
+              lastSale.sale.discountMinor > 0 && (
+                <div>
+                  <span>قيمة الخصم</span>
+
+                  <strong>{lastSale.sale.discount.toFixed(2)} ₪</strong>
+                </div>
+              )
             )}
 
             <div className="receipt-total">
