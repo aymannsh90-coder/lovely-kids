@@ -22,8 +22,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
 import {
+  promotionCustomerTitle,
   promotionDetailText,
-  promotionShortLabel,
   usePromotions,
 } from "@/context/PromotionsContext";
 import { useNotificationOptIn } from "@/context/NotificationOptInContext";
@@ -1048,7 +1048,7 @@ export default function ProductDetailScreen() {
                     },
                   ]}
                 >
-                  {promotionShortLabel(
+                  {promotionCustomerTitle(
                     primaryPromotion,
                   )}
                 </Text>
