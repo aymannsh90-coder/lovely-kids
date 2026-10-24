@@ -15,6 +15,9 @@ import { openDb, type Env } from "./db";
 import { handleCreatePosSaleReturn } from "./pos-sale-return-create";
 import { handleCreateMobileEmergencyReturn } from "./pos-mobile-return-create";
 import { handleVoidPosSaleReturn } from "./pos-sale-return-void";
+import {
+  allocateReturnDiscountMinor,
+} from "./promotion-return-requalification";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -204,6 +207,40 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
     .where(eq(posSaleItemsTable.saleId, sale.id))
     .orderBy(asc(posSaleItemsTable.lineNumber));
 
+  const invoiceDiscountAllocations =
+    allocateReturnDiscountMinor(
+      sale.invoiceDiscountMinor,
+      saleItems.map((item) => {
+        const grossAmountMinor =
+          item.soldUnitPriceMinor *
+          item.quantity;
+
+        return {
+          grossAmountMinor,
+          alreadyAllocatedMinor:
+            item.lineDiscountMinor +
+            item.promotionDiscountMinor,
+          weightMinor:
+            Math.max(
+              0,
+              item.lineTotalMinor,
+            ),
+        };
+      }),
+    );
+
+  const invoiceDiscountByItemId =
+    new Map(
+      saleItems.map(
+        (item, index) => [
+          item.id,
+          invoiceDiscountAllocations[
+            index
+          ] ?? 0,
+        ],
+      ),
+    );
+
   const currentProductImages =
     await getCurrentProductImageMap(
       db,
@@ -283,8 +320,42 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
       lineDiscountMinor: item.lineDiscountMinor,
       lineDiscount: item.lineDiscountMinor / 100,
 
+      promotionDiscountMinor:
+        item.promotionDiscountMinor,
+      promotionDiscount:
+        item.promotionDiscountMinor /
+        100,
+
+      invoiceDiscountAllocatedMinor:
+        invoiceDiscountByItemId.get(
+          item.id,
+        ) ?? 0,
+      invoiceDiscountAllocated:
+        (
+          invoiceDiscountByItemId.get(
+            item.id,
+          ) ?? 0
+        ) / 100,
+
       originalLineTotalMinor: item.lineTotalMinor,
       originalLineTotal: item.lineTotalMinor / 100,
+
+      historicalNetMinor:
+        item.lineTotalMinor -
+        (
+          invoiceDiscountByItemId.get(
+            item.id,
+          ) ?? 0
+        ),
+      historicalNet:
+        (
+          item.lineTotalMinor -
+          (
+            invoiceDiscountByItemId.get(
+              item.id,
+            ) ?? 0
+          )
+        ) / 100,
 
       returnableGrossMinor: item.soldUnitPriceMinor * returnableQuantity,
 
