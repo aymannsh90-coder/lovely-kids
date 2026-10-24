@@ -29,7 +29,6 @@ import { getProductShareUrl } from "@/utils/productShare";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import {
-  bidiSafePromotionText,
   usePromotions,
   type PromotionPreviewResult,
 } from "@/context/PromotionsContext";
@@ -2458,9 +2457,7 @@ export default function CartScreen() {
                       fontWeight: "800",
                     }}
                   >
-                    🎁 {bidiSafePromotionText(
-                      promotion.publicLabel,
-                    )}
+                    🎁 {promotion.publicLabel}
                   </Text>
                 </View>
               ),
