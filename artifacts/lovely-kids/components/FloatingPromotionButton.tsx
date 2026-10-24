@@ -77,6 +77,10 @@ export function FloatingPromotionButton() {
   const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] =
     useState(true);
+  const collapseTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null,
+    );
   const [bubbleSize, setBubbleSize] =
     useState({
       width: 190,
@@ -132,19 +136,40 @@ export function FloatingPromotionButton() {
       "left",
     );
 
+  const scheduleCollapse = () => {
+    if (collapseTimerRef.current) {
+      clearTimeout(
+        collapseTimerRef.current,
+      );
+    }
+
+    collapseTimerRef.current =
+      setTimeout(() => {
+        setExpanded(false);
+        collapseTimerRef.current =
+          null;
+      }, EXPANDED_MS);
+  };
+
   useEffect(() => {
     if (!primaryPromotion) {
       return;
     }
 
     setExpanded(true);
+    scheduleCollapse();
 
-    const timer = setTimeout(
-      () => setExpanded(false),
-      EXPANDED_MS,
-    );
-
-    return () => clearTimeout(timer);
+    return () => {
+      if (
+        collapseTimerRef.current
+      ) {
+        clearTimeout(
+          collapseTimerRef.current,
+        );
+        collapseTimerRef.current =
+          null;
+      }
+    };
   }, [primaryPromotion?.id]);
 
   const clampPosition = (
@@ -377,9 +402,23 @@ export function FloatingPromotionButton() {
       ),
     );
 
-  const openPromotion = () => {
+  const handlePromotionPress = () => {
     if (suppressPress.current) {
       return;
+    }
+
+    if (!expanded) {
+      setExpanded(true);
+      scheduleCollapse();
+      return;
+    }
+
+    if (collapseTimerRef.current) {
+      clearTimeout(
+        collapseTimerRef.current,
+      );
+      collapseTimerRef.current =
+        null;
     }
 
     router.push({
@@ -426,9 +465,13 @@ export function FloatingPromotionButton() {
       ]}
     >
       <Pressable
-        onPress={openPromotion}
+        onPress={handlePromotionPress}
         accessibilityRole="button"
-        accessibilityLabel={`عرض منتجات ${primaryPromotion.publicLabel}. يمكن سحب الزر إلى طرف الشاشة.`}
+        accessibilityLabel={
+          expanded
+            ? `فتح منتجات عرض ${primaryPromotion.publicLabel}. يمكن سحب الزر إلى طرف الشاشة.`
+            : `إظهار تفاصيل عرض ${primaryPromotion.publicLabel}. يمكن سحب الزر إلى طرف الشاشة.`
+        }
         style={({ pressed }) => [
           styles.button,
           expanded
