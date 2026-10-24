@@ -264,6 +264,11 @@ export function ProductCard({
         );
       }
 
+      if (rewardForPromotionId) {
+        router.replace("/(tabs)/cart");
+        return;
+      }
+
       setTimeout(() => {
         void requestGeneralPrompt("cart");
       }, 800);
