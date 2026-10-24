@@ -2959,8 +2959,17 @@ export interface PosSaleReturnPreviewItem {
   lineDiscountMinor: number;
   lineDiscount: number;
 
+  promotionDiscountMinor: number;
+  promotionDiscount: number;
+
+  invoiceDiscountAllocatedMinor: number;
+  invoiceDiscountAllocated: number;
+
   originalLineTotalMinor: number;
   originalLineTotal: number;
+
+  historicalNetMinor: number;
+  historicalNet: number;
 
   returnableGrossMinor: number;
   returnableGross: number;
