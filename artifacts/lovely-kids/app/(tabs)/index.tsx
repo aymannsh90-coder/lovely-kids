@@ -1694,11 +1694,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     flexDirection: "row",
+    direction: "ltr",
     alignItems: "stretch",
     gap: 8,
   },
   promotionShortcut: {
     minHeight: 48,
+    direction: "rtl",
     maxWidth: 132,
     paddingHorizontal: 11,
     borderRadius: 14,
