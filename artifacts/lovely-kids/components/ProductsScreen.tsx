@@ -33,9 +33,8 @@ import { useProductCategories } from "@/hooks/useProductCategories";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 import {
-  bidiSafePromotionText,
+  promotionCustomerTitle,
   promotionDetailText,
-  promotionShortLabel,
   usePromotions,
 } from "@/context/PromotionsContext";
 
@@ -492,7 +491,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
           </Pressable>
           <Text style={[styles.title, { color: colors.foreground }]}>
             {selectedPromotion
-              ? promotionShortLabel(
+              ? promotionCustomerTitle(
                   selectedPromotion,
                 )
               : isOffersView
@@ -656,8 +655,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
               textAlign: "right",
             }}
           >
-            {bidiSafePromotionText(
-              selectedPromotion.publicLabel,
+            {promotionCustomerTitle(
+              selectedPromotion,
             )}
           </Text>
 
