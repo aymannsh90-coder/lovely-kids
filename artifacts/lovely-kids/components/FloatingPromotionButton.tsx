@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useCart } from "@/context/CartContext";
 import {
   promotionShortLabel,
   usePromotions,
@@ -37,7 +36,6 @@ export function FloatingPromotionButton() {
     }>();
   const { promotions, loading } =
     usePromotions();
-  const { totalItems } = useCart();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
