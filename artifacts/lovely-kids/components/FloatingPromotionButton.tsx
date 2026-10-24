@@ -7,9 +7,12 @@ import {
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
+  Animated,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -26,6 +29,8 @@ import {
 const PROMOTION_ACCENT = "#FF8A3D";
 const PROMOTION_DARK = "#0F1E4B";
 const EXPANDED_MS = 4200;
+const EDGE_GAP = 8;
+const DRAG_THRESHOLD = 6;
 
 function bidiSafePromotionLabel(label: string) {
   return label.replace(
@@ -72,6 +77,11 @@ export function FloatingPromotionButton() {
   const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] =
     useState(true);
+  const [bubbleSize, setBubbleSize] =
+    useState({
+      width: 190,
+      height: 56,
+    });
 
   const primaryPromotion =
     useMemo(() => {
@@ -82,6 +92,41 @@ export function FloatingPromotionButton() {
           left.id - right.id,
       )[0] ?? null;
     }, [promotions]);
+
+  const compact = width <= 768;
+
+  const initialTop =
+    compact
+      ? Math.max(
+          insets.top + 220,
+          Math.round(height * 0.50),
+        )
+      : Math.max(
+          insets.top + 240,
+          Math.round(height * 0.46),
+        );
+
+  const position = useRef(
+    new Animated.ValueXY({
+      x: EDGE_GAP,
+      y: initialTop,
+    }),
+  ).current;
+
+  const currentPosition = useRef({
+    x: EDGE_GAP,
+    y: initialTop,
+  });
+  const dragStart = useRef({
+    x: EDGE_GAP,
+    y: initialTop,
+  });
+  const draggedDuringGesture =
+    useRef(false);
+  const suppressPress =
+    useRef(false);
+  const hasUserMoved =
+    useRef(false);
 
   useEffect(() => {
     if (!primaryPromotion) {
@@ -97,6 +142,178 @@ export function FloatingPromotionButton() {
 
     return () => clearTimeout(timer);
   }, [primaryPromotion?.id]);
+
+  const clampPosition = (
+    x: number,
+    y: number,
+    nextSize = bubbleSize,
+  ) => {
+    const maxX = Math.max(
+      EDGE_GAP,
+      width -
+        nextSize.width -
+        EDGE_GAP,
+    );
+    const minY =
+      insets.top + EDGE_GAP;
+    const maxY = Math.max(
+      minY,
+      height -
+        nextSize.height -
+        insets.bottom -
+        78,
+    );
+
+    return {
+      x: Math.min(
+        Math.max(x, EDGE_GAP),
+        maxX,
+      ),
+      y: Math.min(
+        Math.max(y, minY),
+        maxY,
+      ),
+    };
+  };
+
+  useEffect(() => {
+    const target = hasUserMoved.current
+      ? clampPosition(
+          currentPosition.current.x,
+          currentPosition.current.y,
+        )
+      : clampPosition(
+          EDGE_GAP,
+          initialTop,
+        );
+
+    currentPosition.current =
+      target;
+    position.setValue(target);
+  }, [
+    width,
+    height,
+    insets.top,
+    insets.bottom,
+    initialTop,
+    bubbleSize.width,
+    bubbleSize.height,
+    position,
+  ]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder:
+          () => false,
+        onMoveShouldSetPanResponder:
+          (_, gesture) =>
+            Math.abs(gesture.dx) >
+              DRAG_THRESHOLD ||
+            Math.abs(gesture.dy) >
+              DRAG_THRESHOLD,
+        onPanResponderGrant: () => {
+          dragStart.current = {
+            ...currentPosition.current,
+          };
+          draggedDuringGesture.current =
+            false;
+        },
+        onPanResponderMove: (
+          _,
+          gesture,
+        ) => {
+          draggedDuringGesture.current =
+            true;
+          hasUserMoved.current = true;
+
+          const next = clampPosition(
+            dragStart.current.x +
+              gesture.dx,
+            dragStart.current.y +
+              gesture.dy,
+          );
+
+          currentPosition.current =
+            next;
+          position.setValue(next);
+        },
+        onPanResponderRelease: (
+          _,
+          gesture,
+        ) => {
+          if (
+            !draggedDuringGesture.current
+          ) {
+            return;
+          }
+
+          const snappedX =
+            gesture.moveX <
+            width / 2
+              ? EDGE_GAP
+              : Math.max(
+                  EDGE_GAP,
+                  width -
+                    bubbleSize.width -
+                    EDGE_GAP,
+                );
+
+          const target =
+            clampPosition(
+              snappedX,
+              currentPosition.current.y,
+            );
+
+          currentPosition.current =
+            target;
+          suppressPress.current =
+            true;
+
+          Animated.spring(
+            position,
+            {
+              toValue: target,
+              useNativeDriver:
+                false,
+              tension: 90,
+              friction: 10,
+            },
+          ).start(() => {
+            setTimeout(() => {
+              suppressPress.current =
+                false;
+            }, 120);
+          });
+        },
+        onPanResponderTerminate: () => {
+          const target =
+            clampPosition(
+              currentPosition.current.x,
+              currentPosition.current.y,
+            );
+
+          currentPosition.current =
+            target;
+          position.setValue(target);
+          suppressPress.current =
+            true;
+          setTimeout(() => {
+            suppressPress.current =
+              false;
+          }, 120);
+        },
+      }),
+    [
+      width,
+      height,
+      insets.top,
+      insets.bottom,
+      bubbleSize.width,
+      bubbleSize.height,
+      position,
+    ],
+  );
 
   const currentPromotionId =
     Number(params.promotionId);
@@ -123,19 +340,6 @@ export function FloatingPromotionButton() {
     return null;
   }
 
-  const compact = width <= 768;
-
-  const top =
-    compact
-      ? Math.max(
-          insets.top + 220,
-          Math.round(height * 0.50),
-        )
-      : Math.max(
-          insets.top + 240,
-          Math.round(height * 0.46),
-        );
-
   const rawLabel =
     primaryPromotion.publicLabel?.trim() ||
     promotionShortLabel(
@@ -156,7 +360,11 @@ export function FloatingPromotionButton() {
       ),
     );
 
-  const openPromotion = () =>
+  const openPromotion = () => {
+    if (suppressPress.current) {
+      return;
+    }
+
     router.push({
       pathname:
         "/(tabs)/products",
@@ -167,19 +375,43 @@ export function FloatingPromotionButton() {
           ),
       },
     } as never);
+  };
 
   return (
-    <View
-      pointerEvents="box-none"
+    <Animated.View
+      {...panResponder.panHandlers}
+      onLayout={(event) => {
+        const nextSize = {
+          width:
+            event.nativeEvent.layout
+              .width,
+          height:
+            event.nativeEvent.layout
+              .height,
+        };
+
+        setBubbleSize(
+          (current) =>
+            current.width ===
+                nextSize.width &&
+            current.height ===
+                nextSize.height
+              ? current
+              : nextSize,
+        );
+      }}
       style={[
         styles.wrapper,
-        { top },
+        {
+          transform:
+            position.getTranslateTransform(),
+        },
       ]}
     >
       <Pressable
         onPress={openPromotion}
         accessibilityRole="button"
-        accessibilityLabel={`عرض منتجات ${primaryPromotion.publicLabel}`}
+        accessibilityLabel={`عرض منتجات ${primaryPromotion.publicLabel}. يمكن سحب الزر إلى طرف الشاشة.`}
         style={({ pressed }) => [
           styles.button,
           expanded
@@ -239,7 +471,7 @@ export function FloatingPromotionButton() {
           </Text>
         </View>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -247,7 +479,8 @@ const styles =
   StyleSheet.create({
     wrapper: {
       position: "absolute",
-      left: 6,
+      left: 0,
+      top: 0,
       zIndex: 9998,
       elevation: 20,
     },
