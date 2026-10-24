@@ -42,7 +42,11 @@ type AdminInput = {
   name: string;
   publicLabel: string;
   description: string | null;
-  kind: "buy_x_get_y" | "percent_off" | "bundle_price";
+  kind:
+    | "buy_x_get_y"
+    | "percent_off"
+    | "bundle_price"
+    | "spend_x_get_gift";
   scope: "all_products" | "selected_products";
   channel: "web" | "pos" | "both";
   status: "draft" | "active" | "archived";
@@ -58,6 +62,8 @@ type AdminInput = {
 
   bundleQuantity: number | null;
   bundlePriceMinor: number | null;
+
+  spendThresholdMinor: number | null;
 
   repeatable: boolean;
   maxApplicationsPerOrder: number | null;
@@ -205,7 +211,8 @@ function parseAdminInput(value: unknown):
   const kind =
     body.kind === "buy_x_get_y" ||
     body.kind === "percent_off" ||
-    body.kind === "bundle_price"
+    body.kind === "bundle_price" ||
+    body.kind === "spend_x_get_gift"
       ? body.kind
       : null;
 
@@ -310,6 +317,7 @@ function parseAdminInput(value: unknown):
   let percentOff: number | null = null;
   let bundleQuantity: number | null = null;
   let bundlePriceMinor: number | null = null;
+  let spendThresholdMinor: number | null = null;
 
   if (kind === "buy_x_get_y") {
     buyQuantity = integerValue(body.buyQuantity, 1, 100);
@@ -378,7 +386,33 @@ function parseAdminInput(value: unknown):
     }
   }
 
+  if (kind === "spend_x_get_gift") {
+    spendThresholdMinor = integerValue(
+      body.spendThresholdMinor,
+      1,
+      100000000,
+    );
+
+    if (spendThresholdMinor === null) {
+      return {
+        ok: false,
+        error: "حد الشراء المطلوب للحصول على الهدية غير صالح",
+      };
+    }
+
+    if (rewardProductIds.length === 0) {
+      return {
+        ok: false,
+        error: "اختر صنف هدية واحدًا على الأقل",
+      };
+    }
+
+    rewardQuantity = 1;
+    rewardMode = "free";
+  }
+
   const rewardSelectionMode =
+    kind === "spend_x_get_gift" ||
     body.rewardSelectionMode === "customer_choice"
       ? "customer_choice"
       : "cheapest";
@@ -415,8 +449,16 @@ function parseAdminInput(value: unknown):
       bundleQuantity,
       bundlePriceMinor,
 
-      repeatable: booleanValue(body.repeatable, true),
-      maxApplicationsPerOrder,
+      spendThresholdMinor,
+
+      repeatable:
+        kind === "spend_x_get_gift"
+          ? false
+          : booleanValue(body.repeatable, true),
+      maxApplicationsPerOrder:
+        kind === "spend_x_get_gift"
+          ? 1
+          : maxApplicationsPerOrder,
 
       stackWithOtherPromotions:
         booleanValue(body.stackWithOtherPromotions, false),
@@ -700,6 +742,9 @@ function promotionValues(input: AdminInput) {
 
     bundleQuantity: input.bundleQuantity,
     bundlePriceMinor: input.bundlePriceMinor,
+
+    spendThresholdMinor:
+      input.spendThresholdMinor,
 
     repeatable: input.repeatable,
     maxApplicationsPerOrder: input.maxApplicationsPerOrder,
