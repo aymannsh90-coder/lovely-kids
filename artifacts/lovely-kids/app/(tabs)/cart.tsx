@@ -2438,29 +2438,76 @@ export default function CartScreen() {
             ) : null}
 
             {(promotionPreview?.promotions ?? []).map(
-              (promotion) => (
-                <View
-                  style={styles.summaryRow}
-                  key={`cart-promotion-${promotion.promotionId}`}
-                >
-                  <Text
-                    style={{
-                      color: "#16A34A",
-                      fontWeight: "900",
-                    }}
+              (promotion) => {
+                const configuredPromotion =
+                  getPromotionById(
+                    promotion.promotionId,
+                  );
+
+                let displayLabel =
+                  promotion.publicLabel;
+
+                if (
+                  configuredPromotion?.kind ===
+                    "buy_x_get_y" &&
+                  configuredPromotion.buyQuantity &&
+                  configuredPromotion.rewardQuantity
+                ) {
+                  const buyQuantity =
+                    configuredPromotion.buyQuantity;
+                  const rewardQuantity =
+                    configuredPromotion.rewardQuantity;
+
+                  if (
+                    configuredPromotion.rewardMode ===
+                    "free"
+                  ) {
+                    displayLabel =
+                      `اشتري ${buyQuantity} وخذ ${rewardQuantity} مجانًا`;
+                  } else if (
+                    configuredPromotion.rewardMode ===
+                      "percent_off" &&
+                    configuredPromotion.rewardPercent
+                  ) {
+                    displayLabel =
+                      `اشتري ${buyQuantity} وخذ ${rewardQuantity} بخصم ${configuredPromotion.rewardPercent}%`;
+                  } else if (
+                    configuredPromotion.rewardMode ===
+                      "fixed_price" &&
+                    configuredPromotion.rewardPriceMinor !==
+                      null &&
+                    configuredPromotion.rewardPriceMinor !==
+                      undefined
+                  ) {
+                    displayLabel =
+                      `اشتري ${buyQuantity} وخذ ${rewardQuantity} بسعر ${configuredPromotion.rewardPriceMinor / 100} ₪`;
+                  }
+                }
+
+                return (
+                  <View
+                    style={styles.summaryRow}
+                    key={`cart-promotion-${promotion.promotionId}`}
                   >
-                    -{promotion.discountMinor / 100} ₪
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.foreground,
-                      fontWeight: "800",
-                    }}
-                  >
-                    🎁 {promotion.publicLabel}
-                  </Text>
-                </View>
-              ),
+                    <Text
+                      style={{
+                        color: "#16A34A",
+                        fontWeight: "900",
+                      }}
+                    >
+                      -{promotion.discountMinor / 100} ₪
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "800",
+                      }}
+                    >
+                      🎁 {displayLabel}
+                    </Text>
+                  </View>
+                );
+              },
             )}
 
             {promotionDiscountAmount > 0 ? (
