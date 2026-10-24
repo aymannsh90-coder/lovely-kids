@@ -217,23 +217,6 @@ export function promotionShortLabel(
   }
 
   if (
-    promotion.kind ===
-      "spend_x_get_gift" &&
-    promotion.spendThresholdMinor
-  ) {
-    return `عند وصول قيمة الأصناف المؤهلة إلى ${(
-      promotion.spendThresholdMinor /
-      100
-    ).toFixed(
-      promotion.spendThresholdMinor %
-          100 ===
-        0
-        ? 0
-        : 2,
-    )} ₪ يمكنك اختيار هدية واحدة من الهدايا المحددة.`;
-  }
-
-  if (
     promotion.kind === "percent_off" &&
     promotion.percentOff
   ) {
@@ -350,6 +333,23 @@ export function promotionDetailText(
         promotion.rewardPriceMinor % 100 === 0 ? 0 : 2,
       )} ₪`;
     }
+  }
+
+  if (
+    promotion.kind ===
+      "spend_x_get_gift" &&
+    promotion.spendThresholdMinor
+  ) {
+    return `عند وصول قيمة الأصناف المؤهلة إلى ${(
+      promotion.spendThresholdMinor /
+      100
+    ).toFixed(
+      promotion.spendThresholdMinor %
+          100 ===
+        0
+        ? 0
+        : 2,
+    )} ₪ يمكنك اختيار هدية واحدة من الهدايا المحددة.`;
   }
 
   if (
