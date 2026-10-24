@@ -750,6 +750,11 @@ export default function ProductDetailScreen() {
         );
       }
 
+      if (isPromotionRewardSelection) {
+        router.replace("/(tabs)/cart");
+        return;
+      }
+
       setGeneralPromptBlocked(true);
       setCartModal(true);
     };
