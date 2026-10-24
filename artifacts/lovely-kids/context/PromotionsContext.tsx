@@ -140,6 +140,15 @@ function itemKey(
   ]);
 }
 
+export function bidiSafePromotionText(
+  value: string,
+) {
+  return value.replace(
+    /\d+\s*\+\s*\d+/g,
+    (match) => `\u2066${match}\u2069`,
+  );
+}
+
 export function promotionShortLabel(
   promotion: StorePromotion,
 ) {
@@ -149,7 +158,7 @@ export function promotionShortLabel(
     promotion.rewardQuantity
   ) {
     if (promotion.rewardMode === "free") {
-      return `عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} 🎁`;
+      return bidiSafePromotionText(`عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} 🎁`);
     }
 
     if (
@@ -160,7 +169,7 @@ export function promotionShortLabel(
         promotion.buyQuantity === 1 &&
         promotion.rewardQuantity === 1
           ? `الثانية بخصم ${promotion.rewardPercent}%`
-          : `عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} · خصم ${promotion.rewardPercent}%`
+          : bidiSafePromotionText(`عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} · خصم ${promotion.rewardPercent}%`)
       );
     }
 
@@ -179,7 +188,7 @@ export function promotionShortLabel(
         promotion.buyQuantity === 1 &&
         promotion.rewardQuantity === 1
           ? `الثانية بـ${rewardPrice} ₪`
-          : `عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} · المكافأة بـ${rewardPrice} ₪`
+          : bidiSafePromotionText(`عرض ${promotion.buyQuantity}+${promotion.rewardQuantity} · المكافأة بـ${rewardPrice} ₪`)
       );
     }
   }
@@ -204,12 +213,18 @@ export function promotionShortLabel(
     )} ₪`;
   }
 
-  return promotion.publicLabel;
+  return bidiSafePromotionText(promotion.publicLabel);
 }
 
 export function promotionDetailText(
   promotion: StorePromotion,
 ) {
+  const customDescription =
+    promotion.description?.trim();
+
+  if (customDescription) {
+    return customDescription;
+  }
   if (
     promotion.kind === "buy_x_get_y" &&
     promotion.buyQuantity &&
