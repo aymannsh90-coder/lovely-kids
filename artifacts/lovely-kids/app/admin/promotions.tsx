@@ -1460,32 +1460,86 @@ export default function PromotionsAdminScreen() {
             (product) =>
               !product.deletedAt,
           )
-          .filter(
-            (product) =>
-              category ===
-                "all" ||
-              product.category ===
-                category,
-          )
-          .filter(
-            (product) =>
-              !q ||
-              product.nameAr
-                .toLowerCase()
-                .includes(q) ||
+          .filter((product) => {
+            const productCode =
               (
                 product.productCode ??
                 ""
               )
-                .toLowerCase()
-                .includes(q) ||
+                .trim()
+                .toLowerCase();
+
+            const primaryBarcode =
               (
                 product.barcode ??
                 ""
               )
+                .trim()
+                .toLowerCase();
+
+            const additionalBarcodes =
+              (
+                product.additionalBarcodes ??
+                []
+              )
+                .map(
+                  (entry) =>
+                    (
+                      entry.barcode ??
+                      ""
+                    )
+                      .trim()
+                      .toLowerCase(),
+                )
+                .filter(Boolean);
+
+            const exactCodeMatch =
+              Boolean(q) &&
+              (
+                productCode === q ||
+                primaryBarcode === q ||
+                additionalBarcodes.includes(
+                  q,
+                )
+              );
+
+            // A scanned QR/barcode must resolve to its parent model even
+            // when a different category chip is currently selected.
+            if (exactCodeMatch) {
+              return true;
+            }
+
+            if (
+              category !==
+                "all" &&
+              product.category !==
+                category
+            ) {
+              return false;
+            }
+
+            if (!q) {
+              return true;
+            }
+
+            return (
+              product.nameAr
                 .toLowerCase()
-                .includes(q),
-          );
+                .includes(q) ||
+              productCode.includes(
+                q,
+              ) ||
+              primaryBarcode.includes(
+                q,
+              ) ||
+              additionalBarcodes.some(
+                (barcode) =>
+                  barcode.includes(
+                    q,
+                  ),
+              )
+            );
+          });
       }, [
         query,
         category,
