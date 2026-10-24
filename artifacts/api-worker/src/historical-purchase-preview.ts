@@ -834,7 +834,7 @@ export async function getHistoricalPurchasePreview(
 
   const acquisitionRows =
     ledgerRows.flatMap(
-      (row) => {
+      (row: HistoricalLedgerRow) => {
         if (
           row.quantityDelta > 0 &&
           row.eventType ===
