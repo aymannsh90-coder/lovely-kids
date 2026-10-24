@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React from "react";
 import {
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -65,6 +66,7 @@ export function ProductCard({
   const { toggleItem, isWishlisted } = useWishlist();
   const {
     getPromotionsForProduct,
+    getPromotionById,
   } = usePromotions();
   const wishlisted = isWishlisted(product.id);
 
@@ -182,6 +184,27 @@ export function ProductCard({
 
     if (hasVariants) {
       router.push(productRoute);
+      return;
+    }
+
+    const rewardPromotion =
+      getPromotionById(
+        rewardForPromotionId,
+      );
+
+    if (
+      rewardPromotion?.kind ===
+        "spend_x_get_gift" &&
+      items.some(
+        (item) =>
+          item.rewardForPromotionId ===
+          rewardPromotion.id,
+      )
+    ) {
+      Alert.alert(
+        "هدية العرض",
+        "تم اختيار هدية لهذا العرض بالفعل. احذف الهدية الحالية من السلة أولًا إذا أردت اختيار هدية مختلفة.",
+      );
       return;
     }
 
