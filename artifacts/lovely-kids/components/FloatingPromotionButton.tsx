@@ -124,7 +124,7 @@ export function FloatingPromotionButton() {
                   primaryPromotion.id,
                 ),
             },
-          })
+          } as never)
         }
         accessibilityRole="button"
         accessibilityLabel={`عرض منتجات ${primaryPromotion.publicLabel}`}
