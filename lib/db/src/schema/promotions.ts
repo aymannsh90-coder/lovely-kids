@@ -44,6 +44,8 @@ export const promotionsTable = pgTable(
     bundleQuantity: integer("bundle_quantity"),
     bundlePriceMinor: integer("bundle_price_minor"),
 
+    spendThresholdMinor: integer("spend_threshold_minor"),
+
     repeatable: boolean("repeatable").notNull().default(true),
     maxApplicationsPerOrder: integer("max_applications_per_order"),
 
@@ -74,7 +76,7 @@ export const promotionsTable = pgTable(
   (table) => [
     check(
       "promotions_kind_valid",
-      sql`${table.kind} in ('buy_x_get_y', 'percent_off', 'bundle_price')`,
+      sql`${table.kind} in ('buy_x_get_y', 'percent_off', 'bundle_price', 'spend_x_get_gift')`,
     ),
     check(
       "promotions_scope_valid",
@@ -141,6 +143,19 @@ export const promotionsTable = pgTable(
           and ${table.bundleQuantity} > 1
           and ${table.bundlePriceMinor} is not null
           and ${table.bundlePriceMinor} >= 0
+        )
+      `,
+    ),
+    check(
+      "promotions_spend_x_get_gift_valid",
+      sql`
+        ${table.kind} <> 'spend_x_get_gift'
+        or (
+          ${table.spendThresholdMinor} is not null
+          and ${table.spendThresholdMinor} > 0
+          and ${table.rewardQuantity} = 1
+          and ${table.rewardMode} = 'free'
+          and ${table.rewardSelectionMode} = 'customer_choice'
         )
       `,
     ),
