@@ -33,6 +33,7 @@ import { useProductCategories } from "@/hooks/useProductCategories";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
 import {
+  bidiSafePromotionText,
   promotionDetailText,
   promotionShortLabel,
   usePromotions,
@@ -655,7 +656,9 @@ const topPadding = getResponsiveTopPadding(insets.top);
               textAlign: "right",
             }}
           >
-            {selectedPromotion.publicLabel}
+            {bidiSafePromotionText(
+              selectedPromotion.publicLabel,
+            )}
           </Text>
 
           <Text
