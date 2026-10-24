@@ -2288,7 +2288,9 @@ export default function CartScreen() {
           <FlatList
             style={isDesktopWeb ? { flex: 1 } : undefined}
             data={items}
-            keyExtractor={(item) => `${item.id}-${item.color ?? ""}-${item.size ?? ""}`}
+            keyExtractor={(item) =>
+              `${item.id}-${item.color ?? ""}-${item.size ?? ""}-${item.rewardForPromotionId ?? ""}`
+            }
             contentContainerStyle={[
               styles.list,
               isDesktopWeb
@@ -2314,6 +2316,12 @@ export default function CartScreen() {
                     availableQuantity: null,
                   };
               const hasStockIssue = !stockStatus.valid;
+              const isSpendGiftReward =
+                !!item.rewardForPromotionId &&
+                getPromotionById(
+                  item.rewardForPromotionId,
+                )?.kind ===
+                  "spend_x_get_gift";
 
               return (
                 <View
@@ -2339,6 +2347,20 @@ export default function CartScreen() {
                     <Text style={[styles.itemPrice, { color: colors.primary }]}>
                       {item.price * item.quantity} ₪
                     </Text>
+
+                    {isSpendGiftReward ? (
+                      <Text
+                        style={{
+                          color: "#16A34A",
+                          fontSize: 12,
+                          fontWeight: "900",
+                          textAlign: "right",
+                          marginTop: 3,
+                        }}
+                      >
+                        🎁 هدية من العرض
+                      </Text>
+                    ) : null}
 
                     {hasStockIssue ? (
                       <View
@@ -2496,116 +2518,156 @@ export default function CartScreen() {
                       isDesktopWeb ? styles.desktopItemImage : null,
                     ]}
                   />
-                  <View
-                    style={[
-                      styles.quantityRow,
-                      isDesktopWeb ? styles.desktopQuantityRow : null,
-                    ]}
-                  >
-                    <Pressable
-                      disabled={hasStockIssue}
-                      onPress={() => {
-                        const availableStock = product
-                          ? getAvailableStock(product, item.size, item.color)
-                          : null;
-
-                        if (
-                          availableStock !== null &&
-                          item.quantity >= availableStock
-                        ) {
-                          showStockLimit(availableStock);
-                          return;
-                        }
-
-                        updateQuantity(
-                          item.id,
-                          item.quantity + 1,
-                          item.size,
-                          item.color,
-                          item.rewardForPromotionId,
-                        );
-                      }}
+                  {isSpendGiftReward ? (
+                    <View
                       style={[
-                        styles.qtyBtn,
-                        {
-                          backgroundColor: hasStockIssue
-                            ? colors.muted
-                            : colors.primary,
-                        },
+                        styles.quantityRow,
+                        isDesktopWeb
+                          ? styles.desktopQuantityRow
+                          : null,
                       ]}
                     >
-                      <Ionicons
-                        name="add"
-                        size={16}
-                        color={
-                          hasStockIssue
-                            ? colors.mutedForeground
-                            : "#fff"
-                        }
-                      />
-                    </Pressable>
-                    <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
-                    <Pressable
-                      onPress={() => {
-                        const nextItems =
-                          item.quantity ===
-                          1
-                            ? items.filter(
-                                (entry) =>
-                                  !sameCartLine(
-                                    entry,
-                                    item,
-                                  ),
-                              )
-                            : items.map(
-                                (entry) =>
-                                  sameCartLine(
-                                    entry,
-                                    item,
-                                  )
-                                    ? {
-                                        ...entry,
-                                        quantity:
-                                          entry.quantity -
-                                          1,
-                                      }
-                                    : entry,
-                              );
-
-                        void runCartChangeWithGiftGuard(
-                          nextItems,
-                          () => {
-                            if (
-                              item.quantity ===
-                              1
-                            ) {
-                              removeItem(
-                                item.id,
-                                item.size,
-                                item.color,
-                                item.rewardForPromotionId,
-                              );
-                              return;
-                            }
-
-                            updateQuantity(
-                              item.id,
-                              item.quantity -
-                                1,
-                              item.size,
-                              item.color,
-                              item.rewardForPromotionId,
-                            );
+                      <View
+                        style={[
+                          styles.qtyBtn,
+                          {
+                            backgroundColor:
+                              colors.muted,
                           },
-                          item.quantity ===
-                            1,
-                        );
-                      }}
-                      style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
-                    >
-                      <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
-                    </Pressable>
-                  </View>
+                        ]}
+                      >
+                        <Ionicons
+                          name="gift-outline"
+                          size={16}
+                          color={
+                            colors.mutedForeground
+                          }
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.qty,
+                          {
+                            color:
+                              colors.foreground,
+                          },
+                        ]}
+                      >
+                        1
+                      </Text>
+                    </View>
+                  ) : (
+                                      <View
+                                        style={[
+                                          styles.quantityRow,
+                                          isDesktopWeb ? styles.desktopQuantityRow : null,
+                                        ]}
+                                      >
+                                        <Pressable
+                                          disabled={hasStockIssue}
+                                          onPress={() => {
+                                            const availableStock = product
+                                              ? getAvailableStock(product, item.size, item.color)
+                                              : null;
+                    
+                                            if (
+                                              availableStock !== null &&
+                                              item.quantity >= availableStock
+                                            ) {
+                                              showStockLimit(availableStock);
+                                              return;
+                                            }
+                    
+                                            updateQuantity(
+                                              item.id,
+                                              item.quantity + 1,
+                                              item.size,
+                                              item.color,
+                                              item.rewardForPromotionId,
+                                            );
+                                          }}
+                                          style={[
+                                            styles.qtyBtn,
+                                            {
+                                              backgroundColor: hasStockIssue
+                                                ? colors.muted
+                                                : colors.primary,
+                                            },
+                                          ]}
+                                        >
+                                          <Ionicons
+                                            name="add"
+                                            size={16}
+                                            color={
+                                              hasStockIssue
+                                                ? colors.mutedForeground
+                                                : "#fff"
+                                            }
+                                          />
+                                        </Pressable>
+                                        <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
+                                        <Pressable
+                                          onPress={() => {
+                                            const nextItems =
+                                              item.quantity ===
+                                              1
+                                                ? items.filter(
+                                                    (entry) =>
+                                                      !sameCartLine(
+                                                        entry,
+                                                        item,
+                                                      ),
+                                                  )
+                                                : items.map(
+                                                    (entry) =>
+                                                      sameCartLine(
+                                                        entry,
+                                                        item,
+                                                      )
+                                                        ? {
+                                                            ...entry,
+                                                            quantity:
+                                                              entry.quantity -
+                                                              1,
+                                                          }
+                                                        : entry,
+                                                  );
+                    
+                                            void runCartChangeWithGiftGuard(
+                                              nextItems,
+                                              () => {
+                                                if (
+                                                  item.quantity ===
+                                                  1
+                                                ) {
+                                                  removeItem(
+                                                    item.id,
+                                                    item.size,
+                                                    item.color,
+                                                    item.rewardForPromotionId,
+                                                  );
+                                                  return;
+                                                }
+                    
+                                                updateQuantity(
+                                                  item.id,
+                                                  item.quantity -
+                                                    1,
+                                                  item.size,
+                                                  item.color,
+                                                  item.rewardForPromotionId,
+                                                );
+                                              },
+                                              item.quantity ===
+                                                1,
+                                            );
+                                          }}
+                                          style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
+                                        >
+                                          <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
+                                        </Pressable>
+                                      </View>
+                  )}
                 </View>
               );
             }}
