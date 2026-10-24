@@ -886,6 +886,76 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       },
     );
 
+    for (const promotion of activePromotions) {
+      if (
+        promotion.kind !==
+        "spend_x_get_gift"
+      ) {
+        continue;
+      }
+
+      const selectedGiftItems =
+        trustedItems.filter(
+          (item) =>
+            item.rewardForPromotionId ===
+            promotion.id,
+        );
+
+      const selectedGiftQuantity =
+        selectedGiftItems.reduce(
+          (total, item) =>
+            total +
+            item.quantity,
+          0,
+        );
+
+      if (
+        selectedGiftQuantity >
+        1
+      ) {
+        throw new OrderValidationError(
+          "يمكن اختيار هدية واحدة فقط من هذا العرض",
+        );
+      }
+
+      if (
+        selectedGiftItems.some(
+          (item) =>
+            !promotion.rewardProductIds.includes(
+              Number(
+                item.id,
+              ),
+            ),
+        )
+      ) {
+        throw new OrderValidationError(
+          "الهدية المختارة ليست ضمن هدايا العرض المتاحة",
+        );
+      }
+
+      if (
+        selectedGiftQuantity >
+        0
+      ) {
+        const entitlement =
+          promotionCalculation.entitlements.find(
+            (item) =>
+              item.promotionId ===
+              promotion.id,
+          );
+
+        if (
+          !entitlement ||
+          entitlement.earnedRewardQuantity <
+            selectedGiftQuantity
+        ) {
+          throw new OrderValidationError(
+            "قيمة السلة لم تعد مؤهلة للهدية. أزل الهدية أو أضف أصنافًا حتى تصل إلى حد العرض.",
+          );
+        }
+      }
+    }
+
     if (
       promotionCalculation.totalDiscountMinor %
         100 !==
