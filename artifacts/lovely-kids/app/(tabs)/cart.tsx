@@ -358,6 +358,155 @@ export default function CartScreen() {
     };
   }, [items, previewCart]);
 
+  const sameCartLine = (
+    left: (typeof items)[number],
+    right: (typeof items)[number],
+  ) =>
+    left.id === right.id &&
+    left.size === right.size &&
+    left.color === right.color &&
+    left.rewardForPromotionId ===
+      right.rewardForPromotionId;
+
+  const removeSelectedGiftForPromotion = (
+    promotionId: number,
+  ) => {
+    items
+      .filter(
+        (item) =>
+          item.rewardForPromotionId ===
+          promotionId,
+      )
+      .forEach((gift) =>
+        removeItem(
+          gift.id,
+          gift.size,
+          gift.color,
+          gift.rewardForPromotionId,
+        ),
+      );
+  };
+
+  const runCartChangeWithGiftGuard =
+    async (
+      nextItems: typeof items,
+      action: () => void,
+      useNormalRemovePrompt = false,
+    ) => {
+      const selectedGiftPromotionIds = [
+        ...new Set(
+          items
+            .map(
+              (item) =>
+                item.rewardForPromotionId,
+            )
+            .filter(
+              (
+                id,
+              ): id is number =>
+                Number.isSafeInteger(
+                  id,
+                ) &&
+                Number(id) > 0 &&
+                getPromotionById(
+                  id,
+                )?.kind ===
+                  "spend_x_get_gift",
+            ),
+        ),
+      ];
+
+      if (
+        selectedGiftPromotionIds.length ===
+        0
+      ) {
+        if (
+          useNormalRemovePrompt
+        ) {
+          confirmRemoveFromCart(
+            action,
+          );
+        } else {
+          action();
+        }
+        return;
+      }
+
+      try {
+        const nextPreview =
+          await previewCart(
+            nextItems,
+          );
+
+        const lostPromotionId =
+          selectedGiftPromotionIds.find(
+            (promotionId) => {
+              const entitlement =
+                nextPreview.entitlements.find(
+                  (entry) =>
+                    entry.promotionId ===
+                    promotionId,
+                );
+
+              return (
+                (
+                  entitlement
+                    ?.earnedRewardQuantity ??
+                  0
+                ) < 1
+              );
+            },
+          );
+
+        if (
+          !lostPromotionId
+        ) {
+          if (
+            useNormalRemovePrompt
+          ) {
+            confirmRemoveFromCart(
+              action,
+            );
+          } else {
+            action();
+          }
+          return;
+        }
+
+        const promotion =
+          getPromotionById(
+            lostPromotionId,
+          );
+
+        Alert.alert(
+          "تنبيه",
+          `حذف أو تقليل هذا الصنف سيُلغي استحقاقك${promotion?.publicLabel ? ` لعرض "${promotion.publicLabel}"` : ""}، وسيتم إزالة الهدية من السلة. هل تريد المتابعة؟`,
+          [
+            {
+              text: "إلغاء",
+              style: "cancel",
+            },
+            {
+              text: "متابعة",
+              style:
+                "destructive",
+              onPress: () => {
+                action();
+                removeSelectedGiftForPromotion(
+                  lostPromotionId,
+                );
+              },
+            },
+          ],
+        );
+      } catch {
+        Alert.alert(
+          "تعذر التحقق من العرض",
+          "لم نتمكن من التحقق من استحقاق الهدية الآن. حاول مرة أخرى حتى لا تفقد الهدية بالخطأ.",
+        );
+      }
+    };
+
   const promotionDiscountAmount =
     (promotionPreview?.totalDiscountMinor ?? 0) /
     100;
@@ -2296,16 +2445,28 @@ export default function CartScreen() {
                     ) : null}
 
                     <Pressable
-                      onPress={() =>
-                        confirmRemoveFromCart(() =>
-                          removeItem(
+                      onPress={() => {
+                        const nextItems =
+                          items.filter(
+                            (entry) =>
+                              !sameCartLine(
+                                entry,
+                                item,
+                              ),
+                          );
+
+                        void runCartChangeWithGiftGuard(
+                          nextItems,
+                          () =>
+                            removeItem(
                               item.id,
                               item.size,
                               item.color,
                               item.rewardForPromotionId,
                             ),
-                        )
-                      }
+                          true,
+                        );
+                      }}
                       style={styles.deleteBtn}
                     >
                       <Ionicons name="trash-outline" size={15} color="#dc2626" />
@@ -2370,24 +2531,58 @@ export default function CartScreen() {
                     <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
                     <Pressable
                       onPress={() => {
-                        if (item.quantity === 1) {
-                          confirmRemoveFromCart(() =>
-                            removeItem(
+                        const nextItems =
+                          item.quantity ===
+                          1
+                            ? items.filter(
+                                (entry) =>
+                                  !sameCartLine(
+                                    entry,
+                                    item,
+                                  ),
+                              )
+                            : items.map(
+                                (entry) =>
+                                  sameCartLine(
+                                    entry,
+                                    item,
+                                  )
+                                    ? {
+                                        ...entry,
+                                        quantity:
+                                          entry.quantity -
+                                          1,
+                                      }
+                                    : entry,
+                              );
+
+                        void runCartChangeWithGiftGuard(
+                          nextItems,
+                          () => {
+                            if (
+                              item.quantity ===
+                              1
+                            ) {
+                              removeItem(
+                                item.id,
+                                item.size,
+                                item.color,
+                                item.rewardForPromotionId,
+                              );
+                              return;
+                            }
+
+                            updateQuantity(
                               item.id,
+                              item.quantity -
+                                1,
                               item.size,
                               item.color,
                               item.rewardForPromotionId,
-                            ),
-                          );
-                          return;
-                        }
-
-                        updateQuantity(
-                          item.id,
-                          item.quantity - 1,
-                          item.size,
-                          item.color,
-                          item.rewardForPromotionId,
+                            );
+                          },
+                          item.quantity ===
+                            1,
                         );
                       }}
                       style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
@@ -2538,6 +2733,10 @@ export default function CartScreen() {
                   (
                     entitlement.nextBundleRemainingQuantity ??
                     0
+                  ) > 0 ||
+                  (
+                    entitlement.thresholdRemainingMinor ??
+                    0
                   ) > 0,
               )
               .map((entitlement) => {
@@ -2557,6 +2756,16 @@ export default function CartScreen() {
                 const remainingForNextBundle =
                   entitlement.nextBundleRemainingQuantity ??
                   entitlement.remainingRewardQuantity;
+
+                const isSpendGift =
+                  promotion.kind ===
+                  "spend_x_get_gift";
+
+                const thresholdRemaining =
+                  (
+                    entitlement.thresholdRemainingMinor ??
+                    0
+                  ) / 100;
 
                 return (
                   <View
@@ -2585,44 +2794,51 @@ export default function CartScreen() {
                         : `باقي ${remainingForNextBundle} قطعة للاستفادة من العرض`}
                     </Text>
 
-                    <Pressable
-                      onPress={() =>
-                        router.push({
-                          pathname:
-                            "/(tabs)/products",
-                          params: {
-                            promotionId:
-                              String(
-                                entitlement.promotionId,
-                              ),
-                            ...(chooseReward
-                              ? {
-                                  rewardForPromotionId:
-                                    String(
-                                      entitlement.promotionId,
-                                    ),
-                                }
-                              : {}),
-                          },
-                        } as never)
-                      }
-                      style={{
-                        alignSelf: "flex-end",
-                      }}
-                    >
-                      <Text
+                    {chooseReward ||
+                    !isSpendGift ? (
+                      <Pressable
+                        onPress={() =>
+                          router.push({
+                            pathname:
+                              "/(tabs)/products",
+                            params: {
+                              promotionId:
+                                String(
+                                  entitlement.promotionId,
+                                ),
+                              ...(chooseReward
+                                ? {
+                                    rewardForPromotionId:
+                                      String(
+                                        entitlement.promotionId,
+                                      ),
+                                  }
+                                : {}),
+                            },
+                          } as never)
+                        }
                         style={{
-                          color: colors.primary,
-                          fontWeight: "900",
-                          textDecorationLine:
-                            "underline",
+                          alignSelf: "flex-end",
                         }}
                       >
-                        {chooseReward
-                          ? "اختر قطعتك من الأصناف المشمولة"
-                          : "مشاهدة الأصناف المشمولة"}
-                      </Text>
-                    </Pressable>
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontWeight: "900",
+                            textDecorationLine:
+                              "underline",
+                          }}
+                        >
+                          {chooseReward
+                            ? (
+                                isSpendGift
+                                  ? "اختيار الهدية"
+                                  : "اختر قطعتك من الأصناف المشمولة"
+                              )
+                            : "مشاهدة الأصناف المشمولة"}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 );
               })}
