@@ -22,6 +22,8 @@ import {
 } from "@/context/PromotionsContext";
 import { useColors } from "@/hooks/useColors";
 
+const PROMOTION_BUTTON_RED = "#E53935";
+
 function bidiSafePromotionLabel(label: string) {
   return label.replace(
     /\d+\s*\+\s*\d+/g,
@@ -92,8 +94,8 @@ export function FloatingPromotionButton() {
           ? 154 + insets.bottom
           : 182 + insets.bottom
       : compact
-        ? 74 + insets.bottom
-        : 98 + insets.bottom;
+        ? 112 + insets.bottom
+        : 126 + insets.bottom;
 
   const label =
     bidiSafePromotionLabel(
@@ -134,7 +136,7 @@ export function FloatingPromotionButton() {
           styles.button,
           {
             backgroundColor:
-              colors.primary,
+              PROMOTION_BUTTON_RED,
             borderColor:
               "rgba(255,255,255,0.90)",
             opacity:
@@ -151,7 +153,7 @@ export function FloatingPromotionButton() {
             name="gift-outline"
             size={19}
             color={
-              colors.primary
+              PROMOTION_BUTTON_RED
             }
           />
         </View>
@@ -189,24 +191,24 @@ const styles =
     wrapper: {
       position:
         "absolute",
-      right: 10,
+      right: 12,
       zIndex: 9998,
       elevation: 18,
       alignItems:
         "flex-end",
     },
     button: {
-      minHeight: 50,
-      maxWidth: 210,
-      borderRadius: 25,
+      minHeight: 44,
+      maxWidth: 184,
+      borderRadius: 22,
       borderWidth: 2,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
       flexDirection:
         "row-reverse",
       alignItems:
         "center",
-      gap: 8,
+      gap: 7,
       shadowColor: "#000",
       shadowOpacity:
         Platform.OS === "web"
@@ -219,9 +221,9 @@ const styles =
       },
     },
     iconBubble: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       backgroundColor:
         "#FFFFFF",
       alignItems: "center",
@@ -231,14 +233,14 @@ const styles =
     },
     label: {
       color: "#FFFFFF",
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "900",
       textAlign: "right",
     },
     subLabel: {
       color:
         "rgba(255,255,255,0.90)",
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "700",
       textAlign: "right",
       marginTop: 1,
