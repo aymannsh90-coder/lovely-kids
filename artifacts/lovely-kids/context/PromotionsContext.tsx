@@ -216,6 +216,45 @@ export function promotionShortLabel(
   return bidiSafePromotionText(promotion.publicLabel);
 }
 
+export function promotionCustomerTitle(
+  promotion: StorePromotion,
+) {
+  if (
+    promotion.kind === "buy_x_get_y" &&
+    promotion.buyQuantity &&
+    promotion.rewardQuantity
+  ) {
+    if (promotion.rewardMode === "free") {
+      return `اشتري ${promotion.buyQuantity} وخذ ${promotion.rewardQuantity} مجانًا 🎁`;
+    }
+
+    if (
+      promotion.rewardMode === "percent_off" &&
+      promotion.rewardPercent
+    ) {
+      return `اشتري ${promotion.buyQuantity} وخذ ${promotion.rewardQuantity} بخصم ${promotion.rewardPercent}%`;
+    }
+
+    if (
+      promotion.rewardMode === "fixed_price" &&
+      promotion.rewardPriceMinor !== null &&
+      promotion.rewardPriceMinor !== undefined
+    ) {
+      const rewardPrice = (
+        promotion.rewardPriceMinor / 100
+      ).toFixed(
+        promotion.rewardPriceMinor % 100 === 0 ? 0 : 2,
+      );
+
+      return `اشتري ${promotion.buyQuantity} وخذ ${promotion.rewardQuantity} بـ${rewardPrice} ₪`;
+    }
+  }
+
+  return promotionShortLabel(
+    promotion,
+  );
+}
+
 export function promotionDetailText(
   promotion: StorePromotion,
 ) {
