@@ -982,7 +982,12 @@ export default function TodaySalesPanel({
                     <td>-{row.item.quantity}</td>
 
                     <td>
-                      -{formatMinor(row.item.soldUnitPriceMinor)}
+                      -{formatMinor(
+                        row.item.quantity > 0
+                          ? row.item.refundAmountMinor /
+                              row.item.quantity
+                          : 0,
+                      )}
                     </td>
 
                     <td>
@@ -1482,7 +1487,15 @@ export default function TodaySalesPanel({
 
                 <td>-{row.item.quantity}</td>
 
-                <td>-{row.item.soldUnitPrice.toFixed(2)} ₪</td>
+                <td>
+                  -{(
+                    row.item.quantity > 0
+                      ? row.item.refundAmountMinor /
+                        row.item.quantity /
+                        100
+                      : 0
+                  ).toFixed(2)} ₪
+                </td>
 
                 <td>
                   {refundMethodLabel(
