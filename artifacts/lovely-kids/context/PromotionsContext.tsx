@@ -223,7 +223,9 @@ export function promotionDetailText(
     promotion.description?.trim();
 
   if (customDescription) {
-    return customDescription;
+    return bidiSafePromotionText(
+      customDescription,
+    );
   }
   if (
     promotion.kind === "buy_x_get_y" &&
@@ -274,8 +276,9 @@ export function promotionDetailText(
     )} ₪`;
   }
 
-  return promotion.description?.trim() ||
-    promotion.publicLabel;
+  return bidiSafePromotionText(
+    promotion.publicLabel,
+  );
 }
 
 export function PromotionsProvider({
