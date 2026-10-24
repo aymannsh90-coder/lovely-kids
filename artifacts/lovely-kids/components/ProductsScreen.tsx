@@ -366,6 +366,11 @@ export default function ProductsScreen({
     const productId =
       Number(p.id);
 
+    const selectingPromotionReward =
+      !!selectedPromotion &&
+      validRewardPromotionId ===
+        selectedPromotion.id;
+
     const matchPromotion =
       !selectedPromotion ||
       (
@@ -373,14 +378,21 @@ export default function ProductsScreen({
           productId,
         ) &&
         (
-          selectedPromotion.scope ===
-            "all_products" ||
-          selectedPromotion.qualifyingProductIds.includes(
-            productId,
-          ) ||
-          selectedPromotion.rewardProductIds.includes(
-            productId,
-          )
+          selectingPromotionReward &&
+          selectedPromotion.rewardProductIds.length > 0
+            ? selectedPromotion.rewardProductIds.includes(
+                productId,
+              )
+            : (
+                selectedPromotion.scope ===
+                  "all_products" ||
+                selectedPromotion.qualifyingProductIds.includes(
+                  productId,
+                ) ||
+                selectedPromotion.rewardProductIds.includes(
+                  productId,
+                )
+              )
         )
       );
 
