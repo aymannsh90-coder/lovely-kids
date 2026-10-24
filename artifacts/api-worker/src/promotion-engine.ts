@@ -3,7 +3,8 @@ export type PromotionChannel = "web" | "pos";
 export type PromotionKind =
   | "buy_x_get_y"
   | "percent_off"
-  | "bundle_price";
+  | "bundle_price"
+  | "spend_x_get_gift";
 
 export type PromotionRewardMode =
   | "free"
@@ -31,6 +32,8 @@ export interface PromotionDefinition {
 
   bundleQuantity?: number | null;
   bundlePriceMinor?: number | null;
+
+  spendThresholdMinor?: number | null;
 
   repeatable: boolean;
   maxApplicationsPerOrder?: number | null;
@@ -100,6 +103,12 @@ export interface PromotionEntitlement {
   // Kept separate from reward selection so Web customer-choice flows
   // never mistake POS-style progress for an unselected gift.
   nextBundleRemainingQuantity?: number;
+
+  // Spend-threshold gift progress. The selected gift never contributes
+  // toward the qualifying spend.
+  qualifyingSpendMinor?: number;
+  spendThresholdMinor?: number;
+  thresholdRemainingMinor?: number;
 }
 
 export interface PromotionCalculationResult {
@@ -821,6 +830,221 @@ function buildBuyXGetYResult(
   };
 }
 
+function applySpendXGetGift(
+  promotion: PromotionDefinition,
+  units: Unit[],
+  roundingIncrementMinor: number,
+) {
+  const thresholdMinor =
+    promotion.spendThresholdMinor ?? 0;
+
+  if (
+    !validPositiveInteger(
+      thresholdMinor,
+    ) ||
+    promotion.rewardProductIds
+      .length === 0
+  ) {
+    return {
+      applied:
+        null as AppliedPromotionResult | null,
+      entitlement:
+        null as PromotionEntitlement | null,
+    };
+  }
+
+  const explicitRewards =
+    units.filter(
+      (unit) =>
+        unit.rewardForPromotionId ===
+          promotion.id &&
+        promotion.rewardProductIds.includes(
+          unit.productId,
+        ) &&
+        !promotion.excludedProductIds.includes(
+          unit.productId,
+        ) &&
+        unitCanJoinPromotion(
+          unit,
+          promotion,
+        ),
+    );
+
+  const explicitRewardIds =
+    new Set(
+      explicitRewards.map(
+        (unit) => unit.id,
+      ),
+    );
+
+  const qualifierUnits =
+    units.filter(
+      (unit) =>
+        !explicitRewardIds.has(
+          unit.id,
+        ) &&
+        inScope(
+          unit,
+          promotion,
+          "qualifying",
+        ) &&
+        unitCanJoinPromotion(
+          unit,
+          promotion,
+        ),
+    );
+
+  const qualifyingSpendMinor =
+    qualifierUnits.reduce(
+      (total, unit) =>
+        total +
+        currentNetMinor(
+          unit,
+        ),
+      0,
+    );
+
+  // This promotion intentionally grants one gift per order.
+  const earnedRewardQuantity =
+    qualifyingSpendMinor >=
+    thresholdMinor
+      ? 1
+      : 0;
+
+  const selectedRewardQuantity =
+    explicitRewards.length;
+
+  const entitlement: PromotionEntitlement =
+    {
+      promotionId:
+        promotion.id,
+      promotionName:
+        promotion.name,
+      earnedRewardQuantity,
+      selectedRewardQuantity,
+      remainingRewardQuantity:
+        Math.max(
+          0,
+          earnedRewardQuantity -
+            selectedRewardQuantity,
+        ),
+      qualifyingSpendMinor,
+      spendThresholdMinor:
+        thresholdMinor,
+      thresholdRemainingMinor:
+        Math.max(
+          0,
+          thresholdMinor -
+            qualifyingSpendMinor,
+        ),
+    };
+
+  if (
+    earnedRewardQuantity < 1 ||
+    selectedRewardQuantity < 1
+  ) {
+    return {
+      applied: null,
+      entitlement,
+    };
+  }
+
+  const rewardUnit =
+    explicitRewards[0]!;
+
+  const rewardDiscount =
+    roundDiscount(
+      currentNetMinor(
+        rewardUnit,
+      ),
+      roundingIncrementMinor,
+    );
+
+  if (
+    rewardDiscount <= 0
+  ) {
+    return {
+      applied: null,
+      entitlement,
+    };
+  }
+
+  const groupUnits = [
+    ...qualifierUnits,
+    rewardUnit,
+  ];
+
+  const groupKey =
+    `promotion:${promotion.id}:spend-gift:1`;
+
+  const allocated =
+    addGroupAllocation(
+      promotion,
+      groupKey,
+      groupUnits,
+      rewardDiscount,
+      (unit) =>
+        unit.priceMinor,
+    );
+
+  if (allocated <= 0) {
+    return {
+      applied: null,
+      entitlement,
+    };
+  }
+
+  if (
+    !promotion
+      .stackWithOtherPromotions
+  ) {
+    groupUnits.forEach(
+      (unit) => {
+        unit.exclusivePromotionId =
+          promotion.id;
+      },
+    );
+  }
+
+  return {
+    applied: {
+      promotionId:
+        promotion.id,
+      promotionName:
+        promotion.name,
+      publicLabel:
+        promotion.publicLabel,
+      kind:
+        promotion.kind,
+      discountMinor:
+        allocated,
+      applicationCount: 1,
+      stackWithDiscountCodes:
+        promotion
+          .stackWithDiscountCodes,
+      stackWithShippingPromotion:
+        promotion
+          .stackWithShippingPromotion,
+      groups: [
+        {
+          groupKey,
+          discountMinor:
+            allocated,
+          lineKeys: [
+            ...new Set(
+              groupUnits.map(
+                (unit) =>
+                  unit.lineKey,
+              ),
+            ),
+          ],
+        },
+      ],
+    },
+    entitlement,
+  };
+}
+
 function applyPercentOff(
   promotion: PromotionDefinition,
   units: Unit[],
@@ -1102,6 +1326,34 @@ export function calculatePromotions(input: {
         )
       ) {
         entitlements.push(result.entitlement);
+      }
+
+      continue;
+    }
+
+    if (
+      promotion.kind ===
+      "spend_x_get_gift"
+    ) {
+      const result =
+        applySpendXGetGift(
+          promotion,
+          units,
+          roundingIncrementMinor,
+        );
+
+      if (result.applied) {
+        applied.push(
+          result.applied,
+        );
+      }
+
+      if (
+        result.entitlement
+      ) {
+        entitlements.push(
+          result.entitlement,
+        );
       }
 
       continue;
