@@ -37,7 +37,8 @@ import { getResponsiveTopPadding } from "@/utils/webLayout";
 type PromotionKind =
   | "buy_x_get_y"
   | "percent_off"
-  | "bundle_price";
+  | "bundle_price"
+  | "spend_x_get_gift";
 
 type RewardMode =
   | "free"
@@ -75,6 +76,8 @@ type PromotionRow = {
 
   bundleQuantity: number | null;
   bundlePriceMinor: number | null;
+
+  spendThresholdMinor: number | null;
 
   repeatable: boolean;
   maxApplicationsPerOrder:
@@ -456,6 +459,11 @@ export default function PromotionsAdminScreen() {
   ] = useState("100");
 
   const [
+    spendThreshold,
+    setSpendThreshold,
+  ] = useState("200");
+
+  const [
     repeatable,
     setRepeatable,
   ] = useState(true);
@@ -642,6 +650,9 @@ export default function PromotionsAdminScreen() {
       setBundlePrice(
         "100",
       );
+      setSpendThreshold(
+        "200",
+      );
       setRepeatable(true);
       setMaxApplications(
         "",
@@ -742,6 +753,11 @@ export default function PromotionsAdminScreen() {
         minorToMoney(
           row.bundlePriceMinor,
         ) || "100",
+      );
+      setSpendThreshold(
+        minorToMoney(
+          row.spendThresholdMinor,
+        ) || "200",
       );
       setRepeatable(
         row.repeatable,
@@ -888,6 +904,8 @@ export default function PromotionsAdminScreen() {
             ]
           : [],
       rewardProductIds:
+        kind ===
+          "spend_x_get_gift" ||
         separateRewardPool
           ? [
               ...rewardIds,
@@ -1034,6 +1052,43 @@ export default function PromotionsAdminScreen() {
         priceMinor;
     }
 
+    if (
+      kind ===
+      "spend_x_get_gift"
+    ) {
+      const thresholdMinor =
+        moneyInputToMinor(
+          spendThreshold,
+        );
+
+      if (
+        thresholdMinor === null ||
+        thresholdMinor <= 0
+      ) {
+        throw new Error(
+          "حد الشراء المطلوب للحصول على الهدية غير صالح",
+        );
+      }
+
+      if (
+        rewardIds.size === 0
+      ) {
+        throw new Error(
+          "اختر صنف هدية واحدًا على الأقل",
+        );
+      }
+
+      body.spendThresholdMinor =
+        thresholdMinor;
+      body.rewardQuantity = 1;
+      body.rewardMode = "free";
+      body.rewardSelectionMode =
+        "customer_choice";
+      body.repeatable = false;
+      body.maxApplicationsPerOrder =
+        1;
+    }
+
     return body;
   };
 
@@ -1156,6 +1211,8 @@ export default function PromotionsAdminScreen() {
                     row.bundleQuantity,
                   bundlePriceMinor:
                     row.bundlePriceMinor,
+                  spendThresholdMinor:
+                    row.spendThresholdMinor,
                   repeatable:
                     row.repeatable,
                   maxApplicationsPerOrder:
@@ -2329,6 +2386,10 @@ export default function PromotionsAdminScreen() {
                 "bundle_price",
                 "سعر باكج",
               ],
+              [
+                "spend_x_get_gift",
+                "حد شراء + هدية",
+              ],
             ] as const).map(
               ([
                 value,
@@ -2535,6 +2596,42 @@ export default function PromotionsAdminScreen() {
                 />
               </View>
             </>
+          ) : null}
+
+          {kind ===
+          "spend_x_get_gift" ? (
+            <View
+              style={{
+                gap: 8,
+              }}
+            >
+              <NumberField
+                label="حد الشراء للحصول على الهدية ₪"
+                value={
+                  spendThreshold
+                }
+                onChange={
+                  setSpendThreshold
+                }
+                colors={
+                  colors
+                }
+                decimal
+              />
+
+              <Text
+                style={{
+                  color:
+                    colors.mutedForeground,
+                  textAlign:
+                    "right",
+                  fontSize: 12,
+                  lineHeight: 19,
+                }}
+              >
+                عند وصول قيمة الأصناف المؤهلة لهذا الحد، يختار الزبون هدية واحدة فقط من قائمة الهدايا التي تحددها.
+              </Text>
+            </View>
           ) : null}
 
           {kind ===
@@ -2778,21 +2875,26 @@ export default function PromotionsAdminScreen() {
             />
           </View>
 
-          <SettingSwitch
-            label="يتكرر تلقائيًا"
-            hint="مثال: 4+1 يصبح 8+2 إذا توفرت الكمية."
-            value={
-              repeatable
-            }
-            onChange={
-              setRepeatable
-            }
-            colors={
-              colors
-            }
-          />
+          {kind !==
+          "spend_x_get_gift" ? (
+            <SettingSwitch
+              label="يتكرر تلقائيًا"
+              hint="مثال: 4+1 يصبح 8+2 إذا توفرت الكمية."
+              value={
+                repeatable
+              }
+              onChange={
+                setRepeatable
+              }
+              colors={
+                colors
+              }
+            />
+          ) : null}
 
-          {repeatable ? (
+          {kind !==
+            "spend_x_get_gift" &&
+          repeatable ? (
             <NumberField
               label="أقصى عدد مرات في الفاتورة (فارغ = بلا حد)"
               value={
@@ -2931,6 +3033,20 @@ export default function PromotionsAdminScreen() {
             }
           />
         )}
+
+        {kind ===
+        "spend_x_get_gift" ? (
+          <ProductSelector
+            title="أصناف الهدايا المتاحة"
+            hint="الزبون يختار هدية واحدة فقط من هذه الأصناف بعد وصوله إلى حد الشراء."
+            selected={
+              rewardIds
+            }
+            onChange={
+              setRewardIds
+            }
+          />
+        ) : null}
 
         <View
           style={
