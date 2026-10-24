@@ -3,6 +3,7 @@ import {
   appSettingsTable,
   discountCodesTable,
   orderItemCostsTable,
+  orderPromotionsTable,
   ordersTable,
   productsTable,
   type ColorVariant,
@@ -25,6 +26,14 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import {
+  calculatePromotions,
+  type PromotionAllocation,
+} from "./promotion-engine";
+import {
+  loadActivePromotions,
+  serializePromotionSnapshot,
+} from "./promotion-service";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -51,6 +60,7 @@ export interface TrustedOrderItem {
   quantity: number;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
 }
 
 export interface TrustedOrderInput {
@@ -71,6 +81,7 @@ interface GroupedItem {
   quantity: number;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
 }
 
 function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
@@ -85,6 +96,8 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
     const quantity = Number(item.quantity);
     const size = item.size?.trim() || undefined;
     const color = item.color?.trim() || undefined;
+    const rewardForPromotionId =
+      item.rewardForPromotionId;
 
     if (!Number.isInteger(productId) || productId <= 0) {
       throw new OrderValidationError("معرّف أحد المنتجات غير صالح");
@@ -94,7 +107,26 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
       throw new OrderValidationError("كمية أحد المنتجات غير صالحة");
     }
 
-    const key = JSON.stringify([productId, color ?? "", size ?? ""]);
+    if (
+      rewardForPromotionId !== undefined &&
+      (
+        !Number.isSafeInteger(
+          rewardForPromotionId,
+        ) ||
+        rewardForPromotionId <= 0
+      )
+    ) {
+      throw new OrderValidationError(
+        "معرّف عرض المكافأة غير صالح",
+      );
+    }
+
+    const key = JSON.stringify([
+      productId,
+      color ?? "",
+      size ?? "",
+      rewardForPromotionId ?? null,
+    ]);
     const current = grouped.get(key);
 
     if (current) {
@@ -103,7 +135,13 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
         throw new OrderValidationError("كمية أحد المنتجات تتجاوز الحد المسموح");
       }
     } else {
-      grouped.set(key, { productId, quantity, size, color });
+      grouped.set(key, {
+        productId,
+        quantity,
+        size,
+        color,
+        rewardForPromotionId,
+      });
     }
   }
 
@@ -320,6 +358,9 @@ interface TrustedStoredItem {
   image?: string;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: PromotionAllocation[];
   invoiceDiscountMinor?: number;
 }
 
@@ -327,6 +368,7 @@ function allocateOrderDiscountMinor(
   items: Array<{
     price: number;
     quantity: number;
+    promotionDiscountMinor?: number;
   }>,
   discountAmount: number,
 ): number[] {
@@ -334,46 +376,50 @@ function allocateOrderDiscountMinor(
     return items.map(() => 0);
   }
 
-  const productsTotal =
-    items.reduce(
-      (sum, item) =>
-        sum +
+  const basesMinor =
+    items.map((item) =>
+      Math.max(
+        0,
         item.price *
-          item.quantity,
-      0,
+          item.quantity *
+          100 -
+          (item.promotionDiscountMinor ?? 0),
+      ),
     );
 
-  if (
-    productsTotal <= 0 ||
-    discountAmount >
-      productsTotal
-  ) {
-    throw new OrderValidationError(
-      "خصم الكود أكبر من إجمالي المنتجات",
+  const productsTotalMinor =
+    basesMinor.reduce(
+      (sum, value) => sum + value,
+      0,
     );
-  }
 
   const discountMinor =
     discountAmount * 100;
 
+  if (
+    productsTotalMinor <= 0 ||
+    discountMinor >
+      productsTotalMinor
+  ) {
+    throw new OrderValidationError(
+      "خصم الكود أكبر من إجمالي المنتجات بعد العروض",
+    );
+  }
+
   const denominator =
-    BigInt(productsTotal);
+    BigInt(productsTotalMinor);
 
   const rows =
     items.map(
-      (item, index) => {
-        const gross =
-          item.price *
-          item.quantity;
-
+      (_item, index) => {
         const grossMinor =
-          gross * 100;
+          basesMinor[index] ?? 0;
 
         const numerator =
           BigInt(
             discountMinor,
           ) *
-          BigInt(gross);
+          BigInt(grossMinor);
 
         return {
           index,
@@ -764,6 +810,8 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         image: selectedImage,
         size: item.size,
         color: item.color,
+        rewardForPromotionId:
+          item.rewardForPromotionId,
       });
 
       if (
@@ -788,6 +836,156 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
 
       productsTotal += product.price * item.quantity;
     }
+
+    const activePromotions =
+      await loadActivePromotions(
+        tx,
+        "web",
+      );
+
+    const promotionCalculation =
+      calculatePromotions({
+        lines: trustedItems.map(
+          (item, index) => ({
+            key: String(index),
+            productId:
+              Number(item.id),
+            unitPriceMinor:
+              item.price * 100,
+            quantity:
+              item.quantity,
+            rewardForPromotionId:
+              item.rewardForPromotionId,
+          }),
+        ),
+        promotions:
+          activePromotions,
+        channel: "web",
+
+        // Online orders currently store their final total in whole ILS.
+        // Promotion discounts therefore stay on whole-ILS boundaries while
+        // their internal line allocation remains in minor ILS.
+        roundingIncrementMinor: 100,
+      });
+
+    trustedItems.forEach(
+      (item, index) => {
+        const result =
+          promotionCalculation.lines.find(
+            (line) =>
+              line.key ===
+              String(index),
+          );
+
+        item.promotionDiscountMinor =
+          result?.promotionDiscountMinor ??
+          0;
+
+        item.promotionAllocations =
+          result?.allocations ?? [];
+      },
+    );
+
+    for (const promotion of activePromotions) {
+      if (
+        promotion.kind !==
+        "spend_x_get_gift"
+      ) {
+        continue;
+      }
+
+      const selectedGiftItems =
+        trustedItems.filter(
+          (item) =>
+            item.rewardForPromotionId ===
+            promotion.id,
+        );
+
+      const selectedGiftQuantity =
+        selectedGiftItems.reduce(
+          (total, item) =>
+            total +
+            item.quantity,
+          0,
+        );
+
+      if (
+        selectedGiftQuantity >
+        1
+      ) {
+        throw new OrderValidationError(
+          "يمكن اختيار هدية واحدة فقط من هذا العرض",
+        );
+      }
+
+      if (
+        selectedGiftItems.some(
+          (item) =>
+            !promotion.rewardProductIds.includes(
+              Number(
+                item.id,
+              ),
+            ),
+        )
+      ) {
+        throw new OrderValidationError(
+          "الهدية المختارة ليست ضمن هدايا العرض المتاحة",
+        );
+      }
+
+      if (
+        selectedGiftQuantity >
+        0
+      ) {
+        const entitlement =
+          promotionCalculation.entitlements.find(
+            (item) =>
+              item.promotionId ===
+              promotion.id,
+          );
+
+        const appliedPromotion =
+          promotionCalculation.promotions.find(
+            (item) =>
+              item.promotionId ===
+              promotion.id,
+          );
+
+        if (
+          !entitlement ||
+          entitlement.earnedRewardQuantity <
+            selectedGiftQuantity
+        ) {
+          throw new OrderValidationError(
+            "قيمة السلة لم تعد مؤهلة للهدية. أزل الهدية أو أضف أصنافًا حتى تصل إلى حد العرض.",
+          );
+        }
+
+        if (
+          !appliedPromotion ||
+          appliedPromotion.applicationCount <
+            1
+        ) {
+          throw new OrderValidationError(
+            "تعذر تطبيق الهدية المختارة مع العروض الحالية في السلة. غيّر الهدية أو راجع العروض المطبقة.",
+          );
+        }
+      }
+    }
+
+    if (
+      promotionCalculation.totalDiscountMinor %
+        100 !==
+      0
+    ) {
+      throw new OrderValidationError(
+        "تعذر تثبيت خصم العرض على فاتورة المتجر",
+      );
+    }
+
+    const promotionDiscountAmount =
+      promotionCalculation.totalDiscountMinor /
+      100;
 
     const rawDiscountCode =
       input.discountCode?.trim() ??
@@ -845,14 +1043,29 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         candidate;
     }
 
-    // Business rule:
-    // percentage discount is calculated on merchandise only
-    // and ALWAYS rounded down to a whole shekel.
+    if (
+      discountCodeRow &&
+      promotionCalculation.promotions.some(
+        (promotion) =>
+          !promotion.stackWithDiscountCodes,
+      )
+    ) {
+      throw new OrderValidationError(
+        "كود الخصم لا يمكن جمعه مع أحد العروض المطبقة على السلة",
+      );
+    }
+
+    // Percentage code discount is calculated after quantity/general
+    // merchandise promotions and keeps the existing whole-ILS rule.
+    const discountCodeBase =
+      productsTotal -
+      promotionDiscountAmount;
+
     const discountCodeAmount =
       discountCodeRow
         ? Math.floor(
             (
-              productsTotal *
+              discountCodeBase *
               discountCodeRow.discountPercent
             ) /
               100,
@@ -889,11 +1102,22 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
     }
 
     const shippingPromotionProductsTotal =
-      productsTotal - discountCodeAmount;
+      productsTotal -
+      promotionDiscountAmount -
+      discountCodeAmount;
+
+    const quantityPromotionAllowsShipping =
+      promotionCalculation.promotions.every(
+        (promotion) =>
+          promotion.stackWithShippingPromotion,
+      );
 
     const shippingCost =
-      discountCodeRow &&
-      !discountCodeRow.stackWithShippingPromotion
+      (
+        discountCodeRow &&
+        !discountCodeRow.stackWithShippingPromotion
+      ) ||
+      !quantityPromotionAllowsShipping
         ? shipping.cost
         : resolveShippingCost(
             settingsData,
@@ -913,6 +1137,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
 
     const totalPrice =
       productsTotal -
+      promotionDiscountAmount -
       discountCodeAmount +
       shippingCost;
 
@@ -943,6 +1168,7 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
         shippingCost,
         shippingOriginalCost,
         shippingPromotionDiscount,
+        promotionDiscountAmount,
 
         discountCodeId:
           discountCodeRow?.id ??
@@ -990,6 +1216,58 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
       throw new Error(
         "ONLINE_ORDER_INSERT_FAILED",
       );
+    }
+
+    if (
+      promotionCalculation.promotions.length >
+      0
+    ) {
+      const promotionById =
+        new Map(
+          activePromotions.map(
+            (promotion) => [
+              promotion.id,
+              promotion,
+            ],
+          ),
+        );
+
+      await tx
+        .insert(orderPromotionsTable)
+        .values(
+          promotionCalculation.promotions.map(
+            (applied) => {
+              const definition =
+                promotionById.get(
+                  applied.promotionId,
+                );
+
+              if (!definition) {
+                throw new Error(
+                  "ONLINE_ORDER_PROMOTION_SNAPSHOT_MISSING",
+                );
+              }
+
+              return {
+                orderId: order.id,
+                promotionId:
+                  definition.id,
+                promotionName:
+                  definition.name,
+                promotionKind:
+                  definition.kind,
+                discountMinor:
+                  applied.discountMinor,
+                applicationCount:
+                  applied.applicationCount,
+                snapshot:
+                  serializePromotionSnapshot(
+                    definition,
+                  ),
+              };
+            },
+          ),
+        );
     }
 
     // Cost accounting is PRODUCT/MODEL level only.

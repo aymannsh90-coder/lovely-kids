@@ -72,6 +72,36 @@ function parseMoneyToMinor(value: string) {
   return minor;
 }
 
+function allocateProportionalMinor(
+  totalMinor: number,
+  partQuantity: number,
+  totalQuantity: number,
+) {
+  if (
+    partQuantity <= 0 ||
+    totalMinor <= 0
+  ) {
+    return 0;
+  }
+
+  if (
+    partQuantity >= totalQuantity
+  ) {
+    return totalMinor;
+  }
+
+  return Math.floor(
+    (
+      totalMinor *
+        partQuantity +
+      Math.floor(
+        totalQuantity / 2,
+      )
+    ) /
+      totalQuantity,
+  );
+}
+
 function createIdempotencyKey() {
   const randomPart =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -159,6 +189,10 @@ export default function SalesReturnsPage() {
     useState<PosMobileReturnResult | null>(null);
 
   const [idempotencyKey, setIdempotencyKey] = useState(createIdempotencyKey);
+  const [
+    showCalculatedReturnValue,
+    setShowCalculatedReturnValue,
+  ] = useState(false);
 
   const selectedItems = useMemo(() => {
     if (!preview) {
@@ -187,6 +221,80 @@ export default function SalesReturnsPage() {
       ),
     [selectedItems],
   );
+
+  const selectedHistoricalRefundMinor =
+    useMemo(
+      () =>
+        selectedItems.reduce(
+          (
+            total,
+            {
+              item,
+              quantity,
+            },
+          ) => {
+            const beforeQuantity =
+              item.returnedQuantity;
+            const afterQuantity =
+              beforeQuantity +
+              quantity;
+
+            const lineDiscount =
+              allocateProportionalMinor(
+                item.lineDiscountMinor,
+                afterQuantity,
+                item.soldQuantity,
+              ) -
+              allocateProportionalMinor(
+                item.lineDiscountMinor,
+                beforeQuantity,
+                item.soldQuantity,
+              );
+
+            const promotionDiscount =
+              allocateProportionalMinor(
+                item.promotionDiscountMinor,
+                afterQuantity,
+                item.soldQuantity,
+              ) -
+              allocateProportionalMinor(
+                item.promotionDiscountMinor,
+                beforeQuantity,
+                item.soldQuantity,
+              );
+
+            const invoiceDiscount =
+              allocateProportionalMinor(
+                item.invoiceDiscountAllocatedMinor,
+                afterQuantity,
+                item.soldQuantity,
+              ) -
+              allocateProportionalMinor(
+                item.invoiceDiscountAllocatedMinor,
+                beforeQuantity,
+                item.soldQuantity,
+              );
+
+            const gross =
+              item.soldUnitPriceMinor *
+              quantity;
+
+            return (
+              total +
+              gross -
+              lineDiscount -
+              promotionDiscount -
+              invoiceDiscount
+            );
+          },
+          0,
+        ),
+      [selectedItems],
+    );
+
+  const selectedHistoricalDiscountMinor =
+    selectedGrossMinor -
+    selectedHistoricalRefundMinor;
 
   const barcodeReturnUnitMinor = useMemo(
     () => parseMoneyToMinor(barcodeReturnPrice),
@@ -270,6 +378,7 @@ export default function SalesReturnsPage() {
     setRefundCustomerId(null);
     setError("");
     setCompletedReturn(null);
+    setShowCalculatedReturnValue(false);
     setBarcodeReturnProduct(null);
     setBarcodeReturnQuantity(1);
     setBarcodeReturnPrice("");
@@ -325,6 +434,7 @@ export default function SalesReturnsPage() {
       );
 
       setPreview(result);
+      setShowCalculatedReturnValue(false);
       setInvoiceInput(result.sale.publicId);
       setBarcodeInput(barcode);
 
@@ -483,6 +593,7 @@ export default function SalesReturnsPage() {
     }));
 
     setCompletedReturn(null);
+    setShowCalculatedReturnValue(false);
     setIdempotencyKey(createIdempotencyKey());
   }
 
@@ -498,6 +609,7 @@ export default function SalesReturnsPage() {
     );
 
     setCompletedReturn(null);
+    setShowCalculatedReturnValue(false);
     setIdempotencyKey(createIdempotencyKey());
   }
 
@@ -511,6 +623,7 @@ export default function SalesReturnsPage() {
     );
 
     setCompletedReturn(null);
+    setShowCalculatedReturnValue(false);
     setIdempotencyKey(createIdempotencyKey());
   }
 
@@ -555,7 +668,9 @@ export default function SalesReturnsPage() {
         "",
         `الفاتورة: ${preview.sale.publicId}`,
         `عدد القطع: ${selectedPieces}`,
-        `قيمة الأصناف قبل توزيع الخصم: ${formatMoney(selectedGrossMinor)}`,
+        `قيمة الأصناف قبل الخصم: ${formatMoney(selectedGrossMinor)}`,
+        `الخصم الموزع على المرتجع: ${formatMoney(selectedHistoricalDiscountMinor)}`,
+        `مبلغ الاسترداد: ${formatMoney(selectedHistoricalRefundMinor)}`,
         "",
         refundDescription,
       ].join("\n"),
@@ -1838,9 +1953,56 @@ export default function SalesReturnsPage() {
                     <strong>{formatMoney(selectedGrossMinor)}</strong>
                   </div>
 
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={
+                      submitBusy ||
+                      selectedPieces ===
+                        0
+                    }
+                    onClick={() =>
+                      setShowCalculatedReturnValue(
+                        true,
+                      )
+                    }
+                  >
+                    حساب قيمة المرتجع
+                  </button>
+
+                  {showCalculatedReturnValue ? (
+                    <>
+                      <div>
+                        <span>الخصم الموزع على المرتجع</span>
+
+                        <strong>
+                          {formatMoney(
+                            selectedHistoricalDiscountMinor,
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          قيمة المرتجع عند البيع بعد توزيع الخصم
+                        </span>
+
+                        <strong
+                          style={{
+                            fontSize: 20,
+                          }}
+                        >
+                          {formatMoney(
+                            selectedHistoricalRefundMinor,
+                          )}
+                        </strong>
+                      </div>
+                    </>
+                  ) : null}
+
                   <p>
-                    مبلغ الاسترداد النهائي يُحسب حسب سعر البيع والخصم الأصلي
-                    للفاتورة.
+                    قيمة المرتجع تعتمد على السعر التاريخي للصنف وقت البيع بعد
+                    نصيبه من الخصومات، ولا يُعاد احتساب أهلية العرض.
                   </p>
                 </div>
 

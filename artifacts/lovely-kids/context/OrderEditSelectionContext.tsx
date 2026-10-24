@@ -13,6 +13,7 @@ export type OrderEditSelectionItem = {
   image?: string;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
   clientKey: string;
   originalColor?: string;
   originalSize?: string;
@@ -58,13 +59,14 @@ const OrderEditSelectionContext =
 function selectionKey(
   item: Pick<
     OrderEditSelectionItem,
-    "id" | "size" | "color"
+    "id" | "size" | "color" | "rewardForPromotionId"
   >,
 ) {
   return [
     item.id,
     item.color?.trim() ?? "",
     item.size?.trim() ?? "",
+    item.rewardForPromotionId ?? "",
   ].join("::");
 }
 

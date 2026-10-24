@@ -9,6 +9,13 @@ export interface ThermalOrderItem {
   name: string;
   price: number;
   quantity: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: Array<{
+    promotionId: number;
+    promotionName: string;
+    groupKey: string;
+    discountMinor: number;
+  }>;
   invoiceDiscountMinor?: number;
   size?: string;
   color?: string;
@@ -251,6 +258,28 @@ export async function printOrderThermalReceipt(
     shippingPromotionDiscount > 0 &&
     shippingOriginalCost >= shippingPromotionDiscount &&
     shippingOriginalCost - shippingPromotionDiscount === shippingCost;
+
+  const promotionDiscounts =
+    new Map<string, number>();
+
+  for (const item of order.items) {
+    for (const allocation of item.promotionAllocations ?? []) {
+      if (
+        !allocation ||
+        typeof allocation.promotionName !== "string" ||
+        !Number.isSafeInteger(allocation.discountMinor) ||
+        allocation.discountMinor <= 0
+      ) {
+        continue;
+      }
+
+      promotionDiscounts.set(
+        allocation.promotionName,
+        (promotionDiscounts.get(allocation.promotionName) ?? 0) +
+          allocation.discountMinor,
+      );
+    }
+  }
 
   const invoiceDiscount =
     order.items.reduce(
@@ -676,6 +705,20 @@ export async function printOrderThermalReceipt(
                 <strong>${money(productsSubtotal)}</strong>
               </div>
 
+              ${
+                promotionDiscounts.size > 0
+                  ? [...promotionDiscounts.entries()]
+                      .map(
+                        ([promotionName, discountMinor]) => `
+                          <div>
+                            <span>خصم ${escapeHtml(promotionName)}</span>
+                            <strong>-${money(discountMinor / 100)}</strong>
+                          </div>
+                        `,
+                      )
+                      .join("")
+                  : ""
+              }
               ${
                 hasDiscountCode
                   ? `

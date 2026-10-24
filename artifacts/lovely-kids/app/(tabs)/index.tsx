@@ -46,7 +46,6 @@ type GenderTab = "boys" | "girls" | null;
 
 const { width } = Dimensions.get("window");
 const HOME_NOTIFICATION_PROMPT_DELAY_MS = 8000;
-
 function getDiverseRandomProducts(products: Product[], limit: number): Product[] {
   const shuffle = <T,>(items: T[]): T[] => {
     const copy = [...items];
@@ -336,6 +335,7 @@ export default function HomeScreen() {
   const { settings, settingsReady } = useAppSettings();
   const { user, getAuthToken } = useAuth();
   const { count: wishlistCount } = useWishlist();
+
   const firstName = user?.name?.trim().split(/\s+/)[0] || "";
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const ageGroups = AGE_GROUP_IDS.map((id) => ({
@@ -797,12 +797,24 @@ export default function HomeScreen() {
         onPress={() => router.push("/search")}
         style={[
           styles.searchBar,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
           desktopBannerStyle,
         ]}
       >
-        <Ionicons name="search-outline" size={20} color={colors.mutedForeground} />
-        <Text style={[styles.searchPlaceholder, { color: colors.mutedForeground }]}>
+        <Ionicons
+          name="search-outline"
+          size={20}
+          color={colors.mutedForeground}
+        />
+        <Text
+          style={[
+            styles.searchPlaceholder,
+            { color: colors.mutedForeground },
+          ]}
+        >
           ابحث عن منتج...
         </Text>
       </Pressable>
@@ -1612,8 +1624,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   searchBar: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    flex: 1,
+    minHeight: 48,
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 10,

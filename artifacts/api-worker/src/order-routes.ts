@@ -444,6 +444,8 @@ async function handleCreateOrder(
           quantity: item.quantity,
           size: item.size,
           color: item.color,
+          rewardForPromotionId:
+            item.rewardForPromotionId,
         })),
       },
     );

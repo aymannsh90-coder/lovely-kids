@@ -3,6 +3,7 @@ import {
   inventoryMovementsTable,
   appSettingsTable,
   orderItemCostsTable,
+  orderPromotionsTable,
   ordersTable,
   productsTable,
   type ColorVariant,
@@ -27,6 +28,14 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import {
+  calculatePromotions,
+  type PromotionAllocation,
+} from "./promotion-engine";
+import {
+  promotionDefinitionFromSnapshot,
+  serializePromotionSnapshot,
+} from "./promotion-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -35,6 +44,10 @@ interface StoredOrderItem {
   quantity: number;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: PromotionAllocation[];
+  invoiceDiscountMinor?: number;
 }
 
 export async function cancelOrderAndRestoreStock(
@@ -465,6 +478,7 @@ interface EditOrderItemInput {
   color?: string;
   size?: string;
   price?: number;
+  rewardForPromotionId?: number;
 }
 
 interface EditableProductState {
@@ -482,6 +496,10 @@ interface EditedStoredOrderItem {
   image?: string;
   color?: string;
   size?: string;
+  rewardForPromotionId?: number;
+  promotionDiscountMinor?: number;
+  promotionAllocations?: PromotionAllocation[];
+  invoiceDiscountMinor?: number;
 }
 
 function editableOrderItemKey(
@@ -490,6 +508,20 @@ function editableOrderItemKey(
   size?: string,
 ) {
   return JSON.stringify([id, color ?? "", size ?? ""]);
+}
+
+function editableOrderItemIdentityKey(
+  id: number,
+  color?: string,
+  size?: string,
+  rewardForPromotionId?: number,
+) {
+  return JSON.stringify([
+    id,
+    color ?? "",
+    size ?? "",
+    rewardForPromotionId ?? null,
+  ]);
 }
 
 function cloneColorVariants(value: unknown): ColorVariant[] {
@@ -616,7 +648,29 @@ function parseEditOrderItems(value: unknown): EditOrderItemInput[] {
         ? item.size.trim()
         : undefined;
 
-    const key = editableOrderItemKey(id, color, size);
+    const rewardForPromotionId =
+      item.rewardForPromotionId === undefined
+        ? undefined
+        : Number(item.rewardForPromotionId);
+
+    if (
+      rewardForPromotionId !== undefined &&
+      (
+        !Number.isSafeInteger(rewardForPromotionId) ||
+        rewardForPromotionId <= 0
+      )
+    ) {
+      throw new OrderEditError(
+        "معرّف عرض المكافأة غير صالح",
+      );
+    }
+
+    const key = editableOrderItemIdentityKey(
+      id,
+      color,
+      size,
+      rewardForPromotionId,
+    );
     const existing = grouped.get(key);
 
     if (existing) {
@@ -651,6 +705,7 @@ function parseEditOrderItems(value: unknown): EditOrderItemInput[] {
         price,
         color,
         size,
+        rewardForPromotionId,
       });
     }
   }
@@ -857,6 +912,8 @@ function applyEditedOrderItemStock(
     image: selectedImage,
     color: item.color,
     size: item.size,
+    rewardForPromotionId:
+      item.rewardForPromotionId,
   };
 }
 
@@ -887,22 +944,39 @@ function parseOrderInvoiceDiscount(
 }
 
 function allocateOrderInvoiceDiscount(
-  items: Array<{ price: number; quantity: number }>,
+  items: Array<{
+    price: number;
+    quantity: number;
+    promotionDiscountMinor?: number;
+  }>,
   invoiceDiscount: number,
 ): number[] {
   if (invoiceDiscount === 0) {
     return items.map(() => 0);
   }
 
-  const productsTotal = items.reduce(
-    (sum, item) =>
-      sum + item.price * item.quantity,
-    0,
+  const basesMinor = items.map(
+    (item) =>
+      Math.max(
+        0,
+        item.price *
+          item.quantity *
+          100 -
+          (item.promotionDiscountMinor ?? 0),
+      ),
   );
 
+  const productsTotalMinor =
+    basesMinor.reduce(
+      (sum, value) =>
+        sum + value,
+      0,
+    );
+
   if (
-    productsTotal <= 0 ||
-    invoiceDiscount > productsTotal
+    productsTotalMinor <= 0 ||
+    invoiceDiscount * 100 >
+      productsTotalMinor
   ) {
     throw new OrderEditError(
       "الخصم العام أكبر من إجمالي المنتجات",
@@ -917,16 +991,16 @@ function allocateOrderInvoiceDiscount(
     );
   }
 
-  const denominator = BigInt(productsTotal);
+  const denominator =
+    BigInt(productsTotalMinor);
 
-  const rows = items.map((item, index) => {
-    const gross =
-      item.price * item.quantity;
-    const grossMinor = gross * 100;
+  const rows = items.map((_item, index) => {
+    const grossMinor =
+      basesMinor[index] ?? 0;
 
     const numerator =
       BigInt(discountMinor) *
-      BigInt(gross);
+      BigInt(grossMinor);
 
     return {
       index,
@@ -1026,6 +1100,62 @@ export async function editOrderItemsAndAdjustStock(
           allowedStatuses[0] === "new"
           ? "تم تأكيد الطلب أو بدأت معالجته ولم يعد بالإمكان تعديله"
           : "يمكن تعديل الطلبات الجديدة أو المؤكدة أو قيد التوصيل فقط",
+        409,
+      );
+    }
+
+    const historicalPromotionRows =
+      await tx
+        .select()
+        .from(orderPromotionsTable)
+        .where(
+          eq(
+            orderPromotionsTable.orderId,
+            orderId,
+          ),
+        )
+        .orderBy(
+          asc(orderPromotionsTable.id),
+        );
+
+    const historicalPromotions = [
+      ...new Map(
+        historicalPromotionRows
+          .map((row) => {
+            const definition =
+              promotionDefinitionFromSnapshot(
+                row.snapshot,
+              );
+
+            return definition
+              ? [
+                  definition.id,
+                  definition,
+                ] as const
+              : null;
+          })
+          .filter(
+            (
+              entry,
+            ): entry is readonly [
+              number,
+              NonNullable<
+                ReturnType<
+                  typeof promotionDefinitionFromSnapshot
+                >
+              >,
+            ] =>
+              entry !== null,
+          ),
+      ).values(),
+    ];
+
+    if (
+      historicalPromotionRows.length > 0 &&
+      historicalPromotions.length === 0
+    ) {
+      throw new OrderEditError(
+        "تعذر قراءة Snapshot العرض القديم لهذا الطلب",
         409,
       );
     }
@@ -1282,10 +1412,11 @@ export async function editOrderItemsAndAdjustStock(
         );
       }
 
-      const key = editableOrderItemKey(
+      const key = editableOrderItemIdentityKey(
         productId,
         stored.color,
         stored.size,
+        stored.rewardForPromotionId,
       );
 
       if (!oldUnitPrices.has(key)) {
@@ -1338,10 +1469,11 @@ export async function editOrderItemsAndAdjustStock(
         item,
         item.price ??
           oldUnitPrices.get(
-            editableOrderItemKey(
+            editableOrderItemIdentityKey(
               item.id,
               item.color,
               item.size,
+              item.rewardForPromotionId,
             ),
           ) ??
           (
@@ -1359,6 +1491,62 @@ export async function editOrderItemsAndAdjustStock(
         throw new OrderEditError("إجمالي الطلب غير صالح");
       }
     }
+
+    const promotionCalculation =
+      calculatePromotions({
+        lines:
+          trustedItems.map(
+            (item, index) => ({
+              key:
+                String(index),
+              productId:
+                Number(item.id),
+              unitPriceMinor:
+                item.price * 100,
+              quantity:
+                item.quantity,
+              rewardForPromotionId:
+                item.rewardForPromotionId,
+            }),
+          ),
+        promotions:
+          historicalPromotions,
+        channel: "web",
+        roundingIncrementMinor:
+          100,
+      });
+
+    if (
+      promotionCalculation.totalDiscountMinor %
+        100 !==
+      0
+    ) {
+      throw new OrderEditError(
+        "تعذر تثبيت خصم العرض بعد تعديل الطلب",
+        409,
+      );
+    }
+
+    const promotionDiscountAmount =
+      promotionCalculation.totalDiscountMinor /
+      100;
+
+    trustedItems.forEach(
+      (item, index) => {
+        const line =
+          promotionCalculation.lines.find(
+            (candidate) =>
+              candidate.key ===
+              String(index),
+          );
+
+        item.promotionDiscountMinor =
+          line?.promotionDiscountMinor ??
+          0;
+        item.promotionAllocations =
+          line?.allocations ?? [];
+      },
+    );
 
     const oldQuantities = new Map<
       string,
@@ -1787,14 +1975,31 @@ export async function editOrderItemsAndAdjustStock(
       );
     }
 
+    if (
+      hasDiscountCodeSnapshot &&
+      promotionCalculation.promotions.some(
+        (promotion) =>
+          !promotion.stackWithDiscountCodes,
+      )
+    ) {
+      throw new OrderEditError(
+        "كود الخصم القديم لا يمكن جمعه مع العرض بعد تعديل الطلب",
+        409,
+      );
+    }
+
+    const invoiceDiscountBase =
+      productsTotal -
+      promotionDiscountAmount;
+
     // Existing code-discount orders keep the original campaign percentage
-    // when an admin edits their items. The discount is recalculated from
-    // the new merchandise total and always rounded down to whole ILS.
+    // when an admin edits their items. The percentage applies after
+    // merchandise promotions, matching trusted checkout.
     const invoiceDiscount =
       hasDiscountCodeSnapshot
         ? Math.floor(
             (
-              productsTotal *
+              invoiceDiscountBase *
               Number(order.discountCodePercent)
             ) /
               100,
@@ -1805,9 +2010,12 @@ export async function editOrderItemsAndAdjustStock(
               details.invoiceDiscount,
             );
 
-    if (invoiceDiscount > productsTotal) {
+    if (
+      invoiceDiscount >
+      invoiceDiscountBase
+    ) {
       throw new OrderEditError(
-        "الخصم العام أكبر من إجمالي المنتجات",
+        "الخصم العام أكبر من صافي المنتجات بعد العرض",
       );
     }
 
@@ -1826,15 +2034,29 @@ export async function editOrderItemsAndAdjustStock(
         invoiceDiscountAllocations[index];
     });
 
+    const promotionAllowsShipping =
+      promotionCalculation.promotions.every(
+        (promotion) =>
+          promotion.stackWithShippingPromotion,
+      );
+
+    const shippingPromotionProductsTotal =
+      productsTotal -
+      promotionDiscountAmount -
+      invoiceDiscount;
+
     let shippingCost =
-      hasDiscountCodeSnapshot &&
-      order.discountCodeStacksWithShippingPromotion ===
-        false
+      (
+        hasDiscountCodeSnapshot &&
+        order.discountCodeStacksWithShippingPromotion ===
+          false
+      ) ||
+      !promotionAllowsShipping
         ? shipping.cost
         : resolveShippingCost(
             settingsData,
             shipping,
-            productsTotal,
+            shippingPromotionProductsTotal,
           );
 
     let exchangeDeliveryBaseChargeMinor:
@@ -1926,6 +2148,7 @@ export async function editOrderItemsAndAdjustStock(
 
     const totalPrice =
       productsTotal -
+      promotionDiscountAmount -
       invoiceDiscount +
       shippingCost;
 
@@ -2511,6 +2734,7 @@ export async function editOrderItemsAndAdjustStock(
         shippingCost,
         shippingOriginalCost,
         shippingPromotionDiscount,
+        promotionDiscountAmount,
         discountCodeAmount:
           hasDiscountCodeSnapshot
             ? invoiceDiscount
@@ -2544,6 +2768,77 @@ export async function editOrderItemsAndAdjustStock(
       .where(eq(ordersTable.id, orderId))
       .returning();
 
+    if (
+      historicalPromotionRows.length >
+        0
+    ) {
+      await tx
+        .delete(
+          orderPromotionsTable,
+        )
+        .where(
+          eq(
+            orderPromotionsTable.orderId,
+            orderId,
+          ),
+        );
+
+      const historicalById =
+        new Map(
+          historicalPromotions.map(
+            (promotion) => [
+              promotion.id,
+              promotion,
+            ],
+          ),
+        );
+
+      if (
+        promotionCalculation.promotions.length >
+        0
+      ) {
+        await tx
+          .insert(
+            orderPromotionsTable,
+          )
+          .values(
+            promotionCalculation.promotions.map(
+              (applied) => {
+                const definition =
+                  historicalById.get(
+                    applied.promotionId,
+                  );
+
+                if (!definition) {
+                  throw new OrderEditError(
+                    "تعذر حفظ Snapshot العرض بعد تعديل الطلب",
+                    409,
+                  );
+                }
+
+                return {
+                  orderId,
+                  promotionId:
+                    definition.id,
+                  promotionName:
+                    definition.name,
+                  promotionKind:
+                    definition.kind,
+                  discountMinor:
+                    applied.discountMinor,
+                  applicationCount:
+                    applied.applicationCount,
+                  snapshot:
+                    serializePromotionSnapshot(
+                      definition,
+                    ),
+                };
+              },
+            ),
+          );
+      }
+    }
+
     if (linkedOnlineExchange) {
       if (
         exchangeDeliveryBaseChargeMinor === null ||
@@ -2559,7 +2854,11 @@ export async function editOrderItemsAndAdjustStock(
         productsTotal * 100;
 
       const newDiscountMinor =
-        invoiceDiscount * 100;
+        (
+          promotionDiscountAmount +
+          invoiceDiscount
+        ) *
+        100;
 
       const newNetMinor =
         newGrossMinor -

@@ -43,3 +43,4 @@ export * from "./product-daily-analytics";
 export * from "./assistant-drafts";
 
 export * from "./discount-codes";
+export * from "./promotions";

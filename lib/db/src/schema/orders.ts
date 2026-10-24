@@ -32,6 +32,12 @@ export const ordersTable = pgTable("orders", {
   shippingOriginalCost: integer("shipping_original_cost"),
   shippingPromotionDiscount: integer("shipping_promotion_discount"),
 
+  // Merchandise promotion discount snapshot in whole ILS.
+  // Per-line allocations live inside the JSON order items in minor ILS.
+  promotionDiscountAmount: integer("promotion_discount_amount")
+    .notNull()
+    .default(0),
+
   // Discount-code snapshot. The foreign key is optional on purpose:
   // historical receipts remain valid even if the admin later removes a code.
   discountCodeId: integer("discount_code_id").references(
@@ -103,6 +109,7 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
   deliveryCompanyCost: true,
   shippingOriginalCost: true,
   shippingPromotionDiscount: true,
+  promotionDiscountAmount: true,
   discountCodeId: true,
   discountCodeLabel: true,
   discountCodePercent: true,
@@ -122,6 +129,8 @@ export const insertOrderSchema = createInsertSchema(ordersTable).omit({
       image: z.string().optional(),
       size: z.string().optional(),
       color: z.string().optional(),
+      rewardForPromotionId:
+        z.number().int().positive().optional(),
     })
   ),
   paymentMethod: z.enum(["cod", "bank_transfer"]).optional(),

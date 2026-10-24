@@ -6,10 +6,12 @@ import {
   exchangeReturnItemsTable,
   exchangeSaleItemCostsTable,
   exchangeSaleItemsTable,
+  exchangeSalePromotionsTable,
   financeTransactionsTable,
   inventoryMovementsTable,
   posSaleItemCostsTable,
   posSaleItemsTable,
+  posSalePromotionsTable,
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
@@ -43,6 +45,18 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import {
+  calculatePromotions,
+} from "./promotion-engine";
+import {
+  allocateReturnDiscountMinor,
+  calculatePromotionReturnRequalification,
+} from "./promotion-return-requalification";
+import {
+  loadActivePromotions,
+  promotionDefinitionFromSnapshot,
+  serializePromotionSnapshot,
+} from "./promotion-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -98,6 +112,7 @@ interface PlannedExchangeReturnLine {
     quantity: number;
     soldUnitPriceMinor: number;
     lineDiscountMinor: number;
+    promotionDiscountMinor: number;
     generalStockBefore: number | null;
     generalStockAfter: number | null;
     variantStockBefore: number | null;
@@ -107,6 +122,7 @@ interface PlannedExchangeReturnLine {
   quantity: number;
   grossAmountMinor: number;
   lineDiscountMinor: number;
+  promotionDiscountMinor: number;
   netBeforeInvoiceMinor: number;
   invoiceDiscountMinor: number;
   allocatedDiscountMinor: number;
@@ -1392,6 +1408,72 @@ export async function handleCreatePosExchange(
               );
             }
 
+            const allOriginalItems =
+              await tx
+                .select()
+                .from(
+                  posSaleItemsTable,
+                )
+                .where(
+                  eq(
+                    posSaleItemsTable.saleId,
+                    originalSale.id,
+                  ),
+                )
+                .orderBy(
+                  asc(
+                    posSaleItemsTable.lineNumber,
+                  ),
+                );
+
+            const salePromotionRows =
+              await tx
+                .select()
+                .from(
+                  posSalePromotionsTable,
+                )
+                .where(
+                  eq(
+                    posSalePromotionsTable.saleId,
+                    originalSale.id,
+                  ),
+                );
+
+            const originalPromotions =
+              salePromotionRows
+                .map((row) =>
+                  promotionDefinitionFromSnapshot(
+                    row.snapshot,
+                  ),
+                )
+                .filter(
+                  (
+                    promotion,
+                  ): promotion is NonNullable<
+                    ReturnType<
+                      typeof promotionDefinitionFromSnapshot
+                    >
+                  > =>
+                    promotion !==
+                    null,
+                );
+
+            if (
+              originalSale.promotionDiscountMinor >
+                0 &&
+              (
+                originalPromotions.length ===
+                  0 ||
+                originalPromotions.length !==
+                  salePromotionRows.length
+              )
+            ) {
+              throw new PosExchangeError(
+                "تعذر قراءة تفاصيل العرض الأصلي لهذه الفاتورة",
+                409,
+              );
+            }
+
             const completedReturns =
               await tx
                 .select({
@@ -1497,8 +1579,12 @@ export async function handleCreatePosExchange(
             const consumedLineDiscountByOriginalItem =
               new Map<number, number>();
 
+            const consumedPromotionDiscountByOriginalItem =
+              new Map<number, number>();
+
             let priorGrossMinor = 0;
             let priorLineDiscountMinor = 0;
+            let priorPromotionDiscountMinor = 0;
             let priorInvoiceDiscountMinor = 0;
 
             for (
@@ -1534,11 +1620,24 @@ export async function handleCreatePosExchange(
                   item.lineDiscountMinor,
               );
 
+              consumedPromotionDiscountByOriginalItem.set(
+                id,
+                (
+                  consumedPromotionDiscountByOriginalItem.get(
+                    id,
+                  ) ?? 0
+                ) +
+                  item.promotionDiscountMinor,
+              );
+
               priorGrossMinor +=
                 item.grossAmountMinor;
 
               priorLineDiscountMinor +=
                 item.lineDiscountMinor;
+
+              priorPromotionDiscountMinor +=
+                item.promotionDiscountMinor;
 
               priorInvoiceDiscountMinor +=
                 item.invoiceDiscountMinor;
@@ -1577,11 +1676,24 @@ export async function handleCreatePosExchange(
                   item.lineDiscountMinor,
               );
 
+              consumedPromotionDiscountByOriginalItem.set(
+                id,
+                (
+                  consumedPromotionDiscountByOriginalItem.get(
+                    id,
+                  ) ?? 0
+                ) +
+                  item.promotionDiscountMinor,
+              );
+
               priorGrossMinor +=
                 item.grossAmountMinor;
 
               priorLineDiscountMinor +=
                 item.lineDiscountMinor;
+
+              priorPromotionDiscountMinor +=
+                item.promotionDiscountMinor;
 
               priorInvoiceDiscountMinor +=
                 item.invoiceDiscountMinor;
@@ -1599,7 +1711,8 @@ export async function handleCreatePosExchange(
 
             const invoiceBaseMinor =
               originalSale.subtotalMinor -
-              originalSale.itemDiscountMinor;
+              originalSale.itemDiscountMinor -
+              originalSale.promotionDiscountMinor;
 
             if (
               !Number.isSafeInteger(
@@ -1607,6 +1720,9 @@ export async function handleCreatePosExchange(
               ) ||
               !Number.isSafeInteger(
                 priorLineDiscountMinor,
+              ) ||
+              !Number.isSafeInteger(
+                priorPromotionDiscountMinor,
               ) ||
               !Number.isSafeInteger(
                 priorInvoiceDiscountMinor,
@@ -1619,12 +1735,16 @@ export async function handleCreatePosExchange(
                 originalSale.subtotalMinor ||
               priorLineDiscountMinor >
                 originalSale.itemDiscountMinor ||
+              priorPromotionDiscountMinor >
+                originalSale.promotionDiscountMinor ||
               priorInvoiceDiscountMinor >
                 originalSale.invoiceDiscountMinor ||
               priorGrossMinor -
-                  priorLineDiscountMinor >
+                  priorLineDiscountMinor -
+                  priorPromotionDiscountMinor >
                 invoiceBaseMinor ||
               priorLineDiscountMinor +
+                  priorPromotionDiscountMinor +
                   priorInvoiceDiscountMinor >
                 originalSale.discountMinor
             ) {
@@ -1643,6 +1763,148 @@ export async function handleCreatePosExchange(
                   ],
                 ),
               );
+
+            const cumulativeReturnedQuantityByKey =
+              new Map<string, number>();
+
+            for (
+              const originalItem of
+              allOriginalItems
+            ) {
+              const priorQuantity =
+                consumedByOriginalItem.get(
+                  originalItem.id,
+                ) ?? 0;
+
+              const requestedQuantity =
+                requestedById.get(
+                  originalItem.id,
+                ) ?? 0;
+
+              const cumulativeQuantity =
+                priorQuantity +
+                requestedQuantity;
+
+              if (
+                !Number.isSafeInteger(
+                  cumulativeQuantity,
+                ) ||
+                cumulativeQuantity <
+                  0 ||
+                cumulativeQuantity >
+                  originalItem.quantity
+              ) {
+                throw new PosExchangeError(
+                  `الكمية المرتجعة من ${originalItem.productNameAr} غير صالحة`,
+                  409,
+                );
+              }
+
+              cumulativeReturnedQuantityByKey.set(
+                String(
+                  originalItem.id,
+                ),
+                cumulativeQuantity,
+              );
+            }
+
+            let requalification:
+              ReturnType<
+                typeof calculatePromotionReturnRequalification
+              >;
+
+            try {
+              requalification =
+                calculatePromotionReturnRequalification({
+                  lines:
+                    allOriginalItems.map(
+                      (item) => {
+                        if (
+                          item.productId ===
+                          null
+                        ) {
+                          throw new Error(
+                            "PROMOTION_EXCHANGE_PRODUCT_MISSING",
+                          );
+                        }
+
+                        return {
+                          key:
+                            String(
+                              item.id,
+                            ),
+                          productId:
+                            item.productId,
+                          unitPriceMinor:
+                            item.soldUnitPriceMinor,
+                          quantity:
+                            item.quantity,
+                          lineDiscountMinor:
+                            item.lineDiscountMinor,
+                        };
+                      },
+                    ),
+                  returnedQuantityByKey:
+                    cumulativeReturnedQuantityByKey,
+                  promotions:
+                    originalPromotions,
+                  channel:
+                    "pos",
+                  originalPromotionDiscountMinor:
+                    originalSale.promotionDiscountMinor,
+                  originalInvoiceDiscountMinor:
+                    originalSale.invoiceDiscountMinor,
+                  roundingIncrementMinor:
+                    1,
+                });
+            } catch (error) {
+              console.warn(
+                "POS_EXCHANGE_PROMOTION_REQUALIFICATION_FAILED",
+                {
+                  saleId:
+                    originalSale.id,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : String(
+                          error,
+                        ),
+                },
+              );
+
+              throw new PosExchangeError(
+                "هذا التبديل يغيّر استحقاق عرض سابق بطريقة لا يمكن تسويتها تلقائيًا. أعد أصناف العرض المرتبطة معًا.",
+                409,
+              );
+            }
+
+            const currentPromotionDiscountTarget =
+              requalification
+                .targetReturnedPromotionDiscountMinor -
+              priorPromotionDiscountMinor;
+
+            const currentInvoiceDiscountTarget =
+              requalification
+                .targetReturnedInvoiceDiscountMinor -
+              priorInvoiceDiscountMinor;
+
+            if (
+              !Number.isSafeInteger(
+                currentPromotionDiscountTarget,
+              ) ||
+              !Number.isSafeInteger(
+                currentInvoiceDiscountTarget,
+              ) ||
+              currentPromotionDiscountTarget <
+                0 ||
+              currentInvoiceDiscountTarget <
+                0
+            ) {
+              throw new PosExchangeError(
+                "تعذر احتساب أثر العرض على التبديل",
+                409,
+              );
+            }
 
             const historicalReturnLines =
               originalItems.map(
@@ -1700,27 +1962,14 @@ export async function handleCreatePosExchange(
                     );
                   }
 
-                  const consumedAfter =
-                    previouslyConsumed +
-                    quantity;
-
                   const targetLineDiscountMinor =
-                    consumedAfter ===
-                    originalItem.quantity
-                      ? originalItem.lineDiscountMinor
-                      : Number(
-                          (
-                            BigInt(
-                              originalItem.lineDiscountMinor,
-                            ) *
-                            BigInt(
-                              consumedAfter,
-                            )
-                          ) /
-                            BigInt(
-                              originalItem.quantity,
-                            ),
-                        );
+                    requalification
+                      .targetReturnedLineDiscountByKey
+                      .get(
+                        String(
+                          originalItem.id,
+                        ),
+                      ) ?? 0;
 
                   const lineDiscountMinor =
                     targetLineDiscountMinor -
@@ -1737,7 +1986,8 @@ export async function handleCreatePosExchange(
                       previouslyConsumedLineDiscount ||
                     targetLineDiscountMinor >
                       originalItem.lineDiscountMinor ||
-                    lineDiscountMinor < 0 ||
+                    lineDiscountMinor <
+                      0 ||
                     lineDiscountMinor >
                       grossAmountMinor
                   ) {
@@ -1757,6 +2007,8 @@ export async function handleCreatePosExchange(
                     grossAmountMinor,
 
                     lineDiscountMinor,
+                    promotionDiscountMinor:
+                      0,
 
                     netBeforeInvoiceMinor:
                       grossAmountMinor -
@@ -1774,93 +2026,95 @@ export async function handleCreatePosExchange(
                 },
               );
 
-            let runningNetBeforeInvoiceMinor =
-              priorGrossMinor -
-              priorLineDiscountMinor;
-
-            let runningInvoiceDiscountMinor =
-              priorInvoiceDiscountMinor;
-
-            for (
-              const line of
-              historicalReturnLines
-            ) {
-              const nextNetBeforeInvoiceMinor =
-                runningNetBeforeInvoiceMinor +
-                line.netBeforeInvoiceMinor;
-
-              if (
-                !Number.isSafeInteger(
-                  nextNetBeforeInvoiceMinor,
-                ) ||
-                nextNetBeforeInvoiceMinor >
-                  invoiceBaseMinor
-              ) {
-                throw new PosExchangeError(
-                  "صافي الأصناف المرتجعة أكبر من صافي الفاتورة الأصلية",
-                  409,
+            try {
+              const promotionAllocations =
+                allocateReturnDiscountMinor(
+                  currentPromotionDiscountTarget,
+                  historicalReturnLines.map(
+                    (line) => ({
+                      grossAmountMinor:
+                        line.grossAmountMinor,
+                      alreadyAllocatedMinor:
+                        line.lineDiscountMinor,
+                      weightMinor:
+                        Math.max(
+                          0,
+                          line.grossAmountMinor -
+                            line.lineDiscountMinor,
+                        ),
+                    }),
+                  ),
                 );
-              }
 
-              let targetInvoiceDiscountMinor =
-                0;
+              historicalReturnLines.forEach(
+                (line, index) => {
+                  line.promotionDiscountMinor =
+                    promotionAllocations[
+                      index
+                    ] ?? 0;
 
-              if (
-                invoiceBaseMinor > 0
-              ) {
-                targetInvoiceDiscountMinor =
-                  nextNetBeforeInvoiceMinor ===
-                  invoiceBaseMinor
-                    ? originalSale.invoiceDiscountMinor
-                    : Number(
-                        (
-                          BigInt(
-                            originalSale.invoiceDiscountMinor,
-                          ) *
-                          BigInt(
-                            nextNetBeforeInvoiceMinor,
-                          )
-                        ) /
-                          BigInt(
-                            invoiceBaseMinor,
-                          ),
-                      );
-              }
+                  line.netBeforeInvoiceMinor =
+                    line.grossAmountMinor -
+                    line.lineDiscountMinor -
+                    line.promotionDiscountMinor;
+                },
+              );
 
-              const invoiceDiscountMinor =
-                targetInvoiceDiscountMinor -
-                runningInvoiceDiscountMinor;
-
-              if (
-                !Number.isSafeInteger(
-                  invoiceDiscountMinor,
-                ) ||
-                invoiceDiscountMinor < 0 ||
-                invoiceDiscountMinor >
-                  line.netBeforeInvoiceMinor
-              ) {
-                throw new PosExchangeError(
-                  "تعذر توزيع خصم الفاتورة الأصلية على التبديل",
-                  409,
+              const invoiceAllocations =
+                allocateReturnDiscountMinor(
+                  currentInvoiceDiscountTarget,
+                  historicalReturnLines.map(
+                    (line) => ({
+                      grossAmountMinor:
+                        line.grossAmountMinor,
+                      alreadyAllocatedMinor:
+                        line.lineDiscountMinor +
+                        line.promotionDiscountMinor,
+                      weightMinor:
+                        Math.max(
+                          0,
+                          line.netBeforeInvoiceMinor,
+                        ),
+                    }),
+                  ),
                 );
-              }
 
-              line.invoiceDiscountMinor =
-                invoiceDiscountMinor;
+              historicalReturnLines.forEach(
+                (line, index) => {
+                  line.invoiceDiscountMinor =
+                    invoiceAllocations[
+                      index
+                    ] ?? 0;
 
-              line.allocatedDiscountMinor =
-                line.lineDiscountMinor +
-                line.invoiceDiscountMinor;
+                  line.allocatedDiscountMinor =
+                    line.lineDiscountMinor +
+                    line.promotionDiscountMinor +
+                    line.invoiceDiscountMinor;
 
-              line.returnNetMinor =
-                line.grossAmountMinor -
-                line.allocatedDiscountMinor;
+                  line.returnNetMinor =
+                    line.grossAmountMinor -
+                    line.allocatedDiscountMinor;
+                },
+              );
+            } catch (error) {
+              console.warn(
+                "POS_EXCHANGE_PROMOTION_ALLOCATION_FAILED",
+                {
+                  saleId:
+                    originalSale.id,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : String(
+                          error,
+                        ),
+                },
+              );
 
-              runningNetBeforeInvoiceMinor =
-                nextNetBeforeInvoiceMinor;
-
-              runningInvoiceDiscountMinor =
-                targetInvoiceDiscountMinor;
+              throw new PosExchangeError(
+                "هذا التبديل يلغي جزءًا من العرض أكبر من قيمة الأصناف المرتجعة. أعد أصناف العرض المرتبطة معًا.",
+                409,
+              );
             }
 
             for (const line of historicalReturnLines) {
@@ -2366,6 +2620,7 @@ export async function handleCreatePosExchange(
                   quantity: item.quantity,
                   soldUnitPriceMinor,
                   lineDiscountMinor: 0,
+                  promotionDiscountMinor: 0,
 
                   generalStockBefore:
                     product.stock ?? null,
@@ -2382,6 +2637,7 @@ export async function handleCreatePosExchange(
                 quantity: item.quantity,
                 grossAmountMinor,
                 lineDiscountMinor: 0,
+                promotionDiscountMinor: 0,
                 netBeforeInvoiceMinor:
                   grossAmountMinor,
                 invoiceDiscountMinor: 0,
@@ -2641,6 +2897,9 @@ export async function handleCreatePosExchange(
               lineDiscountMinor:
                 line.lineDiscountMinor,
 
+              promotionDiscountMinor:
+                line.promotionDiscountMinor,
+
               invoiceDiscountMinor:
                 line.invoiceDiscountMinor,
 
@@ -2659,6 +2918,52 @@ export async function handleCreatePosExchange(
               nextColorVariants,
             });
           }
+
+          const activeNewPromotions =
+            await loadActivePromotions(
+              tx,
+              "pos",
+            );
+
+          const newPromotionCalculation =
+            calculatePromotions({
+              lines:
+                resolvedNewItems.map(
+                  (item) => ({
+                    key:
+                      String(
+                        item.lineNumber,
+                      ),
+                    productId:
+                      item.productId,
+                    unitPriceMinor:
+                      item.soldUnitPriceMinor,
+                    quantity:
+                      item.quantity,
+                  }),
+                ),
+              promotions:
+                activeNewPromotions,
+              channel:
+                "pos",
+              roundingIncrementMinor:
+                1,
+            });
+
+          const newPromotionLineByNumber =
+            new Map(
+              newPromotionCalculation.lines.map(
+                (line) => [
+                  Number(
+                    line.key,
+                  ),
+                  line,
+                ],
+              ),
+            );
+
+          const newPromotionDiscountMinor =
+            newPromotionCalculation.totalDiscountMinor;
 
           const newStockPlans = [];
 
@@ -2944,9 +3249,16 @@ export async function handleCreatePosExchange(
             const lineDiscountMinor =
               item.lineDiscountMinor;
 
+            const linePromotionDiscountMinor =
+              newPromotionLineByNumber.get(
+                item.lineNumber,
+              )?.promotionDiscountMinor ??
+              0;
+
             const lineTotalMinor =
               lineGrossMinor -
-              lineDiscountMinor;
+              lineDiscountMinor -
+              linePromotionDiscountMinor;
 
             if (
               !Number.isSafeInteger(
@@ -2963,7 +3275,13 @@ export async function handleCreatePosExchange(
                 lineDiscountMinor,
               ) ||
               lineDiscountMinor < 0 ||
-              lineDiscountMinor >
+              !Number.isSafeInteger(
+                linePromotionDiscountMinor,
+              ) ||
+              linePromotionDiscountMinor <
+                0 ||
+              lineDiscountMinor +
+                  linePromotionDiscountMinor >
                 lineGrossMinor ||
               !Number.isSafeInteger(
                 lineTotalMinor,
@@ -3033,6 +3351,9 @@ export async function handleCreatePosExchange(
 
               lineDiscountMinor,
 
+              promotionDiscountMinor:
+                linePromotionDiscountMinor,
+
               lineTotalMinor,
 
               generalStockBefore,
@@ -3047,7 +3368,8 @@ export async function handleCreatePosExchange(
 
           const newItemsNetMinor =
             newSubtotalMinor -
-            newItemDiscountMinor;
+            newItemDiscountMinor -
+            newPromotionDiscountMinor;
 
           if (
             payload.newInvoiceDiscountMinor >
@@ -3060,6 +3382,7 @@ export async function handleCreatePosExchange(
 
           const newDiscountMinor =
             newItemDiscountMinor +
+            newPromotionDiscountMinor +
             payload.newInvoiceDiscountMinor;
 
           const newNetMinor =
@@ -3386,6 +3709,7 @@ export async function handleCreatePosExchange(
 
                 const allocatedDiscountMinor =
                   line.lineDiscountMinor +
+                  line.promotionDiscountMinor +
                   invoiceDiscountMinor;
 
                 const lineNetMinor =
@@ -3554,6 +3878,9 @@ export async function handleCreatePosExchange(
                     lineDiscountMinor:
                       line.lineDiscountMinor,
 
+                    promotionDiscountMinor:
+                      line.promotionDiscountMinor,
+
                     invoiceDiscountMinor:
                       line.invoiceDiscountMinor,
 
@@ -3606,6 +3933,9 @@ export async function handleCreatePosExchange(
 
                     lineDiscountMinor:
                       line.lineDiscountMinor,
+
+                    promotionDiscountMinor:
+                      line.promotionDiscountMinor,
 
                     invoiceDiscountMinor:
                       line.invoiceDiscountMinor,
@@ -3716,6 +4046,61 @@ export async function handleCreatePosExchange(
             );
           }
 
+          if (
+            newPromotionCalculation.promotions.length >
+            0
+          ) {
+            const promotionById =
+              new Map(
+                activeNewPromotions.map(
+                  (promotion) => [
+                    promotion.id,
+                    promotion,
+                  ],
+                ),
+              );
+
+            await tx
+              .insert(
+                exchangeSalePromotionsTable,
+              )
+              .values(
+                newPromotionCalculation.promotions.map(
+                  (applied) => {
+                    const definition =
+                      promotionById.get(
+                        applied.promotionId,
+                      );
+
+                    if (!definition) {
+                      throw new Error(
+                        "POS_EXCHANGE_PROMOTION_SNAPSHOT_MISSING",
+                      );
+                    }
+
+                    return {
+                      exchangeId:
+                        exchange.id,
+                      promotionId:
+                        definition.id,
+                      promotionName:
+                        definition.name,
+                      promotionKind:
+                        definition.kind,
+                      discountMinor:
+                        applied.discountMinor,
+                      applicationCount:
+                        applied.applicationCount,
+                      snapshot:
+                        serializePromotionSnapshot(
+                          definition,
+                        ),
+                    };
+                  },
+                ),
+              );
+          }
+
           // -------------------------------------------------
           // Insert return lines.
           // -------------------------------------------------
@@ -3782,6 +4167,9 @@ export async function handleCreatePosExchange(
 
                         lineDiscountMinor:
                           line.lineDiscountMinor,
+
+                        promotionDiscountMinor:
+                          line.promotionDiscountMinor,
 
                         invoiceDiscountMinor:
                           line.invoiceDiscountMinor,
@@ -3862,6 +4250,9 @@ export async function handleCreatePosExchange(
 
                         lineDiscountMinor:
                           line.lineDiscountMinor,
+
+                        promotionDiscountMinor:
+                          line.promotionDiscountMinor,
 
                         invoiceDiscountMinor:
                           line.invoiceDiscountMinor,

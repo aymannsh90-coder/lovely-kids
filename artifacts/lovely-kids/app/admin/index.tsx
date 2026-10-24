@@ -56,6 +56,12 @@ const ADMIN_CARDS = [
     route: "/admin/notifications" as const,
   },
   {
+    label: "عروض الكمية والخصومات",
+    subtitle: "4+1 · 3+1 · خصم عام · سعر خاص",
+    icon: "gift-outline" as const,
+    route: "/admin/promotions" as never,
+  },
+  {
     label: "قسم العروض 🔥",
     subtitle: "إدارة منتجات العروض",
     icon: "pricetag-outline" as const,

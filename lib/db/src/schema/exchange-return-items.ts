@@ -57,6 +57,10 @@ export const exchangeReturnItemsTable = pgTable(
       .notNull()
       .default(0),
 
+    promotionDiscountMinor: integer("promotion_discount_minor")
+      .notNull()
+      .default(0),
+
     invoiceDiscountMinor: integer("invoice_discount_minor")
       .notNull()
       .default(0),
@@ -122,6 +126,7 @@ export const exchangeReturnItemsTable = pgTable(
         ${table.soldUnitPriceMinor} >= 0
         and ${table.grossAmountMinor} >= 0
         and ${table.lineDiscountMinor} >= 0
+        and ${table.promotionDiscountMinor} >= 0
         and ${table.invoiceDiscountMinor} >= 0
         and ${table.allocatedDiscountMinor} >= 0
         and ${table.returnNetMinor} >= 0
@@ -140,7 +145,8 @@ export const exchangeReturnItemsTable = pgTable(
       "exchange_return_items_discount_matches",
       sql`
         ${table.allocatedDiscountMinor} =
-        ${table.lineDiscountMinor} + ${table.invoiceDiscountMinor}
+        ${table.lineDiscountMinor} +
+        ${table.promotionDiscountMinor} + ${table.invoiceDiscountMinor}
       `,
     ),
 

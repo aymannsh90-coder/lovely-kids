@@ -41,6 +41,7 @@ type OrderItem = {
   image?: string;
   size?: string;
   color?: string;
+  rewardForPromotionId?: number;
 };
 
 type Order = {
@@ -71,11 +72,13 @@ function lineKey(
   id: string,
   color?: string,
   size?: string,
+  rewardForPromotionId?: number,
 ) {
   return [
     id,
     color?.trim() ?? "",
     size?.trim() ?? "",
+    rewardForPromotionId ?? "",
   ].join("::");
 }
 
@@ -544,6 +547,7 @@ export default function EditOrderScreen() {
         pickerProduct.id,
         pickerColor,
         pickerSize,
+        undefined,
       );
 
       setItems((current) => {
@@ -554,6 +558,7 @@ export default function EditOrderScreen() {
                 item.id,
                 item.color,
                 item.size,
+                item.rewardForPromotionId,
               ) === key,
           );
 

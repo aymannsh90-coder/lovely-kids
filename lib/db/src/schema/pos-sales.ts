@@ -48,6 +48,10 @@ export const posSalesTable = pgTable(
 
     itemDiscountMinor: integer("item_discount_minor").notNull().default(0),
 
+    promotionDiscountMinor: integer("promotion_discount_minor")
+      .notNull()
+      .default(0),
+
     invoiceDiscountMinor: integer("invoice_discount_minor")
       .notNull()
       .default(0),
@@ -120,6 +124,7 @@ export const posSalesTable = pgTable(
         ${table.subtotalMinor} >= 0
         and ${table.discountMinor} >= 0
         and ${table.itemDiscountMinor} >= 0
+        and ${table.promotionDiscountMinor} >= 0
         and ${table.invoiceDiscountMinor} >= 0
         and ${table.totalMinor} >= 0
         and ${table.paidMinor} >= 0
@@ -137,7 +142,8 @@ export const posSalesTable = pgTable(
       "pos_sales_discount_breakdown_matches",
       sql`
         ${table.discountMinor} =
-        ${table.itemDiscountMinor} + ${table.invoiceDiscountMinor}
+        ${table.itemDiscountMinor} +
+        ${table.promotionDiscountMinor} + ${table.invoiceDiscountMinor}
       `,
     ),
 
@@ -248,6 +254,10 @@ export const posSaleItemsTable = pgTable(
 
     lineDiscountMinor: integer("line_discount_minor").notNull().default(0),
 
+    promotionDiscountMinor: integer("promotion_discount_minor")
+      .notNull()
+      .default(0),
+
     lineTotalMinor: integer("line_total_minor").notNull(),
 
     generalStockBefore: integer("general_stock_before"),
@@ -278,6 +288,7 @@ export const posSaleItemsTable = pgTable(
         ${table.websiteUnitPriceMinor} >= 0
         and ${table.soldUnitPriceMinor} >= 0
         and ${table.lineDiscountMinor} >= 0
+        and ${table.promotionDiscountMinor} >= 0
         and ${table.lineTotalMinor} >= 0
       `,
     ),
@@ -285,7 +296,7 @@ export const posSaleItemsTable = pgTable(
     check(
       "pos_sale_items_line_discount_not_over_gross",
       sql`
-        ${table.lineDiscountMinor} <=
+        ${table.lineDiscountMinor} + ${table.promotionDiscountMinor} <=
         ${table.soldUnitPriceMinor} * ${table.quantity}
       `,
     ),
@@ -296,6 +307,7 @@ export const posSaleItemsTable = pgTable(
         ${table.lineTotalMinor} =
         ${table.soldUnitPriceMinor} * ${table.quantity}
         - ${table.lineDiscountMinor}
+        - ${table.promotionDiscountMinor}
       `,
     ),
 

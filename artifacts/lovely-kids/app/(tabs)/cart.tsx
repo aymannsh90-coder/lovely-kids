@@ -28,6 +28,10 @@ import type { ShippingZone } from "@/context/AppSettingsContext";
 import { getProductShareUrl } from "@/utils/productShare";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import {
+  usePromotions,
+  type PromotionPreviewResult,
+} from "@/context/PromotionsContext";
 import { useColors } from "@/hooks/useColors";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { type Product, getAvailableStock } from "@/data/products";
@@ -236,6 +240,10 @@ export default function CartScreen() {
   const { user, updateProfile, getAuthToken } = useAuth();
   const { items, updateQuantity, removeItem, totalPrice, totalItems, clearCart } = useCart();
   const { products, refreshProducts } = useVisibleProducts();
+  const {
+    previewCart,
+    getPromotionById,
+  } = usePromotions();
 
   const [step, setStep] = useState<Step>("cart");
   const [loading, setLoading] = useState(false);
@@ -252,6 +260,19 @@ export default function CartScreen() {
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUploaded, setProofUploaded] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
+
+  const [
+    promotionPreview,
+    setPromotionPreview,
+  ] = useState<PromotionPreviewResult | null>(null);
+  const [
+    promotionPreviewLoading,
+    setPromotionPreviewLoading,
+  ] = useState(false);
+  const [
+    promotionPreviewError,
+    setPromotionPreviewError,
+  ] = useState<string | null>(null);
 
   const [discountCodeInput, setDiscountCodeInput] = useState("");
   const [appliedDiscountCode, setAppliedDiscountCode] =
@@ -295,15 +316,275 @@ export default function CartScreen() {
     setDiscountCodeError(null);
   }, [settings.discountCodesEnabled]);
 
+  useEffect(() => {
+    if (items.length === 0) {
+      setPromotionPreview(null);
+      setPromotionPreviewError(null);
+      setPromotionPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const timer = setTimeout(() => {
+      setPromotionPreviewLoading(true);
+      setPromotionPreviewError(null);
+
+      void previewCart(items)
+        .then((preview) => {
+          if (cancelled) return;
+          setPromotionPreview(preview);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+
+          setPromotionPreview(null);
+          setPromotionPreviewError(
+            error instanceof Error
+              ? error.message
+              : "تعذر احتساب عروض السلة",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setPromotionPreviewLoading(false);
+          }
+        });
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [items, previewCart]);
+
+  const sameCartLine = (
+    left: (typeof items)[number],
+    right: (typeof items)[number],
+  ) =>
+    left.id === right.id &&
+    left.size === right.size &&
+    left.color === right.color &&
+    left.rewardForPromotionId ===
+      right.rewardForPromotionId;
+
+  const removeSelectedGiftForPromotion = (
+    promotionId: number,
+  ) => {
+    items
+      .filter(
+        (item) =>
+          item.rewardForPromotionId ===
+          promotionId,
+      )
+      .forEach((gift) =>
+        removeItem(
+          gift.id,
+          gift.size,
+          gift.color,
+          gift.rewardForPromotionId,
+        ),
+      );
+  };
+
+  const runCartChangeWithGiftGuard =
+    async (
+      nextItems: typeof items,
+      action: () => void,
+      useNormalRemovePrompt = false,
+    ) => {
+      const selectedGiftPromotionIds = [
+        ...new Set(
+          items
+            .map(
+              (item) =>
+                item.rewardForPromotionId,
+            )
+            .filter(
+              (
+                id,
+              ): id is number =>
+                Number.isSafeInteger(
+                  id,
+                ) &&
+                Number(id) > 0 &&
+                getPromotionById(
+                  id,
+                )?.kind ===
+                  "spend_x_get_gift",
+            ),
+        ),
+      ];
+
+      if (
+        selectedGiftPromotionIds.length ===
+        0
+      ) {
+        if (
+          useNormalRemovePrompt
+        ) {
+          confirmRemoveFromCart(
+            action,
+          );
+        } else {
+          action();
+        }
+        return;
+      }
+
+      try {
+        const nextPreview =
+          await previewCart(
+            nextItems,
+          );
+
+        const lostPromotionIds =
+          selectedGiftPromotionIds.filter(
+            (promotionId) => {
+              const entitlement =
+                nextPreview.entitlements.find(
+                  (entry) =>
+                    entry.promotionId ===
+                    promotionId,
+                );
+
+              return (
+                (
+                  entitlement
+                    ?.earnedRewardQuantity ??
+                  0
+                ) < 1
+              );
+            },
+          );
+
+        if (
+          lostPromotionIds.length ===
+          0
+        ) {
+          if (
+            useNormalRemovePrompt
+          ) {
+            confirmRemoveFromCart(
+              action,
+            );
+          } else {
+            action();
+          }
+          return;
+        }
+
+        const lostLabels =
+          lostPromotionIds
+            .map(
+              (promotionId) =>
+                getPromotionById(
+                  promotionId,
+                )?.publicLabel,
+            )
+            .filter(
+              (
+                label,
+              ): label is string =>
+                !!label,
+            );
+
+        Alert.alert(
+          "تنبيه",
+          `حذف أو تقليل هذا الصنف سيُلغي استحقاقك للهدية${lostLabels.length > 0 ? ` في ${lostLabels.join("، ")}` : ""}، وسيتم إزالة الهدية غير المستحقة من السلة. هل تريد المتابعة؟`,
+          [
+            {
+              text: "إلغاء",
+              style: "cancel",
+            },
+            {
+              text: "متابعة",
+              style:
+                "destructive",
+              onPress: () => {
+                action();
+                lostPromotionIds.forEach(
+                  (
+                    promotionId,
+                  ) =>
+                    removeSelectedGiftForPromotion(
+                      promotionId,
+                    ),
+                );
+              },
+            },
+          ],
+        );
+      } catch {
+        Alert.alert(
+          "تعذر التحقق من العرض",
+          "لم نتمكن من التحقق من استحقاق الهدية الآن. حاول مرة أخرى حتى لا تفقد الهدية بالخطأ.",
+        );
+      }
+    };
+
+  const promotionDiscountAmount =
+    (promotionPreview?.totalDiscountMinor ?? 0) /
+    100;
+
+  const promotionBlocksDiscountCodes =
+    (promotionPreview?.promotions ?? []).some(
+      (promotion) =>
+        !promotion.stackWithDiscountCodes,
+    );
+
+  const promotionsAllowShippingPromotion =
+    (promotionPreview?.promotions ?? []).every(
+      (promotion) =>
+        promotion.stackWithShippingPromotion,
+    );
+
+  useEffect(() => {
+    if (
+      !promotionBlocksDiscountCodes ||
+      !appliedDiscountCode
+    ) {
+      return;
+    }
+
+    setAppliedDiscountCode(null);
+    setDiscountCodeInput("");
+    setCheckoutCouponExpanded(false);
+    setDiscountCodeError(
+      "أحد عروض السلة لا يسمح بالجمع مع كود خصم.",
+    );
+  }, [
+    promotionBlocksDiscountCodes,
+    appliedDiscountCode,
+  ]);
+
+  const discountCodeBase = Math.max(
+    0,
+    totalPrice -
+      promotionDiscountAmount,
+  );
+
   const appliedDiscountAmount =
     appliedDiscountCode
       ? Math.floor(
-          (totalPrice * appliedDiscountCode.discountPercent) / 100,
+          (
+            discountCodeBase *
+            appliedDiscountCode.discountPercent
+          ) /
+            100,
         )
       : 0;
 
   const handleApplyDiscountCode = async () => {
     const rawCode = discountCodeInput.trim();
+
+    if (promotionBlocksDiscountCodes) {
+      setAppliedDiscountCode(null);
+      setDiscountCodeError(
+        "العرض المطبق على السلة لا يسمح باستخدام كود خصم معه.",
+      );
+      return;
+    }
 
     if (!rawCode) {
       setAppliedDiscountCode(null);
@@ -426,15 +707,20 @@ export default function CartScreen() {
     setLoading(true);
 
     const allowShippingPromotion =
-      !appliedDiscountCode ||
-      appliedDiscountCode.stackWithShippingPromotion;
+      promotionsAllowShippingPromotion &&
+      (
+        !appliedDiscountCode ||
+        appliedDiscountCode.stackWithShippingPromotion
+      );
 
     let currentDiscountAmount =
       appliedDiscountAmount;
 
     const checkoutProductsTotal = Math.max(
       0,
-      totalPrice - currentDiscountAmount,
+      totalPrice -
+        promotionDiscountAmount -
+        currentDiscountAmount,
     );
 
     let shippingCost = getShippingCost(
@@ -490,6 +776,12 @@ export default function CartScreen() {
             image: i.image,
             size: i.size,
             color: i.color,
+            ...(i.rewardForPromotionId
+              ? {
+                  rewardForPromotionId:
+                    i.rewardForPromotionId,
+                }
+              : {}),
           })),
           totalPrice: currentTotal,
           shippingZone: selectedZone.label,
@@ -1047,12 +1339,17 @@ export default function CartScreen() {
       ),
     ];
     const allowShippingPromotion =
-      !appliedDiscountCode ||
-      appliedDiscountCode.stackWithShippingPromotion;
+      promotionsAllowShippingPromotion &&
+      (
+        !appliedDiscountCode ||
+        appliedDiscountCode.stackWithShippingPromotion
+      );
 
     const discountedProductsTotal = Math.max(
       0,
-      totalPrice - appliedDiscountAmount,
+      totalPrice -
+      promotionDiscountAmount -
+      appliedDiscountAmount,
     );
 
     const promotionActive = isShippingPromotionActive(
@@ -1238,6 +1535,32 @@ export default function CartScreen() {
                   قيمة المنتجات
                 </Text>
               </View>
+
+              {(promotionPreview?.promotions ?? []).map(
+                (promotion) => (
+                  <View
+                    style={styles.summaryRow}
+                    key={`checkout-promotion-${promotion.promotionId}`}
+                  >
+                    <Text
+                      style={[
+                        styles.summaryValue,
+                        { color: "#16A34A" },
+                      ]}
+                    >
+                      -{promotion.discountMinor / 100}₪
+                    </Text>
+                    <Text
+                      style={[
+                        styles.summaryLabel,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      خصم {promotion.publicLabel}
+                    </Text>
+                  </View>
+                ),
+              )}
 
               {appliedDiscountCode ? (
                 <View style={styles.summaryRow}>
@@ -1880,11 +2203,16 @@ export default function CartScreen() {
     });
 
   const cartPromotionCanStack =
-    !appliedDiscountCode ||
-    appliedDiscountCode.stackWithShippingPromotion;
+    promotionsAllowShippingPromotion &&
+    (
+      !appliedDiscountCode ||
+      appliedDiscountCode.stackWithShippingPromotion
+    );
   const cartPromotionProductsTotal = Math.max(
     0,
-    totalPrice - appliedDiscountAmount,
+    totalPrice -
+      promotionDiscountAmount -
+      appliedDiscountAmount,
   );
   const cartPromotionWindowActive =
     isShippingPromotionWindowActive(
@@ -1960,7 +2288,9 @@ export default function CartScreen() {
           <FlatList
             style={isDesktopWeb ? { flex: 1 } : undefined}
             data={items}
-            keyExtractor={(item) => `${item.id}-${item.color ?? ""}-${item.size ?? ""}`}
+            keyExtractor={(item) =>
+              `${item.id}-${item.color ?? ""}-${item.size ?? ""}-${item.rewardForPromotionId ?? ""}`
+            }
             contentContainerStyle={[
               styles.list,
               isDesktopWeb
@@ -1986,6 +2316,12 @@ export default function CartScreen() {
                     availableQuantity: null,
                   };
               const hasStockIssue = !stockStatus.valid;
+              const isSpendGiftReward =
+                !!item.rewardForPromotionId &&
+                getPromotionById(
+                  item.rewardForPromotionId,
+                )?.kind ===
+                  "spend_x_get_gift";
 
               return (
                 <View
@@ -2011,6 +2347,20 @@ export default function CartScreen() {
                     <Text style={[styles.itemPrice, { color: colors.primary }]}>
                       {item.price * item.quantity} ₪
                     </Text>
+
+                    {isSpendGiftReward ? (
+                      <Text
+                        style={{
+                          color: "#16A34A",
+                          fontSize: 12,
+                          fontWeight: "900",
+                          textAlign: "right",
+                          marginTop: 3,
+                        }}
+                      >
+                        🎁 هدية من العرض
+                      </Text>
+                    ) : null}
 
                     {hasStockIssue ? (
                       <View
@@ -2099,6 +2449,14 @@ export default function CartScreen() {
                                     cartEdit: "1",
                                     cartSize: item.size ?? "",
                                     cartColor: item.color ?? "",
+                                    ...(item.rewardForPromotionId
+                                      ? {
+                                          cartRewardForPromotionId:
+                                            String(
+                                              item.rewardForPromotionId,
+                                            ),
+                                        }
+                                      : {}),
                                   },
                                 })
                               }
@@ -2125,11 +2483,28 @@ export default function CartScreen() {
                     ) : null}
 
                     <Pressable
-                      onPress={() =>
-                        confirmRemoveFromCart(() =>
-                          removeItem(item.id, item.size, item.color),
-                        )
-                      }
+                      onPress={() => {
+                        const nextItems =
+                          items.filter(
+                            (entry) =>
+                              !sameCartLine(
+                                entry,
+                                item,
+                              ),
+                          );
+
+                        void runCartChangeWithGiftGuard(
+                          nextItems,
+                          () =>
+                            removeItem(
+                              item.id,
+                              item.size,
+                              item.color,
+                              item.rewardForPromotionId,
+                            ),
+                          true,
+                        );
+                      }}
                       style={styles.deleteBtn}
                     >
                       <Ionicons name="trash-outline" size={15} color="#dc2626" />
@@ -2143,75 +2518,156 @@ export default function CartScreen() {
                       isDesktopWeb ? styles.desktopItemImage : null,
                     ]}
                   />
-                  <View
-                    style={[
-                      styles.quantityRow,
-                      isDesktopWeb ? styles.desktopQuantityRow : null,
-                    ]}
-                  >
-                    <Pressable
-                      disabled={hasStockIssue}
-                      onPress={() => {
-                        const availableStock = product
-                          ? getAvailableStock(product, item.size, item.color)
-                          : null;
-
-                        if (
-                          availableStock !== null &&
-                          item.quantity >= availableStock
-                        ) {
-                          showStockLimit(availableStock);
-                          return;
-                        }
-
-                        updateQuantity(
-                          item.id,
-                          item.quantity + 1,
-                          item.size,
-                          item.color,
-                        );
-                      }}
+                  {isSpendGiftReward ? (
+                    <View
                       style={[
-                        styles.qtyBtn,
-                        {
-                          backgroundColor: hasStockIssue
-                            ? colors.muted
-                            : colors.primary,
-                        },
+                        styles.quantityRow,
+                        isDesktopWeb
+                          ? styles.desktopQuantityRow
+                          : null,
                       ]}
                     >
-                      <Ionicons
-                        name="add"
-                        size={16}
-                        color={
-                          hasStockIssue
-                            ? colors.mutedForeground
-                            : "#fff"
-                        }
-                      />
-                    </Pressable>
-                    <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
-                    <Pressable
-                      onPress={() => {
-                        if (item.quantity === 1) {
-                          confirmRemoveFromCart(() =>
-                            removeItem(item.id, item.size, item.color),
-                          );
-                          return;
-                        }
-
-                        updateQuantity(
-                          item.id,
-                          item.quantity - 1,
-                          item.size,
-                          item.color,
-                        );
-                      }}
-                      style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
-                    >
-                      <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
-                    </Pressable>
-                  </View>
+                      <View
+                        style={[
+                          styles.qtyBtn,
+                          {
+                            backgroundColor:
+                              colors.muted,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="gift-outline"
+                          size={16}
+                          color={
+                            colors.mutedForeground
+                          }
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.qty,
+                          {
+                            color:
+                              colors.foreground,
+                          },
+                        ]}
+                      >
+                        1
+                      </Text>
+                    </View>
+                  ) : (
+                                      <View
+                                        style={[
+                                          styles.quantityRow,
+                                          isDesktopWeb ? styles.desktopQuantityRow : null,
+                                        ]}
+                                      >
+                                        <Pressable
+                                          disabled={hasStockIssue}
+                                          onPress={() => {
+                                            const availableStock = product
+                                              ? getAvailableStock(product, item.size, item.color)
+                                              : null;
+                    
+                                            if (
+                                              availableStock !== null &&
+                                              item.quantity >= availableStock
+                                            ) {
+                                              showStockLimit(availableStock);
+                                              return;
+                                            }
+                    
+                                            updateQuantity(
+                                              item.id,
+                                              item.quantity + 1,
+                                              item.size,
+                                              item.color,
+                                              item.rewardForPromotionId,
+                                            );
+                                          }}
+                                          style={[
+                                            styles.qtyBtn,
+                                            {
+                                              backgroundColor: hasStockIssue
+                                                ? colors.muted
+                                                : colors.primary,
+                                            },
+                                          ]}
+                                        >
+                                          <Ionicons
+                                            name="add"
+                                            size={16}
+                                            color={
+                                              hasStockIssue
+                                                ? colors.mutedForeground
+                                                : "#fff"
+                                            }
+                                          />
+                                        </Pressable>
+                                        <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
+                                        <Pressable
+                                          onPress={() => {
+                                            const nextItems =
+                                              item.quantity ===
+                                              1
+                                                ? items.filter(
+                                                    (entry) =>
+                                                      !sameCartLine(
+                                                        entry,
+                                                        item,
+                                                      ),
+                                                  )
+                                                : items.map(
+                                                    (entry) =>
+                                                      sameCartLine(
+                                                        entry,
+                                                        item,
+                                                      )
+                                                        ? {
+                                                            ...entry,
+                                                            quantity:
+                                                              entry.quantity -
+                                                              1,
+                                                          }
+                                                        : entry,
+                                                  );
+                    
+                                            void runCartChangeWithGiftGuard(
+                                              nextItems,
+                                              () => {
+                                                if (
+                                                  item.quantity ===
+                                                  1
+                                                ) {
+                                                  removeItem(
+                                                    item.id,
+                                                    item.size,
+                                                    item.color,
+                                                    item.rewardForPromotionId,
+                                                  );
+                                                  return;
+                                                }
+                    
+                                                updateQuantity(
+                                                  item.id,
+                                                  item.quantity -
+                                                    1,
+                                                  item.size,
+                                                  item.color,
+                                                  item.rewardForPromotionId,
+                                                );
+                                              },
+                                              item.quantity ===
+                                                1,
+                                            );
+                                          }}
+                                          style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
+                                        >
+                                          <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
+                                        </Pressable>
+                                      </View>
+                  )}
                 </View>
               );
             }}
@@ -2236,7 +2692,252 @@ export default function CartScreen() {
               <Text style={[styles.totalPrice, { color: colors.primary }]}>{totalPrice} ₪</Text>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>الإجمالي</Text>
             </View>
-            {settings.discountCodesEnabled === true ? (
+
+            {promotionPreviewLoading ? (
+              <View style={styles.summaryRow}>
+                <ActivityIndicator
+                  size="small"
+                  color={colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.summaryLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  جاري احتساب عروض السلة...
+                </Text>
+              </View>
+            ) : null}
+
+            {(promotionPreview?.promotions ?? []).map(
+              (promotion) => {
+                const configuredPromotion =
+                  getPromotionById(
+                    promotion.promotionId,
+                  );
+
+                let displayLabel =
+                  promotion.publicLabel;
+
+                if (
+                  configuredPromotion?.kind ===
+                    "buy_x_get_y" &&
+                  configuredPromotion.buyQuantity &&
+                  configuredPromotion.rewardQuantity
+                ) {
+                  const buyQuantity =
+                    configuredPromotion.buyQuantity;
+                  const rewardQuantity =
+                    configuredPromotion.rewardQuantity;
+
+                  if (
+                    configuredPromotion.rewardMode ===
+                    "free"
+                  ) {
+                    displayLabel =
+                      `اشتري ${buyQuantity} وخذ ${rewardQuantity} مجانًا`;
+                  } else if (
+                    configuredPromotion.rewardMode ===
+                      "percent_off" &&
+                    configuredPromotion.rewardPercent
+                  ) {
+                    displayLabel =
+                      `اشتري ${buyQuantity} وخذ ${rewardQuantity} بخصم ${configuredPromotion.rewardPercent}%`;
+                  } else if (
+                    configuredPromotion.rewardMode ===
+                      "fixed_price" &&
+                    configuredPromotion.rewardPriceMinor !==
+                      null &&
+                    configuredPromotion.rewardPriceMinor !==
+                      undefined
+                  ) {
+                    displayLabel =
+                      `اشتري ${buyQuantity} وخذ ${rewardQuantity} بسعر ${configuredPromotion.rewardPriceMinor / 100} ₪`;
+                  }
+                }
+
+                return (
+                  <View
+                    style={styles.summaryRow}
+                    key={`cart-promotion-${promotion.promotionId}`}
+                  >
+                    <Text
+                      style={{
+                        color: "#16A34A",
+                        fontWeight: "900",
+                      }}
+                    >
+                      -{promotion.discountMinor / 100} ₪
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "800",
+                      }}
+                    >
+                      🎁 {displayLabel}
+                    </Text>
+                  </View>
+                );
+              },
+            )}
+
+            {promotionDiscountAmount > 0 ? (
+              <View style={styles.summaryRow}>
+                <Text
+                  style={[
+                    styles.totalPrice,
+                    { color: "#16A34A" },
+                  ]}
+                >
+                  {totalPrice - promotionDiscountAmount} ₪
+                </Text>
+                <Text
+                  style={[
+                    styles.totalLabel,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  الإجمالي بعد العرض
+                </Text>
+              </View>
+            ) : null}
+
+            {(promotionPreview?.entitlements ?? [])
+              .filter(
+                (entitlement) =>
+                  entitlement.remainingRewardQuantity > 0 ||
+                  (
+                    entitlement.nextBundleRemainingQuantity ??
+                    0
+                  ) > 0 ||
+                  (
+                    entitlement.thresholdRemainingMinor ??
+                    0
+                  ) > 0,
+              )
+              .map((entitlement) => {
+                const promotion =
+                  getPromotionById(
+                    entitlement.promotionId,
+                  );
+
+                if (!promotion) return null;
+
+                const chooseReward =
+                  promotion.rewardSelectionMode ===
+                    "customer_choice" &&
+                  entitlement.remainingRewardQuantity >
+                    0;
+
+                const remainingForNextBundle =
+                  entitlement.nextBundleRemainingQuantity ??
+                  entitlement.remainingRewardQuantity;
+
+                const isSpendGift =
+                  promotion.kind ===
+                  "spend_x_get_gift";
+
+                const thresholdRemaining =
+                  (
+                    entitlement.thresholdRemainingMinor ??
+                    0
+                  ) / 100;
+
+                return (
+                  <View
+                    key={`promotion-entitlement-${entitlement.promotionId}`}
+                    style={{
+                      borderWidth: 1,
+                      borderColor:
+                        colors.primary + "55",
+                      backgroundColor:
+                        colors.primary + "0D",
+                      borderRadius: 12,
+                      padding: 10,
+                      gap: 7,
+                      marginTop: 5,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontWeight: "800",
+                        textAlign: "right",
+                      }}
+                    >
+                      {chooseReward
+                        ? "🎁 استحققت مكافأة من العرض"
+                        : isSpendGift
+                          ? `باقي ${thresholdRemaining} ₪ للحصول على الهدية`
+                          : `باقي ${remainingForNextBundle} قطعة للاستفادة من العرض`}
+                    </Text>
+
+                    {chooseReward ||
+                    !isSpendGift ? (
+                      <Pressable
+                        onPress={() =>
+                          router.push({
+                            pathname:
+                              "/(tabs)/products",
+                            params: {
+                              promotionId:
+                                String(
+                                  entitlement.promotionId,
+                                ),
+                              ...(chooseReward
+                                ? {
+                                    rewardForPromotionId:
+                                      String(
+                                        entitlement.promotionId,
+                                      ),
+                                  }
+                                : {}),
+                            },
+                          } as never)
+                        }
+                        style={{
+                          alignSelf: "flex-end",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontWeight: "900",
+                            textDecorationLine:
+                              "underline",
+                          }}
+                        >
+                          {chooseReward
+                            ? (
+                                isSpendGift
+                                  ? "اختيار الهدية"
+                                  : "اختر قطعتك من الأصناف المشمولة"
+                              )
+                            : "مشاهدة الأصناف المشمولة"}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+
+            {promotionPreviewError ? (
+              <Text
+                style={{
+                  color: "#DC2626",
+                  fontSize: 12,
+                  textAlign: "right",
+                  marginTop: 4,
+                }}
+              >
+                {promotionPreviewError}
+              </Text>
+            ) : null}
+
+            {settings.discountCodesEnabled === true &&
+            !promotionBlocksDiscountCodes ? (
               <View
                 style={{
                   gap: 8,
@@ -2274,7 +2975,9 @@ export default function CartScreen() {
                     </View>
                     <View style={styles.summaryRow}>
                       <Text style={{ color: colors.primary, fontWeight: "900" }}>
-                        {totalPrice - appliedDiscountAmount} ₪
+                        {totalPrice -
+      promotionDiscountAmount -
+      appliedDiscountAmount} ₪
                       </Text>
                       <Text style={{ color: colors.foreground, fontWeight: "800" }}>
                         بعد الخصم
