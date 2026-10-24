@@ -22,7 +22,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  promotionShortLabel,
+  promotionCustomerTitle,
   usePromotions,
 } from "@/context/PromotionsContext";
 
@@ -365,17 +365,9 @@ export function FloatingPromotionButton() {
     return null;
   }
 
-  const rawLabel =
-    primaryPromotion.publicLabel?.trim() ||
-    promotionShortLabel(
-      primaryPromotion,
-    );
-
   const shortLabel =
-    bidiSafePromotionLabel(
-      /^عرض\s/u.test(rawLabel)
-        ? rawLabel
-        : `عرض ${rawLabel}`,
+    promotionCustomerTitle(
+      primaryPromotion,
     );
 
   const badge =
