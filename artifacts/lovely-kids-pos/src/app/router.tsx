@@ -51,7 +51,7 @@ export default function AppRouter() {
   return (
     <Routes>
       <Route
-        path="sales/manual-order"
+        path="sales/mobile/manual-order"
         element={<ManualOnlineOrderPage />}
       />
 
