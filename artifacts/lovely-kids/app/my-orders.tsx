@@ -1,5 +1,6 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
+import { NotificationSubscribeCard } from "@/components/NotificationSubscribeCard";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
@@ -541,6 +542,15 @@ export default function MyOrdersScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.notificationOptInWrap}>
+        <NotificationSubscribeCard
+          compact
+          hideWhenEnabled
+          orderId={!user ? guestOrder?.id : undefined}
+          phone={!user ? guestPhone : undefined}
+        />
+      </View>
+
       {!user ? (
         <ScrollView
           contentContainerStyle={[
@@ -784,6 +794,10 @@ const styles = StyleSheet.create({
   editBtnText: {
     fontSize: 14,
     fontWeight: "800",
+  },
+  notificationOptInWrap: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
   },
   guestContent: {
     padding: 16,
