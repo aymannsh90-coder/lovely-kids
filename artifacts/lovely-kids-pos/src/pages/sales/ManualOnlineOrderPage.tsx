@@ -1556,6 +1556,10 @@ export default function ManualOnlineOrderPage({
         `تم إنشاء الطلب #${result.id} بنجاح وخصم المخزون.`,
       );
 
+      if (!isDesktop) {
+        stopCamera();
+      }
+
       refocusBarcode();
     } catch (caught) {
       if (
@@ -1726,54 +1730,162 @@ export default function ManualOnlineOrderPage({
             <div>
               <strong>إضافة الأصناف</strong>
               <small>
-                امسح الباركود بالفرد ثم اضغط Enter تلقائيًا
+                {isDesktop
+                  ? "امسح الباركود بفرد الباركود، ويُضاف الصنف مباشرة."
+                  : "افتح الكاميرا ووجّهها نحو باركود المنتج."}
               </small>
             </div>
-            <span>🔫</span>
+            <span>
+              {isDesktop
+                ? "🔫"
+                : "📷"}
+            </span>
           </div>
 
-          <form
-            className="mobile-pos-search manual-order-barcode-form"
-            onSubmit={
-              handleBarcodeSubmit
-            }
-          >
-            <input
-              ref={barcodeInputRef}
-              dir="ltr"
-              value={barcode}
-              onChange={(event) => {
-                const value =
-                  event.target.value;
+          {isDesktop ? (
+            <>
+              <form
+                className="mobile-pos-search manual-order-barcode-form"
+                onSubmit={
+                  handleBarcodeSubmit
+                }
+              >
+                <input
+                  ref={barcodeInputRef}
+                  dir="ltr"
+                  value={barcode}
+                  onChange={(event) => {
+                    const value =
+                      event.target.value;
 
-                barcodeValueRef.current =
-                  value;
-                setBarcode(value);
-              }}
-              onKeyDown={
-                handleBarcodeKeyDown
-              }
-              placeholder="امسح الباركود هنا"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              lang="en"
-              inputMode="text"
-            />
+                    barcodeValueRef.current =
+                      value;
+                    setBarcode(value);
+                  }}
+                  onKeyDown={
+                    handleBarcodeKeyDown
+                  }
+                  placeholder="امسح الباركود هنا"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  lang="en"
+                  inputMode="text"
+                />
 
-            <button
-              type="submit"
-              disabled={lookupBusy}
-            >
-              {lookupBusy
-                ? "..."
-                : "إضافة"}
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  disabled={lookupBusy}
+                >
+                  {lookupBusy
+                    ? "..."
+                    : "إضافة"}
+                </button>
+              </form>
 
-          <small className="manual-order-barcode-hint">
-            يعمل فرد الباركود حتى لو كانت لوحة مفاتيح ويندوز عربية. بعد كل إضافة يرجع المؤشر تلقائيًا للخانة، ومسح نفس القطعة مرة ثانية يزيد الكمية.
-          </small>
+              <small className="manual-order-barcode-hint">
+                يعمل فرد الباركود حتى لو كانت لوحة مفاتيح ويندوز عربية. بعد كل إضافة يرجع المؤشر تلقائيًا للخانة، ومسح نفس القطعة مرة ثانية يزيد الكمية.
+              </small>
+            </>
+          ) : (
+            <>
+              {!cameraOpen ? (
+                <button
+                  className="mobile-pos-camera-button"
+                  type="button"
+                  onClick={() => {
+                    setCameraError("");
+                    setError("");
+                    void unlockMobileScanSound();
+                    setCameraOpen(true);
+                  }}
+                >
+                  <span>📷</span>
+                  <strong>
+                    مسح الباركود
+                  </strong>
+                  <small>
+                    وجّه كاميرا الهاتف نحو باركود المنتج
+                  </small>
+                </button>
+              ) : (
+                <div className="mobile-pos-camera">
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                  />
+
+                  <div className="mobile-pos-camera-target" />
+
+                  {scanFeedback && (
+                    <div className="mobile-pos-scan-feedback">
+                      <span>✓</span>
+                      <strong>
+                        {scanFeedback}
+                      </strong>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={
+                      stopCamera
+                    }
+                  >
+                    إغلاق الكاميرا
+                  </button>
+                </div>
+              )}
+
+              {cameraError && (
+                <div className="mobile-pos-alert mobile-pos-error">
+                  {cameraError}
+                </div>
+              )}
+
+              <form
+                className="mobile-pos-search manual-order-mobile-search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+
+                  const value =
+                    barcode.trim();
+
+                  if (!value) {
+                    setError(
+                      "اكتب باركود أو كود المنتج أو الاسم.",
+                    );
+                    return;
+                  }
+
+                  void lookupAndAdd(
+                    value,
+                  );
+                }}
+              >
+                <input
+                  value={barcode}
+                  onChange={(event) => {
+                    setBarcode(
+                      event.target.value,
+                    );
+                  }}
+                  placeholder="بحث يدوي: باركود، كود أو اسم"
+                  autoComplete="off"
+                />
+
+                <button
+                  type="submit"
+                  disabled={lookupBusy}
+                >
+                  {lookupBusy
+                    ? "..."
+                    : "بحث"}
+                </button>
+              </form>
+            </>
+          )}
 
           {searchResults.length >
             0 && (
@@ -1852,12 +1964,18 @@ export default function ManualOnlineOrderPage({
 
           {cart.length === 0 ? (
             <div className="mobile-pos-empty-cart">
-              <span>🔫</span>
+              <span>
+                {isDesktop
+                  ? "🔫"
+                  : "📷"}
+              </span>
               <strong>
                 لم يتم مسح أصناف بعد
               </strong>
               <small>
-                مرّر فرد الباركود على أول قطعة
+                {isDesktop
+                  ? "مرّر فرد الباركود على أول قطعة"
+                  : "افتح الكاميرا وامسح أول قطعة"}
               </small>
             </div>
           ) : (
