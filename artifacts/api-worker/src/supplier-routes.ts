@@ -3,11 +3,12 @@ import {
   posPurchasesTable,
   suppliersTable,
 } from "@workspace/db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import { openDb, type Env } from "./db";
 import {
   supplierPayableBalances,
+  supplierPayableLedgerLines,
 } from "./finance-supplier-ledger";
 import {
   isPurchaseApiEnabled,
@@ -381,6 +382,214 @@ async function handleListSuppliers(
   });
 }
 
+async function handleSupplierLedger(
+  request: Request,
+  db: Db,
+  env: Env,
+  supplierId: number,
+) {
+  const auth =
+    await requirePosUser(
+      request,
+      db,
+      env,
+    );
+
+  if (!auth.ok) {
+    return auth.response;
+  }
+
+  if (!auth.user.isOwner) {
+    return json(
+      {
+        error:
+          "كشف حساب المورد متاح للمالك فقط",
+      },
+      403,
+    );
+  }
+
+  const supplierRows =
+    await db
+      .select()
+      .from(suppliersTable)
+      .where(
+        eq(
+          suppliersTable.id,
+          supplierId,
+        ),
+      )
+      .limit(1);
+
+  const supplier =
+    supplierRows[0];
+
+  if (!supplier) {
+    return json(
+      {
+        error:
+          "المورد غير موجود",
+      },
+      404,
+    );
+  }
+
+  const [
+    lines,
+    financeSummaries,
+  ] =
+    await Promise.all([
+      supplierPayableLedgerLines(
+        db,
+        supplierId,
+      ),
+      getSupplierFinanceSummaries(
+        db,
+      ),
+    ]);
+
+  const txIds =
+    [
+      ...new Set(
+        lines.map(
+          (line) =>
+            line.transactionId,
+        ),
+      ),
+    ];
+
+  const transactions =
+    txIds.length > 0
+      ? await db
+          .select()
+          .from(
+            financeTransactionsTable,
+          )
+          .where(
+            inArray(
+              financeTransactionsTable.id,
+              txIds,
+            ),
+          )
+      : [];
+
+  const txMap =
+    new Map(
+      transactions.map(
+        (transaction) => [
+          transaction.id,
+          transaction,
+        ],
+      ),
+    );
+
+  const ledgerBalanceMinor =
+    lines.reduce(
+      (total, line) =>
+        total +
+        line.creditMinor -
+        line.debitMinor,
+      0,
+    );
+
+  const finance =
+    financeSummaries.get(
+      supplierId,
+    ) ??
+    EMPTY_SUPPLIER_FINANCE;
+
+  const totalBalanceMinor =
+    finance.dueMinor -
+    finance.supplierCreditMinor;
+
+  const baseOpeningBalanceMinor =
+    totalBalanceMinor -
+    ledgerBalanceMinor;
+
+  let runningBalanceMinor =
+    baseOpeningBalanceMinor;
+
+  const entries =
+    lines.map(
+      (line) => {
+        const transaction =
+          txMap.get(
+            line.transactionId,
+          );
+
+        const deltaMinor =
+          line.creditMinor -
+          line.debitMinor;
+
+        runningBalanceMinor +=
+          deltaMinor;
+
+        return {
+          lineId:
+            line.id,
+          transactionId:
+            line.transactionId,
+          publicId:
+            transaction
+              ?.publicId ??
+            null,
+          transactionType:
+            transaction
+              ?.transactionType ??
+            null,
+          sourceType:
+            transaction
+              ?.sourceType ??
+            null,
+          sourceId:
+            transaction
+              ?.sourceId ??
+            null,
+          sourceEvent:
+            transaction
+              ?.sourceEvent ??
+            null,
+          status:
+            transaction
+              ?.status ??
+            null,
+          businessDate:
+            transaction
+              ?.businessDate ??
+            null,
+          createdAt:
+            transaction
+              ?.createdAt ??
+            line.createdAt,
+          debitMinor:
+            line.debitMinor,
+          creditMinor:
+            line.creditMinor,
+          deltaMinor,
+          runningBalanceMinor,
+          memo:
+            line.memo,
+        };
+      },
+    );
+
+  return json({
+    supplier:
+      toSupplier(
+        supplier,
+        finance,
+        true,
+      ),
+    baseOpeningBalanceMinor,
+    balanceMinor:
+      runningBalanceMinor,
+    balance:
+      runningBalanceMinor /
+      100,
+    entries,
+  });
+}
+
 async function handleCreateSupplier(
   request: Request,
   db: Db,
@@ -494,6 +703,29 @@ export async function handleSupplierRequest(
     }
 
     return handleListSuppliers(request, db, env);
+  }
+
+  const supplierLedgerMatch =
+    path.match(
+      /^\/api\/pos\/suppliers\/(\d+)\/ledger$/,
+    );
+
+  if (
+    request.method === "GET" &&
+    supplierLedgerMatch
+  ) {
+    if (!isPurchaseApiEnabled(env)) {
+      return purchaseFeatureDisabledResponse();
+    }
+
+    return handleSupplierLedger(
+      request,
+      db,
+      env,
+      Number(
+        supplierLedgerMatch[1],
+      ),
+    );
   }
 
   if (
