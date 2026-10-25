@@ -32,6 +32,7 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
+import { subscribeToStockAlert } from "@/hooks/usePushNotifications";
 import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
 import { trackMetaEvent } from "@/utils/metaPixel";
@@ -322,6 +323,62 @@ export default function ProductDetailScreen() {
 
   const product = products.find((p) => p.id === id);
 
+  const enableStockAlert = async (
+    color?: string | null,
+    size?: string | null,
+  ) => {
+    if (!product || stockAlertBusy) return;
+
+    const numericProductId =
+      Number(product.id);
+
+    if (
+      !Number.isSafeInteger(
+        numericProductId,
+      ) ||
+      numericProductId <= 0
+    ) {
+      setSelectionAlert(
+        "تعذر تفعيل تنبيه التوفر لهذا المنتج.",
+      );
+      return;
+    }
+
+    setStockAlertBusy(true);
+
+    try {
+      const result =
+        await subscribeToStockAlert(
+          numericProductId,
+          color,
+          size,
+        );
+
+      if (!result.ok) {
+        setSelectionAlert(
+          result.error ||
+            "تعذر تفعيل تنبيه التوفر.",
+        );
+        return;
+      }
+
+      if (result.alreadyAvailable) {
+        setSelectionAlert(
+          "هذا المقاس أو المنتج متوفر الآن بالفعل.",
+        );
+        return;
+      }
+
+      setSelectionAlert(
+        size
+          ? `تم تفعيل التنبيه لمقاس ${size}${color ? ` - لون ${color}` : ""}. سنخبرك فور توفره 🔔`
+          : "تم تفعيل تنبيه التوفر. سنخبرك فور رجوع المنتج للمخزون 🔔",
+      );
+    } finally {
+      setStockAlertBusy(false);
+    }
+  };
+
   const productPromotions =
     product
       ? getPromotionsForProduct(
@@ -381,6 +438,7 @@ export default function ProductDetailScreen() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [cartModal, setCartModal] = useState(false);
   const [selectionAlert, setSelectionAlert] = useState<string | null>(null);
+  const [stockAlertBusy, setStockAlertBusy] = useState(false);
 
   const closeCartModal = (
     offerNotificationPrompt = true,
@@ -1145,8 +1203,6 @@ export default function ProductDetailScreen() {
                   <Pressable
                     key={cv.color}
                     onPress={() => {
-                      if (isOutOfStock) return;
-
                       if (selectedColor !== cv.color) {
                         setSelectedSize(undefined);
                       }
@@ -1196,14 +1252,11 @@ export default function ProductDetailScreen() {
                     )
                 ).map((s) => {
                   const sizeOut = activeColorVariant ? isSizeOutOfStock(s) : false;
-                  const disabled = isOutOfStock || sizeOut;
 
                   return (
                     <Pressable
                       key={s.size}
                       onPress={() => {
-                        if (isOutOfStock) return;
-
                         if (!activeColorVariant) {
                           Haptics.notificationAsync(
                             Haptics.NotificationFeedbackType.Warning,
@@ -1212,11 +1265,18 @@ export default function ProductDetailScreen() {
                           return;
                         }
 
-                        if (!sizeOut) {
+                        if (sizeOut) {
+                          void enableStockAlert(
+                            activeColorVariant.color,
+                            s.size,
+                          );
+                          return;
+                        }
+
+                        if (!isOutOfStock) {
                           setSelectedSize(s.size);
                         }
                       }}
-                      disabled={disabled}
                       style={[
                         styles.sizeChip,
                         styles.sizeChipWithMark,
@@ -1445,10 +1505,44 @@ export default function ProductDetailScreen() {
         ]}
       >
         {isOutOfStock ? (
-          <View style={[styles.outOfStockBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            <Ionicons name="close-circle-outline" size={20} color={colors.mutedForeground} />
-            <Text style={[styles.outOfStockBtnText, { color: colors.mutedForeground }]}>نفد المخزون</Text>
-          </View>
+          <Pressable
+            disabled={stockAlertBusy}
+            onPress={() => {
+              void enableStockAlert();
+            }}
+            style={[
+              styles.outOfStockBtn,
+              {
+                backgroundColor:
+                  colors.primary + "12",
+                borderColor:
+                  colors.primary,
+                opacity:
+                  stockAlertBusy
+                    ? 0.65
+                    : 1,
+              },
+            ]}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={colors.primary}
+            />
+            <Text
+              style={[
+                styles.outOfStockBtnText,
+                {
+                  color:
+                    colors.primary,
+                },
+              ]}
+            >
+              {stockAlertBusy
+                ? "جاري تفعيل التنبيه..."
+                : "نفد المخزون — أخبرني عند التوفر"}
+            </Text>
+          </Pressable>
         ) : (
           <>
             {selectionIncomplete && (
