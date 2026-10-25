@@ -519,6 +519,53 @@ export default function ManualOnlineOrderPage() {
     const productBarcode =
       product.barcode ?? "";
 
+    const existing =
+      cart.find(
+        (line) =>
+          line.product.productId ===
+            product.productId &&
+          line.barcode ===
+            productBarcode &&
+          line.color === color &&
+          line.size === size,
+      );
+
+    const candidate: ManualOrderLine = {
+      id:
+        existing?.id ??
+        createKey(),
+      barcode: productBarcode,
+      product,
+      color,
+      size,
+      quantity:
+        (existing?.quantity ?? 0) +
+        1,
+    };
+
+    const availability =
+      getLineAvailability(
+        candidate,
+      );
+
+    if (
+      availability.outOfStock ||
+      (
+        availability.stock !==
+          null &&
+        candidate.quantity >
+          availability.stock
+      )
+    ) {
+      setError(
+        `لا يمكن إضافة ${product.nameAr}: الكمية المتوفرة ${availability.stock ?? 0} فقط.`,
+      );
+      setMessage("");
+      setBarcode("");
+      refocusBarcode();
+      return;
+    }
+
     setCart(
       (current) => {
         const existingIndex =
@@ -543,11 +590,8 @@ export default function ManualOnlineOrderPage() {
                 ? {
                     ...line,
                     quantity:
-                      Math.min(
-                        99,
-                        line.quantity +
-                          1,
-                      ),
+                      line.quantity +
+                      1,
                   }
                 : line,
           );
@@ -555,15 +599,7 @@ export default function ManualOnlineOrderPage() {
 
         return [
           ...current,
-          {
-            id: createKey(),
-            barcode:
-              productBarcode,
-            product,
-            color,
-            size,
-            quantity: 1,
-          },
+          candidate,
         ];
       },
     );
@@ -759,27 +795,70 @@ export default function ManualOnlineOrderPage() {
     lineId: string,
     change: number,
   ) {
+    const line =
+      cart.find(
+        (item) =>
+          item.id === lineId,
+      );
+
+    if (!line) {
+      return;
+    }
+
+    const availability =
+      getLineAvailability(line);
+
+    const maximum =
+      availability.stock ===
+      null
+        ? 99
+        : Math.max(
+            0,
+            Math.min(
+              99,
+              availability.stock,
+            ),
+          );
+
+    const requested =
+      line.quantity + change;
+
+    if (
+      change > 0 &&
+      (
+        availability.outOfStock ||
+        requested > maximum
+      )
+    ) {
+      setError(
+        `لا يمكن زيادة ${line.product.nameAr}: الكمية المتوفرة ${availability.stock ?? 0} فقط.`,
+      );
+      setMessage("");
+      refocusBarcode();
+      return;
+    }
+
     setCart(
       (current) =>
         current.map(
-          (line) =>
-            line.id === lineId
+          (item) =>
+            item.id === lineId
               ? {
-                  ...line,
+                  ...item,
                   quantity:
                     Math.max(
                       1,
                       Math.min(
                         99,
-                        line.quantity +
-                          change,
+                        requested,
                       ),
                     ),
                 }
-              : line,
+              : item,
         ),
     );
 
+    setError("");
     refocusBarcode();
   }
 
@@ -1154,7 +1233,7 @@ export default function ManualOnlineOrderPage() {
               }
               placeholder="امسح الباركود هنا"
               autoComplete="off"
-              inputMode="numeric"
+              inputMode="text"
             />
 
             <button
