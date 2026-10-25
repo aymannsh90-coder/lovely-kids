@@ -447,6 +447,83 @@ export function lookupPosProductByBarcode(token: string, barcode: string) {
   );
 }
 
+export interface ManualOrderShippingZone {
+  label: string;
+  cost: number;
+  promoCost?: number;
+}
+
+export interface ManualOrderSettings {
+  shippingZones?: ManualOrderShippingZone[];
+  shippingPromotionEnabled?: boolean;
+  shippingPromotionThreshold?: number;
+  shippingPromotionStartDate?: string;
+  shippingPromotionEndDate?: string;
+}
+
+export interface ManualOnlineOrderResult {
+  id: number;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  totalPrice: number;
+  shippingZone: string | null;
+  shippingCost: number | null;
+  shippingOriginalCost: number | null;
+  shippingPromotionDiscount: number | null;
+  promotionDiscountAmount: number;
+  status: string;
+  paymentMethod: string;
+  createdAt: string;
+}
+
+export function getManualOrderSettings() {
+  return apiRequest<ManualOrderSettings>(
+    "/api/settings",
+  );
+}
+
+export function createManualOnlineOrder(
+  token: string,
+  input: {
+    idempotencyKey: string;
+    customerName: string;
+    customerPhone: string;
+    customerAddress: string;
+    notes?: string;
+    shippingZone: string;
+    totalPrice: number;
+    shippingCost: number;
+    paymentMethod?: "cod";
+    items: Array<{
+      id: string;
+      name: string;
+      price: number;
+      quantity: number;
+      image?: string;
+      size?: string;
+      color?: string;
+    }>;
+  },
+) {
+  const {
+    idempotencyKey,
+    ...body
+  } = input;
+
+  return apiRequest<ManualOnlineOrderResult>(
+    "/api/orders/manual",
+    {
+      method: "POST",
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(body),
+    },
+    token,
+  );
+}
+
 
 export type InventoryMovementType =
   | "purchase"

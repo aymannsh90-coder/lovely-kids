@@ -79,6 +79,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "manual-online-order",
+    group: "sales",
+    path: "/sales/manual-order",
+    title: "إنشاء طلب يدوي",
+    description: "طلب واتساب أو هاتف بالباركود وبنفس آلية طلب المتجر الإلكتروني.",
+    icon: "📦",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "exchange-sale",
     group: "sales",
     path: "/sales/exchange",

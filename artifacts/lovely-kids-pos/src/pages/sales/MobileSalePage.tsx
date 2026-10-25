@@ -773,6 +773,7 @@ export default function MobileSalePage() {
               {online ? "● متصل" : "● غير متصل"}
             </span>
 
+            <Link to="/sales/manual-order">طلب واتساب</Link>
             <Link to="/sales/pos">رجوع</Link>
           </div>
         </header>

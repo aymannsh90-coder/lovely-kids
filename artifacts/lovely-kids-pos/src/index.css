@@ -16609,3 +16609,161 @@ button.inventory-intelligence-metric {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Manual online / WhatsApp order */
+.manual-order-shell {
+  padding-bottom: 250px;
+}
+
+.manual-order-customer-card {
+  margin: 12px 16px 4px;
+  padding: 14px;
+  border: 1px solid #e4e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.manual-order-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+}
+
+.manual-order-section-title > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manual-order-section-title strong {
+  font-size: 16px;
+}
+
+.manual-order-section-title small,
+.manual-order-barcode-hint,
+.manual-order-total-note {
+  color: #737b85;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.manual-order-section-title > span {
+  font-size: 25px;
+}
+
+.manual-order-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-order-fields label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.manual-order-fields label > span {
+  color: #555e69;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.manual-order-fields input,
+.manual-order-fields select,
+.manual-order-fields textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d9dee5;
+  border-radius: 10px;
+  background: #fff;
+  padding: 9px 10px;
+  color: #20242a;
+  font: inherit;
+}
+
+.manual-order-fields input,
+.manual-order-fields select {
+  min-height: 43px;
+}
+
+.manual-order-fields textarea {
+  resize: vertical;
+}
+
+.manual-order-field-wide {
+  grid-column: 1 / -1;
+}
+
+.manual-order-scan-card {
+  padding-top: 12px;
+}
+
+.manual-order-barcode-form input {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.manual-order-barcode-form input:focus,
+.manual-order-fields input:focus,
+.manual-order-fields select:focus,
+.manual-order-fields textarea:focus {
+  outline: 2px solid rgb(233 30 140 / 12%);
+  border-color: #e91e8c;
+}
+
+.manual-order-barcode-hint {
+  display: block;
+  margin-top: 7px;
+}
+
+.manual-order-line-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manual-order-line-price > span,
+.manual-order-line-price > small {
+  color: #737b85;
+  font-size: 11px;
+}
+
+.manual-order-line-price > strong {
+  color: #20242a;
+  font-size: 17px;
+  direction: ltr;
+  text-align: right;
+}
+
+.manual-order-checkout .mobile-pos-checkout-details {
+  gap: 4px;
+}
+
+.manual-order-total-note {
+  display: block;
+  margin-top: 2px;
+}
+
+@media (max-width: 430px) {
+  .manual-order-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-order-field-wide {
+    grid-column: auto;
+  }
+
+  .mobile-pos-header-actions {
+    gap: 5px;
+  }
+
+  .mobile-pos-header-actions a {
+    padding-inline: 7px;
+  }
+}

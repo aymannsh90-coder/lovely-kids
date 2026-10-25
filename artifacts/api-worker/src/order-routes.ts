@@ -397,6 +397,9 @@ async function handleCreateOrder(
   request: Request,
   db: Db,
   env: Env,
+  options: {
+    manualPos?: boolean;
+  } = {},
 ) {
   const body = await request.json().catch(() => null);
   const metaAttribution = getMetaAttribution(body);
@@ -423,15 +426,35 @@ async function handleCreateOrder(
       env,
     );
 
+    if (
+      options.manualPos &&
+      (
+        !authUser ||
+        (!authUser.isAdmin && !authUser.isOwner)
+      )
+    ) {
+      return json(
+        { error: "غير مصرح بإنشاء طلب يدوي" },
+        403,
+      );
+    }
+
     const creation = await createTrustedOrder(
       db,
       {
-        userId: authUser?.id ?? null,
+        userId:
+          options.manualPos
+            ? null
+            : authUser?.id ?? null,
         clientRequestId,
         customerName: parsed.data.customerName,
         customerPhone:
-          authUser?.phone ??
-          parsed.data.customerPhone,
+          options.manualPos
+            ? parsed.data.customerPhone
+            : (
+                authUser?.phone ??
+                parsed.data.customerPhone
+              ),
         customerAddress:
           parsed.data.customerAddress,
         notes: parsed.data.notes,
@@ -453,7 +476,10 @@ async function handleCreateOrder(
     const newOrder =
       creation.order;
 
-    if (creation.created) {
+    if (
+      creation.created &&
+      !options.manualPos
+    ) {
       try {
         const metaResult =
         await sendMetaPurchaseEvent(
@@ -921,6 +947,18 @@ export async function handleOrderRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (
+    request.method === "POST" &&
+    path === "/api/orders/manual"
+  ) {
+    return handleCreateOrder(
+      request,
+      db,
+      env,
+      { manualPos: true },
+    );
+  }
 
   if (
     request.method === "POST" &&
