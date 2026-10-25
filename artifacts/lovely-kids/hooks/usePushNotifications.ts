@@ -197,6 +197,106 @@ export async function enablePushNotifications(
   );
 }
 
+
+export async function subscribeToStockAlert(
+  productId: number,
+  color?: string | null,
+  size?: string | null,
+  phone?: string | null,
+  getAuthToken?: GetAuthToken,
+): Promise<{
+  ok: boolean;
+  alreadyAvailable?: boolean;
+  error?: string;
+}> {
+  try {
+    const enabled =
+      await enableWebPushNotifications(
+        phone,
+        getAuthToken,
+      );
+
+    if (!enabled.ok) {
+      return enabled;
+    }
+
+    const token =
+      await registerForPushNotificationsAsync();
+
+    if (!token) {
+      return {
+        ok: false,
+        error:
+          "تعذر إنشاء اشتراك الإشعارات",
+      };
+    }
+
+    const subscription =
+      JSON.parse(token) as WebPushData;
+
+    const authToken =
+      getAuthToken
+        ? await getAuthToken()
+        : null;
+
+    const response = await fetch(
+      `${API_BASE}/api/stock-notifications`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+          ...(authToken
+            ? {
+                Authorization:
+                  `Bearer ${authToken}`,
+              }
+            : {}),
+        },
+        body: JSON.stringify({
+          productId,
+          color: color || undefined,
+          size: size || undefined,
+          channel: "web",
+          target:
+            subscription.endpoint,
+        }),
+      },
+    );
+
+    const data =
+      await response
+        .json()
+        .catch(() => null) as {
+          alreadyAvailable?: boolean;
+          error?: string;
+        } | null;
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error:
+          data?.error ||
+          `HTTP ${response.status}`,
+      };
+    }
+
+    return {
+      ok: true,
+      alreadyAvailable:
+        !!data?.alreadyAvailable,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "تعذر تفعيل تنبيه التوفر",
+    };
+  }
+}
+
 export function usePushNotifications(
   phone?: string | null,
   getAuthToken?: GetAuthToken,
