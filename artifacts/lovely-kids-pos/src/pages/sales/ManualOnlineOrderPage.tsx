@@ -70,10 +70,14 @@ function formatMoney(value: number) {
 function barcodeCharacterFromPhysicalKey(
   code: string,
   shift: boolean,
+  capsLock: boolean,
 ): string | null {
   if (/^Key[A-Z]$/.test(code)) {
     const letter = code.slice(3);
-    return shift
+    const uppercase =
+      shift !== capsLock;
+
+    return uppercase
       ? letter
       : letter.toLowerCase();
   }
@@ -840,7 +844,10 @@ export default function ManualOnlineOrderPage() {
       return;
     }
 
-    if (event.key === "Enter") {
+    if (
+      event.key === "Enter" ||
+      event.key === "Tab"
+    ) {
       event.preventDefault();
 
       submitBarcodeValue(
@@ -869,6 +876,9 @@ export default function ManualOnlineOrderPage() {
       barcodeCharacterFromPhysicalKey(
         event.code,
         event.shiftKey,
+        event.getModifierState(
+          "CapsLock",
+        ),
       );
 
     if (character === null) {
