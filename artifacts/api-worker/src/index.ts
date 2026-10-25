@@ -25,7 +25,10 @@ import { handleDiscountCodeRequest } from "./discount-code-routes";
 import { handlePromotionRequest } from "./promotion-routes";
 import { handleImageRequest } from "./image-routes";
 import { handleHeroMediaRequest } from "./hero-media-routes";
-import { handleNotificationRequest } from "./notification-routes";
+import {
+  handleNotificationRequest,
+  processExpoPushReceipts,
+} from "./notification-routes";
 import { handlePasswordResetRequest } from "./password-reset-routes";
 import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
@@ -788,7 +791,7 @@ export default {
   },
 
   async scheduled(
-    _controller: unknown,
+    controller: { cron?: string },
     env: Env,
     ctx: { waitUntil(promise: Promise<unknown>): void },
   ): Promise<void> {
@@ -797,15 +800,41 @@ export default {
         const { client, db } = await openDb(env);
 
         try {
-          const purged =
-            await purgeExpiredTrashedProducts(db, env);
+          try {
+            const receipts =
+              await processExpoPushReceipts(db);
 
-          console.log("PRODUCT_TRASH_PURGE_COMPLETE", {
-            purged,
-          });
+            console.log(
+              "EXPO_PUSH_RECEIPTS_COMPLETE",
+              receipts,
+            );
+          } catch (error) {
+            console.error(
+              "EXPO_PUSH_RECEIPTS_FAILED",
+              error,
+            );
+          }
+
+          if (
+            controller.cron ===
+            "15 2 * * *"
+          ) {
+            const purged =
+              await purgeExpiredTrashedProducts(
+                db,
+                env,
+              );
+
+            console.log(
+              "PRODUCT_TRASH_PURGE_COMPLETE",
+              {
+                purged,
+              },
+            );
+          }
         } catch (error) {
           console.error(
-            "PRODUCT_TRASH_PURGE_FAILED",
+            "SCHEDULED_TASK_FAILED",
             error,
           );
           throw error;
