@@ -1,0 +1,28 @@
+name: Barcode Layout Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Activate pnpm
+        run: corepack prepare pnpm@10.26.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck POS
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+
+      - name: Build POS
+        run: pnpm --filter @workspace/lovely-kids-pos build
