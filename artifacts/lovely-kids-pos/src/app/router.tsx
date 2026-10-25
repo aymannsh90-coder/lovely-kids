@@ -52,7 +52,7 @@ export default function AppRouter() {
     <Routes>
       <Route
         path="sales/mobile/manual-order"
-        element={<ManualOnlineOrderPage />}
+        element={<ManualOnlineOrderPage layout="mobile" />}
       />
 
       <Route
@@ -90,6 +90,11 @@ export default function AppRouter() {
       <Route element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="admin" element={<AdminPanelPage />} />
+
+        <Route
+          path="sales/manual-order"
+          element={<ManualOnlineOrderPage layout="desktop" />}
+        />
 
         <Route
           path="sales/pos"
