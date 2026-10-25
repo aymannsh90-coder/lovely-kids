@@ -15,12 +15,32 @@ self.addEventListener("push", (event) => {
       body: data.body || "",
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-      data: { url: "/" }
+      data: { url: data.url || "/" }
     })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  event.waitUntil(self.clients.openWindow(event.notification.data?.url || "/"));
+
+  const url = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.postMessage({
+            type: "LOVELY_KIDS_NOTIFICATION_NAVIGATE",
+            url,
+          });
+          return client.focus();
+        }
+      }
+
+      return self.clients.openWindow(url);
+    }),
+  );
 });
