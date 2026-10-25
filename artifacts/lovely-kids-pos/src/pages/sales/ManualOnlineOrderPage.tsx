@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { Link } from "react-router-dom";
 
@@ -64,6 +65,74 @@ function formatMoney(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)} ₪`;
+}
+
+function barcodeCharacterFromPhysicalKey(
+  code: string,
+  shift: boolean,
+): string | null {
+  if (/^Key[A-Z]$/.test(code)) {
+    const letter = code.slice(3);
+    return shift
+      ? letter
+      : letter.toLowerCase();
+  }
+
+  if (/^Digit[0-9]$/.test(code)) {
+    const digit = code.slice(5);
+    const shifted: Record<string, string> = {
+      "0": ")",
+      "1": "!",
+      "2": "@",
+      "3": "#",
+      "4": "$",
+      "5": "%",
+      "6": "^",
+      "7": "&",
+      "8": "*",
+      "9": "(",
+    };
+
+    return shift
+      ? shifted[digit] ?? digit
+      : digit;
+  }
+
+  if (/^Numpad[0-9]$/.test(code)) {
+    return code.slice(6);
+  }
+
+  const punctuation: Record<
+    string,
+    [string, string]
+  > = {
+    Minus: ["-", "_"],
+    Equal: ["=", "+"],
+    BracketLeft: ["[", "{"],
+    BracketRight: ["]", "}"],
+    Backslash: ["\\", "|"],
+    Semicolon: [";", ":"],
+    Quote: ["'", "\""],
+    Comma: [",", "<"],
+    Period: [".", ">"],
+    Slash: ["/", "?"],
+    Backquote: ["`", "~"],
+    NumpadAdd: ["+", "+"],
+    NumpadSubtract: ["-", "-"],
+    NumpadMultiply: ["*", "*"],
+    NumpadDivide: ["/", "/"],
+    NumpadDecimal: [".", "."],
+  };
+
+  const pair = punctuation[code];
+
+  if (!pair) {
+    return null;
+  }
+
+  return shift
+    ? pair[1]
+    : pair[0];
 }
 
 function getColors(product: PosProductLookup) {
@@ -320,6 +389,9 @@ export default function ManualOnlineOrderPage() {
     setBarcode,
   ] = useState("");
 
+  const barcodeValueRef =
+    useRef("");
+
   const [
     searchResults,
     setSearchResults,
@@ -561,6 +633,7 @@ export default function ManualOnlineOrderPage() {
         `لا يمكن إضافة ${product.nameAr}: الكمية المتوفرة ${availability.stock ?? 0} فقط.`,
       );
       setMessage("");
+      barcodeValueRef.current = "";
       setBarcode("");
       refocusBarcode();
       return;
@@ -618,6 +691,7 @@ export default function ManualOnlineOrderPage() {
 
     setError("");
     setSearchResults([]);
+    barcodeValueRef.current = "";
     setBarcode("");
     refocusBarcode();
   }
@@ -721,12 +795,13 @@ export default function ManualOnlineOrderPage() {
     }
   }
 
-  function handleBarcodeSubmit(
-    event: FormEvent<HTMLFormElement>,
+  function submitBarcodeValue(
+    rawValue: string,
   ) {
-    event.preventDefault();
+    const value =
+      rawValue.trim();
 
-    if (!barcode.trim()) {
+    if (!value) {
       setError(
         "امسح الباركود بفرد الباركود.",
       );
@@ -734,9 +809,81 @@ export default function ManualOnlineOrderPage() {
       return;
     }
 
+    if (lookupBusy) {
+      return;
+    }
+
     void lookupAndAdd(
-      barcode,
+      value,
     );
+  }
+
+  function handleBarcodeSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    submitBarcodeValue(
+      barcodeValueRef.current ||
+        barcode,
+    );
+  }
+
+  function handleBarcodeKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement>,
+  ) {
+    if (
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      submitBarcodeValue(
+        barcodeValueRef.current ||
+          barcode,
+      );
+      return;
+    }
+
+    if (event.key === "Backspace") {
+      event.preventDefault();
+
+      const next =
+        barcodeValueRef.current.slice(
+          0,
+          -1,
+        );
+
+      barcodeValueRef.current =
+        next;
+      setBarcode(next);
+      return;
+    }
+
+    const character =
+      barcodeCharacterFromPhysicalKey(
+        event.code,
+        event.shiftKey,
+      );
+
+    if (character === null) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const next =
+      barcodeValueRef.current +
+      character;
+
+    barcodeValueRef.current =
+      next;
+    setBarcode(next);
   }
 
   function changeColor(
@@ -1052,6 +1199,7 @@ export default function ManualOnlineOrderPage() {
 
       setCart([]);
       setSearchResults([]);
+      barcodeValueRef.current = "";
       setBarcode("");
       setCustomerName("");
       setCustomerPhone("");
@@ -1226,13 +1374,22 @@ export default function ManualOnlineOrderPage() {
               ref={barcodeInputRef}
               dir="ltr"
               value={barcode}
-              onChange={(event) =>
-                setBarcode(
-                  event.target.value,
-                )
+              onChange={(event) => {
+                const value =
+                  event.target.value;
+
+                barcodeValueRef.current =
+                  value;
+                setBarcode(value);
+              }}
+              onKeyDown={
+                handleBarcodeKeyDown
               }
               placeholder="امسح الباركود هنا"
               autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              lang="en"
               inputMode="text"
             />
 
@@ -1247,7 +1404,7 @@ export default function ManualOnlineOrderPage() {
           </form>
 
           <small className="manual-order-barcode-hint">
-            بعد كل إضافة يرجع المؤشر تلقائيًا لخانة الباركود. مسح نفس القطعة مرة ثانية يزيد الكمية.
+            يعمل فرد الباركود حتى لو كانت لوحة مفاتيح ويندوز عربية. بعد كل إضافة يرجع المؤشر تلقائيًا للخانة، ومسح نفس القطعة مرة ثانية يزيد الكمية.
           </small>
 
           {searchResults.length >
