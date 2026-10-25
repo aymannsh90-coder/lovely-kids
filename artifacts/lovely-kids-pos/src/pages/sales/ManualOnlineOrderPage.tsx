@@ -1477,40 +1477,42 @@ export default function ManualOnlineOrderPage({
           )}
         </section>
 
-        {error && (
-          <div className="mobile-pos-alert mobile-pos-error">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="mobile-pos-alert mobile-pos-success">
-            {message}
-          </div>
-        )}
-
-        {lastOrder && (
-          <section className="mobile-pos-last-sale">
-            <div className="mobile-pos-last-sale-icon">
-              ✓
+        <div className="manual-order-status-stack">
+          {error && (
+            <div className="mobile-pos-alert mobile-pos-error">
+              {error}
             </div>
+          )}
 
-            <div>
+          {message && (
+            <div className="mobile-pos-alert mobile-pos-success">
+              {message}
+            </div>
+          )}
+
+          {lastOrder && (
+            <section className="mobile-pos-last-sale">
+              <div className="mobile-pos-last-sale-icon">
+                ✓
+              </div>
+
+              <div>
+                <strong>
+                  تم إنشاء الطلب #{lastOrder.id}
+                </strong>
+                <span>
+                  الحالة: {lastOrder.status}
+                </span>
+              </div>
+
               <strong>
-                تم إنشاء الطلب #{lastOrder.id}
+                {formatMoney(
+                  lastOrder.totalPrice,
+                )}
               </strong>
-              <span>
-                الحالة: {lastOrder.status}
-              </span>
-            </div>
-
-            <strong>
-              {formatMoney(
-                lastOrder.totalPrice,
-              )}
-            </strong>
-          </section>
-        )}
+            </section>
+          )}
+        </div>
 
         <section className="mobile-pos-cart">
           <div className="mobile-pos-cart-title">
