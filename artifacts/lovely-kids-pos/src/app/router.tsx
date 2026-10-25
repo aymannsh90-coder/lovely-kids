@@ -37,6 +37,7 @@ import ExchangePage from "../pages/sales/ExchangePage";
 import TodaySalesPage from "../pages/sales/TodaySalesPage";
 import CustomerBalancesReportPage from "../pages/reports/CustomerBalancesReportPage";
 import CustomerStatementReportPage from "../pages/reports/CustomerStatementReportPage";
+import SupplierStatementReportPage from "../pages/reports/SupplierStatementReportPage";
 import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
 import InventoryValuationReportPage from "../pages/reports/InventoryValuationReportPage";
 import InventoryIntelligenceReportPage from "../pages/reports/InventoryIntelligenceReportPage";
@@ -361,6 +362,15 @@ export default function AppRouter() {
         <Route
           path="reports/customer-statement"
           element={<CustomerStatementReportPage />}
+        />
+
+        <Route
+          path="reports/supplier-statement"
+          element={
+            <RequireOwner>
+              <SupplierStatementReportPage />
+            </RequireOwner>
+          }
         />
 
         <Route
