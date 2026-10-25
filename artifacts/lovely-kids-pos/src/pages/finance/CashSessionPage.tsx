@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
+import type { CashSession } from "../../lib/api";
 import {
   formatBusinessDate,
   formatDateTime,
@@ -22,7 +23,7 @@ function escapeHtml(value: unknown) {
 
 function printClosedSessionReport(
   snapshot: {
-    session: import("../../lib/api").CashSession;
+    session: CashSession;
     varianceMinor: number;
     variance: number;
   },
