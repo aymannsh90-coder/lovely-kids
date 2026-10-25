@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { enablePushNotifications } from "@/hooks/usePushNotifications";
 
 const TEMPLATES = [
   { t: "بضاعة جديدة! 🎁", b: "تفقد أحدث المنتجات الوصلت للمتجر" },
@@ -40,6 +41,7 @@ export default function NotificationsScreen() {
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [tokenCount, setTokenCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(true);
+  const [enablingDevice, setEnablingDevice] = useState(false);
 
   const fetchCount = useCallback(async () => {
     setCountLoading(true);
@@ -61,6 +63,39 @@ export default function NotificationsScreen() {
   useEffect(() => {
     void fetchCount();
   }, [fetchCount]);
+
+  const enableThisDevice = async () => {
+    setEnablingDevice(true);
+    setResult(null);
+
+    try {
+      const enabled =
+        await enablePushNotifications(
+          undefined,
+          getAuthToken,
+        );
+
+      if (!enabled.ok) {
+        setResult({
+          ok: false,
+          message:
+            enabled.error ||
+            "تعذر تفعيل الإشعارات على هذا الجهاز",
+        });
+        return;
+      }
+
+      setResult({
+        ok: true,
+        message:
+          "✅ تم تفعيل إشعارات الإدارة على هذا الجهاز. ستصلك الطلبات الجديدة حتى عند عدم فتح صفحة الطلبات.",
+      });
+
+      void fetchCount();
+    } finally {
+      setEnablingDevice(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) {
@@ -126,6 +161,49 @@ export default function NotificationsScreen() {
           </Text>
         )}
         <Ionicons name="phone-portrait-outline" size={18} color={colors.primary} />
+      </Pressable>
+
+      <Pressable
+        onPress={() => void enableThisDevice()}
+        disabled={enablingDevice}
+        style={[
+          styles.adminPushButton,
+          {
+            backgroundColor:
+              colors.primary + "14",
+            borderColor:
+              colors.primary,
+            opacity:
+              enablingDevice
+                ? 0.65
+                : 1,
+          },
+        ]}
+      >
+        {enablingDevice ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.primary}
+          />
+        ) : (
+          <Ionicons
+            name="notifications-outline"
+            size={18}
+            color={colors.primary}
+          />
+        )}
+        <Text
+          style={[
+            styles.adminPushButtonText,
+            { color: colors.primary },
+          ]}
+        >
+          {enablingDevice
+            ? "جاري التفعيل..."
+            : Platform.OS === "web"
+              ? "تفعيل إشعارات الطلبات على هذا المتصفح"
+              : "تفعيل إشعارات الطلبات على هذا الجهاز"}
+        </Text>
       </Pressable>
 
       <ScrollView
@@ -234,6 +312,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   countText: { fontSize: 14, fontWeight: "600", flex: 1, textAlign: "center" },
+  adminPushButton: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  adminPushButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
+  },
   scroll: { padding: 16, gap: 4 },
   field: { gap: 6, marginBottom: 16 },
   label: { fontSize: 14, fontWeight: "700", textAlign: "right" },

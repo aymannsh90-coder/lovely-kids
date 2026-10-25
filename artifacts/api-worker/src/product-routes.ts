@@ -29,6 +29,9 @@ import {
   getHistoricalPurchasePreview,
   HistoricalPurchasePreviewError,
 } from "./historical-purchase-preview";
+import {
+  sendBackInStockNotifications,
+} from "./notification-routes";
 
 type Db = Awaited<
   ReturnType<typeof openDb>
@@ -2168,6 +2171,79 @@ async function handleUpdateProduct(
     );
   }
 
+  try {
+    const previousVariants =
+      (previousProduct.colorVariants as
+        | ColorVariant[]
+        | null) ?? [];
+
+    const updatedVariants =
+      (product.colorVariants as
+        | ColorVariant[]
+        | null) ?? [];
+
+    if (
+      updatedVariants.length === 0 &&
+      (previousProduct.stock ?? 0) <= 0 &&
+      (product.stock ?? 0) > 0
+    ) {
+      await sendBackInStockNotifications(
+        db,
+        env,
+        {
+          productId: product.id,
+          productName: product.nameAr,
+        },
+      );
+    }
+
+    for (const variant of updatedVariants) {
+      for (const sizeEntry of variant.sizes ?? []) {
+        const previousStock =
+          previousVariants
+            .find(
+              (item) =>
+                item.color === variant.color,
+            )
+            ?.sizes?.find(
+              (item) =>
+                item.size === sizeEntry.size,
+            )
+            ?.stock ?? 0;
+
+        const currentStock =
+          sizeEntry.stock ?? 0;
+
+        if (
+          previousStock <= 0 &&
+          currentStock > 0
+        ) {
+          await sendBackInStockNotifications(
+            db,
+            env,
+            {
+              productId: product.id,
+              productName:
+                product.nameAr,
+              color:
+                variant.color,
+              size:
+                sizeEntry.size,
+            },
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error(
+      "BACK_IN_STOCK_NOTIFICATION_FAILED",
+      {
+        productId: id,
+        error,
+      },
+    );
+  }
+
   return json(
     toProduct(product, additionalBarcodes),
   );
@@ -2421,6 +2497,8 @@ async function handleStock(
       return {
         kind: "updated",
         product: updated,
+        oldStock,
+        newStock,
       } as const;
     },
   );
@@ -2465,6 +2543,31 @@ async function handleStock(
 
   const product =
     result.product;
+
+  if (
+    result.oldStock <= 0 &&
+    result.newStock > 0
+  ) {
+    try {
+      await sendBackInStockNotifications(
+        db,
+        env,
+        {
+          productId: product.id,
+          productName:
+            product.nameAr,
+        },
+      );
+    } catch (error) {
+      console.error(
+        "BACK_IN_STOCK_NOTIFICATION_FAILED",
+        {
+          productId: id,
+          error,
+        },
+      );
+    }
+  }
 
   const additionalBarcodes =
     await getAdditionalBarcodes(db, id);
@@ -3092,6 +3195,8 @@ async function handleVariantStock(
       return {
         kind: "updated",
         product: updated,
+        oldStock,
+        newStock,
       } as const;
     },
   );
@@ -3145,6 +3250,36 @@ async function handleVariantStock(
       },
       404,
     );
+  }
+
+  if (
+    result.oldStock <= 0 &&
+    result.newStock > 0
+  ) {
+    try {
+      await sendBackInStockNotifications(
+        db,
+        env,
+        {
+          productId:
+            result.product.id,
+          productName:
+            result.product.nameAr,
+          color,
+          size,
+        },
+      );
+    } catch (error) {
+      console.error(
+        "BACK_IN_STOCK_NOTIFICATION_FAILED",
+        {
+          productId: id,
+          color,
+          size,
+          error,
+        },
+      );
+    }
   }
 
   const additionalBarcodes =

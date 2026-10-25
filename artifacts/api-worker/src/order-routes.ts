@@ -517,7 +517,7 @@ async function handleCreateOrder(
 
       try {
         const notificationResult =
-        await sendNewOrderNotification(db, {
+        await sendNewOrderNotification(db, env, {
           id: newOrder.id,
           customerName: newOrder.customerName,
           totalPrice: newOrder.totalPrice,

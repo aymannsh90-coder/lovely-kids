@@ -1,5 +1,12 @@
-import { ordersTable, pushTokensTable, webPushSubscriptionsTable } from "@workspace/db/schema";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import {
+  expoPushReceiptsTable,
+  ordersTable,
+  productsTable,
+  pushTokensTable,
+  stockNotificationSubscriptionsTable,
+  webPushSubscriptionsTable,
+} from "@workspace/db/schema";
+import { and, eq, inArray, isNull, lte } from "drizzle-orm";
 import webpush from "web-push";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -245,6 +252,7 @@ async function sendWebPush(
   subscription: { endpoint: string; p256dh: string; auth: string },
   title: string,
   body: string,
+  url = "/",
 ) {
   if (!configureWebPush(env)) {
     return { ok: false, expired: false };
@@ -259,7 +267,7 @@ async function sendWebPush(
           auth: subscription.auth,
         },
       },
-      JSON.stringify({ title, body }),
+      JSON.stringify({ title, body, url }),
     );
 
     return { ok: true, expired: false };
@@ -322,6 +330,830 @@ function chunk<T>(
   }
 
   return result;
+}
+
+type ExpoPushTicket = {
+  status?: string;
+  id?: string;
+  details?: { error?: string };
+};
+
+async function recordExpoPushTickets(
+  db: Db,
+  tokens: string[],
+  tickets: ExpoPushTicket[],
+) {
+  const rows = tickets.flatMap((ticket, index) => {
+    const token = tokens[index];
+
+    if (
+      ticket?.status !== "ok" ||
+      !ticket.id ||
+      !token
+    ) {
+      return [];
+    }
+
+    return [{
+      ticketId: ticket.id,
+      token,
+    }];
+  });
+
+  if (rows.length === 0) return;
+
+  await db
+    .insert(expoPushReceiptsTable)
+    .values(rows)
+    .onConflictDoNothing({
+      target: expoPushReceiptsTable.ticketId,
+    });
+}
+
+export async function processExpoPushReceipts(
+  db: Db,
+) {
+  const cutoff =
+    new Date(Date.now() - 15 * 60 * 1000);
+
+  const pending = await db
+    .select({
+      ticketId: expoPushReceiptsTable.ticketId,
+      token: expoPushReceiptsTable.token,
+    })
+    .from(expoPushReceiptsTable)
+    .where(
+      lte(
+        expoPushReceiptsTable.createdAt,
+        cutoff,
+      ),
+    )
+    .limit(1000);
+
+  if (pending.length === 0) {
+    return {
+      checked: 0,
+      removedInvalidTokens: 0,
+      pending: 0,
+    };
+  }
+
+  const receiptResponse = await fetch(
+    "https://exp.host/--/api/v2/push/getReceipts",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ids: pending.map((row) => row.ticketId),
+      }),
+    },
+  );
+
+  if (!receiptResponse.ok) {
+    throw new Error(
+      `Expo receipt lookup failed: HTTP ${receiptResponse.status}`,
+    );
+  }
+
+  const receiptData = await receiptResponse
+    .json()
+    .catch(() => null) as {
+      data?: Record<
+        string,
+        {
+          status?: string;
+          message?: string;
+          details?: { error?: string };
+        }
+      >;
+    } | null;
+
+  const receipts =
+    receiptData?.data ?? {};
+
+  const handledTicketIds: string[] = [];
+  const invalidTokens: string[] = [];
+
+  for (const row of pending) {
+    const receipt =
+      receipts[row.ticketId];
+
+    if (!receipt) continue;
+
+    handledTicketIds.push(
+      row.ticketId,
+    );
+
+    if (
+      receipt.status === "error" &&
+      receipt.details?.error ===
+        "DeviceNotRegistered"
+    ) {
+      invalidTokens.push(
+        row.token,
+      );
+    }
+  }
+
+  const uniqueInvalidTokens = [
+    ...new Set(invalidTokens),
+  ];
+
+  if (
+    uniqueInvalidTokens.length > 0
+  ) {
+    await db
+      .delete(pushTokensTable)
+      .where(
+        inArray(
+          pushTokensTable.token,
+          uniqueInvalidTokens,
+        ),
+      );
+  }
+
+  if (
+    handledTicketIds.length > 0
+  ) {
+    await db
+      .delete(expoPushReceiptsTable)
+      .where(
+        inArray(
+          expoPushReceiptsTable.ticketId,
+          handledTicketIds,
+        ),
+      );
+  }
+
+  return {
+    checked:
+      handledTicketIds.length,
+    removedInvalidTokens:
+      uniqueInvalidTokens.length,
+    pending:
+      pending.length -
+      handledTicketIds.length,
+  };
+}
+
+async function handleSubscribeStockNotification(
+  request: Request,
+  db: Db,
+) {
+  const body = await request
+    .json()
+    .catch(() => null) as {
+      productId?: unknown;
+      color?: unknown;
+      size?: unknown;
+      channel?: unknown;
+      target?: unknown;
+    } | null;
+
+  const productId =
+    typeof body?.productId === "number"
+      ? body.productId
+      : Number(body?.productId);
+
+  const color =
+    typeof body?.color === "string" &&
+    body.color.trim()
+      ? body.color.trim()
+      : null;
+
+  const size =
+    typeof body?.size === "string" &&
+    body.size.trim()
+      ? body.size.trim()
+      : null;
+
+  const channel =
+    body?.channel === "expo" ||
+    body?.channel === "web"
+      ? body.channel
+      : null;
+
+  const target =
+    typeof body?.target === "string"
+      ? body.target.trim()
+      : "";
+
+  if (
+    !Number.isSafeInteger(productId) ||
+    productId <= 0 ||
+    !channel ||
+    !target ||
+    target.length > 2048 ||
+    (!!color !== !!size)
+  ) {
+    return json(
+      { error: "بيانات تنبيه التوفر غير صالحة" },
+      400,
+    );
+  }
+
+  if (
+    channel === "expo" &&
+    !isValidExpoPushToken(target)
+  ) {
+    return json(
+      { error: "توكن الإشعارات غير صالح" },
+      400,
+    );
+  }
+
+  const registeredTarget =
+    channel === "expo"
+      ? await db
+          .select({ id: pushTokensTable.id })
+          .from(pushTokensTable)
+          .where(
+            eq(
+              pushTokensTable.token,
+              target,
+            ),
+          )
+          .limit(1)
+      : await db
+          .select({
+            id: webPushSubscriptionsTable.id,
+          })
+          .from(webPushSubscriptionsTable)
+          .where(
+            eq(
+              webPushSubscriptionsTable.endpoint,
+              target,
+            ),
+          )
+          .limit(1);
+
+  if (!registeredTarget[0]) {
+    return json(
+      {
+        error:
+          "فعّل الإشعارات أولًا ثم حاول مرة أخرى",
+      },
+      403,
+    );
+  }
+
+  const productRows = await db
+    .select({
+      id: productsTable.id,
+      stock: productsTable.stock,
+      colorVariants:
+        productsTable.colorVariants,
+    })
+    .from(productsTable)
+    .where(
+      eq(
+        productsTable.id,
+        productId,
+      ),
+    )
+    .limit(1);
+
+  const product =
+    productRows[0];
+
+  if (!product) {
+    return json(
+      { error: "المنتج غير موجود" },
+      404,
+    );
+  }
+
+  const variants =
+    (product.colorVariants as Array<{
+      color: string;
+      sizes?: Array<{
+        size: string;
+        stock?: number | null;
+        outOfStock?: boolean;
+      }>;
+    }> | null) ?? [];
+
+  const alreadyAvailable =
+    color && size
+      ? (
+          variants
+            .find(
+              (variant) =>
+                variant.color === color,
+            )
+            ?.sizes?.find(
+              (entry) =>
+                entry.size === size,
+            )
+            ?.stock ?? 0
+        ) > 0
+      : variants.length > 0
+        ? variants.some((variant) =>
+            (variant.sizes ?? []).some(
+              (entry) =>
+                (entry.stock ?? 0) > 0 &&
+                entry.outOfStock !== true,
+            ),
+          )
+        : (product.stock ?? 0) > 0;
+
+  if (alreadyAvailable) {
+    return json({
+      success: true,
+      alreadyAvailable: true,
+    });
+  }
+
+  const existing = await db
+    .select({
+      id:
+        stockNotificationSubscriptionsTable.id,
+      color:
+        stockNotificationSubscriptionsTable.color,
+      size:
+        stockNotificationSubscriptionsTable.size,
+    })
+    .from(
+      stockNotificationSubscriptionsTable,
+    )
+    .where(
+      and(
+        eq(
+          stockNotificationSubscriptionsTable.productId,
+          productId,
+        ),
+        eq(
+          stockNotificationSubscriptionsTable.channel,
+          channel,
+        ),
+        eq(
+          stockNotificationSubscriptionsTable.target,
+          target,
+        ),
+      ),
+    );
+
+  const duplicate =
+    existing.find(
+      (row) =>
+        row.color === color &&
+        row.size === size,
+    );
+
+  if (!duplicate) {
+    await db
+      .insert(
+        stockNotificationSubscriptionsTable,
+      )
+      .values({
+        productId,
+        color,
+        size,
+        channel,
+        target,
+      });
+  }
+
+  return json(
+    {
+      success: true,
+      alreadyAvailable: false,
+    },
+    201,
+  );
+}
+
+export async function sendBackInStockNotifications(
+  db: Db,
+  env: Env,
+  input: {
+    productId: number;
+    productName: string;
+    color?: string | null;
+    size?: string | null;
+  },
+) {
+  const subscriptions = await db
+    .select()
+    .from(
+      stockNotificationSubscriptionsTable,
+    )
+    .where(
+      eq(
+        stockNotificationSubscriptionsTable.productId,
+        input.productId,
+      ),
+    );
+
+  const matched =
+    subscriptions.filter(
+      (row) =>
+        (
+          row.color === null &&
+          row.size === null
+        ) ||
+        (
+          row.color ===
+            (input.color ?? null) &&
+          row.size ===
+            (input.size ?? null)
+        ),
+    );
+
+  if (matched.length === 0) {
+    return {
+      sent: 0,
+      matched: 0,
+    };
+  }
+
+  const title =
+    "رجع للمخزون 🎉";
+
+  const details = [
+    input.color
+      ? `لون ${input.color}`
+      : null,
+    input.size
+      ? `مقاس ${input.size}`
+      : null,
+  ].filter(Boolean);
+
+  const messageBody =
+    `${input.productName}${details.length ? ` - ${details.join(" - ")}` : ""} متوفر الآن`;
+
+  const url =
+    `/product/${input.productId}`;
+
+  const successfulTargets =
+    new Set<string>();
+
+  const expoTargets = [
+    ...new Set(
+      matched
+        .filter(
+          (row) =>
+            row.channel === "expo",
+        )
+        .map((row) => row.target),
+    ),
+  ];
+
+  for (
+    const tokenBatch of
+      chunk(expoTargets, 100)
+  ) {
+    const messages =
+      tokenBatch.map((to) => ({
+        to,
+        sound:
+          "lovely_kids_bell.wav",
+        channelId:
+          "lovely-kids-alerts-v1",
+        title,
+        body: messageBody,
+        data: {
+          type: "back_in_stock",
+          productId:
+            String(input.productId),
+          url,
+        },
+      }));
+
+    const response = await fetch(
+      "https://exp.host/--/api/v2/push/send",
+      {
+        method: "POST",
+        headers: {
+          Accept:
+            "application/json",
+          "Content-Type":
+            "application/json",
+        },
+        body:
+          JSON.stringify(messages),
+      },
+    );
+
+    if (!response.ok) continue;
+
+    const data = await response
+      .json()
+      .catch(() => null) as {
+        data?: ExpoPushTicket[];
+      } | null;
+
+    const tickets =
+      Array.isArray(data?.data)
+        ? data.data
+        : [];
+
+    await recordExpoPushTickets(
+      db,
+      tokenBatch,
+      tickets,
+    );
+
+    tickets.forEach(
+      (ticket, index) => {
+        if (
+          ticket?.status === "ok" &&
+          tokenBatch[index]
+        ) {
+          successfulTargets.add(
+            `expo:${tokenBatch[index]}`,
+          );
+        }
+      },
+    );
+  }
+
+  const webTargets = [
+    ...new Set(
+      matched
+        .filter(
+          (row) =>
+            row.channel === "web",
+        )
+        .map((row) => row.target),
+    ),
+  ];
+
+  if (webTargets.length > 0) {
+    const webDevices = await db
+      .select({
+        endpoint:
+          webPushSubscriptionsTable.endpoint,
+        p256dh:
+          webPushSubscriptionsTable.p256dh,
+        auth:
+          webPushSubscriptionsTable.auth,
+      })
+      .from(
+        webPushSubscriptionsTable,
+      )
+      .where(
+        inArray(
+          webPushSubscriptionsTable.endpoint,
+          webTargets,
+        ),
+      );
+
+    const devicesByEndpoint =
+      new Map(
+        webDevices.map((device) => [
+          device.endpoint,
+          device,
+        ]),
+      );
+
+    for (
+      const endpoint of webTargets
+    ) {
+      const device =
+        devicesByEndpoint.get(
+          endpoint,
+        );
+
+      if (!device) {
+        successfulTargets.add(
+          `web:${endpoint}`,
+        );
+        continue;
+      }
+
+      const result =
+        await sendWebPush(
+          env,
+          device,
+          title,
+          messageBody,
+          url,
+        );
+
+      if (
+        result.ok ||
+        result.expired
+      ) {
+        successfulTargets.add(
+          `web:${endpoint}`,
+        );
+      }
+
+      if (result.expired) {
+        await db
+          .delete(
+            webPushSubscriptionsTable,
+          )
+          .where(
+            eq(
+              webPushSubscriptionsTable.endpoint,
+              endpoint,
+            ),
+          );
+      }
+    }
+  }
+
+  const completedIds =
+    matched
+      .filter((row) =>
+        successfulTargets.has(
+          `${row.channel}:${row.target}`,
+        ),
+      )
+      .map((row) => row.id);
+
+  if (completedIds.length > 0) {
+    await db
+      .delete(
+        stockNotificationSubscriptionsTable,
+      )
+      .where(
+        inArray(
+          stockNotificationSubscriptionsTable.id,
+          completedIds,
+        ),
+      );
+  }
+
+  return {
+    sent:
+      successfulTargets.size,
+    matched:
+      matched.length,
+  };
+}
+
+
+export async function processAvailableStockNotifications(
+  db: Db,
+  env: Env,
+) {
+  const subscriptions = await db
+    .select({
+      productId:
+        stockNotificationSubscriptionsTable.productId,
+      color:
+        stockNotificationSubscriptionsTable.color,
+      size:
+        stockNotificationSubscriptionsTable.size,
+    })
+    .from(
+      stockNotificationSubscriptionsTable,
+    );
+
+  if (subscriptions.length === 0) {
+    return {
+      checked: 0,
+      available: 0,
+    };
+  }
+
+  const productIds = [
+    ...new Set(
+      subscriptions.map(
+        (row) => row.productId,
+      ),
+    ),
+  ];
+
+  const products = await db
+    .select({
+      id: productsTable.id,
+      nameAr: productsTable.nameAr,
+      stock: productsTable.stock,
+      colorVariants:
+        productsTable.colorVariants,
+    })
+    .from(productsTable)
+    .where(
+      inArray(
+        productsTable.id,
+        productIds,
+      ),
+    );
+
+  const productById =
+    new Map(
+      products.map((product) => [
+        product.id,
+        product,
+      ]),
+    );
+
+  const availableKeys =
+    new Map<
+      string,
+      {
+        productId: number;
+        productName: string;
+        color: string | null;
+        size: string | null;
+      }
+    >();
+
+  for (const subscription of subscriptions) {
+    const product =
+      productById.get(
+        subscription.productId,
+      );
+
+    if (!product) continue;
+
+    const variants =
+      (product.colorVariants as Array<{
+        color: string;
+        sizes?: Array<{
+          size: string;
+          stock?: number | null;
+          outOfStock?: boolean;
+        }>;
+      }> | null) ?? [];
+
+    let available = false;
+
+    if (
+      subscription.color &&
+      subscription.size
+    ) {
+      const entry =
+        variants
+          .find(
+            (variant) =>
+              variant.color ===
+              subscription.color,
+          )
+          ?.sizes?.find(
+            (sizeEntry) =>
+              sizeEntry.size ===
+              subscription.size,
+          );
+
+      available =
+        (entry?.stock ?? 0) > 0 &&
+        entry?.outOfStock !== true;
+    } else if (variants.length > 0) {
+      available =
+        variants.some((variant) =>
+          (variant.sizes ?? []).some(
+            (entry) =>
+              (entry.stock ?? 0) > 0 &&
+              entry.outOfStock !== true,
+          ),
+        );
+    } else {
+      available =
+        (product.stock ?? 0) > 0;
+    }
+
+    if (!available) continue;
+
+    const key =
+      JSON.stringify([
+        subscription.productId,
+        subscription.color,
+        subscription.size,
+      ]);
+
+    availableKeys.set(key, {
+      productId:
+        subscription.productId,
+      productName:
+        product.nameAr,
+      color:
+        subscription.color,
+      size:
+        subscription.size,
+    });
+  }
+
+  let delivered = 0;
+
+  for (
+    const item of availableKeys.values()
+  ) {
+    const result =
+      await sendBackInStockNotifications(
+        db,
+        env,
+        item,
+      );
+
+    delivered +=
+      result.sent;
+  }
+
+  return {
+    checked:
+      subscriptions.length,
+    available:
+      availableKeys.size,
+    delivered,
+  };
 }
 
 
@@ -409,10 +1241,16 @@ export async function sendOrderStatusNotification(
     if (!response.ok) continue;
 
     const data = await response.json().catch(() => null) as {
-      data?: Array<{ status?: string; details?: { error?: string } }>;
+      data?: ExpoPushTicket[];
     } | null;
 
     const tickets = Array.isArray(data?.data) ? data.data : [];
+
+    await recordExpoPushTickets(
+      db,
+      tokenBatch,
+      tickets,
+    );
 
     tickets.forEach((ticket, index) => {
       if (ticket?.details?.error === "DeviceNotRegistered" && tokenBatch[index]) {
@@ -423,7 +1261,13 @@ export async function sendOrderStatusNotification(
   }
 
   for (const device of webDevices) {
-    const result = await sendWebPush(env, device, message.title, message.body);
+    const result = await sendWebPush(
+      env,
+      device,
+      message.title,
+      message.body,
+      "/my-orders",
+    );
     if (result.expired) expiredWebEndpoints.push(device.endpoint);
 
   }
@@ -441,6 +1285,7 @@ export async function sendOrderStatusNotification(
 
 export async function sendNewOrderNotification(
   db: Db,
+  env: Env,
   order: {
     id: number;
     customerName: string;
@@ -452,34 +1297,47 @@ export async function sendNewOrderNotification(
     .from(pushTokensTable)
     .where(eq(pushTokensTable.isAdmin, true));
 
-  if (devices.length === 0) {
-    return {
-      sent: 0,
-      total: 0,
-      removedInvalidTokens: 0,
-    };
-  }
+  const webDevices = await db
+    .select({
+      endpoint: webPushSubscriptionsTable.endpoint,
+      p256dh: webPushSubscriptionsTable.p256dh,
+      auth: webPushSubscriptionsTable.auth,
+    })
+    .from(webPushSubscriptionsTable)
+    .where(
+      eq(
+        webPushSubscriptionsTable.isAdmin,
+        true,
+      ),
+    );
 
-  const tokens = devices.map(
-    (device) => device.token,
-  );
+  const title = "طلب جديد";
+  const body =
+    `طلب #${order.id} من ${order.customerName}` +
+    ` بقيمة ${order.totalPrice} ₪`;
 
+  const tokens =
+    devices.map(
+      (device) => device.token,
+    );
 
   let sent = 0;
+  let webSent = 0;
   const invalidTokens: string[] = [];
+  const expiredWebEndpoints: string[] = [];
 
   for (const tokenBatch of chunk(tokens, 100)) {
     const messages = tokenBatch.map((to) => ({
       to,
       sound: "lovely_kids_bell.wav",
       channelId: "lovely-kids-alerts-v1",
-      title: "طلب جديد",
-      body:
-        `طلب #${order.id} من ${order.customerName}` +
-        ` بقيمة ${order.totalPrice} ₪`,
+      title,
+      body,
       data: {
         type: "new_order",
         orderId: String(order.id),
+        url:
+          `/admin/orders?orderId=${order.id}`,
       },
     }));
 
@@ -503,19 +1361,21 @@ export async function sendNewOrderNotification(
       continue;
     }
 
-
     const expoData = await expoResponse
       .json()
       .catch(() => null) as {
-        data?: Array<{
-          status?: string;
-          details?: { error?: string };
-        }>;
+        data?: ExpoPushTicket[];
       } | null;
 
     const tickets = Array.isArray(expoData?.data)
       ? expoData.data
       : [];
+
+    await recordExpoPushTickets(
+      db,
+      tokenBatch,
+      tickets,
+    );
 
     for (
       let index = 0;
@@ -540,6 +1400,23 @@ export async function sendNewOrderNotification(
     }
   }
 
+  for (const device of webDevices) {
+    const result = await sendWebPush(
+      env,
+      device,
+      title,
+      body,
+      `/admin/orders?orderId=${order.id}`,
+    );
+
+    if (result.ok) {
+      webSent += 1;
+    } else if (result.expired) {
+      expiredWebEndpoints.push(
+        device.endpoint,
+      );
+    }
+  }
 
   const uniqueInvalidTokens = [
     ...new Set(invalidTokens),
@@ -556,11 +1433,36 @@ export async function sendNewOrderNotification(
       );
   }
 
+  const uniqueExpiredWebEndpoints = [
+    ...new Set(expiredWebEndpoints),
+  ];
+
+  if (
+    uniqueExpiredWebEndpoints.length > 0
+  ) {
+    await db
+      .delete(
+        webPushSubscriptionsTable,
+      )
+      .where(
+        inArray(
+          webPushSubscriptionsTable.endpoint,
+          uniqueExpiredWebEndpoints,
+        ),
+      );
+  }
+
   return {
-    sent,
-    total: tokens.length,
+    sent: sent + webSent,
+    total:
+      tokens.length +
+      webDevices.length,
+    expoSent: sent,
+    webSent,
     removedInvalidTokens:
       uniqueInvalidTokens.length,
+    removedExpiredWebSubscriptions:
+      uniqueExpiredWebEndpoints.length,
   };
 }
 
@@ -675,15 +1577,18 @@ async function handleSendNotification(
     const expoData = await expoResponse
       .json()
       .catch(() => null) as {
-        data?: Array<{
-          status?: string;
-          details?: { error?: string };
-        }>;
+        data?: ExpoPushTicket[];
       } | null;
 
     const tickets = Array.isArray(expoData?.data)
       ? expoData.data
       : [];
+
+    await recordExpoPushTickets(
+      db,
+      tokenBatch,
+      tickets,
+    );
 
     for (let index = 0; index < tickets.length; index += 1) {
       const ticket = tickets[index];
@@ -793,6 +1698,16 @@ export async function handleNotificationRequest(
     path === "/api/web-push-subscriptions"
   ) {
     return handleRegisterWebPush(request, db, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/stock-notifications"
+  ) {
+    return handleSubscribeStockNotification(
+      request,
+      db,
+    );
   }
 
   if (
