@@ -32,6 +32,7 @@ import { ProductsProvider } from "@/context/ProductsContext";
 import { PromotionsProvider } from "@/context/PromotionsContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useNotificationNavigation } from "@/hooks/useNotificationNavigation";
 import { useVisitorAnalytics } from "@/hooks/useVisitorAnalytics";
 import { setMetaAdvancedMatching } from "@/utils/metaPixel";
 
@@ -52,6 +53,7 @@ const WEB_WELCOME_SESSION_KEY = "lovely_kids_welcome_seen";
 function RootLayoutNav() {
   const { user, getAuthToken } = useAuth();
   usePushNotifications(user?.phone, getAuthToken);
+  useNotificationNavigation();
   useVisitorAnalytics();
 
   useEffect(() => {
