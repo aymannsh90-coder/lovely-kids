@@ -1,5 +1,6 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
+import { NotificationSubscribeCard } from "@/components/NotificationSubscribeCard";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -616,6 +617,15 @@ export default function ProfileScreen() {
         renderAuthForm()
       )}
 
+      <View
+        style={[
+          styles.notificationCardWrap,
+          desktopCardStyle,
+        ]}
+      >
+        <NotificationSubscribeCard />
+      </View>
+
       {/* Menu */}
       <View style={[
         styles.menuCard,
@@ -912,6 +922,10 @@ const styles = StyleSheet.create({
   authSubmitBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   authSubmitText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   forgotLink: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingVertical: 4 },
+  notificationCardWrap: {
+    width: "100%",
+    marginBottom: 14,
+  },
   menuCard: { margin: 16, marginTop: 16, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   menuItem: { flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   menuLabel: { flex: 1, fontSize: 15, fontWeight: "600", textAlign: "right" },
