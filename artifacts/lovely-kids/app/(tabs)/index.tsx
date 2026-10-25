@@ -1072,6 +1072,7 @@ export default function HomeScreen() {
           ]}
         >
           <NotificationSubscribeCard
+            compact
             hideWhenEnabled
           />
         </View>
