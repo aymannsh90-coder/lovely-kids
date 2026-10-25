@@ -190,6 +190,7 @@ function Metric({
 }) {
   return (
     <div
+      className="gross-profit-metric"
       style={{
         border:
           "1px solid #eef0f2",
@@ -241,6 +242,7 @@ function ChannelCard({
 }) {
   return (
     <section
+      className="gross-profit-channel-card"
       style={cardStyle}
     >
       <div
@@ -704,13 +706,147 @@ export default function GrossProfitReportPage() {
       0,
     ) ?? 0;
 
+  const generatedAt =
+    new Date().toLocaleString(
+      "ar-PS",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
+
   return (
     <div
       dir="rtl"
       className="gross-profit-page"
     >
+      <style>{`
+        .gross-profit-print-only {
+          display: none;
+        }
+
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
+
+          html,
+          body {
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          body * {
+            visibility: hidden !important;
+          }
+
+          #gross-profit-print,
+          #gross-profit-print * {
+            visibility: visible !important;
+          }
+
+          #gross-profit-print {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            color: #111827;
+            font-size: 9.5px;
+          }
+
+          .gross-profit-no-print {
+            display: none !important;
+          }
+
+          .gross-profit-print-only {
+            display: block !important;
+          }
+
+          .gross-profit-print-header {
+            margin-bottom: 5mm;
+            text-align: center;
+          }
+
+          .gross-profit-print-brand {
+            color: #E91E8C;
+            font-size: 17px;
+            font-weight: 900;
+          }
+
+          .gross-profit-print-header h1 {
+            margin: 1.5mm 0;
+            font-size: 20px;
+          }
+
+          .gross-profit-print-header p {
+            margin: 1mm 0;
+            color: #4b5563;
+            font-size: 9px;
+          }
+
+          .gross-profit-warning,
+          .gross-profit-channel-card,
+          .gross-profit-note {
+            margin-bottom: 4mm !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .gross-profit-channel-card {
+            padding: 4mm !important;
+          }
+
+          .gross-profit-channel-card h2 {
+            font-size: 14px !important;
+          }
+
+          .gross-profit-channel-card > div:nth-child(2) {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 2.5mm !important;
+          }
+
+          .gross-profit-metric {
+            min-height: 0 !important;
+            padding: 2.5mm !important;
+            border-radius: 0 !important;
+          }
+
+          .gross-profit-metric > div:first-child {
+            font-size: 8px !important;
+            margin-bottom: 1mm !important;
+          }
+
+          .gross-profit-metric > div:last-child {
+            font-size: 11px !important;
+          }
+
+          .gross-profit-print-footer {
+            margin-top: 5mm;
+            padding-top: 2.5mm;
+            border-top: 1px solid #cfd8df;
+            color: #6b7280;
+            text-align: center;
+            font-size: 8px;
+          }
+        }
+      `}</style>
+
       <section
-        className="gross-profit-hero"
+        className="gross-profit-hero gross-profit-no-print"
       >
         <div className="gross-profit-hero-head">
           <div>
@@ -828,6 +964,17 @@ export default function GrossProfitReportPage() {
           >
             عرض التقرير
           </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!report}
+            onClick={() =>
+              window.print()
+            }
+          >
+            🖨️ طباعة A4
+          </button>
         </div>
 
         {error && (
@@ -838,7 +985,19 @@ export default function GrossProfitReportPage() {
       </section>
 
       {report && (
-        <>
+        <div id="gross-profit-print">
+          <header className="gross-profit-print-only gross-profit-print-header">
+            <div className="gross-profit-print-brand">
+              Lovely Kids
+            </div>
+            <h1>تقرير مجمل الربح</h1>
+            <p>
+              الفترة: {report.range.from} — {report.range.to}
+            </p>
+            <p>
+              تاريخ إصدار التقرير: {generatedAt}
+            </p>
+          </header>
           {report.warnings.length >
             0 && (
             <section className="gross-profit-warning">
@@ -872,7 +1031,7 @@ export default function GrossProfitReportPage() {
             0 && (
             <button
               type="button"
-              className="gross-profit-missing-cost-card"
+              className="gross-profit-missing-cost-card gross-profit-no-print"
               onClick={() => {
                 setCostActionError("");
                 setMissingCostsOpen(true);
@@ -945,13 +1104,17 @@ export default function GrossProfitReportPage() {
               مع المصروفات التشغيلية.
             </p>
           </section>
-        </>
+
+          <footer className="gross-profit-print-only gross-profit-print-footer">
+            تقرير صادر من نظام Lovely Kids — مجمل الربح قبل المصروفات التشغيلية.
+          </footer>
+        </div>
       )}
 
       {missingCostsOpen &&
         report && (
         <div
-          className="gross-profit-cost-modal-backdrop"
+          className="gross-profit-cost-modal-backdrop gross-profit-no-print"
           role="presentation"
           onMouseDown={() =>
             setMissingCostsOpen(
