@@ -16767,3 +16767,138 @@ button.inventory-intelligence-metric {
     padding-inline: 7px;
   }
 }
+
+
+/* Desktop manual order layout */
+.manual-order-page-desktop {
+  width: 100%;
+}
+
+.manual-order-shell-desktop {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  display: grid;
+  grid-template-columns:
+    minmax(300px, 0.8fr)
+    minmax(460px, 1.45fr)
+    minmax(280px, 0.75fr);
+  grid-template-areas:
+    "customer cart checkout"
+    "scan cart checkout"
+    "status cart checkout";
+  gap: 16px;
+  align-items: start;
+  padding: 0;
+  background: transparent;
+}
+
+.manual-order-shell-desktop .is-hidden-desktop {
+  display: none;
+}
+
+.manual-order-shell-desktop .manual-order-customer-card {
+  grid-area: customer;
+  margin: 0;
+  min-width: 0;
+}
+
+.manual-order-shell-desktop .manual-order-scan-card {
+  grid-area: scan;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #e4e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.manual-order-shell-desktop .manual-order-status-stack {
+  grid-area: status;
+  min-width: 0;
+}
+
+.manual-order-shell-desktop .manual-order-status-stack:empty {
+  display: none;
+}
+
+.manual-order-shell-desktop .mobile-pos-alert,
+.manual-order-shell-desktop .mobile-pos-last-sale {
+  margin: 0 0 10px;
+}
+
+.manual-order-shell-desktop .mobile-pos-cart {
+  grid-area: cart;
+  min-width: 0;
+  min-height: 540px;
+  padding: 16px;
+  border: 1px solid #e4e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.manual-order-shell-desktop .mobile-pos-cart-title {
+  margin-top: 0;
+}
+
+.manual-order-shell-desktop .mobile-pos-empty-cart {
+  min-height: 430px;
+}
+
+.manual-order-shell-desktop .manual-order-checkout {
+  grid-area: checkout;
+  position: sticky;
+  top: 16px;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e4e7eb;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.manual-order-shell-desktop .manual-order-checkout > button {
+  min-height: 56px;
+}
+
+.manual-order-shell-desktop .manual-order-fields {
+  grid-template-columns: 1fr;
+}
+
+.manual-order-shell-desktop .manual-order-field-wide {
+  grid-column: auto;
+}
+
+.manual-order-shell-desktop .manual-order-barcode-form {
+  margin-top: 0;
+}
+
+.manual-order-shell-desktop .mobile-pos-line {
+  padding: 14px;
+}
+
+@media (max-width: 1180px) {
+  .manual-order-shell-desktop {
+    grid-template-columns:
+      minmax(300px, 0.9fr)
+      minmax(430px, 1.35fr);
+    grid-template-areas:
+      "customer cart"
+      "scan cart"
+      "status cart"
+      "checkout checkout";
+  }
+
+  .manual-order-shell-desktop .manual-order-checkout {
+    position: static;
+  }
+}

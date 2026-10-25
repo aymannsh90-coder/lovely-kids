@@ -330,7 +330,15 @@ function shippingCostForPreview(
     : zone.cost;
 }
 
-export default function ManualOnlineOrderPage() {
+interface ManualOnlineOrderPageProps {
+  layout?: "mobile" | "desktop";
+}
+
+export default function ManualOnlineOrderPage({
+  layout = "mobile",
+}: ManualOnlineOrderPageProps) {
+  const isDesktop =
+    layout === "desktop";
   const {
     token,
     user,
@@ -1241,11 +1249,27 @@ export default function ManualOnlineOrderPage() {
 
   return (
     <main
-      className="mobile-pos-page manual-order-page"
+      className={
+        isDesktop
+          ? "manual-order-page manual-order-page-desktop"
+          : "mobile-pos-page manual-order-page"
+      }
       dir="rtl"
     >
-      <div className="mobile-pos-shell manual-order-shell">
-        <header className="mobile-pos-header">
+      <div
+        className={
+          isDesktop
+            ? "manual-order-shell manual-order-shell-desktop"
+            : "mobile-pos-shell manual-order-shell"
+        }
+      >
+        <header
+          className={
+            isDesktop
+              ? "mobile-pos-header manual-order-mobile-header is-hidden-desktop"
+              : "mobile-pos-header manual-order-mobile-header"
+          }
+        >
           <div>
             <strong>Lovely Kids</strong>
             <span>إنشاء طلب يدوي</span>
@@ -1256,7 +1280,13 @@ export default function ManualOnlineOrderPage() {
               ● {user?.name ?? "الإدارة"}
             </span>
 
-            <Link to="/sales/mobile">
+            <Link
+              to={
+                isDesktop
+                  ? "/sales/pos"
+                  : "/sales/mobile"
+              }
+            >
               رجوع
             </Link>
           </div>
@@ -1447,40 +1477,42 @@ export default function ManualOnlineOrderPage() {
           )}
         </section>
 
-        {error && (
-          <div className="mobile-pos-alert mobile-pos-error">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="mobile-pos-alert mobile-pos-success">
-            {message}
-          </div>
-        )}
-
-        {lastOrder && (
-          <section className="mobile-pos-last-sale">
-            <div className="mobile-pos-last-sale-icon">
-              ✓
+        <div className="manual-order-status-stack">
+          {error && (
+            <div className="mobile-pos-alert mobile-pos-error">
+              {error}
             </div>
+          )}
 
-            <div>
+          {message && (
+            <div className="mobile-pos-alert mobile-pos-success">
+              {message}
+            </div>
+          )}
+
+          {lastOrder && (
+            <section className="mobile-pos-last-sale">
+              <div className="mobile-pos-last-sale-icon">
+                ✓
+              </div>
+
+              <div>
+                <strong>
+                  تم إنشاء الطلب #{lastOrder.id}
+                </strong>
+                <span>
+                  الحالة: {lastOrder.status}
+                </span>
+              </div>
+
               <strong>
-                تم إنشاء الطلب #{lastOrder.id}
+                {formatMoney(
+                  lastOrder.totalPrice,
+                )}
               </strong>
-              <span>
-                الحالة: {lastOrder.status}
-              </span>
-            </div>
-
-            <strong>
-              {formatMoney(
-                lastOrder.totalPrice,
-              )}
-            </strong>
-          </section>
-        )}
+            </section>
+          )}
+        </div>
 
         <section className="mobile-pos-cart">
           <div className="mobile-pos-cart-title">
