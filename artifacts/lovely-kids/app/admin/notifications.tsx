@@ -20,11 +20,85 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { enablePushNotifications } from "@/hooks/usePushNotifications";
 
-const TEMPLATES = [
-  { t: "بضاعة جديدة! 🎁", b: "تفقد أحدث المنتجات الوصلت للمتجر" },
-  { t: "عرض خاص! 🔥", b: "خصومات حصرية لفترة محدودة، لا تفوتها" },
-  { t: "تخفيضات! 💰", b: "أسعار مخفوضة على منتجات مختارة" },
-  { t: "مناسبة خاصة! 🎉", b: "تسوقي أجمل الملابس لمناسبتك القادمة" },
+type NotificationTemplate = {
+  title: string;
+  body: string;
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  accent: string;
+};
+
+const TEMPLATES: NotificationTemplate[] = [
+  {
+    label: "بضاعة جديدة",
+    title: "🎁 بضاعة جديدة وصلت",
+    body: "وصلتنا تشكيلة جديدة ومميزة، تفقدي أحدث المنتجات الآن قبل نفاد الكمية.",
+    icon: "gift-outline",
+    accent: "#EC4899",
+  },
+  {
+    label: "ورد ومناسبة",
+    title: "🌹 شيء مميز بانتظارك",
+    body: "اختيارات جميلة ومميزة وصلت للمتجر، شاهدي التفاصيل واختاري ما يناسبك.",
+    icon: "flower-outline",
+    accent: "#E11D48",
+  },
+  {
+    label: "عرض خاص",
+    title: "🔥 عرض خاص لفترة محدودة",
+    body: "استفيدي الآن من عرض مميز على مجموعة مختارة من المنتجات لفترة محدودة.",
+    icon: "flame-outline",
+    accent: "#F97316",
+  },
+  {
+    label: "تخفيضات",
+    title: "💸 تخفيضات جديدة",
+    body: "اغتنمي الفرصة الآن وتصفحي أحدث التخفيضات والأسعار المميزة داخل المتجر.",
+    icon: "pricetag-outline",
+    accent: "#16A34A",
+  },
+  {
+    label: "هدية",
+    title: "💝 هدية مميزة بانتظارك",
+    body: "اطلبي الآن واستفيدي من الهدية أو العرض المتاح مع طلبك.",
+    icon: "heart-outline",
+    accent: "#DB2777",
+  },
+  {
+    label: "رجع للمخزون",
+    title: "📦 رجع للمخزون",
+    body: "بعض المنتجات المطلوبة توفرت من جديد، سارعي بالطلب قبل نفاد الكمية.",
+    icon: "refresh-circle-outline",
+    accent: "#0284C7",
+  },
+  {
+    label: "توصيل",
+    title: "🚚 اطلب الآن بسهولة",
+    body: "اطلبي من المتجر واستفيدي من خيارات التوصيل أو الاستلام من المحل.",
+    icon: "car-outline",
+    accent: "#7C3AED",
+  },
+  {
+    label: "الأكثر طلبًا",
+    title: "⭐ الأكثر طلبًا الآن",
+    body: "شاهدي المنتجات الأكثر طلبًا واختاري المفضل لديك قبل نفاد الكمية.",
+    icon: "star-outline",
+    accent: "#CA8A04",
+  },
+  {
+    label: "نهاية الأسبوع",
+    title: "🛍️ اختيارات نهاية الأسبوع",
+    body: "جهزنا لك مجموعة مميزة من المنتجات والعروض لتسوق أجمل هذا الأسبوع.",
+    icon: "bag-handle-outline",
+    accent: "#0891B2",
+  },
+  {
+    label: "مناسبة خاصة",
+    title: "🎉 مناسبة خاصة",
+    body: "بمناسبة خاصة جهزنا لكم اختيارات وعروضًا مميزة، تفقديها الآن.",
+    icon: "sparkles-outline",
+    accent: "#9333EA",
+  },
 ];
 
 export default function NotificationsScreen() {
@@ -156,8 +230,8 @@ export default function NotificationsScreen() {
         ) : (
           <Text style={[styles.countText, { color: colors.foreground }]}>
             {tokenCount === null
-              ? "تعذّر جلب عدد الأجهزة"
-              : `${tokenCount} جهاز مسجّل سيستقبل الإشعار`}
+              ? "تعذّر جلب عدد المشتركين"
+              : `${tokenCount} جهاز/متصفح مشترك بالإشعارات`}
           </Text>
         )}
         <Ionicons name="phone-portrait-outline" size={18} color={colors.primary} />
@@ -210,6 +284,48 @@ export default function NotificationsScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPadding }]}
         keyboardShouldPersistTaps="handled"
       >
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.sectionHeaderRow}>
+            <View
+              style={[
+                styles.sectionIcon,
+                { backgroundColor: colors.primary + "14" },
+              ]}
+            >
+              <Ionicons
+                name="create-outline"
+                size={20}
+                color={colors.primary}
+              />
+            </View>
+            <View style={styles.sectionHeaderText}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: colors.foreground },
+                ]}
+              >
+                كتابة حرة
+              </Text>
+              <Text
+                style={[
+                  styles.sectionSubtitle,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                اكتب الإشعار بنفسك، أو اختر قالبًا بالأسفل ثم عدّل النص كما تريد.
+              </Text>
+            </View>
+          </View>
+
         {/* Title */}
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.foreground }]}>عنوان الإشعار *</Text>
@@ -243,18 +359,97 @@ export default function NotificationsScreen() {
           <Text style={[styles.charCount, { color: colors.mutedForeground }]}>{body.length}/200</Text>
         </View>
 
+        </View>
+
         {/* Quick templates */}
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>قوالب سريعة:</Text>
-        <View style={styles.templates}>
-          {TEMPLATES.map((tpl, i) => (
-            <Pressable
-              key={i}
-              onPress={() => { setTitle(tpl.t); setBody(tpl.b); setResult(null); }}
-              style={[styles.chip, { backgroundColor: colors.card, borderColor: colors.border }]}
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.sectionHeaderRow}>
+            <View
+              style={[
+                styles.sectionIcon,
+                { backgroundColor: "#FFF1F2" },
+              ]}
             >
-              <Text style={[styles.chipText, { color: colors.foreground }]}>{tpl.t}</Text>
-            </Pressable>
-          ))}
+              <Ionicons
+                name="apps-outline"
+                size={20}
+                color="#E11D48"
+              />
+            </View>
+            <View style={styles.sectionHeaderText}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: colors.foreground },
+                ]}
+              >
+                قوالب جاهزة
+              </Text>
+              <Text
+                style={[
+                  styles.sectionSubtitle,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                اضغط على أي قالب لتعبئة العنوان والنص، وبعدها عدّلهم بحرية.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.templates}>
+            {TEMPLATES.map((tpl) => (
+              <Pressable
+                key={tpl.label}
+                onPress={() => {
+                  setTitle(tpl.title);
+                  setBody(tpl.body);
+                  setResult(null);
+                }}
+                style={[
+                  styles.templateCard,
+                  {
+                    borderColor: tpl.accent + "35",
+                    backgroundColor: tpl.accent + "0D",
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.templateIcon,
+                    { backgroundColor: tpl.accent + "18" },
+                  ]}
+                >
+                  <Ionicons
+                    name={tpl.icon}
+                    size={24}
+                    color={tpl.accent}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.templateLabel,
+                    { color: colors.foreground },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tpl.label}
+                </Text>
+                <Ionicons
+                  name="chevron-back"
+                  size={15}
+                  color={tpl.accent}
+                />
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {/* Result */}
@@ -281,12 +476,12 @@ export default function NotificationsScreen() {
             <Ionicons name="send-outline" size={20} color="#fff" />
           )}
           <Text style={styles.sendBtnText}>
-            {sending ? "جارٍ الإرسال..." : "إرسال لكل المستخدمين"}
+            {sending ? "جارٍ الإرسال..." : "إرسال لكل المشتركين"}
           </Text>
         </Pressable>
 
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-          سيصل الإشعار لجميع الأجهزة التي سبق لها فتح التطبيق وقبلت السماح بالإشعارات.
+          سيصل الإشعار للمشتركين الذين فعّلوا الإشعارات على التطبيق أو المتصفح.
         </Text>
       </ScrollView>
     </View>
@@ -332,8 +527,44 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
   },
-  scroll: { padding: 16, gap: 4 },
-  field: { gap: 6, marginBottom: 16 },
+  scroll: { padding: 16, gap: 14 },
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+  },
+  sectionHeaderRow: {
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+  },
+  sectionHeaderText: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  sectionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "right",
+    marginTop: 2,
+  },
+  field: { gap: 6, marginBottom: 14 },
   label: { fontSize: 14, fontWeight: "700", textAlign: "right" },
   input: {
     paddingHorizontal: 14,
@@ -344,10 +575,47 @@ const styles = StyleSheet.create({
   },
   textArea: { height: 90, paddingTop: 12 },
   charCount: { fontSize: 11, textAlign: "left" },
-  sectionLabel: { fontSize: 13, fontWeight: "600", textAlign: "right", marginBottom: 8 },
-  templates: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  chipText: { fontSize: 13, fontWeight: "600" },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "right",
+    marginBottom: 8,
+  },
+  templates: {
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  templateCard: {
+    width: "48%",
+    minHeight: 82,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  templateIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  templateLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+  },
   resultBox: {
     padding: 14,
     borderRadius: 12,
