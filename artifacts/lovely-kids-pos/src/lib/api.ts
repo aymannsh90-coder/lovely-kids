@@ -3352,6 +3352,46 @@ export function getPosSuppliers(
   );
 }
 
+export interface PosSupplierLedgerEntry {
+  lineId: number;
+  transactionId:
+    | number
+    | string
+    | null;
+  publicId: string | null;
+  transactionType: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
+  sourceEvent: string | null;
+  status: string | null;
+  businessDate: string | null;
+  createdAt: string;
+  debitMinor: number;
+  creditMinor: number;
+  deltaMinor: number;
+  runningBalanceMinor: number;
+  memo: string | null;
+}
+
+export interface PosSupplierLedgerResult {
+  supplier: PosSupplier;
+  baseOpeningBalanceMinor: number;
+  balanceMinor: number;
+  balance: number;
+  entries: PosSupplierLedgerEntry[];
+}
+
+export function getPosSupplierLedger(
+  token: string,
+  supplierId: number,
+) {
+  return apiRequest<PosSupplierLedgerResult>(
+    `/api/pos/suppliers/${supplierId}/ledger`,
+    {},
+    token,
+  );
+}
+
 export function createPosSupplier(
   token: string,
   input: {

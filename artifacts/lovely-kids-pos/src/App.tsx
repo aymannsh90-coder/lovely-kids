@@ -141,11 +141,21 @@ export default function App() {
 
   const [closeError, setCloseError] = useState("");
 
+  const [
+    lastClosedSession,
+    setLastClosedSession,
+  ] = useState<{
+    session: CashSession;
+    varianceMinor: number;
+    variance: number;
+  } | null>(null);
+
   function clearAuthentication() {
     removeStoredToken();
     setToken(null);
     setUser(null);
     setSession(null);
+    setLastClosedSession(null);
     setPhase("logged-out");
   }
 
@@ -282,6 +292,7 @@ export default function App() {
       });
 
       setSession(result.session);
+      setLastClosedSession(null);
       setOpeningNote("");
 
       setOpenMessage(
@@ -352,6 +363,12 @@ export default function App() {
           result.session.currencyCode,
         )}.`;
       }
+
+      setLastClosedSession({
+        session: result.session,
+        varianceMinor: result.varianceMinor,
+        variance: result.variance,
+      });
 
       setSession(null);
       setOpeningBalance("0.00");
@@ -470,6 +487,7 @@ export default function App() {
         setClosingNote,
         closeBusy,
         closeError,
+        lastClosedSession,
         handleCloseDay,
       }}
     >

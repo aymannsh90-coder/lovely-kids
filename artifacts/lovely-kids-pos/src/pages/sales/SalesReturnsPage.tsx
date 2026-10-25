@@ -27,6 +27,7 @@ import {
   type PosSaleReturnResult,
 } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
+import { printReceiptElementDirect } from "../../lib/directReceiptPrint";
 import {
   captureScannerKeyboardEvent,
   createScannerKeyboardBuffer,
@@ -45,6 +46,22 @@ function formatMoney(valueMinor: number) {
     currency: "ILS",
     minimumFractionDigits: 2,
   }).format(valueMinor / 100);
+}
+
+function refundMethodLabel(value: string) {
+  if (value === "cash") {
+    return "نقدي";
+  }
+
+  if (value === "card") {
+    return "فيزا / بطاقة";
+  }
+
+  if (value === "customer") {
+    return "حساب الزبون";
+  }
+
+  return value;
 }
 
 function parseMoneyToMinor(value: string) {
@@ -120,6 +137,9 @@ export default function SalesReturnsPage() {
     searchParams.get("publicId")?.trim() ?? "";
 
   const autoLoadedPublicIdRef = useRef("");
+
+  const returnReceiptRef =
+    useRef<HTMLElement>(null);
 
   const invoiceInputRef = useRef<HTMLInputElement>(null);
 
@@ -365,6 +385,43 @@ export default function SalesReturnsPage() {
   }
 
   const registerKey = session.registerKey;
+
+  const printableReturn =
+    completedReturn ??
+    completedBarcodeReturn;
+
+  const refundCustomer =
+    refundCustomerId
+      ? customers.find(
+          (customer) =>
+            customer.id ===
+            refundCustomerId,
+        ) ?? null
+      : null;
+
+  async function handlePrintReturnReceipt() {
+    const source =
+      returnReceiptRef.current;
+
+    if (!source) {
+      setError(
+        "لا يوجد إيصال مردود جاهز للطباعة.",
+      );
+      return;
+    }
+
+    setError("");
+
+    try {
+      await printReceiptElementDirect(
+        source,
+      );
+    } catch (caught) {
+      setError(
+        errorMessage(caught),
+      );
+    }
+  }
 
   function resetReturnForm() {
     setPreview(null);
@@ -1118,21 +1175,41 @@ export default function SalesReturnsPage() {
               <small>تم استرجاع نتيجة العملية السابقة دون تكرار المرتجع.</small>
             )}
 
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={submitBusy}
-              onClick={() =>
-                void handleVoidReturn(
-                  completedReturn.saleReturn.publicId,
-                  completedReturn.saleReturn.refundAmountMinor,
-                  preview?.sale.publicId ?? null,
-                  completedReturn.saleReturn.refundMethod,
-                )
-              }
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                marginTop: 10,
+              }}
             >
-              {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
-            </button>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={submitBusy}
+                onClick={() =>
+                  void handlePrintReturnReceipt()
+                }
+              >
+                🖨️ طباعة إيصال المردود
+              </button>
+
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={submitBusy}
+                onClick={() =>
+                  void handleVoidReturn(
+                    completedReturn.saleReturn.publicId,
+                    completedReturn.saleReturn.refundAmountMinor,
+                    preview?.sale.publicId ?? null,
+                    completedReturn.saleReturn.refundMethod,
+                  )
+                }
+              >
+                {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
+              </button>
+            </div>
           </div>
         </article>
       )}
@@ -1163,23 +1240,208 @@ export default function SalesReturnsPage() {
               </small>
             )}
 
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={submitBusy}
-              onClick={() =>
-                void handleVoidReturn(
-                  completedBarcodeReturn.saleReturn.publicId,
-                  completedBarcodeReturn.saleReturn.refundAmountMinor,
-                  null,
-                  completedBarcodeReturn.saleReturn.refundMethod,
-                )
-              }
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                marginTop: 10,
+              }}
             >
-              {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
-            </button>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={submitBusy}
+                onClick={() =>
+                  void handlePrintReturnReceipt()
+                }
+              >
+                🖨️ طباعة إيصال المردود
+              </button>
+
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={submitBusy}
+                onClick={() =>
+                  void handleVoidReturn(
+                    completedBarcodeReturn.saleReturn.publicId,
+                    completedBarcodeReturn.saleReturn.refundAmountMinor,
+                    null,
+                    completedBarcodeReturn.saleReturn.refundMethod,
+                  )
+                }
+              >
+                {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
+              </button>
+            </div>
           </div>
         </article>
+      )}
+
+      {printableReturn && (
+        <section
+          ref={returnReceiptRef}
+          className="receipt-print-area return-receipt-print-area"
+          dir="rtl"
+        >
+          <header className="receipt-header">
+            <img
+              className="receipt-logo"
+              src="/lovely-kids-receipt-logo.png"
+              alt="Lovely Kids"
+            />
+            <strong>إيصال مردود مبيعات</strong>
+            <span dir="ltr">
+              {printableReturn.saleReturn.publicId}
+            </span>
+          </header>
+
+          <div className="receipt-divider" />
+
+          <div className="receipt-info">
+            <span>
+              التاريخ:{" "}
+              <b>
+                {printableReturn.saleReturn.businessDate}
+              </b>
+            </span>
+
+            <span>
+              طريقة الاسترداد:{" "}
+              <b>
+                {refundMethodLabel(
+                  printableReturn.saleReturn.refundMethod,
+                )}
+              </b>
+            </span>
+
+            <span>
+              الفاتورة الأصلية:{" "}
+              <b dir="ltr">
+                {completedReturn
+                  ? preview?.sale.publicId ??
+                    "مرتبطة بفاتورة"
+                  : "بدون فاتورة"}
+              </b>
+            </span>
+
+            <span>
+              الزبون:{" "}
+              <b>
+                {refundCustomer?.name ??
+                  preview?.sale.customerName ??
+                  "زبون نقدي"}
+              </b>
+            </span>
+          </div>
+
+          <div className="receipt-divider" />
+
+          <table className="receipt-items-table">
+            <thead>
+              <tr>
+                <th>الصنف</th>
+                <th>الكمية</th>
+                <th>المبلغ</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {printableReturn.items.map(
+                (item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>
+                        {item.productNameAr}
+                      </strong>
+                      <small>
+                        {[item.color, item.size]
+                          .filter(Boolean)
+                          .join(" / ") || "—"}
+                      </small>
+                    </td>
+
+                    <td>
+                      {item.quantity}
+                    </td>
+
+                    <td>
+                      {formatMoney(
+                        item.refundAmountMinor,
+                      )}
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+
+          <div className="receipt-divider" />
+
+          <div className="receipt-totals">
+            {"discountAmountMinor" in
+              printableReturn.saleReturn &&
+              printableReturn.saleReturn
+                .discountAmountMinor >
+                0 && (
+                <div>
+                  <span>
+                    خصم محتسب على المرتجع
+                  </span>
+                  <strong>
+                    {formatMoney(
+                      printableReturn.saleReturn
+                        .discountAmountMinor,
+                    )}
+                  </strong>
+                </div>
+              )}
+
+            <div className="receipt-total">
+              <span>
+                إجمالي مبلغ الاسترداد
+              </span>
+              <strong>
+                {formatMoney(
+                  printableReturn.saleReturn
+                    .refundAmountMinor,
+                )}
+              </strong>
+            </div>
+          </div>
+
+          <div className="receipt-divider" />
+
+          <div className="receipt-info">
+            <span>
+              السبب:{" "}
+              <b>
+                {printableReturn.saleReturn.reason}
+              </b>
+            </span>
+
+            {"notes" in
+              printableReturn.saleReturn &&
+              printableReturn.saleReturn.notes && (
+                <span>
+                  ملاحظات:{" "}
+                  <b>
+                    {printableReturn.saleReturn.notes}
+                  </b>
+                </span>
+              )}
+          </div>
+
+          <footer className="receipt-footer">
+            <strong>
+              Lovely Kids
+            </strong>
+            <span>
+              احتفظ بإيصال المردود للمراجعة.
+            </span>
+          </footer>
+        </section>
       )}
 
       {barcodeReturnProduct && (

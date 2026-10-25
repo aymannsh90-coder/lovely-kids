@@ -670,12 +670,166 @@ export default function InventoryValuationReportPage() {
   }
 
 
+  const generatedAt =
+    new Date().toLocaleString(
+      "ar-PS",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
+
   return (
     <div
       className="inventory-valuation-page"
       dir="rtl"
     >
-      <section className="inventory-valuation-hero">
+      <style>{`
+        .inventory-valuation-print-only {
+          display: none;
+        }
+
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm 8mm;
+          }
+
+          html,
+          body {
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          body * {
+            visibility: hidden !important;
+          }
+
+          #inventory-valuation-print,
+          #inventory-valuation-print * {
+            visibility: visible !important;
+          }
+
+          #inventory-valuation-print {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            color: #111827;
+            font-size: 8.5px;
+          }
+
+          .inventory-valuation-no-print {
+            display: none !important;
+          }
+
+          .inventory-valuation-print-only {
+            display: block !important;
+          }
+
+          .inventory-valuation-print-header {
+            margin-bottom: 4mm;
+            text-align: center;
+          }
+
+          .inventory-valuation-print-brand {
+            color: #E91E8C;
+            font-size: 17px;
+            font-weight: 900;
+          }
+
+          .inventory-valuation-print-header h1 {
+            margin: 1mm 0;
+            font-size: 19px;
+          }
+
+          .inventory-valuation-print-header p {
+            margin: 1mm 0;
+            color: #4b5563;
+            font-size: 8.5px;
+          }
+
+          .inventory-valuation-metrics {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 2mm !important;
+            margin-bottom: 4mm;
+          }
+
+          .inventory-valuation-metric {
+            min-height: 0 !important;
+            padding: 2.5mm !important;
+            border-radius: 0 !important;
+          }
+
+          .inventory-valuation-warning,
+          .inventory-valuation-table-card {
+            border-radius: 0 !important;
+            box-shadow: none !important;
+          }
+
+          .inventory-valuation-table-card {
+            padding: 0 !important;
+          }
+
+          .inventory-valuation-table-head {
+            padding: 2.5mm 3mm !important;
+          }
+
+          .inventory-valuation-table-wrap {
+            overflow: visible !important;
+          }
+
+          .inventory-valuation-table {
+            width: 100% !important;
+            min-width: 0 !important;
+            table-layout: fixed;
+            border-collapse: collapse;
+          }
+
+          .inventory-valuation-table thead {
+            display: table-header-group;
+          }
+
+          .inventory-valuation-table th,
+          .inventory-valuation-table td {
+            padding: 1.4mm 1mm !important;
+            font-size: 7.6px !important;
+            line-height: 1.25;
+            text-align: center;
+            overflow-wrap: anywhere;
+          }
+
+          .inventory-valuation-table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .inventory-valuation-print-action {
+            display: none !important;
+          }
+
+          .inventory-valuation-print-footer {
+            margin-top: 4mm;
+            padding-top: 2.5mm;
+            border-top: 1px solid #cfd8df;
+            color: #6b7280;
+            text-align: center;
+            font-size: 8px;
+          }
+        }
+      `}</style>
+      <section className="inventory-valuation-hero inventory-valuation-no-print">
         <div>
           <span className="inventory-valuation-eyebrow">
             التقارير
@@ -690,19 +844,38 @@ export default function InventoryValuationReportPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={loading}
-          onClick={() =>
-            void loadData()
-          }
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
         >
-          تحديث البيانات
-        </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading}
+            onClick={() =>
+              void loadData()
+            }
+          >
+            تحديث البيانات
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            disabled={loading || filtered.length === 0}
+            onClick={() =>
+              window.print()
+            }
+          >
+            🖨️ طباعة A4
+          </button>
+        </div>
       </section>
 
-      <section className="inventory-valuation-filters">
+      <section className="inventory-valuation-filters inventory-valuation-no-print">
         <label className="inventory-valuation-search">
           <span>
             بحث
@@ -817,10 +990,35 @@ export default function InventoryValuationReportPage() {
       </section>
 
       {error && (
-        <div className="alert error-alert">
+        <div className="alert error-alert inventory-valuation-no-print">
           {error}
         </div>
       )}
+
+      <div id="inventory-valuation-print">
+        <header className="inventory-valuation-print-only inventory-valuation-print-header">
+          <div className="inventory-valuation-print-brand">
+            Lovely Kids
+          </div>
+          <h1>تقرير تقييم المخزون</h1>
+          <p>
+            عدد الموديلات المعروضة: {formatNumber(filtered.length)}
+            {" · "}
+            تغطية التكلفة:{" "}
+            {filtered.length > 0
+              ? Math.round(
+                  (
+                    summary.costCoveredProducts /
+                    filtered.length
+                  ) * 100,
+                )
+              : 100}
+            %
+          </p>
+          <p>
+            تاريخ إصدار التقرير: {generatedAt}
+          </p>
+        </header>
 
       <section className="inventory-valuation-metrics">
         <Metric
@@ -947,7 +1145,7 @@ export default function InventoryValuationReportPage() {
                 <th>قيمة التكلفة</th>
                 <th>ربح متوقع</th>
                 <th>حالة التكلفة</th>
-                <th>التكلفة</th>
+                <th className="inventory-valuation-print-action">التكلفة</th>
               </tr>
             </thead>
 
@@ -1096,7 +1294,7 @@ export default function InventoryValuationReportPage() {
                             )}
                           </span>
                         </td>
-                        <td>
+                        <td className="inventory-valuation-print-action">
                           <button
                             type="button"
                             className="secondary-button"
@@ -1121,8 +1319,14 @@ export default function InventoryValuationReportPage() {
         </div>
       </section>
 
+        <footer className="inventory-valuation-print-only inventory-valuation-print-footer">
+          تقرير صادر من نظام Lovely Kids — قيمة المخزون بحسب البيانات والفلاتر الحالية.
+        </footer>
+      </div>
+
       {costEditorProduct && (
         <div
+          className="inventory-valuation-no-print"
           role="presentation"
           onMouseDown={(event) => {
             if (

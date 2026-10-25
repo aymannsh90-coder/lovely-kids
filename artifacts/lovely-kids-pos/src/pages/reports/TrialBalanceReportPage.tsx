@@ -243,12 +243,174 @@ export default function TrialBalanceReportPage() {
         rowHasBalance(row),
     ) ?? [];
 
+  const generatedAt =
+    new Date().toLocaleString(
+      "ar-PS",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
+
   return (
     <section
       className="trial-balance-page"
       dir="rtl"
     >
-      <header className="trial-balance-heading">
+      <style>{`
+        .trial-balance-print-only {
+          display: none;
+        }
+
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm 9mm;
+          }
+
+          html,
+          body {
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          body * {
+            visibility: hidden !important;
+          }
+
+          #trial-balance-print,
+          #trial-balance-print * {
+            visibility: visible !important;
+          }
+
+          #trial-balance-print {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            color: #111827;
+            font-size: 9px;
+          }
+
+          .trial-balance-no-print {
+            display: none !important;
+          }
+
+          .trial-balance-print-only {
+            display: block !important;
+          }
+
+          .trial-balance-print-header {
+            margin-bottom: 4mm;
+            text-align: center;
+          }
+
+          .trial-balance-print-brand {
+            color: #E91E8C;
+            font-size: 17px;
+            font-weight: 900;
+          }
+
+          .trial-balance-print-header h1 {
+            margin: 1mm 0;
+            font-size: 19px;
+          }
+
+          .trial-balance-print-header p {
+            margin: 1mm 0;
+            color: #4b5563;
+            font-size: 9px;
+          }
+
+          .trial-balance-integrity,
+          .trial-balance-metrics,
+          .trial-balance-table-card,
+          .trial-balance-problems {
+            margin-bottom: 4mm;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
+
+          .trial-balance-metrics {
+            grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+            gap: 2mm !important;
+          }
+
+          .trial-balance-metric {
+            min-height: 0 !important;
+            padding: 2.5mm !important;
+            border-radius: 0 !important;
+          }
+
+          .trial-balance-metric span,
+          .trial-balance-metric small {
+            font-size: 8px !important;
+          }
+
+          .trial-balance-metric strong {
+            font-size: 10px !important;
+          }
+
+          .trial-balance-table-wrap {
+            overflow: visible !important;
+          }
+
+          .trial-balance-table {
+            width: 100% !important;
+            min-width: 0 !important;
+            table-layout: fixed;
+            border-collapse: collapse;
+          }
+
+          .trial-balance-table thead {
+            display: table-header-group;
+          }
+
+          .trial-balance-table th,
+          .trial-balance-table td {
+            padding: 1.6mm 1.2mm !important;
+            font-size: 8.2px !important;
+            line-height: 1.3;
+            text-align: center;
+            overflow-wrap: anywhere;
+          }
+
+          .trial-balance-table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .trial-balance-table-heading {
+            padding: 2.5mm 3mm !important;
+          }
+
+          .trial-balance-table-heading h2 {
+            font-size: 13px !important;
+          }
+
+          .trial-balance-print-footer {
+            margin-top: 4mm;
+            padding-top: 2.5mm;
+            border-top: 1px solid #cfd8df;
+            color: #6b7280;
+            text-align: center;
+            font-size: 8px;
+          }
+        }
+      `}</style>
+
+      <header className="trial-balance-heading trial-balance-no-print">
         <div>
           <span>
             Stage 6 · سلامة المحاسبة
@@ -264,7 +426,7 @@ export default function TrialBalanceReportPage() {
       </header>
 
       <form
-        className="trial-balance-filters"
+        className="trial-balance-filters trial-balance-no-print"
         onSubmit={submit}
       >
         <label>
@@ -311,6 +473,17 @@ export default function TrialBalanceReportPage() {
             : "تحديث ميزان المراجعة"}
         </button>
 
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!result}
+          onClick={() =>
+            window.print()
+          }
+        >
+          🖨️ طباعة A4
+        </button>
+
         <label className="trial-balance-zero-toggle">
           <input
             type="checkbox"
@@ -330,13 +503,25 @@ export default function TrialBalanceReportPage() {
       </form>
 
       {error && (
-        <div className="alert error-alert">
+        <div className="alert error-alert trial-balance-no-print">
           {error}
         </div>
       )}
 
       {result && (
-        <>
+        <div id="trial-balance-print">
+          <header className="trial-balance-print-only trial-balance-print-header">
+            <div className="trial-balance-print-brand">
+              Lovely Kids
+            </div>
+            <h1>ميزان المراجعة</h1>
+            <p>
+              الفترة: {result.range.from} — {result.range.to}
+            </p>
+            <p>
+              تاريخ إصدار التقرير: {generatedAt}
+            </p>
+          </header>
           <section
             className={
               result.integrity.passed
@@ -629,7 +814,11 @@ export default function TrialBalanceReportPage() {
               </table>
             </div>
           </section>
-        </>
+
+          <footer className="trial-balance-print-only trial-balance-print-footer">
+            تقرير صادر من نظام Lovely Kids — للمراجعة والمطابقة.
+          </footer>
+        </div>
       )}
     </section>
   );

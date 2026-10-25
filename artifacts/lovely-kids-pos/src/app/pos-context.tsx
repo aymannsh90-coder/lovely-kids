@@ -32,6 +32,11 @@ export interface PosRuntimeValue {
   setClosingNote: Dispatch<SetStateAction<string>>;
   closeBusy: boolean;
   closeError: string;
+  lastClosedSession: {
+    session: CashSession;
+    varianceMinor: number;
+    variance: number;
+  } | null;
   handleCloseDay: FormEventHandler<HTMLFormElement>;
 }
 

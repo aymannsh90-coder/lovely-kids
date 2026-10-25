@@ -268,6 +268,111 @@ export async function supplierPayableBalances(
   return result;
 }
 
+async function legacySupplierAccountIds(
+  db: any,
+  supplierId: number,
+) {
+  const rows =
+    await db
+      .select({
+        id:
+          financeAccountsTable.id,
+      })
+      .from(financeAccountsTable)
+      .where(
+        and(
+          eq(
+            financeAccountsTable
+              .linkedEntityType,
+            "supplier",
+          ),
+          eq(
+            financeAccountsTable
+              .linkedEntityId,
+            supplierId,
+          ),
+        ),
+      );
+
+  return rows.map(
+    (row: { id: number }) =>
+      row.id,
+  );
+}
+
+export async function supplierPayableLedgerLines(
+  db: any,
+  rawSupplierId: number,
+) {
+  const supplierId =
+    positiveSupplierId(
+      rawSupplierId,
+    );
+
+  const legacyIds =
+    await legacySupplierAccountIds(
+      db,
+      supplierId,
+    );
+
+  const legacyLines =
+    legacyIds.length > 0
+      ? await db
+          .select()
+          .from(
+            financeTransactionLinesTable,
+          )
+          .where(
+            inArray(
+              financeTransactionLinesTable
+                .accountId,
+              legacyIds,
+            ),
+          )
+      : [];
+
+  const controlAccount =
+    await findSupplierPayableControlAccount(
+      db,
+    );
+
+  const controlLines =
+    controlAccount
+      ? await db
+          .select()
+          .from(
+            financeTransactionLinesTable,
+          )
+          .where(
+            and(
+              eq(
+                financeTransactionLinesTable
+                  .accountId,
+                controlAccount.id,
+              ),
+              eq(
+                financeTransactionLinesTable
+                  .supplierId,
+                supplierId,
+              ),
+            ),
+          )
+      : [];
+
+  return [
+    ...legacyLines,
+    ...controlLines,
+  ].sort(
+    (
+      left:
+        typeof financeTransactionLinesTable.$inferSelect,
+      right:
+        typeof financeTransactionLinesTable.$inferSelect,
+    ) =>
+      left.id - right.id,
+  );
+}
+
 export async function supplierPayableBalanceMinor(
   db: any,
   rawSupplierId: number,
