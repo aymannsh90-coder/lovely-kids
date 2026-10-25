@@ -482,7 +482,24 @@ export default function CustomerStatementReportPage() {
 
         .customer-statement-table {
           width: 100%;
+          table-layout: fixed;
           border-collapse: collapse;
+        }
+
+        .customer-statement-table thead {
+          display: table-header-group;
+        }
+
+        .customer-statement-table th,
+        .customer-statement-table td {
+          overflow-wrap: anywhere;
+          vertical-align: middle;
+        }
+
+        .customer-statement-issued-at {
+          margin-top: 5px;
+          color: #667085;
+          font-size: 11px;
         }
 
         .customer-statement-page {
@@ -678,8 +695,20 @@ export default function CustomerStatementReportPage() {
 
         @media print {
           @page {
-            size: A4;
-            margin: 12mm;
+            size: A4 landscape;
+            margin: 9mm 10mm;
+          }
+
+          html,
+          body {
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
 
           body * {
@@ -695,9 +724,73 @@ export default function CustomerStatementReportPage() {
             position: absolute;
             top: 0;
             right: 0;
+            left: 0;
             width: 100%;
+            max-width: none;
             padding: 0;
+            margin: 0 auto;
+            box-sizing: border-box;
+            background: #fff;
+            color: #111827;
+            font-size: 10.5px;
+          }
+
+          #customer-statement-print h1 {
+            margin: 0 0 2mm;
+            font-size: 20px;
+          }
+
+          #customer-statement-print h2 {
             margin: 0;
+            font-size: 16px;
+          }
+
+          .customer-statement-issued-at {
+            margin-top: 2mm;
+            font-size: 9px;
+          }
+
+          .customer-statement-balance-strip {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 3mm;
+            margin-bottom: 4mm;
+          }
+
+          .customer-statement-balance-strip > div {
+            min-height: 0;
+            padding: 3mm;
+            border-radius: 0;
+          }
+
+          .customer-statement-table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+          }
+
+          .customer-statement-table thead {
+            display: table-header-group;
+          }
+
+          .customer-statement-table th,
+          .customer-statement-table td {
+            padding: 2mm 1.5mm;
+            font-size: 9px;
+            line-height: 1.35;
+            text-align: center;
+          }
+
+          .customer-statement-table th {
+            background: #f3f4f6 !important;
+          }
+
+          .customer-statement-table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .customer-statement-clickable-row {
+            cursor: default;
           }
 
           .customer-statement-no-print {
@@ -850,6 +943,20 @@ export default function CustomerStatementReportPage() {
             >
               كشف حساب زبون
             </h2>
+
+            <div className="customer-statement-issued-at">
+              تاريخ إصدار الكشف:{" "}
+              {new Date().toLocaleString(
+                "ar-PS",
+                {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                },
+              )}
+            </div>
           </div>
 
           <div
@@ -966,6 +1073,16 @@ export default function CustomerStatementReportPage() {
             </div>
           ) : (
             <table className="customer-statement-table">
+              <colgroup>
+                <col style={{ width: "5%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "14%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>#</th>
