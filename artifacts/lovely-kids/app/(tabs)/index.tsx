@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Image,
@@ -331,7 +332,11 @@ export default function HomeScreen() {
         : "#374151"
       : colors.mutedForeground;
   const insets = useSafeAreaInsets();
-  const { products } = useVisibleProducts();
+  const {
+    products,
+    loading: productsLoading,
+    refreshProducts,
+  } = useVisibleProducts();
   const { settings, settingsReady } = useAppSettings();
   const { user, getAuthToken } = useAuth();
   const { count: wishlistCount } = useWishlist();
@@ -1072,6 +1077,7 @@ export default function HomeScreen() {
           ]}
         >
           <NotificationSubscribeCard
+            compact
             hideWhenEnabled
           />
         </View>
@@ -1429,21 +1435,75 @@ export default function HomeScreen() {
         () => router.push("/products"),
       )}
 
-      <View
-        style={[
-          styles.productsGrid,
-          responsiveShellStyle,
-        ]}
-      >
-        {filteredProducts.map((product, idx) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            style={{ width: homeProductCardWidth }}
-            imageHeight={homeProductImageHeight}
+      {productsLoading && filteredProducts.length === 0 ? (
+        <View
+          style={[
+            styles.productsLoadState,
+            responsiveShellStyle,
+          ]}
+        >
+          <ActivityIndicator
+            size="small"
+            color={colors.primary}
           />
-        ))}
-      </View>
+          <Text
+            style={[
+              styles.productsLoadText,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            جاري تحميل المنتجات...
+          </Text>
+        </View>
+      ) : filteredProducts.length === 0 ? (
+        <View
+          style={[
+            styles.productsLoadState,
+            responsiveShellStyle,
+          ]}
+        >
+          <Ionicons
+            name="refresh-outline"
+            size={22}
+            color={colors.primary}
+          />
+          <Text
+            style={[
+              styles.productsLoadText,
+              { color: colors.mutedForeground },
+            ]}
+          >
+            تعذر تحميل المنتجات الآن
+          </Text>
+          <Pressable
+            onPress={() => void refreshProducts()}
+            style={[
+              styles.productsRetryButton,
+              { backgroundColor: colors.primary },
+            ]}
+          >
+            <Text style={styles.productsRetryText}>
+              إعادة المحاولة
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.productsGrid,
+            responsiveShellStyle,
+          ]}
+        >
+          {filteredProducts.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              style={{ width: homeProductCardWidth }}
+              imageHeight={homeProductImageHeight}
+            />
+          ))}
+        </View>
+      )}
 
       {Platform.OS === "web" && (
         <Pressable
@@ -1818,6 +1878,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
     marginBottom: 20,
+  },
+  productsLoadState: {
+    minHeight: 110,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+  },
+  productsLoadText: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  productsRetryButton: {
+    marginTop: 2,
+    minHeight: 38,
+    borderRadius: 11,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  productsRetryText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "800",
   },
   newArrivalsScrollWrapper: {
     position: "relative",

@@ -298,6 +298,23 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
       if (!cancelled) {
         await refreshProducts();
+
+        // A private/incognito window starts without the local product cache.
+        // If the first public network request fails transiently, retry once
+        // so a new visitor is not left with an empty storefront.
+        if (
+          !user?.isAdmin &&
+          !cancelled &&
+          lastSuccessfulFetchAtRef.current === 0
+        ) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1200),
+          );
+
+          if (!cancelled) {
+            await refreshProducts();
+          }
+        }
       }
     })();
 

@@ -64,6 +64,91 @@ export function NotificationSubscribeCard({
     );
   };
 
+  if (compact) {
+    return (
+      <View
+        style={[
+          styles.compactBar,
+          {
+            backgroundColor: enabled
+              ? "#F0FDF4"
+              : colors.card,
+            borderColor: enabled
+              ? "#86EFAC"
+              : colors.primary + "35",
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.compactIcon,
+            {
+              backgroundColor: enabled
+                ? "#DCFCE7"
+                : colors.primary + "12",
+            },
+          ]}
+        >
+          <Ionicons
+            name={
+              enabled
+                ? "notifications-circle"
+                : "notifications-outline"
+            }
+            size={20}
+            color={
+              enabled
+                ? "#16A34A"
+                : colors.primary
+            }
+          />
+        </View>
+
+        <Text
+          style={[
+            styles.compactText,
+            { color: colors.foreground },
+          ]}
+          numberOfLines={1}
+        >
+          {enabled
+            ? "الإشعارات مفعّلة ✅"
+            : "العروض والجديد أول بأول"}
+        </Text>
+
+        {!enabled ? (
+          <Pressable
+            onPress={() => void enable()}
+            disabled={enabling}
+            style={[
+              styles.compactAction,
+              {
+                backgroundColor: colors.primary,
+                opacity: enabling ? 0.65 : 1,
+              },
+            ]}
+          >
+            {enabling ? (
+              <ActivityIndicator
+                size="small"
+                color="#fff"
+              />
+            ) : (
+              <Ionicons
+                name="notifications"
+                size={15}
+                color="#fff"
+              />
+            )}
+            <Text style={styles.compactActionText}>
+              {enabling ? "..." : "تفعيل"}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -265,6 +350,50 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 14,
     gap: 10,
+  },
+  compactBar: {
+    width: "100%",
+    minHeight: 52,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  compactIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  compactText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  compactAction: {
+    minHeight: 34,
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  compactActionText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
   },
   topRow: {
     flexDirection:
