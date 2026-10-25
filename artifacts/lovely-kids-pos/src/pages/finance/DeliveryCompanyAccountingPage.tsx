@@ -185,44 +185,76 @@ function buildDeliveryCompanyStatementDocument(
     summary.company.name,
   )}</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: Arial, Tahoma, sans-serif;
       direction: rtl;
       color: #111827;
-      margin: 24px;
-      font-size: 12px;
+      font-size: 11px;
+      background: #ffffff;
+    }
+
+    .report-shell {
+      width: 100%;
+      max-width: 277mm;
+      margin: 0 auto;
+    }
+
+    .report-header {
+      width: 100%;
+      margin: 0 auto 12px;
+      text-align: center;
     }
 
     h1 {
-      margin: 0 0 4px;
-      font-size: 22px;
+      margin: 2px 0 4px;
+      font-size: 21px;
+      line-height: 1.25;
+      text-align: center;
     }
 
     h2 {
-      margin: 24px 0 8px;
-      font-size: 16px;
+      margin: 16px 0 7px;
+      font-size: 15px;
+      line-height: 1.35;
+      text-align: center;
     }
 
     .brand {
       color: #E91E8C;
       font-weight: 700;
-      font-size: 18px;
+      font-size: 17px;
+      text-align: center;
     }
 
     .meta {
-      margin: 3px 0;
+      margin: 2px 0;
       color: #4b5563;
+      text-align: center;
     }
 
     .summary {
       width: 100%;
+      table-layout: fixed;
       border-collapse: collapse;
-      margin-top: 16px;
+      margin: 12px auto 0;
     }
 
     .summary td {
       border: 1px solid #d1d5db;
-      padding: 8px;
+      padding: 7px 8px;
+      text-align: center;
+      vertical-align: middle;
     }
 
     .summary .label {
@@ -232,21 +264,37 @@ function buildDeliveryCompanyStatementDocument(
 
     table.data {
       width: 100%;
+      table-layout: fixed;
       border-collapse: collapse;
-      margin-top: 8px;
+      margin: 7px auto 0;
     }
 
     table.data th,
     table.data td {
       border: 1px solid #9ca3af;
-      padding: 6px;
+      padding: 5px 4px;
       text-align: center;
       vertical-align: middle;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }
 
     table.data th {
       background: #f3f4f6;
       font-weight: 700;
+      font-size: 10px;
+    }
+
+    table.data td {
+      font-size: 10.5px;
+    }
+
+    table.data thead {
+      display: table-header-group;
+    }
+
+    table.data tbody {
+      display: table-row-group;
     }
 
     .money {
@@ -264,39 +312,72 @@ function buildDeliveryCompanyStatementDocument(
     }
 
     .footer {
-      margin-top: 24px;
+      margin-top: 18px;
       color: #6b7280;
-      font-size: 10px;
+      font-size: 9.5px;
+      text-align: center;
     }
 
     @page {
       size: A4 landscape;
-      margin: 10mm;
+      margin: 8mm 9mm;
     }
 
     @media print {
+      html,
       body {
-        margin: 0;
+        width: 100%;
+        margin: 0 !important;
+        padding: 0 !important;
       }
 
-      h2,
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .report-shell {
+        width: 100%;
+        max-width: none;
+        margin: 0 auto;
+      }
+
+      table.data thead {
+        display: table-header-group;
+      }
+
+      h2 {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+
       tr {
         break-inside: avoid;
+        page-break-inside: avoid;
       }
     }
   </style>
 </head>
 <body>
-  <div class="brand">Lovely Kids</div>
-  <h1>كشف حساب شركة التوصيل</h1>
-  <div class="meta">
-    الشركة: <strong>${escapeHtml(summary.company.name)}</strong>
-  </div>
-  <div class="meta">
-    تاريخ إصدار الكشف: ${escapeHtml(generatedAt)}
-  </div>
+  <main class="report-shell">
+    <header class="report-header">
+      <div class="brand">Lovely Kids</div>
+      <h1>كشف حساب شركة التوصيل</h1>
+      <div class="meta">
+        الشركة: <strong>${escapeHtml(summary.company.name)}</strong>
+      </div>
+      <div class="meta">
+        تاريخ إصدار الكشف: ${escapeHtml(generatedAt)}
+      </div>
+    </header>
 
   <table class="summary">
+    <colgroup>
+      <col style="width: 29%" />
+      <col style="width: 21%" />
+      <col style="width: 29%" />
+      <col style="width: 21%" />
+    </colgroup>
     <tbody>
       <tr>
         <td class="label">المبلغ غير المسوّى</td>
@@ -329,7 +410,18 @@ function buildDeliveryCompanyStatementDocument(
 
   <h2>الطلبات غير المسوّاة</h2>
 
-  <table class="data">
+  <table class="data order-data">
+    <colgroup>
+      <col style="width: 6.5%" />
+      <col style="width: 9%" />
+      <col style="width: 17%" />
+      <col style="width: 11%" />
+      <col style="width: 11%" />
+      <col style="width: 11%" />
+      <col style="width: 11%" />
+      <col style="width: 12%" />
+      <col style="width: 11.5%" />
+    </colgroup>
     <thead>
       <tr>
         <th>رقم الطلب</th>
@@ -374,7 +466,16 @@ function buildDeliveryCompanyStatementDocument(
 
   <h2>سجل التسويات</h2>
 
-  <table class="data">
+  <table class="data settlement-data">
+    <colgroup>
+      <col style="width: 12%" />
+      <col style="width: 12%" />
+      <col style="width: 10%" />
+      <col style="width: 10%" />
+      <col style="width: 12%" />
+      <col style="width: 32%" />
+      <col style="width: 12%" />
+    </colgroup>
     <thead>
       <tr>
         <th>رقم التسوية</th>
@@ -394,6 +495,7 @@ function buildDeliveryCompanyStatementDocument(
   <div class="footer">
     كشف صادر من نظام Lovely Kids — للمطابقة والمراجعة.
   </div>
+  </main>
 </body>
 </html>`;
 }
