@@ -26,6 +26,7 @@ import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import MobileSalePage from "../pages/sales/MobileSalePage";
+import ManualOnlineOrderPage from "../pages/sales/ManualOnlineOrderPage";
 import MobileReturnsPage from "../pages/sales/MobileReturnsPage";
 import MobilePriceCheckPage from "../pages/sales/MobilePriceCheckPage";
 import MobileAssistantPage from "../pages/sales/MobileAssistantPage";
@@ -49,6 +50,11 @@ import FinancialStatementsReportPage from "../pages/reports/FinancialStatementsR
 export default function AppRouter() {
   return (
     <Routes>
+      <Route
+        path="sales/manual-order"
+        element={<ManualOnlineOrderPage />}
+      />
+
       <Route
         path="sales/mobile"
         element={
