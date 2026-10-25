@@ -34,6 +34,19 @@ interface ManualOrderLine {
   quantity: number;
 }
 
+interface BarcodeDetectorResult {
+  rawValue?: string;
+}
+
+interface BarcodeDetectorInstance {
+  detect(
+    source: HTMLVideoElement,
+  ): Promise<BarcodeDetectorResult[]>;
+}
+
+type BarcodeDetectorConstructor =
+  new () => BarcodeDetectorInstance;
+
 const FALLBACK_SHIPPING_ZONES: ManualOrderShippingZone[] = [
   {
     label: "الضفة الغربية",
@@ -405,6 +418,39 @@ export default function ManualOnlineOrderPage({
     useRef("");
 
   const [
+    cameraOpen,
+    setCameraOpen,
+  ] = useState(false);
+
+  const [
+    cameraError,
+    setCameraError,
+  ] = useState("");
+
+  const [
+    scanFeedback,
+    setScanFeedback,
+  ] = useState("");
+
+  const videoRef =
+    useRef<HTMLVideoElement>(null);
+
+  const streamRef =
+    useRef<MediaStream | null>(null);
+
+  const scanBusyRef =
+    useRef(false);
+
+  const lastScannedRef =
+    useRef<{
+      value: string;
+      at: number;
+    } | null>(null);
+
+  const scanFeedbackTimerRef =
+    useRef<number | null>(null);
+
+  const [
     searchResults,
     setSearchResults,
   ] =
@@ -481,13 +527,282 @@ export default function ManualOnlineOrderPage({
         );
       });
 
-    window.setTimeout(
-      () =>
-        barcodeInputRef.current
-          ?.focus(),
-      100,
-    );
+    if (isDesktop) {
+      window.setTimeout(
+        () =>
+          barcodeInputRef.current
+            ?.focus(),
+        100,
+      );
+    }
   }, []);
+
+  function showScanFeedback(
+    productName: string,
+  ) {
+    setScanFeedback(
+      `تمت إضافة ${productName}`,
+    );
+
+    if (
+      scanFeedbackTimerRef.current !==
+      null
+    ) {
+      window.clearTimeout(
+        scanFeedbackTimerRef.current,
+      );
+    }
+
+    scanFeedbackTimerRef.current =
+      window.setTimeout(() => {
+        setScanFeedback("");
+        scanFeedbackTimerRef.current =
+          null;
+      }, 1100);
+  }
+
+  function stopCamera() {
+    streamRef.current
+      ?.getTracks()
+      .forEach(
+        (track) =>
+          track.stop(),
+      );
+
+    streamRef.current = null;
+
+    if (videoRef.current) {
+      videoRef.current.srcObject =
+        null;
+    }
+
+    setCameraOpen(false);
+  }
+
+  useEffect(() => {
+    if (
+      isDesktop ||
+      !cameraOpen
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let intervalId:
+      | number
+      | null = null;
+
+    async function startCamera() {
+      setCameraError("");
+
+      const Detector = (
+        window as unknown as {
+          BarcodeDetector?:
+            BarcodeDetectorConstructor;
+        }
+      ).BarcodeDetector;
+
+      if (!Detector) {
+        setCameraError(
+          "هذا المتصفح لا يدعم قراءة الباركود بالكاميرا مباشرة. استخدم البحث اليدوي.",
+        );
+        setCameraOpen(false);
+        return;
+      }
+
+      if (
+        !navigator.mediaDevices
+          ?.getUserMedia
+      ) {
+        setCameraError(
+          "تعذر الوصول إلى كاميرا الهاتف من هذا المتصفح.",
+        );
+        setCameraOpen(false);
+        return;
+      }
+
+      try {
+        const stream =
+          await navigator.mediaDevices
+            .getUserMedia({
+              audio: false,
+              video: {
+                facingMode: {
+                  ideal:
+                    "environment",
+                },
+                width: {
+                  ideal: 1280,
+                },
+                height: {
+                  ideal: 720,
+                },
+              },
+            });
+
+        if (cancelled) {
+          stream
+            .getTracks()
+            .forEach(
+              (track) =>
+                track.stop(),
+            );
+          return;
+        }
+
+        streamRef.current =
+          stream;
+
+        const video =
+          videoRef.current;
+
+        if (!video) {
+          throw new Error(
+            "تعذر تجهيز شاشة الكاميرا.",
+          );
+        }
+
+        video.srcObject =
+          stream;
+
+        await video.play();
+
+        const detector =
+          new Detector();
+
+        intervalId =
+          window.setInterval(
+            async () => {
+              if (
+                cancelled ||
+                scanBusyRef.current ||
+                !videoRef.current ||
+                videoRef.current
+                  .readyState < 2
+              ) {
+                return;
+              }
+
+              try {
+                scanBusyRef.current =
+                  true;
+
+                const results =
+                  await detector.detect(
+                    videoRef.current,
+                  );
+
+                const value =
+                  results[0]
+                    ?.rawValue
+                    ?.trim();
+
+                if (!value) {
+                  return;
+                }
+
+                const now =
+                  Date.now();
+
+                const previous =
+                  lastScannedRef.current;
+
+                if (
+                  previous &&
+                  previous.value ===
+                    value &&
+                  now -
+                    previous.at <
+                    3000
+                ) {
+                  return;
+                }
+
+                lastScannedRef.current =
+                  {
+                    value,
+                    at: now,
+                  };
+
+                await lookupAndAdd(
+                  value,
+                );
+
+                lastScannedRef.current =
+                  {
+                    value,
+                    at:
+                      Date.now(),
+                  };
+              } catch {
+                // تجاهل خطأ قراءة إطار واحد واستمر بالمسح.
+              } finally {
+                scanBusyRef.current =
+                  false;
+              }
+            },
+            300,
+          );
+      } catch (caught) {
+        setCameraError(
+          caught instanceof Error
+            ? caught.message
+            : "تعذر تشغيل الكاميرا.",
+        );
+        setCameraOpen(false);
+      }
+    }
+
+    void startCamera();
+
+    return () => {
+      cancelled = true;
+
+      if (
+        intervalId !== null
+      ) {
+        window.clearInterval(
+          intervalId,
+        );
+      }
+
+      streamRef.current
+        ?.getTracks()
+        .forEach(
+          (track) =>
+            track.stop(),
+        );
+
+      streamRef.current =
+        null;
+    };
+    // Camera lifecycle is controlled by cameraOpen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    cameraOpen,
+    isDesktop,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (
+        scanFeedbackTimerRef.current !==
+        null
+      ) {
+        window.clearTimeout(
+          scanFeedbackTimerRef.current,
+        );
+      }
+
+      streamRef.current
+        ?.getTracks()
+        .forEach(
+          (track) =>
+            track.stop(),
+        );
+    },
+    [],
+  );
 
   const shippingZones =
     useMemo(() => {
@@ -561,6 +876,10 @@ export default function ManualOnlineOrderPage({
     previewShippingCost;
 
   function refocusBarcode() {
+    if (!isDesktop) {
+      return;
+    }
+
     window.setTimeout(
       () => {
         barcodeInputRef.current
@@ -700,6 +1019,15 @@ export default function ManualOnlineOrderPage({
     setMessage(
       `تمت إضافة ${product.nameAr}`,
     );
+
+    if (
+      !isDesktop &&
+      cameraOpen
+    ) {
+      showScanFeedback(
+        product.nameAr,
+      );
+    }
 
     setError("");
     setSearchResults([]);
