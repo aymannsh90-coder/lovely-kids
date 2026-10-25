@@ -176,6 +176,103 @@ export async function enablePushNotifications(
   }
 }
 
+
+export async function subscribeToStockAlert(
+  productId: number,
+  color?: string | null,
+  size?: string | null,
+  phone?: string | null,
+  getAuthToken?: (() => Promise<string | null>) | null,
+): Promise<{
+  ok: boolean;
+  alreadyAvailable?: boolean;
+  error?: string;
+}> {
+  try {
+    const token =
+      await registerForPushNotificationsAsync();
+
+    if (!token) {
+      return {
+        ok: false,
+        error:
+          "لم يتم السماح بالإشعارات. يمكنك تفعيلها من إعدادات الجهاز.",
+      };
+    }
+
+    const saved =
+      await saveTokenToServer(
+        token,
+        phone,
+        getAuthToken,
+      );
+
+    if (!saved.ok) {
+      return saved;
+    }
+
+    const authToken =
+      getAuthToken
+        ? await getAuthToken()
+        : null;
+
+    const response = await fetch(
+      `${API_BASE}/api/stock-notifications`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+          ...(authToken
+            ? {
+                Authorization:
+                  `Bearer ${authToken}`,
+              }
+            : {}),
+        },
+        body: JSON.stringify({
+          productId,
+          color: color || undefined,
+          size: size || undefined,
+          channel: "expo",
+          target: token,
+        }),
+      },
+    );
+
+    const data =
+      await response
+        .json()
+        .catch(() => null) as {
+          alreadyAvailable?: boolean;
+          error?: string;
+        } | null;
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error:
+          data?.error ||
+          `HTTP ${response.status}`,
+      };
+    }
+
+    return {
+      ok: true,
+      alreadyAvailable:
+        !!data?.alreadyAvailable,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "تعذر تفعيل تنبيه التوفر",
+    };
+  }
+}
+
 export function usePushNotifications(
   phone?: string | null,
   getAuthToken?: (() => Promise<string | null>) | null
