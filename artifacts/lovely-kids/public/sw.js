@@ -32,11 +32,13 @@ self.addEventListener("notificationclick", (event) => {
     }).then((clients) => {
       for (const client of clients) {
         if ("focus" in client) {
-          client.postMessage({
-            type: "LOVELY_KIDS_NOTIFICATION_NAVIGATE",
-            url,
-          });
-          return client.focus();
+          const navigation =
+            "navigate" in client
+              ? client.navigate(url)
+              : Promise.resolve(client);
+
+          return Promise.resolve(navigation)
+            .then(() => client.focus());
         }
       }
 
