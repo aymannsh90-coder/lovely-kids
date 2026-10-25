@@ -989,6 +989,174 @@ export async function sendBackInStockNotifications(
 }
 
 
+export async function processAvailableStockNotifications(
+  db: Db,
+  env: Env,
+) {
+  const subscriptions = await db
+    .select({
+      productId:
+        stockNotificationSubscriptionsTable.productId,
+      color:
+        stockNotificationSubscriptionsTable.color,
+      size:
+        stockNotificationSubscriptionsTable.size,
+    })
+    .from(
+      stockNotificationSubscriptionsTable,
+    );
+
+  if (subscriptions.length === 0) {
+    return {
+      checked: 0,
+      available: 0,
+    };
+  }
+
+  const productIds = [
+    ...new Set(
+      subscriptions.map(
+        (row) => row.productId,
+      ),
+    ),
+  ];
+
+  const products = await db
+    .select({
+      id: productsTable.id,
+      nameAr: productsTable.nameAr,
+      stock: productsTable.stock,
+      colorVariants:
+        productsTable.colorVariants,
+    })
+    .from(productsTable)
+    .where(
+      inArray(
+        productsTable.id,
+        productIds,
+      ),
+    );
+
+  const productById =
+    new Map(
+      products.map((product) => [
+        product.id,
+        product,
+      ]),
+    );
+
+  const availableKeys =
+    new Map<
+      string,
+      {
+        productId: number;
+        productName: string;
+        color: string | null;
+        size: string | null;
+      }
+    >();
+
+  for (const subscription of subscriptions) {
+    const product =
+      productById.get(
+        subscription.productId,
+      );
+
+    if (!product) continue;
+
+    const variants =
+      (product.colorVariants as Array<{
+        color: string;
+        sizes?: Array<{
+          size: string;
+          stock?: number | null;
+          outOfStock?: boolean;
+        }>;
+      }> | null) ?? [];
+
+    let available = false;
+
+    if (
+      subscription.color &&
+      subscription.size
+    ) {
+      const entry =
+        variants
+          .find(
+            (variant) =>
+              variant.color ===
+              subscription.color,
+          )
+          ?.sizes?.find(
+            (sizeEntry) =>
+              sizeEntry.size ===
+              subscription.size,
+          );
+
+      available =
+        (entry?.stock ?? 0) > 0 &&
+        entry?.outOfStock !== true;
+    } else if (variants.length > 0) {
+      available =
+        variants.some((variant) =>
+          (variant.sizes ?? []).some(
+            (entry) =>
+              (entry.stock ?? 0) > 0 &&
+              entry.outOfStock !== true,
+          ),
+        );
+    } else {
+      available =
+        (product.stock ?? 0) > 0;
+    }
+
+    if (!available) continue;
+
+    const key =
+      JSON.stringify([
+        subscription.productId,
+        subscription.color,
+        subscription.size,
+      ]);
+
+    availableKeys.set(key, {
+      productId:
+        subscription.productId,
+      productName:
+        product.nameAr,
+      color:
+        subscription.color,
+      size:
+        subscription.size,
+    });
+  }
+
+  let delivered = 0;
+
+  for (
+    const item of availableKeys.values()
+  ) {
+    const result =
+      await sendBackInStockNotifications(
+        db,
+        env,
+        item,
+      );
+
+    delivered +=
+      result.sent;
+  }
+
+  return {
+    checked:
+      subscriptions.length,
+    available:
+      availableKeys.size,
+    delivered,
+  };
+}
+
+
 export async function sendOrderStatusNotification(
   db: Db,
   env: Env,
