@@ -6,7 +6,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -21,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CartBadge } from "@/components/CartBadge";
+import { NotificationSubscribeCard } from "@/components/NotificationSubscribeCard";
 import {
   CategoryMenu,
   DesktopCategorySidebar,
@@ -356,7 +356,6 @@ export default function HomeScreen() {
     enabled: pushEnabled,
     ready: pushReady,
     canPromptOnVisit,
-    enableNow: enablePushNow,
     requestGeneralPrompt,
   } = useNotificationOptIn();
 
@@ -460,38 +459,6 @@ export default function HomeScreen() {
     window.addEventListener("appinstalled", onInstalled);
     return () => { window.removeEventListener("beforeinstallprompt", onPrompt); window.removeEventListener("appinstalled", onInstalled); };
   }, []);
-
-  const handleEnablePush = async () => {
-    const result = await enablePushNow();
-
-    if (result.ok) {
-      if (Platform.OS === "web") {
-        window.alert(
-          "تم تفعيل الإشعارات بنجاح ✅",
-        );
-      } else {
-        Alert.alert(
-          "تم التفعيل ✅",
-          "سنخبرك بالجديد والعروض وتحديثات طلباتك.",
-        );
-      }
-
-      return;
-    }
-
-    const message =
-      result.error ??
-      "تعذر تفعيل الإشعارات";
-
-    if (Platform.OS === "web") {
-      window.alert(message);
-    } else {
-      Alert.alert(
-        "تعذر تفعيل الإشعارات",
-        message,
-      );
-    }
-  };
 
   const handleInstall = async () => {
     if (installPrompt) {
@@ -1098,19 +1065,16 @@ export default function HomeScreen() {
       ) : null}
 
       {pushReady && !pushEnabled ? (
-        <Pressable
-          onPress={() => void handleEnablePush()}
+        <View
           style={[
-            styles.installBtn,
-            { backgroundColor: colors.primary },
+            styles.notificationOptInWrap,
             desktopBannerStyle,
           ]}
         >
-          <Ionicons name="notifications-outline" size={20} color="#fff" />
-          <Text style={styles.installBtnText}>
-            فعّل الإشعارات وخليك أول من يعرف
-          </Text>
-        </Pressable>
+          <NotificationSubscribeCard
+            hideWhenEnabled
+          />
+        </View>
       ) : null}
 
       {/* Trust Badges */}
@@ -1777,6 +1741,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+  notificationOptInWrap: {
+    marginHorizontal: 16,
+    marginTop: 12,
   },
   installBtnText: {
     color: "#fff",
