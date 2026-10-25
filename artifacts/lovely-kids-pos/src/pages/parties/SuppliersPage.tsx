@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import {
   useEffect,
   useMemo,
@@ -536,13 +537,16 @@ export default function SuppliersPage() {
                 )}
                 <th>الحالة</th>
                 <th>العنوان</th>
+                {user?.isOwner && (
+                  <th>كشف الحساب</th>
+                )}
               </tr>
             </thead>
 
             <tbody>
               {suppliers.length === 0 ? (
                 <tr className="accounting-empty-row">
-                  <td colSpan={user?.isOwner ? 10 : 7}>
+                  <td colSpan={user?.isOwner ? 11 : 7}>
                     {SUPPLIER_API_ENABLED
                       ? loading
                         ? "جاري تحميل الموردين…"
@@ -621,6 +625,19 @@ export default function SuppliersPage() {
                     </td>
 
                     <td>{supplier.address ?? "—"}</td>
+
+                    {user?.isOwner && (
+                      <td>
+                        <Link
+                          className="secondary-button"
+                          to={
+                            `/reports/supplier-statement?supplierId=${supplier.id}`
+                          }
+                        >
+                          كشف الحساب
+                        </Link>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
