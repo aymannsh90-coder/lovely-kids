@@ -1,0 +1,35 @@
+name: Notification improvements check
+
+on:
+  push:
+    branches:
+      - feature/notification-improvements-20261025
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.26.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: API worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+
+      - name: Storefront typecheck
+        run: pnpm --filter @workspace/lovely-kids typecheck
+
+      - name: Storefront build
+        run: pnpm --filter @workspace/lovely-kids build
