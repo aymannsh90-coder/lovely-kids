@@ -27,6 +27,7 @@ import { handleImageRequest } from "./image-routes";
 import { handleHeroMediaRequest } from "./hero-media-routes";
 import {
   handleNotificationRequest,
+  processAvailableStockNotifications,
   processExpoPushReceipts,
 } from "./notification-routes";
 import { handlePasswordResetRequest } from "./password-reset-routes";
@@ -811,6 +812,24 @@ export default {
           } catch (error) {
             console.error(
               "EXPO_PUSH_RECEIPTS_FAILED",
+              error,
+            );
+          }
+
+          try {
+            const stockAlerts =
+              await processAvailableStockNotifications(
+                db,
+                env,
+              );
+
+            console.log(
+              "STOCK_ALERT_RECONCILIATION_COMPLETE",
+              stockAlerts,
+            );
+          } catch (error) {
+            console.error(
+              "STOCK_ALERT_RECONCILIATION_FAILED",
               error,
             );
           }
