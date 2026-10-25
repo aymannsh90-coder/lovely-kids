@@ -440,6 +440,17 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "supplier-statement",
+    group: "reports",
+    path: "/reports/supplier-statement",
+    title: "كشف حساب مورد",
+    description: "كشف كامل لحركات المورد والدفعات والرصيد مع طباعة A4.",
+    icon: "🚚",
+    requiresOpenSession: false,
+    ownerOnly: true,
+    status: "ready",
+  },
+  {
     key: "reports",
     group: "reports",
     path: "/reports",
