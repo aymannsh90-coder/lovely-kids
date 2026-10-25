@@ -44,6 +44,9 @@ jobs:
       - name: Typecheck storefront
         run: pnpm --filter @workspace/lovely-kids typecheck
 
+      - name: Build web storefront
+        run: pnpm --filter @workspace/lovely-kids build
+
       - name: Export Android bundle
         working-directory: artifacts/lovely-kids
         env:
