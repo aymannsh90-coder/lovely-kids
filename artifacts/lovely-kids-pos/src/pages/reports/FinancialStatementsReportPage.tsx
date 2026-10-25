@@ -772,12 +772,237 @@ export default function FinancialStatementsReportPage() {
       .costCoverageComplete ??
     false;
 
+  const generatedAt =
+    new Date().toLocaleString(
+      "ar-PS",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
+
   return (
     <section
       className="financial-statements-page"
       dir="rtl"
     >
-      <header className="financial-statements-heading">
+      <style>{`
+        .financial-print-only {
+          display: none;
+        }
+
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
+
+          html,
+          body {
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          body * {
+            visibility: hidden !important;
+          }
+
+          #financial-statements-print,
+          #financial-statements-print * {
+            visibility: visible !important;
+          }
+
+          #financial-statements-print {
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            width: 100%;
+            max-width: none;
+            margin: 0 auto;
+            padding: 0;
+            background: #fff;
+            color: #111827;
+            font-size: 10px;
+          }
+
+          .financial-print-only {
+            display: block !important;
+          }
+
+          .financial-statements-no-print {
+            display: none !important;
+          }
+
+          .financial-print-header {
+            margin-bottom: 6mm;
+            text-align: center;
+          }
+
+          .financial-print-brand {
+            color: #E91E8C;
+            font-size: 17px;
+            font-weight: 900;
+          }
+
+          .financial-print-header h1 {
+            margin: 1.5mm 0;
+            font-size: 20px;
+          }
+
+          .financial-print-header p {
+            margin: 1mm 0;
+            color: #4b5563;
+            font-size: 9.5px;
+          }
+
+          .financial-statements-gate,
+          .financial-cost-coverage-card,
+          .financial-statement-card,
+          .financial-inventory-memo {
+            margin: 0 0 5mm;
+            border: 1px solid #cfd8df;
+            border-radius: 0;
+            box-shadow: none;
+            background: #fff;
+          }
+
+          .financial-statements-gate,
+          .financial-cost-coverage-card,
+          .financial-statement-card,
+          .financial-inventory-memo {
+            padding: 4mm;
+          }
+
+          .financial-statement-card > header,
+          .financial-inventory-memo > header,
+          .financial-cost-coverage-head {
+            margin-bottom: 3mm;
+          }
+
+          .financial-statement-card > header h2,
+          .financial-inventory-memo > header h2 {
+            font-size: 15px;
+          }
+
+          .financial-statement-card > header > strong,
+          .financial-inventory-memo > header > strong,
+          .financial-cost-coverage-head strong {
+            font-size: 14px;
+          }
+
+          .financial-statement-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 2.5mm !important;
+          }
+
+          .financial-statement-metric {
+            min-height: 0;
+            padding: 3mm;
+            border-radius: 0;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .financial-statement-metric > span {
+            font-size: 9px;
+          }
+
+          .financial-statement-metric > strong {
+            font-size: 12px;
+          }
+
+          .financial-statement-metric > small {
+            font-size: 8.5px;
+          }
+
+          .financial-statement-columns {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 3mm !important;
+            margin-top: 3mm;
+          }
+
+          .financial-statement-columns > article {
+            border-radius: 0;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .financial-statement-columns > article > header {
+            padding: 2.5mm 3mm;
+          }
+
+          .financial-statement-account-row {
+            padding: 2.2mm 3mm;
+          }
+
+          .financial-statement-account-row strong,
+          .financial-statement-account-row b {
+            font-size: 9.5px;
+          }
+
+          .financial-statement-account-row small {
+            font-size: 8px;
+          }
+
+          .financial-equation {
+            grid-template-columns: auto auto 18px minmax(0, 1fr) auto;
+            gap: 2mm;
+            margin-top: 3mm;
+            border-radius: 0;
+            padding: 3mm;
+            font-size: 9px;
+          }
+
+          .financial-equation i {
+            font-size: 16px;
+          }
+
+          .financial-disclosure,
+          .financial-history-warning {
+            margin-top: 3mm;
+            border-radius: 0;
+            padding: 3mm;
+            font-size: 8.5px;
+          }
+
+          .financial-cost-progress {
+            height: 2.5mm;
+            margin-top: 2.5mm;
+          }
+
+          .financial-cost-coverage-card p,
+          .financial-statements-gate p {
+            margin-top: 1.5mm;
+            font-size: 9px;
+          }
+
+          .financial-balance-sheet {
+            break-before: page;
+            page-break-before: always;
+          }
+
+          .financial-print-footer {
+            margin-top: 5mm;
+            padding-top: 3mm;
+            border-top: 1px solid #cfd8df;
+            color: #6b7280;
+            text-align: center;
+            font-size: 8.5px;
+          }
+        }
+      `}</style>
+
+      <header className="financial-statements-heading financial-statements-no-print">
         <div>
           <span>
             Stage 7 · القوائم المالية
@@ -794,7 +1019,7 @@ export default function FinancialStatementsReportPage() {
       </header>
 
       <form
-        className="financial-statements-filters"
+        className="financial-statements-filters financial-statements-no-print"
         onSubmit={submit}
       >
         <label>
@@ -840,10 +1065,26 @@ export default function FinancialStatementsReportPage() {
             ? "جاري الاحتساب..."
             : "تحديث القوائم"}
         </button>
+
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={
+            loading ||
+            !trialBalance ||
+            !grossProfit ||
+            !derived
+          }
+          onClick={() =>
+            window.print()
+          }
+        >
+          🖨️ طباعة A4
+        </button>
       </form>
 
       {error && (
-        <div className="alert error-alert">
+        <div className="alert error-alert financial-statements-no-print">
           {error}
         </div>
       )}
@@ -851,7 +1092,24 @@ export default function FinancialStatementsReportPage() {
       {trialBalance &&
         grossProfit &&
         derived && (
-          <>
+          <div
+            id="financial-statements-print"
+            className="financial-statements-print"
+          >
+            <header className="financial-print-only financial-print-header">
+              <div className="financial-print-brand">
+                Lovely Kids
+              </div>
+              <h1>
+                القوائم المالية
+              </h1>
+              <p>
+                الفترة: {from} — {to}
+              </p>
+              <p>
+                تاريخ إصدار التقرير: {generatedAt}
+              </p>
+            </header>
             <section
               className={
                 trialBalance
@@ -967,7 +1225,7 @@ export default function FinancialStatementsReportPage() {
               </p>
             </section>
 
-            <section className="financial-statement-card">
+            <section className="financial-statement-card financial-income-statement">
               <header>
                 <div>
                   <span>
@@ -1110,7 +1368,7 @@ export default function FinancialStatementsReportPage() {
               </div>
             </section>
 
-            <section className="financial-statement-card">
+            <section className="financial-statement-card financial-balance-sheet">
               <header>
                 <div>
                   <span>
@@ -1329,7 +1587,7 @@ export default function FinancialStatementsReportPage() {
               .missingCostProducts
               .length >
               0 && (
-              <section className="financial-missing-cost-card">
+              <section className="financial-missing-cost-card financial-statements-no-print">
                 <header>
                   <div>
                     <span>
@@ -1531,7 +1789,11 @@ export default function FinancialStatementsReportPage() {
                 </div>
               </section>
             )}
-          </>
+
+            <footer className="financial-print-only financial-print-footer">
+              تقرير صادر من نظام Lovely Kids — للمراجعة والمطابقة.
+            </footer>
+          </div>
         )}
     </section>
   );
