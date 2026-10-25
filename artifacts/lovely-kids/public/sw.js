@@ -24,6 +24,8 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   const url = event.notification.data?.url || "/";
+  const targetUrl =
+    new URL(url, self.location.origin).href;
 
   event.waitUntil(
     self.clients.matchAll({
@@ -34,7 +36,7 @@ self.addEventListener("notificationclick", (event) => {
         if ("focus" in client) {
           const navigation =
             "navigate" in client
-              ? client.navigate(url)
+              ? client.navigate(targetUrl)
               : Promise.resolve(client);
 
           return Promise.resolve(navigation)
@@ -42,7 +44,7 @@ self.addEventListener("notificationclick", (event) => {
         }
       }
 
-      return self.clients.openWindow(url);
+      return self.clients.openWindow(targetUrl);
     }),
   );
 });
