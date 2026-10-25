@@ -64,6 +64,15 @@ function foreignReceiptBaseMinor(
   );
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function errorText(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -446,6 +455,405 @@ export default function VoucherRegisterPage() {
     expenseCategoryById,
   ]);
 
+  function openPrintDocument(
+    html: string,
+    width = 1100,
+    height = 850,
+  ) {
+    const printWindow =
+      window.open(
+        "",
+        "_blank",
+        `width=${width},height=${height}`,
+      );
+
+    if (!printWindow) {
+      setError(
+        "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.",
+      );
+      return;
+    }
+
+    printWindow.opener = null;
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    const runPrint = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+
+    if (
+      printWindow.document.readyState ===
+      "complete"
+    ) {
+      window.setTimeout(
+        runPrint,
+        100,
+      );
+    } else {
+      printWindow.addEventListener(
+        "load",
+        () =>
+          window.setTimeout(
+            runPrint,
+            100,
+          ),
+        { once: true },
+      );
+    }
+  }
+
+  function printVoucher(
+    voucher: PosFinanceVoucher,
+  ) {
+    const party =
+      partyLabel(
+        voucher,
+      );
+
+    const generatedAt =
+      new Date().toLocaleString(
+        "ar-PS",
+        {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+      );
+
+    const foreignDetail =
+      voucher.currencyCode !==
+        "ILS" &&
+      voucher.transactionAmountMinor !==
+        null
+        ? `
+          <tr>
+            <th>المبلغ المستلم بالعملة</th>
+            <td>${escapeHtml(
+              formatCurrencyMinor(
+                voucher.transactionAmountMinor,
+                voucher.currencyCode,
+              ),
+            )}</td>
+          </tr>
+          <tr>
+            <th>سعر الصرف</th>
+            <td>${escapeHtml(
+              (
+                voucher.exchangeRateMicros /
+                1_000_000
+              ).toFixed(6),
+            )}</td>
+          </tr>
+        `
+        : "";
+
+    openPrintDocument(`<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escapeHtml(voucherLabel(voucher))} - ${escapeHtml(voucher.publicId)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Tahoma, sans-serif;
+      color: #111827;
+      background: #fff;
+    }
+    .sheet {
+      width: 100%;
+      max-width: 185mm;
+      margin: 0 auto;
+      padding: 8mm;
+    }
+    .head {
+      text-align: center;
+      margin-bottom: 8mm;
+    }
+    .brand {
+      color: #E91E8C;
+      font-size: 20px;
+      font-weight: 800;
+    }
+    h1 {
+      margin: 2mm 0 1mm;
+      font-size: 24px;
+    }
+    .sub {
+      color: #6b7280;
+      font-size: 11px;
+    }
+    .voucher-id {
+      margin: 5mm auto;
+      border: 2px solid #111827;
+      padding: 3mm 5mm;
+      width: fit-content;
+      direction: ltr;
+      font-size: 16px;
+      font-weight: 800;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #cfd8df;
+      padding: 4mm;
+      vertical-align: middle;
+    }
+    th {
+      width: 34%;
+      background: #f3f4f6;
+      text-align: right;
+    }
+    td {
+      font-weight: 600;
+    }
+    .amount {
+      font-size: 22px;
+      font-weight: 900;
+      direction: ltr;
+      text-align: center;
+    }
+    .notes {
+      min-height: 22mm;
+      white-space: pre-wrap;
+    }
+    .status-voided {
+      color: #b42318;
+      font-weight: 900;
+    }
+    .footer {
+      margin-top: 10mm;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18mm;
+    }
+    .signature {
+      padding-top: 12mm;
+      border-top: 1px solid #6b7280;
+      text-align: center;
+      font-size: 11px;
+    }
+    .system-footer {
+      margin-top: 10mm;
+      color: #6b7280;
+      text-align: center;
+      font-size: 9px;
+    }
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+    @media print {
+      .sheet {
+        max-width: none;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <header class="head">
+      <div class="brand">Lovely Kids</div>
+      <h1>${escapeHtml(voucherLabel(voucher))}</h1>
+      <div class="sub">تاريخ الطباعة: ${escapeHtml(generatedAt)}</div>
+      <div class="voucher-id">${escapeHtml(voucher.publicId)}</div>
+    </header>
+
+    <table>
+      <tbody>
+        <tr>
+          <th>التاريخ</th>
+          <td>${escapeHtml(voucher.businessDate)}</td>
+        </tr>
+        <tr>
+          <th>الطرف / الحساب</th>
+          <td>${escapeHtml(party)}</td>
+        </tr>
+        <tr>
+          <th>المبلغ</th>
+          <td class="amount">${escapeHtml(formatMinor(voucher.amountMinor))}</td>
+        </tr>
+        <tr>
+          <th>طريقة الحركة</th>
+          <td>${escapeHtml(paymentLabel(voucher.paymentMethod))}</td>
+        </tr>
+        ${foreignDetail}
+        <tr>
+          <th>الحالة</th>
+          <td class="${voucher.status === "voided" ? "status-voided" : ""}">
+            ${voucher.status === "posted" ? "فعال" : "ملغى"}
+          </td>
+        </tr>
+        ${voucher.voidReason ? `
+          <tr>
+            <th>سبب الإلغاء</th>
+            <td>${escapeHtml(voucher.voidReason)}</td>
+          </tr>
+        ` : ""}
+        <tr>
+          <th>البيان / الملاحظات</th>
+          <td class="notes">${escapeHtml(voucher.notes ?? "—")}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <div class="signature">توقيع المستلم / الطرف</div>
+      <div class="signature">توقيع المسؤول</div>
+    </div>
+
+    <div class="system-footer">
+      سند صادر من نظام Lovely Kids — محفوظ ضمن سجل التدقيق المحاسبي.
+    </div>
+  </main>
+</body>
+</html>`);
+  }
+
+  function printRegister() {
+    const generatedAt =
+      new Date().toLocaleString(
+        "ar-PS",
+        {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+      );
+
+    const rows =
+      visible
+        .map(
+          (voucher) => `
+            <tr>
+              <td dir="ltr">${escapeHtml(voucher.publicId)}</td>
+              <td>${escapeHtml(voucherLabel(voucher))}</td>
+              <td>${escapeHtml(voucher.businessDate)}</td>
+              <td>${escapeHtml(partyLabel(voucher))}</td>
+              <td class="money">${escapeHtml(formatMinor(voucher.amountMinor))}</td>
+              <td>${escapeHtml(paymentLabel(voucher.paymentMethod))}</td>
+              <td>${voucher.status === "posted" ? "فعال" : "ملغى"}</td>
+              <td>${escapeHtml(voucher.notes ?? "—")}</td>
+            </tr>
+          `,
+        )
+        .join("");
+
+    openPrintDocument(`<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>سجل السندات - Lovely Kids</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Tahoma, sans-serif;
+      color: #111827;
+      font-size: 9px;
+    }
+    .head {
+      text-align: center;
+      margin-bottom: 5mm;
+    }
+    .brand {
+      color: #E91E8C;
+      font-size: 17px;
+      font-weight: 800;
+    }
+    h1 {
+      margin: 1mm 0;
+      font-size: 20px;
+    }
+    .meta {
+      color: #6b7280;
+      margin-top: 1mm;
+    }
+    table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+    }
+    thead { display: table-header-group; }
+    th, td {
+      border: 1px solid #9ca3af;
+      padding: 1.8mm 1.2mm;
+      text-align: center;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+    }
+    th {
+      background: #f3f4f6;
+      font-weight: 800;
+    }
+    tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .money {
+      direction: ltr;
+      white-space: nowrap;
+    }
+    .footer {
+      margin-top: 4mm;
+      padding-top: 2mm;
+      border-top: 1px solid #cfd8df;
+      color: #6b7280;
+      text-align: center;
+    }
+    @page {
+      size: A4 landscape;
+      margin: 8mm 9mm;
+    }
+  </style>
+</head>
+<body>
+  <header class="head">
+    <div class="brand">Lovely Kids</div>
+    <h1>سجل السندات</h1>
+    <div class="meta">
+      عدد السندات: ${visible.length}
+      · نوع الفلتر: ${escapeHtml(kind)}
+      · الحالة: ${escapeHtml(status)}
+    </div>
+    <div class="meta">تاريخ إصدار التقرير: ${escapeHtml(generatedAt)}</div>
+  </header>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:13%">رقم السند</th>
+        <th style="width:15%">النوع</th>
+        <th style="width:9%">التاريخ</th>
+        <th style="width:13%">الطرف</th>
+        <th style="width:11%">المبلغ</th>
+        <th style="width:9%">الطريقة</th>
+        <th style="width:8%">الحالة</th>
+        <th style="width:22%">البيان</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows || '<tr><td colspan="8">لا توجد سندات مطابقة.</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    تقرير صادر من نظام Lovely Kids — سجل السندات حسب الفلاتر الحالية.
+  </div>
+</body>
+</html>`);
+  }
+
   async function handleEdit(
     voucher: PosFinanceVoucher,
   ) {
@@ -703,6 +1111,15 @@ export default function VoucherRegisterPage() {
             }
           >
             + سند قيد
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading || visible.length === 0}
+            onClick={printRegister}
+          >
+            🖨️ طباعة السجل A4
           </button>
         </div>
       </div>
@@ -983,65 +1400,77 @@ export default function VoucherRegisterPage() {
                     </td>
 
                     <td>
-                      {voucher.status ===
-                        "posted" &&
-                      user?.isOwner ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            flexWrap: "wrap",
-                          }}
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() =>
+                            printVoucher(
+                              voucher,
+                            )
+                          }
                         >
-                          {voucher.currencyCode ===
-                            "ILS" &&
-                          (
-                            voucher.voucherType === "receipt" ||
-                            voucher.voucherType === "payment" ||
-                            voucher.voucherType === "journal"
-                          ) && (
+                          طباعة
+                        </button>
+
+                        {voucher.status ===
+                          "posted" &&
+                        user?.isOwner && (
+                          <>
+                            {voucher.currencyCode ===
+                              "ILS" &&
+                            (
+                              voucher.voucherType === "receipt" ||
+                              voucher.voucherType === "payment" ||
+                              voucher.voucherType === "journal"
+                            ) && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                disabled={
+                                  editingId === voucher.id ||
+                                  voidingId === voucher.id
+                                }
+                                onClick={() =>
+                                  void handleEdit(
+                                    voucher,
+                                  )
+                                }
+                              >
+                                {editingId ===
+                                voucher.id
+                                  ? "جاري التعديل..."
+                                  : "تعديل"}
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               className="secondary-button"
                               disabled={
-                                editingId === voucher.id ||
-                                voidingId === voucher.id
+                                voidingId === voucher.id ||
+                                editingId === voucher.id
                               }
                               onClick={() =>
-                                void handleEdit(
+                                void handleVoid(
                                   voucher,
                                 )
                               }
                             >
-                              {editingId ===
+                              {voidingId ===
                               voucher.id
-                                ? "جاري التعديل..."
-                                : "تعديل"}
+                                ? "جاري الإلغاء..."
+                                : "إلغاء"}
                             </button>
-                          )}
-
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            disabled={
-                              voidingId === voucher.id ||
-                              editingId === voucher.id
-                            }
-                            onClick={() =>
-                              void handleVoid(
-                                voucher,
-                              )
-                            }
-                          >
-                            {voidingId ===
-                            voucher.id
-                              ? "جاري الإلغاء..."
-                              : "إلغاء"}
-                          </button>
-                        </div>
-                      ) : (
-                        "—"
-                      )}
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ),
