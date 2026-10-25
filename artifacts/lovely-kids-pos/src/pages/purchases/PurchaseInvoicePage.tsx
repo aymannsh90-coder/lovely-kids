@@ -29,6 +29,10 @@ import {
   type PosSupplier,
 } from "../../lib/api";
 import { formatMinor } from "../../lib/format";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "../../lib/scannerKeyboard";
 
 const PURCHASE_API_ENABLED =
   import.meta.env.VITE_PURCHASE_API_ENABLED === "true";
@@ -280,6 +284,14 @@ export default function PurchaseInvoicePage() {
   const [notes, setNotes] = useState("");
 
   const [query, setQuery] = useState("");
+
+  const scannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
+  const scannerSubmitValue =
+    useRef<string | null>(null);
+
   const [lookupBusy, setLookupBusy] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] =
@@ -1355,7 +1367,15 @@ export default function PurchaseInvoicePage() {
   ) {
     event.preventDefault();
 
-    const value = query.trim();
+    const scannerValue =
+      scannerSubmitValue.current;
+
+    scannerSubmitValue.current =
+      null;
+
+    const value = (
+      scannerValue ?? query
+    ).trim();
 
     if (!value) {
       setError("امسح الباركود أو أدخل اسم أو كود الصنف.");
@@ -1405,6 +1425,33 @@ export default function PurchaseInvoicePage() {
   function handleSearchKeyDown(
     event: KeyboardEvent<HTMLInputElement>,
   ) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const scannedValue =
+      captureScannerKeyboardEvent(
+        scannerKeyboard.current,
+        event,
+      );
+
+    if (
+      event.key === "Enter" &&
+      scannedValue
+    ) {
+      event.preventDefault();
+
+      scannerSubmitValue.current =
+        scannedValue;
+
+      setQuery(scannedValue);
+      clearSearchResults();
+
+      event.currentTarget.form
+        ?.requestSubmit();
+      return;
+    }
+
     if (!searchOpen || searchResults.length === 0) {
       return;
     }

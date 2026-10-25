@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import JsBarcode from "jsbarcode";
 import {
   useNavigate,
@@ -17,6 +24,10 @@ import {
   type PosMobileReturnResult,
   type PosSaleReturnResult,
 } from "./lib/api";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "./lib/scannerKeyboard";
 
 interface TodaySalesPanelProps {
   token: string;
@@ -277,6 +288,13 @@ export default function TodaySalesPanel({
   const [loadError, setLoadError] = useState("");
 
   const [invoiceSearch, setInvoiceSearch] = useState("");
+
+  const invoiceScannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
+  const invoiceScannerSubmitValue =
+    useRef<string | null>(null);
 
   const [searchBusy, setSearchBusy] = useState(false);
 
@@ -645,13 +663,14 @@ export default function TodaySalesPanel({
     exchanges.length,
   ]);
 
-  async function handleInvoiceSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const value = invoiceSearch.trim().toUpperCase();
+  async function searchInvoice(rawValue: string) {
+    const value =
+      rawValue.trim().toUpperCase();
 
     if (!value) {
-      setSearchError("امسح باركود الفاتورة أو أدخل رقمها");
+      setSearchError(
+        "امسح باركود الفاتورة أو أدخل رقمها",
+      );
       return;
     }
 
@@ -660,19 +679,76 @@ export default function TodaySalesPanel({
     setSelectedSale(null);
 
     try {
-      const result = await getPosSaleByPublicId(token, value);
+      const result =
+        await getPosSaleByPublicId(
+          token,
+          value,
+        );
 
       setSelectedSale(result);
-      setInvoiceSearch(result.sale.publicId);
+      setInvoiceSearch(
+        result.sale.publicId,
+      );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (
+        error instanceof ApiError &&
+        error.status === 401
+      ) {
         onUnauthorized();
         return;
       }
 
-      setSearchError(errorMessage(error));
+      setSearchError(
+        errorMessage(error),
+      );
     } finally {
       setSearchBusy(false);
+    }
+  }
+
+  async function handleInvoiceSearch(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    const scannerValue =
+      invoiceScannerSubmitValue.current;
+
+    invoiceScannerSubmitValue.current =
+      null;
+
+    await searchInvoice(
+      scannerValue ??
+        invoiceSearch,
+    );
+  }
+
+  function handleInvoiceScannerKeyDown(
+    event: KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const scannedValue =
+      captureScannerKeyboardEvent(
+        invoiceScannerKeyboard.current,
+        event,
+      );
+
+    if (
+      event.key === "Enter" &&
+      scannedValue
+    ) {
+      event.preventDefault();
+
+      invoiceScannerSubmitValue.current =
+        scannedValue;
+
+      setInvoiceSearch(scannedValue);
+
+      event.currentTarget.form
+        ?.requestSubmit();
     }
   }
 
@@ -1255,7 +1331,14 @@ export default function TodaySalesPanel({
               dir="ltr"
               autoComplete="off"
               value={invoiceSearch}
-              onChange={(event) => setInvoiceSearch(event.target.value)}
+              onChange={(event) =>
+                setInvoiceSearch(
+                  event.target.value,
+                )
+              }
+              onKeyDown={
+                handleInvoiceScannerKeyDown
+              }
               placeholder="POS-YYYYMMDD-XXXXXXXXXXXX"
               disabled={searchBusy}
             />

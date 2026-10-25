@@ -316,6 +316,19 @@ export default function SalesInvoicePage() {
     null,
   );
 
+  const openInvoiceInputRef =
+    useRef<HTMLInputElement>(null);
+
+  const openInvoiceScannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
+  const [openInvoiceDialog, setOpenInvoiceDialog] =
+    useState(false);
+
+  const [openInvoiceValue, setOpenInvoiceValue] =
+    useState("");
+
   const [lookupBusy, setLookupBusy] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1393,17 +1406,18 @@ export default function SalesInvoicePage() {
     }
   }
 
-  function handleOpenInvoice() {
-    const value = window.prompt(
-      "أدخل رقم الفاتورة",
-      loadedSale?.sale.publicId ?? "",
-    );
+  function submitOpenInvoice(rawValue: string) {
+    const publicId =
+      rawValue.trim().toUpperCase();
 
-    if (!value?.trim()) {
+    if (!publicId) {
+      setError("أدخل رقم الفاتورة");
+      openInvoiceInputRef.current?.focus();
       return;
     }
 
-    const publicId = value.trim().toUpperCase();
+    setOpenInvoiceDialog(false);
+    setOpenInvoiceValue("");
 
     if (publicId === requestedPublicId) {
       void loadStoredInvoice(publicId);
@@ -1411,6 +1425,47 @@ export default function SalesInvoicePage() {
     }
 
     openStoredInvoice(publicId);
+  }
+
+  function handleOpenInvoice() {
+    setOpenInvoiceValue(
+      loadedSale?.sale.publicId ?? "",
+    );
+    setOpenInvoiceDialog(true);
+
+    window.setTimeout(() => {
+      openInvoiceInputRef.current?.focus();
+      openInvoiceInputRef.current?.select();
+    }, 0);
+  }
+
+  function handleOpenInvoiceScannerKeyDown(
+    event: KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const scannedValue =
+      captureScannerKeyboardEvent(
+        openInvoiceScannerKeyboard.current,
+        event,
+      );
+
+    if (
+      event.key === "Enter" &&
+      scannedValue
+    ) {
+      event.preventDefault();
+      setOpenInvoiceValue(scannedValue);
+      submitOpenInvoice(scannedValue);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpenInvoiceDialog(false);
+    }
   }
 
   function handleCopyInvoice() {
@@ -2506,6 +2561,97 @@ export default function SalesInvoicePage() {
           receiptRef={receiptRef}
         />
       ) : null}
+
+      {openInvoiceDialog && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setOpenInvoiceDialog(false);
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 12000,
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            background: "rgba(15, 23, 42, .62)",
+          }}
+        >
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-label="فتح فاتورة"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitOpenInvoice(openInvoiceValue);
+            }}
+            style={{
+              width: "min(520px, 94vw)",
+              background: "#fff",
+              borderRadius: 18,
+              padding: 20,
+              boxShadow: "0 24px 80px rgba(15,23,42,.35)",
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            <div>
+              <strong style={{ fontSize: 18 }}>
+                فتح فاتورة
+              </strong>
+              <div style={{ marginTop: 4, color: "#64748b", fontSize: 12 }}>
+                امسح باركود الفاتورة أو اكتب رقمها. يعمل فرد الباركود مع لوحة عربية أو إنجليزية.
+              </div>
+            </div>
+
+            <input
+              ref={openInvoiceInputRef}
+              dir="ltr"
+              value={openInvoiceValue}
+              onChange={(event) =>
+                setOpenInvoiceValue(event.target.value)
+              }
+              onKeyDown={
+                handleOpenInvoiceScannerKeyDown
+              }
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="POS-YYYYMMDD-XXXXXXXXXXXX"
+              style={{
+                minHeight: 48,
+                border: "1px solid #cbd5e1",
+                borderRadius: 10,
+                padding: "0 12px",
+                font: "inherit",
+              }}
+            />
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "flex-start",
+              }}
+            >
+              <button type="submit">
+                فتح الفاتورة
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenInvoiceDialog(false)
+                }
+              >
+                إلغاء
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }

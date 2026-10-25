@@ -1,8 +1,10 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -19,6 +21,10 @@ import {
   type OwnerInventoryValuationProduct,
   type PosAdminInventoryProduct,
 } from "../../lib/api";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "../../lib/scannerKeyboard";
 
 type StockFilter =
   | "all"
@@ -249,6 +255,10 @@ export default function InventoryStockPage() {
   const [query, setQuery] =
     useState("");
 
+  const scannerKeyboard = useRef(
+    createScannerKeyboardBuffer(),
+  );
+
   const [filter, setFilter] =
     useState<StockFilter>("all");
 
@@ -348,6 +358,28 @@ export default function InventoryStockPage() {
     saving,
   ]);
 
+
+  function handleInventorySearchKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement>,
+  ) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const scannedValue =
+      captureScannerKeyboardEvent(
+        scannerKeyboard.current,
+        event,
+      );
+
+    if (
+      event.key === "Enter" &&
+      scannedValue
+    ) {
+      event.preventDefault();
+      setQuery(scannedValue);
+    }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -934,6 +966,9 @@ export default function InventoryStockPage() {
                 setQuery(
                   event.target.value,
                 )
+              }
+              onKeyDown={
+                handleInventorySearchKeyDown
               }
               placeholder="اسم، كود، باركود أو تصنيف..."
             />
