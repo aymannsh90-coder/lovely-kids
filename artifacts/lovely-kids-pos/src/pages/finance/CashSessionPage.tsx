@@ -175,7 +175,7 @@ function printClosedSessionReport(
     }
     @page {
       size: A4 portrait;
-      margin: 10mm;
+      margin: 12mm 9mm;
     }
     @media print {
       .sheet {
