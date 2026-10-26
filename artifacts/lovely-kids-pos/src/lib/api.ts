@@ -242,6 +242,7 @@ export interface PosAdminInventoryProduct {
   nameAr: string;
   productCode: string | null;
   barcode: string | null;
+  additionalBarcodes?: PosProductBarcode[];
   price: number;
   image: string;
   category: string;
@@ -249,6 +250,7 @@ export interface PosAdminInventoryProduct {
   stock: number | null;
   isNew?: boolean;
   newUntil?: string | null;
+  showInOffers?: boolean;
   isHidden: boolean;
   deletedAt: string | null;
 }
@@ -262,14 +264,57 @@ export interface PosManualStockCostInput {
   unitCostMinor?: number;
 }
 
-export function getPosAdminInventoryProducts(
+export async function getPosAdminInventoryProducts(
   token: string,
 ) {
-  return apiRequest<PosAdminInventoryProduct[]>(
-    "/api/products/admin",
-    {},
-    token,
-  );
+  const [products, barcodeRows] = await Promise.all([
+    apiRequest<PosAdminInventoryProduct[]>(
+      "/api/products/admin",
+      {},
+      token,
+    ),
+    apiRequest<
+      Array<{
+        productId: string;
+        barcode: string;
+        color: string | null;
+        size: string | null;
+      }>
+    >(
+      "/api/products/barcodes",
+      {},
+      token,
+    ),
+  ]);
+
+  const barcodesByProduct =
+    new Map<string, PosProductBarcode[]>();
+
+  for (const row of barcodeRows) {
+    const current =
+      barcodesByProduct.get(
+        String(row.productId),
+      ) ?? [];
+
+    current.push({
+      barcode: row.barcode,
+      color: row.color,
+      size: row.size,
+    });
+
+    barcodesByProduct.set(
+      String(row.productId),
+      current,
+    );
+  }
+
+  return products.map((product) => ({
+    ...product,
+    additionalBarcodes:
+      barcodesByProduct.get(
+        String(product.id),
+      ) ?? [],
+  }));
 }
 
 
