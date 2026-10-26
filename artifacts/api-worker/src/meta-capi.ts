@@ -4,6 +4,20 @@ import type { Env } from "./db";
 const META_DATASET_ID = "923601613685011";
 const META_GRAPH_VERSION = "v26.0";
 
+export type MetaWebEventName =
+  | "ViewContent"
+  | "AddToCart"
+  | "InitiateCheckout";
+
+type MetaWebEventInput = {
+  eventName: MetaWebEventName;
+  eventId: string;
+  fbp?: string;
+  fbc?: string;
+  eventSourceUrl?: string;
+  customData?: Record<string, unknown>;
+};
+
 type MetaPurchaseInput = {
   orderId: number;
   customerName: string;
@@ -206,6 +220,79 @@ export async function sendMetaPurchaseEvent(
         result?.events_received ?? null,
       traceId:
         result?.fbtrace_id ?? null,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+
+export async function sendMetaWebEvent(
+  env: Env,
+  request: Request,
+  input: MetaWebEventInput,
+) {
+  const accessToken = env.META_CAPI_ACCESS_TOKEN?.trim();
+
+  if (!accessToken) {
+    return { sent: false as const, reason: "missing_access_token" };
+  }
+
+  const userData: Record<string, unknown> = {};
+  const clientIp = request.headers.get("CF-Connecting-IP")?.trim();
+  const userAgent = request.headers.get("User-Agent")?.trim();
+
+  if (clientIp) userData.client_ip_address = clientIp;
+  if (userAgent) userData.client_user_agent = userAgent;
+  if (input.fbp) userData.fbp = input.fbp;
+  if (input.fbc) userData.fbc = input.fbc;
+
+  const payload = {
+    data: [{
+      event_name: input.eventName,
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: input.eventId,
+      action_source: "website",
+      event_source_url:
+        input.eventSourceUrl ||
+        request.headers.get("Origin") ||
+        "https://lovelykids.net",
+      user_data: userData,
+      custom_data: input.customData ?? {},
+    }],
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${META_GRAPH_VERSION}/${META_DATASET_ID}/events`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      },
+    );
+
+    const result = await response.json().catch(() => null) as {
+      events_received?: number;
+      fbtrace_id?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(`Meta CAPI HTTP ${response.status}`);
+    }
+
+    return {
+      sent: true as const,
+      eventId: input.eventId,
+      eventsReceived: result?.events_received ?? null,
+      traceId: result?.fbtrace_id ?? null,
     };
   } finally {
     clearTimeout(timeout);
