@@ -14,12 +14,14 @@ import { useAuth } from "@/context/AuthContext";
 
 interface NewOrdersContextType {
   newCount: number;
+  pendingNewCount: number;
   latestOrderId: number | null;
   clearNew: () => void;
 }
 
 const NewOrdersContext = createContext<NewOrdersContextType>({
   newCount: 0,
+  pendingNewCount: 0,
   latestOrderId: null,
   clearNew: () => {},
 });
@@ -27,12 +29,20 @@ const NewOrdersContext = createContext<NewOrdersContextType>({
 export function NewOrdersProvider({ children }: { children: React.ReactNode }) {
   const { user, getAuthToken } = useAuth();
   const [newCount, setNewCount] = useState(0);
+  const [pendingNewCount, setPendingNewCount] = useState(0);
   const [latestOrderId, setLatestOrderId] = useState<number | null>(null);
   const lastSeenIdRef = useRef<number | null>(null);
   const initialLoadRef = useRef(true);
 
   const fetchAndDetect = useCallback(async () => {
-    if (!user?.isAdmin) return;
+    if (!user?.isAdmin) {
+      setNewCount(0);
+      setPendingNewCount(0);
+      setLatestOrderId(null);
+      lastSeenIdRef.current = null;
+      initialLoadRef.current = true;
+      return;
+    }
 
     try {
       const token = await getAuthToken();
@@ -43,7 +53,19 @@ export function NewOrdersProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.ok) return;
       const orders: { id: number; status: string }[] = await res.json();
-      if (!Array.isArray(orders) || orders.length === 0) return;
+      if (!Array.isArray(orders)) return;
+
+      const pendingNewOrders = orders.filter(
+        (order) => order.status === "new",
+      );
+
+      setPendingNewCount(
+        pendingNewOrders.length,
+      );
+
+      if (orders.length === 0) {
+        return;
+      }
 
       const newestId = orders[0].id;
 
@@ -72,7 +94,7 @@ export function NewOrdersProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchAndDetect();
-    const interval = setInterval(fetchAndDetect, 60000); // every 20s
+    const interval = setInterval(fetchAndDetect, 20000); // every 20s
     return () => clearInterval(interval);
   }, [fetchAndDetect]);
 
@@ -82,7 +104,14 @@ export function NewOrdersProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <NewOrdersContext.Provider value={{ newCount, latestOrderId, clearNew }}>
+    <NewOrdersContext.Provider
+      value={{
+        newCount,
+        pendingNewCount,
+        latestOrderId,
+        clearNew,
+      }}
+    >
       {children}
     </NewOrdersContext.Provider>
   );
