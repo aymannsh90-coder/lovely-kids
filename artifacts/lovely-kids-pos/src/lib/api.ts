@@ -238,6 +238,7 @@ export interface PosProductLookup {
 
 export interface PosAdminInventoryProduct {
   id: string;
+  name?: string;
   nameAr: string;
   productCode: string | null;
   barcode: string | null;
@@ -246,6 +247,8 @@ export interface PosAdminInventoryProduct {
   category: string;
   colorVariants: PosColorVariant[];
   stock: number | null;
+  isNew?: boolean;
+  newUntil?: string | null;
   isHidden: boolean;
   deletedAt: string | null;
 }
@@ -265,6 +268,48 @@ export function getPosAdminInventoryProducts(
   return apiRequest<PosAdminInventoryProduct[]>(
     "/api/products/admin",
     {},
+    token,
+  );
+}
+
+
+export function setPosProductVisibility(
+  token: string,
+  productId: string | number,
+  hidden: boolean,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}/visibility`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ hidden }),
+    },
+    token,
+  );
+}
+
+export function archivePosProduct(
+  token: string,
+  productId: string | number,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}`,
+    {
+      method: "DELETE",
+    },
+    token,
+  );
+}
+
+export function restorePosProduct(
+  token: string,
+  productId: string | number,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}/restore`,
+    {
+      method: "PATCH",
+    },
     token,
   );
 }
