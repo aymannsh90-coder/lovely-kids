@@ -1577,7 +1577,7 @@ export default function SalePanel({
   }
 
   useEffect(() => {
-    function handleSaleShortcut(event: KeyboardEvent) {
+    function handleSaleShortcut(event: globalThis.KeyboardEvent) {
       if (
         event.key !== "F3" ||
         event.repeat ||
