@@ -64,7 +64,27 @@
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
     fbq('init', '923601613685011');
-    fbq('track', 'PageView');
+    var lkPageViewId='lk-pageview-'+(window.crypto&&window.crypto.randomUUID?window.crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
+    fbq('track', 'PageView', {}, {eventID: lkPageViewId});
+    try {
+      var lkCookies={};
+      document.cookie.split(';').forEach(function(part){
+        var i=part.indexOf('=');
+        if(i>0) lkCookies[part.slice(0,i).trim()]=decodeURIComponent(part.slice(i+1));
+      });
+      fetch('https://api.lovelykids.net/api/meta/events',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          eventName:'PageView',
+          eventId:lkPageViewId,
+          metaFbp:lkCookies._fbp,
+          metaFbc:lkCookies._fbc,
+          metaEventSourceUrl:window.location.href,
+          customData:{}
+        })
+      }).catch(function(){});
+    } catch(e) {}
     </script>
     <noscript><img height="1" width="1" style="display:none"
     src="https://www.facebook.com/tr?id=923601613685011&ev=PageView&noscript=1"
