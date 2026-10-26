@@ -2688,7 +2688,7 @@ export default function SalePanel({
                   <span>
                     {saleBusy
                       ? "جاري الحفظ والطباعة…"
-                      : "إتمام البيع + خصم المخزون + طباعة فاتورة حرارية"}
+                      : "إتمام البيع + طباعة فاتورة حرارية"}
                   </span>
                 </button>
 
@@ -2700,7 +2700,7 @@ export default function SalePanel({
                 >
                   {saleBusy
                     ? "جاري حفظ البيع…"
-                    : "إتمام البيع وخصم المخزون"}
+                    : "إتمام البيع"}
                 </button>
               </div>
             )}
