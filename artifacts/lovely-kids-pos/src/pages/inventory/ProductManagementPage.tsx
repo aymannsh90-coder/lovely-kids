@@ -11,9 +11,11 @@ import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
   archivePosProduct,
+  getOwnerInventoryValuationProducts,
   getPosAdminInventoryProducts,
   restorePosProduct,
   setPosProductVisibility,
+  type OwnerInventoryValuationProduct,
   type PosAdminInventoryProduct,
 } from "../../lib/api";
 import {
@@ -23,8 +25,11 @@ import {
 
 type ProductFilter =
   | "all"
+  | "offers"
   | "new"
   | "out"
+  | "noQr"
+  | "noCost"
   | "hidden"
   | "deleted";
 
@@ -68,6 +73,7 @@ export default function ProductManagementPage() {
   const { token, user, clearAuthentication } = usePosRuntime();
 
   const [products, setProducts] = useState<PosAdminInventoryProduct[]>([]);
+  const [valuation, setValuation] = useState<OwnerInventoryValuationProduct[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ProductFilter>("all");
   const [loading, setLoading] = useState(true);
@@ -89,8 +95,16 @@ export default function ProductManagementPage() {
     setError("");
 
     try {
-      const rows = await getPosAdminInventoryProducts(token);
+      const [rows, valuationResult] =
+        await Promise.all([
+          getPosAdminInventoryProducts(token),
+          user?.isOwner
+            ? getOwnerInventoryValuationProducts(token)
+            : Promise.resolve({ products: [] }),
+        ]);
+
       setProducts(rows);
+      setValuation(valuationResult.products);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         clearAuthentication();
@@ -126,11 +140,50 @@ export default function ProductManagementPage() {
     [products],
   );
 
+  const valuationByProduct = useMemo(
+    () =>
+      new Map(
+        valuation.map((entry) => [
+          String(entry.productId),
+          entry,
+        ]),
+      ),
+    [valuation],
+  );
+
+  const hasQr = (
+    product: PosAdminInventoryProduct,
+  ) =>
+    [
+      product.barcode,
+      ...(product.additionalBarcodes ?? []).map(
+        (entry) => entry.barcode,
+      ),
+    ].some((value) =>
+      value?.trim().startsWith("LKQR-"),
+    );
+
+  const hasKnownCost = (
+    product: PosAdminInventoryProduct,
+  ) => {
+    const cost = valuationByProduct.get(
+      String(product.id),
+    );
+
+    return Boolean(
+      cost?.initialized &&
+      cost.referenceUnitCostMinor !== null,
+    );
+  };
+
   const counts = useMemo(() => {
     const now = Date.now();
 
     return {
       all: activeProducts.length,
+      offers: activeProducts.filter(
+        (product) => product.showInOffers,
+      ).length,
       new: activeProducts.filter((product) => {
         const newUntil = product.newUntil
           ? new Date(product.newUntil).getTime()
@@ -141,10 +194,23 @@ export default function ProductManagementPage() {
       out: activeProducts.filter(
         (product) => effectiveQuantity(product) === 0,
       ).length,
+      noQr: activeProducts.filter(
+        (product) => !hasQr(product),
+      ).length,
+      noCost: user?.isOwner
+        ? activeProducts.filter(
+            (product) => !hasKnownCost(product),
+          ).length
+        : 0,
       hidden: activeProducts.filter((product) => product.isHidden).length,
       deleted: products.filter((product) => Boolean(product.deletedAt)).length,
     };
-  }, [activeProducts, products]);
+  }, [
+    activeProducts,
+    products,
+    user?.isOwner,
+    valuationByProduct,
+  ]);
 
   const displayedProducts = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -155,6 +221,10 @@ export default function ProductManagementPage() {
         if (filter === "deleted") {
           if (!product.deletedAt) return false;
         } else if (product.deletedAt) {
+          return false;
+        }
+
+        if (filter === "offers" && !product.showInOffers) {
           return false;
         }
 
@@ -172,6 +242,17 @@ export default function ProductManagementPage() {
           return false;
         }
 
+        if (filter === "noQr" && hasQr(product)) {
+          return false;
+        }
+
+        if (
+          filter === "noCost" &&
+          (!user?.isOwner || hasKnownCost(product))
+        ) {
+          return false;
+        }
+
         if (filter === "hidden" && !product.isHidden) {
           return false;
         }
@@ -185,6 +266,9 @@ export default function ProductManagementPage() {
           product.name,
           product.productCode,
           product.barcode,
+          ...(product.additionalBarcodes ?? []).map(
+            (entry) => entry.barcode,
+          ),
           product.category,
         ]
           .filter(Boolean)
@@ -204,7 +288,13 @@ export default function ProductManagementPage() {
 
         return right.nameAr.localeCompare(left.nameAr, "ar");
       });
-  }, [products, query, filter]);
+  }, [
+    products,
+    query,
+    filter,
+    user?.isOwner,
+    valuationByProduct,
+  ]);
 
   async function updateVisibility(
     product: PosAdminInventoryProduct,
@@ -351,18 +441,25 @@ export default function ProductManagementPage() {
         </label>
 
         <div className="pos-products-filters" role="tablist">
-          {[
+          {([
             ["all", "الكل", counts.all],
+            ["offers", "العروض", counts.offers],
             ["new", "الجديد", counts.new],
             ["out", "بدون كمية", counts.out],
+            ["noQr", "بدون QR", counts.noQr],
+            ...(user?.isOwner
+              ? [["noCost", "بدون تكلفة", counts.noCost] as const]
+              : []),
             ["hidden", "مخفي", counts.hidden],
             ["deleted", "المحذوفات", counts.deleted],
-          ].map(([key, label, count]) => (
+          ] satisfies ReadonlyArray<
+            readonly [ProductFilter, string, number]
+          >).map(([key, label, count]) => (
             <button
-              key={String(key)}
+              key={key}
               type="button"
               className={filter === key ? "active" : ""}
-              onClick={() => setFilter(key as ProductFilter)}
+              onClick={() => setFilter(key)}
             >
               {label} <strong>{count}</strong>
             </button>
