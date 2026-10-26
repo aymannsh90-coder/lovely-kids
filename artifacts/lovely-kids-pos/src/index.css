@@ -1157,7 +1157,7 @@ textarea:disabled {
 @media (min-width: 1101px) {
   #pos-sale.sale-panel {
     display: grid;
-    grid-template-columns: 342px minmax(0, 1fr);
+    grid-template-columns: 380px minmax(0, 1fr);
     align-items: start;
     gap: 14px 18px;
     margin-top: 14px;
