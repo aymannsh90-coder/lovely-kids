@@ -26,6 +26,11 @@ import {
   type PosFinancePaymentMethod,
   type PosFinanceVoucher,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  printA4Report,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 type QuickTileKind =
   | "expense"
@@ -544,6 +549,21 @@ export default function ExpensesPage() {
   const [message, setMessage] =
     useState("");
 
+  const [
+    reportFrom,
+    setReportFrom,
+  ] = useState("");
+
+  const [
+    reportTo,
+    setReportTo,
+  ] = useState("");
+
+  const [
+    reportBusy,
+    setReportBusy,
+  ] = useState(false);
+
   const activeCategories =
     useMemo(
       () =>
@@ -957,6 +977,25 @@ export default function ExpensesPage() {
     session?.businessDate,
     user?.isOwner,
   ]);
+
+  useEffect(() => {
+    const businessDate =
+      session?.businessDate ?? "";
+
+    if (!businessDate) {
+      return;
+    }
+
+    if (!reportTo) {
+      setReportTo(businessDate);
+    }
+
+    if (!reportFrom) {
+      setReportFrom(
+        `${businessDate.slice(0, 8)}01`,
+      );
+    }
+  }, [session?.businessDate]);
 
   useEffect(() => {
     if (
@@ -1618,6 +1657,209 @@ export default function ExpensesPage() {
     }
   }
 
+  async function loadExpensePeriodReport(): Promise<A4ReportOptions | null> {
+    if (!reportFrom || !reportTo) {
+      setError("حدد تاريخ البداية والنهاية للتقرير.");
+      return null;
+    }
+
+    if (reportFrom > reportTo) {
+      setError("تاريخ البداية يجب أن يكون قبل تاريخ النهاية.");
+      return null;
+    }
+
+    setReportBusy(true);
+    setError("");
+
+    try {
+      const result =
+        await getPosFinanceVouchers(
+          token,
+        );
+
+      const rows = result.results
+        .filter(
+          (voucher) =>
+            voucher.voucherType ===
+              "expense" &&
+            voucher.businessDate >=
+              reportFrom &&
+            voucher.businessDate <=
+              reportTo,
+        )
+        .sort((left, right) =>
+          left.businessDate ===
+          right.businessDate
+            ? left.id - right.id
+            : left.businessDate.localeCompare(
+                right.businessDate,
+              ),
+        );
+
+      const posted = rows.filter(
+        (voucher) =>
+          voucher.status ===
+          "posted",
+      );
+
+      const total = posted.reduce(
+        (sum, voucher) =>
+          sum +
+          voucher.amountMinor,
+        0,
+      );
+
+      const byCategory =
+        new Map<string, number>();
+
+      for (const voucher of posted) {
+        const label =
+          voucherTitle(
+            voucher,
+            categories,
+          );
+        byCategory.set(
+          label,
+          (byCategory.get(label) ??
+            0) +
+            voucher.amountMinor,
+        );
+      }
+
+      return {
+        title: "تقرير المصروفات",
+        subtitle:
+          "المصروفات المسجلة حسب الفترة",
+        period: `من ${reportFrom} إلى ${reportTo}`,
+        orientation: "landscape",
+        summary: [
+          {
+            label: "إجمالي المصروفات",
+            value:
+              moneyMinor(total),
+          },
+          {
+            label: "عدد الحركات الفعالة",
+            value: posted.length,
+          },
+          {
+            label: "الحركات الملغاة",
+            value:
+              rows.filter(
+                (voucher) =>
+                  voucher.status ===
+                  "voided",
+              ).length,
+          },
+        ],
+        sections: [
+          {
+            title:
+              "ملخص حسب التصنيف",
+            headers: [
+              "التصنيف",
+              "الإجمالي",
+            ],
+            rows: Array.from(
+              byCategory.entries(),
+            )
+              .sort(
+                (
+                  left,
+                  right,
+                ) =>
+                  right[1] -
+                  left[1],
+              )
+              .map(
+                ([
+                  label,
+                  amountMinor,
+                ]) => [
+                  label,
+                  moneyMinor(
+                    amountMinor,
+                  ),
+                ],
+              ),
+          },
+          {
+            title:
+              "تفاصيل المصروفات",
+            headers: [
+              "التاريخ",
+              "السند",
+              "التصنيف",
+              "طريقة الدفع",
+              "المبلغ",
+              "الحالة",
+              "ملاحظات",
+            ],
+            rows: rows.map(
+              (voucher) => [
+                voucher.businessDate,
+                voucher.publicId,
+                voucherTitle(
+                  voucher,
+                  categories,
+                ),
+                paymentLabel(
+                  voucher.paymentMethod,
+                ),
+                moneyMinor(
+                  voucher.amountMinor,
+                ),
+                voucher.status ===
+                "posted"
+                  ? "مسجل"
+                  : "ملغى",
+                voucher.notes ??
+                  "",
+              ],
+            ),
+          },
+        ],
+      };
+    } catch (caught) {
+      if (
+        caught instanceof
+          ApiError &&
+        caught.status === 401
+      ) {
+        clearAuthentication();
+        return null;
+      }
+
+      setError(
+        errorText(caught),
+      );
+      return null;
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  async function printExpensePeriodReport() {
+    const options =
+      await loadExpensePeriodReport();
+
+    if (options) {
+      printA4Report(options);
+    }
+  }
+
+  async function exportExpensePeriodReport() {
+    const options =
+      await loadExpensePeriodReport();
+
+    if (options) {
+      exportReportAsExcel(
+        `expenses-${reportFrom}-to-${reportTo}.xls`,
+        options,
+      );
+    }
+  }
+
   return (
     <section className="expense-hub-page">
       <div className="expense-hub-heading">
@@ -1635,17 +1877,51 @@ export default function ExpensesPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="secondary-button expense-manage-button"
-          onClick={() =>
-            setShowManager(
-              true,
-            )
-          }
-        >
-          ⚙️ إدارة المربعات
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+          <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+            <span>من</span>
+            <input
+              type="date"
+              value={reportFrom}
+              onChange={(event) => setReportFrom(event.target.value)}
+            />
+          </label>
+
+          <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+            <span>إلى</span>
+            <input
+              type="date"
+              value={reportTo}
+              onChange={(event) => setReportTo(event.target.value)}
+            />
+          </label>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={reportBusy}
+            onClick={() => void printExpensePeriodReport()}
+          >
+            🖨️ تقرير A4
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={reportBusy}
+            onClick={() => void exportExpensePeriodReport()}
+          >
+            📊 Excel
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button expense-manage-button"
+            onClick={() => setShowManager(true)}
+          >
+            ⚙️ إدارة المربعات
+          </button>
+        </div>
       </div>
 
       {error && (
