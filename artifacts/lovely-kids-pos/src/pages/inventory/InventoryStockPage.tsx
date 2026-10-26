@@ -22,6 +22,11 @@ import {
   type PosAdminInventoryProduct,
 } from "../../lib/api";
 import {
+  exportReportAsExcel,
+  printA4Report,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
+import {
   captureScannerKeyboardEvent,
   createScannerKeyboardBuffer,
 } from "../../lib/scannerKeyboard";
@@ -892,6 +897,108 @@ export default function InventoryStockPage() {
           .stockMatchesAccounting,
     ).length;
 
+  function buildPhysicalCountSheet(): A4ReportOptions {
+    const rows = displayedProducts.flatMap(
+      (product) => {
+        const variants =
+          product.colorVariants.flatMap(
+            (variant) =>
+              variant.sizes.map(
+                (size) => [
+                  product.productCode ??
+                    "—",
+                  product.nameAr,
+                  product.category,
+                  variant.color,
+                  size.size,
+                  size.stock ??
+                    "غير متتبع",
+                  "",
+                  "",
+                  "",
+                ],
+              ),
+          );
+
+        if (variants.length > 0) {
+          return variants;
+        }
+
+        return [[
+          product.productCode ??
+            "—",
+          product.nameAr,
+          product.category,
+          "—",
+          "—",
+          product.stock ??
+            "غير متتبع",
+          "",
+          "",
+          "",
+        ]];
+      },
+    );
+
+    const filterLabel =
+      filter === "attention"
+        ? "يحتاج انتباه"
+        : filter === "out"
+          ? "نافد"
+          : filter === "hidden"
+            ? "مخفي"
+            : "الكل";
+
+    return {
+      title: "ورقة الجرد الفعلي للمخزون",
+      subtitle:
+        "تُعبأ الكمية المعدودة والفرق يدويًا أثناء الجرد",
+      period: `فلتر: ${filterLabel}${query.trim() ? ` · بحث: ${query.trim()}` : ""}`,
+      orientation: "landscape",
+      summary: [
+        {
+          label: "عدد الموديلات",
+          value:
+            displayedProducts.length,
+        },
+        {
+          label: "عدد أسطر الجرد",
+          value: rows.length,
+        },
+      ],
+      sections: [
+        {
+          title: "ورقة العد",
+          headers: [
+            "الكود",
+            "الصنف",
+            "التصنيف",
+            "اللون",
+            "المقاس",
+            "كمية النظام",
+            "الكمية المعدودة",
+            "الفرق",
+            "ملاحظات",
+          ],
+          rows,
+        },
+      ],
+    };
+  }
+
+  function printPhysicalCountSheet() {
+    printA4Report(
+      buildPhysicalCountSheet(),
+    );
+  }
+
+  function exportPhysicalCountSheet() {
+    exportReportAsExcel(
+      "physical-stock-count.xls",
+      buildPhysicalCountSheet(),
+    );
+  }
+
   return (
     <section className="sales-return-page">
       <header className="sales-return-header">
@@ -904,12 +1011,32 @@ export default function InventoryStockPage() {
           </p>
         </div>
 
-        <a
-          className="primary-button"
-          href="/inventory/stock-check"
-        >
-          فحص سريع بالباركود
-        </a>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading}
+            onClick={printPhysicalCountSheet}
+          >
+            🖨️ ورقة جرد A4
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading}
+            onClick={exportPhysicalCountSheet}
+          >
+            📊 Excel
+          </button>
+
+          <a
+            className="primary-button"
+            href="/inventory/stock-check"
+          >
+            فحص سريع بالباركود
+          </a>
+        </div>
       </header>
 
       <article className="sales-return-invoice">
