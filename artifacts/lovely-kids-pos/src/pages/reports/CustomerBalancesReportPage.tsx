@@ -459,7 +459,7 @@ export default function CustomerBalancesReportPage() {
         @media print {
           @page {
             size: A4;
-            margin: 10mm;
+            margin: 12mm 9mm;
           }
 
           body * {
