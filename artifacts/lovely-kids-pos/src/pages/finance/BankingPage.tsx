@@ -30,6 +30,11 @@ import {
   type PosFinanceTransfer,
   type PosCurrencyConversion,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  printA4Report,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 interface TransferAccountOption {
   id: number;
@@ -1765,6 +1770,104 @@ export default function BankingPage() {
     }
   }
 
+  function buildBankingReport(): A4ReportOptions {
+    const bankTotalMinor = accounts.reduce(
+      (sum, account) => sum + account.baseBalanceMinor,
+      0,
+    );
+
+    return {
+      title: "كشف البنوك والصناديق والتحويلات",
+      subtitle: "أرصدة الحسابات والحركات الداخلية المسجلة",
+      period: "حتى آخر حركة محملة في النظام",
+      orientation: "landscape",
+      summary: [
+        { label: "عدد الحسابات البنكية", value: accounts.length },
+        { label: "إجمالي البنوك بالشيكل", value: formatMinor(bankTotalMinor, "₪") },
+        { label: "عدد الصناديق", value: cashAccounts.length },
+        { label: "التحويلات المالية", value: transfers.length },
+        { label: "تحويلات العملات", value: conversions.length },
+      ],
+      sections: [
+        {
+          title: "الحسابات البنكية",
+          headers: ["البنك", "الحساب", "العملة", "الرصيد الأصلي", "القيمة بالشيكل", "رقم الحساب", "IBAN"],
+          rows: accounts.map((account) => [
+            account.bank.nameAr,
+            account.name,
+            account.currencyCode,
+            formatMinor(account.currencyBalanceMinor, currencySymbol(account.currencyCode)),
+            formatMinor(account.baseBalanceMinor, "₪"),
+            account.accountNumber ?? "—",
+            account.iban ?? "—",
+          ]),
+        },
+        {
+          title: "الصناديق",
+          headers: ["الصندوق", "العملة", "الرصيد التشغيلي", "الرصيد الدفتري", "المصدر"],
+          rows: cashAccounts.map((account) => [
+            account.name,
+            account.currencyCode,
+            formatMinor(account.operationalBalanceMinor, currencySymbol(account.currencyCode)),
+            formatMinor(account.bookBalanceMinor, currencySymbol(account.currencyCode)),
+            account.balanceSource === "cash_session" ? "جلسة صندوق" : "Ledger",
+          ]),
+        },
+        {
+          title: "سجل التحويلات",
+          headers: ["الحركة", "التاريخ", "من", "إلى", "المبلغ", "بالشيكل", "الحالة", "ملاحظات"],
+          rows: transfers.map((transfer) => {
+            const code =
+              transfer.source?.currencyCode ??
+              transfer.destination?.currencyCode ??
+              "ILS";
+            return [
+              transfer.transaction.publicId,
+              transfer.transaction.businessDate,
+              transfer.source?.name ?? "—",
+              transfer.destination?.name ?? "—",
+              formatMinor(transfer.amountMinor, currencySymbol(code)),
+              formatMinor(transfer.baseAmountMinor, "₪"),
+              transfer.transaction.status === "reversed" ? "معكوس" : "مرحّل",
+              transfer.transaction.notes ?? "",
+            ];
+          }),
+        },
+        {
+          title: "سجل تحويل العملات",
+          headers: ["الحركة", "التاريخ", "من", "المبلغ الخارج", "إلى", "المبلغ الداخل", "سعر الصفقة", "فرق العملة", "الحالة"],
+          rows: conversions.map((conversion) => [
+            conversion.transaction.publicId,
+            conversion.transaction.businessDate,
+            conversion.source?.name ?? "—",
+            formatMinor(
+              conversion.fromAmountMinor,
+              currencySymbol(conversion.source?.currencyCode ?? "ILS"),
+            ),
+            conversion.destination?.name ?? "—",
+            formatMinor(
+              conversion.toAmountMinor,
+              currencySymbol(conversion.destination?.currencyCode ?? "ILS"),
+            ),
+            conversion.actualRateMicros > 0
+              ? `${(conversion.actualRateMicros / 1_000_000).toFixed(6)} ₪`
+              : "—",
+            formatMinor(conversion.fxDifferenceMinor, "₪"),
+            conversion.transaction.status === "reversed" ? "معكوس" : "مرحّل",
+          ]),
+        },
+      ],
+    };
+  }
+
+  function printBankingReport() {
+    printA4Report(buildBankingReport());
+  }
+
+  function exportBankingReport() {
+    exportReportAsExcel("banking-and-transfers.xls", buildBankingReport());
+  }
+
   return (
     <section className="banking-page">
       <div className="banking-heading">
@@ -1780,16 +1883,32 @@ export default function BankingPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={loading}
-          onClick={() =>
-            void loadData()
-          }
-        >
-          تحديث
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading}
+            onClick={printBankingReport}
+          >
+            🖨️ طباعة A4
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading}
+            onClick={exportBankingReport}
+          >
+            📊 Excel
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading}
+            onClick={() => void loadData()}
+          >
+            تحديث
+          </button>
+        </div>
       </div>
 
       {error && (
