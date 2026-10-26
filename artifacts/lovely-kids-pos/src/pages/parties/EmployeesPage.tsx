@@ -23,6 +23,10 @@ import {
   type PosEmployeeLedgerResult,
   updatePosEmployee,
 } from "../../lib/api";
+import {
+  printA4Report,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 type StatusFilter =
   | "all"
@@ -1066,6 +1070,65 @@ export default function EmployeesPage() {
     }
   }
 
+  function buildEmployeeStatement(): A4ReportOptions | null {
+    if (!selected || !ledger) {
+      return null;
+    }
+
+    return {
+      title: `كشف حركة الموظف — ${selected.name}`,
+      subtitle: `${selected.code}${selected.phone ? ` · ${selected.phone}` : ""}`,
+      orientation: "landscape",
+      summary: [
+        { label: "السلف القائمة", value: formatMinor(ledger.advanceMinor) },
+        { label: "المستحقات القائمة", value: formatMinor(ledger.payableMinor) },
+        {
+          label: "الصافي",
+          value:
+            ledger.netDueToEmployeeMinor > 0
+              ? `له ${formatMinor(ledger.netDueToEmployeeMinor)}`
+              : ledger.netDueToEmployeeMinor < 0
+                ? `عليه ${formatMinor(Math.abs(ledger.netDueToEmployeeMinor))}`
+                : "مسدد",
+        },
+        { label: "الراتب الأساسي", value: formatMinor(selected.baseSalaryMinor) },
+      ],
+      sections: [
+        {
+          title: "الحركات",
+          headers: ["التاريخ", "الحركة", "البيان", "تغير السلفة", "تغير المستحقات", "الفترة", "المرجع"],
+          rows: [...ledger.entries].reverse().map((entry) => {
+            const advanceDelta =
+              entry.accountKind === "employee_advance"
+                ? entry.debitMinor - entry.creditMinor
+                : 0;
+            const payableDelta =
+              entry.accountKind === "employee_payable"
+                ? entry.creditMinor - entry.debitMinor
+                : 0;
+
+            return [
+              entry.businessDate ?? entry.createdAt.slice(0, 10),
+              eventLabel(entry.sourceEvent),
+              entry.memo ?? "—",
+              advanceDelta === 0 ? "—" : signedMinor(advanceDelta),
+              payableDelta === 0 ? "—" : signedMinor(payableDelta),
+              entry.referencePeriod ?? "—",
+              entry.publicId ?? "—",
+            ];
+          }),
+        },
+      ],
+    };
+  }
+
+  function printEmployeeStatement() {
+    const options = buildEmployeeStatement();
+    if (options) {
+      printA4Report(options);
+    }
+  }
+
   return (
     <section
       className="employees-page"
@@ -2003,11 +2066,21 @@ export default function EmployeesPage() {
                     </p>
                   </div>
 
-                  <span>
-                    {ledgerBusy
-                      ? "جاري التحميل…"
-                      : `${ledger?.entries.length ?? 0} حركة`}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span>
+                      {ledgerBusy
+                        ? "جاري التحميل…"
+                        : `${ledger?.entries.length ?? 0} حركة`}
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={!ledger || ledgerBusy}
+                      onClick={printEmployeeStatement}
+                    >
+                      🖨️ طباعة الكشف
+                    </button>
+                  </div>
                 </div>
 
                 <div className="employees-ledger-wrap">
