@@ -36,6 +36,7 @@ import { handleUsersRequest } from "./users-routes";
 import { handleVisitorAnalyticsRequest } from "./visitor-analytics-routes";
 import { handleProductAnalyticsRequest } from "./product-analytics-routes";
 import { handleOwnerCostRequest } from "./owner-cost-routes";
+import { handleHistoricalInventoryValuationRequest } from "./historical-inventory-valuation-routes";
 import { handleOwnerReportRequest } from "./gross-profit-report-routes";
 import { handleInventoryIntelligenceRequest } from "./inventory-intelligence-routes";
 import { handleCashSessionRequest } from "./cash-session-routes";
@@ -701,6 +702,17 @@ export default {
 
       if (ownerCostResponse) {
         return ownerCostResponse;
+      }
+
+      const historicalInventoryValuationResponse =
+        await handleHistoricalInventoryValuationRequest(
+          request,
+          db,
+          env,
+        );
+
+      if (historicalInventoryValuationResponse) {
+        return historicalInventoryValuationResponse;
       }
 
       const ownerReportResponse =
