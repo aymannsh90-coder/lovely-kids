@@ -12,6 +12,11 @@ import {
   type PosFinanceAgingRow,
   type PosFinanceLiquidityReport,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  printA4Report,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 function money(
   minor: number,
@@ -348,6 +353,117 @@ export default function ReceivablesLiquidityReportPage() {
         .cashBaseComplete
     );
 
+  function buildLiquidityReport(): A4ReportOptions | null {
+    if (!report) {
+      return null;
+    }
+
+    const customerRows =
+      report.customerAging.rows
+        .filter((row) => row.balanceMinor > 0)
+        .map((row) => [
+          row.name,
+          money(row.currentMinor),
+          money(row.days31To60Minor),
+          money(row.days61To90Minor),
+          money(row.daysOver90Minor),
+          money(row.balanceMinor),
+        ]);
+
+    const supplierRows =
+      report.supplierAging.rows
+        .filter((row) => row.balanceMinor > 0)
+        .map((row) => [
+          row.name,
+          money(row.currentMinor),
+          money(row.days31To60Minor),
+          money(row.days61To90Minor),
+          money(row.daysOver90Minor),
+          money(row.balanceMinor),
+        ]);
+
+    const checkRows =
+      report.checks.rows.map((check) => [
+        check.direction === "received" ? "وارد" : "صادر",
+        check.partyName,
+        check.checkNumber,
+        check.dueDate,
+        dueText(check.daysUntilDue),
+        currencyMoney(check.amountMinor, check.currencyCode),
+        money(check.baseAmountMinor),
+      ]);
+
+    return {
+      title: "تقرير الذمم والسيولة",
+      subtitle: "أعمار الذمم والسيولة والشيكات المعلقة",
+      period: `لقطة حتى ${report.asOf}`,
+      orientation: "landscape",
+      summary: [
+        { label: "السيولة الحالية", value: money(report.summary.currentLiquidityMinor) },
+        { label: "المتوقع تحصيله", value: money(report.summary.expectedCollectionsMinor) },
+        { label: "المتوقع دفعه", value: money(report.summary.expectedPaymentsMinor) },
+        { label: "ذمم الزبائن", value: money(report.summary.customerReceivableMinor) },
+        { label: "ذمم الموردين", value: money(report.summary.supplierPayableMinor) },
+        { label: "صافي بعد المتوقع", value: money(report.summary.projectedLiquidityMinor) },
+        { label: "الصناديق", value: money(report.summary.cashOperationalBaseMinor) },
+        { label: "البنوك", value: money(report.summary.bankBaseMinor) },
+      ],
+      sections: [
+        {
+          title: "أعمار ذمم الزبائن",
+          headers: ["الطرف", "0–30", "31–60", "61–90", "+90", "الإجمالي"],
+          rows: customerRows,
+        },
+        {
+          title: "أعمار مستحقات الموردين",
+          headers: ["الطرف", "0–30", "31–60", "61–90", "+90", "الإجمالي"],
+          rows: supplierRows,
+        },
+        {
+          title: "الشيكات المعلقة",
+          headers: ["النوع", "الطرف", "رقم الشيك", "الاستحقاق", "الحالة الزمنية", "المبلغ الأصلي", "بالشيكل"],
+          rows: checkRows,
+        },
+        {
+          title: "أرصدة الصناديق",
+          headers: ["الصندوق", "العملة", "الرصيد التشغيلي", "بالشيكل", "المصدر"],
+          rows: report.liquidity.cash.map((account) => [
+            account.name,
+            account.currencyCode,
+            currencyMoney(account.operationalMinor, account.currencyCode),
+            account.operationalBaseMinor === null ? "غير متاح" : money(account.operationalBaseMinor),
+            account.balanceSource === "cash_session" ? "جلسة صندوق" : "Ledger",
+          ]),
+        },
+        {
+          title: "الحسابات البنكية",
+          headers: ["البنك", "الحساب", "العملة", "رصيد العملة", "بالشيكل"],
+          rows: report.liquidity.banks.map((account) => [
+            account.bankName,
+            account.name,
+            account.currencyCode,
+            currencyMoney(account.currencyBalanceMinor, account.currencyCode),
+            money(account.baseBalanceMinor),
+          ]),
+        },
+      ],
+    };
+  }
+
+  function printLiquidityReport() {
+    const options = buildLiquidityReport();
+    if (options) {
+      printA4Report(options);
+    }
+  }
+
+  function exportLiquidityReport() {
+    const options = buildLiquidityReport();
+    if (options) {
+      exportReportAsExcel(`receivables-liquidity-${report?.asOf ?? "report"}.xls`, options);
+    }
+  }
+
   return (
     <section
       className="liquidity-report-page"
@@ -367,18 +483,32 @@ export default function ReceivablesLiquidityReportPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="primary-button"
-          disabled={loading}
-          onClick={() =>
-            void loadData()
-          }
-        >
-          {loading
-            ? "جاري التحديث..."
-            : "تحديث"}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!report}
+            onClick={printLiquidityReport}
+          >
+            🖨️ طباعة A4
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!report}
+            onClick={exportLiquidityReport}
+          >
+            📊 Excel
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={loading}
+            onClick={() => void loadData()}
+          >
+            {loading ? "جاري التحديث..." : "تحديث"}
+          </button>
+        </div>
       </header>
 
       {error && (

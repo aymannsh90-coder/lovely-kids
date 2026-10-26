@@ -25,6 +25,11 @@ import {
   type PosFinanceCheckStatus,
   type PosFinanceCurrency,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  printA4Report,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 type CreateMode =
   | "received"
@@ -904,6 +909,66 @@ export default function ChecksPage() {
     }
   }
 
+  function buildChecksReport(): A4ReportOptions {
+    const visibleBaseTotal = visibleChecks.reduce(
+      (sum, check) => sum + check.baseAmountMinor,
+      0,
+    );
+    const directionLabel =
+      directionFilter === "received"
+        ? "شيكات مستلمة"
+        : directionFilter === "issued"
+          ? "شيكات صادرة"
+          : "كل الشيكات";
+    const statusText =
+      statusFilter === "all"
+        ? "كل الحالات"
+        : statusLabel(statusFilter);
+
+    return {
+      title: "سجل الشيكات",
+      subtitle: `${directionLabel} · ${statusText}`,
+      period: "حسب الفلاتر الحالية في الشاشة",
+      orientation: "landscape",
+      summary: [
+        { label: "عدد الشيكات الظاهرة", value: visibleChecks.length },
+        { label: "إجماليها بالشيكل", value: formatMinor(visibleBaseTotal, "₪") },
+        { label: "شيكات مستلمة مفتوحة", value: receivedOpen.length },
+        { label: "شيكات صادرة مفتوحة", value: issuedOpen.length },
+        { label: "مستحقة اليوم أو قبل", value: dueSoon },
+      ],
+      sections: [
+        {
+          title: "السجل",
+          headers: ["النوع", "رقم الشيك", "الطرف", "البنك", "العملة", "المبلغ", "بالشيكل", "الاستحقاق", "الحالة", "ملاحظات"],
+          rows: visibleChecks.map((check) => [
+            check.direction === "received" ? "مستلم" : "صادر",
+            check.checkNumber,
+            check.party?.name ?? "—",
+            check.bank?.nameAr ?? "—",
+            check.currencyCode,
+            formatMinor(
+              check.amountMinor,
+              currencyMap.get(check.currencyCode)?.symbol ?? check.currencyCode,
+            ),
+            formatMinor(check.baseAmountMinor, "₪"),
+            check.dueDate,
+            statusLabel(check.status),
+            check.notes ?? "",
+          ]),
+        },
+      ],
+    };
+  }
+
+  function printChecksReport() {
+    printA4Report(buildChecksReport());
+  }
+
+  function exportChecksReport() {
+    exportReportAsExcel("checks-register.xls", buildChecksReport());
+  }
+
   return (
     <section className="checks-page">
       <div className="checks-heading">
@@ -919,33 +984,45 @@ export default function ChecksPage() {
           </p>
         </div>
 
-        {user?.isOwner && (
-          <div className="checks-heading-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() =>
-                openCreate(
-                  "received",
-                )
-              }
-            >
-              + شيك مستلم
-            </button>
+        <div className="checks-heading-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={printChecksReport}
+            disabled={loading}
+          >
+            🖨️ طباعة A4
+          </button>
 
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() =>
-                openCreate(
-                  "issued",
-                )
-              }
-            >
-              + شيك صادر
-            </button>
-          </div>
-        )}
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={exportChecksReport}
+            disabled={loading}
+          >
+            📊 Excel
+          </button>
+
+          {user?.isOwner && (
+            <>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => openCreate("received")}
+              >
+                + شيك مستلم
+              </button>
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => openCreate("issued")}
+              >
+                + شيك صادر
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {error && (
