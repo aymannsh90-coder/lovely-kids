@@ -5,6 +5,7 @@ const META_DATASET_ID = "923601613685011";
 const META_GRAPH_VERSION = "v26.0";
 
 export type MetaWebEventName =
+  | "PageView"
   | "ViewContent"
   | "AddToCart"
   | "InitiateCheckout";
