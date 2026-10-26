@@ -1840,11 +1840,34 @@ export default function ExpensesPage() {
   }
 
   async function printExpensePeriodReport() {
+    const previewWindow =
+      window.open(
+        "",
+        "_blank",
+        "noopener,noreferrer,width=1200,height=850",
+      );
+
+    if (!previewWindow) {
+      setError(
+        "تعذر فتح معاينة الطباعة. اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.",
+      );
+      return;
+    }
+
+    previewWindow.document.write(
+      '<div dir="rtl" style="font-family:Arial;padding:24px">جاري تجهيز تقرير المصروفات…</div>',
+    );
+
     const options =
       await loadExpensePeriodReport();
 
     if (options) {
-      printA4Report(options);
+      printA4Report(
+        options,
+        previewWindow,
+      );
+    } else {
+      previewWindow.close();
     }
   }
 
