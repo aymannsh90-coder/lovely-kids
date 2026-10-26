@@ -16,6 +16,7 @@ import { useAppSettings } from "@/context/AppSettingsContext";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
+import { useNewOrders } from "@/context/NewOrdersContext";
 import { useColors } from "@/hooks/useColors";
 
 const ADMIN_CARDS = [
@@ -24,84 +25,98 @@ const ADMIN_CARDS = [
     subtitle: "المنتجات والمخزون",
     icon: "cube-outline" as const,
     route: "/admin/products" as const,
+    accent: "#2F80ED",
   },
   {
     label: "ترتيب المنتجات",
     subtitle: "تحديد ترتيب ظهور المنتجات",
     icon: "swap-vertical-outline" as const,
     route: "/admin/product-ordering" as never,
+    accent: "#8B5CF6",
   },
   {
     label: "الطلبات",
     subtitle: "متابعة طلبات الزبائن",
     icon: "bag-handle-outline" as const,
     route: "/admin/orders" as const,
+    accent: "#E91E8C",
   },
   {
     label: "شركات التوصيل",
     subtitle: "إضافة وتعديل شركات التوصيل",
     icon: "car-outline" as const,
     route: "/admin/delivery-companies" as never,
+    accent: "#06B6D4",
   },
   {
     label: "المستخدمون",
     subtitle: "الحسابات والمستخدمون",
     icon: "people-outline" as const,
     route: "/admin/users" as const,
+    accent: "#6366F1",
   },
   {
     label: "الإشعارات",
     subtitle: "إرسال الإشعارات",
     icon: "notifications-outline" as const,
     route: "/admin/notifications" as const,
+    accent: "#F59E0B",
   },
   {
     label: "عروض الكمية والخصومات",
     subtitle: "4+1 · 3+1 · خصم عام · سعر خاص",
     icon: "gift-outline" as const,
     route: "/admin/promotions" as never,
+    accent: "#EC4899",
   },
   {
     label: "قسم العروض 🔥",
     subtitle: "إدارة منتجات العروض",
     icon: "pricetag-outline" as const,
     route: "/admin/product-offers" as const,
+    accent: "#EF4444",
   },
   {
     label: "ترتيب منتجات قسم العروض",
     subtitle: "ترتيب تبويبات وأقسام العروض",
     icon: "reorder-four-outline" as const,
     route: "/admin/offers-category-order" as never,
+    accent: "#F97316",
   },
   {
     label: "عرض التوصيل",
     subtitle: "الحد الأدنى والفترة وأسعار العرض",
     icon: "car-outline" as const,
     route: "/admin/shipping-promotion" as const,
+    accent: "#0EA5E9",
   },
   {
     label: "أكواد الخصم",
     subtitle: "التفعيل، الأكواد، ونسبة الخصم والتقارير",
     icon: "ticket-outline" as const,
     route: "/admin/discount-codes" as never,
+    accent: "#10B981",
   },
   {
     label: "أقسام الصفحة الرئيسية",
     subtitle: "إظهار وإخفاء أقسام الرئيسية",
     icon: "eye-outline" as const,
     route: "/admin/home-sections" as const,
+    accent: "#14B8A6",
   },
   {
     label: "تخزين الصور",
     subtitle: "اختيار R2 أو Supabase للصور الجديدة",
     icon: "cloud-upload-outline" as const,
     route: "/admin/image-storage" as never,
+    accent: "#64748B",
   },
   {
     label: "إعدادات التطبيق",
     subtitle: "جميع الإعدادات",
     icon: "settings-outline" as const,
     route: "/admin/settings" as const,
+    accent: "#7C3AED",
   },
 ];
 
@@ -142,6 +157,10 @@ export default function AdminDashboardScreen() {
   const insets = useSafeAreaInsets();
   const { user, getAuthToken } = useAuth();
   const { products } = useProducts();
+  const {
+    pendingNewCount,
+    clearNew,
+  } = useNewOrders();
   const [showInventoryDetails, setShowInventoryDetails] = useState(false);
   const [visitorStats, setVisitorStats] =
     useState<VisitorAnalyticsStats | null>(null);
@@ -165,6 +184,34 @@ export default function AdminDashboardScreen() {
     () => products.filter((product) => product.showInOffers === true).length,
     [products],
   );
+
+  const summaryItems = [
+    {
+      label: "منتج",
+      value: products.length,
+      icon: "cube-outline" as const,
+    },
+    {
+      label: "في العروض",
+      value: offersCount,
+      icon: "pricetag-outline" as const,
+    },
+    {
+      label: "تصنيف نشط",
+      value: activeCategories.length,
+      icon: "grid-outline" as const,
+    },
+  ];
+
+  const openAdminCard = (
+    route: (typeof ADMIN_CARDS)[number]["route"],
+  ) => {
+    if (route === "/admin/orders") {
+      clearNew();
+    }
+
+    router.push(route);
+  };
 
   useEffect(() => {
     if (user?.isOwner !== true) {
@@ -304,21 +351,47 @@ export default function AdminDashboardScreen() {
         style={[
           styles.header,
           {
-            paddingTop: topPadding + 12,
+            paddingTop: topPadding + 10,
             backgroundColor: colors.primary,
           },
         ]}
       >
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-forward" size={24} color="#fff" />
+        <View style={styles.headerGlow} />
+
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={styles.headerAction}
+        >
+          <Ionicons
+            name="arrow-forward"
+            size={22}
+            color="#fff"
+          />
         </Pressable>
 
-        <View style={{ alignItems: "center" }}>
-          <Text style={styles.headerTitle}>لوحة الإدارة</Text>
-          <Text style={styles.headerSubtitle}>Lovely Kids</Text>
+        <View style={styles.headerCenter}>
+          <View style={styles.headerEyebrow}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.headerEyebrowText}>
+              إدارة المتجر
+            </Text>
+          </View>
+          <Text style={styles.headerTitle}>
+            لوحة الإدارة
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            Lovely Kids
+          </Text>
         </View>
 
-        <View style={{ width: 24 }} />
+        <View style={styles.headerAction}>
+          <Ionicons
+            name="sparkles-outline"
+            size={19}
+            color="rgba(255,255,255,0.92)"
+          />
+        </View>
       </View>
 
       <View style={styles.body}>
@@ -332,36 +405,54 @@ export default function AdminDashboardScreen() {
             },
           ]}
         >
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryNumber, { color: colors.primary }]}>
-              {products.length}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
-              منتج
-            </Text>
-          </View>
+          {summaryItems.map((item, index) => (
+            <React.Fragment key={item.label}>
+              <View style={styles.summaryItem}>
+                <View
+                  style={[
+                    styles.summaryIcon,
+                    {
+                      backgroundColor:
+                        colors.primary + "12",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={17}
+                    color={colors.primary}
+                  />
+                </View>
 
-          <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+                <Text
+                  style={[
+                    styles.summaryNumber,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {item.value.toLocaleString("en-US")}
+                </Text>
 
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryNumber, { color: colors.primary }]}>
-              {offersCount}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
-              في العروض
-            </Text>
-          </View>
+                <Text
+                  style={[
+                    styles.summaryLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </View>
 
-          <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryNumber, { color: colors.primary }]}>
-              {activeCategories.length}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
-              تصنيف نشط
-            </Text>
-          </View>
+              {index < summaryItems.length - 1 ? (
+                <View
+                  style={[
+                    styles.summaryDivider,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+              ) : null}
+            </React.Fragment>
+          ))}
         </View>
 
         {user?.isOwner === true ? (
@@ -957,41 +1048,168 @@ export default function AdminDashboardScreen() {
         ) : null}
 
         {/* Main admin cards */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          الإدارة الرئيسية
-        </Text>
-
-        <View style={styles.cardsGrid}>
-          {ADMIN_CARDS.map((item) => (
-            <Pressable
-              key={item.route}
-              onPress={() => router.push(item.route)}
+        <View style={styles.sectionHeadingRow}>
+          <View>
+            <Text
               style={[
-                styles.adminCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                },
+                styles.sectionTitle,
+                { color: colors.foreground },
               ]}
             >
-              <View
-                style={[
-                  styles.iconCircle,
-                  { backgroundColor: colors.secondary },
+              الإدارة الرئيسية
+            </Text>
+            <Text
+              style={[
+                styles.sectionHint,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              وصول سريع لأهم أدوات المتجر
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.sectionCountPill,
+              {
+                backgroundColor:
+                  colors.primary + "10",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.sectionCountText,
+                { color: colors.primary },
+              ]}
+            >
+              {ADMIN_CARDS.length}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.cardsGrid}>
+          {ADMIN_CARDS.map((item) => {
+            const isOrders =
+              item.route === "/admin/orders";
+
+            return (
+              <Pressable
+                key={item.route}
+                onPress={() =>
+                  openAdminCard(item.route)
+                }
+                style={({ pressed }) => [
+                  styles.adminCard,
+                  {
+                    backgroundColor:
+                      colors.card,
+                    borderColor:
+                      isOrders &&
+                      pendingNewCount > 0
+                        ? item.accent + "70"
+                        : colors.border,
+                    opacity: pressed ? 0.84 : 1,
+                  },
                 ]}
               >
-                <Ionicons name={item.icon} size={25} color={colors.primary} />
-              </View>
+                <View
+                  style={[
+                    styles.cardAccent,
+                    {
+                      backgroundColor:
+                        item.accent,
+                    },
+                  ]}
+                />
 
-              <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-                {item.label}
-              </Text>
+                {isOrders &&
+                pendingNewCount > 0 ? (
+                  <View
+                    style={[
+                      styles.orderBadge,
+                      {
+                        backgroundColor:
+                          item.accent,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={
+                        styles.orderBadgeText
+                      }
+                    >
+                      {pendingNewCount > 99
+                        ? "99+"
+                        : pendingNewCount}
+                    </Text>
+                  </View>
+                ) : null}
 
-              <Text style={[styles.cardSubtitle, { color: colors.mutedForeground }]}>
-                {item.subtitle}
-              </Text>
-            </Pressable>
-          ))}
+                <View style={styles.cardTopRow}>
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      {
+                        backgroundColor:
+                          item.accent + "14",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={item.icon}
+                      size={23}
+                      color={item.accent}
+                    />
+                  </View>
+
+                  <View
+                    style={[
+                      styles.cardArrow,
+                      {
+                        backgroundColor:
+                          item.accent + "0D",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="chevron-back"
+                      size={16}
+                      color={item.accent}
+                    />
+                  </View>
+                </View>
+
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    {
+                      color:
+                        isOrders &&
+                        pendingNewCount > 0
+                          ? item.accent
+                          : colors.mutedForeground,
+                    },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {isOrders &&
+                  pendingNewCount > 0
+                    ? `${pendingNewCount} طلب ${pendingNewCount === 1 ? "جديد" : "جديدة"} بانتظارك`
+                    : item.subtitle}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
@@ -1087,66 +1305,164 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   header: {
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    minHeight: 142,
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 24,
+    overflow: "hidden",
+    position: "relative",
+  },
+  headerGlow: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor:
+      "rgba(255,255,255,0.08)",
+    left: -55,
+    top: -80,
+  },
+  headerAction: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor:
+      "rgba(255,255,255,0.12)",
+  },
+  headerCenter: {
+    alignItems: "center",
+  },
+  headerEyebrow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 2,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#A7F3D0",
+  },
+  headerEyebrowText: {
+    color:
+      "rgba(255,255,255,0.82)",
+    fontSize: 10,
+    fontWeight: "700",
   },
   headerTitle: {
     color: "#fff",
-    fontSize: 20,
+    fontSize: 23,
     fontWeight: "900",
   },
   headerSubtitle: {
     color: "rgba(255,255,255,0.78)",
     fontSize: 11,
     marginTop: 2,
+    letterSpacing: 0.2,
   },
 
   body: {
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
     gap: 14,
     width: "100%",
     maxWidth: 900,
     alignSelf: "center",
+    marginTop: -14,
   },
 
   summaryCard: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    borderRadius: 22,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
     alignItems: "center",
     justifyContent: "space-around",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   summaryItem: {
     flex: 1,
     alignItems: "center",
     gap: 2,
   },
+  summaryIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
   summaryNumber: {
     fontSize: 22,
     fontWeight: "900",
   },
   summaryLabel: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
   },
   summaryDivider: {
     width: 1,
-    height: 38,
+    height: 48,
   },
 
+  sectionHeadingRow: {
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 2,
+  },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "900",
+    textAlign: "right",
+  },
+  sectionHint: {
+    fontSize: 11,
+    fontWeight: "600",
     textAlign: "right",
     marginTop: 2,
   },
+  sectionCountPill: {
+    minWidth: 36,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionCountText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
 
   cardsGrid: {
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
     flexWrap: "wrap",
     gap: 10,
   },
@@ -1155,28 +1471,90 @@ const styles = StyleSheet.create({
     flexBasis: "46%",
     minWidth: 150,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
     alignItems: "flex-end",
-    gap: 7,
-    minHeight: 132,
+    gap: 6,
+    minHeight: 116,
+    overflow: "hidden",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.035,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  cardAccent: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    left: 0,
+    height: 3,
+  },
+  cardTopRow: {
+    width: "100%",
+    flexDirection:
+      Platform.OS === "web"
+        ? "row-reverse"
+        : "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900",
     textAlign: "right",
   },
   cardSubtitle: {
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
     textAlign: "right",
+  },
+  orderBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    zIndex: 5,
+    minWidth: 25,
+    height: 25,
+    paddingHorizontal: 6,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.14,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  orderBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "900",
   },
 
   quickCard: {
