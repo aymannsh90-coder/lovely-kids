@@ -92,11 +92,42 @@ export default function AddProductScreen() {
   const barcodeBeep = useAudioPlayer(require("../../assets/sounds/barcode-beep.wav"));
   const insets = useSafeAreaInsets();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const { productId, copyFrom } =
-    useLocalSearchParams<{ productId?: string; copyFrom?: string }>();
+  const { productId, copyFrom, embed } =
+    useLocalSearchParams<{
+      productId?: string;
+      copyFrom?: string;
+      embed?: string;
+    }>();
   const { products, addProduct, updateProduct } = useProducts();
   const { settings } = useAppSettings();
   const { getAuthToken, user } = useAuth();
+
+  const isPosEmbed =
+    Platform.OS === "web" &&
+    embed === "pos";
+
+  const leaveEditor = (
+    type:
+      | "lovely-product-saved"
+      | "lovely-product-editor-close",
+  ) => {
+    if (
+      isPosEmbed &&
+      typeof window !== "undefined" &&
+      window.parent &&
+      window.parent !== window
+    ) {
+      // No secret is sent here. The POS parent validates both the child
+      // origin and the exact iframe window before acting on this message.
+      window.parent.postMessage(
+        { type },
+        "*",
+      );
+      return;
+    }
+
+    router.back();
+  };
   const categoryLabels = settings.categoryLabels ?? DEFAULT_CATEGORY_LABELS;
   const ageGroupLabels = settings.ageGroupLabels ?? DEFAULT_AGE_GROUP_LABELS;
   const customCategories = settings.customCategories ?? [];
@@ -2656,7 +2687,7 @@ export default function AddProductScreen() {
         );
       }
 
-      router.back();
+      leaveEditor("lovely-product-saved");
     } catch (error) {
       setErrors([
         error instanceof Error
@@ -2677,7 +2708,13 @@ export default function AddProductScreen() {
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.primary }]}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable
+          onPress={() =>
+            leaveEditor(
+              "lovely-product-editor-close",
+            )
+          }
+        >
           <Ionicons name="arrow-forward" size={24} color="#fff" />
         </Pressable>
         <Text style={styles.title}>
