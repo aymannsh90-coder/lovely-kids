@@ -1559,9 +1559,43 @@ textarea:disabled {
 }
 
 #pos-sale .complete-sale-print-button {
-  border-color: #f1b8d7;
-  color: #b11d69;
-  background: #fff7fb;
+  display: grid;
+  min-height: 64px;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  border: 0;
+  color: #fff;
+  background:
+    linear-gradient(
+      135deg,
+      #ed238f,
+      #df177f
+    );
+  box-shadow:
+    0 9px 20px rgba(233, 30, 140, 0.22);
+}
+
+#pos-sale .complete-sale-print-button:hover:not(:disabled) {
+  background:
+    linear-gradient(
+      135deg,
+      #e11b83,
+      #cf126f
+    );
+}
+
+#pos-sale .sale-print-icon {
+  display: block;
+  font-size: 22px;
+  line-height: 1;
+}
+
+#pos-sale .complete-sale-no-print-button {
+  min-height: 44px;
+  border-color: #e2d4dc;
+  color: #6e5262;
+  background: #fff;
 }
 
 #pos-sale .pos-product-search-panel {
