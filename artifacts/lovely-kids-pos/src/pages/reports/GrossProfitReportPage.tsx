@@ -16,6 +16,10 @@ import {
   type GrossProfitMissingCostProduct,
   type GrossProfitReport,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 function dateInput(
   date: Date,
@@ -718,6 +722,84 @@ export default function GrossProfitReportPage() {
       },
     );
 
+  function buildGrossProfitExcel(): A4ReportOptions | null {
+    if (!report) {
+      return null;
+    }
+
+    const channelRows = [
+      ["الإجمالي", report.channels.total],
+      ["المحل — POS", report.channels.pos],
+      ["المتجر الإلكتروني", report.channels.online],
+    ] as const;
+
+    return {
+      title: "تقرير مجمل الربح",
+      subtitle: "مجمل الربح قبل المصروفات التشغيلية",
+      period: `الفترة: ${report.range.from} — ${report.range.to}`,
+      orientation: "landscape",
+      summary: [
+        { label: "صافي المبيعات", value: formatReportMoney(report.channels.total.netSalesMinor) },
+        { label: "تكلفة البضاعة المسجلة", value: formatReportMoney(report.channels.total.cogsKnownMinor) },
+        {
+          label: "مجمل الربح",
+          value: report.channels.total.grossProfitMinor === null
+            ? "غير مكتمل"
+            : formatReportMoney(report.channels.total.grossProfitMinor),
+        },
+        { label: "هامش مجمل الربح", value: percent(report.channels.total.grossMarginPercent) },
+        { label: "التوصيل المحصل", value: formatReportMoney(report.channels.total.shippingChargedMinor) },
+        { label: "تكلفة شركة التوصيل", value: formatReportMoney(report.channels.total.deliveryCompanyCostMinor) },
+      ],
+      sections: [
+        {
+          title: "تفصيل القنوات",
+          headers: ["القناة", "المبيعات", "المردودات", "صافي المبيعات", "التكلفة", "مجمل الربح", "الهامش", "المبيعات #", "المردودات #", "التبديلات #", "تغطية التكلفة"],
+          rows: channelRows.map(([label, data]) => [
+            label,
+            formatReportMoney(data.salesMinor),
+            formatReportMoney(data.returnsMinor),
+            formatReportMoney(data.netSalesMinor),
+            formatReportMoney(data.cogsKnownMinor),
+            data.grossProfitMinor === null ? "غير مكتمل" : formatReportMoney(data.grossProfitMinor),
+            percent(data.grossMarginPercent),
+            data.documents,
+            data.returnDocuments,
+            data.exchangeDocuments,
+            `${reportNumber(data.costCoveragePercent)}%`,
+          ]),
+        },
+        {
+          title: "التوصيل",
+          headers: ["المحصل من الزبائن", "تكلفة شركة التوصيل", "صافي التوصيل", "مجمل الربح بعد التوصيل"],
+          rows: [[
+            formatReportMoney(report.channels.total.shippingChargedMinor),
+            formatReportMoney(report.channels.total.deliveryCompanyCostMinor),
+            formatReportMoney(report.channels.total.deliveryImpactMinor),
+            report.channels.total.profitAfterDeliveryMinor === null
+              ? "غير مكتمل"
+              : formatReportMoney(report.channels.total.profitAfterDeliveryMinor),
+          ]],
+        },
+        {
+          title: "تنبيهات",
+          headers: ["التنبيه"],
+          rows: report.warnings.map((warning) => [warning]),
+        },
+      ],
+    };
+  }
+
+  function exportGrossProfitExcel() {
+    const options = buildGrossProfitExcel();
+    if (options) {
+      exportReportAsExcel(
+        `gross-profit-${report?.range.from ?? "from"}-${report?.range.to ?? "to"}.xls`,
+        options,
+      );
+    }
+  }
+
   return (
     <div
       dir="rtl"
@@ -974,6 +1056,15 @@ export default function GrossProfitReportPage() {
             }
           >
             🖨️ طباعة A4
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!report}
+            onClick={exportGrossProfitExcel}
+          >
+            📊 Excel
           </button>
         </div>
 
