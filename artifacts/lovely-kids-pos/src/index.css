@@ -1539,14 +1539,15 @@ textarea:disabled {
 
 #pos-sale.sale-panel .sale-summary > .complete-sale-actions {
   display: grid !important;
-  width: calc(100% + 28px) !important;
-  max-width: calc(100% + 28px) !important;
+  width: 100% !important;
+  max-width: 100% !important;
   flex: 0 0 auto !important;
   align-self: center !important;
   justify-self: stretch !important;
+  justify-items: center !important;
   gap: 7px;
   margin-top: 3px;
-  margin-inline: -14px !important;
+  margin-inline: 0 !important;
   padding-top: 8px;
   padding-inline: 0;
   border-top: 1px solid #eadce5;
@@ -1554,13 +1555,13 @@ textarea:disabled {
 }
 
 #pos-sale.sale-panel .sale-summary > .complete-sale-actions > button {
-  width: 100% !important;
-  min-width: 100% !important;
-  max-width: 100% !important;
-  justify-self: stretch !important;
+  width: 88% !important;
+  min-width: 0 !important;
+  max-width: 320px !important;
+  justify-self: center !important;
   align-self: stretch !important;
   min-height: 48px;
-  margin-inline: 0 !important;
+  margin-inline: auto !important;
   border-radius: 11px;
   font-size: 13px;
   line-height: 1.35;
