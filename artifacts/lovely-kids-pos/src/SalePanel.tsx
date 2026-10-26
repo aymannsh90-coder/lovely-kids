@@ -1578,8 +1578,13 @@ export default function SalePanel({
 
   useEffect(() => {
     function handleSaleShortcut(event: globalThis.KeyboardEvent) {
+      const isSaveShortcut =
+        event.key === "F3";
+      const isPrintShortcut =
+        event.key === "F4";
+
       if (
-        event.key !== "F3" ||
+        (!isSaveShortcut && !isPrintShortcut) ||
         event.repeat ||
         event.altKey ||
         event.ctrlKey ||
@@ -1592,6 +1597,15 @@ export default function SalePanel({
       event.preventDefault();
 
       if (saleBusy || cart.length === 0) {
+        return;
+      }
+
+      if (isPrintShortcut) {
+        if (paymentMethod === "credit") {
+          return;
+        }
+
+        void completeSale(undefined, true);
         return;
       }
 
@@ -1609,7 +1623,12 @@ export default function SalePanel({
         handleSaleShortcut,
       );
     };
-  }, [saleBusy, cart.length, completeSale]);
+  }, [
+    saleBusy,
+    cart.length,
+    paymentMethod,
+    completeSale,
+  ]);
 
   return (
     <>
@@ -2715,6 +2734,8 @@ export default function SalePanel({
                 <button
                   className="primary-button complete-sale-button complete-sale-print-button"
                   type="button"
+                  aria-keyshortcuts="F4"
+                  title="اختصار الطباعة: F4"
                   disabled={saleBusy || cart.length === 0}
                   onClick={() => void completeSale(undefined, true)}
                 >
@@ -2725,16 +2746,26 @@ export default function SalePanel({
                     🖨️
                   </span>
 
-                  <span>
-                    {saleBusy
-                      ? "جاري الحفظ والطباعة…"
-                      : "إتمام البيع + طباعة فاتورة حرارية"}
+                  <span className="sale-print-button-label">
+                    <span>
+                      {saleBusy
+                        ? "جاري الحفظ والطباعة…"
+                        : "إتمام البيع + طباعة فاتورة حرارية"}
+                    </span>
+
+                    {!saleBusy && (
+                      <kbd className="sale-shortcut-key sale-shortcut-key-print">
+                        F4
+                      </kbd>
+                    )}
                   </span>
                 </button>
 
                 <button
                   className="secondary-button complete-sale-button complete-sale-no-print-button"
                   type="button"
+                  aria-keyshortcuts="F3"
+                  title="اختصار الحفظ: F3"
                   disabled={saleBusy || cart.length === 0}
                   onClick={() => void completeSale()}
                 >
