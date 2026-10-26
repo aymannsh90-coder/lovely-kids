@@ -40,6 +40,7 @@ import CustomerStatementReportPage from "../pages/reports/CustomerStatementRepor
 import SupplierStatementReportPage from "../pages/reports/SupplierStatementReportPage";
 import GrossProfitReportPage from "../pages/reports/GrossProfitReportPage";
 import InventoryValuationReportPage from "../pages/reports/InventoryValuationReportPage";
+import HistoricalInventoryValuationReportPage from "../pages/reports/HistoricalInventoryValuationReportPage";
 import InventoryIntelligenceReportPage from "../pages/reports/InventoryIntelligenceReportPage";
 import ProductAnalyticsReportPage from "../pages/reports/ProductAnalyticsReportPage";
 import SalesAnalyticsPage from "../pages/reports/SalesAnalyticsPage";
@@ -387,6 +388,15 @@ export default function AppRouter() {
           element={
             <RequireOwner>
               <InventoryValuationReportPage />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="reports/inventory-valuation-history"
+          element={
+            <RequireOwner>
+              <HistoricalInventoryValuationReportPage />
             </RequireOwner>
           }
         />
