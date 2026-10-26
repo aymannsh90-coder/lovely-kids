@@ -21,6 +21,7 @@ import {
   sanitizePublicSettingsData,
 } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
+import { handleMetaWebEventRequest } from "./meta-capi";
 import { handleDiscountCodeRequest } from "./discount-code-routes";
 import { handlePromotionRequest } from "./promotion-routes";
 import { handleImageRequest } from "./image-routes";
@@ -307,6 +308,12 @@ export default {
     }
 
     const path = new URL(request.url).pathname;
+
+    const metaWebEventResponse =
+      await handleMetaWebEventRequest(request, env);
+    if (metaWebEventResponse) {
+      return metaWebEventResponse;
+    }
 
     if (
       request.method === "GET" &&
