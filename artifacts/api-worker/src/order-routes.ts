@@ -968,12 +968,23 @@ async function handleMetaWebEvent(
   }
 
   const attribution = getMetaAttribution(body);
+  if (!attribution.eventSourceUrl) {
+    return json({ error: "Invalid Meta event source" }, 400);
+  }
+
   const customData =
     body.customData &&
     typeof body.customData === "object" &&
     !Array.isArray(body.customData)
       ? body.customData as Record<string, unknown>
       : {};
+
+  // Keep the public analytics endpoint deliberately small. It accepts only
+  // browser-originated store URLs and modest event payloads; analytics must
+  // never become a generic proxy to the Meta API.
+  if (JSON.stringify(customData).length > 8192) {
+    return json({ error: "Meta event payload too large" }, 413);
+  }
 
   try {
     const result = await sendMetaWebEvent(env, request, {
