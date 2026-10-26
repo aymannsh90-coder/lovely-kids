@@ -74,6 +74,7 @@ export default function ProductManagementPage() {
 
   const [products, setProducts] = useState<PosAdminInventoryProduct[]>([]);
   const [valuation, setValuation] = useState<OwnerInventoryValuationProduct[]>([]);
+  const [valuationReady, setValuationReady] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ProductFilter>("all");
   const [loading, setLoading] = useState(true);
@@ -95,16 +96,33 @@ export default function ProductManagementPage() {
     setError("");
 
     try {
-      const [rows, valuationResult] =
-        await Promise.all([
-          getPosAdminInventoryProducts(token),
-          user?.isOwner
-            ? getOwnerInventoryValuationProducts(token)
-            : Promise.resolve({ products: [] }),
-        ]);
+      const rows =
+        await getPosAdminInventoryProducts(
+          token,
+        );
 
       setProducts(rows);
-      setValuation(valuationResult.products);
+      setValuation([]);
+      setValuationReady(false);
+
+      if (user?.isOwner) {
+        try {
+          const valuationResult =
+            await getOwnerInventoryValuationProducts(
+              token,
+            );
+
+          setValuation(
+            valuationResult.products,
+          );
+          setValuationReady(true);
+        } catch {
+          // Cost metadata is an optional owner-only enhancement here.
+          // Product management must remain usable if this report is unavailable.
+          setValuation([]);
+          setValuationReady(false);
+        }
+      }
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         clearAuthentication();
@@ -197,7 +215,7 @@ export default function ProductManagementPage() {
       noQr: activeProducts.filter(
         (product) => !hasQr(product),
       ).length,
-      noCost: user?.isOwner
+      noCost: user?.isOwner && valuationReady
         ? activeProducts.filter(
             (product) => !hasKnownCost(product),
           ).length
@@ -210,6 +228,7 @@ export default function ProductManagementPage() {
     products,
     user?.isOwner,
     valuationByProduct,
+    valuationReady,
   ]);
 
   const displayedProducts = useMemo(() => {
@@ -447,7 +466,7 @@ export default function ProductManagementPage() {
             ["new", "الجديد", counts.new],
             ["out", "بدون كمية", counts.out],
             ["noQr", "بدون QR", counts.noQr],
-            ...(user?.isOwner
+            ...(user?.isOwner && valuationReady
               ? [["noCost", "بدون تكلفة", counts.noCost] as const]
               : []),
             ["hidden", "مخفي", counts.hidden],
