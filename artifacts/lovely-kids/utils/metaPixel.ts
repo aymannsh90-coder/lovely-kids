@@ -1,3 +1,5 @@
+import { API_BASE } from "@/constants/api";
+
 export type MetaPixelEvent =
   | "ViewContent"
   | "AddToCart"
@@ -123,6 +125,59 @@ export function setMetaAdvancedMatching(
   }
 }
 
+function readMetaCookie(name: string): string | undefined {
+  const root = globalThis as typeof globalThis & {
+    document?: { cookie?: string };
+  };
+  const cookieText = root.document?.cookie;
+  if (!cookieText) return undefined;
+  const prefix = `${name}=`;
+  const entry = cookieText.split(";").map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  if (!entry) return undefined;
+  const value = entry.slice(prefix.length);
+  try { return decodeURIComponent(value); } catch { return value; }
+}
+
+function createMetaEventId(event: MetaPixelEvent): string {
+  const cryptoRoot = globalThis as typeof globalThis & {
+    crypto?: { randomUUID?: () => string };
+  };
+  const random = cryptoRoot.crypto?.randomUUID?.() ??
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `lk-${event.toLowerCase()}-${random}`;
+}
+
+function sendMetaCapiEvent(
+  event: Exclude<MetaPixelEvent, "Purchase">,
+  eventId: string,
+  params: MetaPixelParams,
+): void {
+  const root = globalThis as typeof globalThis & {
+    location?: { href?: string };
+    document?: unknown;
+  };
+  if (!root.document || typeof root.location?.href !== "string") return;
+
+  const metaFbp = readMetaCookie("_fbp");
+  const metaFbc = readMetaCookie("_fbc");
+
+  void fetch(`${API_BASE}/api/meta/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      eventName: event,
+      eventId,
+      customData: params,
+      ...(metaFbp ? { metaFbp } : {}),
+      ...(metaFbc ? { metaFbc } : {}),
+      metaEventSourceUrl: root.location.href,
+    }),
+  }).catch(() => {
+    // Meta analytics must never block or break the shopping experience.
+  });
+}
+
 export function trackMetaEvent(
   event: MetaPixelEvent,
   params: MetaPixelParams = {},
@@ -132,17 +187,13 @@ export function trackMetaEvent(
     fbq?: (...args: unknown[]) => void;
   };
 
-  if (typeof root.fbq !== "function") return;
+  const eventId = options.eventId ?? createMetaEventId(event);
 
-  if (options.eventId) {
-    root.fbq(
-      "track",
-      event,
-      params,
-      { eventID: options.eventId },
-    );
-    return;
+  if (typeof root.fbq === "function") {
+    root.fbq("track", event, params, { eventID: eventId });
   }
 
-  root.fbq("track", event, params);
+  if (event !== "Purchase") {
+    sendMetaCapiEvent(event, eventId, params);
+  }
 }
