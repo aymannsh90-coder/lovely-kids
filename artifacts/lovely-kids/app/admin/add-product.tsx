@@ -321,9 +321,105 @@ export default function AddProductScreen() {
     startY: 0,
   });
   const copiedFromRef = useRef<string | null>(null);
+  const editHydratedRef = useRef<string | null>(null);
 
   const topPadding = getResponsiveTopPadding(insets.top);
   const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
+
+  useEffect(() => {
+    if (
+      !editProduct ||
+      !productId ||
+      editHydratedRef.current === editProduct.id
+    ) {
+      return;
+    }
+
+    editHydratedRef.current = editProduct.id;
+
+    setNameAr(editProduct.nameAr ?? "");
+    setName(editProduct.name ?? "");
+    setProductCode(editProduct.productCode ?? "");
+    setBarcode(editProduct.barcode ?? "");
+    setAdditionalBarcodes([
+      ...(editProduct.additionalBarcodes ?? []),
+    ]);
+    setAdditionalBarcodesExpanded(
+      (editProduct.additionalBarcodes?.length ?? 0) > 0,
+    );
+
+    setPrice(editProduct.price?.toString() ?? "");
+    setOriginalPrice(
+      editProduct.originalPrice?.toString() ?? "",
+    );
+
+    setImage(editProduct.image ?? "");
+    setImages([...(editProduct.images ?? [])]);
+    setDescription(editProduct.description ?? "");
+
+    setCategory(editProduct.category ?? "clothes");
+    setAgeGroup(editProduct.ageGroup ?? "newborn");
+    setGender(editProduct.gender ?? null);
+    setSeason(editProduct.season ?? null);
+    setIsPinned(editProduct.isPinned ?? false);
+    setShowInOffers(editProduct.showInOffers ?? false);
+
+    setFacebookUrl(editProduct.facebookUrl ?? "");
+    setInstagramUrl(editProduct.instagramUrl ?? "");
+    setTiktokUrl(editProduct.tiktokUrl ?? "");
+
+    setStock(
+      editProduct.stock !== undefined &&
+      editProduct.stock !== null
+        ? editProduct.stock.toString()
+        : "",
+    );
+
+    setSizes([...(editProduct.sizes ?? [])]);
+    setColorVariants(
+      (editProduct.colorVariants ?? []).map(
+        (variant) => ({
+          ...variant,
+          sizes: variant.sizes.map(
+            (entry) => ({ ...entry }),
+          ),
+        }),
+      ),
+    );
+
+    setIsNew(editProduct.isNew ?? false);
+
+    const remainingDays =
+      editProduct.isNew &&
+      editProduct.newUntil
+        ? Math.max(
+            1,
+            Math.ceil(
+              (
+                new Date(
+                  editProduct.newUntil,
+                ).getTime() -
+                Date.now()
+              ) / 86400000,
+            ),
+          )
+        : 7;
+
+    setNewDays(String(remainingDays));
+    setNewDaysMode(
+      remainingDays === 7
+        ? "7"
+        : remainingDays === 14
+          ? "14"
+          : "custom",
+    );
+    setNewDurationChanged(false);
+
+    setEditStockCostMode(null);
+    setEditNewBatchCostInput("");
+    setOpeningCostInput("");
+    setErrors([]);
+  }, [editProduct, productId]);
 
   useEffect(() => {
     if (
