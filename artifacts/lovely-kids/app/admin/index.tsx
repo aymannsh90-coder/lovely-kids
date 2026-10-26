@@ -28,18 +28,18 @@ const ADMIN_CARDS = [
     accent: "#2F80ED",
   },
   {
-    label: "ترتيب المنتجات",
-    subtitle: "تحديد ترتيب ظهور المنتجات",
-    icon: "swap-vertical-outline" as const,
-    route: "/admin/product-ordering" as never,
-    accent: "#8B5CF6",
-  },
-  {
     label: "الطلبات",
     subtitle: "متابعة طلبات الزبائن",
     icon: "bag-handle-outline" as const,
     route: "/admin/orders" as const,
     accent: "#E91E8C",
+  },
+  {
+    label: "ترتيب المنتجات",
+    subtitle: "تحديد ترتيب ظهور المنتجات",
+    icon: "swap-vertical-outline" as const,
+    route: "/admin/product-ordering" as never,
+    accent: "#8B5CF6",
   },
   {
     label: "شركات التوصيل",
@@ -1204,7 +1204,9 @@ export default function AdminDashboardScreen() {
                 >
                   {isOrders &&
                   pendingNewCount > 0
-                    ? `${pendingNewCount} طلب ${pendingNewCount === 1 ? "جديد" : "جديدة"} بانتظارك`
+                    ? pendingNewCount === 1
+                      ? "طلب جديد بانتظارك"
+                      : `${pendingNewCount} طلبات جديدة بانتظارك`
                     : item.subtitle}
                 </Text>
               </Pressable>
