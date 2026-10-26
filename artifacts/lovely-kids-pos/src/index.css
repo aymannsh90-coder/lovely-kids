@@ -1537,26 +1537,30 @@ textarea:disabled {
   font-size: 13px;
 }
 
-#pos-sale .complete-sale-actions {
-  display: grid;
-  width: 100% !important;
-  max-width: none !important;
+#pos-sale.sale-panel .sale-summary > .complete-sale-actions {
+  display: grid !important;
+  width: calc(100% + 28px) !important;
+  max-width: calc(100% + 28px) !important;
+  flex: 0 0 auto !important;
+  align-self: center !important;
   justify-self: stretch !important;
-  align-self: stretch !important;
   gap: 7px;
   margin-top: 3px;
-  margin-inline: 0 !important;
+  margin-inline: -14px !important;
   padding-top: 8px;
   padding-inline: 0;
   border-top: 1px solid #eadce5;
   box-sizing: border-box;
 }
 
-#pos-sale .complete-sale-actions button {
+#pos-sale.sale-panel .sale-summary > .complete-sale-actions > button {
   width: 100% !important;
-  max-width: none !important;
-  justify-self: stretch;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
   min-height: 48px;
+  margin-inline: 0 !important;
   border-radius: 11px;
   font-size: 13px;
   line-height: 1.35;
@@ -1599,6 +1603,20 @@ textarea:disabled {
   display: block;
   font-size: 22px;
   line-height: 1;
+}
+
+#pos-sale .sale-print-button-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+}
+
+#pos-sale .sale-shortcut-key-print {
+  border-color: rgba(255, 255, 255, 0.7);
+  color: #9a1559;
+  background: #fff;
 }
 
 #pos-sale .complete-sale-no-print-button {
