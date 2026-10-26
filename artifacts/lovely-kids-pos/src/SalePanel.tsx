@@ -2673,23 +2673,34 @@ export default function SalePanel({
             {paymentMethod !== "credit" && (
               <div className="complete-sale-actions">
                 <button
-                  className="primary-button complete-sale-button"
-                  type="button"
-                  disabled={saleBusy || cart.length === 0}
-                  onClick={() => void completeSale()}
-                >
-                  {saleBusy ? "جاري حفظ البيع…" : "إتمام البيع وخصم المخزون"}
-                </button>
-
-                <button
-                  className="secondary-button complete-sale-print-button"
+                  className="primary-button complete-sale-button complete-sale-print-button"
                   type="button"
                   disabled={saleBusy || cart.length === 0}
                   onClick={() => void completeSale(undefined, true)}
                 >
+                  <span
+                    className="sale-print-icon"
+                    aria-hidden="true"
+                  >
+                    🖨️
+                  </span>
+
+                  <span>
+                    {saleBusy
+                      ? "جاري الحفظ والطباعة…"
+                      : "إتمام البيع + خصم المخزون + طباعة فاتورة حرارية"}
+                  </span>
+                </button>
+
+                <button
+                  className="secondary-button complete-sale-button complete-sale-no-print-button"
+                  type="button"
+                  disabled={saleBusy || cart.length === 0}
+                  onClick={() => void completeSale()}
+                >
                   {saleBusy
-                    ? "جاري الحفظ…"
-                    : "إتمام البيع + خصم المخزون + طباعة فاتورة حرارية"}
+                    ? "جاري حفظ البيع…"
+                    : "إتمام البيع وخصم المخزون"}
                 </button>
               </div>
             )}
