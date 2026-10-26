@@ -399,6 +399,18 @@ export const posNavigation: PosNavigationItem[] = [
     requiresOpenSession: false,
     status: "ready",
   },
+
+  {
+    key: "inventory-valuation-history",
+    group: "reports",
+    path: "/reports/inventory-valuation-history",
+    title: "تقييم المخزون بتاريخ",
+    description: "الكمية المتوفرة وتكلفة القطعة وإجمالي قيمة المخزون في تاريخ سابق.",
+    icon: "🗓️",
+    requiresOpenSession: false,
+    ownerOnly: true,
+    status: "ready",
+  },
   {
     key: "inventory-intelligence",
     group: "reports",

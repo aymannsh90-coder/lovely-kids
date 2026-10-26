@@ -931,6 +931,13 @@ export default function InventoryValuationReportPage() {
             تحديث البيانات
           </button>
 
+          <a
+            className="secondary-button"
+            href="/reports/inventory-valuation-history"
+          >
+            🗓️ تقييم بتاريخ
+          </a>
+
           <button
             type="button"
             className="primary-button"
