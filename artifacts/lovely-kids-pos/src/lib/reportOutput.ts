@@ -78,8 +78,13 @@ function reportBody(options: A4ReportOptions) {
   `;
 }
 
-export function printA4Report(options: A4ReportOptions) {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=850");
+export function printA4Report(
+  options: A4ReportOptions,
+  existingWindow?: Window | null,
+) {
+  const printWindow =
+    existingWindow ??
+    window.open("", "_blank", "noopener,noreferrer,width=1200,height=850");
 
   if (!printWindow) {
     throw new Error("تعذر فتح معاينة الطباعة. اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.");
