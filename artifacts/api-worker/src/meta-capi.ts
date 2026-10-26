@@ -299,3 +299,96 @@ export async function sendMetaWebEvent(
     clearTimeout(timeout);
   }
 }
+
+
+function normalizeMetaBrowserIdentifier(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 1024 || !/^fb\.\d+\.\d+\.[^\s]+$/.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
+}
+
+function normalizeStoreEventSourceUrl(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim() || value.length > 2048) return undefined;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+    const hostname = url.hostname.toLowerCase();
+    const allowed =
+      hostname === "lovelykids.net" ||
+      hostname.endsWith(".lovelykids.net") ||
+      hostname === "lovely-kids.pages.dev" ||
+      hostname.endsWith(".lovely-kids.pages.dev");
+    return allowed ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function metaJson(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+export async function handleMetaWebEventRequest(
+  request: Request,
+  env: Env,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (request.method !== "POST" || url.pathname !== "/api/meta/events") return null;
+
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body || typeof body !== "object") return metaJson({ error: "Invalid Meta event payload" }, 400);
+
+  const allowedEvents = new Set<MetaWebEventName>([
+    "PageView",
+    "ViewContent",
+    "AddToCart",
+    "InitiateCheckout",
+  ]);
+  const eventName = body.eventName;
+  const eventId = typeof body.eventId === "string" ? body.eventId.trim() : "";
+  if (
+    typeof eventName !== "string" ||
+    !allowedEvents.has(eventName as MetaWebEventName) ||
+    !/^[A-Za-z0-9._:-]{8,160}$/.test(eventId)
+  ) {
+    return metaJson({ error: "Invalid Meta event" }, 400);
+  }
+
+  const eventSourceUrl = normalizeStoreEventSourceUrl(body.metaEventSourceUrl);
+  if (!eventSourceUrl) return metaJson({ error: "Invalid Meta event source" }, 400);
+
+  const customData = body.customData && typeof body.customData === "object" && !Array.isArray(body.customData)
+    ? body.customData as Record<string, unknown>
+    : {};
+  if (JSON.stringify(customData).length > 8192) {
+    return metaJson({ error: "Meta event payload too large" }, 413);
+  }
+
+  try {
+    const result = await sendMetaWebEvent(env, request, {
+      eventName: eventName as MetaWebEventName,
+      eventId,
+      fbp: normalizeMetaBrowserIdentifier(body.metaFbp),
+      fbc: normalizeMetaBrowserIdentifier(body.metaFbc),
+      eventSourceUrl,
+      customData,
+    });
+    return metaJson(result);
+  } catch (error) {
+    console.error("META_CAPI_WEB_EVENT_FAILED", {
+      eventName,
+      eventId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return metaJson({ sent: false, reason: "delivery_failed" });
+  }
+}
