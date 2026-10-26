@@ -30,7 +30,7 @@ import {
   OrderFinanceError,
 } from "./order-finance";
 import { rewriteMediaUrlsForPublic } from "./media-url";
-import { sendMetaPurchaseEvent, sendMetaWebEvent, type MetaWebEventName } from "./meta-capi";
+import { sendMetaPurchaseEvent } from "./meta-capi";
 import {
   mergeOnlineOrders,
   OrderMergeError,
@@ -941,86 +941,12 @@ async function handleMarkOrderPrinted(
   return json(updated[0]);
 }
 
-async function handleMetaWebEvent(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
-
-  if (!body || typeof body !== "object") {
-    return json({ error: "Invalid Meta event payload" }, 400);
-  }
-
-  const allowedEvents = new Set<MetaWebEventName>([
-    "PageView",
-    "ViewContent",
-    "AddToCart",
-    "InitiateCheckout",
-  ]);
-  const eventName = body.eventName;
-  const eventId = typeof body.eventId === "string" ? body.eventId.trim() : "";
-
-  if (
-    typeof eventName !== "string" ||
-    !allowedEvents.has(eventName as MetaWebEventName) ||
-    !/^[A-Za-z0-9._:-]{8,160}$/.test(eventId)
-  ) {
-    return json({ error: "Invalid Meta event" }, 400);
-  }
-
-  const attribution = getMetaAttribution(body);
-  if (!attribution.eventSourceUrl) {
-    return json({ error: "Invalid Meta event source" }, 400);
-  }
-
-  const customData =
-    body.customData &&
-    typeof body.customData === "object" &&
-    !Array.isArray(body.customData)
-      ? body.customData as Record<string, unknown>
-      : {};
-
-  // Keep the public analytics endpoint deliberately small. It accepts only
-  // browser-originated store URLs and modest event payloads; analytics must
-  // never become a generic proxy to the Meta API.
-  if (JSON.stringify(customData).length > 8192) {
-    return json({ error: "Meta event payload too large" }, 413);
-  }
-
-  try {
-    const result = await sendMetaWebEvent(env, request, {
-      eventName: eventName as MetaWebEventName,
-      eventId,
-      fbp: attribution.fbp,
-      fbc: attribution.fbc,
-      eventSourceUrl: attribution.eventSourceUrl,
-      customData,
-    });
-    return json(result);
-  } catch (error) {
-    console.error("META_CAPI_WEB_EVENT_FAILED", {
-      eventName,
-      eventId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Analytics is best-effort and must never affect the shopping flow.
-    return json({ sent: false, reason: "delivery_failed" });
-  }
-}
-
 export async function handleOrderRequest(
   request: Request,
   db: Db,
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
-  if (
-    request.method === "POST" &&
-    path === "/api/meta/events"
-  ) {
-    return handleMetaWebEvent(request, env);
-  }
-
 
   if (
     request.method === "POST" &&
