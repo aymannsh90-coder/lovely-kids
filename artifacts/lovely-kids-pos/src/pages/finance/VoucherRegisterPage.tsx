@@ -648,7 +648,7 @@ export default function VoucherRegisterPage() {
     }
     @page {
       size: A4 portrait;
-      margin: 10mm;
+      margin: 12mm 9mm;
     }
     @media print {
       .sheet {
@@ -813,7 +813,7 @@ export default function VoucherRegisterPage() {
     }
     @page {
       size: A4 landscape;
-      margin: 8mm 9mm;
+      margin: 12mm 9mm;
     }
   </style>
 </head>

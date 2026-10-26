@@ -1400,7 +1400,7 @@ textarea:disabled {
 
 @page daily-sales {
   size: A4 landscape;
-  margin: 9mm;
+  margin: 12mm 9mm;
 }
 
 @media print {

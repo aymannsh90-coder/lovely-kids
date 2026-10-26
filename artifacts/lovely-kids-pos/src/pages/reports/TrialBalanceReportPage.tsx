@@ -268,7 +268,7 @@ export default function TrialBalanceReportPage() {
         @media print {
           @page {
             size: A4 landscape;
-            margin: 8mm 9mm;
+            margin: 12mm 9mm;
           }
 
           html,

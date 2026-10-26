@@ -696,7 +696,7 @@ export default function CustomerStatementReportPage() {
         @media print {
           @page {
             size: A4 landscape;
-            margin: 9mm 10mm;
+            margin: 12mm 9mm;
           }
 
           html,
