@@ -16,6 +16,11 @@ import {
   type PosCardProcessor,
   type PosCardSettlementSummary,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  printA4Report,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 function formatMinor(
   value: number,
@@ -566,6 +571,80 @@ export default function CardSettlementsPage() {
     }
   }
 
+  function buildCardSettlementsReport(): A4ReportOptions | null {
+    if (!data) {
+      return null;
+    }
+
+    const posted = data.settlements.filter(
+      (item) => item.transaction.status === "posted",
+    );
+    const grossTotal = posted.reduce(
+      (sum, item) => sum + item.grossMinor,
+      0,
+    );
+    const netTotal = posted.reduce(
+      (sum, item) => sum + item.netMinor,
+      0,
+    );
+    const feeTotal = posted.reduce(
+      (sum, item) => sum + item.feeMinor,
+      0,
+    );
+
+    return {
+      title: "تقرير تسويات الفيزا",
+      subtitle: "أرصدة الماكينات والتسويات البنكية والعمولات",
+      orientation: "landscape",
+      summary: [
+        { label: "رصيد العربي قيد التحصيل", value: formatMinor(data.terminals.find((item) => item.processor === "arab")?.balanceMinor ?? 0) },
+        { label: "رصيد بنك فلسطين قيد التحصيل", value: formatMinor(data.terminals.find((item) => item.processor === "bop")?.balanceMinor ?? 0) },
+        { label: "إجمالي التسويات الفعالة", value: formatMinor(grossTotal) },
+        { label: "صافي الواصل للبنوك", value: formatMinor(netTotal) },
+        { label: "إجمالي العمولات", value: formatMinor(feeTotal) },
+      ],
+      sections: [
+        {
+          title: "أرصدة الماكينات",
+          headers: ["الماكينة", "الرصيد قيد التحصيل"],
+          rows: data.terminals.map((item) => [
+            item.label,
+            formatMinor(item.balanceMinor),
+          ]),
+        },
+        {
+          title: "سجل التسويات",
+          headers: ["التسوية", "التاريخ", "الماكينة", "الإجمالي", "صافي البنك", "العمولة", "الحساب البنكي", "الحالة", "ملاحظات"],
+          rows: data.settlements.map((item) => [
+            item.transaction.publicId,
+            item.transaction.businessDate,
+            processorLabel(item.processor),
+            formatMinor(item.grossMinor),
+            formatMinor(item.netMinor),
+            formatMinor(item.feeMinor),
+            item.bankAccountName ?? "—",
+            item.transaction.status === "posted" ? "فعال" : "ملغى",
+            item.transaction.notes ?? "",
+          ]),
+        },
+      ],
+    };
+  }
+
+  function printCardSettlementsReport() {
+    const options = buildCardSettlementsReport();
+    if (options) {
+      printA4Report(options);
+    }
+  }
+
+  function exportCardSettlementsReport() {
+    const options = buildCardSettlementsReport();
+    if (options) {
+      exportReportAsExcel("card-settlements.xls", options);
+    }
+  }
+
   const hasBopBank =
     data?.bankAccounts.some(
       (account) =>
@@ -597,12 +676,30 @@ export default function CardSettlementsPage() {
           </p>
         </div>
 
-        <Link
-          className="secondary-button"
-          to="/finance/banking"
-        >
-          إدارة الحسابات البنكية
-        </Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!data}
+            onClick={printCardSettlementsReport}
+          >
+            🖨️ طباعة A4
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!data}
+            onClick={exportCardSettlementsReport}
+          >
+            📊 Excel
+          </button>
+          <Link
+            className="secondary-button"
+            to="/finance/banking"
+          >
+            إدارة الحسابات البنكية
+          </Link>
+        </div>
       </div>
 
       {error && (
