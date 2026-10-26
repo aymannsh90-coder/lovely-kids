@@ -242,7 +242,7 @@ function printPurchaseA4() {
   const pageStyle = document.createElement("style");
   pageStyle.id = "purchase-a4-page-style";
   pageStyle.textContent =
-    "@page { size: A4 portrait; margin: 12mm; }";
+    "@page { size: A4 portrait; margin: 12mm 9mm; }";
 
   document.head.appendChild(pageStyle);
 
