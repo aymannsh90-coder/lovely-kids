@@ -14,6 +14,10 @@ import {
   setOwnerOpeningCost,
   type OwnerInventoryValuationProduct,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 function formatMoney(
   minor: number,
@@ -682,6 +686,71 @@ export default function InventoryValuationReportPage() {
       },
     );
 
+  function buildInventoryValuationExcel(): A4ReportOptions {
+    return {
+      title: "تقرير تقييم المخزون",
+      subtitle: "قيمة المخزون بحسب البيانات والفلاتر الحالية",
+      orientation: "landscape",
+      summary: [
+        { label: "عدد الموديلات", value: formatNumber(filtered.length) },
+        { label: "الكمية الحالية", value: formatNumber(summary.quantity) },
+        { label: "قيمة البيع", value: formatMoney(summary.saleValueMinor) },
+        { label: "التكلفة المعروفة", value: formatMoney(summary.knownCostMinor) },
+        {
+          label: "الربح المتوقع",
+          value: summary.expectedProfitMinor === null
+            ? "غير مكتمل"
+            : formatMoney(summary.expectedProfitMinor),
+        },
+        {
+          label: "تغطية التكلفة",
+          value: `${filtered.length > 0
+            ? Math.round((summary.costCoveredProducts / filtered.length) * 100)
+            : 100}%`,
+        },
+      ],
+      sections: [
+        {
+          title: "تفاصيل المخزون",
+          headers: ["رقم", "الصنف", "الكود", "التصنيف", "تاريخ الإدخال", "الكمية", "سعر البيع", "قيمة البيع", "متوسط التكلفة", "قيمة التكلفة", "ربح متوقع", "حالة التكلفة"],
+          rows: filtered.map((product) => {
+            const saleValue = rowSaleValueMinor(product);
+            const costValue = rowCostValueMinor(product);
+            const expectedProfit =
+              saleValue !== null && costValue !== null
+                ? saleValue - costValue
+                : null;
+            const averageCost =
+              product.averageCostMinor ??
+              product.referenceUnitCostMinor;
+
+            return [
+              product.productId,
+              product.nameAr,
+              product.productCode ?? "",
+              product.category,
+              productDate(product.createdAt),
+              product.currentQuantity ?? "—",
+              formatMoney(product.price * 100),
+              saleValue === null ? "—" : formatMoney(saleValue),
+              averageCost === null ? "—" : formatMoney(Math.round(averageCost)),
+              costValue === null ? "—" : formatMoney(costValue),
+              expectedProfit === null ? "—" : formatMoney(expectedProfit),
+              costQualityLabel(product),
+            ];
+          }),
+        },
+      ],
+    };
+  }
+
+  function exportInventoryValuationExcel() {
+    exportReportAsExcel(
+      "inventory-valuation.xls",
+      buildInventoryValuationExcel(),
+    );
+  }
+
   return (
     <div
       className="inventory-valuation-page"
@@ -871,6 +940,15 @@ export default function InventoryValuationReportPage() {
             }
           >
             🖨️ طباعة A4
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={loading || filtered.length === 0}
+            onClick={exportInventoryValuationExcel}
+          >
+            📊 Excel
           </button>
         </div>
       </section>
