@@ -1844,7 +1844,7 @@ export default function ExpensesPage() {
       window.open(
         "",
         "_blank",
-        "noopener,noreferrer,width=1200,height=850",
+        "width=1200,height=850",
       );
 
     if (!previewWindow) {

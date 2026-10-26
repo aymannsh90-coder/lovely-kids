@@ -84,7 +84,7 @@ export function printA4Report(
 ) {
   const printWindow =
     existingWindow ??
-    window.open("", "_blank", "noopener,noreferrer,width=1200,height=850");
+    window.open("", "_blank", "width=1200,height=850");
 
   if (!printWindow) {
     throw new Error("تعذر فتح معاينة الطباعة. اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.");
