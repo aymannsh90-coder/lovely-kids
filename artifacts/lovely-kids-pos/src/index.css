@@ -1153,6 +1153,442 @@ textarea:disabled {
   }
 }
 
+/* Modern desktop POS sale layout */
+@media (min-width: 1101px) {
+  #pos-sale.sale-panel {
+    display: grid;
+    grid-template-columns: 342px minmax(0, 1fr);
+    align-items: start;
+    gap: 14px 18px;
+    margin-top: 14px;
+    padding: 18px;
+    direction: ltr;
+    border-color: #dfe9ee;
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    box-shadow:
+      0 8px 26px rgba(34, 61, 82, 0.06);
+    font-family:
+      "Segoe UI",
+      Tahoma,
+      Arial,
+      sans-serif;
+  }
+
+  #pos-sale.sale-panel > *,
+  #pos-sale .sale-checkout > * {
+    direction: rtl;
+  }
+
+  #pos-sale > .panel-heading,
+  #pos-sale > .barcode-form,
+  #pos-sale > .pos-product-search-panel,
+  #pos-sale > .sale-alert,
+  #pos-sale > .empty-cart,
+  #pos-sale > .document-items-table-wrap {
+    grid-column: 2;
+  }
+
+  #pos-sale > .panel-heading {
+    grid-row: 1;
+  }
+
+  #pos-sale > .barcode-form {
+    grid-row: 2;
+  }
+
+  #pos-sale > .sale-checkout {
+    display: contents;
+  }
+
+  #pos-sale .sale-summary {
+    grid-column: 1;
+    grid-row: 1 / span 8;
+    align-self: start;
+    margin: 0;
+  }
+
+  #pos-sale .sale-customer-fields {
+    grid-column: 2;
+  }
+
+  #pos-sale > .last-sale-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+#pos-sale .panel-heading {
+  min-height: 52px;
+  gap: 11px;
+  padding: 2px 4px;
+  align-items: center;
+}
+
+#pos-sale .panel-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      #fff0f7,
+      #ffe3f2
+    );
+  color: #e91e8c;
+  font-size: 22px;
+  box-shadow:
+    inset 0 0 0 1px rgba(233, 30, 140, 0.08);
+}
+
+#pos-sale .panel-heading h2 {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+#pos-sale .panel-heading p {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#pos-sale .barcode-form {
+  grid-template-columns:
+    minmax(0, 1fr)
+    142px;
+  gap: 9px;
+  margin-top: 0;
+  padding: 10px;
+  border: 1px solid #e1eaf0;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow:
+    0 4px 14px rgba(35, 63, 84, 0.04);
+}
+
+#pos-sale .barcode-form label {
+  gap: 5px;
+}
+
+#pos-sale .barcode-form label > span {
+  color: #586878;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+#pos-sale .barcode-form input {
+  min-height: 42px;
+  border-radius: 10px;
+  border-color: #d8e3e9;
+  font-size: 14px;
+}
+
+#pos-sale .barcode-form .primary-button {
+  min-height: 42px;
+  border-radius: 10px;
+  box-shadow:
+    0 6px 14px rgba(233, 30, 140, 0.16);
+}
+
+#pos-sale .empty-cart {
+  display: grid;
+  min-height: 330px;
+  margin-top: 0;
+  padding: 34px 24px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 1px solid #e3ebef;
+  border-radius: 17px;
+  color: #71808e;
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(233, 30, 140, 0.035),
+      transparent 48%
+    ),
+    #fff;
+}
+
+#pos-sale .empty-cart-icon {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 22px;
+  background: #fff0f7;
+  font-size: 30px;
+}
+
+#pos-sale .empty-cart strong {
+  color: #23364a;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+#pos-sale .empty-cart small {
+  color: #8493a1;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#pos-sale .document-items-table-wrap {
+  margin-top: 0;
+  border-color: #e0e9ee;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 4px 14px rgba(35, 63, 84, 0.035);
+}
+
+#pos-sale .document-items-table th {
+  padding-block: 10px;
+  color: #4a5d6f;
+  background: #f7fafc;
+  font-size: 12px;
+}
+
+#pos-sale .document-items-table td {
+  font-size: 12px;
+}
+
+#pos-sale .sale-customer-fields {
+  gap: 10px;
+  margin-top: 0;
+  padding: 12px;
+  border: 1px solid #e1eaf0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 4px 14px rgba(35, 63, 84, 0.035);
+}
+
+#pos-sale .sale-customer-fields label > span {
+  color: #536575;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+#pos-sale .sale-customer-fields input {
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+#pos-sale .sale-customer-fields textarea {
+  min-height: 60px;
+  border-radius: 10px;
+}
+
+#pos-sale .sale-summary {
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid #e4e9ee;
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #fffafd 100%
+    );
+  box-shadow:
+    0 10px 28px rgba(31, 56, 76, 0.08);
+}
+
+#pos-sale .sale-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -2px -2px 2px;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      135deg,
+      #fff0f7,
+      #fff7fb
+    );
+}
+
+#pos-sale .sale-summary-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+#pos-sale .sale-summary-heading strong {
+  color: #25374a;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+#pos-sale .sale-summary-heading small {
+  color: #8a667a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+#pos-sale .sale-summary-heading-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  color: #e91e8c;
+  background: #fff;
+  font-size: 19px;
+  box-shadow:
+    0 4px 12px rgba(233, 30, 140, 0.1);
+}
+
+#pos-sale .sale-summary > div:not(.sale-summary-heading) {
+  min-height: 30px;
+}
+
+#pos-sale .sale-summary > div > span,
+#pos-sale .sale-summary label > span {
+  color: #536475;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#pos-sale .sale-summary > div > strong {
+  color: #1d2d3d;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+#pos-sale .sale-grand-total {
+  margin-block: 2px;
+  padding: 11px 10px;
+  border: 0;
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      #fff0f7,
+      #fff8fc
+    );
+}
+
+#pos-sale .sale-grand-total span {
+  color: #a51d66;
+  font-weight: 900;
+}
+
+#pos-sale .sale-grand-total strong {
+  color: #e91e8c;
+  font-size: 21px;
+}
+
+#pos-sale .customer-account-summary {
+  display: grid;
+  align-items: start;
+  gap: 3px;
+  padding-block: 7px;
+  border-top: 1px dashed #e4e9ed;
+}
+
+#pos-sale .customer-account-summary small {
+  color: #7b8995;
+  font-size: 10px;
+}
+
+#pos-sale .sale-payment-methods {
+  display: grid !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  padding-top: 4px;
+  border-top: 1px dashed #e4e9ed;
+}
+
+#pos-sale .sale-payment-method-grid {
+  display: grid;
+  gap: 7px;
+  margin-top: 3px;
+}
+
+#pos-sale .sale-payment-method-row {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+#pos-sale .sale-payment-method-row button {
+  width: 100%;
+  min-height: 39px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+#pos-sale .sale-summary select,
+#pos-sale .sale-summary input {
+  min-height: 39px;
+  border-radius: 10px;
+  border-color: #d9e3e8;
+  font-size: 12px;
+}
+
+#pos-sale .complete-sale-actions {
+  display: grid;
+  gap: 7px;
+  margin-top: 3px;
+  padding-top: 8px;
+  border-top: 1px solid #eadce5;
+}
+
+#pos-sale .complete-sale-actions button {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 11px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#pos-sale .complete-sale-actions .primary-button {
+  box-shadow:
+    0 8px 18px rgba(233, 30, 140, 0.2);
+}
+
+#pos-sale .complete-sale-print-button {
+  border-color: #f1b8d7;
+  color: #b11d69;
+  background: #fff7fb;
+}
+
+#pos-sale .pos-product-search-panel {
+  margin-top: 0;
+  border-radius: 15px;
+}
+
+#pos-sale .sale-alert {
+  margin-top: 0;
+}
+
+@media (max-width: 1100px) {
+  #pos-sale.sale-panel {
+    display: block;
+    padding: 18px;
+  }
+
+  #pos-sale .sale-checkout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 16px;
+    padding-top: 16px;
+  }
+
+  #pos-sale .sale-summary {
+    margin-top: 0;
+  }
+}
+
 /* Today sales and A4 report */
 
 .today-sales-panel {
