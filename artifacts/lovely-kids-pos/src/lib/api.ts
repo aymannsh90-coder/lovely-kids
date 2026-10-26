@@ -267,56 +267,71 @@ export interface PosManualStockCostInput {
 export async function getPosAdminInventoryProducts(
   token: string,
 ) {
-  const [products, barcodeRows] = await Promise.all([
-    apiRequest<PosAdminInventoryProduct[]>(
+  const products =
+    await apiRequest<
+      PosAdminInventoryProduct[]
+    >(
       "/api/products/admin",
       {},
       token,
-    ),
-    apiRequest<
-      Array<{
-        productId: string;
-        barcode: string;
-        color: string | null;
-        size: string | null;
-      }>
-    >(
-      "/api/products/barcodes",
-      {},
-      token,
-    ),
-  ]);
-
-  const barcodesByProduct =
-    new Map<string, PosProductBarcode[]>();
-
-  for (const row of barcodeRows) {
-    const current =
-      barcodesByProduct.get(
-        String(row.productId),
-      ) ?? [];
-
-    current.push({
-      barcode: row.barcode,
-      color: row.color,
-      size: row.size,
-    });
-
-    barcodesByProduct.set(
-      String(row.productId),
-      current,
     );
+
+  try {
+    const barcodeRows =
+      await apiRequest<
+        Array<{
+          productId: string;
+          barcode: string;
+          color: string | null;
+          size: string | null;
+        }>
+      >(
+        "/api/products/barcodes",
+        {},
+        token,
+      );
+
+    const barcodesByProduct =
+      new Map<
+        string,
+        PosProductBarcode[]
+      >();
+
+    for (const row of barcodeRows) {
+      const current =
+        barcodesByProduct.get(
+          String(row.productId),
+        ) ?? [];
+
+      current.push({
+        barcode: row.barcode,
+        color: row.color,
+        size: row.size,
+      });
+
+      barcodesByProduct.set(
+        String(row.productId),
+        current,
+      );
+    }
+
+    return products.map((product) => ({
+      ...product,
+      additionalBarcodes:
+        barcodesByProduct.get(
+          String(product.id),
+        ) ?? [],
+    }));
+  } catch {
+    // Product management and stock screens must stay usable even if
+    // the optional barcode mapping request fails temporarily.
+    return products.map((product) => ({
+      ...product,
+      additionalBarcodes:
+        product.additionalBarcodes ?? [],
+    }));
   }
-
-  return products.map((product) => ({
-    ...product,
-    additionalBarcodes:
-      barcodesByProduct.get(
-        String(product.id),
-      ) ?? [],
-  }));
 }
-
 
 export function setPosProductVisibility(
   token: string,
