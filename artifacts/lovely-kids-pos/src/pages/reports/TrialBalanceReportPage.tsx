@@ -14,6 +14,10 @@ import {
   type PosTrialBalanceResult,
   type PosTrialBalanceRow,
 } from "../../lib/api";
+import {
+  exportReportAsExcel,
+  type A4ReportOptions,
+} from "../../lib/reportOutput";
 
 function localDate(
   date: Date,
@@ -255,6 +259,68 @@ export default function TrialBalanceReportPage() {
       },
     );
 
+  function buildTrialBalanceExcel(): A4ReportOptions | null {
+    if (!result) {
+      return null;
+    }
+
+    return {
+      title: "ميزان المراجعة",
+      subtitle: result.integrity.passed
+        ? "Integrity Gate: سليم"
+        : "Integrity Gate: يوجد فرق يحتاج مراجعة",
+      period: `الفترة: ${result.range.from} — ${result.range.to}`,
+      orientation: "landscape",
+      summary: [
+        { label: "افتتاحي مدين", value: money(result.totals.openingDebitMinor) },
+        { label: "افتتاحي دائن", value: money(result.totals.openingCreditMinor) },
+        { label: "حركة مدين", value: money(result.totals.periodDebitMinor) },
+        { label: "حركة دائن", value: money(result.totals.periodCreditMinor) },
+        { label: "ختامي مدين", value: money(result.totals.closingDebitMinor) },
+        { label: "ختامي دائن", value: money(result.totals.closingCreditMinor) },
+      ],
+      sections: [
+        {
+          title: "الحسابات",
+          headers: ["الكود", "الحساب", "النوع", "افتتاحي مدين", "افتتاحي دائن", "حركة مدين", "حركة دائن", "ختامي مدين", "ختامي دائن"],
+          rows: rows.map((row) => [
+            row.account.code,
+            row.account.name,
+            accountTypeLabel(row.account.accountType),
+            money(row.openingDebitMinor),
+            money(row.openingCreditMinor),
+            money(row.periodDebitMinor),
+            money(row.periodCreditMinor),
+            money(row.closingDebitMinor),
+            money(row.closingCreditMinor),
+          ]),
+        },
+        {
+          title: "قيود غير متوازنة",
+          headers: ["القيد", "التاريخ", "الحالة", "مدين", "دائن", "الفرق"],
+          rows: result.integrity.unbalancedTransactions.map((transaction) => [
+            transaction.publicId,
+            transaction.businessDate,
+            transaction.status,
+            money(transaction.debitMinor),
+            money(transaction.creditMinor),
+            money(Math.abs(transaction.differenceMinor)),
+          ]),
+        },
+      ],
+    };
+  }
+
+  function exportTrialBalanceExcel() {
+    const options = buildTrialBalanceExcel();
+    if (options) {
+      exportReportAsExcel(
+        `trial-balance-${result?.range.from ?? "from"}-${result?.range.to ?? "to"}.xls`,
+        options,
+      );
+    }
+  }
+
   return (
     <section
       className="trial-balance-page"
@@ -482,6 +548,15 @@ export default function TrialBalanceReportPage() {
           }
         >
           🖨️ طباعة A4
+        </button>
+
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!result}
+          onClick={exportTrialBalanceExcel}
+        >
+          📊 Excel
         </button>
 
         <label className="trial-balance-zero-toggle">
