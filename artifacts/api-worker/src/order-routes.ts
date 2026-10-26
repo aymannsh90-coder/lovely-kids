@@ -952,6 +952,7 @@ async function handleMetaWebEvent(
   }
 
   const allowedEvents = new Set<MetaWebEventName>([
+    "PageView",
     "ViewContent",
     "AddToCart",
     "InitiateCheckout",
