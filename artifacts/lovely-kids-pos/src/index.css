@@ -1242,13 +1242,13 @@ textarea:disabled {
 }
 
 #pos-sale .panel-heading h2 {
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.2;
 }
 
 #pos-sale .panel-heading p {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -1272,7 +1272,7 @@ textarea:disabled {
 
 #pos-sale .barcode-form label > span {
   color: #586878;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1280,12 +1280,13 @@ textarea:disabled {
   min-height: 42px;
   border-radius: 10px;
   border-color: #d8e3e9;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 #pos-sale .barcode-form .primary-button {
   min-height: 42px;
   border-radius: 10px;
+  font-size: 13px;
   box-shadow:
     0 6px 14px rgba(233, 30, 140, 0.16);
 }
@@ -1323,13 +1324,13 @@ textarea:disabled {
 
 #pos-sale .empty-cart strong {
   color: #23364a;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 900;
 }
 
 #pos-sale .empty-cart small {
   color: #8493a1;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -1346,11 +1347,11 @@ textarea:disabled {
   padding-block: 10px;
   color: #4a5d6f;
   background: #f7fafc;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 #pos-sale .document-items-table td {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 #pos-sale .sale-customer-fields {
@@ -1366,18 +1367,20 @@ textarea:disabled {
 
 #pos-sale .sale-customer-fields label > span {
   color: #536575;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 #pos-sale .sale-customer-fields input {
   min-height: 40px;
   border-radius: 10px;
+  font-size: 14px;
 }
 
 #pos-sale .sale-customer-fields textarea {
   min-height: 60px;
   border-radius: 10px;
+  font-size: 14px;
 }
 
 #pos-sale .sale-summary {
@@ -1419,13 +1422,13 @@ textarea:disabled {
 
 #pos-sale .sale-summary-heading strong {
   color: #25374a;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 900;
 }
 
 #pos-sale .sale-summary-heading small {
   color: #8a667a;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1449,13 +1452,13 @@ textarea:disabled {
 #pos-sale .sale-summary > div > span,
 #pos-sale .sale-summary label > span {
   color: #536475;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 #pos-sale .sale-summary > div > strong {
   color: #1d2d3d;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -1479,7 +1482,7 @@ textarea:disabled {
 
 #pos-sale .sale-grand-total strong {
   color: #e91e8c;
-  font-size: 21px;
+  font-size: 23px;
 }
 
 #pos-sale .customer-account-summary {
@@ -1492,7 +1495,7 @@ textarea:disabled {
 
 #pos-sale .customer-account-summary small {
   color: #7b8995;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 #pos-sale .sale-payment-methods {
@@ -1518,20 +1521,20 @@ textarea:disabled {
 
 #pos-sale .sale-payment-method-row button {
   width: 100%;
-  min-height: 39px;
+  min-height: 40px;
   padding: 0 8px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 12.5px;
   white-space: nowrap;
   box-shadow: none;
 }
 
 #pos-sale .sale-summary select,
 #pos-sale .sale-summary input {
-  min-height: 39px;
+  min-height: 40px;
   border-radius: 10px;
   border-color: #d9e3e8;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 #pos-sale .complete-sale-actions {
@@ -1544,9 +1547,9 @@ textarea:disabled {
 
 #pos-sale .complete-sale-actions button {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
   border-radius: 11px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.35;
 }
 
