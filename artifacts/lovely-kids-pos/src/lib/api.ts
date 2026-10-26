@@ -4093,6 +4093,69 @@ export function getOwnerInventoryValuationProducts(
 }
 
 
+export type HistoricalInventoryValuationSource =
+  | "ledger"
+  | "historical_cost"
+  | "missing_cost"
+  | "untracked_quantity";
+
+export interface HistoricalInventoryValuationProduct {
+  productId: string;
+  nameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  category: string;
+  isHidden: boolean;
+  quantity: number | null;
+  unitCostMinor: number | null;
+  inventoryValueMinor: number | null;
+  costQuality:
+    | "confirmed"
+    | "estimated"
+    | "mixed"
+    | null;
+  source: HistoricalInventoryValuationSource;
+  ledgerQuantity: number | null;
+  quantityMatchesLedger: boolean | null;
+}
+
+export interface HistoricalInventoryValuationReport {
+  asOf: string;
+  generatedAt: string;
+  minimumSupportedDate: string;
+  summary: {
+    productCount: number;
+    productsWithStock: number;
+    totalQuantity: number;
+    totalInventoryValueMinor: number;
+    valuedProductsWithStock: number;
+    missingCostProducts: number;
+    unknownQuantityProducts: number;
+    ledgerProducts: number;
+    historicalCostProducts: number;
+    coveragePercent: number;
+    complete: boolean;
+  };
+  products: HistoricalInventoryValuationProduct[];
+}
+
+export function getHistoricalInventoryValuation(
+  token: string,
+  asOf: string,
+) {
+  const params =
+    new URLSearchParams({
+      asOf,
+    });
+
+  return apiRequest<HistoricalInventoryValuationReport>(
+    `/api/owner/reports/inventory-valuation-history?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+
 export function setOwnerOpeningCost(
   token: string,
   input: {
