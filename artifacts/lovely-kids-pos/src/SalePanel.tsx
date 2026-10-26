@@ -1686,7 +1686,11 @@ export default function SalePanel({
         )}
 
         {cart.length === 0 ? (
-          <div className="empty-cart">لم تتم إضافة أصناف إلى الفاتورة بعد.</div>
+          <div className="empty-cart">
+            <span className="empty-cart-icon" aria-hidden="true">🛒</span>
+            <strong>لم تتم إضافة أصناف إلى الفاتورة بعد</strong>
+            <small>امسح الباركود أو ابحث عن المنتج في الأعلى لبدء البيع.</small>
+          </div>
         ) : (
           <div className="document-items-table-wrap">
             <table className="document-items-table">
@@ -1952,6 +1956,14 @@ export default function SalePanel({
           </div>
 
           <div className="sale-summary">
+            <div className="sale-summary-heading">
+              <div>
+                <strong>ملخص الفاتورة</strong>
+                <small>المبالغ وطريقة الدفع</small>
+              </div>
+              <span className="sale-summary-heading-icon" aria-hidden="true">🧾</span>
+            </div>
+
             <div>
               <span>مجموع الأصناف</span>
               <strong>{formatMinor(subtotalMinor)}</strong>
@@ -2095,100 +2107,97 @@ export default function SalePanel({
               )}
             </div>
 
-            <div>
+            <div className="sale-payment-methods">
               <span>طريقة الدفع</span>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginTop: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <button
-                  type="button"
-                  className={
-                    paymentMethod ===
-                    "cash"
-                      ? "primary-button"
-                      : "secondary-button"
-                  }
-                  onClick={() => {
-                    setPaymentMethod(
-                      "cash",
-                    );
-                    setCardProcessor(
-                      null,
-                    );
-                  }}
-                >
-                  💵 نقدي
-                </button>
+              <div className="sale-payment-method-grid">
+                <div className="sale-payment-method-row">
+                  <button
+                    type="button"
+                    className={
+                      paymentMethod ===
+                      "cash"
+                        ? "primary-button"
+                        : "secondary-button"
+                    }
+                    onClick={() => {
+                      setPaymentMethod(
+                        "cash",
+                      );
+                      setCardProcessor(
+                        null,
+                      );
+                    }}
+                  >
+                    💵 نقدي
+                  </button>
 
-                <button
-                  type="button"
-                  className={
-                    paymentMethod ===
-                      "card" &&
-                    cardProcessor ===
-                      "arab"
-                      ? "primary-button"
-                      : "secondary-button"
-                  }
-                  onClick={() => {
-                    setPaymentMethod(
-                      "card",
-                    );
-                    setCardProcessor(
-                      "arab",
-                    );
-                  }}
-                >
-                  💳 فيزا البنك العربي
-                </button>
+                  <button
+                    type="button"
+                    className={
+                      paymentMethod ===
+                      "credit"
+                        ? "primary-button"
+                        : "secondary-button"
+                    }
+                    onClick={() => {
+                      setPaymentMethod(
+                        "credit",
+                      );
+                      setCardProcessor(
+                        null,
+                      );
+                    }}
+                  >
+                    🧾 آجل
+                  </button>
+                </div>
 
-                <button
-                  type="button"
-                  className={
-                    paymentMethod ===
-                      "card" &&
-                    cardProcessor ===
-                      "bop"
-                      ? "primary-button"
-                      : "secondary-button"
-                  }
-                  onClick={() => {
-                    setPaymentMethod(
-                      "card",
-                    );
-                    setCardProcessor(
-                      "bop",
-                    );
-                  }}
-                >
-                  💳 فيزا بنك فلسطين
-                </button>
+                <div className="sale-payment-method-row">
+                  <button
+                    type="button"
+                    className={
+                      paymentMethod ===
+                        "card" &&
+                      cardProcessor ===
+                        "arab"
+                        ? "primary-button"
+                        : "secondary-button"
+                    }
+                    onClick={() => {
+                      setPaymentMethod(
+                        "card",
+                      );
+                      setCardProcessor(
+                        "arab",
+                      );
+                    }}
+                  >
+                    💳 فيزا البنك العربي
+                  </button>
 
-                <button
-                  type="button"
-                  className={
-                    paymentMethod ===
-                    "credit"
-                      ? "primary-button"
-                      : "secondary-button"
-                  }
-                  onClick={() => {
-                    setPaymentMethod(
-                      "credit",
-                    );
-                    setCardProcessor(
-                      null,
-                    );
-                  }}
-                >
-                  🧾 آجل
-                </button>
+                  <button
+                    type="button"
+                    className={
+                      paymentMethod ===
+                        "card" &&
+                      cardProcessor ===
+                        "bop"
+                        ? "primary-button"
+                        : "secondary-button"
+                    }
+                    onClick={() => {
+                      setPaymentMethod(
+                        "card",
+                      );
+                      setCardProcessor(
+                        "bop",
+                      );
+                    }}
+                  >
+                    💳 فيزا بنك فلسطين
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2680,7 +2689,7 @@ export default function SalePanel({
                 >
                   {saleBusy
                     ? "جاري الحفظ…"
-                    : "إتمام البيع + خصم المخزون + طباعة إيصال"}
+                    : "إتمام البيع + خصم المخزون + طباعة فاتورة حرارية"}
                 </button>
               </div>
             )}
