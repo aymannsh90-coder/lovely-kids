@@ -238,14 +238,19 @@ export interface PosProductLookup {
 
 export interface PosAdminInventoryProduct {
   id: string;
+  name?: string;
   nameAr: string;
   productCode: string | null;
   barcode: string | null;
+  additionalBarcodes?: PosProductBarcode[];
   price: number;
   image: string;
   category: string;
   colorVariants: PosColorVariant[];
   stock: number | null;
+  isNew?: boolean;
+  newUntil?: string | null;
+  showInOffers?: boolean;
   isHidden: boolean;
   deletedAt: string | null;
 }
@@ -259,12 +264,112 @@ export interface PosManualStockCostInput {
   unitCostMinor?: number;
 }
 
-export function getPosAdminInventoryProducts(
+export async function getPosAdminInventoryProducts(
   token: string,
 ) {
-  return apiRequest<PosAdminInventoryProduct[]>(
-    "/api/products/admin",
-    {},
+  const products =
+    await apiRequest<
+      PosAdminInventoryProduct[]
+    >(
+      "/api/products/admin",
+      {},
+      token,
+    );
+
+  try {
+    const barcodeRows =
+      await apiRequest<
+        Array<{
+          productId: string;
+          barcode: string;
+          color: string | null;
+          size: string | null;
+        }>
+      >(
+        "/api/products/barcodes",
+        {},
+        token,
+      );
+
+    const barcodesByProduct =
+      new Map<
+        string,
+        PosProductBarcode[]
+      >();
+
+    for (const row of barcodeRows) {
+      const current =
+        barcodesByProduct.get(
+          String(row.productId),
+        ) ?? [];
+
+      current.push({
+        barcode: row.barcode,
+        color: row.color,
+        size: row.size,
+      });
+
+      barcodesByProduct.set(
+        String(row.productId),
+        current,
+      );
+    }
+
+    return products.map((product) => ({
+      ...product,
+      additionalBarcodes:
+        barcodesByProduct.get(
+          String(product.id),
+        ) ?? [],
+    }));
+  } catch {
+    // Product management and stock screens must stay usable even if
+    // the optional barcode mapping request fails temporarily.
+    return products.map((product) => ({
+      ...product,
+      additionalBarcodes:
+        product.additionalBarcodes ?? [],
+    }));
+  }
+}
+
+export function setPosProductVisibility(
+  token: string,
+  productId: string | number,
+  hidden: boolean,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}/visibility`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ hidden }),
+    },
+    token,
+  );
+}
+
+export function archivePosProduct(
+  token: string,
+  productId: string | number,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}`,
+    {
+      method: "DELETE",
+    },
+    token,
+  );
+}
+
+export function restorePosProduct(
+  token: string,
+  productId: string | number,
+) {
+  return apiRequest<PosAdminInventoryProduct>(
+    `/api/products/${encodeURIComponent(String(productId))}/restore`,
+    {
+      method: "PATCH",
+    },
     token,
   );
 }

@@ -20,6 +20,8 @@ import JournalVoucherPage from "../pages/finance/JournalVoucherPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
 import InventoryStockPage from "../pages/inventory/InventoryStockPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
+import ProductManagementPage from "../pages/inventory/ProductManagementPage";
+import ProductEditorPage from "../pages/inventory/ProductEditorPage";
 import CustomersPage from "../pages/parties/CustomersPage";
 import EmployeesPage from "../pages/parties/EmployeesPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
@@ -173,19 +175,17 @@ export default function AppRouter() {
 
         <Route
           path="inventory/products"
-          element={
-            <ComingSoonPage
-              icon="👕"
-              title="الأصناف"
-              description="إدارة الأصناف والأسعار والباركود والمتغيرات."
-              points={[
-                "إضافة وتعديل الأصناف.",
-                "باركود أساسي وباركودات متعددة.",
-                "ألوان ومقاسات ومخزون دقيق.",
-                "إدارة أسعار البيع.",
-              ]}
-            />
-          }
+          element={<ProductManagementPage />}
+        />
+
+        <Route
+          path="inventory/products/new"
+          element={<ProductEditorPage />}
+        />
+
+        <Route
+          path="inventory/products/:productId/edit"
+          element={<ProductEditorPage />}
         />
 
         <Route

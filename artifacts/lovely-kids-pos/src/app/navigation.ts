@@ -166,7 +166,7 @@ export const posNavigation: PosNavigationItem[] = [
     description: "إضافة الأصناف وتعديل الأسعار والباركود والمتغيرات.",
     icon: "👕",
     requiresOpenSession: false,
-    status: "planned",
+    status: "ready",
   },
   {
     key: "quick-stock-check",
