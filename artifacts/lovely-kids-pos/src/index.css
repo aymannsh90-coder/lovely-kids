@@ -1539,18 +1539,28 @@ textarea:disabled {
 
 #pos-sale .complete-sale-actions {
   display: grid;
+  width: 100% !important;
+  max-width: none !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
   gap: 7px;
   margin-top: 3px;
+  margin-inline: 0 !important;
   padding-top: 8px;
+  padding-inline: 0;
   border-top: 1px solid #eadce5;
+  box-sizing: border-box;
 }
 
 #pos-sale .complete-sale-actions button {
-  width: 100%;
+  width: 100% !important;
+  max-width: none !important;
+  justify-self: stretch;
   min-height: 48px;
   border-radius: 11px;
   font-size: 13px;
   line-height: 1.35;
+  box-sizing: border-box;
 }
 
 #pos-sale .complete-sale-actions .primary-button {
@@ -1592,10 +1602,29 @@ textarea:disabled {
 }
 
 #pos-sale .complete-sale-no-print-button {
+  display: flex;
   min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border-color: #e2d4dc;
   color: #6e5262;
   background: #fff;
+}
+
+#pos-sale .sale-shortcut-key {
+  display: inline-grid;
+  min-width: 34px;
+  min-height: 24px;
+  place-items: center;
+  padding: 2px 7px;
+  border: 1px solid #d8c8d1;
+  border-radius: 7px;
+  color: #745767;
+  background: #fff7fb;
+  font: 800 11px/1 "Segoe UI", Tahoma, Arial, sans-serif;
+  direction: ltr;
+  box-shadow: inset 0 -1px 0 rgba(80, 52, 68, 0.08);
 }
 
 #pos-sale .pos-product-search-panel {

@@ -1576,6 +1576,41 @@ export default function SalePanel({
     }
   }
 
+  useEffect(() => {
+    function handleSaleShortcut(event: globalThis.KeyboardEvent) {
+      if (
+        event.key !== "F3" ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (saleBusy || cart.length === 0) {
+        return;
+      }
+
+      void completeSale();
+    }
+
+    window.addEventListener(
+      "keydown",
+      handleSaleShortcut,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleSaleShortcut,
+      );
+    };
+  }, [saleBusy, cart.length, completeSale]);
+
   return (
     <>
       <section className="sale-panel" id="pos-sale">
@@ -2631,7 +2666,12 @@ export default function SalePanel({
                   >
                     {saleBusy
                       ? "جاري الحفظ…"
-                      : "حفظ الفاتورة"}
+                      : (
+                        <>
+                          <span>حفظ الفاتورة</span>
+                          <kbd className="sale-shortcut-key">F3</kbd>
+                        </>
+                      )}
                   </button>
 
                   <button
@@ -2700,7 +2740,12 @@ export default function SalePanel({
                 >
                   {saleBusy
                     ? "جاري حفظ البيع…"
-                    : "إتمام البيع"}
+                    : (
+                      <>
+                        <span>إتمام البيع</span>
+                        <kbd className="sale-shortcut-key">F3</kbd>
+                      </>
+                    )}
                 </button>
               </div>
             )}
