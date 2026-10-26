@@ -333,7 +333,15 @@ export default function ProductManagementPage() {
 
       setProducts((current) =>
         current.map((entry) =>
-          entry.id === updated.id ? updated : entry,
+          entry.id === updated.id
+            ? {
+                ...updated,
+                additionalBarcodes:
+                  updated.additionalBarcodes?.length
+                    ? updated.additionalBarcodes
+                    : entry.additionalBarcodes ?? [],
+              }
+            : entry,
         ),
       );
 
@@ -369,7 +377,15 @@ export default function ProductManagementPage() {
 
       setProducts((current) =>
         current.map((entry) =>
-          entry.id === updated.id ? updated : entry,
+          entry.id === updated.id
+            ? {
+                ...updated,
+                additionalBarcodes:
+                  updated.additionalBarcodes?.length
+                    ? updated.additionalBarcodes
+                    : entry.additionalBarcodes ?? [],
+              }
+            : entry,
         ),
       );
 
@@ -393,7 +409,15 @@ export default function ProductManagementPage() {
 
       setProducts((current) =>
         current.map((entry) =>
-          entry.id === updated.id ? updated : entry,
+          entry.id === updated.id
+            ? {
+                ...updated,
+                additionalBarcodes:
+                  updated.additionalBarcodes?.length
+                    ? updated.additionalBarcodes
+                    : entry.additionalBarcodes ?? [],
+              }
+            : entry,
         ),
       );
 
