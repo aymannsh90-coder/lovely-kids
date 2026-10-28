@@ -1416,6 +1416,8 @@ async function handleEditOrderItems(
         notes?: unknown;
         invoiceDiscount?: unknown;
         paymentMethod?: unknown;
+        exchangeDeliveryDiscountMode?: unknown;
+        exchangeManualDeliveryDiscountMinor?: unknown;
       }
     | null;
 
@@ -1436,6 +1438,8 @@ async function handleEditOrderItems(
         notes: body.notes,
         invoiceDiscount: body.invoiceDiscount,
         paymentMethod: body.paymentMethod,
+        exchangeDeliveryDiscountMode: body.exchangeDeliveryDiscountMode,
+        exchangeManualDeliveryDiscountMinor: body.exchangeManualDeliveryDiscountMinor,
       },
       user.id,
     );
