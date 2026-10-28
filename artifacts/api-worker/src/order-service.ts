@@ -1136,13 +1136,15 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
             shippingPromotionProductsTotal,
           );
 
+    // A null original price indicates an unquoted local delivery, never a
+    // free-delivery offer. Once the admin approves a quote it is snapshotted.
     const shippingOriginalCost =
-      shipping.cost;
+      shipping.label === LOCAL_NABLUS_DELIVERY_LABEL ? null : shipping.cost;
 
     const shippingPromotionDiscount =
       Math.max(
         0,
-        shippingOriginalCost -
+        (shippingOriginalCost ?? 0) -
           shippingCost,
       );
 
