@@ -55,6 +55,7 @@ export async function cancelOrderAndRestoreStock(
   orderId: number,
   allowedStatuses: readonly string[] = ["new"],
   actorUserId?: number | null,
+  exchangeVoidReason?: string,
 ) {
   return db.transaction(async (tx) => {
     const rows = await tx
@@ -81,6 +82,50 @@ export async function cancelOrderAndRestoreStock(
         kind: "invalid_status",
         status: order.status,
       } as const;
+    }
+
+    // Exchange cancellation must be atomic with the replacement order's
+    // inventory reversal. Ordinary order-cancellation endpoints must not
+    // silently leave an active exchange pointing to a cancelled order.
+    const exchangeRows = await tx
+      .select()
+      .from(exchangeDocumentsTable)
+      .where(
+        and(
+          eq(exchangeDocumentsTable.sourceType, "online_order"),
+          eq(exchangeDocumentsTable.replacementOrderId, orderId),
+          eq(exchangeDocumentsTable.status, "completed"),
+        ),
+      )
+      .for("update");
+
+    if (exchangeRows.length > 1) {
+      throw new OrderEditError("الطلب مرتبط بأكثر من عملية تبديل", 409);
+    }
+
+    const activeExchange = exchangeRows[0] ?? null;
+    if (activeExchange) {
+      const reason = exchangeVoidReason?.trim() ?? "";
+      if (!actorUserId || reason.length < 3 || reason.length > 500) {
+        throw new OrderEditError(
+          "يجب إلغاء التبديل من شاشة التبديل مع إدخال سبب الإلغاء",
+          409,
+        );
+      }
+
+      if (
+        order.status !== "new" ||
+        activeExchange.replacementOrderOrigin !== "system_created" ||
+        activeExchange.financialCompletedAt !== null ||
+        activeExchange.returnReceivedAt !== null
+      ) {
+        throw new OrderEditError(
+          "لا يمكن إلغاء هذا التبديل تلقائياً بعد تجهيز الطلب أو تسليمه أو ربطه بطلب موجود",
+          409,
+        );
+      }
+    } else if (exchangeVoidReason !== undefined) {
+      throw new OrderEditError("لا توجد عملية تبديل فعالة لإلغائها", 409);
     }
 
     const items = Array.isArray(order.items)
@@ -369,6 +414,25 @@ export async function cancelOrderAndRestoreStock(
       .where(eq(ordersTable.id, orderId))
       .returning();
 
+    if (activeExchange) {
+      const voidedAt = new Date();
+      await tx
+        .update(exchangeDocumentsTable)
+        .set({
+          status: "voided",
+          voidedAt,
+          voidedByUserId: actorUserId!,
+          voidReason: exchangeVoidReason!.trim(),
+          updatedAt: voidedAt,
+        })
+        .where(
+          and(
+            eq(exchangeDocumentsTable.id, activeExchange.id),
+            eq(exchangeDocumentsTable.status, "completed"),
+          ),
+        );
+    }
+
     return {
       kind: "updated",
       order: updated[0],
@@ -426,6 +490,8 @@ interface EditOrderDetailsInput {
   notes?: unknown;
   invoiceDiscount?: unknown;
   paymentMethod?: unknown;
+  exchangeDeliveryDiscountMode?: unknown;
+  exchangeManualDeliveryDiscountMinor?: unknown;
 }
 
 function parseRequiredOrderEditText(
@@ -1191,6 +1257,17 @@ export async function editOrderItemsAndAdjustStock(
 
     const linkedOnlineExchange =
       linkedExchangeRows[0] ?? null;
+
+    if (
+      !linkedOnlineExchange &&
+      (rawDetails?.exchangeDeliveryDiscountMode !== undefined ||
+        rawDetails?.exchangeManualDeliveryDiscountMinor !== undefined)
+    ) {
+      throw new OrderEditError(
+        "تعديل خصم توصيل التبديل مسموح للطلب البديل المرتبط فقط",
+        409,
+      );
+    }
 
     if (
       linkedOnlineExchange?.financialCompletedAt !== null &&
@@ -2065,6 +2142,9 @@ export async function editOrderItemsAndAdjustStock(
     let exchangeDeliveryChargeMinor:
       number | null = null;
 
+    let exchangeDeliveryDiscountMode:
+      "none" | "half" | "full" | "manual" | null = null;
+
     if (linkedOnlineExchange) {
       if (
         shipping.label ===
@@ -2079,19 +2159,35 @@ export async function editOrderItemsAndAdjustStock(
       const baseChargeMinor =
         shipping.cost * 100;
 
-      const deliveryDiscountMode =
-        linkedOnlineExchange.deliveryDiscountMode;
+      const requestedMode =
+        details.exchangeDeliveryDiscountMode === undefined
+          ? linkedOnlineExchange.deliveryDiscountMode
+          : details.exchangeDeliveryDiscountMode;
+
+      if (
+        requestedMode !== "none" &&
+        requestedMode !== "half" &&
+        requestedMode !== "full" &&
+        requestedMode !== "manual"
+      ) {
+        throw new OrderEditError("نوع خصم توصيل التبديل غير صالح", 400);
+      }
+
+      exchangeDeliveryDiscountMode = requestedMode;
+
+      const manualDiscount =
+        details.exchangeManualDeliveryDiscountMinor === undefined
+          ? linkedOnlineExchange.deliveryDiscountMinor
+          : Number(details.exchangeManualDeliveryDiscountMinor);
 
       const preservedDiscountMinor =
-        deliveryDiscountMode === "none"
+        requestedMode === "none"
           ? 0
-          : deliveryDiscountMode === "full"
+          : requestedMode === "full"
             ? baseChargeMinor
-            : deliveryDiscountMode === "half"
+            : requestedMode === "half"
               ? baseChargeMinor / 2
-              : deliveryDiscountMode === "manual"
-                ? linkedOnlineExchange.deliveryDiscountMinor
-                : Number.NaN;
+              : manualDiscount;
 
       if (
         !Number.isSafeInteger(
@@ -2914,6 +3010,8 @@ export async function editOrderItemsAndAdjustStock(
           deliveryDiscountMinor:
             exchangeDeliveryBaseChargeMinor -
             exchangeDeliveryChargeMinor,
+          deliveryDiscountMode:
+            exchangeDeliveryDiscountMode,
 
           deliveryChargeMinor:
             exchangeDeliveryChargeMinor,
