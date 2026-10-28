@@ -767,6 +767,54 @@ export default function AdminOrdersScreen() {
     [getAuthToken],
   );
 
+  const confirmVoidOnlineExchange = async () => {
+    const target = exchangeVoidTarget;
+    const reason = exchangeVoidReason.trim();
+    if (!target?.exchangePublicId || exchangeVoidBusy) return;
+    if (reason.length < 3) {
+      setExchangeVoidError("أدخل سبب الإلغاء (3 أحرف على الأقل)");
+      return;
+    }
+
+    setExchangeVoidBusy(true);
+    setExchangeVoidError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
+
+      const response = await fetch(`${API_BASE}/api/pos/exchanges/online/void`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ publicId: target.exchangePublicId, reason }),
+      });
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+      if (!response.ok || !body?.ok) {
+        throw new Error(body?.error ?? "تعذر إلغاء التبديل");
+      }
+
+      setExchangeVoidTarget(null);
+      setExchangeVoidReason("");
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === target.id
+            ? { ...order, status: "cancelled", exchangePublicId: null }
+            : order,
+        ),
+      );
+      await fetchOrdersRef.current();
+      Alert.alert("تم إلغاء التبديل", "أُلغي الطلب البديل بأمان، ويمكن إنشاء تبديل جديد من الطلب الأصلي.");
+    } catch (error) {
+      setExchangeVoidError(error instanceof Error ? error.message : "تعذر إلغاء التبديل");
+    } finally {
+      setExchangeVoidBusy(false);
+    }
+  };
+
   const openExchangeReturnReceipt = async (order: Order) => {
     const publicId = order.exchangePublicId?.trim();
 
@@ -4532,6 +4580,29 @@ export default function AdminOrdersScreen() {
                           🔄 متابعة طلب التبديل
                         </Text>
 
+                        {item.exchangeReplacementOrderOrigin === "system_created" &&
+                          item.status === "new" &&
+                          !item.exchangeFinancialCompletedAt && (
+                            <Pressable
+                              disabled={exchangeVoidBusy || pendingOrderIds.has(item.id)}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                setExchangeVoidTarget(item);
+                                setExchangeVoidReason("");
+                                setExchangeVoidError("");
+                              }}
+                              style={[
+                                styles.editOrderBtn,
+                                { backgroundColor: "#FEE2E2", borderColor: "#DC2626" },
+                              ]}
+                            >
+                              <Ionicons name="close-circle-outline" size={18} color="#B91C1C" />
+                              <Text style={[styles.editOrderBtnText, { color: "#B91C1C" }]}>
+                                إلغاء التبديل والطلب البديل
+                              </Text>
+                            </Pressable>
+                          )}
+
                         {item.status === "delivering" && (
                           <Pressable
                             disabled={pendingOrderIds.has(item.id)}
@@ -5193,6 +5264,76 @@ export default function AdminOrdersScreen() {
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      <Modal
+        visible={exchangeVoidTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!exchangeVoidBusy) setExchangeVoidTarget(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.deleteConfirmCard,
+              {
+                width: 440,
+                maxWidth: "92%",
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                alignItems: "stretch",
+                gap: 12,
+              },
+            ]}
+          >
+            <Text style={{ color: "#B91C1C", fontWeight: "900", fontSize: 18, textAlign: "right" }}>
+              إلغاء تبديل الطلب #{exchangeVoidTarget?.id}
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right" }}>
+              متاح فقط قبل تأكيد وتجهيز الطلب. سيتم إلغاء عملية التبديل والطلب البديل معاً، دون حذف السجل، ويمكن إنشاء تبديل جديد من الطلب الأصلي.
+            </Text>
+            <TextInput
+              value={exchangeVoidReason}
+              onChangeText={(value) => {
+                setExchangeVoidReason(value);
+                setExchangeVoidError("");
+              }}
+              placeholder="سبب الإلغاء (إجباري)"
+              placeholderTextColor={colors.mutedForeground}
+              maxLength={500}
+              multiline
+              style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, minHeight: 65 }]}
+              textAlign="right"
+            />
+            {exchangeVoidError ? (
+              <Text style={{ color: "#DC2626", textAlign: "right" }}>{exchangeVoidError}</Text>
+            ) : null}
+            <Pressable
+              disabled={exchangeVoidBusy || exchangeVoidReason.trim().length < 3}
+              onPress={() => void confirmVoidOnlineExchange()}
+              style={[
+                styles.deleteConfirmBtn,
+                {
+                  backgroundColor: "#DC2626",
+                  opacity: exchangeVoidBusy || exchangeVoidReason.trim().length < 3 ? 0.5 : 1,
+                },
+              ]}
+            >
+              {exchangeVoidBusy
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.deleteConfirmBtnText}>تأكيد إلغاء التبديل</Text>}
+            </Pressable>
+            <Pressable
+              disabled={exchangeVoidBusy}
+              style={[styles.deleteCancelBtn, { borderColor: colors.border }]}
+              onPress={() => setExchangeVoidTarget(null)}
+            >
+              <Text style={[styles.deleteCancelBtnText, { color: colors.foreground }]}>رجوع</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal
