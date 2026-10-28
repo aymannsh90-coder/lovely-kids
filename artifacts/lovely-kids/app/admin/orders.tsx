@@ -122,6 +122,7 @@ interface Order {
   shippingCost?: number;
   deliveryCompanyCost?: number | null;
   courierCashReceivedAt?: string | null;
+  courierCashReversedAt?: string | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   promotionDiscountAmount?: number;
@@ -569,6 +570,13 @@ export default function AdminOrdersScreen() {
   const [courierCashTarget, setCourierCashTarget] = useState<Order | null>(null);
   const [courierCashBusy, setCourierCashBusy] = useState(false);
   const [courierCashError, setCourierCashError] = useState("");
+  const [courierReversalTarget, setCourierReversalTarget] = useState<Order | null>(null);
+  const [courierReversalReason, setCourierReversalReason] = useState("");
+  const [courierReversalGoodsReturned, setCourierReversalGoodsReturned] = useState(false);
+  const [courierReversalCashRefunded, setCourierReversalCashRefunded] = useState(false);
+  const [courierReversalNoFee, setCourierReversalNoFee] = useState(false);
+  const [courierReversalBusy, setCourierReversalBusy] = useState(false);
+  const [courierReversalError, setCourierReversalError] = useState("");
   const [
     pickupSettlementOrder,
     setPickupSettlementOrder,
@@ -1253,6 +1261,66 @@ export default function AdminOrdersScreen() {
       );
     } finally {
       setCourierCashBusy(false);
+    }
+  };
+
+  const openLocalCourierReversal = (order: Order) => {
+    setCourierReversalReason("");
+    setCourierReversalGoodsReturned(false);
+    setCourierReversalCashRefunded(false);
+    setCourierReversalNoFee(false);
+    setCourierReversalError("");
+    setCourierReversalTarget(order);
+  };
+
+  const confirmLocalCourierReversal = async () => {
+    const order = courierReversalTarget;
+    if (!order || courierReversalBusy) return;
+    setCourierReversalBusy(true);
+    setCourierReversalError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
+      const response = await fetch(
+        `${API_BASE}/api/orders/${order.id}/local-courier-reverse`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            reason: courierReversalReason.trim(),
+            goodsReturned: courierReversalGoodsReturned,
+            courierRefunded: courierReversalCashRefunded,
+            noCourierFeeOwed: courierReversalNoFee,
+          }),
+        },
+      );
+      const result = await response.json().catch(() => null) as
+        | { ok?: boolean; error?: string; order?: Order; cashRefundMinor?: number }
+        | null;
+      if (!response.ok || !result?.ok || !result.order) {
+        throw new Error(result?.error ?? "تعذر عكس الطلب مالياً");
+      }
+
+      setOrders((prev) => prev.map((row) =>
+        row.id === order.id
+          ? { ...row, ...result.order, courierCashReversedAt: new Date().toISOString() }
+          : row,
+      ));
+      setCourierReversalTarget(null);
+      await fetchOrdersRef.current();
+      Alert.alert(
+        "تم عكس طلب الديلفري",
+        `تم رد ${(result.cashRefundMinor ?? 0) / 100}₪ من الصندوق وإرجاع البضاعة وعكس قيود الطلب.`,
+      );
+    } catch (error) {
+      setCourierReversalError(
+        error instanceof Error ? error.message : "تعذر عكس طلب الديلفري",
+      );
+    } finally {
+      setCourierReversalBusy(false);
     }
   };
 
@@ -3962,6 +4030,12 @@ export default function AdminOrdersScreen() {
                         </View>
                       ) : null}
 
+                      {item.courierCashReversedAt ? (
+                        <View style={[styles.newDot, { backgroundColor: "#B45309" }]}>
+                          <Text style={styles.newDotText}>إلغاء مع عكس الصندوق والمبيعات والمخزون</Text>
+                        </View>
+                      ) : null}
+
                       {item.status === "new" && (
                         <View style={[styles.newDot, { backgroundColor: colors.primary }]}>
                           <Text style={styles.newDotText}>جديد</Text>
@@ -4944,6 +5018,36 @@ export default function AdminOrdersScreen() {
                         </View>
                       )}
 
+                    {item.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
+                      !!item.courierCashReceivedAt &&
+                      (item.paymentMethod === "cod" || item.paymentMethod === "local_store_cash") &&
+                      !item.courierCashReversedAt &&
+                      ["confirmed", "delivering", "done"].includes(item.status) && (
+                        <View style={{
+                          borderWidth: 1, borderColor: "#F59E0B", borderRadius: 12,
+                          padding: 12, gap: 8, backgroundColor: "#FFF7ED",
+                        }}>
+                          <Text style={{ textAlign: "right", fontWeight: "800", color: "#92400E" }}>
+                            إذا الزبون رفض الطرد، رجعت البضاعة للمحل، وردّيت للمندوب قيمة البضاعة نقداً، يمكنك عكس الطلب كاملاً.
+                          </Text>
+                          <Pressable
+                            disabled={courierReversalBusy || pendingOrderIds.has(item.id)}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              openLocalCourierReversal(item);
+                            }}
+                            style={{
+                              backgroundColor: "#B91C1C", padding: 12,
+                              borderRadius: 10, alignItems: "center",
+                            }}
+                          >
+                            <Text style={{ color: "#fff", fontWeight: "900" }}>
+                              إلغاء الديلفري وعكس القبض والمبيعات والمخزون
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
+
                     {/* Status Change */}
                     <Text
                       style={[
@@ -5073,7 +5177,8 @@ export default function AdminOrdersScreen() {
                     </View>
 
                     {/* Delete Order */}
-                    {(item.status === "cancelled" || item.status === "done") && (
+                    {(item.status === "cancelled" || item.status === "done") &&
+                     !item.courierCashReceivedAt && (
                     <Pressable
                       onPress={() => confirmDeleteOrder(item.id)}
                       style={[styles.deleteBtn, { backgroundColor: "#ef444420" }]}
@@ -5089,6 +5194,113 @@ export default function AdminOrdersScreen() {
           }}
         />
       )}
+
+      <Modal
+        visible={courierReversalTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!courierReversalBusy) setCourierReversalTarget(null); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[
+            styles.editOrderModalCard,
+            {
+              maxWidth: 520, width: "94%", alignSelf: "center",
+              backgroundColor: colors.card, borderColor: colors.border,
+              padding: 18, gap: 12,
+            },
+          ]}>
+            <Text style={{ fontWeight: "900", color: "#B91C1C", fontSize: 17, textAlign: "right" }}>
+              إلغاء ديلفري نابلس وعكس جميع الحركات — الطلب #{courierReversalTarget?.id}
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right", lineHeight: 22 }}>
+              سيتم رد {(courierReversalTarget?.totalPrice ?? 0) - (courierReversalTarget?.shippingCost ?? 0)}₪
+              {" "}للمندوب من الصندوق، وإرجاع نفس الأصناف للمخزون، وعكس مبيعات وأجرة ديلفري الطلب إن كانت مسجلة.
+              يجب أن تكون الحركة النقدية وإعادة الطرد تمت فعلياً، وألا يكون على المحل أي أجرة توصيل مستحقة.
+            </Text>
+            <TextInput
+              value={courierReversalReason}
+              onChangeText={(v) => setCourierReversalReason(v)}
+              placeholder="سبب الإلغاء (إجباري، مثل: رفض الزبون الاستلام)"
+              placeholderTextColor={colors.mutedForeground}
+              maxLength={500}
+              multiline
+              style={[styles.editOrderFieldInput, {
+                color: colors.foreground, borderColor: colors.border, minHeight: 62,
+              }]}
+              textAlign="right"
+            />
+            {([
+              {
+                key: "goods" as const,
+                checked: courierReversalGoodsReturned,
+                set: setCourierReversalGoodsReturned,
+                label: "رجع الطرد للمحل وتم التأكد من نفس الأصناف والنمر",
+              },
+              {
+                key: "cash" as const,
+                checked: courierReversalCashRefunded,
+                set: setCourierReversalCashRefunded,
+                label: "تم رد قيمة البضاعة للمندوب فعلياً من الصندوق",
+              },
+              {
+                key: "fee" as const,
+                checked: courierReversalNoFee,
+                set: setCourierReversalNoFee,
+                label: "المندوب لم يأخذ أجرة ديلفري ولا توجد أجرة مستحقة له",
+              },
+            ]).map((confirmation) => (
+              <Pressable
+                key={confirmation.key}
+                onPress={() => confirmation.set(!confirmation.checked)}
+                style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8, paddingVertical: 4 }}
+              >
+                <Ionicons
+                  name={confirmation.checked ? "checkbox" : "square-outline"}
+                  size={22}
+                  color={confirmation.checked ? "#16A34A" : colors.mutedForeground}
+                />
+                <Text style={{ flex: 1, color: colors.foreground, textAlign: "right", fontWeight: "700" }}>
+                  {confirmation.label}
+                </Text>
+              </Pressable>
+            ))}
+            {courierReversalError ? (
+              <Text style={{ color: "#DC2626", textAlign: "right" }}>{courierReversalError}</Text>
+            ) : null}
+            <Pressable
+              disabled={
+                courierReversalBusy ||
+                courierReversalReason.trim().length < 3 ||
+                !courierReversalGoodsReturned ||
+                !courierReversalCashRefunded ||
+                !courierReversalNoFee
+              }
+              onPress={() => { void confirmLocalCourierReversal(); }}
+              style={{
+                padding: 14, borderRadius: 10, alignItems: "center",
+                backgroundColor: "#B91C1C",
+                opacity: courierReversalBusy ||
+                  courierReversalReason.trim().length < 3 ||
+                  !courierReversalGoodsReturned ||
+                  !courierReversalCashRefunded ||
+                  !courierReversalNoFee ? 0.45 : 1,
+              }}
+            >
+              {courierReversalBusy
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: "#fff", fontWeight: "900" }}>تأكيد الإلغاء وعكس الحركات المالية والمخزون</Text>}
+            </Pressable>
+            <Pressable
+              disabled={courierReversalBusy}
+              onPress={() => setCourierReversalTarget(null)}
+              style={{ borderWidth: 1, borderColor: colors.border, padding: 12, borderRadius: 10, alignItems: "center" }}
+            >
+              <Text style={{ color: colors.foreground, fontWeight: "800" }}>رجوع بدون إلغاء</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={courierCashTarget !== null}
