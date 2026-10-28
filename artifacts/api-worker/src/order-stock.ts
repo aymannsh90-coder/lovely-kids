@@ -213,6 +213,9 @@ export async function cancelOrderAndRestoreStockInTransaction(
       const quantity = Number(item.quantity);
 
       if (!Number.isInteger(productId) || !Number.isInteger(quantity) || quantity <= 0) {
+        if (auditedLocalReversal) {
+          throw new OrderEditError("تعذر تحديد أحد الأصناف المطلوب إرجاعها للمخزون", 409);
+        }
         continue;
       }
 
@@ -232,6 +235,9 @@ export async function cancelOrderAndRestoreStockInTransaction(
       const product = productRows[0];
 
       if (!product) {
+        if (auditedLocalReversal) {
+          throw new OrderEditError("صنف من الطلب لم يعد موجوداً؛ تم منع الإلغاء المالي", 409);
+        }
         continue;
       }
 
@@ -255,6 +261,18 @@ export async function cancelOrderAndRestoreStockInTransaction(
 
       const colorVariants =
         (product.colorVariants as ColorVariant[] | null) ?? [];
+
+      if (auditedLocalReversal && item.color && item.size &&
+          !colorVariants.some((variant) =>
+            variant.color === item.color &&
+            variant.sizes.some((size) => size.size === item.size && size.stock !== null && size.stock !== undefined)
+          )
+      ) {
+        throw new OrderEditError(
+          "لون أو نمرة من الطلب لم تعد موجودة بالمخزون؛ لا يمكن الإلغاء التلقائي",
+          409,
+        );
+      }
 
       if (item.color && item.size && colorVariants.length > 0) {
         const variantIndex = colorVariants.findIndex(
@@ -299,6 +317,10 @@ export async function cancelOrderAndRestoreStockInTransaction(
             }
           }
         }
+      }
+
+      if (auditedLocalReversal && Object.keys(updates).length === 0) {
+        throw new OrderEditError("لا يمكن إعادة الصنف للمخزون آلياً", 409);
       }
 
       if (Object.keys(updates).length > 0) {
@@ -350,6 +372,13 @@ export async function cancelOrderAndRestoreStockInTransaction(
 
       const originalCost =
         costByLineNumber.get(lineNumber);
+
+      if (auditedLocalReversal && !originalCost) {
+        throw new OrderEditError(
+          "لا توجد تكلفة تاريخية موثوقة لهذا الصنف؛ الإلغاء التلقائي موقوف",
+          409,
+        );
+      }
 
       if (originalCost) {
         if (
