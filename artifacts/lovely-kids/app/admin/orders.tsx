@@ -168,7 +168,6 @@ interface OnlineExchangeStatusPayload {
     financialCompletedAt: string | null;
     returnReceivedAt: string | null;
     deliveryDiscountMode: "none" | "half" | "full" | "manual";
-    deliveryDiscountMinor: number;
   };
   returnItems: OnlineExchangeReturnItem[];
 }
