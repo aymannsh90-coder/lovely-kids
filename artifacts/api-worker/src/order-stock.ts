@@ -24,6 +24,7 @@ import {
   resolveShippingCost,
   resolveShippingZone,
   STORE_PICKUP_LABEL,
+  LOCAL_NABLUS_DELIVERY_LABEL,
 } from "./order-service";
 import {
   getPendingPurchaseQuantityForProduct,
@@ -492,6 +493,8 @@ interface EditOrderDetailsInput {
   paymentMethod?: unknown;
   exchangeDeliveryDiscountMode?: unknown;
   exchangeManualDeliveryDiscountMinor?: unknown;
+  localDeliveryCharge?: unknown;
+  localDeliveryCourierCost?: unknown;
 }
 
 function parseRequiredOrderEditText(
@@ -985,8 +988,8 @@ function applyEditedOrderItemStock(
 
 function parseOrderEditPaymentMethod(
   value: unknown,
-): "cod" | "bank_transfer" {
-  if (value !== "cod" && value !== "bank_transfer") {
+): "cod" | "bank_transfer" | "local_store_cash" {
+  if (value !== "cod" && value !== "bank_transfer" && value !== "local_store_cash") {
     throw new OrderEditError("طريقة الدفع غير صالحة");
   }
   return value;
@@ -1160,6 +1163,19 @@ export async function editOrderItemsAndAdjustStock(
       throw new OrderEditError("الطلب غير موجود", 404);
     }
 
+    // A negotiated local courier price must not be changed via the customer's
+    // generic order editor, since that would invalidate the agreed total.
+    if (
+      options?.restrictToPublicCatalog &&
+      (order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL ||
+       rawDetails?.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL)
+    ) {
+      throw new OrderEditError(
+        "تعديل طلب ديلفري نابلس يتم من المتجر بعد تأكيد سعر التوصيل مع الزبون",
+        409,
+      );
+    }
+
     if (!allowedStatuses.includes(order.status)) {
       throw new OrderEditError(
         allowedStatuses.length === 1 &&
@@ -1257,6 +1273,13 @@ export async function editOrderItemsAndAdjustStock(
 
     const linkedOnlineExchange =
       linkedExchangeRows[0] ?? null;
+
+    if (options?.restrictToPublicCatalog && (
+      rawDetails?.localDeliveryCharge !== undefined ||
+      rawDetails?.localDeliveryCourierCost !== undefined
+    )) {
+      throw new OrderEditError("تسعير ديلفري نابلس من صلاحية الإدارة فقط", 403);
+    }
 
     if (linkedOnlineExchange && options?.restrictToPublicCatalog) {
       throw new OrderEditError(
@@ -1967,6 +1990,11 @@ export async function editOrderItemsAndAdjustStock(
         ? order.paymentMethod
         : parseOrderEditPaymentMethod(details.paymentMethod);
 
+    if (paymentMethod === "local_store_cash" &&
+        shipping.label !== LOCAL_NABLUS_DELIVERY_LABEL) {
+      throw new OrderEditError("التحصيل النقدي المحلي مخصص لديلفري نابلس فقط", 409);
+    }
+
     if (
       linkedOnlineExchange &&
       paymentMethod !== "cod"
@@ -2154,8 +2182,8 @@ export async function editOrderItemsAndAdjustStock(
 
     if (linkedOnlineExchange) {
       if (
-        shipping.label ===
-        STORE_PICKUP_LABEL
+        shipping.label === STORE_PICKUP_LABEL ||
+        shipping.label === LOCAL_NABLUS_DELIVERY_LABEL
       ) {
         throw new OrderEditError(
           "طلب التبديل المرتبط يجب أن يبقى طلب توصيل",
@@ -2237,11 +2265,50 @@ export async function editOrderItemsAndAdjustStock(
         customerDeliveryMinor;
     }
 
+    const isLocalDelivery =
+      shipping.label === LOCAL_NABLUS_DELIVERY_LABEL;
+
+    if (
+      !isLocalDelivery &&
+      (details.localDeliveryCharge !== undefined ||
+       details.localDeliveryCourierCost !== undefined)
+    ) {
+      throw new OrderEditError("حقول الديلفري المحلي متاحة لديلفري نابلس فقط", 400);
+    }
+
+    if (isLocalDelivery) {
+      if (order.status === "delivering") {
+        throw new OrderEditError("لا يمكن تغيير تسعيرة ديلفري نابلس بعد خروج الطلب للتوصيل", 409);
+      }
+      if (linkedOnlineExchange) {
+        throw new OrderEditError("لا يمكن تحويل طلب التبديل إلى ديلفري محلي", 409);
+      }
+      if (
+        details.localDeliveryCharge === undefined ||
+        details.localDeliveryCourierCost === undefined
+      ) {
+        // Keep an already agreed quote only when editing the same delivery mode.
+        if (order.shippingZone !== LOCAL_NABLUS_DELIVERY_LABEL ||
+            order.deliveryCompanyCost === null) {
+          throw new OrderEditError("حدد أجرة الديلفري على الزبون وتكلفة المندوب قبل حفظ الطلب", 400);
+        }
+        shippingCost = order.shippingCost ?? 0;
+      } else {
+        const quote = Number(details.localDeliveryCharge);
+        const cost = Number(details.localDeliveryCourierCost);
+        if (!Number.isSafeInteger(quote) || quote < 0 || quote > 10000 ||
+            !Number.isSafeInteger(cost) || cost < 0 || cost > 10000) {
+          throw new OrderEditError("رسوم الديلفري وتكلفته يجب أن تكون أرقام شيكل صحيحة", 400);
+        }
+        shippingCost = quote;
+      }
+    }
+
     const shippingOriginalCost =
-      shipping.cost;
+      isLocalDelivery ? shippingCost : shipping.cost;
 
     const shippingPromotionDiscount =
-      linkedOnlineExchange
+      linkedOnlineExchange || isLocalDelivery
         ? 0
         : Math.max(
             0,
@@ -2850,7 +2917,7 @@ export async function editOrderItemsAndAdjustStock(
                   "delivery")
               : null,
         deliveryCompanyId:
-          shipping.label === STORE_PICKUP_LABEL
+          shipping.label === STORE_PICKUP_LABEL || isLocalDelivery
             ? null
             : order.status === "delivering"
               ? order.deliveryCompanyId
@@ -2858,9 +2925,13 @@ export async function editOrderItemsAndAdjustStock(
         deliveryCompanyCost:
           shipping.label === STORE_PICKUP_LABEL
             ? 0
-            : order.status === "delivering"
-              ? order.deliveryCompanyCost
-              : null,
+            : isLocalDelivery
+              ? details.localDeliveryCourierCost === undefined
+                ? order.deliveryCompanyCost
+                : Number(details.localDeliveryCourierCost)
+              : order.status === "delivering"
+                ? order.deliveryCompanyCost
+                : null,
         notes,
         paymentMethod,
         paymentStatus,

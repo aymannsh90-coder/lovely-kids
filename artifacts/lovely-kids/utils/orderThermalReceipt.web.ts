@@ -53,6 +53,7 @@ export interface ThermalOrder {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  deliveryCompanyCost?: number | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   discountCode?: string | null;
@@ -101,6 +102,8 @@ function paymentMethodLabel(value: string) {
   switch (value) {
     case "bank_transfer":
       return "تحويل بنكي";
+    case "local_store_cash":
+      return "نقدًا للمحل - ديلفري نابلس";
     case "cod":
     case "cash_on_delivery":
       return "الدفع عند الاستلام";
@@ -935,10 +938,12 @@ export async function printOrderThermalReceipt(
                       <strong>-${money(shippingPromotionDiscount)}</strong>
                     </div>
                   `
-                  : shippingCost > 0
+                  : (shippingCost > 0 ||
+                      (order.shippingZone === "ديلفري داخل مدينة نابلس" &&
+                       order.deliveryCompanyCost != null))
                     ? `
                       <div>
-                        <span>التوصيل</span>
+                        <span>${order.shippingZone === "ديلفري داخل مدينة نابلس" ? "توصيل ديلفري نابلس" : "التوصيل"}</span>
                         <strong>${money(shippingCost)}</strong>
                       </div>
                     `
@@ -946,7 +951,7 @@ export async function printOrderThermalReceipt(
               }
 
               <div class="receipt-total">
-                <span>الإجمالي النهائي</span>
+                <span>${order.shippingZone === "ديلفري داخل مدينة نابلس" && order.deliveryCompanyCost == null ? "إجمالي المنتجات (أجرة الديلفري قيد التأكيد)" : "الإجمالي النهائي"}</span>
                 <strong>${money(order.totalPrice)}</strong>
               </div>
             `

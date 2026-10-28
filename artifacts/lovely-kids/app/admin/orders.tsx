@@ -120,6 +120,7 @@ interface Order {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  deliveryCompanyCost?: number | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   promotionDiscountAmount?: number;
@@ -188,6 +189,7 @@ interface ExchangeReturnConfirmation {
 }
 
 const ADMIN_STORE_PICKUP_LABEL = "استلام من المحل";
+const ADMIN_LOCAL_DELIVERY_LABEL = "ديلفري داخل مدينة نابلس";
 
 const ADMIN_DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   { label: "الضفة الغربية", cost: 20, promoCost: 20 },
@@ -362,7 +364,7 @@ function statusInfo(
 }
 
 function paymentMethodLabel(m: string) {
-  return m === "bank_transfer" ? "تحويل بنكي" : "عند الاستلام";
+  return m === "bank_transfer" ? "تحويل بنكي" : m === "local_store_cash" ? "نقدًا للمحل - ديلفري نابلس" : "عند الاستلام";
 }
 
 function getOrderInvoiceDiscount(items: OrderItem[]): number {
@@ -530,7 +532,8 @@ function isMergeEligibleOrder(order: Order) {
     order.paymentMethod === "cod" &&
     order.mergedIntoOrderId == null &&
     (order.mergedOrderCount ?? 0) === 0 &&
-    !order.exchangePublicId
+    !order.exchangePublicId &&
+    order.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL
   );
 }
 
@@ -612,11 +615,14 @@ export default function AdminOrdersScreen() {
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
+  const [editLocalCharge, setEditLocalCharge] = useState("");
+  const [editLocalCourierCost, setEditLocalCourierCost] = useState("");
+  const [editLocalCustomerConfirmed, setEditLocalCustomerConfirmed] = useState(false);
   const [editExchangeDeliveryMode, setEditExchangeDeliveryMode] =
     useState<"none" | "half" | "full" | "manual">("none");
   const [editExchangeManualDelivery, setEditExchangeManualDelivery] = useState("0");
   const [editPaymentMethod, setEditPaymentMethod] =
-    useState<"cod" | "bank_transfer">("cod");
+    useState<"cod" | "bank_transfer" | "local_store_cash">("cod");
 
   const editScannerKeyboard =
     useRef(createScannerKeyboardBuffer());
@@ -1394,6 +1400,9 @@ export default function AdminOrdersScreen() {
     setEditCustomerPhone("");
     setEditCustomerAddress("");
     setEditShippingZone("");
+    setEditLocalCharge("");
+    setEditLocalCourierCost("");
+    setEditLocalCustomerConfirmed(false);
     setEditNotes("");
     setEditExchangeDeliveryMode("none");
     setEditExchangeManualDelivery("0");
@@ -1545,6 +1554,22 @@ export default function AdminOrdersScreen() {
     setEditShippingZone(
       order.shippingZone ?? "",
     );
+    setEditLocalCharge(
+      order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
+      order.deliveryCompanyCost !== null
+        ? String(order.shippingCost ?? 0)
+        : "",
+    );
+    setEditLocalCourierCost(
+      order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
+      order.deliveryCompanyCost !== null
+        ? String(order.deliveryCompanyCost)
+        : "",
+    );
+    setEditLocalCustomerConfirmed(
+      order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
+      order.deliveryCompanyCost !== null,
+    );
     setEditNotes(order.notes ?? "");
     setEditInvoiceDiscount(
       String(getOrderInvoiceDiscount(order.items)),
@@ -1552,7 +1577,9 @@ export default function AdminOrdersScreen() {
     setEditPaymentMethod(
       order.paymentMethod === "bank_transfer"
         ? "bank_transfer"
-        : "cod",
+        : order.paymentMethod === "local_store_cash"
+          ? "local_store_cash"
+          : "cod",
     );
     setEditSearch("");
     setEditPickedProduct(null);
@@ -1764,6 +1791,26 @@ export default function AdminOrdersScreen() {
       return;
     }
 
+    if (editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL) {
+      const charge = Number(editLocalCharge);
+      const cost = Number(editLocalCourierCost);
+      if (!/^\d+$/.test(editLocalCharge) || !/^\d+$/.test(editLocalCourierCost) ||
+          !Number.isSafeInteger(charge) || !Number.isSafeInteger(cost) ||
+          charge > 10000 || cost > 10000) {
+        setEditOrderError("أدخل أجرة الديلفري للزبون وتكلفة المندوب بالشيكل (حتى لو صفر)");
+        return;
+      }
+      if (!editLocalCustomerConfirmed) {
+        setEditOrderError("يجب تأكيد موافقة الزبون على أجرة الديلفري قبل حفظ الطلب");
+        return;
+      }
+    }
+
+    if (editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL && editPaymentMethod === "local_store_cash") {
+      setEditOrderError("اختر طريقة دفع عادية عند الخروج من الديلفري المحلي");
+      return;
+    }
+
     setEditSaving(true);
     setEditOrderError(null);
 
@@ -1797,6 +1844,12 @@ export default function AdminOrdersScreen() {
             notes: editNotes.trim(),
             invoiceDiscount,
             paymentMethod: editPaymentMethod,
+            ...(editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
+              ? {
+                  localDeliveryCharge: Number(editLocalCharge),
+                  localDeliveryCourierCost: Number(editLocalCourierCost),
+                }
+              : {}),
             ...(editingOrder.exchangePublicId
               ? {
                   exchangeDeliveryDiscountMode: editExchangeDeliveryMode,
@@ -1982,11 +2035,17 @@ export default function AdminOrdersScreen() {
       cost: 0,
       promoCost: 0,
     },
+    {
+      label: ADMIN_LOCAL_DELIVERY_LABEL,
+      cost: 0,
+      promoCost: 0,
+    },
     ...(settings.shippingZones?.length
       ? settings.shippingZones
       : ADMIN_DEFAULT_SHIPPING_ZONES
     ).filter(
-      (zone) => zone.label !== ADMIN_STORE_PICKUP_LABEL,
+      (zone) => zone.label !== ADMIN_STORE_PICKUP_LABEL &&
+                zone.label !== ADMIN_LOCAL_DELIVERY_LABEL,
     ),
   ];
 
@@ -2004,7 +2063,9 @@ export default function AdminOrdersScreen() {
     Number(editingOrder.discountCodePercent) <= 100;
 
   const editShippingCost = editSelectedShippingZone
-    ? editingOrder?.exchangePublicId
+    ? editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
+      ? Number(editLocalCharge) || 0
+    : editingOrder?.exchangePublicId
       ? Math.max(
           0,
           editSelectedShippingZone.cost -
@@ -5876,6 +5937,11 @@ export default function AdminOrdersScreen() {
                         onPress={() => {
                           setEditShippingZone(zone.label);
                           setEditOrderError(null);
+                          if (zone.label === ADMIN_LOCAL_DELIVERY_LABEL) {
+                            setEditLocalCustomerConfirmed(false);
+                          } else if (editPaymentMethod === "local_store_cash") {
+                            setEditPaymentMethod("cod");
+                          }
 
                           if (
                             zone.label ===
@@ -5918,7 +5984,7 @@ export default function AdminOrdersScreen() {
                             },
                           ]}
                         >
-                          {cost}₪
+                          {zone.label === ADMIN_LOCAL_DELIVERY_LABEL ? "يدوي" : `${cost}₪`}
                         </Text>
                       </Pressable>
                     );
@@ -6027,14 +6093,33 @@ export default function AdminOrdersScreen() {
                   </View>
                 )}
 
+                {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL && (
+                  <View style={{ padding: 12, gap: 8, borderWidth: 1, borderColor: "#93C5FD", borderRadius: 12, backgroundColor: "#EFF6FF" }}>
+                    <Text style={{ fontWeight: "900", color: "#1D4ED8", textAlign: "right" }}>🚴 ديلفري نابلس — التسعير اليدوي</Text>
+                    <Text style={{ color: "#1E40AF", textAlign: "right" }}>أدخل المبلغ المتفق عليه مع المندوب، والمبلغ الذي وافق الزبون على دفعه. كلا المبلغين مستقل عن شركات التوصيل وعروض التوصيل العامة.</Text>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>رسوم الديلفري على الزبون (₪)</Text>
+                    <TextInput value={editLocalCharge} onChangeText={(v) => { setEditLocalCharge(v.replace(/[^0-9]/g, "")); setEditLocalCustomerConfirmed(false); }} keyboardType="number-pad" placeholder="أدخل المبلغ حتى لو صفر" placeholderTextColor={colors.mutedForeground} style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} textAlign="right"/>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>التكلفة الفعلية للمندوب (₪) — للإدارة فقط</Text>
+                    <TextInput value={editLocalCourierCost} onChangeText={(v) => setEditLocalCourierCost(v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="أدخل تكلفة المندوب" placeholderTextColor={colors.mutedForeground} style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} textAlign="right"/>
+                    <Pressable onPress={() => setEditLocalCustomerConfirmed((v) => !v)} style={{ flexDirection: "row-reverse", gap: 8, alignItems: "center", paddingVertical: 8 }}>
+                      <Ionicons name={editLocalCustomerConfirmed ? "checkbox" : "square-outline"} size={22} color="#1D4ED8"/>
+                      <Text style={{ color: "#1E40AF", fontWeight: "800", flex: 1, textAlign: "right" }}>أكد الزبون السعر النهائي للديلفري</Text>
+                    </Pressable>
+                    <Text style={{ color: "#1D4ED8", textAlign: "right" }}>فرق التوصيل المتوقع: {(Number(editLocalCharge) || 0) - (Number(editLocalCourierCost) || 0)} ₪</Text>
+                  </View>
+                )}
+
                 <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
-                  طريقة الدفع *
+                  {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "من سيحصّل قيمة الطلب؟ *" : "طريقة الدفع *"}
                 </Text>
 
                 <View style={styles.editOrderShippingZones}>
                   {[
-                    { key: "cod" as const, label: "الدفع عند الاستلام" },
-                    { key: "bank_transfer" as const, label: "تحويل بنكي" },
+                    { key: "cod" as const, label: editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "المندوب يستلم المبلغ" : "الدفع عند الاستلام" },
+                    { key: "bank_transfer" as const, label: "تحويل بنكي للمحل" },
+                    ...(editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
+                      ? [{ key: "local_store_cash" as const, label: "نقدًا للمحل — المندوب يأخذ أجرته" }]
+                      : []),
                   ].filter((option) => !editingOrder?.exchangePublicId || option.key === "cod").map((option) => {
                     const selected =
                       editPaymentMethod === option.key;
@@ -6847,7 +6932,7 @@ export default function AdminOrdersScreen() {
                       fontWeight: "600",
                     }}
                   >
-                    التوصيل
+                    {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "توصيل ديلفري نابلس" : "التوصيل"}
                   </Text>
                   <Text
                     style={{

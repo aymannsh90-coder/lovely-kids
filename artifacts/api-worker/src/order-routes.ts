@@ -14,6 +14,7 @@ import {
   OrderValidationError,
   resolveShippingZone,
   STORE_PICKUP_LABEL,
+  LOCAL_NABLUS_DELIVERY_LABEL,
 } from "./order-service";
 import {
   cancelOrderAndRestoreStock,
@@ -39,6 +40,13 @@ import {
 type Db = Awaited<
   ReturnType<typeof openDb>
 >["db"];
+
+// Never include internal courier cost or delivery company ID in customer APIs.
+const customerOrderView = (order: typeof ordersTable.$inferSelect) => ({
+  ...order,
+  deliveryCompanyId: undefined,
+  deliveryCompanyCost: undefined,
+});
 
 const json = (data: unknown, status = 200) =>
   Response.json(rewriteMediaUrlsForPublic(data), {
@@ -199,6 +207,28 @@ async function getAutomaticFulfillmentUpdate(
     return {
       ok: false,
       error: "منطقة التوصيل غير محددة في الطلب",
+    };
+  }
+
+  if (order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL) {
+    if (
+      order.deliveryCompanyCost === null ||
+      !Number.isSafeInteger(order.deliveryCompanyCost) ||
+      order.deliveryCompanyCost < 0
+    ) {
+      return {
+        ok: false,
+        error: "حدد أجرة ديلفري نابلس وتكلفة المندوب مع تأكيد الزبون قبل إرسال الطلب",
+      };
+    }
+
+    return {
+      ok: true,
+      update: {
+        fulfillmentMethod: "delivery",
+        deliveryCompanyId: null,
+        deliveryCompanyCost: order.deliveryCompanyCost,
+      },
     };
   }
 
@@ -773,7 +803,7 @@ async function handleLookupOrder(
         );
 
       return json({
-        ...master,
+        ...customerOrderView(master),
         mergedFromOrderId:
           order.id,
         ...(trackingToken
@@ -791,7 +821,7 @@ async function handleLookupOrder(
     );
 
   return json({
-    ...order,
+    ...customerOrderView(order),
     ...(trackingToken
       ? { trackingToken }
       : {}),
@@ -863,7 +893,7 @@ async function handleTrackOrder(
         );
 
       return json({
-        ...master,
+        ...customerOrderView(master),
         mergedFromOrderId:
           order.id,
         ...(masterToken
@@ -876,7 +906,7 @@ async function handleTrackOrder(
     }
   }
 
-  return json(order);
+  return json(customerOrderView(order));
 }
 
 async function handleGetMyOrders(
@@ -910,7 +940,7 @@ async function handleGetMyOrders(
     )
     .orderBy(desc(ordersTable.createdAt));
 
-  return json(orders);
+  return json(orders.map(customerOrderView));
 }
 
 async function handleMarkOrderPrinted(
@@ -1335,7 +1365,7 @@ async function handleCustomerEditOrderItems(
         },
       );
 
-    return json(updated);
+    return json(customerOrderView(updated));
   } catch (error) {
     if (error instanceof OrderEditError) {
       return json(
@@ -1422,6 +1452,8 @@ async function handleEditOrderItems(
         paymentMethod?: unknown;
         exchangeDeliveryDiscountMode?: unknown;
         exchangeManualDeliveryDiscountMinor?: unknown;
+        localDeliveryCharge?: unknown;
+        localDeliveryCourierCost?: unknown;
       }
     | null;
 
@@ -1444,6 +1476,8 @@ async function handleEditOrderItems(
         paymentMethod: body.paymentMethod,
         exchangeDeliveryDiscountMode: body.exchangeDeliveryDiscountMode,
         exchangeManualDeliveryDiscountMinor: body.exchangeManualDeliveryDiscountMinor,
+        localDeliveryCharge: body.localDeliveryCharge,
+        localDeliveryCourierCost: body.localDeliveryCourierCost,
       },
       user.id,
     );
@@ -1557,7 +1591,7 @@ async function handleCancelOrder(
     return json({ error: "لا يمكن إلغاء هذا الطلب" }, 409);
   }
 
-  return json(result.order);
+  return json(user.isAdmin ? result.order : customerOrderView(result.order));
 }
 
 async function handleConvertOrderToStorePickup(
@@ -1613,6 +1647,13 @@ async function handleConvertOrderToStorePickup(
       { error: "لا يمكن تعديل طريقة استلام طلب مكتمل أو ملغي" },
       409,
     );
+  }
+
+  if (
+    order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL &&
+    order.status === "delivering"
+  ) {
+    return json({ error: "لا يمكن تغيير طلب ديلفري نابلس إلى استلام من المحل بعد خروجه للتوصيل" }, 409);
   }
 
   if (order.shippingZone === "استلام من المحل") {

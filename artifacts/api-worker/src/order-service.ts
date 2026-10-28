@@ -149,6 +149,7 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
 }
 
 export const STORE_PICKUP_LABEL = "استلام من المحل";
+export const LOCAL_NABLUS_DELIVERY_LABEL = "ديلفري داخل مدينة نابلس";
 
 const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   {
@@ -180,6 +181,16 @@ export function resolveShippingZone(
   if (requested === STORE_PICKUP_LABEL) {
     return {
       label: STORE_PICKUP_LABEL,
+      cost: 0,
+      promoCost: 0,
+    };
+  }
+
+  // Price is negotiated and confirmed by the admin after checkout.
+  // Never use standard courier zones or automatic free-shipping promotions.
+  if (requested === LOCAL_NABLUS_DELIVERY_LABEL) {
+    return {
+      label: LOCAL_NABLUS_DELIVERY_LABEL,
       cost: 0,
       promoCost: 0,
     };
@@ -1125,13 +1136,15 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
             shippingPromotionProductsTotal,
           );
 
+    // A null original price indicates an unquoted local delivery, never a
+    // free-delivery offer. Once the admin approves a quote it is snapshotted.
     const shippingOriginalCost =
-      shipping.cost;
+      shipping.label === LOCAL_NABLUS_DELIVERY_LABEL ? null : shipping.cost;
 
     const shippingPromotionDiscount =
       Math.max(
         0,
-        shippingOriginalCost -
+        (shippingOriginalCost ?? 0) -
           shippingCost,
       );
 
