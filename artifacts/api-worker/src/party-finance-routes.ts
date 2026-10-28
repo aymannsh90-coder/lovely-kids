@@ -4426,34 +4426,57 @@ async function handleVoidVoucher(
               );
             }
 
-            const sessionRows =
-              await tx
+            // Preserve historical cash-session closures; reverse cash
+            // in the active ILS session of the same register instead.
+            const originalSessionRows = await tx
+              .select()
+              .from(cashSessionsTable)
+              .where(eq(cashSessionsTable.id, voucher.cashSessionId))
+              .limit(1);
+
+            const originalSession = originalSessionRows[0] ?? null;
+            if (!originalSession || originalSession.currencyCode !== "ILS") {
+              throw new PartyFinanceError(
+                "جلسة الصندوق الأصلية غير موجودة أو عملتها لا تطابق السند",
+                409,
+              );
+            }
+
+            const sessionRows = await tx
+              .select()
+              .from(cashSessionsTable)
+              .where(
+                and(
+                  eq(cashSessionsTable.id, voucher.cashSessionId),
+                  eq(cashSessionsTable.status, "open"),
+                ),
+              )
+              .limit(1)
+              .for("update");
+
+            session = sessionRows[0] ?? null;
+
+            if (!session && originalSession.status === "closed") {
+              const currentSessionRows = await tx
                 .select()
-                .from(
-                  cashSessionsTable,
-                )
+                .from(cashSessionsTable)
                 .where(
                   and(
-                    eq(
-                      cashSessionsTable.id,
-                      voucher.cashSessionId,
-                    ),
-                    eq(
-                      cashSessionsTable.status,
-                      "open",
-                    ),
+                    eq(cashSessionsTable.registerKey, originalSession.registerKey),
+                    eq(cashSessionsTable.currencyCode, "ILS"),
+                    eq(cashSessionsTable.status, "open"),
                   ),
                 )
+                .orderBy(desc(cashSessionsTable.openedAt))
                 .limit(1)
                 .for("update");
 
-            session =
-              sessionRows[0] ??
-              null;
+              session = currentSessionRows[0] ?? null;
+            }
 
             if (!session) {
               throw new PartyFinanceError(
-                "لا يمكن إلغاء حركة نقدية بعد إغلاق جلسة الصندوق",
+                "لا يمكن عكس الحركة: افتح جلسة صندوق حالية بالشيكل لنفس الصندوق الأصلي",
                 409,
               );
             }
@@ -4569,7 +4592,11 @@ async function handleVoidVoucher(
                   session?.id ??
                   null,
                 notes:
-                  `عكس ${voucher.publicId}: ${reason}`,
+                  `عكس ${voucher.publicId}: ${reason}${
+                    session && session.id !== voucher.cashSessionId
+                      ? ` (إلغاء بعد إغلاق الجلسة ${voucher.cashSessionId}؛ قيد عكسي في الجلسة ${session.id})`
+                      : ""
+                  }`,
                 createdByUserId:
                   auth.user.id,
                 lines:
@@ -4650,28 +4677,26 @@ async function handleVoidVoucher(
             expectedAfter !==
               null
           ) {
-            await tx
-              .update(
-                cashSessionsTable,
-              )
+            const updatedSessionRows = await tx
+              .update(cashSessionsTable)
               .set({
-                expectedBalanceMinor:
-                  expectedAfter,
-                updatedAt:
-                  new Date(),
+                expectedBalanceMinor: expectedAfter,
+                updatedAt: new Date(),
               })
               .where(
                 and(
-                  eq(
-                    cashSessionsTable.id,
-                    session.id,
-                  ),
-                  eq(
-                    cashSessionsTable.status,
-                    "open",
-                  ),
+                  eq(cashSessionsTable.id, session.id),
+                  eq(cashSessionsTable.status, "open"),
                 ),
+              )
+              .returning({ id: cashSessionsTable.id });
+
+            if (!updatedSessionRows[0]) {
+              throw new PartyFinanceError(
+                "أُغلقت جلسة الصندوق قبل تسجيل القيد العكسي",
+                409,
               );
+            }
           }
 
           return {
@@ -4682,6 +4707,9 @@ async function handleVoidVoucher(
               expectedBefore,
             expectedCashAfterMinor:
               expectedAfter,
+            reversalCashSessionId: session?.id ?? null,
+            reversedAfterSessionClose:
+              Boolean(session && session.id !== voucher.cashSessionId),
           };
         },
       );

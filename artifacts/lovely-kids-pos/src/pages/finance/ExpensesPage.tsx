@@ -1613,7 +1613,7 @@ export default function ExpensesPage() {
 
     if (
       !window.confirm(
-        `تأكيد إلغاء ${voucher.publicId} بقيمة ${moneyMinor(voucher.amountMinor)}؟\nسيتم إنشاء قيد عكسي ولن يُحذف القيد الأصلي.`,
+        `تأكيد إلغاء ${voucher.publicId} بقيمة ${moneyMinor(voucher.amountMinor)}؟\nسيتم إنشاء قيد عكسي ولن يُحذف القيد الأصلي. إذا كانت جلسة الصندوق الأصلية مغلقة، سيُسجل العكس في الجلسة المفتوحة الحالية لنفس الصندوق.`,
       )
     ) {
       return;
@@ -1626,14 +1626,16 @@ export default function ExpensesPage() {
     setMessage("");
 
     try {
-      await voidPosFinanceVoucher(
+      const result = await voidPosFinanceVoucher(
         token,
         voucher.id,
         cleanReason,
       );
 
       setMessage(
-        `تم إلغاء ${voucher.publicId} بقيد عكسي.`,
+        result.reversedAfterSessionClose
+          ? `تم إلغاء ${voucher.publicId} بقيد عكسي في جلسة الصندوق الحالية رقم ${result.reversalCashSessionId}، مع إبقاء جلسة الإغلاق الأصلية دون تغيير.`
+          : `تم إلغاء ${voucher.publicId} بقيد عكسي.`,
       );
 
       await Promise.all([

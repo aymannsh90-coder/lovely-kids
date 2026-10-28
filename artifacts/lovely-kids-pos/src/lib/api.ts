@@ -1541,6 +1541,8 @@ export function voidPosFinanceVoucher(
     reversal: unknown;
     expectedCashBeforeMinor: number | null;
     expectedCashAfterMinor: number | null;
+    reversalCashSessionId?: number | null;
+    reversedAfterSessionClose?: boolean;
   }>(
     `/api/pos/finance/vouchers/${voucherId}/void`,
     {
