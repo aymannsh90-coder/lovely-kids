@@ -268,7 +268,6 @@ export async function completeOrderWithFinance(
     if (
       isLocalDelivery &&
       (order.paymentMethod === "cod" || order.paymentMethod === "local_store_cash") &&
-      productSalesMinor > 0 &&
       !localCashHandover
     ) {
       throw new OrderFinanceError(
