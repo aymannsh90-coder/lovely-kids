@@ -146,16 +146,6 @@ export async function createOrderPrintHtml(
 
   const isLocalNablusDelivery =
     order.shippingZone === "ديلفري داخل مدينة نابلس";
-  const localBaseCost = 15;
-  const localDiscount =
-    isLocalNablusDelivery && order.deliveryCompanyCost != null
-      ? Math.max(0, localBaseCost - (shippingCost ?? localBaseCost))
-      : 0;
-  const localExtra =
-    isLocalNablusDelivery && order.deliveryCompanyCost != null
-      ? Math.max(0, (shippingCost ?? localBaseCost) - localBaseCost)
-      : 0;
-
   const hasShippingPromotion =
     !isLocalNablusDelivery &&
     shippingCost !== null &&
@@ -323,17 +313,14 @@ export async function createOrderPrintHtml(
           `
           : isLocalNablusDelivery
             ? `
-              <div class="row"><strong>ديلفري نابلس الأساسي:</strong> ${localBaseCost} ₪</div>
-              ${localExtra > 0 ? `<div class="row"><strong>رسوم توصيل إضافية:</strong> +${localExtra} ₪</div>` : ""}
-              ${localDiscount > 0 ? `<div class="row"><strong>خصم توصيل ديلفري:</strong> -${localDiscount} ₪</div>` : ""}
-              <div class="row"><strong>توصيل ديلفري نابلس:</strong> ${shippingCost ?? localBaseCost} ₪</div>
+              <div class="row"><strong>توصيل ديلفري نابلس:</strong> ${shippingCost ?? 15} ₪</div>
               ${order.deliveryCompanyCost == null ? `<div class="row">أي زيادة تُؤكّد مع الزبون قبل الإرسال</div>` : ""}
             `
             : shippingCost !== null
               ? `<div class="row"><strong>التوصيل:</strong> ${shippingCost} ₪</div>`
               : ""
       }
-      <div class="total">${isLocalNablusDelivery && order.deliveryCompanyCost == null ? "الإجمالي المبدئي (يشمل ديلفري 15₪)" : "الإجمالي"}: ${order.totalPrice} ₪</div>
+      <div class="total">${isLocalNablusDelivery && order.deliveryCompanyCost == null ? "الإجمالي المبدئي" : "الإجمالي"}: ${order.totalPrice} ₪</div>
     </div>
   </div>
 
