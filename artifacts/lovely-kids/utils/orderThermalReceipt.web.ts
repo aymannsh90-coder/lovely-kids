@@ -938,7 +938,9 @@ export async function printOrderThermalReceipt(
                       <strong>-${money(shippingPromotionDiscount)}</strong>
                     </div>
                   `
-                  : shippingCost > 0
+                  : (shippingCost > 0 ||
+                      (order.shippingZone === "ديلفري داخل مدينة نابلس" &&
+                       order.deliveryCompanyCost != null))
                     ? `
                       <div>
                         <span>${order.shippingZone === "ديلفري داخل مدينة نابلس" ? "توصيل ديلفري نابلس" : "التوصيل"}</span>
