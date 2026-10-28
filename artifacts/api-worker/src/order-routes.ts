@@ -1539,12 +1539,15 @@ async function handleCancelOrder(
     );
   }
 
-  const result = await cancelOrderAndRestoreStock(
-    db,
-    id,
-    ["new"],
-    user.id,
-  );
+  let result: Awaited<ReturnType<typeof cancelOrderAndRestoreStock>>;
+  try {
+    result = await cancelOrderAndRestoreStock(db, id, ["new"], user.id);
+  } catch (error) {
+    if (error instanceof OrderEditError) {
+      return json({ error: error.message }, error.status);
+    }
+    throw error;
+  }
 
   if (result.kind === "not_found") {
     return json({ error: "الطلب غير موجود" }, 404);
@@ -1961,12 +1964,20 @@ async function handleUpdateOrderStatus(
   }
 
   if (body.status === "cancelled") {
-    const result = await cancelOrderAndRestoreStock(
-      db,
-      id,
-      ["new", "confirmed", "delivering"],
-      user.id,
-    );
+    let result: Awaited<ReturnType<typeof cancelOrderAndRestoreStock>>;
+    try {
+      result = await cancelOrderAndRestoreStock(
+        db,
+        id,
+        ["new", "confirmed", "delivering"],
+        user.id,
+      );
+    } catch (error) {
+      if (error instanceof OrderEditError) {
+        return json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
 
     if (result.kind === "not_found") {
       return json({ error: "الطلب غير موجود" }, 404);
