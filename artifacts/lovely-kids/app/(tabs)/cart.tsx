@@ -1995,7 +1995,7 @@ export default function CartScreen() {
                   <View style={styles.zoneOptionContent}>
                     <Text style={[styles.zoneOptionCost, { color: isSelected ? colors.primary : colors.foreground }]}>
                       {zone.label === STORE_PICKUP_LABEL
-                        ? "مجانًا"
+                        ? (isLocalDelivery ? "ديلفري 15₪" : "مجانًا")
                         : promotionActive && displayedCost !== zone.cost
                           ? `${displayedCost}₪ بدل ${zone.cost}₪`
                           : `${displayedCost}₪`}
