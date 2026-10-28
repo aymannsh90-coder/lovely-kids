@@ -597,6 +597,8 @@ async function handleGetOrders(
           exchangeDocumentsTable.originalOrderId,
         publicId:
           exchangeDocumentsTable.publicId,
+        replacementOrderOrigin:
+          exchangeDocumentsTable.replacementOrderOrigin,
         returnNetMinor:
           exchangeDocumentsTable.returnNetMinor,
         newNetMinor:
@@ -682,6 +684,8 @@ async function handleGetOrders(
           linkedExchange?.originalOrderId ?? null,
         exchangePublicId:
           linkedExchange?.publicId ?? null,
+        exchangeReplacementOrderOrigin:
+          linkedExchange?.replacementOrderOrigin ?? null,
         exchangeReturnNetMinor:
           linkedExchange?.returnNetMinor ?? null,
         exchangeNewNetMinor:
