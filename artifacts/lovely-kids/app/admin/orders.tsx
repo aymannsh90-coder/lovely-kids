@@ -190,6 +190,7 @@ interface ExchangeReturnConfirmation {
 
 const ADMIN_STORE_PICKUP_LABEL = "استلام من المحل";
 const ADMIN_LOCAL_DELIVERY_LABEL = "ديلفري داخل مدينة نابلس";
+const ADMIN_LOCAL_DELIVERY_BASE_ILS = 15;
 
 const ADMIN_DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   { label: "الضفة الغربية", cost: 20, promoCost: 20 },
@@ -615,8 +616,13 @@ export default function AdminOrdersScreen() {
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
-  const [editLocalCharge, setEditLocalCharge] = useState("");
+  const [editLocalDiscount, setEditLocalDiscount] = useState("0");
+  const [editLocalExtra, setEditLocalExtra] = useState("0");
   const [editLocalCourierCost, setEditLocalCourierCost] = useState("");
+  const editLocalCharge =
+    ADMIN_LOCAL_DELIVERY_BASE_ILS -
+    (Number(editLocalDiscount) || 0) +
+    (Number(editLocalExtra) || 0);
   const [editLocalCustomerConfirmed, setEditLocalCustomerConfirmed] = useState(false);
   const [editExchangeDeliveryMode, setEditExchangeDeliveryMode] =
     useState<"none" | "half" | "full" | "manual">("none");
@@ -1400,7 +1406,8 @@ export default function AdminOrdersScreen() {
     setEditCustomerPhone("");
     setEditCustomerAddress("");
     setEditShippingZone("");
-    setEditLocalCharge("");
+    setEditLocalDiscount("0");
+    setEditLocalExtra("0");
     setEditLocalCourierCost("");
     setEditLocalCustomerConfirmed(false);
     setEditNotes("");
@@ -1554,12 +1561,18 @@ export default function AdminOrdersScreen() {
     setEditShippingZone(
       order.shippingZone ?? "",
     );
-    setEditLocalCharge(
+    // Preserve previously quoted prices when reopening existing local orders.
+    const storedLocalCharge =
       order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
       order.deliveryCompanyCost !== null
-        ? String(order.shippingCost ?? 0)
-        : "",
-    );
+        ? (order.shippingCost ?? ADMIN_LOCAL_DELIVERY_BASE_ILS)
+        : ADMIN_LOCAL_DELIVERY_BASE_ILS;
+    setEditLocalDiscount(String(
+      Math.max(0, ADMIN_LOCAL_DELIVERY_BASE_ILS - storedLocalCharge),
+    ));
+    setEditLocalExtra(String(
+      Math.max(0, storedLocalCharge - ADMIN_LOCAL_DELIVERY_BASE_ILS),
+    ));
     setEditLocalCourierCost(
       order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
       order.deliveryCompanyCost !== null
@@ -1792,12 +1805,26 @@ export default function AdminOrdersScreen() {
     }
 
     if (editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL) {
-      const charge = Number(editLocalCharge);
+      const discount = Number(editLocalDiscount);
+      const extra = Number(editLocalExtra);
+      const charge = editLocalCharge;
       const cost = Number(editLocalCourierCost);
-      if (!/^\d+$/.test(editLocalCharge) || !/^\d+$/.test(editLocalCourierCost) ||
-          !Number.isSafeInteger(charge) || !Number.isSafeInteger(cost) ||
-          charge > 10000 || cost > 10000) {
-        setEditOrderError("أدخل أجرة الديلفري للزبون وتكلفة المندوب بالشيكل (حتى لو صفر)");
+      if (
+        !/^\d+$/.test(editLocalDiscount) ||
+        !/^\d+$/.test(editLocalExtra) ||
+        !/^\d+$/.test(editLocalCourierCost) ||
+        !Number.isSafeInteger(discount) ||
+        !Number.isSafeInteger(extra) ||
+        !Number.isSafeInteger(charge) ||
+        !Number.isSafeInteger(cost) ||
+        discount > ADMIN_LOCAL_DELIVERY_BASE_ILS ||
+        extra > 10000 ||
+        charge < 0 ||
+        charge > 10000 ||
+        cost > 10000 ||
+        (discount > 0 && extra > 0)
+      ) {
+        setEditOrderError("تحقق من الخصم (0–15₪) والرسوم الإضافية وتكلفة المندوب بالأرقام الصحيحة");
         return;
       }
       if (!editLocalCustomerConfirmed) {
@@ -1846,7 +1873,7 @@ export default function AdminOrdersScreen() {
             paymentMethod: editPaymentMethod,
             ...(editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
               ? {
-                  localDeliveryCharge: Number(editLocalCharge),
+                  localDeliveryCharge: editLocalCharge,
                   localDeliveryCourierCost: Number(editLocalCourierCost),
                 }
               : {}),
