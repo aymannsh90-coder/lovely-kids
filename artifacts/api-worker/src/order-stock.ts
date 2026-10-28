@@ -1,5 +1,6 @@
 import {
   exchangeDocumentsTable,
+  financeTransactionsTable,
   inventoryMovementsTable,
   appSettingsTable,
   orderItemCostsTable,
@@ -106,6 +107,22 @@ export async function cancelOrderAndRestoreStock(
     }
 
     const activeExchange = exchangeRows[0] ?? null;
+
+    const cashReceipt = await tx.select({ id: financeTransactionsTable.id })
+      .from(financeTransactionsTable)
+      .where(and(
+        eq(financeTransactionsTable.sourceType, "web_order"),
+        eq(financeTransactionsTable.sourceId, String(orderId)),
+        eq(financeTransactionsTable.sourceEvent, "local_courier_cash_handover"),
+        eq(financeTransactionsTable.status, "posted"),
+      )).limit(1);
+    if (cashReceipt.length > 0) {
+      throw new OrderEditError(
+        "تم قبض قيمة البضاعة من المندوب؛ يجب معالجة رد المبلغ محاسبياً قبل إلغاء الطلب",
+        409,
+      );
+    }
+
     if (activeExchange) {
       const reason = exchangeVoidReason?.trim() ?? "";
       if (!actorUserId || reason.length < 3 || reason.length > 500) {
@@ -1173,6 +1190,21 @@ export async function editOrderItemsAndAdjustStock(
     ) {
       throw new OrderEditError(
         "تعديل طلب ديلفري نابلس يتم من المتجر بعد تأكيد سعر التوصيل مع الزبون",
+        409,
+      );
+    }
+
+    const localReceipt = await tx.select({ id: financeTransactionsTable.id })
+      .from(financeTransactionsTable)
+      .where(and(
+        eq(financeTransactionsTable.sourceType, "web_order"),
+        eq(financeTransactionsTable.sourceId, String(orderId)),
+        eq(financeTransactionsTable.sourceEvent, "local_courier_cash_handover"),
+        eq(financeTransactionsTable.status, "posted"),
+      )).limit(1);
+    if (localReceipt.length > 0) {
+      throw new OrderEditError(
+        "تم قبض قيمة البضاعة من المندوب؛ لا يمكن تغيير المنتجات أو السعر أو طريقة التحصيل بعد القبض",
         409,
       );
     }
