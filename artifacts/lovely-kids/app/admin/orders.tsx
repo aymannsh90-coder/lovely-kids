@@ -364,7 +364,7 @@ function statusInfo(
 }
 
 function paymentMethodLabel(m: string) {
-  return m === "bank_transfer" ? "تحويل بنكي" : "عند الاستلام";
+  return m === "bank_transfer" ? "تحويل بنكي" : m === "local_store_cash" ? "نقدًا للمحل - ديلفري نابلس" : "عند الاستلام";
 }
 
 function getOrderInvoiceDiscount(items: OrderItem[]): number {
@@ -532,7 +532,8 @@ function isMergeEligibleOrder(order: Order) {
     order.paymentMethod === "cod" &&
     order.mergedIntoOrderId == null &&
     (order.mergedOrderCount ?? 0) === 0 &&
-    !order.exchangePublicId
+    !order.exchangePublicId &&
+    order.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL
   );
 }
 
