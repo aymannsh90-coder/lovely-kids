@@ -47,6 +47,7 @@ type Step = "cart" | "checkout" | "payment" | "success";
 
 const STORE_PICKUP_LABEL = "استلام من المحل";
 const LOCAL_NABLUS_DELIVERY_LABEL = "ديلفري داخل مدينة نابلس";
+const LOCAL_NABLUS_DELIVERY_BASE_ILS = 15;
 
 type AppliedDiscountCode = {
   code: string;
@@ -208,6 +209,10 @@ function getShippingCost(
   startDate: string,
   endDate: string,
 ): number {
+  if (zone.label === LOCAL_NABLUS_DELIVERY_LABEL) {
+    return LOCAL_NABLUS_DELIVERY_BASE_ILS;
+  }
+
   const active = isShippingPromotionActive(
     productsTotal,
     enabled,
@@ -936,10 +941,10 @@ export default function CartScreen() {
         ? `🎟️ كود الخصم: ${appliedDiscountCode.code} — ${appliedDiscountCode.campaignName} (${appliedDiscountCode.discountPercent}%)\n💸 الخصم: -${currentDiscountAmount}₪\n`
         : "") +
       (isLocalDelivery
-        ? "🚴 أجرة ديلفري نابلس: سيتم تحديدها والتأكيد عليها من المحل\n"
+        ? `🚴 ديلفري داخل نابلس: ${LOCAL_NABLUS_DELIVERY_BASE_ILS}₪ أساسي — أي زيادة تُؤكد مع الزبون قبل الإرسال\n`
         : `🚚 التوصيل (${selectedZone.label}): ${shippingCost}₪\n`) +
       (isLocalDelivery
-        ? `💰 *إجمالي المنتجات الآن: ${currentTotal}₪ (دون أجرة الديلفري)*`
+        ? `💰 *الإجمالي مع ديلفري ${LOCAL_NABLUS_DELIVERY_BASE_ILS}₪: ${currentTotal}₪ (قبل أي زيادة مؤكدة)*`
         : `💰 *الإجمالي شامل التوصيل: ${currentTotal}₪*`) +
       (trackingUrl
         ? `\n\n🔗 *متابعة حالة الطلب:*\n${trackingUrl}`
@@ -1338,14 +1343,22 @@ export default function CartScreen() {
   if (step === "checkout") {
     const configuredShippingZones = settings.shippingZones ?? [];
 
+    // Canonical regions first; pickup comes last and offers local
+    // Nablus delivery as an optional sub-choice.
+    const regionOrder = ["الضفة الغربية", "القدس", "أراضي الـ48"];
+    const regionalZones = configuredShippingZones
+      .filter((zone) =>
+        zone.label !== STORE_PICKUP_LABEL &&
+        zone.label !== LOCAL_NABLUS_DELIVERY_LABEL,
+      )
+      .sort((a, b) => {
+        const ai = regionOrder.indexOf(a.label);
+        const bi = regionOrder.indexOf(b.label);
+        return (ai < 0 ? 3 : ai) - (bi < 0 ? 3 : bi);
+      });
     const shippingZones: ShippingZone[] = [
+      ...regionalZones,
       { label: STORE_PICKUP_LABEL, cost: 0 },
-      { label: LOCAL_NABLUS_DELIVERY_LABEL, cost: 0 },
-      ...configuredShippingZones.filter(
-        (zone) =>
-          zone.label !== STORE_PICKUP_LABEL &&
-          zone.label !== LOCAL_NABLUS_DELIVERY_LABEL,
-      ),
     ];
     const allowShippingPromotion =
       promotionsAllowShippingPromotion &&
@@ -1384,7 +1397,7 @@ export default function CartScreen() {
 
     const shippingOriginalCost = selectedZone?.cost ?? 0;
     const shippingPromotionDiscount =
-      selectedZone && promotionActive
+      selectedZone && promotionActive && !isLocalDelivery
         ? Math.max(0, shippingOriginalCost - shippingCost)
         : 0;
 
@@ -1601,7 +1614,7 @@ export default function CartScreen() {
                         { color: colors.foreground },
                       ]}
                     >
-                      {isLocalDelivery ? "يُحدّد بالتواصل" : "0₪"}
+                      {isLocalDelivery ? `${LOCAL_NABLUS_DELIVERY_BASE_ILS}₪` : "0₪"}
                     </Text>
                     <Text
                       style={[
@@ -1609,7 +1622,7 @@ export default function CartScreen() {
                         { color: colors.mutedForeground },
                       ]}
                     >
-                      {isLocalDelivery ? "ديلفري داخل نابلس (غير محسوب بعد)" : "الاستلام من المحل"}
+                      {isLocalDelivery ? "ديلفري داخل نابلس (الأساسي)" : "الاستلام من المحل"}
                     </Text>
                   </View>
                 ) : (
@@ -1875,7 +1888,7 @@ export default function CartScreen() {
                   { color: colors.foreground },
                 ]}
               >
-                {isLocalDelivery ? "إجمالي المنتجات قبل أجرة الديلفري" : "الإجمالي شامل التوصيل"}
+                {isLocalDelivery ? "الإجمالي مع ديلفري 15₪ قبل أي رسوم إضافية" : "الإجمالي شامل التوصيل"}
               </Text>
             </View>
           </View>
@@ -1954,7 +1967,8 @@ export default function CartScreen() {
             ]}
           >
             {shippingZones.map((zone) => {
-              const isSelected = selectedZone?.label === zone.label;
+              const isSelected = selectedZone?.label === zone.label ||
+                (zone.label === STORE_PICKUP_LABEL && isLocalDelivery);
 
               const displayedCost = getShippingCost(
                 zone,
@@ -1967,8 +1981,8 @@ export default function CartScreen() {
               );
 
               return (
+                <React.Fragment key={zone.label}>
                 <Pressable
-                  key={zone.label}
                   onPress={() => setSelectedZone(zone)}
                   style={[
                     styles.zoneOption,
@@ -1982,8 +1996,6 @@ export default function CartScreen() {
                     <Text style={[styles.zoneOptionCost, { color: isSelected ? colors.primary : colors.foreground }]}>
                       {zone.label === STORE_PICKUP_LABEL
                         ? "مجانًا"
-                        : zone.label === LOCAL_NABLUS_DELIVERY_LABEL
-                          ? "السعر بعد التأكيد"
                         : promotionActive && displayedCost !== zone.cost
                           ? `${displayedCost}₪ بدل ${zone.cost}₪`
                           : `${displayedCost}₪`}
@@ -2001,6 +2013,31 @@ export default function CartScreen() {
                     <Ionicons name="checkmark-circle" size={18} color={colors.primary} style={styles.zoneCheck} />
                   )}
                 </Pressable>
+                {zone.label === STORE_PICKUP_LABEL && (isStorePickup || isLocalDelivery) && (
+                  <View style={{ marginHorizontal: 10, marginTop: 5, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isLocalDelivery ? "#60A5FA" : colors.border, backgroundColor: isLocalDelivery ? "#EFF6FF" : colors.card }}>
+                    <Pressable
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isLocalDelivery }}
+                      onPress={() => setSelectedZone(
+                        isLocalDelivery
+                          ? { label: STORE_PICKUP_LABEL, cost: 0 }
+                          : { label: LOCAL_NABLUS_DELIVERY_LABEL, cost: LOCAL_NABLUS_DELIVERY_BASE_ILS },
+                      )}
+                      style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8, paddingVertical: 5 }}
+                    >
+                      <Ionicons name={isLocalDelivery ? "checkbox" : "square-outline"} size={23} color="#1D4ED8" />
+                      <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "800", flex: 1 }}>
+                        🚴 بدي توصيل عبر ديلفري داخل مدينة نابلس (+15₪)
+                      </Text>
+                    </Pressable>
+                    <Text style={{ color: "#1E40AF", textAlign: "right", fontSize: 12, lineHeight: 20 }}>
+                      {isLocalDelivery
+                        ? "سيُطلب عنوان التوصيل. السعر الأساسي 15₪، وإذا احتاج العنوان رسومًا إضافية، بنتواصل معك لتأكيدها قبل الإرسال."
+                        : "اختياري: بدلاً من الحضور للمحل، يمكنك طلب ديلفري داخل نابلس بسعر أساسي 15₪."}
+                    </Text>
+                  </View>
+                )}
+                </React.Fragment>
               );
             })}
           </View>
@@ -2008,10 +2045,10 @@ export default function CartScreen() {
           {isLocalDelivery ? (
             <View style={{ backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#93C5FD", borderRadius: 14, padding: 13, gap: 6 }}>
               <Text style={{ color: "#1D4ED8", fontWeight: "900", textAlign: "right" }}>
-                🚴 ديلفري داخل مدينة نابلس
+                🚴 ديلفري نابلس — الأساسي 15₪
               </Text>
               <Text style={{ color: "#1E40AF", textAlign: "right", lineHeight: 21, fontSize: 13 }}>
-                رسوم الديلفري غير محددة بعد وليست مجانية. سيتواصل معك المحل لتأكيد العنوان والسعر والإجمالي النهائي قبل إرسال الطلب.
+                رسوم التوصيل الأساسية 15₪ ومشمولة بالمبلغ المعروض. في حال احتاج العنوان رسومًا إضافية، يتواصل معك المحل لتأكيدها قبل الإرسال.
               </Text>
             </View>
           ) : isStorePickup ? (
@@ -2119,7 +2156,7 @@ export default function CartScreen() {
                   ? "جاري إرسال طلب الديلفري..."
                   : "جاري تأكيد الطلب..."
                 : isLocalDelivery
-                  ? `إرسال الطلب — ${finalTotal}₪ منتجات فقط`
+                  ? `تأكيد الطلب — ${finalTotal}₪ شامل ديلفري 15₪`
                   : `تأكيد الطلب — ${finalTotal} ₪`}
             </Text>
           </Pressable>
@@ -2130,7 +2167,7 @@ export default function CartScreen() {
             ]}
           >
             {isLocalDelivery
-              ? "المبلغ المعروض للمنتجات فقط. سنؤكد أجرة الديلفري والإجمالي النهائي معك قبل إرسال الطلب."
+              ? "السعر يشمل 15₪ ديلفري داخل نابلس. أي رسوم إضافية لا تُعتمد إلا بعد موافقتك."
               : "سيتم حفظ طلبك مباشرة وإرسال نسخة عبر واتساب"}
           </Text>
 
