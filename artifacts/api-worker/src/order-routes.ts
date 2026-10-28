@@ -14,6 +14,7 @@ import {
   OrderValidationError,
   resolveShippingZone,
   STORE_PICKUP_LABEL,
+  LOCAL_NABLUS_DELIVERY_LABEL,
 } from "./order-service";
 import {
   cancelOrderAndRestoreStock,
@@ -199,6 +200,28 @@ async function getAutomaticFulfillmentUpdate(
     return {
       ok: false,
       error: "منطقة التوصيل غير محددة في الطلب",
+    };
+  }
+
+  if (order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL) {
+    if (
+      order.deliveryCompanyCost === null ||
+      !Number.isSafeInteger(order.deliveryCompanyCost) ||
+      order.deliveryCompanyCost < 0
+    ) {
+      return {
+        ok: false,
+        error: "حدد أجرة ديلفري نابلس وتكلفة المندوب مع تأكيد الزبون قبل إرسال الطلب",
+      };
+    }
+
+    return {
+      ok: true,
+      update: {
+        fulfillmentMethod: "delivery",
+        deliveryCompanyId: null,
+        deliveryCompanyCost: order.deliveryCompanyCost,
+      },
     };
   }
 
@@ -1422,6 +1445,8 @@ async function handleEditOrderItems(
         paymentMethod?: unknown;
         exchangeDeliveryDiscountMode?: unknown;
         exchangeManualDeliveryDiscountMinor?: unknown;
+        localDeliveryCharge?: unknown;
+        localDeliveryCourierCost?: unknown;
       }
     | null;
 
@@ -1444,6 +1469,8 @@ async function handleEditOrderItems(
         paymentMethod: body.paymentMethod,
         exchangeDeliveryDiscountMode: body.exchangeDeliveryDiscountMode,
         exchangeManualDeliveryDiscountMinor: body.exchangeManualDeliveryDiscountMinor,
+        localDeliveryCharge: body.localDeliveryCharge,
+        localDeliveryCourierCost: body.localDeliveryCourierCost,
       },
       user.id,
     );
