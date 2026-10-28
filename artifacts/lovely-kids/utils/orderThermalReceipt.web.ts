@@ -582,31 +582,6 @@ export async function printOrderThermalReceipt(
       padding: 5px 1px;
     }
 
-    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(1),
-    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(1) {
-      width: 6%;
-    }
-
-    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(2),
-    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(2) {
-      width: 35%;
-    }
-
-    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(3),
-    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(3) {
-      width: 21%;
-    }
-
-    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(4),
-    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(4) {
-      width: 13%;
-    }
-
-    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(5),
-    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(5) {
-      width: 25%;
-    }
-
     .lk-order-thermal-capture .receipt-exchange-section {
       margin: 8px 0 4px;
       border: 1px solid #000;
@@ -660,6 +635,31 @@ export async function printOrderThermalReceipt(
     .lk-order-thermal-capture .receipt-items-table td:nth-child(5) {
       width: 25%;
       font-size: 13.5px;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(1),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(1) {
+      width: 6%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(2),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(2) {
+      width: 35%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(3),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(3) {
+      width: 21%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(4),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(4) {
+      width: 13%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(5),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(5) {
+      width: 25%;
     }
 
     .lk-order-thermal-capture .receipt-totals > div {
