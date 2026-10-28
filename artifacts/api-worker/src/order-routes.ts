@@ -1649,6 +1649,13 @@ async function handleConvertOrderToStorePickup(
     );
   }
 
+  if (
+    order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL &&
+    order.status === "delivering"
+  ) {
+    return json({ error: "لا يمكن تغيير طلب ديلفري نابلس إلى استلام من المحل بعد خروجه للتوصيل" }, 409);
+  }
+
   if (order.shippingZone === "استلام من المحل") {
     const current = await db
       .select()
