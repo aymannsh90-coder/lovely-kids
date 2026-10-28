@@ -1190,7 +1190,7 @@ export async function completeOrderWithFinance(
         deliveryCompanyCost,
         ...(
           ((isPickup && order.paymentMethod === "cod") ||
-           (isLocalDelivery && order.paymentMethod === "local_store_cash"))
+           (isLocalDelivery && localCashHandover !== null))
             ? {
                 paymentStatus:
                   "confirmed",
