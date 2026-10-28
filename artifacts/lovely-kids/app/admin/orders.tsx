@@ -4525,7 +4525,9 @@ export default function AdminOrdersScreen() {
                       </Pressable>
                     </View>
 
-                    {(item.status === "new" || item.status === "confirmed" || item.status === "delivering") &&
+                    {(item.status === "new" ||
+                      item.status === "confirmed" ||
+                      (item.status === "delivering" && !!item.exchangePublicId)) &&
                       (!item.exchangePublicId || !item.exchangeFinancialCompletedAt) && (
                       <Pressable
                         disabled={pendingOrderIds.has(item.id)}
@@ -5703,7 +5705,9 @@ export default function AdminOrdersScreen() {
                     { color: colors.mutedForeground },
                   ]}
                 >
-                  عدّل بيانات الزبون، التوصيل، المنتجات والأسعار
+                  {editingOrder?.exchangePublicId
+                    ? "تعديل الأصناف والخصومات والتوصيل مع إعادة احتساب فرق التبديل"
+                    : "عدّل بيانات الزبون، التوصيل، المنتجات والأسعار"}
                 </Text>
               </View>
 
