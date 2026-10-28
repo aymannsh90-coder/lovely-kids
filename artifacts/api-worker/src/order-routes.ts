@@ -41,6 +41,13 @@ type Db = Awaited<
   ReturnType<typeof openDb>
 >["db"];
 
+// Never include internal courier cost or delivery company ID in customer APIs.
+const customerOrderView = (order: typeof ordersTable.$inferSelect) => ({
+  ...order,
+  deliveryCompanyId: undefined,
+  deliveryCompanyCost: undefined,
+});
+
 const json = (data: unknown, status = 200) =>
   Response.json(rewriteMediaUrlsForPublic(data), {
     status,
@@ -796,7 +803,7 @@ async function handleLookupOrder(
         );
 
       return json({
-        ...master,
+        ...customerOrderView(master),
         mergedFromOrderId:
           order.id,
         ...(trackingToken
@@ -814,7 +821,7 @@ async function handleLookupOrder(
     );
 
   return json({
-    ...order,
+    ...customerOrderView(order),
     ...(trackingToken
       ? { trackingToken }
       : {}),
@@ -886,7 +893,7 @@ async function handleTrackOrder(
         );
 
       return json({
-        ...master,
+        ...customerOrderView(master),
         mergedFromOrderId:
           order.id,
         ...(masterToken
@@ -899,7 +906,7 @@ async function handleTrackOrder(
     }
   }
 
-  return json(order);
+  return json(customerOrderView(order));
 }
 
 async function handleGetMyOrders(
@@ -933,7 +940,7 @@ async function handleGetMyOrders(
     )
     .orderBy(desc(ordersTable.createdAt));
 
-  return json(orders);
+  return json(orders.map(customerOrderView));
 }
 
 async function handleMarkOrderPrinted(
@@ -1358,7 +1365,7 @@ async function handleCustomerEditOrderItems(
         },
       );
 
-    return json(updated);
+    return json(customerOrderView(updated));
   } catch (error) {
     if (error instanceof OrderEditError) {
       return json(
