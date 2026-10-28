@@ -260,7 +260,20 @@ export async function printOrderThermalReceipt(
       ? Number(order.shippingPromotionDiscount)
       : 0;
 
+  const isLocalNablusDelivery =
+    order.shippingZone === "ديلفري داخل مدينة نابلس";
+  const localBaseCost = 15;
+  const localDiscount =
+    isLocalNablusDelivery && order.deliveryCompanyCost != null
+      ? Math.max(0, localBaseCost - shippingCost)
+      : 0;
+  const localExtra =
+    isLocalNablusDelivery && order.deliveryCompanyCost != null
+      ? Math.max(0, shippingCost - localBaseCost)
+      : 0;
+
   const hasShippingPromotion =
+    !isLocalNablusDelivery &&
     shippingPromotionDiscount > 0 &&
     shippingOriginalCost >= shippingPromotionDiscount &&
     shippingOriginalCost - shippingPromotionDiscount === shippingCost;
@@ -938,20 +951,26 @@ export async function printOrderThermalReceipt(
                       <strong>-${money(shippingPromotionDiscount)}</strong>
                     </div>
                   `
-                  : (shippingCost > 0 ||
-                      (order.shippingZone === "ديلفري داخل مدينة نابلس" &&
-                       order.deliveryCompanyCost != null))
+                  : isLocalNablusDelivery
                     ? `
                       <div>
-                        <span>${order.shippingZone === "ديلفري داخل مدينة نابلس" ? "توصيل ديلفري نابلس" : "التوصيل"}</span>
+                        <span>ديلفري نابلس الأساسي</span>
+                        <strong>${money(localBaseCost)}</strong>
+                      </div>
+                      ${localExtra > 0 ? `<div><span>رسوم توصيل إضافية</span><strong>+${money(localExtra)}</strong></div>` : ""}
+                      ${localDiscount > 0 ? `<div><span>خصم توصيل ديلفري</span><strong>-${money(localDiscount)}</strong></div>` : ""}
+                      <div>
+                        <span>توصيل ديلفري نابلس</span>
                         <strong>${money(shippingCost)}</strong>
                       </div>
                     `
-                    : ""
+                    : shippingCost > 0
+                      ? `<div><span>التوصيل</span><strong>${money(shippingCost)}</strong></div>`
+                      : ""
               }
 
               <div class="receipt-total">
-                <span>${order.shippingZone === "ديلفري داخل مدينة نابلس" && order.deliveryCompanyCost == null ? "إجمالي المنتجات (أجرة الديلفري قيد التأكيد)" : "الإجمالي النهائي"}</span>
+                <span>${isLocalNablusDelivery && order.deliveryCompanyCost == null ? "الإجمالي المبدئي (يشمل ديلفري 15₪)" : "الإجمالي النهائي"}</span>
                 <strong>${money(order.totalPrice)}</strong>
               </div>
             `
