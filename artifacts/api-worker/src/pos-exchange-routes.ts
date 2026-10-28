@@ -11,6 +11,7 @@ import { handleCreatePosExchange } from "./pos-exchange-create";
 import {
   handleCreateOnlineOrderExchange,
   handleGetOnlineOrderExchangeStatus,
+  handleVoidOnlineOrderExchange,
 } from "./pos-online-exchange-create";
 import { handleReceiveOnlineExchangeReturn } from "./pos-online-exchange-receive";
 import {
@@ -967,6 +968,17 @@ export async function handlePosExchangeRequest(
     path === "/api/pos/exchanges/online/status"
   ) {
     return handleGetOnlineOrderExchangeStatus(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/pos/exchanges/online/void"
+  ) {
+    return handleVoidOnlineOrderExchange(
       request,
       db,
       env,

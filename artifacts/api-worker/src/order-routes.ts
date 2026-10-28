@@ -597,6 +597,8 @@ async function handleGetOrders(
           exchangeDocumentsTable.originalOrderId,
         publicId:
           exchangeDocumentsTable.publicId,
+        replacementOrderOrigin:
+          exchangeDocumentsTable.replacementOrderOrigin,
         returnNetMinor:
           exchangeDocumentsTable.returnNetMinor,
         newNetMinor:
@@ -682,6 +684,8 @@ async function handleGetOrders(
           linkedExchange?.originalOrderId ?? null,
         exchangePublicId:
           linkedExchange?.publicId ?? null,
+        exchangeReplacementOrderOrigin:
+          linkedExchange?.replacementOrderOrigin ?? null,
         exchangeReturnNetMinor:
           linkedExchange?.returnNetMinor ?? null,
         exchangeNewNetMinor:
@@ -1416,6 +1420,8 @@ async function handleEditOrderItems(
         notes?: unknown;
         invoiceDiscount?: unknown;
         paymentMethod?: unknown;
+        exchangeDeliveryDiscountMode?: unknown;
+        exchangeManualDeliveryDiscountMinor?: unknown;
       }
     | null;
 
@@ -1436,6 +1442,8 @@ async function handleEditOrderItems(
         notes: body.notes,
         invoiceDiscount: body.invoiceDiscount,
         paymentMethod: body.paymentMethod,
+        exchangeDeliveryDiscountMode: body.exchangeDeliveryDiscountMode,
+        exchangeManualDeliveryDiscountMinor: body.exchangeManualDeliveryDiscountMinor,
       },
       user.id,
     );
@@ -1531,12 +1539,15 @@ async function handleCancelOrder(
     );
   }
 
-  const result = await cancelOrderAndRestoreStock(
-    db,
-    id,
-    ["new"],
-    user.id,
-  );
+  let result: Awaited<ReturnType<typeof cancelOrderAndRestoreStock>>;
+  try {
+    result = await cancelOrderAndRestoreStock(db, id, ["new"], user.id);
+  } catch (error) {
+    if (error instanceof OrderEditError) {
+      return json({ error: error.message }, error.status);
+    }
+    throw error;
+  }
 
   if (result.kind === "not_found") {
     return json({ error: "الطلب غير موجود" }, 404);
@@ -1953,12 +1964,20 @@ async function handleUpdateOrderStatus(
   }
 
   if (body.status === "cancelled") {
-    const result = await cancelOrderAndRestoreStock(
-      db,
-      id,
-      ["new", "confirmed", "delivering"],
-      user.id,
-    );
+    let result: Awaited<ReturnType<typeof cancelOrderAndRestoreStock>>;
+    try {
+      result = await cancelOrderAndRestoreStock(
+        db,
+        id,
+        ["new", "confirmed", "delivering"],
+        user.id,
+      );
+    } catch (error) {
+      if (error instanceof OrderEditError) {
+        return json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
 
     if (result.kind === "not_found") {
       return json({ error: "الطلب غير موجود" }, 404);

@@ -100,6 +100,7 @@ interface Order {
   id: number;
   exchangeOriginalOrderId?: number | null;
   exchangePublicId?: string | null;
+  exchangeReplacementOrderOrigin?: "system_created" | "existing_order" | null;
   exchangeReturnNetMinor?: number | null;
   exchangeNewNetMinor?: number | null;
   exchangeDifferenceMinor?: number | null;
@@ -152,6 +153,8 @@ interface OnlineExchangeStatusPayload {
     publicId: string;
     financialCompletedAt: string | null;
     returnReceivedAt: string | null;
+    deliveryDiscountMode: "none" | "half" | "full" | "manual";
+    deliveryDiscountMinor: number;
   };
   returnItems: OnlineExchangeReturnItem[];
 }
@@ -556,6 +559,10 @@ export default function AdminOrdersScreen() {
   ] = useState<
     "arab" | "bop" | null
   >(null);
+  const [exchangeVoidTarget, setExchangeVoidTarget] = useState<Order | null>(null);
+  const [exchangeVoidReason, setExchangeVoidReason] = useState("");
+  const [exchangeVoidBusy, setExchangeVoidBusy] = useState(false);
+  const [exchangeVoidError, setExchangeVoidError] = useState("");
   const [exchangeReturnConfirm, setExchangeReturnConfirm] =
     useState<ExchangeReturnConfirmation | null>(null);
   const [exchangeReturnBusyId, setExchangeReturnBusyId] =
@@ -592,6 +599,9 @@ export default function AdminOrdersScreen() {
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
+  const [editExchangeDeliveryMode, setEditExchangeDeliveryMode] =
+    useState<"none" | "half" | "full" | "manual">("none");
+  const [editExchangeManualDelivery, setEditExchangeManualDelivery] = useState("0");
   const [editPaymentMethod, setEditPaymentMethod] =
     useState<"cod" | "bank_transfer">("cod");
 
@@ -756,6 +766,54 @@ export default function AdminOrdersScreen() {
     },
     [getAuthToken],
   );
+
+  const confirmVoidOnlineExchange = async () => {
+    const target = exchangeVoidTarget;
+    const reason = exchangeVoidReason.trim();
+    if (!target?.exchangePublicId || exchangeVoidBusy) return;
+    if (reason.length < 3) {
+      setExchangeVoidError("أدخل سبب الإلغاء (3 أحرف على الأقل)");
+      return;
+    }
+
+    setExchangeVoidBusy(true);
+    setExchangeVoidError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
+
+      const response = await fetch(`${API_BASE}/api/pos/exchanges/online/void`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ publicId: target.exchangePublicId, reason }),
+      });
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+      if (!response.ok || !body?.ok) {
+        throw new Error(body?.error ?? "تعذر إلغاء التبديل");
+      }
+
+      setExchangeVoidTarget(null);
+      setExchangeVoidReason("");
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === target.id
+            ? { ...order, status: "cancelled", exchangePublicId: null }
+            : order,
+        ),
+      );
+      await fetchOrdersRef.current();
+      Alert.alert("تم إلغاء التبديل", "أُلغي الطلب البديل بأمان، ويمكن إنشاء تبديل جديد من الطلب الأصلي.");
+    } catch (error) {
+      setExchangeVoidError(error instanceof Error ? error.message : "تعذر إلغاء التبديل");
+    } finally {
+      setExchangeVoidBusy(false);
+    }
+  };
 
   const openExchangeReturnReceipt = async (order: Order) => {
     const publicId = order.exchangePublicId?.trim();
@@ -1324,6 +1382,8 @@ export default function AdminOrdersScreen() {
     setEditCustomerAddress("");
     setEditShippingZone("");
     setEditNotes("");
+    setEditExchangeDeliveryMode("none");
+    setEditExchangeManualDelivery("0");
   };
 
   const loadEditProducts = async () => {
@@ -1433,6 +1493,31 @@ export default function AdminOrdersScreen() {
         "يمكن تعديل الطلبات الجديدة أو المؤكدة أو قيد التوصيل فقط",
       );
       return;
+    }
+
+    if (order.exchangeFinancialCompletedAt) {
+      showError("لا يمكن تعديل طلب تبديل تم تسجيله محاسبياً");
+      return;
+    }
+
+    if (order.exchangePublicId) {
+      try {
+        const latest = await fetchOnlineExchangeStatus(order.exchangePublicId);
+        if (latest.exchange.financialCompletedAt) {
+          showError("تم تسليم طلب التبديل وتسجيله محاسبياً، ولا يمكن تعديله");
+          return;
+        }
+        setEditExchangeDeliveryMode(latest.exchange.deliveryDiscountMode);
+        setEditExchangeManualDelivery(
+          String(latest.exchange.deliveryDiscountMinor / 100),
+        );
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "تعذر تحميل خصم توصيل التبديل");
+        return;
+      }
+    } else {
+      setEditExchangeDeliveryMode("none");
+      setEditExchangeManualDelivery("0");
     }
 
     setEditingOrder(order);
@@ -1699,6 +1784,13 @@ export default function AdminOrdersScreen() {
             notes: editNotes.trim(),
             invoiceDiscount,
             paymentMethod: editPaymentMethod,
+            ...(editingOrder.exchangePublicId
+              ? {
+                  exchangeDeliveryDiscountMode: editExchangeDeliveryMode,
+                  exchangeManualDeliveryDiscountMinor:
+                    Number(editExchangeManualDelivery) * 100,
+                }
+              : {}),
             items: editItems.map((item) => ({
               id: item.id,
               quantity: item.quantity,
@@ -1899,14 +1991,26 @@ export default function AdminOrdersScreen() {
     Number(editingOrder.discountCodePercent) <= 100;
 
   const editShippingCost = editSelectedShippingZone
-    ? editingOrderHasDiscountCode &&
-      editingOrder?.discountCodeStacksWithShippingPromotion === false
-      ? editSelectedShippingZone.cost
-      : getAdminEditShippingCost(
-          settings,
-          editSelectedShippingZone,
-          editProductsTotal,
+    ? editingOrder?.exchangePublicId
+      ? Math.max(
+          0,
+          editSelectedShippingZone.cost -
+            (editExchangeDeliveryMode === "full"
+              ? editSelectedShippingZone.cost
+              : editExchangeDeliveryMode === "half"
+                ? editSelectedShippingZone.cost / 2
+                : editExchangeDeliveryMode === "manual"
+                  ? Number(editExchangeManualDelivery) || 0
+                  : 0),
         )
+      : editingOrderHasDiscountCode &&
+          editingOrder?.discountCodeStacksWithShippingPromotion === false
+        ? editSelectedShippingZone.cost
+        : getAdminEditShippingCost(
+            settings,
+            editSelectedShippingZone,
+            editProductsTotal,
+          )
     : 0;
 
   const editInvoiceDiscountValue = (() => {
@@ -4421,7 +4525,10 @@ export default function AdminOrdersScreen() {
                       </Pressable>
                     </View>
 
-                    {(item.status === "new" || item.status === "confirmed") && (
+                    {(item.status === "new" ||
+                      item.status === "confirmed" ||
+                      (item.status === "delivering" && !!item.exchangePublicId)) &&
+                      (!item.exchangePublicId || !item.exchangeFinancialCompletedAt) && (
                       <Pressable
                         disabled={pendingOrderIds.has(item.id)}
                         onPress={(event) => {
@@ -4448,7 +4555,7 @@ export default function AdminOrdersScreen() {
                             { color: colors.primary },
                           ]}
                         >
-                          تعديل منتجات الطلب
+                          {item.exchangePublicId ? "تعديل أصناف ومبالغ التبديل" : "تعديل منتجات الطلب"}
                         </Text>
                       </Pressable>
                     )}
@@ -4474,6 +4581,29 @@ export default function AdminOrdersScreen() {
                         >
                           🔄 متابعة طلب التبديل
                         </Text>
+
+                        {item.exchangeReplacementOrderOrigin === "system_created" &&
+                          item.status === "new" &&
+                          !item.exchangeFinancialCompletedAt && (
+                            <Pressable
+                              disabled={exchangeVoidBusy || pendingOrderIds.has(item.id)}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                setExchangeVoidTarget(item);
+                                setExchangeVoidReason("");
+                                setExchangeVoidError("");
+                              }}
+                              style={[
+                                styles.editOrderBtn,
+                                { backgroundColor: "#FEE2E2", borderColor: "#DC2626" },
+                              ]}
+                            >
+                              <Ionicons name="close-circle-outline" size={18} color="#B91C1C" />
+                              <Text style={[styles.editOrderBtnText, { color: "#B91C1C" }]}>
+                                إلغاء التبديل والطلب البديل
+                              </Text>
+                            </Pressable>
+                          )}
 
                         {item.status === "delivering" && (
                           <Pressable
@@ -5139,6 +5269,76 @@ export default function AdminOrdersScreen() {
       </Modal>
 
       <Modal
+        visible={exchangeVoidTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!exchangeVoidBusy) setExchangeVoidTarget(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.deleteConfirmCard,
+              {
+                width: 440,
+                maxWidth: "92%",
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                alignItems: "stretch",
+                gap: 12,
+              },
+            ]}
+          >
+            <Text style={{ color: "#B91C1C", fontWeight: "900", fontSize: 18, textAlign: "right" }}>
+              إلغاء تبديل الطلب #{exchangeVoidTarget?.id}
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right" }}>
+              متاح فقط قبل تأكيد وتجهيز الطلب. سيتم إلغاء عملية التبديل والطلب البديل معاً، دون حذف السجل، ويمكن إنشاء تبديل جديد من الطلب الأصلي.
+            </Text>
+            <TextInput
+              value={exchangeVoidReason}
+              onChangeText={(value) => {
+                setExchangeVoidReason(value);
+                setExchangeVoidError("");
+              }}
+              placeholder="سبب الإلغاء (إجباري)"
+              placeholderTextColor={colors.mutedForeground}
+              maxLength={500}
+              multiline
+              style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, minHeight: 65 }]}
+              textAlign="right"
+            />
+            {exchangeVoidError ? (
+              <Text style={{ color: "#DC2626", textAlign: "right" }}>{exchangeVoidError}</Text>
+            ) : null}
+            <Pressable
+              disabled={exchangeVoidBusy || exchangeVoidReason.trim().length < 3}
+              onPress={() => void confirmVoidOnlineExchange()}
+              style={[
+                styles.deleteConfirmBtn,
+                {
+                  backgroundColor: "#DC2626",
+                  opacity: exchangeVoidBusy || exchangeVoidReason.trim().length < 3 ? 0.5 : 1,
+                },
+              ]}
+            >
+              {exchangeVoidBusy
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.deleteConfirmBtnText}>تأكيد إلغاء التبديل</Text>}
+            </Pressable>
+            <Pressable
+              disabled={exchangeVoidBusy}
+              style={[styles.deleteCancelBtn, { borderColor: colors.border }]}
+              onPress={() => setExchangeVoidTarget(null)}
+            >
+              <Text style={[styles.deleteCancelBtnText, { color: colors.foreground }]}>رجوع</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={exchangeReturnConfirm !== null}
         transparent
         animationType="fade"
@@ -5505,7 +5705,9 @@ export default function AdminOrdersScreen() {
                     { color: colors.mutedForeground },
                   ]}
                 >
-                  عدّل بيانات الزبون، التوصيل، المنتجات والأسعار
+                  {editingOrder?.exchangePublicId
+                    ? "تعديل الأصناف والخصومات والتوصيل مع إعادة احتساب فرق التبديل"
+                    : "عدّل بيانات الزبون، التوصيل، المنتجات والأسعار"}
                 </Text>
               </View>
 
@@ -5720,6 +5922,55 @@ export default function AdminOrdersScreen() {
                   </View>
                 )}
 
+                {editingOrder?.exchangePublicId && (
+                  <View style={{ gap: 9, padding: 12, borderWidth: 1, borderColor: "#7C3AED55", borderRadius: 12 }}>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                      خصم توصيل التبديل
+                    </Text>
+                    <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 }}>
+                      {([
+                        { key: "none", label: "بدون خصم" },
+                        { key: "half", label: "نصف التوصيل" },
+                        { key: "full", label: "توصيل مجاني" },
+                        { key: "manual", label: "خصم يدوي" },
+                      ] as const).map((option) => (
+                        <Pressable
+                          key={option.key}
+                          onPress={() => setEditExchangeDeliveryMode(option.key)}
+                          style={[
+                            styles.editOrderShippingZoneBtn,
+                            {
+                              borderColor: editExchangeDeliveryMode === option.key ? "#7C3AED" : colors.border,
+                              backgroundColor: editExchangeDeliveryMode === option.key ? "#7C3AED" : colors.card,
+                            },
+                          ]}
+                        >
+                          <Text style={{ color: editExchangeDeliveryMode === option.key ? "#fff" : colors.foreground, fontWeight: "700" }}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {editExchangeDeliveryMode === "manual" && (
+                      <>
+                        <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                          قيمة خصم التوصيل بالشيكل
+                        </Text>
+                        <TextInput
+                          value={editExchangeManualDelivery}
+                          onChangeText={(value) => setEditExchangeManualDelivery(value.replace(/[^0-9]/g, ""))}
+                          keyboardType="number-pad"
+                          style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border }]}
+                          textAlign="right"
+                        />
+                      </>
+                    )}
+                    <Text style={{ color: "#7C3AED", textAlign: "right", fontWeight: "700" }}>
+                      رسوم التوصيل بعد الخصم: {editShippingCost} ₪ — يُحدَّث فرق التبديل تلقائياً عند الحفظ
+                    </Text>
+                  </View>
+                )}
+
                 <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
                   طريقة الدفع *
                 </Text>
@@ -5728,7 +5979,7 @@ export default function AdminOrdersScreen() {
                   {[
                     { key: "cod" as const, label: "الدفع عند الاستلام" },
                     { key: "bank_transfer" as const, label: "تحويل بنكي" },
-                  ].map((option) => {
+                  ].filter((option) => !editingOrder?.exchangePublicId || option.key === "cod").map((option) => {
                     const selected =
                       editPaymentMethod === option.key;
 

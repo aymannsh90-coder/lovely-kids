@@ -9,6 +9,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { cancelOrderAndRestoreStock, OrderEditError } from "./order-stock";
 import type { Env, openDb } from "./db";
 import {
   resolveShippingCost,
@@ -2250,5 +2251,95 @@ export async function handleCreateOnlineOrderExchange(
       },
       500,
     );
+  }
+}
+
+/**
+ * Void an online exchange before its system-created replacement order has
+ * been processed. The order cancellation and exchange void are committed
+ * in one database transaction by cancelOrderAndRestoreStock, including any
+ * inventory-cost reversal. Never void a settled or externally-linked order.
+ */
+export async function handleVoidOnlineOrderExchange(
+  request: Request,
+  db: Db,
+  env: Env,
+): Promise<Response> {
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isAdmin && !user.isOwner) {
+    return json({ error: "غير مصرح باستخدام نقطة البيع" }, 403);
+  }
+
+  const raw = await request.json().catch(() => null);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return json({ error: "بيانات الإلغاء غير صالحة" }, 400);
+  }
+
+  const body = raw as Record<string, unknown>;
+  const publicId =
+    typeof body.publicId === "string" ? body.publicId.trim().toUpperCase() : "";
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  if (!publicId || publicId.length > 100) {
+    return json({ error: "رقم عملية التبديل غير صالح" }, 400);
+  }
+  if (reason.length < 3 || reason.length > 500) {
+    return json({ error: "أدخل سبب الإلغاء (من 3 إلى 500 حرف)" }, 400);
+  }
+
+  try {
+    const exchangeRows = await db
+      .select()
+      .from(exchangeDocumentsTable)
+      .where(eq(exchangeDocumentsTable.publicId, publicId))
+      .limit(1);
+    const exchange = exchangeRows[0];
+    if (!exchange) return json({ error: "عملية التبديل غير موجودة" }, 404);
+    if (exchange.sourceType !== "online_order") {
+      return json({ error: "هذه العملية ليست تبديل طلب أونلاين" }, 409);
+    }
+    if (exchange.status === "voided") {
+      return json({ ok: true, alreadyVoided: true });
+    }
+
+    if (
+      exchange.replacementOrderOrigin !== "system_created" ||
+      exchange.replacementOrderId === null ||
+      exchange.financialCompletedAt !== null ||
+      exchange.returnReceivedAt !== null
+    ) {
+      return json(
+        { error: "لا يمكن إلغاء التبديل بعد التسوية أو استلام المرتجع أو عند ربط طلب موجود" },
+        409,
+      );
+    }
+
+    const result = await cancelOrderAndRestoreStock(
+      db,
+      exchange.replacementOrderId,
+      ["new"],
+      user.id,
+      reason,
+    );
+
+    if (result.kind !== "updated") {
+      return json(
+        { error: "يجب أن يكون الطلب البديل جديداً ولم يبدأ تجهيزه حتى يمكن إلغاء التبديل" },
+        409,
+      );
+    }
+
+    return json({
+      ok: true,
+      alreadyVoided: false,
+      cancelledOrderId: exchange.replacementOrderId,
+      publicId,
+    });
+  } catch (error) {
+    if (error instanceof OrderEditError) {
+      return json({ error: error.message }, error.status);
+    }
+    console.error("ONLINE_ORDER_EXCHANGE_VOID_FAILED", error);
+    return json({ error: "تعذر إلغاء تبديل الأونلاين" }, 500);
   }
 }
