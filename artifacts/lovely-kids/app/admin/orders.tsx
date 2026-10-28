@@ -4477,7 +4477,8 @@ export default function AdminOrdersScreen() {
                       </Pressable>
                     </View>
 
-                    {(item.status === "new" || item.status === "confirmed") && (
+                    {(item.status === "new" || item.status === "confirmed" || item.status === "delivering") &&
+                      (!item.exchangePublicId || !item.exchangeFinancialCompletedAt) && (
                       <Pressable
                         disabled={pendingOrderIds.has(item.id)}
                         onPress={(event) => {
@@ -4504,7 +4505,7 @@ export default function AdminOrdersScreen() {
                             { color: colors.primary },
                           ]}
                         >
-                          تعديل منتجات الطلب
+                          {item.exchangePublicId ? "تعديل أصناف ومبالغ التبديل" : "تعديل منتجات الطلب"}
                         </Text>
                       </Pressable>
                     )}
@@ -5776,6 +5777,55 @@ export default function AdminOrdersScreen() {
                   </View>
                 )}
 
+                {editingOrder?.exchangePublicId && (
+                  <View style={{ gap: 9, padding: 12, borderWidth: 1, borderColor: "#7C3AED55", borderRadius: 12 }}>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                      خصم توصيل التبديل
+                    </Text>
+                    <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 }}>
+                      {([
+                        { key: "none", label: "بدون خصم" },
+                        { key: "half", label: "نصف التوصيل" },
+                        { key: "full", label: "توصيل مجاني" },
+                        { key: "manual", label: "خصم يدوي" },
+                      ] as const).map((option) => (
+                        <Pressable
+                          key={option.key}
+                          onPress={() => setEditExchangeDeliveryMode(option.key)}
+                          style={[
+                            styles.editOrderShippingZoneBtn,
+                            {
+                              borderColor: editExchangeDeliveryMode === option.key ? "#7C3AED" : colors.border,
+                              backgroundColor: editExchangeDeliveryMode === option.key ? "#7C3AED" : colors.card,
+                            },
+                          ]}
+                        >
+                          <Text style={{ color: editExchangeDeliveryMode === option.key ? "#fff" : colors.foreground, fontWeight: "700" }}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {editExchangeDeliveryMode === "manual" && (
+                      <>
+                        <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                          قيمة خصم التوصيل بالشيكل
+                        </Text>
+                        <TextInput
+                          value={editExchangeManualDelivery}
+                          onChangeText={(value) => setEditExchangeManualDelivery(value.replace(/[^0-9]/g, ""))}
+                          keyboardType="number-pad"
+                          style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border }]}
+                          textAlign="right"
+                        />
+                      </>
+                    )}
+                    <Text style={{ color: "#7C3AED", textAlign: "right", fontWeight: "700" }}>
+                      رسوم التوصيل بعد الخصم: {editShippingCost} ₪ — يُحدَّث فرق التبديل تلقائياً عند الحفظ
+                    </Text>
+                  </View>
+                )}
+
                 <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
                   طريقة الدفع *
                 </Text>
@@ -5784,7 +5834,7 @@ export default function AdminOrdersScreen() {
                   {[
                     { key: "cod" as const, label: "الدفع عند الاستلام" },
                     { key: "bank_transfer" as const, label: "تحويل بنكي" },
-                  ].map((option) => {
+                  ].filter((option) => !editingOrder?.exchangePublicId || option.key === "cod").map((option) => {
                     const selected =
                       editPaymentMethod === option.key;
 
