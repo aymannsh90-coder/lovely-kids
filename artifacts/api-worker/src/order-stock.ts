@@ -1258,6 +1258,13 @@ export async function editOrderItemsAndAdjustStock(
     const linkedOnlineExchange =
       linkedExchangeRows[0] ?? null;
 
+    if (linkedOnlineExchange && options?.restrictToPublicCatalog) {
+      throw new OrderEditError(
+        "تعديل طلب التبديل يتم بواسطة الإدارة فقط",
+        409,
+      );
+    }
+
     if (
       !linkedOnlineExchange &&
       (rawDetails?.exchangeDeliveryDiscountMode !== undefined ||
