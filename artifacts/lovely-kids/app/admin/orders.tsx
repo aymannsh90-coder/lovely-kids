@@ -7003,6 +7003,26 @@ export default function AdminOrdersScreen() {
                   </Text>
                 </View>
 
+                {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL && (
+                  <>
+                    <View style={styles.editOrderSummaryRow}>
+                      <Text style={{ color: colors.mutedForeground, fontWeight: "600" }}>ديلفري نابلس الأساسي</Text>
+                      <Text style={{ color: colors.foreground, fontWeight: "700" }}>{ADMIN_LOCAL_DELIVERY_BASE_ILS}₪</Text>
+                    </View>
+                    {Number(editLocalExtra) > 0 && (
+                      <View style={styles.editOrderSummaryRow}>
+                        <Text style={{ color: colors.mutedForeground, fontWeight: "600" }}>رسوم توصيل إضافية</Text>
+                        <Text style={{ color: colors.foreground, fontWeight: "700" }}>+{editLocalExtra}₪</Text>
+                      </View>
+                    )}
+                    {Number(editLocalDiscount) > 0 && (
+                      <View style={styles.editOrderSummaryRow}>
+                        <Text style={{ color: colors.mutedForeground, fontWeight: "600" }}>خصم ديلفري</Text>
+                        <Text style={{ color: "#DC2626", fontWeight: "700" }}>-{editLocalDiscount}₪</Text>
+                      </View>
+                    )}
+                  </>
+                )}
                 <View style={styles.editOrderSummaryRow}>
                   <Text
                     style={{
@@ -7010,7 +7030,7 @@ export default function AdminOrdersScreen() {
                       fontWeight: "600",
                     }}
                   >
-                    {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "توصيل ديلفري نابلس" : "التوصيل"}
+                    {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "التوصيل بعد التعديل" : "التوصيل"}
                   </Text>
                   <Text
                     style={{
