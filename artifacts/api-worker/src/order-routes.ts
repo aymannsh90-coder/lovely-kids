@@ -1591,7 +1591,7 @@ async function handleCancelOrder(
     return json({ error: "لا يمكن إلغاء هذا الطلب" }, 409);
   }
 
-  return json(result.order);
+  return json(user.isAdmin ? result.order : customerOrderView(result.order));
 }
 
 async function handleConvertOrderToStorePickup(
