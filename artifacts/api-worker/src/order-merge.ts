@@ -18,6 +18,7 @@ import {
   resolveShippingCost,
   resolveShippingZone,
   STORE_PICKUP_LABEL,
+  LOCAL_NABLUS_DELIVERY_LABEL,
 } from "./order-service";
 
 type Db = Awaited<
@@ -448,6 +449,13 @@ export async function mergeOnlineOrders(
     ) {
       throw new OrderMergeError(
         "يجب أن تكون جميع الطلبات على نفس منطقة التوصيل أو نفس طريقة الاستلام",
+        409,
+      );
+    }
+
+    if (shippingZone === LOCAL_NABLUS_DELIVERY_LABEL) {
+      throw new OrderMergeError(
+        "دمج طلبات ديلفري نابلس غير مسموح حتى لا تضيع التسعيرات اليدوية للمندوب",
         409,
       );
     }
