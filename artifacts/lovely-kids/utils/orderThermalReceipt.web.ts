@@ -22,6 +22,18 @@ export interface ThermalOrderItem {
   productCode?: string | null;
 }
 
+export interface ThermalExchangeReturnItem {
+  productNameAr: string;
+  productCode?: string | null;
+  barcode?: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  soldUnitPriceMinor: number;
+  returnNetMinor: number;
+  allocatedDiscountMinor?: number;
+}
+
 export interface ThermalOrder {
   id: number;
   exchangeOriginalOrderId?: number | null;
@@ -30,6 +42,9 @@ export interface ThermalOrder {
   exchangeNewNetMinor?: number | null;
   exchangeDifferenceMinor?: number | null;
   exchangeDeliveryChargeMinor?: number | null;
+  exchangeDeliveryBaseChargeMinor?: number | null;
+  exchangeDeliveryDiscountMinor?: number | null;
+  exchangeReturnItems?: ThermalExchangeReturnItem[];
   exchangeSettlementAmountMinor?: number | null;
   customerName: string;
   customerPhone: string;
@@ -74,24 +89,6 @@ function formatDateTime(value: string) {
 
 function money(value: number) {
   return `${Number(value || 0).toFixed(2)} ₪`;
-}
-
-function shortProductName(value: string) {
-  const clean = value.trim();
-  if (!clean) return "صنف";
-
-  const words = clean.split(/\s+/).filter(Boolean);
-
-  if (words.length === 0) return "صنف";
-  if (words.length === 1) return words[0];
-
-  const firstTwoWords = `${words[0]} ${words[1]}`.trim();
-
-  if (firstTwoWords.length <= 16) {
-    return firstTwoWords;
-  }
-
-  return words[0];
 }
 
 function paymentMethodLabel(value: string) {
@@ -300,6 +297,8 @@ export async function printOrderThermalReceipt(
     order.exchangeNewNetMinor,
     order.exchangeDifferenceMinor,
     order.exchangeDeliveryChargeMinor,
+    order.exchangeDeliveryBaseChargeMinor,
+    order.exchangeDeliveryDiscountMinor,
     order.exchangeSettlementAmountMinor,
   ];
 
@@ -315,6 +314,51 @@ export async function printOrderThermalReceipt(
   }
 
   const isOnlineExchange = hasExchangeLink;
+
+  // Fetch the exchange's historic return snapshot before printing. Do not
+  // infer the returned products from the original order or current inventory.
+  const returnedItems = isOnlineExchange
+    ? order.exchangeReturnItems
+    : undefined;
+
+  if (isOnlineExchange) {
+    if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
+      throw new Error("أصناف التبديل المرتجعة غير مكتملة، أعد تحميل عملية التبديل قبل الطباعة.");
+    }
+
+    if (returnedItems.some((item) =>
+      !item ||
+      typeof item.productNameAr !== "string" ||
+      !item.productNameAr.trim() ||
+      !Number.isSafeInteger(item.quantity) ||
+      item.quantity <= 0 ||
+      !Number.isSafeInteger(item.returnNetMinor) ||
+      item.returnNetMinor < 0
+    )) {
+      throw new Error("بيانات أصناف التبديل المرتجعة غير صالحة للطباعة.");
+    }
+
+    const base = Number(order.exchangeDeliveryBaseChargeMinor);
+    const discount = Number(order.exchangeDeliveryDiscountMinor);
+    const charge = Number(order.exchangeDeliveryChargeMinor);
+
+    if (
+      base < 0 ||
+      discount < 0 ||
+      base < discount ||
+      base - discount !== charge
+    ) {
+      throw new Error("معلومات التوصيل وخصمه في التبديل غير متطابقة. حدّث الطلب قبل الطباعة.");
+    }
+
+    const returnedTotal = returnedItems.reduce(
+      (sum, item) => sum + item.returnNetMinor,
+      0,
+    );
+    if (returnedTotal !== order.exchangeReturnNetMinor) {
+      throw new Error("قيمة الأصناف المرتجعة لا تطابق ملخص التبديل.");
+    }
+  }
 
   const exchangeReturnValue =
     isOnlineExchange
@@ -336,6 +380,16 @@ export async function printOrderThermalReceipt(
       ? Number(order.exchangeDeliveryChargeMinor) / 100
       : shippingCost;
 
+  const exchangeDeliveryBaseValue =
+    isOnlineExchange
+      ? Number(order.exchangeDeliveryBaseChargeMinor) / 100
+      : 0;
+
+  const exchangeDeliveryDiscountValue =
+    isOnlineExchange
+      ? Number(order.exchangeDeliveryDiscountMinor) / 100
+      : 0;
+
   const exchangeSettlementValue =
     isOnlineExchange
       ? Number(order.exchangeSettlementAmountMinor) / 100
@@ -355,16 +409,44 @@ export async function printOrderThermalReceipt(
     .map((item, index) => {
       const mainProductCode =
         item.productCode?.trim() || "—";
+      const variantText = [item.color, item.size]
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .join(" / ");
 
       return `
         <tr>
           <td>${index + 1}</td>
-          <td>${escapeHtml(shortProductName(item.name))}</td>
+          <td>
+            <span class="receipt-product-name">${escapeHtml(item.name)}</span>
+            ${variantText ? `<span class="receipt-item-variant">${escapeHtml(variantText)}</span>` : ""}
+          </td>
           <td dir="ltr">${escapeHtml(mainProductCode)}</td>
           <td>${Number(item.quantity || 0)}</td>
           <td dir="ltr">${money(
             Number(item.price || 0) * Number(item.quantity || 0),
           )}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const returnedItemRows = (returnedItems ?? [])
+    .map((item, index) => {
+      const historicalCode = item.productCode?.trim() || item.barcode?.trim() || "—";
+      const variantText = [item.color, item.size]
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .join(" / ");
+
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>
+            <span class="receipt-product-name">${escapeHtml(item.productNameAr)}</span>
+            ${variantText ? `<span class="receipt-item-variant">${escapeHtml(variantText)}</span>` : ""}
+          </td>
+          <td dir="ltr">${escapeHtml(historicalCode)}</td>
+          <td>${item.quantity}</td>
+          <td dir="ltr">${money(item.returnNetMinor / 100)}</td>
         </tr>
       `;
     })
@@ -482,6 +564,34 @@ export async function printOrderThermalReceipt(
     .lk-order-thermal-capture .receipt-items-table th {
       font-size: 14px;
       font-weight: 700;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-section {
+      margin: 8px 0 4px;
+      border: 1px solid #000;
+      padding: 5px 6px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .lk-order-thermal-capture .receipt-items-table td:nth-child(2) {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .lk-order-thermal-capture .receipt-product-name {
+      display: block;
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    .lk-order-thermal-capture .receipt-item-variant {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 700;
+      margin-top: 2px;
+      line-height: 1.25;
     }
 
     .lk-order-thermal-capture .receipt-items-table th:nth-child(1),
@@ -657,6 +767,26 @@ export async function printOrderThermalReceipt(
 
       <div class="receipt-divider"></div>
 
+      ${isOnlineExchange
+        ? `
+          <div class="receipt-exchange-section">الأصناف المرتجعة من الطلب #${escapeHtml(order.exchangeOriginalOrderId)}</div>
+          <table class="receipt-items-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الصنف</th>
+                <th>الكود</th>
+                <th>الكمية</th>
+                <th>صافي المرتجع</th>
+              </tr>
+            </thead>
+            <tbody>${returnedItemRows}</tbody>
+          </table>
+          <div class="receipt-divider"></div>
+          <div class="receipt-exchange-section">الأصناف الجديدة بالطلب البديل #${escapeHtml(order.id)}</div>
+        `
+        : ""}
+
       <table class="receipt-items-table">
         <thead>
           <tr>
@@ -691,7 +821,19 @@ export async function printOrderThermalReceipt(
                 <strong>${money(exchangeDifferenceValue)}</strong>
               </div>
               <div>
-                <span>التوصيل</span>
+                <span>التوصيل الأساسي</span>
+                <strong>${money(exchangeDeliveryBaseValue)}</strong>
+              </div>
+              ${exchangeDeliveryDiscountValue > 0
+                ? `
+                  <div>
+                    <span>خصم التوصيل</span>
+                    <strong>-${money(exchangeDeliveryDiscountValue)}</strong>
+                  </div>
+                `
+                : ""}
+              <div>
+                <span>التوصيل بعد الخصم</span>
                 <strong>${money(exchangeDeliveryValue)}</strong>
               </div>
               <div class="receipt-total">

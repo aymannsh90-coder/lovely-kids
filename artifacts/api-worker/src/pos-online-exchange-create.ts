@@ -733,6 +733,10 @@ async function buildResponse(
                 ),
           productNameAr:
             item.productNameAr,
+          productCode:
+            item.productCode,
+          barcode:
+            item.barcode,
           color:
             item.color,
           size:

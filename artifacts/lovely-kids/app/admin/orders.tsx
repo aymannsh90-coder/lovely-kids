@@ -143,18 +143,31 @@ interface OnlineExchangeReturnItem {
   id?: string;
   productId?: string | null;
   productNameAr: string;
+  productCode?: string | null;
+  barcode?: string | null;
   color: string | null;
   size: string | null;
   quantity: number;
+  soldUnitPriceMinor: number;
+  returnNetMinor: number;
+  allocatedDiscountMinor?: number;
 }
 
 interface OnlineExchangeStatusPayload {
   exchange: {
     publicId: string;
+    status: string;
+    replacementOrderId: string | null;
+    returnNetMinor: number;
+    newNetMinor: number;
+    differenceMinor: number;
+    deliveryBaseChargeMinor: number;
+    deliveryDiscountMinor: number;
+    deliveryChargeMinor: number;
+    settlementAmountMinor: number;
     financialCompletedAt: string | null;
     returnReceivedAt: string | null;
     deliveryDiscountMode: "none" | "half" | "full" | "manual";
-    deliveryDiscountMinor: number;
   };
   returnItems: OnlineExchangeReturnItem[];
 }
@@ -2757,6 +2770,27 @@ export default function AdminOrdersScreen() {
     setThermalPrintingId(order.id);
 
     try {
+      // For exchanges, print the actual return lines and delivery pricing
+      // snapshot. The replacement order's items alone cannot describe the
+      // returned goods, and its shippingCost only contains net delivery.
+      const exchangePrintData = order.exchangePublicId
+        ? await fetchOnlineExchangeStatus(order.exchangePublicId)
+        : null;
+
+      if (order.exchangeOriginalOrderId && !exchangePrintData) {
+        throw new Error("تعذر تحميل تفاصيل التبديل المرتجعة للطباعة.");
+      }
+
+      if (exchangePrintData) {
+        if (
+          exchangePrintData.exchange.status !== "completed" ||
+          exchangePrintData.exchange.replacementOrderId !== String(order.id) ||
+          exchangePrintData.exchange.publicId !== order.exchangePublicId
+        ) {
+          throw new Error("بيانات التبديل تغيرت، حدّث قائمة الطلبات قبل الطباعة.");
+        }
+      }
+
       const productCodeById = new Map<string, string | null>();
 
       // Thermal receipts are printed from the admin screen, so use the
@@ -2831,6 +2865,28 @@ export default function AdminOrdersScreen() {
 
       await printOrderThermalReceipt({
         ...order,
+        ...(exchangePrintData
+          ? {
+              exchangeReturnNetMinor: exchangePrintData.exchange.returnNetMinor,
+              exchangeNewNetMinor: exchangePrintData.exchange.newNetMinor,
+              exchangeDifferenceMinor: exchangePrintData.exchange.differenceMinor,
+              exchangeDeliveryChargeMinor: exchangePrintData.exchange.deliveryChargeMinor,
+              exchangeDeliveryBaseChargeMinor: exchangePrintData.exchange.deliveryBaseChargeMinor,
+              exchangeDeliveryDiscountMinor: exchangePrintData.exchange.deliveryDiscountMinor,
+              exchangeSettlementAmountMinor: exchangePrintData.exchange.settlementAmountMinor,
+              exchangeReturnItems: exchangePrintData.returnItems.map((item) => ({
+                ...item,
+                // Older online exchange snapshots do not store the product
+                // code, so fall back to the admin catalog when available.
+                productCode:
+                  item.productCode?.trim() ||
+                  (item.productId
+                    ? productCodeById.get(String(item.productId))
+                    : null) ||
+                  null,
+              })),
+            }
+          : {}),
         items: order.items.map((orderItem) => ({
           ...orderItem,
           productCode:

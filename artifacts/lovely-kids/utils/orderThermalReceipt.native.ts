@@ -16,6 +16,18 @@ export interface ThermalOrderItem {
   productCode?: string | null;
 }
 
+export interface ThermalExchangeReturnItem {
+  productNameAr: string;
+  productCode?: string | null;
+  barcode?: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  soldUnitPriceMinor: number;
+  returnNetMinor: number;
+  allocatedDiscountMinor?: number;
+}
+
 export interface ThermalOrder {
   id: number;
   exchangeOriginalOrderId?: number | null;
@@ -24,6 +36,9 @@ export interface ThermalOrder {
   exchangeNewNetMinor?: number | null;
   exchangeDifferenceMinor?: number | null;
   exchangeDeliveryChargeMinor?: number | null;
+  exchangeDeliveryBaseChargeMinor?: number | null;
+  exchangeDeliveryDiscountMinor?: number | null;
+  exchangeReturnItems?: ThermalExchangeReturnItem[];
   exchangeSettlementAmountMinor?: number | null;
   customerName: string;
   customerPhone: string;
