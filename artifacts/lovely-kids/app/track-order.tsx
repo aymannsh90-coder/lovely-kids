@@ -32,6 +32,7 @@ type Order = {
   status: string;
   shippingZone?: string | null;
   shippingCost?: number | null;
+  shippingOriginalCost?: number | null;
   paymentMethod?: string | null;
   paymentStatus?: string | null;
   createdAt: string;
@@ -351,6 +352,12 @@ export default function TrackOrderScreen() {
               </Text>
             ) : null}
 
+            {order.shippingZone === "ديلفري داخل مدينة نابلس" && order.shippingOriginalCost == null ? (
+              <Text style={[styles.detailSub, { color: "#1D4ED8" }]}>
+                🚴 السعر النهائي للديلفري قيد الاتفاق مع المحل. المبلغ المعروض أدناه للمنتجات فقط.
+              </Text>
+            ) : null}
+
             <View
               style={[
                 styles.totalRow,
@@ -358,7 +365,7 @@ export default function TrackOrderScreen() {
               ]}
             >
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>
-                الإجمالي
+                {order.shippingZone === "ديلفري داخل مدينة نابلس" && order.shippingOriginalCost == null ? "إجمالي المنتجات" : "الإجمالي"}
               </Text>
               <Text style={[styles.totalValue, { color: colors.primary }]}>
                 {order.totalPrice} شيكل
