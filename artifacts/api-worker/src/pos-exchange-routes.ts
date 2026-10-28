@@ -976,6 +976,17 @@ export async function handlePosExchangeRequest(
 
   if (
     request.method === "POST" &&
+    path === "/api/pos/exchanges/online/void"
+  ) {
+    return handleVoidOnlineOrderExchange(
+      request,
+      db,
+      env,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
     path === "/api/pos/exchanges/online/receive-return"
   ) {
     return handleReceiveOnlineExchangeReturn(
