@@ -101,6 +101,8 @@ function paymentMethodLabel(value: string) {
   switch (value) {
     case "bank_transfer":
       return "تحويل بنكي";
+    case "local_store_cash":
+      return "نقدًا للمحل - ديلفري نابلس";
     case "cod":
     case "cash_on_delivery":
       return "الدفع عند الاستلام";
@@ -938,7 +940,7 @@ export async function printOrderThermalReceipt(
                   : shippingCost > 0
                     ? `
                       <div>
-                        <span>التوصيل</span>
+                        <span>${order.shippingZone === "ديلفري داخل مدينة نابلس" ? "توصيل ديلفري نابلس" : "التوصيل"}</span>
                         <strong>${money(shippingCost)}</strong>
                       </div>
                     `
