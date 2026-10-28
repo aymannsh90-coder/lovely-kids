@@ -1116,23 +1116,55 @@ export default function AdminOrdersScreen() {
         );
       }
 
-      const res = await fetch(
-        `${API_BASE}/api/orders/${id}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Authorization:
-              `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            status,
-            ...(pickupSettlement ??
-              {}),
-          }),
+      const statusUrl = `${API_BASE}/api/orders/${id}/status`;
+      const statusRequest = {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+        body: JSON.stringify({
+          status,
+          ...(pickupSettlement ?? {}),
+        }),
+      };
+
+      // Only the idempotent "delivering" transition can be safely retried.
+      // Never replay a financial completion or cancellation on network errors.
+      let res: Response;
+      try {
+        res = await fetch(statusUrl, statusRequest);
+      } catch (networkError) {
+        if (status !== "delivering") throw networkError;
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        try {
+          res = await fetch(statusUrl, statusRequest);
+        } catch {
+          // A lost response might have concealed a successful PATCH.
+          try {
+            const check = await fetch(`${API_BASE}/api/orders`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (check.ok) {
+              const latest = await check.json() as Order[];
+              const serverOrder = Array.isArray(latest)
+                ? latest.find((row) => row.id === id)
+                : undefined;
+              if (serverOrder?.status === status) {
+                setOrders((prev) => prev.map((row) =>
+                  row.id === id ? { ...row, ...serverOrder } : row,
+                ));
+                return true;
+              }
+            }
+          } catch {
+            // Still offline, preserve original state.
+          }
+          throw new Error(
+            "تعذّر الاتصال بخادم الطلبات لتغيير الحالة. افتح lovelykids.net/admin/orders مباشرة وحدث الصفحة. لم يتم تسجيل أي قبض جديد.",
+          );
+        }
+      }
 
       if (!res.ok) {
         let msg =
