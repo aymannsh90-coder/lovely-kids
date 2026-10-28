@@ -1163,6 +1163,19 @@ export async function editOrderItemsAndAdjustStock(
       throw new OrderEditError("الطلب غير موجود", 404);
     }
 
+    // A negotiated local courier price must not be changed via the customer's
+    // generic order editor, since that would invalidate the agreed total.
+    if (
+      options?.restrictToPublicCatalog &&
+      (order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL ||
+       rawDetails?.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL)
+    ) {
+      throw new OrderEditError(
+        "تعديل طلب ديلفري نابلس يتم من المتجر بعد تأكيد سعر التوصيل مع الزبون",
+        409,
+      );
+    }
+
     if (!allowedStatuses.includes(order.status)) {
       throw new OrderEditError(
         allowedStatuses.length === 1 &&
