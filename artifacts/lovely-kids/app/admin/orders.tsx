@@ -1793,7 +1793,7 @@ export default function AdminOrdersScreen() {
     if (editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL) {
       const charge = Number(editLocalCharge);
       const cost = Number(editLocalCourierCost);
-      if (!/^\\d+$/.test(editLocalCharge) || !/^\\d+$/.test(editLocalCourierCost) ||
+      if (!/^\d+$/.test(editLocalCharge) || !/^\d+$/.test(editLocalCourierCost) ||
           !Number.isSafeInteger(charge) || !Number.isSafeInteger(cost) ||
           charge > 10000 || cost > 10000) {
         setEditOrderError("أدخل أجرة الديلفري للزبون وتكلفة المندوب بالشيكل (حتى لو صفر)");
