@@ -53,6 +53,7 @@ export interface ThermalOrder {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  deliveryCompanyCost?: number | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   discountCode?: string | null;
@@ -948,7 +949,7 @@ export async function printOrderThermalReceipt(
               }
 
               <div class="receipt-total">
-                <span>الإجمالي النهائي</span>
+                <span>${order.shippingZone === "ديلفري داخل مدينة نابلس" && order.deliveryCompanyCost == null ? "إجمالي المنتجات (أجرة الديلفري قيد التأكيد)" : "الإجمالي النهائي"}</span>
                 <strong>${money(order.totalPrice)}</strong>
               </div>
             `
