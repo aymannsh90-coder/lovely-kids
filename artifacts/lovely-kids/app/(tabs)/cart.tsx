@@ -2001,11 +2001,13 @@ export default function CartScreen() {
                           : `${displayedCost}₪`}
                     </Text>
                     <Text style={[styles.zoneOptionLabel, { color: isSelected ? colors.primary : colors.foreground }]}>
-                      {zone.label}
+                      {zone.label === STORE_PICKUP_LABEL && isLocalDelivery
+                        ? "توصيل ديلفري داخل نابلس"
+                        : zone.label}
                     </Text>
                   </View>
                   <Ionicons
-                    name={zone.label === STORE_PICKUP_LABEL ? "storefront-outline" : "bicycle-outline"}
+                    name={zone.label === STORE_PICKUP_LABEL && !isLocalDelivery ? "storefront-outline" : "bicycle-outline"}
                     size={20}
                     color={isSelected ? colors.primary : colors.mutedForeground}
                   />
@@ -2027,7 +2029,7 @@ export default function CartScreen() {
                     >
                       <Ionicons name={isLocalDelivery ? "checkbox" : "square-outline"} size={23} color="#1D4ED8" />
                       <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "800", flex: 1 }}>
-                        🚴 بدي توصيل عبر ديلفري داخل مدينة نابلس (+15₪)
+                        🚴 توصيل عبر ديلفري داخل مدينة نابلس (+15₪)
                       </Text>
                     </Pressable>
                     <Text style={{ color: "#1E40AF", textAlign: "right", fontSize: 12, lineHeight: 20 }}>
