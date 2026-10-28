@@ -11,6 +11,7 @@ import { handleCreatePosExchange } from "./pos-exchange-create";
 import {
   handleCreateOnlineOrderExchange,
   handleGetOnlineOrderExchangeStatus,
+  handleVoidOnlineOrderExchange,
 } from "./pos-online-exchange-create";
 import { handleReceiveOnlineExchangeReturn } from "./pos-online-exchange-receive";
 import {
