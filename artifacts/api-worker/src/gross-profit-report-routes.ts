@@ -1061,11 +1061,20 @@ async function handleGrossProfit(
   // This is intentionally NOT order.createdAt.
   // ==========================================================
 
-  const onlineCompletions =
+  // A cancelled local-courier order still has its original posted "done"
+  // journal. If its exact sale reversal is posted in this report period,
+  // both entries net to zero: do not treat the cancellation as a missing
+  // current order or suppress the gross profit for unrelated sales.
+  // Reversals outside the selected period are deliberately not netted here;
+  // cross-period return recognition needs separate accounting treatment.
+  const onlineFinanceEvents =
     await db
       .select({
         sourceId:
           financeTransactionsTable.sourceId,
+
+        sourceEvent:
+          financeTransactionsTable.sourceEvent,
 
         businessDate:
           financeTransactionsTable.businessDate,
@@ -1079,9 +1088,9 @@ async function handleGrossProfit(
             financeTransactionsTable.sourceType,
             "web_order",
           ),
-          eq(
+          inArray(
             financeTransactionsTable.sourceEvent,
-            "done",
+            ["done", "local_courier_reverse_sale"],
           ),
           eq(
             financeTransactionsTable.status,
@@ -1097,6 +1106,23 @@ async function handleGrossProfit(
           ),
         ),
       );
+
+  const reversedOnlineSaleIds =
+    new Set(
+      onlineFinanceEvents
+        .filter(
+          (entry) =>
+            entry.sourceEvent === "local_courier_reverse_sale",
+        )
+        .map((entry) => entry.sourceId),
+    );
+
+  const onlineCompletions =
+    onlineFinanceEvents.filter(
+      (entry) =>
+        entry.sourceEvent === "done" &&
+        !reversedOnlineSaleIds.has(entry.sourceId),
+    );
 
   const onlineOrderIds =
     [
