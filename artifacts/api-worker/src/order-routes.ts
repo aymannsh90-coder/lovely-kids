@@ -2,6 +2,7 @@ import {
   appSettingsTable,
   deliveryCompaniesTable,
   exchangeDocumentsTable,
+  financeTransactionsTable,
   insertOrderSchema,
   ordersTable,
 } from "@workspace/db/schema";
@@ -30,6 +31,11 @@ import {
   completeOrderWithFinance,
   OrderFinanceError,
 } from "./order-finance";
+import {
+  recordLocalCourierCashHandover,
+  LocalCourierCashError,
+  LOCAL_COURIER_CASH_EVENT,
+} from "./order-local-courier";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import { sendMetaPurchaseEvent } from "./meta-capi";
 import {
@@ -618,6 +624,21 @@ async function handleGetOrders(
     .from(ordersTable)
     .orderBy(desc(ordersTable.createdAt));
 
+  const courierCashReceipts = await db
+    .select({
+      sourceId: financeTransactionsTable.sourceId,
+      createdAt: financeTransactionsTable.createdAt,
+    })
+    .from(financeTransactionsTable)
+    .where(and(
+      eq(financeTransactionsTable.sourceType, "web_order"),
+      eq(financeTransactionsTable.sourceEvent, LOCAL_COURIER_CASH_EVENT),
+      eq(financeTransactionsTable.status, "posted"),
+    ));
+  const courierCashByOrder = new Map(
+    courierCashReceipts.map((row) => [row.sourceId, row.createdAt.toISOString()]),
+  );
+
   const exchangeLinks =
     await db
       .select({
@@ -707,6 +728,7 @@ async function handleGetOrders(
 
       return {
         ...order,
+        courierCashReceivedAt: courierCashByOrder.get(String(order.id)) ?? null,
         mergedOrderIds,
         mergedOrderCount:
           mergedOrderIds.length,
@@ -1146,6 +1168,15 @@ export async function handleOrderRequest(
       db,
       env,
       Number(storePickupMatch[1]),
+    );
+  }
+
+  const courierHandoverMatch = path.match(
+    /^\/api\/orders\/(\d+)\/local-courier-cash$/,
+  );
+  if (request.method === "POST" && courierHandoverMatch) {
+    return handleLocalCourierCashHandover(
+      request, db, env, Number(courierHandoverMatch[1]),
     );
   }
 
