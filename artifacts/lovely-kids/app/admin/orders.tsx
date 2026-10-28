@@ -2874,7 +2874,17 @@ export default function AdminOrdersScreen() {
               exchangeDeliveryBaseChargeMinor: exchangePrintData.exchange.deliveryBaseChargeMinor,
               exchangeDeliveryDiscountMinor: exchangePrintData.exchange.deliveryDiscountMinor,
               exchangeSettlementAmountMinor: exchangePrintData.exchange.settlementAmountMinor,
-              exchangeReturnItems: exchangePrintData.returnItems,
+              exchangeReturnItems: exchangePrintData.returnItems.map((item) => ({
+                ...item,
+                // Older online exchange snapshots do not store the product
+                // code, so fall back to the admin catalog when available.
+                productCode:
+                  item.productCode?.trim() ||
+                  (item.productId
+                    ? productCodeById.get(String(item.productId))
+                    : null) ||
+                  null,
+              })),
             }
           : {}),
         items: order.items.map((orderItem) => ({
