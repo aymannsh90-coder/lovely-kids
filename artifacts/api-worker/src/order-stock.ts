@@ -3209,6 +3209,23 @@ export async function restoreCancelledOrderAndDeductStock(
       );
     }
 
+    // A fully reversed courier order cannot be reactivated as an ordinary
+    // order: it would deduct inventory without recreating the cash/journals.
+    const auditedReversal = await tx.select({ id: financeTransactionsTable.id })
+      .from(financeTransactionsTable)
+      .where(and(
+        eq(financeTransactionsTable.sourceType, "web_order"),
+        eq(financeTransactionsTable.sourceId, String(orderId)),
+        eq(financeTransactionsTable.sourceEvent, "local_courier_reverse_cash"),
+        eq(financeTransactionsTable.status, "posted"),
+      )).limit(1);
+    if (auditedReversal.length > 0) {
+      throw new OrderEditError(
+        "هذا الطلب أُلغي مع عكس مالي ومخزني؛ أنشئ طلباً جديداً بدلاً من إعادة تفعيله",
+        409,
+      );
+    }
+
     const storedItems = Array.isArray(order.items)
       ? (order.items as Array<
           StoredOrderItem & {
