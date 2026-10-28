@@ -60,11 +60,28 @@ export async function cancelOrderAndRestoreStock(
   actorUserId?: number | null,
   exchangeVoidReason?: string,
 ) {
-  return db.transaction(async (tx) => {
+  return db.transaction((tx) =>
+    cancelOrderAndRestoreStockInTransaction(
+      tx, orderId, allowedStatuses, actorUserId, exchangeVoidReason,
+    ),
+  );
+}
+
+type OrderStockTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+export async function cancelOrderAndRestoreStockInTransaction(
+  tx: OrderStockTx,
+  orderId: number,
+  allowedStatuses: readonly string[],
+  actorUserId: number | null | undefined,
+  exchangeVoidReason: string | undefined,
+  allowAuditedLocalCourierReversal = false,
+) {
     const rows = await tx
       .select({
         status: ordersTable.status,
         items: ordersTable.items,
+        shippingZone: ordersTable.shippingZone,
       })
       .from(ordersTable)
       .where(eq(ordersTable.id, orderId))
@@ -76,9 +93,13 @@ export async function cancelOrderAndRestoreStock(
       return { kind: "not_found" } as const;
     }
 
+    const auditedLocalReversal =
+      allowAuditedLocalCourierReversal &&
+      order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL;
+
     if (
       order.status === "cancelled" ||
-      order.status === "done" ||
+      (order.status === "done" && !auditedLocalReversal) ||
       !allowedStatuses.includes(order.status)
     ) {
       return {
@@ -116,11 +137,14 @@ export async function cancelOrderAndRestoreStock(
         eq(financeTransactionsTable.sourceEvent, "local_courier_cash_handover"),
         eq(financeTransactionsTable.status, "posted"),
       )).limit(1);
-    if (cashReceipt.length > 0) {
+    if (cashReceipt.length > 0 && !auditedLocalReversal) {
       throw new OrderEditError(
         "تم قبض قيمة البضاعة من المندوب؛ يجب معالجة رد المبلغ محاسبياً قبل إلغاء الطلب",
         409,
       );
+    }
+    if (auditedLocalReversal && cashReceipt.length !== 1) {
+      throw new OrderEditError("لم يُعثر على قبض المندوب المطلوب عكسه", 409);
     }
 
     if (activeExchange) {
@@ -456,7 +480,6 @@ export async function cancelOrderAndRestoreStock(
       kind: "updated",
       order: updated[0],
     } as const;
-  });
 }
 
 
