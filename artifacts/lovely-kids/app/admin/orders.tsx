@@ -100,6 +100,7 @@ interface Order {
   id: number;
   exchangeOriginalOrderId?: number | null;
   exchangePublicId?: string | null;
+  exchangeReplacementOrderOrigin?: "system_created" | "existing_order" | null;
   exchangeReturnNetMinor?: number | null;
   exchangeNewNetMinor?: number | null;
   exchangeDifferenceMinor?: number | null;
@@ -152,6 +153,8 @@ interface OnlineExchangeStatusPayload {
     publicId: string;
     financialCompletedAt: string | null;
     returnReceivedAt: string | null;
+    deliveryDiscountMode: "none" | "half" | "full" | "manual";
+    deliveryDiscountMinor: number;
   };
   returnItems: OnlineExchangeReturnItem[];
 }
@@ -556,6 +559,10 @@ export default function AdminOrdersScreen() {
   ] = useState<
     "arab" | "bop" | null
   >(null);
+  const [exchangeVoidTarget, setExchangeVoidTarget] = useState<Order | null>(null);
+  const [exchangeVoidReason, setExchangeVoidReason] = useState("");
+  const [exchangeVoidBusy, setExchangeVoidBusy] = useState(false);
+  const [exchangeVoidError, setExchangeVoidError] = useState("");
   const [exchangeReturnConfirm, setExchangeReturnConfirm] =
     useState<ExchangeReturnConfirmation | null>(null);
   const [exchangeReturnBusyId, setExchangeReturnBusyId] =
@@ -592,6 +599,9 @@ export default function AdminOrdersScreen() {
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
+  const [editExchangeDeliveryMode, setEditExchangeDeliveryMode] =
+    useState<"none" | "half" | "full" | "manual">("none");
+  const [editExchangeManualDelivery, setEditExchangeManualDelivery] = useState("0");
   const [editPaymentMethod, setEditPaymentMethod] =
     useState<"cod" | "bank_transfer">("cod");
 
@@ -1324,6 +1334,8 @@ export default function AdminOrdersScreen() {
     setEditCustomerAddress("");
     setEditShippingZone("");
     setEditNotes("");
+    setEditExchangeDeliveryMode("none");
+    setEditExchangeManualDelivery("0");
   };
 
   const loadEditProducts = async () => {
@@ -1433,6 +1445,31 @@ export default function AdminOrdersScreen() {
         "يمكن تعديل الطلبات الجديدة أو المؤكدة أو قيد التوصيل فقط",
       );
       return;
+    }
+
+    if (order.exchangeFinancialCompletedAt) {
+      showError("لا يمكن تعديل طلب تبديل تم تسجيله محاسبياً");
+      return;
+    }
+
+    if (order.exchangePublicId) {
+      try {
+        const latest = await fetchOnlineExchangeStatus(order.exchangePublicId);
+        if (latest.exchange.financialCompletedAt) {
+          showError("تم تسليم طلب التبديل وتسجيله محاسبياً، ولا يمكن تعديله");
+          return;
+        }
+        setEditExchangeDeliveryMode(latest.exchange.deliveryDiscountMode);
+        setEditExchangeManualDelivery(
+          String(latest.exchange.deliveryDiscountMinor / 100),
+        );
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "تعذر تحميل خصم توصيل التبديل");
+        return;
+      }
+    } else {
+      setEditExchangeDeliveryMode("none");
+      setEditExchangeManualDelivery("0");
     }
 
     setEditingOrder(order);
@@ -1699,6 +1736,13 @@ export default function AdminOrdersScreen() {
             notes: editNotes.trim(),
             invoiceDiscount,
             paymentMethod: editPaymentMethod,
+            ...(editingOrder.exchangePublicId
+              ? {
+                  exchangeDeliveryDiscountMode: editExchangeDeliveryMode,
+                  exchangeManualDeliveryDiscountMinor:
+                    Number(editExchangeManualDelivery) * 100,
+                }
+              : {}),
             items: editItems.map((item) => ({
               id: item.id,
               quantity: item.quantity,
@@ -1899,14 +1943,26 @@ export default function AdminOrdersScreen() {
     Number(editingOrder.discountCodePercent) <= 100;
 
   const editShippingCost = editSelectedShippingZone
-    ? editingOrderHasDiscountCode &&
-      editingOrder?.discountCodeStacksWithShippingPromotion === false
-      ? editSelectedShippingZone.cost
-      : getAdminEditShippingCost(
-          settings,
-          editSelectedShippingZone,
-          editProductsTotal,
+    ? editingOrder?.exchangePublicId
+      ? Math.max(
+          0,
+          editSelectedShippingZone.cost -
+            (editExchangeDeliveryMode === "full"
+              ? editSelectedShippingZone.cost
+              : editExchangeDeliveryMode === "half"
+                ? editSelectedShippingZone.cost / 2
+                : editExchangeDeliveryMode === "manual"
+                  ? Number(editExchangeManualDelivery) || 0
+                  : 0),
         )
+      : editingOrderHasDiscountCode &&
+          editingOrder?.discountCodeStacksWithShippingPromotion === false
+        ? editSelectedShippingZone.cost
+        : getAdminEditShippingCost(
+            settings,
+            editSelectedShippingZone,
+            editProductsTotal,
+          )
     : 0;
 
   const editInvoiceDiscountValue = (() => {
