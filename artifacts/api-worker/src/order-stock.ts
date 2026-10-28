@@ -25,6 +25,7 @@ import {
   resolveShippingZone,
   STORE_PICKUP_LABEL,
   LOCAL_NABLUS_DELIVERY_LABEL,
+  LOCAL_NABLUS_DELIVERY_BASE_ILS,
 } from "./order-service";
 import {
   getPendingPurchaseQuantityForProduct,
@@ -2304,8 +2305,10 @@ export async function editOrderItemsAndAdjustStock(
       }
     }
 
+    // Keep the fixed Nablus base separate from any customer-approved
+    // discount or surcharge. Do not treat these as a global shipping promo.
     const shippingOriginalCost =
-      isLocalDelivery ? shippingCost : shipping.cost;
+      isLocalDelivery ? LOCAL_NABLUS_DELIVERY_BASE_ILS : shipping.cost;
 
     const shippingPromotionDiscount =
       linkedOnlineExchange || isLocalDelivery

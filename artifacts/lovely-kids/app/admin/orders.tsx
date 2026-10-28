@@ -190,6 +190,7 @@ interface ExchangeReturnConfirmation {
 
 const ADMIN_STORE_PICKUP_LABEL = "استلام من المحل";
 const ADMIN_LOCAL_DELIVERY_LABEL = "ديلفري داخل مدينة نابلس";
+const ADMIN_LOCAL_DELIVERY_BASE_ILS = 15;
 
 const ADMIN_DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   { label: "الضفة الغربية", cost: 20, promoCost: 20 },
@@ -223,6 +224,9 @@ function getAdminEditShippingCost(
 ) {
   if (shipping.label === ADMIN_STORE_PICKUP_LABEL) {
     return 0;
+  }
+  if (shipping.label === ADMIN_LOCAL_DELIVERY_LABEL) {
+    return ADMIN_LOCAL_DELIVERY_BASE_ILS;
   }
 
   if (settings.shippingPromotionEnabled !== true) {
@@ -615,8 +619,13 @@ export default function AdminOrdersScreen() {
   const [editShippingZone, setEditShippingZone] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
-  const [editLocalCharge, setEditLocalCharge] = useState("");
+  const [editLocalDiscount, setEditLocalDiscount] = useState("0");
+  const [editLocalExtra, setEditLocalExtra] = useState("0");
   const [editLocalCourierCost, setEditLocalCourierCost] = useState("");
+  const editLocalCharge =
+    ADMIN_LOCAL_DELIVERY_BASE_ILS -
+    (Number(editLocalDiscount) || 0) +
+    (Number(editLocalExtra) || 0);
   const [editLocalCustomerConfirmed, setEditLocalCustomerConfirmed] = useState(false);
   const [editExchangeDeliveryMode, setEditExchangeDeliveryMode] =
     useState<"none" | "half" | "full" | "manual">("none");
@@ -1400,7 +1409,8 @@ export default function AdminOrdersScreen() {
     setEditCustomerPhone("");
     setEditCustomerAddress("");
     setEditShippingZone("");
-    setEditLocalCharge("");
+    setEditLocalDiscount("0");
+    setEditLocalExtra("0");
     setEditLocalCourierCost("");
     setEditLocalCustomerConfirmed(false);
     setEditNotes("");
@@ -1554,12 +1564,18 @@ export default function AdminOrdersScreen() {
     setEditShippingZone(
       order.shippingZone ?? "",
     );
-    setEditLocalCharge(
+    // Preserve previously quoted prices when reopening existing local orders.
+    const storedLocalCharge =
       order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
       order.deliveryCompanyCost !== null
-        ? String(order.shippingCost ?? 0)
-        : "",
-    );
+        ? (order.shippingCost ?? ADMIN_LOCAL_DELIVERY_BASE_ILS)
+        : ADMIN_LOCAL_DELIVERY_BASE_ILS;
+    setEditLocalDiscount(String(
+      Math.max(0, ADMIN_LOCAL_DELIVERY_BASE_ILS - storedLocalCharge),
+    ));
+    setEditLocalExtra(String(
+      Math.max(0, storedLocalCharge - ADMIN_LOCAL_DELIVERY_BASE_ILS),
+    ));
     setEditLocalCourierCost(
       order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
       order.deliveryCompanyCost !== null
@@ -1792,12 +1808,26 @@ export default function AdminOrdersScreen() {
     }
 
     if (editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL) {
-      const charge = Number(editLocalCharge);
+      const discount = Number(editLocalDiscount);
+      const extra = Number(editLocalExtra);
+      const charge = editLocalCharge;
       const cost = Number(editLocalCourierCost);
-      if (!/^\d+$/.test(editLocalCharge) || !/^\d+$/.test(editLocalCourierCost) ||
-          !Number.isSafeInteger(charge) || !Number.isSafeInteger(cost) ||
-          charge > 10000 || cost > 10000) {
-        setEditOrderError("أدخل أجرة الديلفري للزبون وتكلفة المندوب بالشيكل (حتى لو صفر)");
+      if (
+        !/^\d+$/.test(editLocalDiscount) ||
+        !/^\d+$/.test(editLocalExtra) ||
+        !/^\d+$/.test(editLocalCourierCost) ||
+        !Number.isSafeInteger(discount) ||
+        !Number.isSafeInteger(extra) ||
+        !Number.isSafeInteger(charge) ||
+        !Number.isSafeInteger(cost) ||
+        discount > ADMIN_LOCAL_DELIVERY_BASE_ILS ||
+        extra > 10000 ||
+        charge < 0 ||
+        charge > 10000 ||
+        cost > 10000 ||
+        (discount > 0 && extra > 0)
+      ) {
+        setEditOrderError("تحقق من الخصم (0–15₪) والرسوم الإضافية وتكلفة المندوب بالأرقام الصحيحة");
         return;
       }
       if (!editLocalCustomerConfirmed) {
@@ -1846,7 +1876,7 @@ export default function AdminOrdersScreen() {
             paymentMethod: editPaymentMethod,
             ...(editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
               ? {
-                  localDeliveryCharge: Number(editLocalCharge),
+                  localDeliveryCharge: editLocalCharge,
                   localDeliveryCourierCost: Number(editLocalCourierCost),
                 }
               : {}),
@@ -2029,24 +2059,21 @@ export default function AdminOrdersScreen() {
     0,
   );
 
+  const adminRegionOrder = ["الضفة الغربية", "القدس", "أراضي الـ48"];
   const editShippingZones: ShippingZone[] = [
-    {
-      label: ADMIN_STORE_PICKUP_LABEL,
-      cost: 0,
-      promoCost: 0,
-    },
-    {
-      label: ADMIN_LOCAL_DELIVERY_LABEL,
-      cost: 0,
-      promoCost: 0,
-    },
     ...(settings.shippingZones?.length
       ? settings.shippingZones
       : ADMIN_DEFAULT_SHIPPING_ZONES
     ).filter(
       (zone) => zone.label !== ADMIN_STORE_PICKUP_LABEL &&
                 zone.label !== ADMIN_LOCAL_DELIVERY_LABEL,
-    ),
+    ).sort((a, b) => {
+      const ai = adminRegionOrder.indexOf(a.label);
+      const bi = adminRegionOrder.indexOf(b.label);
+      return (ai < 0 ? 3 : ai) - (bi < 0 ? 3 : bi);
+    }),
+    { label: ADMIN_LOCAL_DELIVERY_LABEL, cost: ADMIN_LOCAL_DELIVERY_BASE_ILS, promoCost: ADMIN_LOCAL_DELIVERY_BASE_ILS },
+    { label: ADMIN_STORE_PICKUP_LABEL, cost: 0, promoCost: 0 },
   ];
 
   const editSelectedShippingZone =
@@ -5938,6 +5965,10 @@ export default function AdminOrdersScreen() {
                           setEditShippingZone(zone.label);
                           setEditOrderError(null);
                           if (zone.label === ADMIN_LOCAL_DELIVERY_LABEL) {
+                            if (editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL) {
+                              setEditLocalDiscount("0");
+                              setEditLocalExtra("0");
+                            }
                             setEditLocalCustomerConfirmed(false);
                           } else if (editPaymentMethod === "local_store_cash") {
                             setEditPaymentMethod("cod");
@@ -5984,7 +6015,7 @@ export default function AdminOrdersScreen() {
                             },
                           ]}
                         >
-                          {zone.label === ADMIN_LOCAL_DELIVERY_LABEL ? "يدوي" : `${cost}₪`}
+                          {zone.label === ADMIN_LOCAL_DELIVERY_LABEL ? "من 15₪" : `${cost}₪`}
                         </Text>
                       </Pressable>
                     );
@@ -6095,17 +6126,64 @@ export default function AdminOrdersScreen() {
 
                 {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL && (
                   <View style={{ padding: 12, gap: 8, borderWidth: 1, borderColor: "#93C5FD", borderRadius: 12, backgroundColor: "#EFF6FF" }}>
-                    <Text style={{ fontWeight: "900", color: "#1D4ED8", textAlign: "right" }}>🚴 ديلفري نابلس — التسعير اليدوي</Text>
-                    <Text style={{ color: "#1E40AF", textAlign: "right" }}>أدخل المبلغ المتفق عليه مع المندوب، والمبلغ الذي وافق الزبون على دفعه. كلا المبلغين مستقل عن شركات التوصيل وعروض التوصيل العامة.</Text>
-                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>رسوم الديلفري على الزبون (₪)</Text>
-                    <TextInput value={editLocalCharge} onChangeText={(v) => { setEditLocalCharge(v.replace(/[^0-9]/g, "")); setEditLocalCustomerConfirmed(false); }} keyboardType="number-pad" placeholder="أدخل المبلغ حتى لو صفر" placeholderTextColor={colors.mutedForeground} style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} textAlign="right"/>
+                    <Text style={{ fontWeight: "900", color: "#1D4ED8", textAlign: "right" }}>🚴 ديلفري نابلس — السعر الأساسي 15₪</Text>
+                    <Text style={{ color: "#1E40AF", textAlign: "right" }}>
+                      التكلفة الفعلية للمندوب للإدارة فقط. عند إدخال تكلفة أعلى من 15₪ تُحسب الزيادة تلقائيًا، ويمكنك تعديلها أو تقديم خصم للزبون.
+                    </Text>
                     <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>التكلفة الفعلية للمندوب (₪) — للإدارة فقط</Text>
-                    <TextInput value={editLocalCourierCost} onChangeText={(v) => setEditLocalCourierCost(v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="أدخل تكلفة المندوب" placeholderTextColor={colors.mutedForeground} style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} textAlign="right"/>
+                    <TextInput
+                      value={editLocalCourierCost}
+                      onChangeText={(v) => {
+                        const value = v.replace(/[^0-9]/g, "");
+                        setEditLocalCourierCost(value);
+                        setEditLocalExtra(String(Math.max(0, Number(value || 0) - ADMIN_LOCAL_DELIVERY_BASE_ILS)));
+                        setEditLocalDiscount("0");
+                        setEditLocalCustomerConfirmed(false);
+                      }}
+                      keyboardType="number-pad"
+                      placeholder="كم اتفقت مع المندوب؟"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                      textAlign="right"
+                    />
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>رسوم توصيل إضافية (₪)</Text>
+                    <TextInput
+                      value={editLocalExtra}
+                      onChangeText={(v) => {
+                        const value = v.replace(/[^0-9]/g, "");
+                        setEditLocalExtra(value);
+                        if (Number(value) > 0) setEditLocalDiscount("0");
+                        setEditLocalCustomerConfirmed(false);
+                      }}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                      textAlign="right"
+                    />
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>خصم ديلفري للزبون من 15₪ (₪)</Text>
+                    <TextInput
+                      value={editLocalDiscount}
+                      onChangeText={(v) => {
+                        const value = v.replace(/[^0-9]/g, "");
+                        setEditLocalDiscount(value);
+                        if (Number(value) > 0) setEditLocalExtra("0");
+                        setEditLocalCustomerConfirmed(false);
+                      }}
+                      keyboardType="number-pad"
+                      placeholder="0 — مثال 5 يعني التوصيل 10₪"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                      textAlign="right"
+                    />
+                    <Text style={{ fontWeight: "900", color: "#1D4ED8", textAlign: "right" }}>
+                      أجرة الزبون: 15₪ {Number(editLocalExtra) > 0 ? `+ ${editLocalExtra}₪ رسوم إضافية` : ""} {Number(editLocalDiscount) > 0 ? `− ${editLocalDiscount}₪ خصم` : ""} = {editLocalCharge}₪
+                    </Text>
                     <Pressable onPress={() => setEditLocalCustomerConfirmed((v) => !v)} style={{ flexDirection: "row-reverse", gap: 8, alignItems: "center", paddingVertical: 8 }}>
                       <Ionicons name={editLocalCustomerConfirmed ? "checkbox" : "square-outline"} size={22} color="#1D4ED8"/>
                       <Text style={{ color: "#1E40AF", fontWeight: "800", flex: 1, textAlign: "right" }}>أكد الزبون السعر النهائي للديلفري</Text>
                     </Pressable>
-                    <Text style={{ color: "#1D4ED8", textAlign: "right" }}>فرق التوصيل المتوقع: {(Number(editLocalCharge) || 0) - (Number(editLocalCourierCost) || 0)} ₪</Text>
+                    <Text style={{ color: "#1D4ED8", textAlign: "right" }}>فرق التوصيل المتوقع: {editLocalCharge - (Number(editLocalCourierCost) || 0)} ₪</Text>
                   </View>
                 )}
 
@@ -6925,6 +7003,26 @@ export default function AdminOrdersScreen() {
                   </Text>
                 </View>
 
+                {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL && (
+                  <>
+                    <View style={styles.editOrderSummaryRow}>
+                      <Text style={{ color: colors.mutedForeground, fontWeight: "600" }}>ديلفري نابلس الأساسي</Text>
+                      <Text style={{ color: colors.foreground, fontWeight: "700" }}>{ADMIN_LOCAL_DELIVERY_BASE_ILS}₪</Text>
+                    </View>
+                    {Number(editLocalExtra) > 0 && (
+                      <View style={styles.editOrderSummaryRow}>
+                        <Text style={{ color: colors.mutedForeground, fontWeight: "600" }}>رسوم توصيل إضافية</Text>
+                        <Text style={{ color: colors.foreground, fontWeight: "700" }}>+{editLocalExtra}₪</Text>
+                      </View>
+                    )}
+                    {Number(editLocalDiscount) > 0 && (
+                      <View style={styles.editOrderSummaryRow}>
+                        <Text style={{ color: colors.mutedForeground, fontWeight: "600" }}>خصم ديلفري</Text>
+                        <Text style={{ color: "#DC2626", fontWeight: "700" }}>-{editLocalDiscount}₪</Text>
+                      </View>
+                    )}
+                  </>
+                )}
                 <View style={styles.editOrderSummaryRow}>
                   <Text
                     style={{
@@ -6932,7 +7030,7 @@ export default function AdminOrdersScreen() {
                       fontWeight: "600",
                     }}
                   >
-                    {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "توصيل ديلفري نابلس" : "التوصيل"}
+                    {editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "التوصيل بعد التعديل" : "التوصيل"}
                   </Text>
                   <Text
                     style={{
