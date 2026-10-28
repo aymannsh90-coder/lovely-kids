@@ -2115,8 +2115,12 @@ export default function CartScreen() {
             )}
             <Text style={styles.confirmBtnText}>
               {loading
-                ? "جاري تأكيد الطلب..."
-                : `تأكيد الطلب — ${finalTotal} ₪`}
+                ? isLocalDelivery
+                  ? "جاري إرسال طلب الديلفري..."
+                  : "جاري تأكيد الطلب..."
+                : isLocalDelivery
+                  ? `إرسال الطلب — ${finalTotal}₪ منتجات فقط`
+                  : `تأكيد الطلب — ${finalTotal} ₪`}
             </Text>
           </Pressable>
           <Text
@@ -2125,7 +2129,9 @@ export default function CartScreen() {
               { color: colors.mutedForeground },
             ]}
           >
-            سيتم حفظ طلبك مباشرة وإرسال نسخة عبر واتساب
+            {isLocalDelivery
+              ? "المبلغ المعروض للمنتجات فقط. سنؤكد أجرة الديلفري والإجمالي النهائي معك قبل إرسال الطلب."
+              : "سيتم حفظ طلبك مباشرة وإرسال نسخة عبر واتساب"}
           </Text>
 
           {showValidationErrors && !canSubmit && (
