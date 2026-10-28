@@ -91,6 +91,12 @@ function money(value: number) {
   return `${Number(value || 0).toFixed(2)} ₪`;
 }
 
+// Keep thermal slips compact, like the in-store POS receipts.
+// Only the printed label is shortened; product codes and variants stay intact.
+function shortProductName(value: string): string {
+  return value.trim().split(/\s+/).filter(Boolean).slice(0, 2).join(" ") || "صنف";
+}
+
 function paymentMethodLabel(value: string) {
   switch (value) {
     case "bank_transfer":
@@ -417,7 +423,7 @@ export async function printOrderThermalReceipt(
         <tr>
           <td>${index + 1}</td>
           <td>
-            <span class="receipt-product-name">${escapeHtml(item.name)}</span>
+            <span class="receipt-product-name">${escapeHtml(shortProductName(item.name))}</span>
             ${variantText ? `<span class="receipt-item-variant">${escapeHtml(variantText)}</span>` : ""}
           </td>
           <td dir="ltr">${escapeHtml(mainProductCode)}</td>
@@ -441,7 +447,7 @@ export async function printOrderThermalReceipt(
         <tr>
           <td>${index + 1}</td>
           <td>
-            <span class="receipt-product-name">${escapeHtml(item.productNameAr)}</span>
+            <span class="receipt-product-name">${escapeHtml(shortProductName(item.productNameAr))}</span>
             ${variantText ? `<span class="receipt-item-variant">${escapeHtml(variantText)}</span>` : ""}
           </td>
           <td dir="ltr">${escapeHtml(historicalCode)}</td>
