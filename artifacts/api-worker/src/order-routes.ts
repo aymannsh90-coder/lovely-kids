@@ -997,6 +997,31 @@ async function handleMarkOrderPrinted(
   return json(updated[0]);
 }
 
+async function handleLocalCourierCashHandover(
+  request: Request,
+  db: Db,
+  env: Env,
+  orderId: number,
+): Promise<Response> {
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isAdmin) return json({ error: "غير مصرح" }, 403);
+
+  try {
+    const receipt = await recordLocalCourierCashHandover(db, orderId, user.id);
+    return json({
+      ok: true,
+      ...receipt,
+    });
+  } catch (error) {
+    if (error instanceof LocalCourierCashError) {
+      return json({ error: error.message }, error.status);
+    }
+    console.error("LOCAL_COURIER_CASH_HANDOVER_FAILED", error);
+    return json({ error: "تعذر تسجيل قبض قيمة البضاعة من المندوب" }, 500);
+  }
+}
+
 export async function handleOrderRequest(
   request: Request,
   db: Db,
