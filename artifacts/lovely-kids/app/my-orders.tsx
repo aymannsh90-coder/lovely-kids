@@ -48,6 +48,7 @@ type Order = {
   notes: string | null;
   shippingZone?: string | null;
   shippingCost?: number | null;
+  shippingOriginalCost?: number | null;
   trackingToken?: string;
   createdAt: string;
 };
@@ -494,6 +495,13 @@ export default function MyOrdersScreen() {
           ))}
         </View>
 
+        {item.shippingZone === "ديلفري داخل مدينة نابلس" && item.shippingOriginalCost == null && (
+          <View style={{ marginTop: 8, padding: 10, backgroundColor: "#EFF6FF", borderRadius: 10 }}>
+            <Text style={{ color: "#1D4ED8", textAlign: "right", fontWeight: "700" }}>
+              🚴 رسوم ديلفري نابلس لم تُحدّد بعد. المبلغ أدناه للمنتجات فقط، وسيتم تأكيد سعر التوصيل معك.
+            </Text>
+          </View>
+        )}
         {/* Footer */}
         <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
           <Text style={[styles.payMethod, { color: colors.mutedForeground }]}>
