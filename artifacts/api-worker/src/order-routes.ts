@@ -2,6 +2,7 @@ import {
   appSettingsTable,
   deliveryCompaniesTable,
   exchangeDocumentsTable,
+  financeTransactionsTable,
   insertOrderSchema,
   ordersTable,
 } from "@workspace/db/schema";
@@ -30,6 +31,11 @@ import {
   completeOrderWithFinance,
   OrderFinanceError,
 } from "./order-finance";
+import {
+  recordLocalCourierCashHandover,
+  LocalCourierCashError,
+  LOCAL_COURIER_CASH_EVENT,
+} from "./order-local-courier";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import { sendMetaPurchaseEvent } from "./meta-capi";
 import {
@@ -618,6 +624,21 @@ async function handleGetOrders(
     .from(ordersTable)
     .orderBy(desc(ordersTable.createdAt));
 
+  const courierCashReceipts = await db
+    .select({
+      sourceId: financeTransactionsTable.sourceId,
+      createdAt: financeTransactionsTable.createdAt,
+    })
+    .from(financeTransactionsTable)
+    .where(and(
+      eq(financeTransactionsTable.sourceType, "web_order"),
+      eq(financeTransactionsTable.sourceEvent, LOCAL_COURIER_CASH_EVENT),
+      eq(financeTransactionsTable.status, "posted"),
+    ));
+  const courierCashByOrder = new Map(
+    courierCashReceipts.map((row) => [row.sourceId, row.createdAt.toISOString()]),
+  );
+
   const exchangeLinks =
     await db
       .select({
@@ -707,6 +728,7 @@ async function handleGetOrders(
 
       return {
         ...order,
+        courierCashReceivedAt: courierCashByOrder.get(String(order.id)) ?? null,
         mergedOrderIds,
         mergedOrderCount:
           mergedOrderIds.length,
@@ -975,6 +997,31 @@ async function handleMarkOrderPrinted(
   return json(updated[0]);
 }
 
+async function handleLocalCourierCashHandover(
+  request: Request,
+  db: Db,
+  env: Env,
+  orderId: number,
+): Promise<Response> {
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isAdmin) return json({ error: "غير مصرح" }, 403);
+
+  try {
+    const receipt = await recordLocalCourierCashHandover(db, orderId, user.id);
+    return json({
+      ok: true,
+      ...receipt,
+    });
+  } catch (error) {
+    if (error instanceof LocalCourierCashError) {
+      return json({ error: error.message }, error.status);
+    }
+    console.error("LOCAL_COURIER_CASH_HANDOVER_FAILED", error);
+    return json({ error: "تعذر تسجيل قبض قيمة البضاعة من المندوب" }, 500);
+  }
+}
+
 export async function handleOrderRequest(
   request: Request,
   db: Db,
@@ -1146,6 +1193,15 @@ export async function handleOrderRequest(
       db,
       env,
       Number(storePickupMatch[1]),
+    );
+  }
+
+  const courierHandoverMatch = path.match(
+    /^\/api\/orders\/(\d+)\/local-courier-cash$/,
+  );
+  if (request.method === "POST" && courierHandoverMatch) {
+    return handleLocalCourierCashHandover(
+      request, db, env, Number(courierHandoverMatch[1]),
     );
   }
 
@@ -1647,6 +1703,20 @@ async function handleConvertOrderToStorePickup(
       { error: "لا يمكن تعديل طريقة استلام طلب مكتمل أو ملغي" },
       409,
     );
+  }
+
+  // The courier's goods-only cash advance cannot survive switching this
+  // order into pickup. Reverse/refund it through an audited workflow first.
+  const receivedCourierCash = await db.select({ id: financeTransactionsTable.id })
+    .from(financeTransactionsTable)
+    .where(and(
+      eq(financeTransactionsTable.sourceType, "web_order"),
+      eq(financeTransactionsTable.sourceId, String(id)),
+      eq(financeTransactionsTable.sourceEvent, LOCAL_COURIER_CASH_EVENT),
+      eq(financeTransactionsTable.status, "posted"),
+    )).limit(1);
+  if (receivedCourierCash.length > 0) {
+    return json({ error: "تم قبض قيمة البضاعة من المندوب؛ لا يمكن تحويل الطلب لاستلام من المحل بعد القبض" }, 409);
   }
 
   if (
@@ -2323,6 +2393,20 @@ async function handleDeleteOrder(
       },
       409,
     );
+  }
+
+  // Never physically erase an order with a posted courier handover receipt:
+  // the cash-session and finance journal must remain traceable to the order.
+  const courierCash = await db.select({ id: financeTransactionsTable.id })
+    .from(financeTransactionsTable)
+    .where(and(
+      eq(financeTransactionsTable.sourceType, "web_order"),
+      eq(financeTransactionsTable.sourceId, String(id)),
+      eq(financeTransactionsTable.sourceEvent, LOCAL_COURIER_CASH_EVENT),
+      eq(financeTransactionsTable.status, "posted"),
+    )).limit(1);
+  if (courierCash.length > 0) {
+    return json({ error: "لا يمكن حذف طلب مسجّل عليه قبض نقدي من مندوب الديلفري؛ يجب الاحتفاظ بالسجل المحاسبي" }, 409);
   }
 
   const mergedChildren = await db

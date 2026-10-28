@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { openDb } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 import { STORE_PICKUP_LABEL, LOCAL_NABLUS_DELIVERY_LABEL } from "./order-service";
+import { getLocalCourierCashReceipt, LOCAL_COURIER_ADVANCE_ACCOUNT } from "./order-local-courier";
 import {
   CARD_PROCESSOR_CONFIG,
   type PosCardProcessor,
@@ -256,6 +257,25 @@ export async function completeOrderWithFinance(
     const productSalesMinor =
       totalMinor - shippingMinor;
 
+    // The courier pays the store for the GOODS at handover. Cash is already
+    // posted to the main register and held as a customer advance until delivery.
+    const localCashHandover =
+      isLocalDelivery &&
+      (order.paymentMethod === "cod" || order.paymentMethod === "local_store_cash")
+        ? await getLocalCourierCashReceipt(tx, order.id)
+        : null;
+
+    if (
+      isLocalDelivery &&
+      (order.paymentMethod === "cod" || order.paymentMethod === "local_store_cash") &&
+      !localCashHandover
+    ) {
+      throw new OrderFinanceError(
+        "سجّل قبض قيمة البضاعة نقداً من مندوب ديلفري نابلس قبل إتمام التسليم",
+        409,
+      );
+    }
+
     let onlineExchangeDifferenceMinor:
       number | null = null;
 
@@ -404,10 +424,9 @@ export async function completeOrderWithFinance(
 
     // الاستلام من المحل + الدفع عند الاستلام = نقد داخل الصندوق.
     if (
-      ((isPickup &&
+      (isPickup &&
         order.paymentMethod === "cod" &&
-        pickupSettlement?.method === "cash") ||
-        (isLocalDelivery && order.paymentMethod === "local_store_cash")) &&
+        pickupSettlement?.method === "cash") &&
       totalMinor > 0
     ) {
       const sessionRows = await tx
@@ -560,6 +579,15 @@ export async function completeOrderWithFinance(
           })
         : null;
 
+    const localCourierAdvanceAccount =
+      localCashHandover && productSalesMinor > 0
+        ? await ensureAccount({
+            code: LOCAL_COURIER_ADVANCE_ACCOUNT,
+            name: "مبالغ مندوب ديلفري نابلس المقبوضة مقدماً",
+            accountType: "liability",
+          })
+        : null;
+
     const deliveryExpenseAccount =
       deliveryCostMinor > 0
         ? await ensureAccount({
@@ -580,10 +608,9 @@ export async function completeOrderWithFinance(
         : null;
 
     const cashAccount =
-      ((isPickup &&
+      (isPickup &&
         order.paymentMethod === "cod" &&
-        pickupSettlement?.method === "cash") ||
-        (isLocalDelivery && order.paymentMethod === "local_store_cash")) &&
+        pickupSettlement?.method === "cash") &&
       totalMinor > 0
         ? await ensureAccount({
             code: "CASH_MAIN",
@@ -815,53 +842,61 @@ export async function completeOrderWithFinance(
           });
         }
       } else if (isLocalDelivery) {
-        // Dedicated local-courier accounts; do not affect delivery-company balances.
-        if (order.paymentMethod === "cod") {
-          const net = totalMinor - deliveryCostMinor;
-          if (net !== 0) {
-            const account = await ensureAccount({
-              code: net > 0 ? "LOCAL_NABLUS_DELIVERY_AR" : "LOCAL_NABLUS_DELIVERY_AP",
-              name: net > 0 ? "ذمم مدينة - مندوبي ديلفري نابلس" : "ذمم دائنة - مندوبي ديلفري نابلس",
-              accountType: net > 0 ? "asset" : "liability",
-            });
-            financeLines.push({
-              accountId: account.id,
-              debitMinor: net > 0 ? net : 0,
-              creditMinor: net < 0 ? -net : 0,
-              memo: `تسوية ديلفري نابلس للطلب #${order.id}`,
-            });
-          }
-        } else {
-          if (order.paymentMethod === "bank_transfer" && bankAccount && totalMinor > 0) {
-            financeLines.push({
-              accountId: bankAccount.id,
-              debitMinor: totalMinor,
-              creditMinor: 0,
-              memo: `تحويل بنكي لطلب ديلفري نابلس #${order.id}`,
-            });
-          }
-          if (order.paymentMethod === "local_store_cash" && cashAccount && totalMinor > 0) {
-            financeLines.push({
-              accountId: cashAccount.id,
-              debitMinor: totalMinor,
-              creditMinor: 0,
-              memo: `تحصيل نقدي مباشر لطلب ديلفري نابلس #${order.id}`,
-            });
-          }
-          if (deliveryCostMinor > 0) {
-            const payable = await ensureAccount({
-              code: "LOCAL_NABLUS_DELIVERY_AP",
-              name: "ذمم دائنة - مندوبي ديلفري نابلس",
-              accountType: "liability",
-            });
-            financeLines.push({
-              accountId: payable.id,
-              debitMinor: 0,
-              creditMinor: deliveryCostMinor,
-              memo: `أجرة مندوب ديلفري نابلس للطلب #${order.id}`,
-            });
-          }
+        // Courier collects goods + delivery from customer and keeps delivery fee.
+        // CASH for goods was already posted at physical courier handover.
+        // At delivery, clear that advance; never debit the cash register again.
+        if (localCourierAdvanceAccount && productSalesMinor > 0) {
+          financeLines.push({
+            accountId: localCourierAdvanceAccount.id,
+            debitMinor: productSalesMinor,
+            creditMinor: 0,
+            memo: `تسوية القبض المقدم من المندوب للطلب #${order.id}`,
+          });
+        } else if (order.paymentMethod === "bank_transfer" && bankAccount && totalMinor > 0) {
+          financeLines.push({
+            accountId: bankAccount.id,
+            debitMinor: totalMinor,
+            creditMinor: 0,
+            memo: `تحويل بنكي لطلب ديلفري نابلس #${order.id}`,
+          });
         }
+
+        if (localCourierAdvanceAccount) {
+          // Any agreed courier fee above/below the customer charge is handled
+          // as a receivable/payable, not fictitious money in the cash drawer.
+          const courierDifference = shippingMinor - deliveryCostMinor;
+          if (courierDifference !== 0) {
+            const differenceAccount = await ensureAccount({
+              code: courierDifference > 0
+                ? "LOCAL_NABLUS_DELIVERY_AR"
+                : "LOCAL_NABLUS_DELIVERY_AP",
+              name: courierDifference > 0
+                ? "ذمم مدينة - مندوبي ديلفري نابلس"
+                : "ذمم دائنة - مندوبي ديلفري نابلس",
+              accountType: courierDifference > 0 ? "asset" : "liability",
+            });
+            financeLines.push({
+              accountId: differenceAccount.id,
+              debitMinor: courierDifference > 0 ? courierDifference : 0,
+              creditMinor: courierDifference < 0 ? -courierDifference : 0,
+              memo: `فرق أجرة ديلفري نابلس للطلب #${order.id}`,
+            });
+          }
+        } else if (deliveryCostMinor > 0) {
+          // Store received bank payment directly; it still owes courier fees.
+          const payable = await ensureAccount({
+            code: "LOCAL_NABLUS_DELIVERY_AP",
+            name: "ذمم دائنة - مندوبي ديلفري نابلس",
+            accountType: "liability",
+          });
+          financeLines.push({
+            accountId: payable.id,
+            debitMinor: 0,
+            creditMinor: deliveryCostMinor,
+            memo: `أجرة مندوب ديلفري نابلس للطلب #${order.id}`,
+          });
+        }
+
         if (deliveryExpenseAccount && deliveryCostMinor > 0) {
           financeLines.push({
             accountId: deliveryExpenseAccount.id,
@@ -1155,7 +1190,7 @@ export async function completeOrderWithFinance(
         deliveryCompanyCost,
         ...(
           ((isPickup && order.paymentMethod === "cod") ||
-           (isLocalDelivery && order.paymentMethod === "local_store_cash"))
+           (isLocalDelivery && localCashHandover !== null))
             ? {
                 paymentStatus:
                   "confirmed",

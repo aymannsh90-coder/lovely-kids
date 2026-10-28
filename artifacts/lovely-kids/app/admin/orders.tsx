@@ -121,6 +121,7 @@ interface Order {
   shippingZone?: string;
   shippingCost?: number;
   deliveryCompanyCost?: number | null;
+  courierCashReceivedAt?: string | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   promotionDiscountAmount?: number;
@@ -565,6 +566,9 @@ export default function AdminOrdersScreen() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [pickupConfirmOrder, setPickupConfirmOrder] = useState<Order | null>(null);
   const [pickupConvertingId, setPickupConvertingId] = useState<number | null>(null);
+  const [courierCashTarget, setCourierCashTarget] = useState<Order | null>(null);
+  const [courierCashBusy, setCourierCashBusy] = useState(false);
+  const [courierCashError, setCourierCashError] = useState("");
   const [
     pickupSettlementOrder,
     setPickupSettlementOrder,
@@ -1206,6 +1210,49 @@ export default function AdminOrdersScreen() {
           return next;
         },
       );
+    }
+  };
+
+  const confirmCourierCashHandover = async () => {
+    const target = courierCashTarget;
+    if (!target || courierCashBusy) return;
+
+    setCourierCashBusy(true);
+    setCourierCashError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
+      const res = await fetch(
+        `${API_BASE}/api/orders/${target.id}/local-courier-cash`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const body = await res.json().catch(() => null) as
+        | { ok?: boolean; error?: string; receivedAt?: string; amountMinor?: number }
+        | null;
+      if (!res.ok || !body?.ok || !body.receivedAt) {
+        throw new Error(body?.error ?? "تعذر تسجيل قبض المندوب");
+      }
+
+      setOrders((current) => current.map((order) =>
+        order.id === target.id
+          ? { ...order, courierCashReceivedAt: body.receivedAt }
+          : order,
+      ));
+      setCourierCashTarget(null);
+      await fetchOrdersRef.current();
+      Alert.alert(
+        "تم تسجيل قبض المندوب",
+        `تم تسجيل ${(body.amountMinor ?? 0) / 100}₪ بالصندوق الرئيسي، دون أجرة التوصيل.`,
+      );
+    } catch (error) {
+      setCourierCashError(
+        error instanceof Error ? error.message : "تعذر تسجيل قبض المندوب",
+      );
+    } finally {
+      setCourierCashBusy(false);
     }
   };
 
@@ -4849,6 +4896,54 @@ export default function AdminOrdersScreen() {
                       </View>
                     )}
 
+                    {item.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
+                      (item.paymentMethod === "cod" || item.paymentMethod === "local_store_cash") &&
+                      item.status !== "cancelled" &&
+                      (item.status !== "new" || !!item.courierCashReceivedAt) && (
+                        <View style={{
+                          padding: 12, borderWidth: 1, borderRadius: 12,
+                          gap: 8, borderColor: item.courierCashReceivedAt ? "#16A34A" : "#60A5FA",
+                          backgroundColor: item.courierCashReceivedAt ? "#F0FDF4" : "#EFF6FF",
+                        }}>
+                          <Text style={{ textAlign: "right", fontWeight: "900", color: item.courierCashReceivedAt ? "#15803D" : "#1D4ED8" }}>
+                            {item.courierCashReceivedAt
+                              ? "✅ تم قبض قيمة البضاعة من المندوب في الصندوق"
+                              : "🚴 قبض قيمة البضاعة نقداً من مندوب ديلفري نابلس"}
+                          </Text>
+                          <Text style={{ textAlign: "right", fontWeight: "800", color: "#1E40AF" }}>
+                            قيمة البضاعة: {item.totalPrice - (item.shippingCost ?? 0)}₪ — أجرة الديلفري: {item.shippingCost ?? 0}₪ (للمندوب)
+                          </Text>
+                          {!item.courierCashReceivedAt && (item.status === "confirmed" || item.status === "delivering") && (
+                            <Pressable
+                              disabled={pendingOrderIds.has(item.id) || courierCashBusy || item.deliveryCompanyCost == null}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                setCourierCashError("");
+                                setCourierCashTarget(item);
+                              }}
+                              style={{
+                                borderRadius: 10, padding: 11, alignItems: "center",
+                                backgroundColor: item.deliveryCompanyCost == null ? "#94A3B8" : "#2563EB",
+                              }}
+                            >
+                              <Text style={{ color: "#fff", fontWeight: "900" }}>
+                                تأكيد استلام {item.totalPrice - (item.shippingCost ?? 0)}₪ من المندوب
+                              </Text>
+                            </Pressable>
+                          )}
+                          {!item.courierCashReceivedAt && item.deliveryCompanyCost == null && (
+                            <Text style={{ color: "#B45309", textAlign: "right" }}>
+                              يجب اعتماد أجرة الديلفري وتكلفة المندوب من تعديل الطلب أولاً.
+                            </Text>
+                          )}
+                          {!item.courierCashReceivedAt && item.status === "delivering" && (
+                            <Text style={{ color: "#B45309", textAlign: "right" }}>
+                              قبل إتمام تسليم الطلب، سجّل القبض الفعلي من المندوب.
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
                     {/* Status Change */}
                     <Text
                       style={[
@@ -4895,6 +4990,16 @@ export default function AdminOrdersScreen() {
                                 event,
                               ) => {
                                 event.stopPropagation();
+
+                                if (
+                                  item.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
+                                  (item.paymentMethod === "cod" || item.paymentMethod === "local_store_cash") &&
+                                  s.key === "done" &&
+                                  !item.courierCashReceivedAt
+                                ) {
+                                  showError("سجّل أولاً قبض قيمة البضاعة نقداً من المندوب قبل إتمام الطلب");
+                                  return;
+                                }
 
                                 if (
                                   isPickup &&
@@ -4984,6 +5089,49 @@ export default function AdminOrdersScreen() {
           }}
         />
       )}
+
+      <Modal
+        visible={courierCashTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!courierCashBusy) setCourierCashTarget(null); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[
+            styles.editOrderModalCard,
+            { maxWidth: 480, width: "92%", alignSelf: "center", backgroundColor: colors.card, borderColor: colors.border, padding: 20, gap: 14 },
+          ]}>
+            <Text style={{ color: colors.foreground, fontWeight: "900", fontSize: 18, textAlign: "right" }}>
+              تأكيد قبض نقدي من مندوب ديلفري نابلس
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right", lineHeight: 24 }}>
+              الطلب #{courierCashTarget?.id} — هل استلمت فعلياً
+              {" "}{(courierCashTarget?.totalPrice ?? 0) - (courierCashTarget?.shippingCost ?? 0)}₪
+              {" "}قيمة البضاعة نقداً من المندوب؟
+              لا تدخل أجرة الديلفري للصندوق، ويُسجّل القبض مرة واحدة.
+            </Text>
+            {courierCashError ? (
+              <Text style={{ color: "#DC2626", textAlign: "right" }}>{courierCashError}</Text>
+            ) : null}
+            <Pressable
+              disabled={courierCashBusy}
+              onPress={() => { void confirmCourierCashHandover(); }}
+              style={{ padding: 14, borderRadius: 10, backgroundColor: "#16A34A", alignItems: "center" }}
+            >
+              {courierCashBusy ? <ActivityIndicator color="#fff" /> : (
+                <Text style={{ color: "#fff", fontWeight: "900" }}>نعم، تم قبض قيمة البضاعة نقداً</Text>
+              )}
+            </Pressable>
+            <Pressable
+              disabled={courierCashBusy}
+              onPress={() => setCourierCashTarget(null)}
+              style={{ padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: "center" }}
+            >
+              <Text style={{ color: colors.foreground, fontWeight: "800" }}>إلغاء</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={
@@ -6193,10 +6341,10 @@ export default function AdminOrdersScreen() {
 
                 <View style={styles.editOrderShippingZones}>
                   {[
-                    { key: "cod" as const, label: editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "المندوب يستلم المبلغ" : "الدفع عند الاستلام" },
+                    { key: "cod" as const, label: editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL ? "المندوب يدفع قيمة البضاعة للمحل ويحتفظ بأجرة الديلفري" : "الدفع عند الاستلام" },
                     { key: "bank_transfer" as const, label: "تحويل بنكي للمحل" },
                     ...(editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
-                      ? [{ key: "local_store_cash" as const, label: "نقدًا للمحل — المندوب يأخذ أجرته" }]
+                      ? [{ key: "local_store_cash" as const, label: "قبض قيمة البضاعة من المندوب (نقداً)" }]
                       : []),
                   ].filter((option) => !editingOrder?.exchangePublicId || option.key === "cod").map((option) => {
                     const selected =
