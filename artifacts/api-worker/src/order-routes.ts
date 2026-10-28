@@ -36,6 +36,11 @@ import {
   LocalCourierCashError,
   LOCAL_COURIER_CASH_EVENT,
 } from "./order-local-courier";
+import {
+  reverseFailedLocalCourierOrder,
+  LocalCourierReversalError,
+  LOCAL_COURIER_REVERSE_CASH_EVENT,
+} from "./order-local-courier-reversal";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import { sendMetaPurchaseEvent } from "./meta-capi";
 import {
@@ -639,6 +644,18 @@ async function handleGetOrders(
     courierCashReceipts.map((row) => [row.sourceId, row.createdAt.toISOString()]),
   );
 
+  const courierReversals = await db.select({
+    sourceId: financeTransactionsTable.sourceId,
+    createdAt: financeTransactionsTable.createdAt,
+  }).from(financeTransactionsTable).where(and(
+    eq(financeTransactionsTable.sourceType, "web_order"),
+    eq(financeTransactionsTable.sourceEvent, LOCAL_COURIER_REVERSE_CASH_EVENT),
+    eq(financeTransactionsTable.status, "posted"),
+  ));
+  const courierCashReversedByOrder = new Map(
+    courierReversals.map((row) => [row.sourceId, row.createdAt.toISOString()]),
+  );
+
   const exchangeLinks =
     await db
       .select({
@@ -729,6 +746,7 @@ async function handleGetOrders(
       return {
         ...order,
         courierCashReceivedAt: courierCashByOrder.get(String(order.id)) ?? null,
+        courierCashReversedAt: courierCashReversedByOrder.get(String(order.id)) ?? null,
         mergedOrderIds,
         mergedOrderCount:
           mergedOrderIds.length,
@@ -1022,6 +1040,58 @@ async function handleLocalCourierCashHandover(
   }
 }
 
+async function handleLocalCourierCashReversal(
+  request: Request,
+  db: Db,
+  env: Env,
+  orderId: number,
+): Promise<Response> {
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isAdmin) return json({ error: "غير مصرح" }, 403);
+  const body = await request.json().catch(() => null) as {
+    reason?: unknown;
+    goodsReturned?: unknown;
+    courierRefunded?: unknown;
+    noCourierFeeOwed?: unknown;
+  } | null;
+  if (
+    !body ||
+    typeof body.reason !== "string" ||
+    body.goodsReturned !== true ||
+    body.courierRefunded !== true ||
+    body.noCourierFeeOwed !== true
+  ) {
+    return json({ error: "سبب الإلغاء وتأكيد رجوع البضاعة وردّ المبلغ وعدم استحقاق أجرة ديلفري مطلوبة" }, 400);
+  }
+
+  try {
+    const reversal = await reverseFailedLocalCourierOrder(db, orderId, user.id, {
+      reason: body.reason,
+      goodsReturned: true,
+      courierRefunded: true,
+      noCourierFeeOwed: true,
+    });
+    // Notify only after both finance and stock transaction committed.
+    if (reversal.order.customerPhone) {
+      try {
+        await sendOrderStatusNotification(
+          db, env, orderId, reversal.order.customerPhone, "cancelled",
+        );
+      } catch (error) {
+        console.error("LOCAL_COURIER_REVERSAL_NOTIFICATION_FAILED", error);
+      }
+    }
+    return json({ ok: true, ...reversal });
+  } catch (error) {
+    if (error instanceof LocalCourierReversalError || error instanceof OrderEditError) {
+      return json({ error: error.message }, error.status);
+    }
+    console.error("LOCAL_COURIER_REVERSAL_FAILED", error);
+    return json({ error: "تعذر عكس طلب الديلفري مالياً وإعادة مخزونه" }, 500);
+  }
+}
+
 export async function handleOrderRequest(
   request: Request,
   db: Db,
@@ -1202,6 +1272,15 @@ export async function handleOrderRequest(
   if (request.method === "POST" && courierHandoverMatch) {
     return handleLocalCourierCashHandover(
       request, db, env, Number(courierHandoverMatch[1]),
+    );
+  }
+
+  const courierReversalMatch = path.match(
+    /^\/api\/orders\/(\d+)\/local-courier-reverse$/,
+  );
+  if (request.method === "POST" && courierReversalMatch) {
+    return handleLocalCourierCashReversal(
+      request, db, env, Number(courierReversalMatch[1]),
     );
   }
 
