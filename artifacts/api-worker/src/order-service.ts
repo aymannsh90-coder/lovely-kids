@@ -150,6 +150,7 @@ function groupItems(items: TrustedOrderItem[]): GroupedItem[] {
 
 export const STORE_PICKUP_LABEL = "استلام من المحل";
 export const LOCAL_NABLUS_DELIVERY_LABEL = "ديلفري داخل مدينة نابلس";
+export const LOCAL_NABLUS_DELIVERY_BASE_ILS = 15;
 
 const DEFAULT_SHIPPING_ZONES: ShippingZone[] = [
   {
@@ -186,13 +187,13 @@ export function resolveShippingZone(
     };
   }
 
-  // Price is negotiated and confirmed by the admin after checkout.
-  // Never use standard courier zones or automatic free-shipping promotions.
+  // Nablus local delivery starts at 15 ILS. A higher actual courier
+  // price may add a customer-approved surcharge before dispatch.
   if (requested === LOCAL_NABLUS_DELIVERY_LABEL) {
     return {
       label: LOCAL_NABLUS_DELIVERY_LABEL,
-      cost: 0,
-      promoCost: 0,
+      cost: LOCAL_NABLUS_DELIVERY_BASE_ILS,
+      promoCost: LOCAL_NABLUS_DELIVERY_BASE_ILS,
     };
   }
 
@@ -298,6 +299,11 @@ export function resolveShippingCost(
   shipping: ShippingZone,
   productsTotal: number,
 ): number {
+  // Local Nablus delivery never participates in global free-shipping offers.
+  if (shipping.label === LOCAL_NABLUS_DELIVERY_LABEL) {
+    return LOCAL_NABLUS_DELIVERY_BASE_ILS;
+  }
+
   const settings =
     settingsData as
       | {
@@ -1136,10 +1142,9 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
             shippingPromotionProductsTotal,
           );
 
-    // A null original price indicates an unquoted local delivery, never a
-    // free-delivery offer. Once the admin approves a quote it is snapshotted.
-    const shippingOriginalCost =
-      shipping.label === LOCAL_NABLUS_DELIVERY_LABEL ? null : shipping.cost;
+    // The base 15 ILS is known at checkout; only possible surcharges
+    // require explicit approval before the order can be dispatched.
+    const shippingOriginalCost = shipping.cost;
 
     const shippingPromotionDiscount =
       Math.max(
