@@ -308,7 +308,7 @@ export async function createOrderPrintHtml(
             <div class="row"><strong>خصم عرض التوصيل:</strong> -${shippingPromotionDiscount} ₪</div>
           `
           : shippingCost !== null
-            ? `<div class="row"><strong>التوصيل:</strong> ${shippingCost} ₪</div>`
+            ? `<div class="row"><strong>${order.shippingZone === "ديلفري داخل مدينة نابلس" ? "توصيل ديلفري نابلس" : "التوصيل"}:</strong> ${shippingCost} ₪</div>`
             : ""
       }
       <div class="total">الإجمالي: ${order.totalPrice} ₪</div>
