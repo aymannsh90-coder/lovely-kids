@@ -530,6 +530,8 @@ export default function AdminOrdersScreen() {
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasLoadedOrders, setHasLoadedOrders] = useState(false);
+  const [ordersRefreshError, setOrdersRefreshError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [proofModal, setProofModal] = useState<string | null>(null);
@@ -607,6 +609,9 @@ export default function AdminOrdersScreen() {
 
   const pendingOrderIdsRef = useRef<Set<number>>(new Set());
   const ordersFetchVersionRef = useRef(0);
+  const ordersRequestIdRef = useRef(0);
+  const ordersRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchOrdersRef = useRef<() => Promise<void>>(async () => {});
   const listRef = useRef<FlatList<Order>>(null);
   const openedOrderParamRef = useRef<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -636,26 +641,47 @@ export default function AdminOrdersScreen() {
   const fetchOrders = useCallback(async () => {
     if (pendingOrderIdsRef.current.size > 0) { setRefreshing(false); return; }
     const fetchVersion = ordersFetchVersionRef.current;
-    const token = await getAuthToken();
-    if (!token) {
-      setOrders([]);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
+    const requestId = ++ordersRequestIdRef.current;
 
     try {
-      const res = await fetch(`${API_BASE}/api/orders`, { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      if (fetchVersion !== ordersFetchVersionRef.current) return;
-      setOrders(Array.isArray(data) ? data : []);
-    } catch {
-      setOrders([]);
+      const token = await getAuthToken();
+      if (!token) throw new Error("Orders refresh: admin session unavailable");
+
+      const res = await fetch(`${API_BASE}/api/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Orders refresh: HTTP ${res.status}`);
+
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Orders refresh: invalid response");
+
+      if (fetchVersion !== ordersFetchVersionRef.current || requestId !== ordersRequestIdRef.current) return;
+      setOrders(data);
+      setHasLoadedOrders(true);
+      setOrdersRefreshError(null);
+      if (ordersRetryTimerRef.current !== null) {
+        clearTimeout(ordersRetryTimerRef.current);
+        ordersRetryTimerRef.current = null;
+      }
+    } catch (error) {
+      if (fetchVersion !== ordersFetchVersionRef.current || requestId !== ordersRequestIdRef.current) return;
+      console.warn("Failed to refresh admin orders:", error);
+      setOrdersRefreshError("تعذّر تحديث الطلبات مؤقتًا. نعرض آخر بيانات صحيحة وسنعيد المحاولة تلقائيًا.");
+      // Never replace known orders with an empty list after a transient API or session failure.
+      if (ordersRetryTimerRef.current === null) {
+        ordersRetryTimerRef.current = setTimeout(() => {
+          ordersRetryTimerRef.current = null;
+          void fetchOrdersRef.current();
+        }, 5000);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === ordersRequestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [getAuthToken]);
+  fetchOrdersRef.current = fetchOrders;
 
   useEffect(() => {
     if (newCount > 0) {
@@ -670,9 +696,16 @@ export default function AdminOrdersScreen() {
   }, [clearNew]);
 
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
+    void fetchOrders();
+    const interval = setInterval(() => void fetchOrders(), 30000);
+    return () => {
+      clearInterval(interval);
+      if (ordersRetryTimerRef.current !== null) {
+        clearTimeout(ordersRetryTimerRef.current);
+        ordersRetryTimerRef.current = null;
+      }
+      ordersRequestIdRef.current += 1;
+    };
   }, [fetchOrders]);
 
   // عداد الاستلام يتحرك محلياً فقط بدون أي طلبات للسيرفر
@@ -3045,6 +3078,20 @@ export default function AdminOrdersScreen() {
         </Pressable>
       </View>
 
+      {ordersRefreshError && (
+        <View style={styles.ordersRefreshWarning}>
+          <Ionicons name="warning-outline" size={18} color="#92400e" />
+          <Text style={styles.ordersRefreshWarningText}>
+            {hasLoadedOrders
+              ? ordersRefreshError
+              : "تعذّر تحميل الطلبات مؤقتًا. سنعيد المحاولة تلقائيًا."}
+          </Text>
+          <Pressable onPress={() => { setRefreshing(true); void fetchOrders(); }} style={styles.ordersRefreshRetry}>
+            <Text style={styles.ordersRefreshRetryText}>إعادة المحاولة</Text>
+          </Pressable>
+        </View>
+      )}
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -3053,7 +3100,7 @@ export default function AdminOrdersScreen() {
       >
         {ORDER_FILTER_OPTIONS.map((option) => {
           const selected = orderStatusFilter === option.key;
-          const count = orderStatusCounts[option.key] ?? 0;
+          const count = hasLoadedOrders ? (orderStatusCounts[option.key] ?? 0) : "—";
 
           return (
             <Pressable
@@ -3407,15 +3454,19 @@ export default function AdminOrdersScreen() {
             <View style={styles.center}>
               <Ionicons name="bag-outline" size={56} color={colors.mutedForeground} />
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                {orderStatusFilter !== "all" || orderSearch.trim()
-                  ? "لا توجد طلبات مطابقة"
-                  : "لا توجد طلبات بعد"}
+                {ordersRefreshError && !hasLoadedOrders
+                  ? "تعذّر تحميل الطلبات"
+                  : orderStatusFilter !== "all" || orderSearch.trim()
+                    ? "لا توجد طلبات مطابقة"
+                    : "لا توجد طلبات بعد"}
               </Text>
 
               <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                {orderStatusFilter !== "all" || orderSearch.trim()
-                  ? "جرّب تغيير الفلتر أو عبارة البحث"
-                  : "ستظهر الطلبات هنا فور استلامها"}
+                {ordersRefreshError && !hasLoadedOrders
+                  ? "سنحاول الاتصال مجددًا دون حذف أي طلب."
+                  : orderStatusFilter !== "all" || orderSearch.trim()
+                    ? "جرّب تغيير الفلتر أو عبارة البحث"
+                    : "ستظهر الطلبات هنا فور استلامها"}
               </Text>
             </View>
           }
@@ -6880,6 +6931,10 @@ const styles = StyleSheet.create({
   notifText: { color: "#fff", fontWeight: "700", fontSize: 14, flex: 1, textAlign: "center" },
   errorBanner: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", alignItems: "center", gap: 8, backgroundColor: "#c0392b", paddingHorizontal: 16, paddingVertical: 12, zIndex: 99 },
   errorBannerText: { color: "#fff", fontWeight: "700", fontSize: 13, flex: 1, textAlign: "right" },
+  ordersRefreshWarning: { flexDirection: "row-reverse", alignItems: "center", gap: 8, backgroundColor: "#fff7ed", borderBottomWidth: 1, borderBottomColor: "#fed7aa", paddingHorizontal: 14, paddingVertical: 10 },
+  ordersRefreshWarningText: { flex: 1, color: "#92400e", fontWeight: "600", fontSize: 12, textAlign: "right" },
+  ordersRefreshRetry: { paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "#ffedd5" },
+  ordersRefreshRetryText: { color: "#9a3412", fontWeight: "700", fontSize: 12 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
   loadingText: { fontSize: 14 },
   emptyText: { fontSize: 18, fontWeight: "700" },
