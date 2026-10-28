@@ -656,8 +656,21 @@ export default {
         return promotionResponse;
       }
 
-      const orderResponse =
-        await handleOrderRequest(request, db, env);
+      // Keep CORS headers on unexpected order-handler failures so browsers
+      // can report a real server error instead of the opaque "Failed to fetch".
+      let orderResponse: Response | null;
+      try {
+        orderResponse = await handleOrderRequest(request, db, env);
+      } catch (error) {
+        console.error("ORDER_REQUEST_UNHANDLED_FAILURE", {
+          method: request.method,
+          path,
+          error,
+        });
+        return json({
+          error: "تعذر تحديث الطلب بسبب خطأ مؤقت بالخادم. لم تُؤكد العملية؛ حدّث الطلب قبل إعادة المحاولة.",
+        }, 500);
+      }
 
       if (orderResponse) {
         if (
