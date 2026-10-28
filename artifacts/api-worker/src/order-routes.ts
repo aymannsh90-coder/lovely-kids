@@ -2395,6 +2395,20 @@ async function handleDeleteOrder(
     );
   }
 
+  // Never physically erase an order with a posted courier handover receipt:
+  // the cash-session and finance journal must remain traceable to the order.
+  const courierCash = await db.select({ id: financeTransactionsTable.id })
+    .from(financeTransactionsTable)
+    .where(and(
+      eq(financeTransactionsTable.sourceType, "web_order"),
+      eq(financeTransactionsTable.sourceId, String(id)),
+      eq(financeTransactionsTable.sourceEvent, LOCAL_COURIER_CASH_EVENT),
+      eq(financeTransactionsTable.status, "posted"),
+    )).limit(1);
+  if (courierCash.length > 0) {
+    return json({ error: "لا يمكن حذف طلب مسجّل عليه قبض نقدي من مندوب الديلفري؛ يجب الاحتفاظ بالسجل المحاسبي" }, 409);
+  }
+
   const mergedChildren = await db
     .select({
       id: ordersTable.id,
