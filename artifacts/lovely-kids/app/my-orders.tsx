@@ -113,7 +113,7 @@ function timeAgo(dateStr: string) {
 }
 
 function payMethodLabel(m: string) {
-  return m === "bank_transfer" ? "تحويل بنكي" : "الدفع عند الاستلام";
+  return m === "bank_transfer" ? "تحويل بنكي" : m === "local_store_cash" ? "نقدًا للمحل - ديلفري نابلس" : "الدفع عند الاستلام";
 }
 
 const STORE_PICKUP_LABEL = "استلام من المحل";
