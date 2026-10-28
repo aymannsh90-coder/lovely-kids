@@ -20,6 +20,7 @@ export interface PrintableOrder {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  deliveryCompanyCost?: number | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   discountCode?: string | null;
@@ -307,11 +308,13 @@ export async function createOrderPrintHtml(
             <div class="row"><strong>التوصيل الأصلي:</strong> ${shippingOriginalCost} ₪</div>
             <div class="row"><strong>خصم عرض التوصيل:</strong> -${shippingPromotionDiscount} ₪</div>
           `
-          : shippingCost !== null
-            ? `<div class="row"><strong>${order.shippingZone === "ديلفري داخل مدينة نابلس" ? "توصيل ديلفري نابلس" : "التوصيل"}:</strong> ${shippingCost} ₪</div>`
+          : order.shippingZone === "ديلفري داخل مدينة نابلس" && order.deliveryCompanyCost == null
+            ? `<div class="row"><strong>توصيل ديلفري نابلس:</strong> أجرة التوصيل قيد التأكيد مع الزبون</div>`
+            : shippingCost !== null
+              ? `<div class="row"><strong>${order.shippingZone === "ديلفري داخل مدينة نابلس" ? "توصيل ديلفري نابلس" : "التوصيل"}:</strong> ${shippingCost} ₪</div>`
             : ""
       }
-      <div class="total">الإجمالي: ${order.totalPrice} ₪</div>
+      <div class="total">${order.shippingZone === "ديلفري داخل مدينة نابلس" && order.deliveryCompanyCost == null ? "إجمالي المنتجات (لا يشمل الديلفري)" : "الإجمالي"}: ${order.totalPrice} ₪</div>
     </div>
   </div>
 
@@ -319,7 +322,9 @@ export async function createOrderPrintHtml(
     <div class="row"><strong>طريقة الدفع:</strong> ${
       order.paymentMethod === "bank_transfer"
         ? "تحويل بنكي"
-        : "الدفع عند الاستلام"
+        : order.paymentMethod === "local_store_cash"
+          ? "نقدًا للمحل - ديلفري نابلس"
+          : "الدفع عند الاستلام"
     }</div>
   </div>
 
