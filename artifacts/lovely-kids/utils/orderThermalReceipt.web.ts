@@ -91,24 +91,6 @@ function money(value: number) {
   return `${Number(value || 0).toFixed(2)} ₪`;
 }
 
-function shortProductName(value: string) {
-  const clean = value.trim();
-  if (!clean) return "صنف";
-
-  const words = clean.split(/\s+/).filter(Boolean);
-
-  if (words.length === 0) return "صنف";
-  if (words.length === 1) return words[0];
-
-  const firstTwoWords = `${words[0]} ${words[1]}`.trim();
-
-  if (firstTwoWords.length <= 16) {
-    return firstTwoWords;
-  }
-
-  return words[0];
-}
-
 function paymentMethodLabel(value: string) {
   switch (value) {
     case "bank_transfer":
