@@ -218,8 +218,17 @@ export async function reverseFailedLocalCourierOrder(
     // Sale reverses revenue, actual courier cost, and courier balances;
     // cash receipt reverses the exact physical money handover.
     if (sales.length === 1) {
+      const saleLines = await readLines(sales[0]!.id);
+      // Legacy local-delivery completions sometimes booked their own cash.
+      // Those require a separate reconciliation instead of incorrectly
+      // reversing the journal while leaving the cash session unchanged.
+      if (saleLines.some((line) => line.accountId === cashAccountId)) {
+        throw new LocalCourierReversalError(
+          "الطلب يحتوي قبضاً نقدياً قديماً عند التسليم؛ يلزم تدقيق الصندوق قبل العكس",
+        );
+      }
       await reversePosting(
-        sales[0]!, await readLines(sales[0]!.id),
+        sales[0]!, saleLines,
         LOCAL_COURIER_REVERSE_SALE_EVENT,
         "عكس مبيعات وديلفري طلب مرفوض", null,
       );
