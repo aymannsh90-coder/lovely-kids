@@ -1705,6 +1705,20 @@ async function handleConvertOrderToStorePickup(
     );
   }
 
+  // The courier's goods-only cash advance cannot survive switching this
+  // order into pickup. Reverse/refund it through an audited workflow first.
+  const receivedCourierCash = await db.select({ id: financeTransactionsTable.id })
+    .from(financeTransactionsTable)
+    .where(and(
+      eq(financeTransactionsTable.sourceType, "web_order"),
+      eq(financeTransactionsTable.sourceId, String(id)),
+      eq(financeTransactionsTable.sourceEvent, LOCAL_COURIER_CASH_EVENT),
+      eq(financeTransactionsTable.status, "posted"),
+    )).limit(1);
+  if (receivedCourierCash.length > 0) {
+    return json({ error: "تم قبض قيمة البضاعة من المندوب؛ لا يمكن تحويل الطلب لاستلام من المحل بعد القبض" }, 409);
+  }
+
   if (
     order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL &&
     order.status === "delivering"
