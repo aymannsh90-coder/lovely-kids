@@ -572,6 +572,41 @@ export async function printOrderThermalReceipt(
       font-weight: 700;
     }
 
+    /* The receipt is 384px wide: do not let long Arabic column
+       headings overlap neighbouring values on the exchange slip. */
+    .lk-order-thermal-capture .receipt-exchange-return-table th {
+      font-size: 12px;
+      line-height: 1.3;
+      white-space: normal;
+      overflow-wrap: normal;
+      padding: 5px 1px;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(1),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(1) {
+      width: 6%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(2),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(2) {
+      width: 35%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(3),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(3) {
+      width: 21%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(4),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(4) {
+      width: 13%;
+    }
+
+    .lk-order-thermal-capture .receipt-exchange-return-table th:nth-child(5),
+    .lk-order-thermal-capture .receipt-exchange-return-table td:nth-child(5) {
+      width: 25%;
+    }
+
     .lk-order-thermal-capture .receipt-exchange-section {
       margin: 8px 0 4px;
       border: 1px solid #000;
@@ -776,14 +811,14 @@ export async function printOrderThermalReceipt(
       ${isOnlineExchange
         ? `
           <div class="receipt-exchange-section">الأصناف المرتجعة من الطلب #${escapeHtml(order.exchangeOriginalOrderId)}</div>
-          <table class="receipt-items-table">
+          <table class="receipt-items-table receipt-exchange-return-table">
             <thead>
               <tr>
                 <th>#</th>
                 <th>الصنف</th>
                 <th>الكود</th>
                 <th>الكمية</th>
-                <th>صافي المرتجع</th>
+                <th>القيمة</th>
               </tr>
             </thead>
             <tbody>${returnedItemRows}</tbody>
