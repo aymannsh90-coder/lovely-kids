@@ -15,6 +15,9 @@ import {
   createPosEmployeePayment,
   createPosEmployeeRepayment,
   createPosEmployeeSalaryAccrual,
+  getPosEmployeeMonthClosePreview,
+  closePosEmployeeSalaryMonth,
+  type PosEmployeeMonthClosePreview,
   getPosBankAccounts,
   getPosEmployeeLedger,
   getPosEmployees,
@@ -369,6 +372,12 @@ export default function EmployeesPage() {
     setActionBusy,
   ] =
     useState(false);
+
+  const [closePeriod, setClosePeriod] = useState(
+    () => new Date().toISOString().slice(0, 7),
+  );
+  const [closePreview, setClosePreview] = useState<PosEmployeeMonthClosePreview | null>(null);
+  const [closeBusy, setCloseBusy] = useState(false);
 
   const selected =
     useMemo(
@@ -1070,6 +1079,55 @@ export default function EmployeesPage() {
     }
   }
 
+  async function previewSalaryMonth() {
+    setCloseBusy(true);
+    setClosePreview(null);
+    setError("");
+    try {
+      const preview = await getPosEmployeeMonthClosePreview(token, closePeriod);
+      setClosePreview(preview);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        clearAuthentication();
+        return;
+      }
+      setError(errorText(caught));
+    } finally {
+      setCloseBusy(false);
+    }
+  }
+
+  async function closeSalaryMonth() {
+    if (!closePreview?.canClose || closeBusy || closePreview.period !== closePeriod) return;
+    if (!window.confirm(
+      `تأكيد تسوية سلف ورواتب شهر ${closePreview.period} بمبلغ ${formatMinor(closePreview.totalOffsetMinor)}؟\n\nهذه مقاصة بين السلف والمستحقات فقط، لا تدخل أو تخرج نقدًا من الصندوق، ولا تسجل مصروف رواتب جديد.`,
+    )) return;
+    setCloseBusy(true);
+    setError("");
+    try {
+      const result = await closePosEmployeeSalaryMonth(token, closePreview);
+      setMessage(result.alreadyClosed
+        ? "تم إغلاق الشهر مسبقًا. لم تُسجل حركة جديدة."
+        : `تم إغلاق رواتب ${closePreview.period} بالقيد ${result.transaction?.publicId ?? "المحاسبي"}، دون حركة صندوق.`);
+      const [updated] = await Promise.all([
+        getPosEmployeeMonthClosePreview(token, closePreview.period),
+        loadEmployees(true),
+        selectedId !== null ? loadLedger(selectedId) : Promise.resolve(),
+      ]);
+      setClosePreview(updated);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        clearAuthentication();
+        return;
+      }
+      setError(errorText(caught));
+      // Stale preview must never be offered as a retry confirmation.
+      setClosePreview(null);
+    } finally {
+      setCloseBusy(false);
+    }
+  }
+
   function buildEmployeeStatement(): A4ReportOptions | null {
     if (!selected || !ledger) {
       return null;
@@ -1172,6 +1230,66 @@ export default function EmployeesPage() {
           {message}
         </div>
       )}
+
+      <section className="employees-month-close employees-form-card">
+        <div className="employees-section-heading">
+          <div>
+            <h2>تسوية وإغلاق رواتب الشهر</h2>
+            <p>بعد إدخال استحقاق راتب لكل حساب، راجع السلف واضغط الإغلاق مرة واحدة.
+              تُجرى المقاصة بدون سحب نقدي جديد وبدون خصم راتب ثانٍ من الربح.</p>
+          </div>
+        </div>
+        <div className="employees-month-close-controls">
+          <label>
+            <span>شهر الاستحقاق</span>
+            <input type="month" value={closePeriod}
+              onChange={(event) => { setClosePeriod(event.target.value); setClosePreview(null); }} />
+          </label>
+          <button type="button" className="secondary-button" disabled={closeBusy}
+            onClick={() => void previewSalaryMonth()}>
+            {closeBusy ? "جارٍ التحقق..." : "معاينة إغلاق الشهر"}
+          </button>
+        </div>
+        {closePreview?.period === closePeriod && (
+          <div className="employees-month-close-preview">
+            {closePreview.message && <p className="employees-month-close-note">{closePreview.message}</p>}
+            {closePreview.employees.length > 0 && (
+              <div className="employees-month-close-table-wrap">
+                <table>
+                  <thead><tr>
+                    <th>الحساب</th><th>سلف الشهر</th><th>استحقاق الشهر</th>
+                    <th>المقاصة</th><th>مستحق غير مدفوع</th><th>المراجعة</th>
+                  </tr></thead>
+                  <tbody>{closePreview.employees.map((employee) => (
+                    <tr key={employee.employeeId}>
+                      <td>{employee.employeeName}</td>
+                      <td>{formatMinor(employee.monthlyAdvancesMinor)}</td>
+                      <td>{formatMinor(employee.salaryAccrualMinor)}</td>
+                      <td>{formatMinor(employee.offsetMinor)}</td>
+                      <td>{formatMinor(employee.payableRemainderMinor)}</td>
+                      <td>{employee.issue ?? "جاهز"}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+            <div className="employees-month-close-footer">
+              <span>إجمالي المقاصة: <b>{formatMinor(closePreview.totalOffsetMinor)}</b></span>
+              {closePreview.closed ? (
+                <strong>الشهر مغلق — لا يمكن تكرار العملية</strong>
+              ) : (
+                <button type="button" className="primary-button"
+                  disabled={!closePreview.canClose || closeBusy}
+                  onClick={() => void closeSalaryMonth()}>
+                  {closeBusy ? "جارٍ التسوية..." : "تسوية وإغلاق رواتب الشهر"}
+                </button>
+              )}
+            </div>
+            <small>الإغلاق لا يغيّر مسحوبات الصندوق السابقة ولا يسجّل مصروف راتب جديد.
+              صافي الربح يحتسب الاستحقاق الذي أدخلته مسبقًا. أي مستحق متبقٍ يظل مفتوحًا في حساب الموظف.</small>
+          </div>
+        )}
+      </section>
 
       {showNew && (
         <form
