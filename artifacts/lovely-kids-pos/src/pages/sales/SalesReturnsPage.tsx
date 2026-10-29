@@ -123,6 +123,17 @@ function allocateProportionalMinor(
   );
 }
 
+function palestineBusinessDate() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Hebron",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function createIdempotencyKey() {
   const randomPart =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -207,6 +218,9 @@ export default function SalesReturnsPage() {
     useState(Boolean(requestedReturnPublicId));
   const [historyInput, setHistoryInput] =
     useState(requestedReturnPublicId);
+  const [historyDate, setHistoryDate] =
+    useState(palestineBusinessDate);
+  const [historyTruncated, setHistoryTruncated] = useState(false);
   const [returnHistory, setReturnHistory] =
     useState<PosReturnHistorySummary[]>([]);
   const [historySelected, setHistorySelected] =
@@ -403,7 +417,7 @@ export default function SalesReturnsPage() {
     token,
   ]);
 
-  async function loadReturnHistory(publicId?: string) {
+  async function loadReturnHistory(publicId?: string, date?: string) {
     if (!session) return;
     setHistoryBusy(true);
     setHistoryError("");
@@ -412,7 +426,10 @@ export default function SalesReturnsPage() {
         token,
         session.registerKey,
         publicId,
+        date,
       );
+      setHistoryDate(result.businessDate);
+      setHistoryTruncated(result.truncated);
       setReturnHistory(result.recent);
       setHistorySelected(result.selected);
       setHistoryInput(result.selected?.publicId ?? publicId ?? "");
@@ -435,7 +452,7 @@ export default function SalesReturnsPage() {
       setHistoryVisible(true);
       void loadReturnHistory(requestedReturnPublicId);
     } else {
-      void loadReturnHistory();
+      void loadReturnHistory(undefined, palestineBusinessDate());
     }
   }, [token, session?.registerKey, requestedReturnPublicId]);
 
@@ -478,7 +495,7 @@ export default function SalesReturnsPage() {
       const currentSession = await getCurrentCashSession(token, session!.registerKey);
       setSession(currentSession.session);
       window.alert("تم تصحيح الاسترداد إلى حساب الزبون مع عكس حركة الصندوق.");
-      await loadReturnHistory(selected.publicId);
+      await loadReturnHistory(selected.publicId, selected.businessDate);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         clearAuthentication();
@@ -1156,14 +1173,13 @@ export default function SalesReturnsPage() {
       </header>
 
 
-      <nav className="return-mode-tabs" aria-label="طريقة التعامل مع المردودات">
+      <nav className="return-mode-tabs" aria-label="نوع العملية">
         <button type="button"
           className={`return-mode-tab ${!historyVisible ? "is-active" : ""}`}
           aria-current={!historyVisible ? "page" : undefined}
           disabled={submitBusy || historyBusy}
           onClick={() => setHistoryVisible(false)}>
-          <span className="return-mode-tab-icon">＋</span>
-          تسجيل مردود جديد
+          <span aria-hidden="true">＋</span> مردود جديد
         </button>
         <button type="button"
           className={`return-mode-tab ${historyVisible ? "is-active" : ""}`}
@@ -1171,135 +1187,179 @@ export default function SalesReturnsPage() {
           disabled={submitBusy || historyBusy}
           onClick={() => {
             setHistoryVisible(true);
-            void loadReturnHistory(historySelected?.publicId || requestedReturnPublicId || undefined);
+            void loadReturnHistory(requestedReturnPublicId || undefined,
+              requestedReturnPublicId ? undefined : historyDate);
           }}>
-          <span className="return-mode-tab-icon">↩</span>
-          مراجعة وتعديل مردود سابق
+          <span aria-hidden="true">▤</span> سجل المردودات والتعديل
         </button>
       </nav>
 
       {historyVisible && (
         <article className="return-history-panel">
-          <div className="return-history-heading">
+          <header className="return-history-header">
             <div>
-              <h3>سجل المردودات</h3>
-              <p>بحث وتصفح المردودات السابقة، مع تصحيح طريقة الاسترداد أو إلغاء المردود.</p>
+              <h3>سجل مردودات المبيعات</h3>
+              <p>كل مردود بسطر مستقل. اختر التاريخ لعرض مردوداته فقط.</p>
             </div>
-            <span className="return-history-count">آخر {returnHistory.length} مردود</span>
-          </div>
-
-          <div className="return-history-toolbar">
-            <form className="return-history-find" onSubmit={(event) => {
-              event.preventDefault();
-              void loadReturnHistory(historyInput.trim() || undefined);
-            }}>
-              <label className="sales-return-field">
-                <span>البحث برقم المردود</span>
-                <input dir="ltr" autoComplete="off"
-                  placeholder="MRET-YYYYMMDD-XXXXXXXX"
-                  value={historyInput}
-                  onChange={(event) => setHistoryInput(event.target.value.toUpperCase())}
-                  disabled={historyBusy || submitBusy} />
-              </label>
-              <button type="submit" className="primary-button return-history-find-button"
-                disabled={historyBusy || submitBusy}>
-                {historyBusy ? "جاري البحث…" : "بحث"}
-              </button>
-            </form>
-            <label className="sales-return-field return-history-recent-picker">
-              <span>انتقال سريع لآخر المردودات</span>
-              <select
-                value={returnHistory.some((item) => item.publicId === historySelected?.publicId)
-                  ? historySelected?.publicId || "" : ""}
-                disabled={historyBusy || submitBusy || returnHistory.length === 0}
+            <div className="return-history-datebar">
+              <label htmlFor="return-history-date">تاريخ المردودات</label>
+              <input id="return-history-date" type="date"
+                value={historyDate}
+                disabled={historyBusy || submitBusy}
                 onChange={(event) => {
-                  if (event.target.value) void loadReturnHistory(event.target.value);
-                }}>
-                <option value="">اختر مردودًا من السجل</option>
-                {returnHistory.map((item) => (
-                  <option key={item.id} value={item.publicId}>
-                    {item.publicId.slice(-8)} — {formatMoney(item.refundAmountMinor)}
-                    {item.status === "voided" ? " (ملغى)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  const next = event.target.value;
+                  setHistoryDate(next);
+                  setHistoryInput("");
+                  setHistorySelected(null);
+                  setHistoryCorrectionOpen(false);
+                  if (next) void loadReturnHistory(undefined, next);
+                }} />
+              <button type="button" className="secondary-button"
+                disabled={historyBusy || submitBusy}
+                onClick={() => {
+                  const today = palestineBusinessDate();
+                  setHistoryDate(today);
+                  void loadReturnHistory(undefined, today);
+                }}>اليوم</button>
+            </div>
+          </header>
+
+          <div className="return-history-summary">
+            <div><span>عدد مردودات اليوم المحدد</span>
+              <strong>{returnHistory.length}{historyTruncated ? "+" : ""}</strong></div>
+            <div><span>إجمالي المردودات المكتملة</span>
+              <strong>{formatMoney(returnHistory.filter((item) => item.status === "completed")
+                .reduce((sum, item) => sum + item.refundAmountMinor, 0))}</strong></div>
+            <div><span>مردودات نقدية</span>
+              <strong>{formatMoney(returnHistory.filter((item) =>
+                item.status === "completed" && item.refundMethod === "cash")
+                .reduce((sum, item) => sum + item.refundAmountMinor, 0))}</strong></div>
+            <div><span>مردودات لحساب الزبون</span>
+              <strong>{formatMoney(returnHistory.filter((item) =>
+                item.status === "completed" && item.refundMethod === "customer")
+                .reduce((sum, item) => sum + item.refundAmountMinor, 0))}</strong></div>
+          </div>
+          {historyTruncated && <p className="return-history-warning">
+            يوجد أكثر من 199 مردودًا بهذا التاريخ؛ المعروض أحدث 200 عملية فقط.
+          </p>}
+
+          <div className="return-history-findbar">
+            <label htmlFor="return-history-search">بحث برقم مردود قديم</label>
+            <form onSubmit={(event) => {
+              event.preventDefault();
+              if (historyInput.trim()) void loadReturnHistory(historyInput.trim());
+              else void loadReturnHistory(undefined, historyDate);
+            }}>
+              <input id="return-history-search" dir="ltr"
+                placeholder="MRET-YYYYMMDD-XXXXXXXX"
+                value={historyInput}
+                onChange={(event) => setHistoryInput(event.target.value.toUpperCase())}
+                disabled={historyBusy || submitBusy} />
+              <button type="submit" className="secondary-button"
+                disabled={historyBusy || submitBusy}>بحث</button>
+            </form>
           </div>
 
           {historyError && <div className="alert error-alert">{historyError}</div>}
 
-          {historySelected ? (
-            <div className="return-history-detail">
-              <div className="return-history-nav">
-                <button className="secondary-button" type="button"
-                  disabled={!historySelected.previousPublicId || historyBusy || submitBusy}
-                  onClick={() => void loadReturnHistory(historySelected.previousPublicId || undefined)}>
-                  المردود السابق
-                </button>
-                <div className="return-history-current">
-                  <span>رقم المردود</span>
-                  <strong dir="ltr">{historySelected.publicId}</strong>
-                </div>
-                <button className="secondary-button" type="button"
-                  disabled={!historySelected.nextPublicId || historyBusy || submitBusy}
-                  onClick={() => void loadReturnHistory(historySelected.nextPublicId || undefined)}>
-                  المردود التالي
-                </button>
+          <div className="return-history-list">
+            <table className="return-history-table">
+              <thead>
+                <tr>
+                  <th>رقم المردود</th>
+                  <th>الوقت</th>
+                  <th>اسم الزبون</th>
+                  <th>قيمة المردود</th>
+                  <th>طريقة الاسترداد</th>
+                  <th>الحالة</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnHistory.map((item) => (
+                  <tr key={item.id} className={historySelected?.id === item.id
+                    ? "is-selected" : ""}>
+                    <td><strong className="return-history-id" dir="ltr">
+                      {item.publicId}
+                    </strong></td>
+                    <td>{new Intl.DateTimeFormat("ar-PS", {
+                      timeZone: "Asia/Hebron",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(new Date(item.createdAt))}</td>
+                    <td>{item.customerName || "زبون نقدي"}</td>
+                    <td><strong className="return-history-amount">
+                      {formatMoney(item.refundAmountMinor)}</strong></td>
+                    <td>{refundMethodLabel(item.refundMethod)}</td>
+                    <td><span className={`return-history-status ${item.status === "completed"
+                      ? "is-completed" : "is-voided"}`}>
+                      {item.status === "completed" ? "مكتمل" : "ملغى"}
+                    </span></td>
+                    <td>
+                      <button type="button"
+                        className={item.status === "completed"
+                          ? "return-history-edit-btn" : "return-history-view-btn"}
+                        disabled={historyBusy || submitBusy}
+                        onClick={() => {
+                          void loadReturnHistory(item.publicId, historyDate).then(() => {
+                            setHistoryCorrectionOpen(item.status === "completed"
+                              && item.refundMethod === "cash");
+                          });
+                        }}>
+                        {item.status === "completed" ? "✏️ عرض وتعديل" : "عرض"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!historyBusy && returnHistory.length === 0 && (
+              <div className="return-history-empty">
+                <strong>لا توجد مردودات في هذا التاريخ</strong>
+                <span>اختر يومًا آخر أو استخدم البحث برقم المردود.</span>
               </div>
+            )}
+            {historyBusy && <div className="return-history-loading">جاري تحميل المردودات…</div>}
+          </div>
 
-              <div className="return-history-stats">
-                <div className="return-history-stat">
-                  <span>قيمة المردود</span>
-                  <strong>{formatMoney(historySelected.refundAmountMinor)}</strong>
+          {historySelected && (
+            <section className="return-history-detail">
+              <div className="return-history-detail-title">
+                <div>
+                  <span>تفاصيل المردود المحدد</span>
+                  <h4 dir="ltr">{historySelected.publicId}</h4>
                 </div>
-                <div className="return-history-stat">
-                  <span>طريقة الاسترداد</span>
-                  <strong>{refundMethodLabel(historySelected.refundMethod)}</strong>
-                </div>
-                <div className="return-history-stat">
-                  <span>اسم الزبون</span>
-                  <strong>{historySelected.customerName || "غير محدد"}</strong>
-                </div>
-                <div className="return-history-stat">
-                  <span>الحالة والتاريخ</span>
-                  <strong>{historySelected.status === "completed" ? "مكتمل" : "ملغى"}</strong>
-                  <small>{formatDateTime(historySelected.createdAt)}</small>
-                </div>
+                <button type="button" className="secondary-button"
+                  onClick={() => {
+                    setHistorySelected(null);
+                    setHistoryCorrectionOpen(false);
+                  }}>إغلاق التفاصيل ✕</button>
               </div>
-
-              <div className="return-history-note">
-                <strong>سبب المردود</strong>
-                <span>{historySelected.reason}</span>
+              <div className="return-history-info">
+                <div><span>الزبون</span><strong>{historySelected.customerName || "زبون نقدي"}</strong></div>
+                <div><span>المبلغ</span><strong>{formatMoney(historySelected.refundAmountMinor)}</strong></div>
+                <div><span>طريقة الاسترداد</span><strong>{refundMethodLabel(historySelected.refundMethod)}</strong></div>
+                <div><span>الحالة</span><strong>{historySelected.status === "completed" ? "مكتمل" : "ملغى"}</strong></div>
               </div>
-
+              <div className="return-history-detail-reason">
+                <strong>سبب المردود:</strong> {historySelected.reason}
+              </div>
               <div className="return-history-items">
-                <h4>الأصناف المرتجعة</h4>
-                <div className="today-sales-table-wrap">
-                  <table className="today-sales-table">
-                    <thead>
-                      <tr>
-                        <th>اسم الصنف</th>
-                        <th>الباركود</th>
-                        <th>اللون / المقاس</th>
-                        <th>الكمية</th>
-                        <th>قيمة المرتجع</th>
+                <table className="return-history-table">
+                  <thead><tr><th>الصنف</th><th>الباركود</th><th>اللون / المقاس</th><th>الكمية</th><th>القيمة</th></tr></thead>
+                  <tbody>
+                    {historySelected.items.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.productNameAr}</td>
+                        <td dir="ltr">{item.barcode || "—"}</td>
+                        <td>{[item.color,item.size].filter(Boolean).join(" / ") || "—"}</td>
+                        <td>{item.quantity}</td>
+                        <td>{formatMoney(item.refundAmountMinor)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {historySelected.items.map((item) => (
-                        <tr key={item.id}>
-                          <td><strong>{item.productNameAr}</strong></td>
-                          <td dir="ltr">{item.barcode || "—"}</td>
-                          <td>{[item.color, item.size].filter(Boolean).join(" / ") || "—"}</td>
-                          <td>{item.quantity}</td>
-                          <td>{formatMoney(item.refundAmountMinor)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-
               {historySelected.status === "completed" && (
                 <div className="return-history-actions">
                   <button type="button" className="primary-button"
@@ -1308,9 +1368,7 @@ export default function SalesReturnsPage() {
                       setHistoryCorrectionOpen(!historyCorrectionOpen);
                       setHistoryCorrectionCustomerId(historySelected.customerId ?? null);
                       setHistoryError("");
-                    }}>
-                    {historyCorrectionOpen ? "إغلاق التعديل" : "✏️ تعديل المردود"}
-                  </button>
+                    }}>✏️ تعديل طريقة الاسترداد</button>
                   <button type="button" className="secondary-button"
                     disabled={historyBusy || submitBusy}
                     onClick={() => void handleVoidReturn(
@@ -1318,29 +1376,33 @@ export default function SalesReturnsPage() {
                       historySelected.refundAmountMinor,
                       null,
                       historySelected.refundMethod,
-                    )}>
-                    إلغاء المردود
+                    )}>إلغاء المردود</button>
+                  <button type="button" className="secondary-button"
+                    disabled={!historySelected.previousPublicId || historyBusy || submitBusy}
+                    onClick={() => void loadReturnHistory(historySelected.previousPublicId || undefined, historyDate)}>
+                    المردود السابق
+                  </button>
+                  <button type="button" className="secondary-button"
+                    disabled={!historySelected.nextPublicId || historyBusy || submitBusy}
+                    onClick={() => void loadReturnHistory(historySelected.nextPublicId || undefined, historyDate)}>
+                    المردود التالي
                   </button>
                 </div>
               )}
-
               {historyCorrectionOpen && historySelected.status === "completed" && (
                 <section className="return-history-editor">
-                  <div className="return-history-editor-heading">
-                    <h4>تصحيح طريقة الاسترداد</h4>
-                    <p>هذا التصحيح محاسبي فقط؛ لن تتغير كمية أو تكلفة الأصناف بالمخزون.</p>
-                  </div>
+                  <h4>تصحيح طريقة الاسترداد</h4>
+                  <p>التصحيح محاسبي فقط ولا يغيّر المخزون أو كمية المردود.</p>
                   {historySelected.refundMethod === "cash" ? (
                     <>
-                      <div className="return-history-editor-fields">
-                        <div className="return-history-editor-customer">
+                      <div className="return-history-editor-grid">
+                        <div className="return-history-customer">
                           <CustomerPicker customers={customers}
                             value={historyCorrectionCustomerId}
                             disabled={historyBusy || submitBusy}
-                            label="حساب الزبون الذي سيُضاف له رصيد المردود"
+                            label="حساب الزبون"
                             placeholder="اختر الزبون"
-                            onChange={(customer) =>
-                              setHistoryCorrectionCustomerId(customer?.id ?? null)} />
+                            onChange={(customer) => setHistoryCorrectionCustomerId(customer?.id ?? null)} />
                         </div>
                         <label className="sales-return-field">
                           <span>سبب التصحيح</span>
@@ -1350,26 +1412,22 @@ export default function SalesReturnsPage() {
                         </label>
                       </div>
                       <div className="return-history-editor-footer">
-                        <p>سيعود {formatMoney(historySelected.refundAmountMinor)} لرصيد الصندوق محاسبيًا،
-                          ويُضاف رصيد بنفس القيمة لحساب الزبون. تأكد أن المبلغ لم يُدفع نقدًا بالفعل.</p>
+                        <p>سيعود {formatMoney(historySelected.refundAmountMinor)} لرصيد الصندوق محاسبيًا
+                          وينعكس كرصيد لصالح الزبون. لا تؤكد إذا تم تسليم النقد فعليًا.</p>
                         <button type="button" className="primary-button"
                           disabled={historyBusy || submitBusy || !historyCorrectionCustomerId}
                           onClick={() => void handleCorrectHistoryReturn()}>
-                          {historyBusy ? "جارٍ حفظ التصحيح…" : "حفظ التصحيح إلى حساب الزبون"}
+                          حفظ التصحيح إلى حساب الزبون
                         </button>
                       </div>
                     </>
                   ) : (
-                    <p>تعديل طريقة الاسترداد متاح حاليًا من نقدي إلى حساب الزبون فقط.
-                      لتغيير أصناف المردود أو الكمية يمكن إلغاء المردود وإعادة تسجيله.</p>
+                    <p>يمكن تصحيح النقدي إلى حساب الزبون فقط. لتغيير الأصناف أو الكمية،
+                      استخدم إلغاء المردود وإعادة تسجيله.</p>
                   )}
                 </section>
               )}
-            </div>
-          ) : (
-            <div className="return-history-empty">
-              {historyBusy ? "جارٍ تحميل سجل المردودات…" : "لا يوجد مردود محدد للعرض."}
-            </div>
+            </section>
           )}
         </article>
       )}
