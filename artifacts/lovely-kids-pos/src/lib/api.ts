@@ -3020,6 +3020,19 @@ export function createPosSale(
   );
 }
 
+export interface PosWebCashMovement {
+  transactionId: string;
+  orderId: string;
+  event: "done" | "local_courier_cash_handover" | "local_courier_reverse_cash";
+  amountMinor: number;
+  createdAt: string;
+  customerName: string | null;
+  fulfillmentMethod: string | null;
+  productNames: string;
+  pieces: number;
+  subtotalMinor: number;
+}
+
 export interface PosTodaySalesResult {
   session: {
     id: string;
@@ -3028,6 +3041,8 @@ export interface PosTodaySalesResult {
   } | null;
 
   sales: PosSaleResult[];
+
+  webCashMovements: PosWebCashMovement[];
 
   saleReturns: Array<
     PosSaleReturnResult & {
