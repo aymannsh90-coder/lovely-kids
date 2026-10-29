@@ -18124,3 +18124,65 @@ button.inventory-intelligence-metric {
   .return-history-detail { padding: 12px; }
   .return-history-actions { grid-template-columns: 1fr; }
 }
+
+
+/* Daily collections are recorded by actual receipt date, not sale date. */
+.today-sales-collection-hint {
+  margin: 14px 0 4px;
+  padding: 10px 14px;
+  background: #f6fafc;
+  border-inline-start: 3px solid #7dabbc;
+  border-radius: 7px;
+  color: #486779;
+  font-size: .85rem;
+  line-height: 1.8;
+}
+.today-debt-collections {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #dce8ed;
+  border-radius: 14px;
+  background: #fff;
+}
+.today-debt-collections .today-sales-heading {
+  margin-bottom: 13px;
+}
+.today-debt-collections .today-sales-heading h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.today-debt-collections .today-sales-heading p {
+  margin: 4px 0 0;
+  color: #6c8190;
+  font-size: .85rem;
+}
+.today-sales-collections-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e5edf1;
+  border-radius: 10px;
+  background: #f7fafb;
+  font-size: .85rem;
+}
+.today-sales-collections-totals span { color: #627988; }
+.today-sales-collections-totals strong {
+  color: #223e4d;
+  font-weight: 800;
+  margin-inline-start: 4px;
+}
+.today-sales-collection-empty {
+  color: #8394a0;
+  text-align: center;
+  padding: 18px 12px;
+  border: 1px dashed #dce7ec;
+  border-radius: 10px;
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .today-debt-collections { padding: 12px; }
+  .today-sales-collections-totals { display: grid; gap: 9px; }
+}
