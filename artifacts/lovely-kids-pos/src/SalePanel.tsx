@@ -220,6 +220,55 @@ function bidiSafePromotionLabel(label: string) {
   );
 }
 
+type VisaBankProcessor = "arab" | "bop";
+
+/** One visual component for regular sales and customer-balance settlement.
+ * Keep payment state/dispatch owned by SalePanel so financial logic is unchanged.
+ */
+function VisaBankButton({
+  bank,
+  selected,
+  onClick,
+}: {
+  bank: VisaBankProcessor;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const [logoSourceIndex, setLogoSourceIndex] = useState(0);
+  const isArab = bank === "arab";
+  const bankName = isArab ? "البنك العربي" : "بنك فلسطين";
+  const bopLogoSources = [
+    "https://www.sibos.com/sites/default/files/styles/large/public/partner_portal/2026-06/BankofPalestine-logo%202026.png?itok=SGYZ9J0q",
+    "https://upload.wikimedia.org/wikipedia/commons/1/1c/Logo_de_Bank_of_Palestine.jpg",
+  ];
+
+  return (
+    <button
+      type="button"
+      className={`sale-bank-visa-button sale-bank-visa-button--${bank}${selected ? " is-selected" : ""}`}
+      aria-pressed={selected}
+      onClick={onClick}
+    >
+      <span className="sale-bank-visa-button__logo" aria-hidden="true">
+        {isArab ? (
+          <img src="/brand-arab-bank.svg" alt="" width={52} height={30} />
+        ) : logoSourceIndex < bopLogoSources.length ? (
+          <img
+            src={bopLogoSources[logoSourceIndex]}
+            alt=""
+            width={29}
+            height={29}
+            onError={() => setLogoSourceIndex((index) => Math.min(index + 1, bopLogoSources.length))}
+          />
+        ) : (
+          <span className="sale-bank-visa-button__logo-fallback">بنك فلسطين</span>
+        )}
+      </span>
+      <span className="sale-bank-visa-button__label">فيزا {bankName}</span>
+    </button>
+  );
+}
+
 export default function SalePanel({
   token,
   session,
@@ -2208,49 +2257,22 @@ export default function SalePanel({
                 </div>
 
                 <div className="sale-payment-method-row">
-                  <button
-                    type="button"
-                    className={
-                      paymentMethod ===
-                        "card" &&
-                      cardProcessor ===
-                        "arab"
-                        ? "primary-button"
-                        : "secondary-button"
-                    }
+                  <VisaBankButton
+                    bank="arab"
+                    selected={paymentMethod === "card" && cardProcessor === "arab"}
                     onClick={() => {
-                      setPaymentMethod(
-                        "card",
-                      );
-                      setCardProcessor(
-                        "arab",
-                      );
+                      setPaymentMethod("card");
+                      setCardProcessor("arab");
                     }}
-                  >
-                    💳 فيزا البنك العربي
-                  </button>
-
-                  <button
-                    type="button"
-                    className={
-                      paymentMethod ===
-                        "card" &&
-                      cardProcessor ===
-                        "bop"
-                        ? "primary-button"
-                        : "secondary-button"
-                    }
+                  />
+                  <VisaBankButton
+                    bank="bop"
+                    selected={paymentMethod === "card" && cardProcessor === "bop"}
                     onClick={() => {
-                      setPaymentMethod(
-                        "card",
-                      );
-                      setCardProcessor(
-                        "bop",
-                      );
+                      setPaymentMethod("card");
+                      setCardProcessor("bop");
                     }}
-                  >
-                    💳 فيزا بنك فلسطين
-                  </button>
+                  />
                 </div>
               </div>
             </div>
@@ -2616,49 +2638,22 @@ export default function SalePanel({
                       💵 كاش
                     </button>
 
-                    <button
-                      type="button"
-                      className={
-                        settlementMethod ===
-                          "card" &&
-                        settlementCardProcessor ===
-                          "arab"
-                          ? "primary-button"
-                          : "secondary-button"
-                      }
+                    <VisaBankButton
+                      bank="arab"
+                      selected={settlementMethod === "card" && settlementCardProcessor === "arab"}
                       onClick={() => {
-                        setSettlementMethod(
-                          "card",
-                        );
-                        setSettlementCardProcessor(
-                          "arab",
-                        );
+                        setSettlementMethod("card");
+                        setSettlementCardProcessor("arab");
                       }}
-                    >
-                      💳 فيزا البنك العربي
-                    </button>
-
-                    <button
-                      type="button"
-                      className={
-                        settlementMethod ===
-                          "card" &&
-                        settlementCardProcessor ===
-                          "bop"
-                          ? "primary-button"
-                          : "secondary-button"
-                      }
+                    />
+                    <VisaBankButton
+                      bank="bop"
+                      selected={settlementMethod === "card" && settlementCardProcessor === "bop"}
                       onClick={() => {
-                        setSettlementMethod(
-                          "card",
-                        );
-                        setSettlementCardProcessor(
-                          "bop",
-                        );
+                        setSettlementMethod("card");
+                        setSettlementCardProcessor("bop");
                       }}
-                    >
-                      💳 فيزا بنك فلسطين
-                    </button>
+                    />
                   </div>
                 </div>
 
