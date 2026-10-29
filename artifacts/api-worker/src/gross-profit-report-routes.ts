@@ -13,6 +13,7 @@ import {
   posSaleReturnItemsTable,
   posSaleReturnsTable,
   posSalesTable,
+  productCostLedgerTable,
   productCostStateTable,
   productsTable,
 } from "@workspace/db/schema";
