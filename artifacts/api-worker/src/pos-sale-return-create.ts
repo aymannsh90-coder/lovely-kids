@@ -1754,8 +1754,12 @@ export async function handleCreatePosSaleReturn(
               costTotalMinor:
                 estimatedCost.costTotalMinor,
 
+              // When the original snapshot is missing, reuse an already
+              // verified unchanged cost; otherwise keep it estimated.
               costQuality:
-                "estimated",
+                estimatedCost.costQuality === "confirmed"
+                  ? "confirmed"
+                  : "estimated",
             });
 
           continue;
