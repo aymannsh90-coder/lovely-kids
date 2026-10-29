@@ -3033,6 +3033,18 @@ export interface PosWebCashMovement {
   subtotalMinor: number;
 }
 
+export interface PosCustomerDebtReceipt {
+  id: string;
+  publicId: string;
+  businessDate: string;
+  createdAt: string;
+  customerId: string | null;
+  customerName: string;
+  paymentMethod: "cash" | "card" | "bank";
+  amountMinor: number;
+  notes: string | null;
+}
+
 export interface PosTodaySalesResult {
   session: {
     id: string;
@@ -3043,6 +3055,8 @@ export interface PosTodaySalesResult {
   sales: PosSaleResult[];
 
   webCashMovements: PosWebCashMovement[];
+
+  customerReceipts: PosCustomerDebtReceipt[];
 
   saleReturns: Array<
     PosSaleReturnResult & {

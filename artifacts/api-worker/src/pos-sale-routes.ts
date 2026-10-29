@@ -8,6 +8,7 @@ import {
   financeExchangeRatesTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
+  financeVouchersTable,
   posPurchaseItemsTable,
   posPurchasesTable,
   posSaleItemCostsTable,
@@ -4883,6 +4884,82 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
       ),
   ]);
 
+  // Read-only customer debt receipts. These are COLLECTIONS, never new
+  // sales: sales remain dated when invoiced, receipt stays dated when posted.
+  // Only posted, non-voided vouchers with a posted journal can appear.
+  const customerReceiptRows = await db
+    .select({
+      id: financeVouchersTable.id,
+      publicId: financeVouchersTable.publicId,
+      businessDate: financeVouchersTable.businessDate,
+      paymentMethod: financeVouchersTable.paymentMethod,
+      amountMinor: financeVouchersTable.amountMinor,
+      createdAt: financeVouchersTable.createdAt,
+      customerId: financeVouchersTable.partyId,
+      customerName: customersTable.name,
+      cashRegister: cashSessionsTable.registerKey,
+      cashCurrency: cashSessionsTable.currencyCode,
+      voucherCurrency: financeVouchersTable.currencyCode,
+      notes: financeVouchersTable.notes,
+    })
+    .from(financeVouchersTable)
+    .innerJoin(
+      financeTransactionsTable,
+      eq(financeTransactionsTable.id, financeVouchersTable.financeTransactionId),
+    )
+    .leftJoin(
+      customersTable,
+      eq(customersTable.id, financeVouchersTable.partyId),
+    )
+    .leftJoin(
+      cashSessionsTable,
+      eq(cashSessionsTable.id, financeVouchersTable.cashSessionId),
+    )
+    .where(
+      and(
+        eq(financeVouchersTable.businessDate, businessDate),
+        eq(financeVouchersTable.partyType, "customer"),
+        eq(financeVouchersTable.status, "posted"),
+        eq(financeTransactionsTable.status, "posted"),
+        or(
+          eq(financeVouchersTable.voucherType, "customer_receipt"),
+          and(
+            eq(financeVouchersTable.voucherType, "receipt"),
+            eq(financeVouchersTable.voucherPurpose, "customer_receipt"),
+          ),
+        ),
+      ),
+    )
+    .orderBy(
+      asc(financeVouchersTable.createdAt),
+      asc(financeVouchersTable.id),
+    );
+
+  const customerReceipts = customerReceiptRows
+    .filter((receipt) => {
+      if (receipt.paymentMethod === "cash") {
+        // Do not count foreign currency drawer receipts as ILS cash.
+        return receipt.cashRegister === registerKey &&
+          receipt.cashCurrency === "ILS" &&
+          (receipt.voucherCurrency === "ILS" || receipt.voucherCurrency === null);
+      }
+      // Bank/card receipts have no cash session/register association.
+      // Show them once in the main report, and NEVER in cash-box totals.
+      return registerKey === "main" &&
+        (receipt.paymentMethod === "bank" || receipt.paymentMethod === "card");
+    })
+    .map((receipt) => ({
+      id: String(receipt.id),
+      publicId: receipt.publicId,
+      businessDate: receipt.businessDate,
+      createdAt: receipt.createdAt.toISOString(),
+      customerId: receipt.customerId === null ? null : String(receipt.customerId),
+      customerName: receipt.customerName ?? "زبون",
+      paymentMethod: receipt.paymentMethod,
+      amountMinor: receipt.amountMinor,
+      notes: receipt.notes,
+    }));
+
   // Cash-only web order movements for the physical main register.
   // Deliberately exclude courier-company receivables and card receipts.
   // A local-courier handover is a cash advance, not a second sale at delivery.
@@ -5241,6 +5318,7 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
     businessDate,
 
     webCashMovements,
+    customerReceipts,
 
     sales: sales.map((sale) => {
       const refundAmountMinor =

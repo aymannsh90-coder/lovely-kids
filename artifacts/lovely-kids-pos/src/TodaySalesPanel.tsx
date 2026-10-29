@@ -21,6 +21,7 @@ import {
   type PosSaleItemResult,
   type PosSaleResult,
   type PosWebCashMovement,
+  type PosCustomerDebtReceipt,
   type PosExchangeSummary,
   type PosMobileReturnResult,
   type PosSaleReturnResult,
@@ -272,6 +273,10 @@ export default function TodaySalesPanel({
   // Based on posted CASH_MAIN entries, not the date an order was placed.
   const [webCashMovements, setWebCashMovements] =
     useState<PosWebCashMovement[]>([]);
+
+  // Posted customer debt collections, not additional sales.
+  const [customerReceipts, setCustomerReceipts] =
+    useState<PosCustomerDebtReceipt[]>([]);
 
   const [saleReturns, setSaleReturns] =
     useState<
@@ -601,6 +606,18 @@ export default function TodaySalesPanel({
       ],
     );
 
+  const customerCashReceiptsMinor = customerReceipts
+    .filter((receipt) => receipt.paymentMethod === "cash")
+    .reduce((total, receipt) => total + receipt.amountMinor, 0);
+  const customerNonCashReceiptsMinor = customerReceipts
+    .filter((receipt) => receipt.paymentMethod !== "cash")
+    .reduce((total, receipt) => total + receipt.amountMinor, 0);
+  const customerReceiptTotalMinor =
+    customerCashReceiptsMinor + customerNonCashReceiptsMinor;
+  // Excludes courier advances and unrelated register expenses/withdrawals.
+  const cashSalesAndReceiptsNetMinor =
+    cashSalesMinor + customerCashReceiptsMinor - cashReturnedMinor;
+
   const netTotalMinor = useMemo(
     () =>
       activeSales.reduce(
@@ -637,6 +654,7 @@ export default function TodaySalesPanel({
         result.sales as TodaySaleResult[],
       );
       setWebCashMovements(result.webCashMovements ?? []);
+      setCustomerReceipts(result.customerReceipts ?? []);
       setSaleReturns(
         result.saleReturns ?? [],
       );
@@ -873,7 +891,8 @@ export default function TodaySalesPanel({
                   rows.length === 0 &&
                   saleReturnRows.length === 0 &&
                   mobileReturnRows.length === 0 &&
-                  webCashMovements.length === 0
+                  webCashMovements.length === 0 &&
+                  customerReceipts.length === 0
                 )
               }
               onClick={printDailyReport}
@@ -947,8 +966,20 @@ export default function TodaySalesPanel({
           )}
 
           <div>
-            <span>مبيعات على الحساب</span>
+            <span>مبيعات على الحساب (لم تُقبض بعد البيع)</span>
             <strong>{formatMinor(accountSalesMinor)}</strong>
+          </div>
+          <div>
+            <span>قبض نقدي من ذمم الزبائن</span>
+            <strong>{formatMinor(customerCashReceiptsMinor)}</strong>
+          </div>
+          <div>
+            <span>قبض ذمم عبر البنك أو الفيزا (غير نقدي)</span>
+            <strong>{formatMinor(customerNonCashReceiptsMinor)}</strong>
+          </div>
+          <div>
+            <span>صافي نقد المبيعات وقبض الذمم</span>
+            <strong>{formatMinor(cashSalesAndReceiptsNetMinor)}</strong>
           </div>
 
           <div>
@@ -972,11 +1003,16 @@ export default function TodaySalesPanel({
           </div>
 
           <div>
-            <span>صافي المبيعات</span>
+            <span>صافي المبيعات (يشمل الآجل، دون قبض الديون)</span>
             <strong>{formatMinor(netTotalMinor)}</strong>
           </div>
         </div>
 
+        <p className="today-sales-collection-hint">
+          البيع على الحساب يُسجل بتاريخ الفاتورة ضمن المبيعات والذمم.
+          وعند قبض الدين يظهر السند في تحصيلات يوم القبض، دون تسجيل بيع جديد.
+          صافي نقد المبيعات والذمم لا يشمل مصروفات الصندوق ولا تحصيلات المندوب المقدمة.
+        </p>
         {loadError && <div className="alert error-alert">{loadError}</div>}
 
         {!loading &&
@@ -985,7 +1021,8 @@ export default function TodaySalesPanel({
         saleReturnRows.length === 0 &&
         mobileReturnRows.length === 0 &&
         exchanges.length === 0 &&
-        webCashMovements.length === 0 && (
+        webCashMovements.length === 0 &&
+        customerReceipts.length === 0 && (
           <div className="empty-cart">
             لا توجد مبيعات مسجلة في جلسة اليوم حتى الآن.
           </div>
@@ -1198,6 +1235,57 @@ export default function TodaySalesPanel({
             </table>
           </div>
         )}
+
+        <section className="today-debt-collections">
+          <div className="today-sales-heading">
+            <div className="panel-heading">
+              <div className="panel-icon">🧾</div>
+              <div>
+                <h2>تحصيلات ذمم الزبائن</h2>
+                <p>سندات قبض معتمدة بتاريخ التحصيل. ليست فواتير بيع جديدة ولا تزيد صافي المبيعات.</p>
+              </div>
+            </div>
+          </div>
+          <div className="today-sales-collections-totals">
+            <span>نقد الصندوق: <strong>{formatMinor(customerCashReceiptsMinor)}</strong></span>
+            <span>بنك / فيزا: <strong>{formatMinor(customerNonCashReceiptsMinor)}</strong></span>
+            <span>إجمالي قبض الذمم: <strong>{formatMinor(customerReceiptTotalMinor)}</strong></span>
+          </div>
+          {customerReceipts.length > 0 ? (
+            <div className="today-sales-table-wrap">
+              <table className="today-sales-table">
+                <thead>
+                  <tr>
+                    <th>رقم سند القبض</th>
+                    <th>الزبون</th>
+                    <th>وقت القبض</th>
+                    <th>طريقة القبض</th>
+                    <th>المبلغ المقبوض</th>
+                    <th>ملاحظات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerReceipts.map((receipt) => (
+                    <tr key={receipt.id}>
+                      <td dir="ltr">{receipt.publicId}</td>
+                      <td>{receipt.customerName}</td>
+                      <td>{formatDateTime(receipt.createdAt)}</td>
+                      <td>{receipt.paymentMethod === "cash"
+                        ? "نقدي — دخل الصندوق"
+                        : receipt.paymentMethod === "bank"
+                          ? "بنك — ليس نقد صندوق"
+                          : "فيزا — ليست نقد صندوق"}</td>
+                      <td><strong>{formatMinor(receipt.amountMinor)}</strong></td>
+                      <td>{receipt.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="today-sales-collection-empty">لا توجد سندات قبض ذمم مسجلة في هذا التاريخ.</p>
+          )}
+        </section>
 
         {webCashMovements.length > 0 && (
           <section className="web-cash-movements">
@@ -1582,6 +1670,10 @@ export default function TodaySalesPanel({
           <span>مبيعات نقدي: {formatMinor(cashSalesMinor)}</span>
           <span>نقد استلام المحل: {formatMinor(webCompletedCashMinor)}</span>
           <span>قبض ديلفري مقدم/عكس: {formatMinor(courierCashNetMinor)}</span>
+          <span>مبيعات آجل (ليست تحصيلًا): {formatMinor(accountSalesMinor)}</span>
+          <span>قبض ذمم نقدي: {formatMinor(customerCashReceiptsMinor)}</span>
+          <span>قبض ذمم فيزا/بنك: {formatMinor(customerNonCashReceiptsMinor)}</span>
+          <span>صافي نقد المبيعات والذمم: {formatMinor(cashSalesAndReceiptsNetMinor)}</span>
 
           <span>فيزا: {formatMinor(cardSalesMinor)}</span>
 
@@ -1603,7 +1695,7 @@ export default function TodaySalesPanel({
 
           <span>مردود حساب الزبون: {formatMinor(customerReturnedMinor)}</span>
 
-          <strong>الصافي: {formatMinor(netTotalMinor)}</strong>
+          <strong>صافي المبيعات (شامل الآجل): {formatMinor(netTotalMinor)}</strong>
         </div>
 
         <table className="daily-report-table">
@@ -1752,6 +1844,35 @@ export default function TodaySalesPanel({
             ))}
           </tbody>
         </table>
+
+        {customerReceipts.length > 0 && (
+          <>
+            <h2>تحصيلات ذمم الزبائن — ليست مبيعات جديدة</h2>
+            <table className="daily-report-table">
+              <thead>
+                <tr>
+                  <th>سند القبض</th>
+                  <th>الزبون</th>
+                  <th>وقت القبض</th>
+                  <th>طريقة الدفع</th>
+                  <th>المبلغ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customerReceipts.map((receipt) => (
+                  <tr key={`print-debt-receipt-${receipt.id}`}>
+                    <td dir="ltr">{receipt.publicId}</td>
+                    <td>{receipt.customerName}</td>
+                    <td>{formatDateTime(receipt.createdAt)}</td>
+                    <td>{receipt.paymentMethod === "cash" ? "نقدي"
+                      : receipt.paymentMethod === "bank" ? "بنك" : "فيزا"}</td>
+                    <td>{formatMinor(receipt.amountMinor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
 
         {webCashMovements.length > 0 && (
           <>
