@@ -117,6 +117,11 @@ function getMetaBrowserAttribution(): MetaBrowserAttribution {
   };
 }
 
+function isValidCustomerMobilePhone(value: string): boolean {
+  const compact = value.trim().replace(/[\s().-]/g, "");
+  return /^(?:05\d{8}|(?:\+|00)?(?:970|972)5\d{8})$/.test(compact);
+}
+
 function createCheckoutRequestId(): string {
   return [
     "checkout",
@@ -689,6 +694,14 @@ export default function CartScreen() {
       setShowValidationErrors(true);
       setCheckoutValidationMessage(
         `يرجى إكمال البيانات التالية:\n\n• ${missingFields.join("\n• ")}`
+      );
+      return;
+    }
+
+    if (!isValidCustomerMobilePhone(phone)) {
+      setShowValidationErrors(true);
+      setCheckoutValidationMessage(
+        "رقم الهاتف ناقص أو غير صحيح.\n\nأدخلي رقم جوال من 10 خانات يبدأ بـ 05 مثل 0591234567 أو 0521234567، أو استخدمي الصيغة الدولية +970 / +972."
       );
       return;
     }
@@ -1406,7 +1419,7 @@ export default function CartScreen() {
       shippingCost;
     const canSubmit =
       name.trim().length > 0 &&
-      phone.trim().length > 0 &&
+      isValidCustomerMobilePhone(phone) &&
       selectedZone !== null &&
       (isStorePickup || address.trim().length > 0);
     return (
@@ -1911,8 +1924,8 @@ export default function CartScreen() {
                   styles.fieldLabel,
                   {
                     color:
-                      showValidationErrors &&
-                      !f.value.trim()
+                      (showValidationErrors && !f.value.trim()) ||
+                      (f.label === "رقم الهاتف *" && phone.trim() && !isValidCustomerMobilePhone(phone))
                         ? "#DC2626"
                         : colors.foreground,
                   },
@@ -1924,8 +1937,8 @@ export default function CartScreen() {
                 style={[
                   styles.inputRow,
                   { backgroundColor: colors.card, borderColor: colors.border },
-                  showValidationErrors &&
-                  !f.value.trim()
+                  ((showValidationErrors && !f.value.trim()) ||
+                    (f.label === "رقم الهاتف *" && phone.trim() && !isValidCustomerMobilePhone(phone)))
                     ? { borderColor: "#DC2626", borderWidth: 1.5 }
                     : null,
                 ]}
@@ -1941,6 +1954,11 @@ export default function CartScreen() {
                   textAlign="right"
                 />
               </View>
+              {f.label === "رقم الهاتف *" && phone.trim() && !isValidCustomerMobilePhone(phone) && (
+                <Text style={[styles.validationHint, { color: "#DC2626" }]}>
+                  رقم الهاتف ناقص أو غير صحيح. أدخلي 10 أرقام تبدأ بـ 05 أو رقمًا دوليًا صحيحًا.
+                </Text>
+              )}
             </View>
           ))}
 
@@ -2175,7 +2193,7 @@ export default function CartScreen() {
 
           {showValidationErrors && !canSubmit && (
             <Text style={[styles.validationHint, { color: "#DC2626" }]}>
-              * الحقول المحددة بالأحمر مطلوبة لإتمام الطلب
+              * راجعي الحقول المحددة بالأحمر ورقم الهاتف لإتمام الطلب
             </Text>
           )}
 

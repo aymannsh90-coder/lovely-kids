@@ -489,13 +489,9 @@ async function handleCreateOrder(
             : authUser?.id ?? null,
         clientRequestId,
         customerName: parsed.data.customerName,
-        customerPhone:
-          options.manualPos
-            ? parsed.data.customerPhone
-            : (
-                authUser?.phone ??
-                parsed.data.customerPhone
-              ),
+        // Always use the number provided and validated for this order.
+        // A stored account number might be stale or incomplete.
+        customerPhone: parsed.data.customerPhone,
         customerAddress:
           parsed.data.customerAddress,
         notes: parsed.data.notes,
