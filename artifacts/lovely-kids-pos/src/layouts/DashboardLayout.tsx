@@ -89,6 +89,7 @@ export default function DashboardLayout() {
   const routeSection = findMenuSection(currentItem?.group);
   const isDashboard = location.pathname === "/";
   const isAdminPanel = location.pathname === "/admin";
+  const isAccessPage = location.pathname === "/access";
 
   const [activeSectionKey, setActiveSectionKey] =
     useState<MenuSectionKey>("documents");
@@ -218,6 +219,13 @@ export default function DashboardLayout() {
               </button>
             ))}
 
+            {user?.isOwner && (
+              <button className={isAccessPage ? "pos-shamel-primary-button is-active" : "pos-shamel-primary-button"}
+                type="button" aria-pressed={isAccessPage} onClick={() => navigate("/access")}>
+                <span aria-hidden="true">🔐</span> الصلاحيات
+              </button>
+            )}
+
             {(user?.isAdmin || user?.isOwner) && (
               <button
                 className={
@@ -236,7 +244,7 @@ export default function DashboardLayout() {
           </nav>
 
           <nav
-            hidden={isAdminPanel}
+            hidden={isAdminPanel || isAccessPage}
             className="pos-shamel-secondary-menu"
             aria-label={`عمليات ${activeSection.title}`}
           >
