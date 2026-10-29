@@ -19449,3 +19449,246 @@ button.inventory-intelligence-metric {
   }
 }
 /* End invoice desktop single-viewport layout */
+
+
+/* Lovely Kids POS — exchange workspace polish, isolated from sales returns. */
+.route-content #pos-sales-exchange {
+  --exchange-ink: #27475b;
+  --exchange-border: #dae6ed;
+  --exchange-muted: #678296;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #d6e5ec;
+  border-radius: 12px;
+  background: #f5f9fc;
+  overflow: visible;
+}
+.route-content #pos-sales-exchange > * {
+  min-width: 0;
+}
+.route-content #pos-sales-exchange > .sales-return-heading {
+  min-height: 66px;
+  padding: 11px 16px;
+  margin: -10px -10px 2px;
+  border-bottom: 1px solid #eacbdc;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(105deg, #fff1f7 0%, #fffafd 65%, #f2f8fe 100%);
+  box-shadow: none;
+}
+#pos-sales-exchange .sales-return-heading h2 {
+  color: #213e51;
+  font-size: 20px;
+  font-weight: 900;
+}
+#pos-sales-exchange .sales-return-heading p {
+  color: #617d90;
+  font-size: 12px;
+  line-height: 1.5;
+}
+#pos-sales-exchange .sales-return-heading .panel-icon {
+  border: 1px solid #f3cbdc;
+  border-radius: 10px;
+  background: #fff0f7;
+  box-shadow: none;
+}
+#pos-sales-exchange .sales-return-heading > .secondary-button {
+  min-height: 35px;
+  border: 1px solid #c8dbe6;
+  border-radius: 9px;
+  color: #2a5870;
+  background: #fff;
+  font-weight: 800;
+}
+#pos-sales-exchange .sales-return-session {
+  min-width: 116px;
+  padding: 7px 11px;
+  border: 1px solid #c4e1ce;
+  border-radius: 9px;
+  background: #ecf8ef;
+}
+#pos-sales-exchange .sales-return-session strong {
+  color: #155b3f;
+}
+#pos-sales-exchange .sales-return-search-panel,
+#pos-sales-exchange .sales-return-invoice,
+#pos-sales-exchange .sales-return-items-panel,
+#pos-sales-exchange .sales-return-completion-panel {
+  margin: 0;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--exchange-border);
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(32, 72, 94, .035);
+}
+#pos-sales-exchange .sales-return-section-title {
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid #e8eff3;
+  gap: 12px;
+}
+#pos-sales-exchange .sales-return-section-title h3 {
+  color: var(--exchange-ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+#pos-sales-exchange .sales-return-section-title p {
+  margin: 3px 0 0;
+  color: var(--exchange-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+#pos-sales-exchange .exchange-customer-fields {
+  display: grid;
+  gap: 9px;
+  padding: 3px 0 0;
+}
+#pos-sales-exchange .exchange-customer-fields > small {
+  margin: 0;
+  padding: 6px 8px;
+  background: #eaf5fc;
+  border-radius: 7px;
+  color: #2b6485;
+  font-size: 11px;
+  line-height: 1.4;
+}
+#pos-sales-exchange .sales-return-field {
+  gap: 5px;
+}
+#pos-sales-exchange .sales-return-field > span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #345970;
+}
+#pos-sales-exchange .sales-return-field small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+#pos-sales-exchange .sales-return-field input,
+#pos-sales-exchange .sales-return-field select {
+  min-height: 37px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+#pos-sales-exchange .exchange-mode-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 3px 0 0;
+}
+#pos-sales-exchange .exchange-mode-picker > button {
+  min-width: 0;
+  min-height: 39px;
+  border: 1px solid #d3e1e9;
+  border-radius: 9px;
+  padding: 8px 9px;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+  background: #f8fbfd;
+  color: #32556d;
+}
+#pos-sales-exchange .exchange-mode-picker > button:hover:not(:disabled) {
+  background: #edf5fa;
+  border-color: #9dbfda;
+}
+#pos-sales-exchange .exchange-mode-picker > button[aria-pressed="true"] {
+  background: #e91e8c;
+  border-color: #cc1376;
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(233, 30, 140, .13);
+}
+#pos-sales-exchange .exchange-mode-picker > button:focus-visible,
+#pos-sales-exchange button:focus-visible {
+  outline: 2px solid #255e87;
+  outline-offset: 2px;
+}
+#pos-sales-exchange .sales-return-search-form {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  gap: 9px;
+  margin-top: 8px;
+  align-items: end;
+}
+#pos-sales-exchange .sales-return-search-form > button {
+  min-height: 37px;
+  border-radius: 8px;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+#pos-sales-exchange .sales-return-table-wrap {
+  max-height: 340px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #d6e4ec;
+  border-radius: 9px;
+}
+#pos-sales-exchange .sales-return-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #e9f3f8;
+  color: #2d5167;
+  font-weight: 900;
+}
+#pos-sales-exchange .sales-return-table td {
+  border-color: #e5edf2;
+}
+@media (min-width: 1200px) {
+  /* The two setup steps appear together; follow-up panels span full width. */
+  .route-content #pos-sales-exchange {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+    gap: 10px;
+  }
+  #pos-sales-exchange > :not(.exchange-customer-panel):not(.exchange-mode-panel) {
+    grid-column: 1 / -1;
+  }
+  #pos-sales-exchange > .exchange-customer-panel {
+    grid-column: 1;
+  }
+  #pos-sales-exchange > .exchange-mode-panel {
+    grid-column: 2;
+  }
+  #pos-sales-exchange .exchange-mode-picker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+  #pos-sales-exchange .exchange-mode-picker > button {
+    min-height: 37px;
+  }
+}
+@media (max-width: 1199px) {
+  .route-content #pos-sales-exchange {
+    grid-template-columns: 1fr;
+  }
+  #pos-sales-exchange .exchange-customer-panel,
+  #pos-sales-exchange .exchange-mode-panel {
+    grid-column: 1;
+  }
+}
+@media (max-width: 750px) {
+  .route-content #pos-sales-exchange {
+    padding: 7px;
+    gap: 8px;
+  }
+  .route-content #pos-sales-exchange > .sales-return-heading {
+    margin: -7px -7px 0;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  #pos-sales-exchange .exchange-mode-picker {
+    grid-template-columns: 1fr;
+  }
+  #pos-sales-exchange .sales-return-search-form {
+    grid-template-columns: 1fr;
+  }
+  #pos-sales-exchange .sales-return-search-form > button {
+    width: 100%;
+  }
+  #pos-sales-exchange .sales-return-search-panel {
+    padding: 10px;
+  }
+}
