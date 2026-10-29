@@ -4,6 +4,8 @@ import {
   exchangeReturnItemsTable,
   exchangeSaleItemCostsTable,
   exchangeSaleItemsTable,
+  financeAccountsTable,
+  financeTransactionLinesTable,
   financeTransactionsTable,
   orderItemCostsTable,
   ordersTable,
@@ -25,6 +27,8 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
+  sql,
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
@@ -1772,6 +1776,55 @@ async function handleGrossProfit(
             Number(right.productId),
       );
 
+  // Operating net result is based on the posted general ledger,
+  // not cash payouts or employee advances. Shipping/delivery expense is
+  // ALREADY deducted by profitAfterDeliveryMinor, so exclude that GL account.
+  // Use business dates consistently with the sales report and include posted
+  // reversals (credits) to prevent overstating the expense total.
+  const journalExpenseRows = await db.select({
+    accountCode: financeAccountsTable.code,
+    accountName: financeAccountsTable.name,
+    netMinor: sql<string>`COALESCE(SUM(${financeTransactionLinesTable.debitMinor} - ${financeTransactionLinesTable.creditMinor}), 0)::text`,
+    lineCount: sql<string>`COUNT(*)::text`,
+  }).from(financeTransactionLinesTable)
+    .innerJoin(financeTransactionsTable,
+      eq(financeTransactionLinesTable.transactionId, financeTransactionsTable.id))
+    .innerJoin(financeAccountsTable,
+      eq(financeTransactionLinesTable.accountId, financeAccountsTable.id))
+    .where(and(
+      eq(financeTransactionsTable.status, "posted"),
+      gte(financeTransactionsTable.businessDate, from),
+      lte(financeTransactionsTable.businessDate, to),
+      eq(financeAccountsTable.accountType, "expense"),
+      ne(financeAccountsTable.code, "DELIVERY_EXPENSE"),
+    ))
+    .groupBy(financeAccountsTable.id, financeAccountsTable.code, financeAccountsTable.name)
+    .orderBy(asc(financeAccountsTable.code));
+
+  const expenseAccounts = journalExpenseRows.map((account) => {
+    const amountMinor = Number(account.netMinor);
+    if (!Number.isSafeInteger(amountMinor)) {
+      throw new Error("GROSS_PROFIT_EXPENSE_TOTAL_OUT_OF_RANGE");
+    }
+    return {
+      code: account.accountCode,
+      name: account.accountName,
+      amountMinor,
+      lines: Number(account.lineCount),
+    };
+  });
+  const salaryExpenseMinor = sum(expenseAccounts
+    .filter((account) => account.code === "EXPENSE_SALARY")
+    .map((account) => account.amountMinor));
+  const otherOperatingExpensesMinor = sum(expenseAccounts
+    .filter((account) => account.code !== "EXPENSE_SALARY")
+    .map((account) => account.amountMinor));
+  const totalOperatingExpensesMinor = salaryExpenseMinor + otherOperatingExpensesMinor;
+  const salaryPosted = expenseAccounts.some((account) => account.code === "EXPENSE_SALARY");
+  const netProfitRecordedMinor = total.profitAfterDeliveryMinor === null
+    ? null
+    : total.profitAfterDeliveryMinor - totalOperatingExpensesMinor;
+
   const warnings: string[] =
     [];
 
@@ -1833,6 +1886,19 @@ async function handleGrossProfit(
 
     warnings,
 
+    netProfit: {
+      profitAfterDeliveryMinor: total.profitAfterDeliveryMinor,
+      otherOperatingExpensesMinor,
+      salaryExpenseMinor,
+      totalOperatingExpensesMinor,
+      netProfitRecordedMinor,
+      salaryPosted,
+      expenseAccounts,
+      // The number reflects posted expenses only; unpaid/unrecorded
+      // salaries and costs cannot be inferred from employee cash advances.
+      provisional: !salaryPosted || total.costQuality !== "confirmed",
+    },
+
     missingCostProducts,
     unresolvedMissingCostLines,
     mixedCostReview,
@@ -1852,7 +1918,10 @@ async function handleGrossProfit(
         "Customer shipping charge minus actual delivery company cost",
 
       expensesIncluded:
-        false,
+        true,
+
+      netProfitDefinition:
+        "Recorded operating result: profit after delivery minus posted general-ledger expense account debits net of reversals, excluding delivery already included, with salaries separated. Owner withdrawals, employee advances, supplier payments, transfers, and purchases are not expenses here. Unrecorded accruals are not estimated.",
 
       verifiedOwnerAttestations:
         attestedStates.length,
