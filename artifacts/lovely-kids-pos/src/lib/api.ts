@@ -4823,6 +4823,7 @@ export interface GrossProfitMixedCostReview {
   productCode: string | null;
   nameAr: string;
   soldMixedQuantity: number;
+  currentCostQuality: string | null;
   sources: Array<{
     kind: "exchange" | "return";
     publicId: string;
