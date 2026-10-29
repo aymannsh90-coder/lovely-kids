@@ -1,6 +1,7 @@
 import {
   inventoryMovementsTable,
   cashSessionsTable,
+  ordersTable,
   customersTable,
   financeAccountsTable,
   financeCurrenciesTable,
@@ -4882,6 +4883,128 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
       ),
   ]);
 
+  // Cash-only web order movements for the physical main register.
+  // Deliberately exclude courier-company receivables and card receipts.
+  // A local-courier handover is a cash advance, not a second sale at delivery.
+  const cashMainAccountRows =
+    registerKey === "main"
+      ? await db
+          .select({ id: financeAccountsTable.id })
+          .from(financeAccountsTable)
+          .where(eq(financeAccountsTable.code, "CASH_MAIN"))
+          .limit(1)
+      : [];
+
+  const webCashFinanceRows =
+    cashMainAccountRows[0]
+      ? await db
+          .select({
+            transactionId: financeTransactionsTable.id,
+            sourceId: financeTransactionsTable.sourceId,
+            sourceEvent: financeTransactionsTable.sourceEvent,
+            createdAt: financeTransactionsTable.createdAt,
+            debitMinor: financeTransactionLinesTable.debitMinor,
+            creditMinor: financeTransactionLinesTable.creditMinor,
+          })
+          .from(financeTransactionsTable)
+          .innerJoin(
+            financeTransactionLinesTable,
+            eq(
+              financeTransactionLinesTable.transactionId,
+              financeTransactionsTable.id,
+            ),
+          )
+          .where(
+            and(
+              eq(financeTransactionsTable.sourceType, "web_order"),
+              eq(financeTransactionsTable.status, "posted"),
+              eq(financeTransactionsTable.businessDate, businessDate),
+              isNotNull(financeTransactionsTable.cashSessionId),
+              eq(
+                financeTransactionLinesTable.accountId,
+                cashMainAccountRows[0].id,
+              ),
+              inArray(financeTransactionsTable.sourceEvent, [
+                "done",
+                "local_courier_cash_handover",
+                "local_courier_reverse_cash",
+              ]),
+            ),
+          )
+          .orderBy(
+            asc(financeTransactionsTable.createdAt),
+            asc(financeTransactionsTable.id),
+          )
+      : [];
+
+  const webOrderIds = [
+    ...new Set(
+      webCashFinanceRows
+        .map((row) => Number(row.sourceId))
+        .filter((id) => Number.isSafeInteger(id) && id > 0),
+    ),
+  ];
+  const webCashOrders =
+    webOrderIds.length > 0
+      ? await db
+          .select({
+            id: ordersTable.id,
+            customerName: ordersTable.customerName,
+            fulfillmentMethod: ordersTable.fulfillmentMethod,
+            items: ordersTable.items,
+          })
+          .from(ordersTable)
+          .where(inArray(ordersTable.id, webOrderIds))
+      : [];
+  const webOrdersById = new Map(
+    webCashOrders.map((order) => [order.id, order]),
+  );
+
+  const webCashMovements = webCashFinanceRows.flatMap((row) => {
+    const order = webOrdersById.get(Number(row.sourceId));
+    if (!order) return [];
+
+    const rawItems: unknown[] = Array.isArray(order.items)
+      ? order.items
+      : [];
+    const items = rawItems
+      .filter(
+        (item): item is Record<string, unknown> =>
+          item !== null && typeof item === "object" && !Array.isArray(item),
+      )
+      .map((item) => ({
+        name: typeof item.name === "string" ? item.name : "صنف",
+        quantity:
+          Number.isSafeInteger(Number(item.quantity)) &&
+          Number(item.quantity) > 0
+            ? Number(item.quantity)
+            : 0,
+        priceMinor:
+          typeof item.price === "number" && Number.isFinite(item.price)
+            ? Math.round(item.price * 100)
+            : 0,
+      }));
+
+    const amountMinor = row.debitMinor - row.creditMinor;
+    if (amountMinor === 0) return [];
+
+    return [{
+      transactionId: String(row.transactionId),
+      orderId: String(order.id),
+      event: row.sourceEvent,
+      amountMinor,
+      createdAt: row.createdAt.toISOString(),
+      customerName: order.customerName,
+      fulfillmentMethod: order.fulfillmentMethod,
+      productNames: items.map((item) => item.name).join("، "),
+      pieces: items.reduce((total, item) => total + item.quantity, 0),
+      subtotalMinor: items.reduce(
+        (total, item) => total + item.priceMinor * item.quantity,
+        0,
+      ),
+    }];
+  });
+
   const saleIds = sales.map((sale) => sale.id);
 
   const completedReturns =
@@ -5116,6 +5239,8 @@ async function handleTodaySales(request: Request, db: Db, env: Env) {
         : null,
 
     businessDate,
+
+    webCashMovements,
 
     sales: sales.map((sale) => {
       const refundAmountMinor =

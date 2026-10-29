@@ -20,6 +20,7 @@ import {
   type CashSession,
   type PosSaleItemResult,
   type PosSaleResult,
+  type PosWebCashMovement,
   type PosExchangeSummary,
   type PosMobileReturnResult,
   type PosSaleReturnResult,
@@ -268,6 +269,10 @@ export default function TodaySalesPanel({
 
   const [sales, setSales] = useState<TodaySaleResult[]>([]);
 
+  // Based on posted CASH_MAIN entries, not the date an order was placed.
+  const [webCashMovements, setWebCashMovements] =
+    useState<PosWebCashMovement[]>([]);
+
   const [saleReturns, setSaleReturns] =
     useState<
       Array<
@@ -341,9 +346,31 @@ export default function TodaySalesPanel({
     [mobileReturns],
   );
 
+  const webCompletedCashSales = webCashMovements.filter(
+    (movement) => movement.event === "done" && movement.amountMinor > 0,
+  );
+  const webCompletedCashMinor = webCompletedCashSales.reduce(
+    (sum, movement) => sum + movement.amountMinor, 0,
+  );
+  const webCompletedSubtotalMinor = webCompletedCashSales.reduce(
+    (sum, movement) =>
+      sum + Math.max(movement.subtotalMinor, movement.amountMinor), 0,
+  );
+  const webCompletedDiscountMinor =
+    webCompletedSubtotalMinor - webCompletedCashMinor;
+  // Courier cash is an advance, not a completed sale.
+  const courierCashNetMinor = webCashMovements
+    .filter((movement) => movement.event !== "done")
+    .reduce((sum, movement) => sum + movement.amountMinor, 0);
+  const webCashNetMinor = webCashMovements.reduce(
+    (sum, movement) => sum + movement.amountMinor, 0,
+  );
+  const invoiceCount = activeSales.length + webCompletedCashSales.length;
+
   const totalPieces = useMemo(
-    () => rows.reduce((total, row) => total + row.item.quantity, 0),
-    [rows],
+    () => rows.reduce((total, row) => total + row.item.quantity, 0) +
+      webCompletedCashSales.reduce((sum, movement) => sum + movement.pieces, 0),
+    [rows, webCashMovements],
   );
 
   const subtotalMinor = useMemo(
@@ -351,9 +378,9 @@ export default function TodaySalesPanel({
       activeSales.reduce(
         (total, result) =>
           total + result.sale.subtotalMinor,
-        0,
+        webCompletedSubtotalMinor,
       ),
-    [activeSales],
+    [activeSales, webCashMovements],
   );
 
   const discountMinor = useMemo(
@@ -361,9 +388,9 @@ export default function TodaySalesPanel({
       activeSales.reduce(
         (total, result) =>
           total + result.sale.discountMinor,
-        0,
+        webCompletedDiscountMinor,
       ),
-    [activeSales],
+    [activeSales, webCashMovements],
   );
 
   const cashSalesMinor = useMemo(
@@ -397,8 +424,8 @@ export default function TodaySalesPanel({
           return total;
         },
         0,
-      ),
-    [activeSales],
+      ) + webCompletedCashMinor,
+    [activeSales, webCashMovements],
   );
 
   const cardSalesMinor = useMemo(
@@ -579,10 +606,10 @@ export default function TodaySalesPanel({
       activeSales.reduce(
         (total, result) =>
           total + result.sale.totalMinor,
-        0,
+        webCompletedCashMinor,
       ) -
       returnedMinor,
-    [activeSales, returnedMinor],
+    [activeSales, returnedMinor, webCashMovements],
   );
 
   async function loadTodaySales() {
@@ -609,6 +636,7 @@ export default function TodaySalesPanel({
       setSales(
         result.sales as TodaySaleResult[],
       );
+      setWebCashMovements(result.webCashMovements ?? []);
       setSaleReturns(
         result.saleReturns ?? [],
       );
@@ -838,7 +866,8 @@ export default function TodaySalesPanel({
                 (
                   rows.length === 0 &&
                   saleReturnRows.length === 0 &&
-                  mobileReturnRows.length === 0
+                  mobileReturnRows.length === 0 &&
+                  webCashMovements.length === 0
                 )
               }
               onClick={printDailyReport}
@@ -851,7 +880,7 @@ export default function TodaySalesPanel({
         <div className="today-summary">
           <div>
             <span>عدد الفواتير</span>
-            <strong>{activeSales.length}</strong>
+            <strong>{invoiceCount}</strong>
           </div>
 
           <div>
@@ -872,6 +901,21 @@ export default function TodaySalesPanel({
           <div>
             <span>مبيعات نقدي</span>
             <strong>{formatMinor(cashSalesMinor)}</strong>
+          </div>
+
+          <div>
+            <span>نقد استلام المحل</span>
+            <strong>{formatMinor(webCompletedCashMinor)}</strong>
+          </div>
+
+          <div>
+            <span>قبض ديلفري نابلس (مقدم/عكس)</span>
+            <strong>{formatMinor(courierCashNetMinor)}</strong>
+          </div>
+
+          <div>
+            <span>صافي قبض الطلبات الإلكترونية</span>
+            <strong>{formatMinor(webCashNetMinor)}</strong>
           </div>
 
           <div>
@@ -934,7 +978,8 @@ export default function TodaySalesPanel({
         rows.length === 0 &&
         saleReturnRows.length === 0 &&
         mobileReturnRows.length === 0 &&
-        exchanges.length === 0 && (
+        exchanges.length === 0 &&
+        webCashMovements.length === 0 && (
           <div className="empty-cart">
             لا توجد مبيعات مسجلة في جلسة اليوم حتى الآن.
           </div>
@@ -1131,6 +1176,55 @@ export default function TodaySalesPanel({
               </tbody>
             </table>
           </div>
+        )}
+
+        {webCashMovements.length > 0 && (
+          <section className="web-cash-movements">
+            <div className="today-sales-heading">
+              <div className="panel-heading">
+                <div className="panel-icon">💵</div>
+                <div>
+                  <h2>طلبات المتجر المقبوضة نقدًا</h2>
+                  <p>استلام المحل وقبض مندوب ديلفري نابلس فقط؛ لا تشمل ذمم شركات التوصيل.</p>
+                </div>
+              </div>
+            </div>
+            <div className="today-sales-table-wrap">
+              <table className="today-sales-table">
+                <thead>
+                  <tr>
+                    <th>رقم الطلب</th>
+                    <th>الأصناف / الحركة</th>
+                    <th>القطع المباعة</th>
+                    <th>النقد الداخل أو الخارج</th>
+                    <th>وقت الحركة</th>
+                    <th>الزبون</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {webCashMovements.map((movement) => (
+                    <tr key={movement.transactionId}>
+                      <td>#{movement.orderId}</td>
+                      <td>
+                        <strong>
+                          {movement.event === "local_courier_reverse_cash"
+                            ? "↩️ عكس قبض مندوب الديلفري"
+                            : movement.event === "local_courier_cash_handover"
+                              ? "قبض ديلفري نابلس (مقدم)"
+                              : "استلام من المحل — نقدي"}
+                        </strong>
+                        <small>{movement.productNames || "طلب متجر إلكتروني"}</small>
+                      </td>
+                      <td>{movement.event === "done" ? movement.pieces : "—"}</td>
+                      <td>{formatMinor(movement.amountMinor)}</td>
+                      <td>{formatDateTime(movement.createdAt)}</td>
+                      <td>{movement.customerName || "زبون المتجر"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
 
         <div
@@ -1449,14 +1543,14 @@ export default function TodaySalesPanel({
           </div>
 
           <div>
-            <span>تاريخ العمل: {session.businessDate}</span>
+            <span>تاريخ التقرير: {selectedDate}</span>
 
             <span>الصندوق: {session.registerKey}</span>
           </div>
         </header>
 
         <div className="daily-report-summary">
-          <span>الفواتير: {activeSales.length}</span>
+          <span>الفواتير: {invoiceCount}</span>
 
           <span>القطع: {totalPieces}</span>
 
@@ -1464,7 +1558,9 @@ export default function TodaySalesPanel({
 
           <span>الخصومات: {formatMinor(discountMinor)}</span>
 
-          <span>نقدي: {formatMinor(cashSalesMinor)}</span>
+          <span>مبيعات نقدي: {formatMinor(cashSalesMinor)}</span>
+          <span>نقد استلام المحل: {formatMinor(webCompletedCashMinor)}</span>
+          <span>قبض ديلفري مقدم/عكس: {formatMinor(courierCashNetMinor)}</span>
 
           <span>فيزا: {formatMinor(cardSalesMinor)}</span>
 
@@ -1635,6 +1731,42 @@ export default function TodaySalesPanel({
             ))}
           </tbody>
         </table>
+
+        {webCashMovements.length > 0 && (
+          <>
+            <h2>الطلبات الإلكترونية المقبوضة نقدًا</h2>
+            <table className="daily-report-table">
+              <thead>
+                <tr>
+                  <th>الطلب</th>
+                  <th>الحركة</th>
+                  <th>الأصناف</th>
+                  <th>القطع المباعة</th>
+                  <th>النقد</th>
+                  <th>الزبون</th>
+                </tr>
+              </thead>
+              <tbody>
+                {webCashMovements.map((movement) => (
+                  <tr key={`print-web-${movement.transactionId}`}>
+                    <td>#{movement.orderId}</td>
+                    <td>
+                      {movement.event === "local_courier_reverse_cash"
+                        ? "عكس قبض الديلفري"
+                        : movement.event === "local_courier_cash_handover"
+                          ? "قبض ديلفري مقدم"
+                          : "استلام المحل نقدًا"}
+                    </td>
+                    <td>{movement.productNames}</td>
+                    <td>{movement.event === "done" ? movement.pieces : "—"}</td>
+                    <td>{formatMinor(movement.amountMinor)}</td>
+                    <td>{movement.customerName || "زبون المتجر"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
 
         <footer className="daily-report-footer">
           تمت طباعة التقرير:{" "}
