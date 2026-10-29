@@ -11,6 +11,7 @@ import { appSettingsTable, productsTable } from "@workspace/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { openDb, type Env } from "./db";
 import { handleAuthRequest } from "./auth-routes";
+import { handleStaffAccessRequest } from "./staff-access-routes";
 import {
   handleProductRequest,
   purgeExpiredTrashedProducts,
@@ -361,6 +362,9 @@ export default {
 
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
+
+      const staffAccessResponse = await handleStaffAccessRequest(request, db, env);
+      if (staffAccessResponse) return staffAccessResponse;
 
       const cashSessionResponse = await handleCashSessionRequest(
         request,
