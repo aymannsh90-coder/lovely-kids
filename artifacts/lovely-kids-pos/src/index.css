@@ -20362,3 +20362,181 @@ button.inventory-intelligence-metric {
   }
 }
 /* End POS sales workstation viewport layout */
+
+
+/* POS credit sale summary repair: always-visible save/collect controls */
+/* A separate scroll region makes room for the fixed sale actions in both cash
+   and customer-credit modes. Normal desktop/mobile flow stays accessible. */
+#pos-sale .sale-summary-scroll-content {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+#pos-sale .sale-summary-scroll-content > * {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#pos-sale .sale-summary-scroll-content > div:not(.sale-summary-heading):not(.sale-payment-methods):not(.customer-account-summary):not(.customer-account-credit-box) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+#pos-sale .sale-summary-scroll-content > div > span,
+#pos-sale .sale-summary-scroll-content > label > span {
+  color: #536475;
+  font-size: 12px;
+  font-weight: 700;
+}
+#pos-sale .sale-summary-scroll-content > div > strong {
+  color: #1d2d3d;
+  font-size: 14px;
+  font-weight: 900;
+}
+#pos-sale .sale-summary-scroll-content .sale-grand-total > strong {
+  color: #e91e8c;
+  font-size: 23px;
+}
+#pos-sale .sale-summary-scroll-content .customer-account-summary {
+  display: grid;
+  justify-content: stretch;
+  align-content: start;
+}
+#pos-sale .sale-summary-scroll-content .sale-payment-methods {
+  display: grid !important;
+}
+#pos-sale .sale-summary-scroll-content .customer-account-credit-box {
+  flex: 0 0 auto;
+}
+#pos-sale .customer-account-credit-box .sale-credit-settlement-methods > div {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px !important;
+  margin-top: 5px !important;
+}
+#pos-sale .customer-account-credit-box .sale-credit-settlement-methods > div > button:first-child {
+  grid-column: 1 / -1;
+}
+#pos-sale .customer-account-credit-box .sale-credit-settlement-methods > div > button {
+  min-width: 0 !important;
+  width: 100% !important;
+  min-height: 34px;
+  padding: 4px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+#pos-sale .customer-account-credit-box .sale-credit-settlement-methods > div > button.sale-bank-visa-button {
+  justify-content: center;
+}
+/* Credit settlement now has the exact same footer position as cash F3/F4.
+   Unlike a sticky descendant of a long credit box, this never scrolls away. */
+#pos-sale.sale-panel .sale-summary > .sale-credit-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  justify-items: stretch !important;
+  align-items: stretch !important;
+  border-top: 1px solid #e8dbe4;
+}
+#pos-sale.sale-panel .sale-summary > .sale-credit-actions > button {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  min-height: 42px;
+  padding: 6px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: normal !important;
+}
+#pos-sale.sale-panel .sale-summary > .sale-credit-actions > button.primary-button {
+  background: #168265;
+  border-color: #168265;
+  color: #fff;
+}
+#pos-sale.sale-panel .sale-summary > .sale-credit-actions > button.primary-button:disabled {
+  opacity: .55;
+}
+
+@media screen and (min-width: 1200px) and (min-height: 700px) {
+  #pos-sale.is-credit-sale.sale-panel {
+    grid-template-columns: minmax(375px, 400px) minmax(0, 1fr);
+  }
+  #pos-sale.sale-panel .sale-payment-checkout > .sale-summary {
+    overflow: hidden !important;
+    scrollbar-gutter: auto;
+    gap: 0;
+    padding: 7px 9px 6px;
+  }
+  #pos-sale .sale-summary > .sale-summary-scroll-content {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 5px;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding: 1px 3px 5px 0;
+  }
+  #pos-sale .sale-summary-scroll-content > div:not(.sale-summary-heading):not(.sale-payment-methods):not(.customer-account-summary):not(.customer-account-credit-box) {
+    flex: 0 0 auto;
+    min-height: 22px;
+  }
+  #pos-sale .sale-summary-scroll-content > label,
+  #pos-sale .sale-summary-scroll-content > .sale-summary-heading,
+  #pos-sale .sale-summary-scroll-content > .sale-payment-methods,
+  #pos-sale .sale-summary-scroll-content > .customer-account-summary {
+    flex: 0 0 auto;
+  }
+  #pos-sale .sale-summary-scroll-content .sale-grand-total {
+    min-height: 32px;
+    padding: 6px 9px;
+  }
+  #pos-sale .sale-summary-scroll-content .sale-grand-total strong {
+    font-size: 19px;
+  }
+  #pos-sale .sale-summary-scroll-content .customer-account-credit-box {
+    gap: 7px !important;
+    padding: 9px !important;
+    background: #fcf9fd !important;
+    border-color: #e7d3e1 !important;
+  }
+  #pos-sale .customer-account-credit-box > strong {
+    font-size: 13px !important;
+    line-height: 1.3 !important;
+  }
+  #pos-sale .customer-account-credit-box > p {
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+  }
+  #pos-sale .customer-account-credit-box > label > span,
+  #pos-sale .sale-credit-settlement-methods > span {
+    font-size: 11px;
+  }
+  #pos-sale .customer-account-credit-box .sale-credit-settlement-methods {
+    margin-top: 0 !important;
+  }
+  #pos-sale.sale-panel .sale-summary > .complete-sale-actions {
+    position: relative !important;
+    bottom: auto !important;
+    z-index: 4;
+    flex: 0 0 auto !important;
+    margin: auto 0 0 !important;
+    padding: 7px 0 2px;
+    background: #fffafd;
+  }
+  #pos-sale.sale-panel .sale-summary > .sale-credit-actions > button {
+    min-height: 42px !important;
+  }
+}
+/* End credit sale visible-action repair */
