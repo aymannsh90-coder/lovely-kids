@@ -1098,7 +1098,11 @@ export default function SalesInvoicePage() {
     setMessage(
       `تم حفظ الفاتورة ${invoicePublicId} على حساب الزبون، وتسجيل سند قبض ${response.voucher.publicId} بمبلغ ${formatMinor(settlement.amountMinor)}.`,
     );
-    await refreshCashSession();
+    try {
+      await refreshCashSession();
+    } catch {
+      // Receipt has already posted; cash session display can refresh separately.
+    }
   }
 
   async function retryPendingInvoiceSettlement() {
@@ -1167,9 +1171,10 @@ export default function SalesInvoicePage() {
     if (
       amountMinor === null ||
       amountMinor <= 0 ||
-      amountMinor > finalTotalMinor
+      amountMinor > finalTotalMinor ||
+      (settlementKind === "partial" && amountMinor >= finalTotalMinor)
     ) {
-      setError("الدفعة يجب أن تكون أكبر من صفر ولا تتجاوز قيمة الفاتورة");
+      setError("الدفعة الجزئية يجب أن تكون أكبر من صفر وأقل من قيمة الفاتورة؛ اختر كامل المبلغ للدفع الكامل");
       return;
     }
 
@@ -1397,8 +1402,6 @@ export default function SalesInvoicePage() {
           : `تم حفظ الفاتورة ${result.sale.publicId} وخصم المخزون.`,
       );
 
-      await refreshCashSession();
-
       if (settlement && selectedCustomerId) {
         setPendingInvoiceSettlement({
           publicId: result.sale.publicId,
@@ -1423,6 +1426,12 @@ export default function SalesInvoicePage() {
           );
           setMessage("");
         }
+      }
+
+      try {
+        await refreshCashSession();
+      } catch {
+        // A secondary refresh failure must not obscure a committed invoice.
       }
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
@@ -1678,6 +1687,12 @@ export default function SalesInvoicePage() {
 
     setInvoiceDateTime(getLocalDateTimeValue());
 
+    if (selectedCustomerId) {
+      setPaymentMethod("credit");
+      setPaidAmountAuto(false);
+      setPaidAmount("0.00");
+    }
+
     setLines((current) =>
       current.map((line) => ({
         ...line,
@@ -1824,6 +1839,11 @@ export default function SalesInvoicePage() {
 
   function handleNewInvoice() {
     if (invoiceBusy) {
+      return;
+    }
+
+    if (pendingInvoiceSettlement) {
+      setError("الفاتورة محفوظة، لكن سند القبض بحاجة لتأكيد. أعد محاولة سند القبض قبل الانتقال لفاتورة أخرى.");
       return;
     }
 
@@ -2046,8 +2066,13 @@ export default function SalesInvoicePage() {
             editMode ||
             !ACCOUNTING_WRITES_ENABLED ||
             !loadedSale ||
-            loadedSale.sale.status !== "completed"
+            loadedSale.sale.status !== "completed" ||
+            !!linkedReceipt ||
+            !!pendingInvoiceSettlement
           }
+          title={linkedReceipt || pendingInvoiceSettlement
+            ? "اعكس سند القبض المرتبط أولًا، قبل إلغاء الفاتورة"
+            : undefined}
           onClick={() => {
             void handleVoidInvoice();
           }}
@@ -2828,7 +2853,7 @@ export default function SalesInvoicePage() {
               </label>
               <label className="accounting-settlement-radio">
                 <input type="radio" name="invoice-settlement-kind" checked={settlementKind === "partial"}
-                  onChange={() => setSettlementKind("partial")}/>
+                  onChange={() => { setSettlementKind("partial"); setSettlementAmount(""); }}/>
                 دفعة جزئية
               </label>
               {settlementKind === "partial" && (
