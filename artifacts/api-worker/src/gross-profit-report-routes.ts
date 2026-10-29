@@ -1586,18 +1586,33 @@ async function handleGrossProfit(
     if (typeof productId !== "number" || !Number.isSafeInteger(productId) || productId <= 0 || !Number.isSafeInteger(quantity) || quantity <= 0) return;
     mixedQuantityByProduct.set(productId, (mixedQuantityByProduct.get(productId) ?? 0) + quantity);
   };
+  // Keep the review count consistent with the effective quality used
+  // by the totals above. Historic snapshots remain unchanged, but a
+  // properly audited owner attestation resolves the pending review.
   for (const item of saleItems) {
-    if (saleCostByItem.get(item.id)?.costQuality === "mixed") noteMixed(item.productId, item.quantity);
+    const cost = saleCostByItem.get(item.id);
+    if (cost && verifiedQuality(
+      item.productId, item.quantity, cost.costTotalMinor, cost.costQuality,
+    ) === "mixed") noteMixed(item.productId, item.quantity);
   }
   for (const item of exchangeSaleItems) {
-    if (exchangeSaleCostByItem.get(item.id)?.costQuality === "mixed") noteMixed(item.productId, item.quantity);
+    const cost = exchangeSaleCostByItem.get(item.id);
+    if (cost && verifiedQuality(
+      item.productId, item.quantity, cost.costTotalMinor, cost.costQuality,
+    ) === "mixed") noteMixed(item.productId, item.quantity);
   }
   for (const order of onlineOrders) {
     if (!Array.isArray(order.items)) continue;
     for (const [index, entry] of order.items.entries()) {
-      if (onlineCostByLine.get(`${order.id}:${index + 1}`)?.costQuality !== "mixed") continue;
+      const cost = onlineCostByLine.get(`${order.id}:${index + 1}`);
+      if (!cost) continue;
       const item = entry as { id?: unknown; quantity?: unknown };
-      noteMixed(Number(item.id), Number(item.quantity));
+      const productId = Number(item.id);
+      const quantity = Number(item.quantity);
+      if (verifiedQuality(
+        Number.isSafeInteger(productId) ? productId : null,
+        quantity, cost.costTotalMinor, cost.costQuality,
+      ) === "mixed") noteMixed(productId, quantity);
     }
   }
 
