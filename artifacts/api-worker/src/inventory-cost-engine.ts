@@ -5,6 +5,7 @@ import {
 import { desc, eq } from "drizzle-orm";
 
 import type { openDb } from "./db";
+import { isStableApprovedReturnCost } from "./cost-return-confidence";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type Tx = Parameters<
@@ -1114,10 +1115,11 @@ export async function addExactProductCostOrInitialize(
  * If cost accounting is not initialized, it remains untracked
  * rather than inventing a zero cost.
  */
-// Confirm future no-receipt returns only when the owner previously
-// attested this exact product unit cost and no unverified stock or cost
-// event has happened since. This never establishes a sales-invoice link.
-async function hasActiveOwnerReturnCostAttestation(
+// Infer the already-approved unit cost only when the complete cost ledger
+// proves the unit cost has never changed, or after an owner-audited one-time
+// certification with no subsequent conflicting stock/cost event.
+// This does not fabricate an original sale reference or change the valuation.
+async function hasStableApprovedReturnCost(
   tx: Tx,
   productId: number,
   state: LockedCostState,
@@ -1129,36 +1131,24 @@ async function hasActiveOwnerReturnCostAttestation(
     return false;
   }
 
+  const limit = 2000;
   const events = await tx.select({
     eventType: productCostLedgerTable.eventType,
     sourceType: productCostLedgerTable.sourceType,
     costQuality: productCostLedgerTable.costQuality,
     quantityAfter: productCostLedgerTable.quantityAfter,
-    valueAfter: productCostLedgerTable.inventoryValueAfterMinor,
+    valueAfterMinor: productCostLedgerTable.inventoryValueAfterMinor,
     note: productCostLedgerTable.note,
   }).from(productCostLedgerTable)
     .where(eq(productCostLedgerTable.productId, productId))
-    .orderBy(desc(productCostLedgerTable.id)).limit(2000);
+    .orderBy(desc(productCostLedgerTable.id))
+    .limit(limit);
 
-  const certifiedAt = events.findIndex((event) =>
-    event.eventType === "correction" &&
-    event.sourceType === "owner_cost_quality_attestation");
-  if (certifiedAt < 0) return false;
-  const certificate = events[certifiedAt];
-  if (!certificate?.note?.startsWith(
-    "Owner verified unit cost " + unitCostMinor + " minor units without claiming original sale linkage."
-  )) return false;
-
-  const allowed = new Set([
-    "pos_sale", "online_order", "exchange_sale", "pos_return",
-    "pos_mobile_return", "exchange_return", "pos_sale_void",
-    "pos_sale_edit_reverse", "pos_return_void", "online_order_cancel",
-    "online_order_edit_reverse", "exchange_return_void", "exchange_sale_void",
-  ]);
-  return events.slice(0, certifiedAt).every((event) =>
-    allowed.has(event.eventType) &&
-    event.costQuality === "confirmed" &&
-    BigInt(event.quantityAfter) * BigInt(unitCostMinor) === BigInt(event.valueAfter));
+  return isStableApprovedReturnCost(
+    events,
+    unitCostMinor,
+    events.length < limit,
+  );
 }
 
 export async function addProductCostAtCurrentAverage(
@@ -1226,13 +1216,14 @@ export async function addProductCostAtCurrentAverage(
   const incomingQuality = input.addedCostQuality ?? "estimated";
   const isNoReceiptReturn =
     (input.eventType === "exchange_return" && input.sourceType === "exchange") ||
-    (input.eventType === "pos_mobile_return" && input.sourceType === "pos_mobile_return");
-  const ownerCertified = isNoReceiptReturn && incomingQuality === "estimated" &&
-    await hasActiveOwnerReturnCostAttestation(tx, input.productId, state, unitCostMinor);
+    (input.eventType === "pos_mobile_return" && input.sourceType === "pos_mobile_return") ||
+    (input.eventType === "pos_return" && input.sourceType === "pos_return");
+  const stableCost = isNoReceiptReturn && incomingQuality === "estimated" &&
+    await hasStableApprovedReturnCost(tx, input.productId, state, unitCostMinor);
   const costQuality = mergeCostQuality(
     state.quantityOnHand,
     state.costQuality,
-    ownerCertified ? "confirmed" : incomingQuality,
+    stableCost ? "confirmed" : incomingQuality,
   );
 
   const referenceUnitCostMinor =
