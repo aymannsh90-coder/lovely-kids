@@ -1397,6 +1397,56 @@ export interface PosEmployeeSettlementInput {
   idempotencyKey: string;
 }
 
+export interface PosEmployeeMonthCloseRow {
+  employeeId: number;
+  employeeName: string;
+  monthlyAdvancesMinor: number;
+  salaryAccrualMinor: number;
+  outstandingAdvanceMinor: number;
+  outstandingPayableMinor: number;
+  offsetMinor: number;
+  payableRemainderMinor: number;
+  issue: string | null;
+}
+
+export interface PosEmployeeMonthClosePreview {
+  period: string;
+  periodEnd: string;
+  closed: boolean;
+  canClose: boolean;
+  closeAvailable: boolean;
+  closedTransactionId: number | null;
+  employees: PosEmployeeMonthCloseRow[];
+  totalOffsetMinor: number;
+  totalSalaryMinor: number;
+  message: string | null;
+}
+
+export function getPosEmployeeMonthClosePreview(token: string, period: string) {
+  return apiRequest<PosEmployeeMonthClosePreview>(
+    `/api/pos/employees/month-close?period=${encodeURIComponent(period)}`, {}, token);
+}
+
+export function closePosEmployeeSalaryMonth(
+  token: string, preview: PosEmployeeMonthClosePreview,
+) {
+  return apiRequest<{
+    alreadyClosed: boolean;
+    transaction?: { publicId: string };
+    preview: PosEmployeeMonthClosePreview;
+  }>("/api/pos/employees/month-close", {
+    method: "POST",
+    body: JSON.stringify({
+      period: preview.period, confirmed: true,
+      expected: preview.employees.map((e) => ({
+        employeeId: e.employeeId, offsetMinor: e.offsetMinor,
+        salaryAccrualMinor: e.salaryAccrualMinor,
+        monthlyAdvancesMinor: e.monthlyAdvancesMinor,
+      })),
+    }),
+  }, token);
+}
+
 export function createPosEmployeeAdvance(
   token: string,
   employeeId: number,
