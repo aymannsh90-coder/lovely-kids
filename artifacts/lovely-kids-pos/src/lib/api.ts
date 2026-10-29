@@ -19,6 +19,9 @@ export interface PosUser {
   email?: string | null;
   isAdmin: boolean;
   isOwner: boolean;
+  staffRole?: string | null;
+  staffEnabled?: boolean;
+  permissions?: string[];
 }
 
 export interface CashSession {

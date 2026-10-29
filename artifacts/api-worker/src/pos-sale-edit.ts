@@ -17,6 +17,7 @@ import {
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   addProductCostAtCurrentAverage,
@@ -859,7 +860,7 @@ async function requirePosUser(
     );
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(await userHasPermission(db, user, "sales.edit"))) {
     return json(
       {
         error: "غير مصرح باستخدام نقطة البيع",

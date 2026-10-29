@@ -4,6 +4,7 @@ import {
   productLikesTable,
   securityAuditLogsTable,
   sessionsTable,
+  staffAccessTable,
   usersTable,
 } from "@workspace/db/schema";
 import { asc, desc, eq } from "drizzle-orm";
@@ -283,6 +284,11 @@ async function handleDeleteUser(
       403,
     );
   }
+
+  // Staff users must be disabled, never deleted, to retain their audit trail.
+  const staffRows = await db.select({ id: staffAccessTable.userId })
+    .from(staffAccessTable).where(eq(staffAccessTable.userId, userId)).limit(1);
+  if (staffRows.length) return json({ error: "عطّل الموظف من شاشة الصلاحيات بدلاً من حذف حسابه" }, 403);
 
   if (target.isAdmin && !admin.isOwner) {
     return json(

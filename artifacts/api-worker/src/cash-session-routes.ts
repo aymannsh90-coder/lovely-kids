@@ -4,6 +4,7 @@ import {
 } from "@workspace/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
+import { userHasAnyPermission, type StaffPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -236,13 +237,19 @@ async function requirePosUser(
   }
 
   if (!user.isAdmin && !user.isOwner) {
-    return {
-      ok: false,
-      response: json(
-        { error: "غير مصرح باستخدام نقطة البيع" },
-        403,
-      ),
-    };
+    const path = new URL(request.url).pathname;
+    const method = request.method;
+    const required: StaffPermission[] =
+      method === "GET" && path === "/api/pos/cash-sessions/current"
+        ? ["cash.view", "sales.create"]
+        : method === "POST" && path === "/api/pos/cash-sessions/open"
+          ? ["cash.open"]
+          : method === "POST" && path === "/api/pos/cash-sessions/close"
+            ? ["cash.close"]
+            : [];
+    if (!required.length || !(await userHasAnyPermission(db, user, required))) {
+      return { ok: false, response: json({ error: "لا تملك صلاحية الصندوق المطلوبة" }, 403) };
+    }
   }
 
   return {

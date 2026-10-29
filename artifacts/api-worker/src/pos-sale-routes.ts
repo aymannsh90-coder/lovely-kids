@@ -27,6 +27,7 @@ import {
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import { userHasAnyPermission, type StaffPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
@@ -105,15 +106,23 @@ async function requirePosUser(
   }
 
   if (!user.isAdmin && !user.isOwner) {
-    return {
-      ok: false,
-      response: json(
-        {
-          error: "غير مصرح باستخدام نقطة البيع",
-        },
-        403,
-      ),
-    };
+    const path = new URL(request.url).pathname;
+    const method = request.method;
+    let required: StaffPermission[] = [];
+    if (method === "GET" && (path === "/api/pos/products/search" || path === "/api/pos/products/by-barcode" || path === "/api/pos/sales/cash-currencies")) {
+      required = ["sales.create"];
+    } else if (method === "GET" && path === "/api/pos/inventory/product-card") {
+      required = ["inventory.view"];
+    } else if (method === "GET" && (path === "/api/pos/sales/today" || path === "/api/pos/sales/by-public-id")) {
+      required = ["sales.view"];
+    } else if (method === "POST" && path === "/api/pos/sales") {
+      required = ["sales.create"];
+    } else if (method === "POST" && path === "/api/pos/sales/void") {
+      required = ["sales.void"];
+    }
+    if (!required.length || !(await userHasAnyPermission(db, user, required))) {
+      return { ok: false, response: json({ error: "لا تملك صلاحية هذه العملية" }, 403) };
+    }
   }
 
   return {
