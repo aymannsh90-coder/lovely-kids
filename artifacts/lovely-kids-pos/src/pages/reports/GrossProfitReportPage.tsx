@@ -651,7 +651,7 @@ export default function GrossProfitReportPage() {
       return;
     }
     const reason = window.prompt(
-      `لتأكيد تكلفة الصنف ${product.productCode ?? product.productId} بمبلغ ${formatReportMoney(costs[0])} للقطعة، اكتب سبب اعتماد التكلفة من سجلات الشراء. لا يتم إثبات ارتباط المرتجعات بفواتير البيع القديمة.`,
+      `لتأكيد تكلفة الصنف ${product.productCode ?? product.productId} بمبلغ ${formatReportMoney(costs[0])} للقطعة، اكتب سبب اعتماد التكلفة من سجلات الشراء. لا يتم إثبات ارتباط المرتجعات بفواتير البيع القديمة. ويسري اعتماد تكلفة الصنف على المردودات المستقبلية ما دام السعر ثابتًا ولم تدخل دفعة شراء أو تصحيح تكلفة جديد.`,
     );
     if (reason === null) return;
     if (reason.trim().length < 12) {
@@ -659,7 +659,7 @@ export default function GrossProfitReportPage() {
       return;
     }
     if (!window.confirm(
-      `سيتم اعتماد تكلفة ${formatReportMoney(costs[0])} للمبيعات القادمة للصنف ${product.productCode ?? product.productId}، مع تسجيل سند مراجعة وعدم تعديل الفواتير القديمة أو المخزون. هل تؤكد؟`,
+      `سيتم اعتماد تكلفة ${formatReportMoney(costs[0])} للمبيعات القادمة للصنف ${product.productCode ?? product.productId}، مع تسجيل سند مراجعة وعدم تعديل الفواتير القديمة أو المخزون. ويُستخدم السعر المعتمد للمردودات المستقبلية حتى تتغير تكلفة الدفعة. هل تؤكد؟`,
     )) return;
     setAttestingProductId(product.productId);
     setAttestationError("");
