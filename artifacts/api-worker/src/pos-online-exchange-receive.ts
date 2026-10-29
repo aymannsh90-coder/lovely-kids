@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 import {
   addProductCostAtCurrentAverage,
@@ -449,7 +450,8 @@ export async function handleReceiveOnlineExchangeReturn(
 
   if (
     !user.isAdmin &&
-    !user.isOwner
+    !user.isOwner &&
+    !(await userHasPermission(db, user, "sales.exchange.online"))
   ) {
     return json(
       {
