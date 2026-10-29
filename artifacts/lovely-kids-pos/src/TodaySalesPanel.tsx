@@ -1013,7 +1013,7 @@ export default function TodaySalesPanel({
           وعند قبض الدين يظهر السند في تحصيلات يوم القبض، دون تسجيل بيع جديد.
           صافي نقد المبيعات والذمم لا يشمل مصروفات الصندوق ولا تحصيلات المندوب المقدمة.
         </p>
-        {loadError && <div className="alert error-alert">{loadError}</div>
+        {loadError && <div className="alert error-alert">{loadError}</div>}
 
         {!loading &&
         !loadError &&
