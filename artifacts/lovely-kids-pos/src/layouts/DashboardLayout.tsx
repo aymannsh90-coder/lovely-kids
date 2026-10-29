@@ -8,6 +8,7 @@ import {
 } from "../app/navigation";
 import { usePosRuntime } from "../app/pos-context";
 import ClockWidget from "../components/ClockWidget";
+import RequireStaffPage, { canVisitStaffPage } from "../guards/RequireStaffPage";
 import { API_BASE_URL, POS_REGISTER_KEY } from "../lib/api";
 import { formatMoney } from "../lib/format";
 
@@ -116,9 +117,11 @@ export default function DashboardLayout() {
           (item.group !== "reports" || user?.isOwner === true) &&
           (item.group !== "statements" || user?.isOwner === true) &&
           (item.group !== "vouchers" || user?.isOwner === true) &&
-          (item.ownerOnly !== true || user?.isOwner === true),
+          (item.ownerOnly !== true || user?.isOwner === true) &&
+          (user?.isAdmin === true || user?.isOwner === true ||
+            canVisitStaffPage(item.path, user?.permissions ?? [])),
       ),
-    [activeSection, user?.isOwner],
+    [activeSection, user?.isOwner, user?.isAdmin, user?.permissions],
   );
 
   const pageTitle = isDashboard
@@ -347,7 +350,7 @@ export default function DashboardLayout() {
               : "route-content"
           }
         >
-          <Outlet />
+          <RequireStaffPage><Outlet /></RequireStaffPage>
         </section>
 
         <footer hidden={isAdminPanel} className="footer">
