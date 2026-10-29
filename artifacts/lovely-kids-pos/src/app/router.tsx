@@ -6,6 +6,7 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
+import StaffAccessPage from "../pages/admin/StaffAccessPage";
 import BankingPage from "../pages/finance/BankingPage";
 import CardSettlementsPage from "../pages/finance/CardSettlementsPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
@@ -94,6 +95,7 @@ export default function AppRouter() {
       <Route element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="admin" element={<AdminPanelPage />} />
+        <Route path="access" element={<RequireOwner><StaffAccessPage /></RequireOwner>} />
 
         <Route
           path="sales/manual-order"
