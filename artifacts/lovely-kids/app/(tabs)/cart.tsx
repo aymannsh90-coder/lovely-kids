@@ -940,6 +940,17 @@ export default function CartScreen() {
         if (isStockError) {
           setCartStockSnapshot(null);
           void refreshProducts();
+          // Capture last-second server stock rejections too, where stock
+          // changed after the initial pre-check (without delaying the customer).
+          void fetchFreshCartProducts().then((freshProducts) => {
+            for (const item of currentItems) {
+              const product = freshProducts.find((entry) => entry.id === item.id);
+              const status = getCartStockStatus(item, product);
+              if (!status.valid && status.kind) {
+                void trackCartStockEvent("checkout_blocked", item, status.kind, status.availableQuantity);
+              }
+            }
+          }).catch(() => {});
           setStep("cart");
         }
 
