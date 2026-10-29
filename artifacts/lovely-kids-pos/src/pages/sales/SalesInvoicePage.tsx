@@ -367,6 +367,7 @@ export default function SalesInvoicePage() {
     amountMinor: number;
     method: "cash" | "card";
   } | null>(null);
+  const linkedReceiptInvoiceRef = useRef<string | null>(null);
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -1090,6 +1091,7 @@ export default function SalesInvoicePage() {
     }
 
     setPendingInvoiceSettlement(null);
+    linkedReceiptInvoiceRef.current = invoicePublicId;
     setLinkedReceipt({
       publicId: response.voucher.publicId,
       amountMinor: response.voucher.amountMinor,
@@ -1474,6 +1476,19 @@ export default function SalesInvoicePage() {
       setLoadedSale(response);
       setEditMode(false);
 
+      if (response.linkedInitialReceipt) {
+        linkedReceiptInvoiceRef.current = response.sale.publicId;
+        setLinkedReceipt({
+          publicId: response.linkedInitialReceipt.publicId,
+          amountMinor: response.linkedInitialReceipt.amountMinor,
+          method: response.linkedInitialReceipt.paymentMethod,
+        });
+        setPendingInvoiceSettlement(null);
+      } else if (linkedReceiptInvoiceRef.current !== response.sale.publicId) {
+        linkedReceiptInvoiceRef.current = null;
+        setLinkedReceipt(null);
+      }
+
       createIdempotencyKey.current = null;
       editIdempotencyKey.current = null;
 
@@ -1677,6 +1692,7 @@ export default function SalesInvoicePage() {
     setPaidAmountAuto(true);
     setEditMode(false);
     setLinkedReceipt(null);
+    linkedReceiptInvoiceRef.current = null;
     setPendingInvoiceSettlement(null);
 
     createIdempotencyKey.current = null;
@@ -1807,6 +1823,7 @@ export default function SalesInvoicePage() {
     setSettlementOpen(false);
     setPendingInvoiceSettlement(null);
     setLinkedReceipt(null);
+    linkedReceiptInvoiceRef.current = null;
     setPaidAmountAuto(true);
     setEditMode(false);
 
