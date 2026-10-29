@@ -3376,6 +3376,82 @@ export function createPosSaleReturn(
   );
 }
 
+export interface PosReturnHistorySummary {
+  id: string;
+  publicId: string;
+  status: string;
+  originalSaleId: string | null;
+  customerId: number | null;
+  refundMethod: string;
+  refundAmountMinor: number;
+  createdAt: string;
+  reason: string;
+}
+
+export interface PosReturnHistoryDetail extends PosReturnHistorySummary {
+  customerName: string | null;
+  cashSessionId: string;
+  businessDate: string;
+  notes: string | null;
+  previousPublicId: string | null;
+  nextPublicId: string | null;
+  items: Array<{
+    id: string;
+    barcode: string | null;
+    productNameAr: string;
+    color: string | null;
+    size: string | null;
+    quantity: number;
+    refundAmountMinor: number;
+  }>;
+}
+
+export interface PosReturnHistoryResponse {
+  recent: PosReturnHistorySummary[];
+  selected: PosReturnHistoryDetail | null;
+}
+
+export function getPosReturnHistory(
+  token: string,
+  registerKey: string,
+  publicId?: string,
+) {
+  const params = new URLSearchParams({ register: registerKey });
+  if (publicId?.trim()) {
+    params.set("publicId", publicId.trim().toUpperCase());
+  }
+  return apiRequest<PosReturnHistoryResponse>(
+    `/api/pos/sales/returns/history?${params.toString()}`,
+    {},
+    token,
+  );
+}
+
+export function correctPosReturnCashToCustomer(
+  token: string,
+  input: {
+    publicId: string;
+    customerId: number;
+    reason: string;
+  },
+) {
+  return apiRequest<{
+    ok: boolean;
+    alreadyCorrected: boolean;
+    publicId: string;
+    refundMethod: "customer";
+    customerId: number;
+    refundAmountMinor: number;
+  }>("/api/pos/sales/returns/correct-cash-to-customer", {
+    method: "POST",
+    body: JSON.stringify({
+      publicId: input.publicId,
+      customerId: input.customerId,
+      reason: input.reason,
+    }),
+  }, token);
+}
+
 export interface PosSaleReturnVoidResult {
   alreadyVoided: boolean;
 

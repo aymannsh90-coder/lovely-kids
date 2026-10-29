@@ -1,5 +1,6 @@
 import {
   exchangeDocumentsTable,
+  customersTable,
   exchangeReturnItemsTable,
   posSaleItemsTable,
   posSaleReturnItemsTable,
@@ -17,6 +18,7 @@ import { openDb, type Env } from "./db";
 import { handleCreatePosSaleReturn } from "./pos-sale-return-create";
 import { handleCreateMobileEmergencyReturn } from "./pos-mobile-return-create";
 import { handleVoidPosSaleReturn } from "./pos-sale-return-void";
+import { handleCorrectReturnCashToCustomer } from "./pos-return-correction";
 import {
   allocateReturnDiscountMinor,
 } from "./promotion-return-requalification";
@@ -508,12 +510,111 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
 }
 
 
+
+/**
+ * Read-only recent returns plus a selected historic return with previous/next
+ * navigation. Selection is independent from the original sale invoice.
+ */
+async function handleReturnHistory(request: Request, db: Db, env: Env) {
+  const auth = await requirePosUser(request, db, env);
+  if (!auth.ok) return auth.response;
+
+  const url = new URL(request.url);
+  const registerKey = (url.searchParams.get("register") || "main").trim().toLowerCase();
+  if (!/^[a-z0-9_-]{1,50}$/.test(registerKey)) {
+    return json({ error: "معرّف الصندوق غير صالح" }, 400);
+  }
+  const requestedId = (url.searchParams.get("publicId") || "").trim().toUpperCase();
+  if (requestedId && (requestedId.length > 80 || !/^[A-Z0-9_-]+$/.test(requestedId))) {
+    return json({ error: "رقم المردود غير صالح" }, 400);
+  }
+
+  const recent = await db.select().from(posSaleReturnsTable)
+    .where(eq(posSaleReturnsTable.registerKey, registerKey))
+    .orderBy(desc(posSaleReturnsTable.id)).limit(50);
+
+  const chosen = requestedId
+    ? (await db.select().from(posSaleReturnsTable)
+        .where(and(
+          eq(posSaleReturnsTable.publicId, requestedId),
+          eq(posSaleReturnsTable.registerKey, registerKey),
+        )).limit(1))[0] ?? null
+    : recent[0] ?? null;
+
+  if (requestedId && !chosen) return json({ error: "المردود غير موجود" }, 404);
+
+  const [items, previous, next, customer] = chosen
+    ? await Promise.all([
+        db.select().from(posSaleReturnItemsTable)
+          .where(eq(posSaleReturnItemsTable.returnId, chosen.id))
+          .orderBy(asc(posSaleReturnItemsTable.lineNumber)),
+        db.select({ publicId: posSaleReturnsTable.publicId })
+          .from(posSaleReturnsTable)
+          .where(and(eq(posSaleReturnsTable.registerKey, registerKey),
+            lt(posSaleReturnsTable.id, chosen.id)))
+          .orderBy(desc(posSaleReturnsTable.id)).limit(1),
+        db.select({ publicId: posSaleReturnsTable.publicId })
+          .from(posSaleReturnsTable)
+          .where(and(eq(posSaleReturnsTable.registerKey, registerKey),
+            gt(posSaleReturnsTable.id, chosen.id)))
+          .orderBy(asc(posSaleReturnsTable.id)).limit(1),
+        chosen.customerId !== null
+          ? db.select({ name: customersTable.name }).from(customersTable)
+              .where(eq(customersTable.id, chosen.customerId)).limit(1)
+          : Promise.resolve([] as Array<{ name: string }>),
+      ])
+    : [[], [], [], []];
+
+  const summary = (saleReturn: typeof posSaleReturnsTable.$inferSelect) => ({
+    id: String(saleReturn.id),
+    publicId: saleReturn.publicId,
+    status: saleReturn.status,
+    originalSaleId: saleReturn.originalSaleId === null
+      ? null : String(saleReturn.originalSaleId),
+    customerId: saleReturn.customerId,
+    refundMethod: saleReturn.refundMethod,
+    refundAmountMinor: saleReturn.refundAmountMinor,
+    createdAt: saleReturn.createdAt.toISOString(),
+    reason: saleReturn.reason,
+  });
+
+  return json({
+    recent: recent.map(summary),
+    selected: chosen ? {
+      ...summary(chosen),
+      customerName: customer[0]?.name ?? null,
+      cashSessionId: String(chosen.cashSessionId),
+      businessDate: chosen.businessDate,
+      notes: chosen.notes,
+      previousPublicId: previous[0]?.publicId ?? null,
+      nextPublicId: next[0]?.publicId ?? null,
+      items: items.map((item) => ({
+        id: String(item.id),
+        barcode: item.barcode,
+        productNameAr: item.productNameAr,
+        color: item.color,
+        size: item.size,
+        quantity: item.quantity,
+        refundAmountMinor: item.refundAmountMinor,
+      })),
+    } : null,
+  });
+}
+
 export async function handlePosSaleReturnRequest(
   request: Request,
   db: Db,
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  if (request.method === "GET" && path === "/api/pos/sales/returns/history") {
+    return handleReturnHistory(request, db, env);
+  }
+
+  if (request.method === "POST" && path === "/api/pos/sales/returns/correct-cash-to-customer") {
+    return handleCorrectReturnCashToCustomer(request, db, env);
+  }
 
   if (request.method === "GET" && path === "/api/pos/sales/returns/preview") {
     return handleReturnPreview(request, db, env);
