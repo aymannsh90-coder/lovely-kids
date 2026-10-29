@@ -19938,3 +19938,427 @@ button.inventory-intelligence-metric {
     transition: none;
   }
 }
+
+
+/* POS sales workstation — one desktop viewport with independently scrolling items */
+/* The main workspace and summary are explicit visual regions. The underlying
+   cart, customer selection, payment controls and receipt handlers are untouched. */
+@media screen and (min-width: 1101px) {
+  #pos-sale.sale-panel {
+    display: grid;
+    grid-template-columns: minmax(315px, 352px) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 8px;
+    direction: ltr;
+  }
+  #pos-sale > .sale-workspace-main {
+    display: grid;
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-rows: auto auto auto auto;
+    gap: 8px;
+    min-width: 0;
+    direction: rtl;
+  }
+  #pos-sale > .sale-payment-checkout {
+    display: block !important;
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    direction: rtl;
+  }
+  #pos-sale .sale-workspace-main > .sale-customer-checkout {
+    display: block !important;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  #pos-sale > .sale-workspace-main > .panel-heading,
+  #pos-sale > .sale-workspace-main > .barcode-form,
+  #pos-sale .sale-workspace-main > .sale-main-items-region {
+    grid-column: auto;
+    grid-row: auto;
+    min-width: 0;
+  }
+  #pos-sale .sale-workspace-main > .panel-heading {
+    min-height: 42px;
+  }
+  #pos-sale .sale-main-items-region {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
+  }
+  #pos-sale .sale-main-items-region > .document-items-table-wrap {
+    min-width: 0;
+    margin: 0;
+  }
+  #pos-sale .sale-main-items-region > .pos-product-search-panel {
+    min-width: 0;
+    margin: 0;
+  }
+  #pos-sale .sale-summary {
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+    margin: 0;
+    align-self: stretch;
+  }
+  #pos-sale > .last-sale-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
+  }
+}
+/* Apply viewport pinning only when the browser has enough real vertical room.
+   Smaller windows keep natural page scrolling; on desktop the cart and
+   payment sidebar can each scroll without hiding the payment controls. */
+@media screen and (min-width: 1200px) and (min-height: 700px) {
+  .pos-full-page:has(#pos-sale) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  .pos-full-page:has(#pos-sale) > .pos-full-shell {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 4px;
+  }
+  .pos-full-page:has(#pos-sale) .pos-shamel-menu-shell,
+  .pos-full-page:has(#pos-sale) .pos-shamel-session-banner {
+    flex: 0 0 auto;
+  }
+  .pos-full-page:has(#pos-sale) > .pos-full-shell > .route-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .route-content > #pos-sale.sale-panel {
+    flex: 1 1 auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-items: stretch;
+    min-height: 0;
+    height: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    gap: 8px 11px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  #pos-sale > .sale-workspace-main {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    min-height: 0;
+    height: 100%;
+    gap: 6px;
+    overflow: hidden;
+  }
+  #pos-sale .sale-workspace-main > .panel-heading {
+    min-height: 37px;
+    padding: 0 3px;
+    gap: 7px;
+  }
+  #pos-sale .sale-workspace-main .panel-icon {
+    width: 35px;
+    height: 35px;
+    border-radius: 10px;
+    font-size: 19px;
+  }
+  #pos-sale .sale-workspace-main .panel-heading h2 {
+    font-size: 19px;
+  }
+  #pos-sale .sale-workspace-main .panel-heading p {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  #pos-sale .sale-workspace-main > .barcode-form {
+    grid-template-columns: minmax(0, 1fr) 122px;
+    gap: 7px;
+    padding: 6px 8px;
+    border-radius: 10px;
+  }
+  #pos-sale .barcode-form label {
+    gap: 2px;
+  }
+  #pos-sale .barcode-form label > span {
+    font-size: 11px;
+  }
+  #pos-sale .barcode-form input,
+  #pos-sale .barcode-form .primary-button {
+    min-height: 35px;
+    font-size: 12px;
+  }
+  #pos-sale .sale-main-items-region {
+    min-height: 0;
+    overflow: hidden;
+    gap: 5px;
+  }
+  #pos-sale .sale-main-items-region > .sale-alert {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+  #pos-sale .sale-main-items-region > .pos-product-search-panel {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: min(200px, 33dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  #pos-sale .sale-main-items-region > .empty-cart {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 9px;
+    gap: 3px;
+    border-radius: 12px;
+    overflow: auto;
+  }
+  #pos-sale .sale-main-items-region > .empty-cart .empty-cart-icon {
+    width: 46px;
+    height: 46px;
+    margin-bottom: 1px;
+    border-radius: 14px;
+    font-size: 25px;
+  }
+  #pos-sale .sale-main-items-region > .empty-cart strong {
+    font-size: 16px;
+  }
+  #pos-sale .sale-main-items-region > .empty-cart small {
+    font-size: 11px;
+  }
+  #pos-sale .sale-main-items-region > .document-items-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    border-radius: 11px;
+  }
+  #pos-sale .document-items-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding-block: 6px;
+    font-size: 11px;
+  }
+  #pos-sale .document-items-table td {
+    font-size: 12px;
+  }
+  #pos-sale .sale-workspace-main > .sale-customer-checkout {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  #pos-sale .sale-customer-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px 10px;
+    padding: 7px 10px;
+    border-radius: 11px;
+  }
+  #pos-sale .sale-customer-fields .customer-picker-label,
+  #pos-sale .sale-customer-fields label > span {
+    font-size: 11px;
+  }
+  #pos-sale .sale-customer-fields input,
+  #pos-sale .sale-customer-fields .customer-picker-control > input {
+    min-height: 33px;
+    height: 33px;
+    font-size: 12px;
+  }
+  #pos-sale .sale-customer-fields .customer-picker-search-button,
+  #pos-sale .sale-customer-fields .customer-picker-clear-button {
+    min-height: 33px;
+    height: 33px;
+  }
+  #pos-sale .sale-customer-fields .sale-notes {
+    grid-column: 1 / -1;
+    min-height: 0;
+  }
+  #pos-sale .sale-customer-fields textarea {
+    min-height: 42px;
+    height: 42px;
+    max-height: 42px;
+    resize: none;
+    font-size: 12px;
+  }
+  #pos-sale .sale-customer-fields .customer-picker-selected-meta {
+    margin-top: 2px;
+    font-size: 10px;
+  }
+
+  #pos-sale > .sale-payment-checkout {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+  #pos-sale.sale-panel .sale-payment-checkout > .sale-summary {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    gap: 5px;
+    padding: 8px 9px;
+    border-radius: 12px;
+    box-sizing: border-box;
+  }
+  #pos-sale .sale-summary-heading {
+    flex: 0 0 auto;
+    margin: 0 0 1px;
+    padding: 7px 9px;
+    border-radius: 10px;
+  }
+  #pos-sale .sale-summary-heading strong {
+    font-size: 16px;
+  }
+  #pos-sale .sale-summary-heading small {
+    font-size: 10px;
+  }
+  #pos-sale .sale-summary-heading-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+  #pos-sale .sale-summary > div:not(.sale-summary-heading) {
+    min-height: 22px;
+  }
+  #pos-sale .sale-summary > div > span,
+  #pos-sale .sale-summary label > span {
+    font-size: 11px;
+  }
+  #pos-sale .sale-summary > div > strong {
+    font-size: 12px;
+  }
+  #pos-sale .sale-grand-total {
+    flex: 0 0 auto;
+    min-height: 32px;
+    margin: 0;
+    padding: 6px 9px;
+  }
+  #pos-sale .sale-grand-total strong {
+    font-size: 19px !important;
+  }
+  #pos-sale .customer-account-summary {
+    gap: 2px;
+    padding-block: 3px;
+  }
+  #pos-sale .sale-payment-methods {
+    gap: 3px !important;
+    padding-top: 3px;
+  }
+  #pos-sale .sale-payment-method-grid {
+    gap: 4px;
+    margin-top: 0;
+  }
+  #pos-sale .sale-payment-method-row {
+    gap: 5px;
+  }
+  #pos-sale .sale-payment-method-row button {
+    min-height: 33px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+  #pos-sale button.sale-bank-visa-button {
+    min-height: 35px;
+    padding: 3px 5px;
+    font-size: 10px;
+  }
+  #pos-sale .sale-bank-visa-button__logo {
+    width: 35px;
+    height: 28px;
+  }
+  #pos-sale .sale-bank-visa-button--bop .sale-bank-visa-button__logo {
+    width: 29px;
+    height: 29px;
+  }
+  #pos-sale .sale-summary select,
+  #pos-sale .sale-summary input {
+    min-height: 33px;
+    font-size: 12px;
+  }
+  #pos-sale .sale-summary .money-input {
+    min-height: 33px;
+  }
+  #pos-sale .sale-summary > label,
+  #pos-sale .sale-summary > div[style*="display: grid"] {
+    flex: 0 0 auto;
+  }
+
+  /* Both buttons stay visible while the longer summary itself scrolls.
+     The same summary can grow for a foreign currency or credit sale. */
+  #pos-sale.sale-panel .sale-summary > .complete-sale-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    flex: 0 0 auto !important;
+    gap: 5px;
+    margin: auto 0 0;
+    padding: 6px 0 2px;
+    background: linear-gradient(180deg, rgba(255,250,253,.92), #fffafd 30%);
+    border-top: 1px solid #eadce5;
+  }
+  #pos-sale.sale-panel .sale-summary > .complete-sale-actions > button {
+    width: 92% !important;
+    min-height: 39px !important;
+    max-width: 330px !important;
+    font-size: 11px;
+    border-radius: 9px;
+  }
+  #pos-sale .complete-sale-print-button {
+    min-height: 43px !important;
+    gap: 1px;
+  }
+  #pos-sale .sale-print-icon {
+    font-size: 18px;
+  }
+  #pos-sale .sale-shortcut-key {
+    min-height: 20px;
+    font-size: 10px;
+  }
+
+  #pos-sale > .last-sale-actions {
+    grid-row: 2;
+    min-height: 0;
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+  .pos-full-page:has(#pos-sale) .footer {
+    flex: 0 0 auto;
+    min-height: 0;
+    margin-top: 3px;
+    padding: 3px 10px;
+    border-radius: 7px;
+    font-size: 10px;
+  }
+}
+/* End POS sales workstation viewport layout */
