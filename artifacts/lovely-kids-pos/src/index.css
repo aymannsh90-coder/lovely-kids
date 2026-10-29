@@ -20412,6 +20412,13 @@ button.inventory-intelligence-metric {
 #pos-sale .sale-summary-scroll-content .customer-account-credit-box {
   flex: 0 0 auto;
 }
+/* This is now the credit box's last div; override the older rule
+   that presumed the last div was the two-button actions grid. */
+#pos-sale .customer-account-credit-box > .sale-credit-settlement-methods {
+  display: block !important;
+  grid-template-columns: none !important;
+  width: 100% !important;
+}
 #pos-sale .customer-account-credit-box .sale-credit-settlement-methods > div {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr));
