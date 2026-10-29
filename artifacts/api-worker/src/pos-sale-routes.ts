@@ -3746,6 +3746,30 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         throw new PosSaleError("لا يمكن إلغاء هذه الفاتورة", 409);
       }
 
+      // An invoice's linked initial receipt must be reversed first.
+      // Otherwise voiding the credit sale while leaving cash/card collection
+      // posted would create an artificial customer credit (double reversal).
+      const linkedReceiptRows = await tx
+        .select({ id: financeVouchersTable.id })
+        .from(financeVouchersTable)
+        .where(
+          and(
+            eq(
+              financeVouchersTable.idempotencyKey,
+              `pos_invoice_initial_receipt:${sale.publicId}`,
+            ),
+            eq(financeVouchersTable.status, "posted"),
+          ),
+        )
+        .limit(1);
+
+      if (linkedReceiptRows[0]) {
+        throw new PosSaleError(
+          "للفـاتورة سند قبض مرتبط ومعتمد. يجب عكس سند القبض أولًا من سندات الزبون قبل إلغاء الفاتورة، لتجنّب اختلال الذمم والصندوق.",
+          409,
+        );
+      }
+
       const completedReturnRows = await tx
         .select({
           id: posSaleReturnsTable.id,
