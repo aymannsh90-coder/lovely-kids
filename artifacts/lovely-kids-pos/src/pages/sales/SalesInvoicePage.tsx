@@ -19,6 +19,7 @@ import {
 import {
   ApiError,
   createPosSale,
+  createPosCustomerReceipt,
   getCurrentCashSession,
   getPosCustomers,
   getPosSaleByPublicId,
@@ -36,6 +37,12 @@ const ACCOUNTING_WRITES_ENABLED =
 
 const PRODUCT_IMAGE_PLACEHOLDER =
   "/mobile-pos-icon-192.png";
+
+type InvoiceSettlement = {
+  amountMinor: number;
+  method: "cash" | "card";
+  cardProcessor: "arab" | "bop" | null;
+};
 
 interface InvoiceLine {
   id: string;
@@ -344,6 +351,23 @@ export default function SalesInvoicePage() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [costCenter, setCostCenter] = useState("general");
 
+  const [settlementOpen, setSettlementOpen] = useState(false);
+  const [settlementKind, setSettlementKind] = useState<"full" | "partial">("full");
+  const [settlementAmount, setSettlementAmount] = useState("0.00");
+  const [settlementMethod, setSettlementMethod] = useState<"cash" | "card">("cash");
+  const [settlementCardProcessor, setSettlementCardProcessor] =
+    useState<"arab" | "bop" | null>(null);
+  const [pendingInvoiceSettlement, setPendingInvoiceSettlement] = useState<{
+    publicId: string;
+    customerId: number;
+    settlement: InvoiceSettlement;
+  } | null>(null);
+  const [linkedReceipt, setLinkedReceipt] = useState<{
+    publicId: string;
+    amountMinor: number;
+    method: "cash" | "card";
+  } | null>(null);
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -501,6 +525,8 @@ export default function SalesInvoicePage() {
 
   const paidMinor = moneyToMinor(paidAmount);
   const changeMinor = Math.max(0, paidMinor - finalTotalMinor);
+  const customerDueMinor = paymentMethod === "credit" ?
+    finalTotalMinor : Math.max(0, finalTotalMinor - paidMinor);
 
   useEffect(() => {
     if (!paidAmountAuto || loadedSale !== null || paymentMethod !== "cash") {
@@ -1032,7 +1058,140 @@ export default function SalesInvoicePage() {
     void loadStoredInvoice(publicId);
   }
 
-  async function handleSaveInvoice(printAfterSave = false) {
+  async function postCustomerInvoiceReceipt(
+    invoicePublicId: string,
+    customerId: number,
+    settlement: InvoiceSettlement,
+  ) {
+    const response = await createPosCustomerReceipt(
+      token,
+      customerId,
+      {
+        amount: (settlement.amountMinor / 100).toFixed(2),
+        paymentMethod: settlement.method,
+        ...(settlement.method === "card" && settlement.cardProcessor
+          ? { cardProcessor: settlement.cardProcessor }
+          : {}),
+        registerKey: session?.registerKey ?? "main",
+        notes: `تسديد فاتورة المبيعات ${invoicePublicId}`,
+        // One initial collection per invoice. Retrying never issues a second receipt.
+        idempotencyKey: `pos_invoice_initial_receipt:${invoicePublicId}`,
+      },
+    );
+
+    if (
+      response.voucher.amountMinor !== settlement.amountMinor ||
+      response.voucher.paymentMethod !== settlement.method ||
+      response.voucher.status !== "posted"
+    ) {
+      throw new Error(
+        "سند القبض المرتبط بهذه الفاتورة لا يطابق الدفعة المطلوبة؛ راجع سندات الزبون قبل أي محاولة جديدة.",
+      );
+    }
+
+    setPendingInvoiceSettlement(null);
+    setLinkedReceipt({
+      publicId: response.voucher.publicId,
+      amountMinor: response.voucher.amountMinor,
+      method: settlement.method,
+    });
+    setMessage(
+      `تم حفظ الفاتورة ${invoicePublicId} على حساب الزبون، وتسجيل سند قبض ${response.voucher.publicId} بمبلغ ${formatMinor(settlement.amountMinor)}.`,
+    );
+    await refreshCashSession();
+  }
+
+  async function retryPendingInvoiceSettlement() {
+    if (!pendingInvoiceSettlement || invoiceBusy) {
+      return;
+    }
+
+    setInvoiceBusy(true);
+    setError("");
+    try {
+      await postCustomerInvoiceReceipt(
+        pendingInvoiceSettlement.publicId,
+        pendingInvoiceSettlement.customerId,
+        pendingInvoiceSettlement.settlement,
+      );
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        clearAuthentication();
+        return;
+      }
+
+      setError(
+        `الفاتورة ${pendingInvoiceSettlement.publicId} محفوظة كآجل. لم نتأكد من سند القبض: ${caught instanceof Error ? caught.message : "حدث خطأ"}. استخدم إعادة محاولة السند، ولا تنشئ فاتورة أخرى.`,
+      );
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
+  function openSettlementDialog() {
+    if (!ACCOUNTING_WRITES_ENABLED || invoiceBusy || editMode || loadedSale) {
+      return;
+    }
+
+    const validationError = validateInvoiceForSave();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    if (!selectedCustomerId || paymentMethod !== "credit") {
+      setError("اختر زبونًا مسجّلًا لحفظ الفاتورة على حسابه ثم تسديدها");
+      return;
+    }
+
+    if (finalTotalMinor <= 0) {
+      setError("قيمة الفاتورة يجب أن تكون أكبر من صفر لإصدار سند قبض");
+      return;
+    }
+
+    setSettlementKind("full");
+    setSettlementAmount((finalTotalMinor / 100).toFixed(2));
+    setSettlementMethod("cash");
+    setSettlementCardProcessor(null);
+    setSettlementOpen(true);
+    setError("");
+  }
+
+  function confirmSettlementDialog(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const amountMinor = settlementKind === "full"
+      ? finalTotalMinor
+      : parseMoneyInput(settlementAmount);
+
+    if (
+      amountMinor === null ||
+      amountMinor <= 0 ||
+      amountMinor > finalTotalMinor
+    ) {
+      setError("الدفعة يجب أن تكون أكبر من صفر ولا تتجاوز قيمة الفاتورة");
+      return;
+    }
+
+    if (settlementMethod === "card" && !settlementCardProcessor) {
+      setError("اختر ماكينة الفيزا لتسجيل سند القبض");
+      return;
+    }
+
+    setSettlementOpen(false);
+    void handleSaveInvoice(false, {
+      amountMinor,
+      method: settlementMethod,
+      cardProcessor: settlementMethod === "card"
+        ? settlementCardProcessor
+        : null,
+    });
+  }
+
+  async function handleSaveInvoice(
+    printAfterSave = false,
+    settlement: InvoiceSettlement | null = null,
+  ) {
     if (!ACCOUNTING_WRITES_ENABLED) {
       setError("الحفظ محمي حاليًا حتى تشغيل الـMigration وتجهيز بيئة الاختبار");
       return;
@@ -1239,6 +1398,32 @@ export default function SalesInvoicePage() {
       );
 
       await refreshCashSession();
+
+      if (settlement && selectedCustomerId) {
+        setPendingInvoiceSettlement({
+          publicId: result.sale.publicId,
+          customerId: selectedCustomerId,
+          settlement,
+        });
+
+        try {
+          await postCustomerInvoiceReceipt(
+            result.sale.publicId,
+            selectedCustomerId,
+            settlement,
+          );
+        } catch (receiptError) {
+          if (receiptError instanceof ApiError && receiptError.status === 401) {
+            clearAuthentication();
+            return;
+          }
+
+          setError(
+            `تم حفظ الفاتورة ${result.sale.publicId} على حساب الزبون وخصم المخزون، لكن لم نؤكد سند القبض: ${receiptError instanceof Error ? receiptError.message : "حدث خطأ"}. أعد محاولة سند القبض فقط، ولا تنشئ فاتورة ثانية.`,
+          );
+          setMessage("");
+        }
+      }
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         clearAuthentication();
@@ -1478,6 +1663,8 @@ export default function SalesInvoicePage() {
     setLoadedSale(null);
     setPaidAmountAuto(true);
     setEditMode(false);
+    setLinkedReceipt(null);
+    setPendingInvoiceSettlement(null);
 
     createIdempotencyKey.current = null;
     editIdempotencyKey.current = null;
@@ -1598,6 +1785,9 @@ export default function SalesInvoicePage() {
 
   function resetInvoiceForm() {
     setLoadedSale(null);
+    setSettlementOpen(false);
+    setPendingInvoiceSettlement(null);
+    setLinkedReceipt(null);
     setPaidAmountAuto(true);
     setEditMode(false);
 
@@ -1688,7 +1878,9 @@ export default function SalesInvoicePage() {
         event.isComposing ||
         event.ctrlKey ||
         event.altKey ||
-        event.metaKey
+        event.metaKey ||
+        settlementOpen ||
+        openInvoiceDialog
       ) {
         return;
       }
