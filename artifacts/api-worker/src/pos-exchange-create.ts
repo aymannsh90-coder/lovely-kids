@@ -4715,8 +4715,12 @@ export async function handleCreatePosExchange(
                     costTotalMinor:
                       estimatedCost.costTotalMinor,
 
+                    // Legacy sales with no cost snapshot can still use
+                    // the independently verified unchanged unit cost.
                     costQuality:
-                      "estimated",
+                      estimatedCost.costQuality === "confirmed"
+                        ? "confirmed"
+                        : "estimated",
                   });
 
                 continue;
