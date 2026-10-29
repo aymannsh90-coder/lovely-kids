@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasAnyPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
@@ -73,7 +74,8 @@ async function requirePosUser(
 
   if (
     !user.isAdmin &&
-    !user.isOwner
+    !user.isOwner &&
+    !(await userHasAnyPermission(db, user, ["sales.exchange", "sales.exchange.online"]))
   ) {
     return {
       ok: false as const,
