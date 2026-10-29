@@ -131,6 +131,12 @@ type VisitorAnalyticsStats = {
   }[];
 };
 
+type CartStockReport = {
+  days: number;
+  summary: { seenEvents: number; seenVisitors: number; blockedAttempts: number; blockedVisitors: number; corrected: number; removed: number };
+  topIssues: { productId: number; productName: string | null; issueKind: string; color: string | null; size: string | null; seen: number; blocked: number; visitors: number }[];
+};
+
 const ANALYTICS_COUNTRY_LABELS: Record<string, string> = {
   PS: "فلسطين",
   IL: "إسرائيل",
@@ -168,6 +174,10 @@ export default function AdminDashboardScreen() {
     useState(false);
   const [showVisitorDetails, setShowVisitorDetails] =
     useState(false);
+  const [cartStockDays, setCartStockDays] = useState<7 | 30>(7);
+  const [cartStockReport, setCartStockReport] = useState<CartStockReport | null>(null);
+  const [cartStockReportLoading, setCartStockReportLoading] = useState(false);
+  const [showCartStockReport, setShowCartStockReport] = useState(false);
   const { settings, updateSettings } = useAppSettings();
 
   const topPadding = getResponsiveTopPadding(insets.top);
@@ -258,6 +268,29 @@ export default function AdminDashboardScreen() {
       cancelled = true;
     };
   }, [user?.isOwner, getAuthToken]);
+
+  useEffect(() => {
+    if (user?.isOwner !== true) { setCartStockReport(null); return; }
+    let cancelled = false;
+    void (async () => {
+      setCartStockReportLoading(true);
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const response = await fetch(`${API_BASE}/api/owner/reports/cart-stock-analytics?days=${cartStockDays}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error("تعذر تحميل تقرير المخزون");
+        const data = (await response.json()) as CartStockReport;
+        if (!cancelled) setCartStockReport(data);
+      } catch {
+        if (!cancelled) setCartStockReport(null);
+      } finally {
+        if (!cancelled) setCartStockReportLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.isOwner, getAuthToken, cartStockDays]);
 
   const inventoryValue = useMemo(() => {
     const getProductQuantity = (
@@ -1040,6 +1073,102 @@ export default function AdminDashboardScreen() {
                     }}
                   >
                     لا توجد بيانات زوار حتى الآن.
+                  </Text>
+                )}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Owner-only checkout stock friction report: no customer contact details. */}
+        {user?.isOwner === true ? (
+          <View style={{
+            marginTop: 12, marginBottom: 8, padding: 16,
+            borderRadius: 18, borderWidth: 1.5, borderColor: "#F59E0B55",
+            backgroundColor: colors.card, gap: 12,
+          }}>
+            <Pressable
+              onPress={() => setShowCartStockReport((value) => !value)}
+              style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" }}
+            >
+              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                <Ionicons name="alert-circle-outline" size={24} color="#D97706" />
+                <Text style={{ color: colors.foreground, fontWeight: "900", fontSize: 17 }}>
+                  تقرير فقدان المبيعات بسبب نفاد المقاسات
+                </Text>
+              </View>
+              <Ionicons name={showCartStockReport ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
+            </Pressable>
+            {showCartStockReport ? (
+              <View style={{ gap: 12 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                  {([7, 30] as const).map((days) => (
+                    <Pressable key={days} onPress={() => setCartStockDays(days)}
+                      style={{
+                        paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10,
+                        backgroundColor: cartStockDays === days ? colors.primary : colors.background,
+                        borderWidth: 1, borderColor: colors.border,
+                      }}>
+                      <Text style={{ color: cartStockDays === days ? "#fff" : colors.foreground, fontWeight: "800" }}>
+                        آخر {days} أيام
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {cartStockReportLoading ? (
+                  <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>جاري تحميل التقرير...</Text>
+                ) : cartStockReport ? (
+                  <>
+                    <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 }}>
+                      {[
+                        { label: "زبائن ظهر لهم نفاد مخزون", value: cartStockReport.summary.seenVisitors },
+                        { label: "زبائن مُنعوا من متابعة الطلب", value: cartStockReport.summary.blockedVisitors },
+                        { label: "محاولات متابعة مُنعت", value: cartStockReport.summary.blockedAttempts },
+                        { label: "تعديلات ناجحة", value: cartStockReport.summary.corrected },
+                        { label: "أصناف حُذفت من السلة", value: cartStockReport.summary.removed },
+                      ].map((metric) => (
+                        <View key={metric.label} style={{
+                          minWidth: "44%", flexGrow: 1, padding: 11,
+                          borderWidth: 1, borderColor: colors.border,
+                          backgroundColor: colors.background, borderRadius: 12,
+                        }}>
+                          <Text style={{ fontSize: 21, fontWeight: "900", color: colors.primary, textAlign: "center" }}>
+                            {metric.value.toLocaleString("en-US")}
+                          </Text>
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textAlign: "center" }}>
+                            {metric.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={{ fontWeight: "900", color: colors.foreground, textAlign: "right" }}>
+                      المنتجات والمقاسات الأكثر تسبّبًا بالمشكلة
+                    </Text>
+                    {cartStockReport.topIssues.length === 0 ? (
+                      <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>
+                        لم تُسجّل حالات بعد. يبدأ التسجيل من نشر تحديث المتجر.
+                      </Text>
+                    ) : cartStockReport.topIssues.map((item, index) => (
+                      <View key={`${item.productId}-${item.color}-${item.size}-${item.issueKind}-${index}`}
+                        style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 4 }}>
+                        <Text style={{ textAlign: "right", fontWeight: "800", color: colors.foreground }}>
+                          {item.productName || `منتج #${item.productId}`}
+                          {item.color ? ` • ${item.color}` : ""}
+                          {item.size ? ` • مقاس ${item.size}` : ""}
+                        </Text>
+                        <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 12 }}>
+                          {item.issueKind === "product_unavailable" ? "نفاد المنتج" : item.issueKind === "quantity_exceeds_stock" ? "كمية غير كافية" : "لون/مقاس غير متوفر"}
+                          {" • "}ظهور: {item.seen}{" • "}منع متابعة: {item.blocked}{" • "}زبائن: {item.visitors}
+                        </Text>
+                      </View>
+                    ))}
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11, textAlign: "right", lineHeight: 18 }}>
+                      يحسب التقرير الحالات منذ تفعيل التتبع فقط. منع متابعة الطلب لا يعني فقدان البيع حتمًا؛ قد تُكمل الزبونة الشراء لاحقًا.
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>
+                    تعذر تحميل التقرير حاليًا.
                   </Text>
                 )}
               </View>

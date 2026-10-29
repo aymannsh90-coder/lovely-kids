@@ -36,6 +36,7 @@ import { useColors } from "@/hooks/useColors";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { type Product, getAvailableStock } from "@/data/products";
 import { getCartStockStatus } from "@/utils/cartStock";
+import { trackCartStockEvent } from "@/utils/cartStockAnalytics";
 import { confirmRemoveFromCart, showStockLimit } from "@/utils/cartPrompts";
 
 import { API_BASE } from "@/constants/api";
@@ -302,6 +303,7 @@ export default function CartScreen() {
   const [checkoutCouponExpanded, setCheckoutCouponExpanded] = useState(false);
   const [cartStockSnapshot, setCartStockSnapshot] = useState<Product[] | null>(null);
   const [cartStockChecking, setCartStockChecking] = useState(false);
+  const reportedStockIssues = useRef<Set<string>>(new Set());
   const checkoutSubmitLock = useRef(false);
   const checkoutRequestIdRef =
     useRef<string | null>(null);
@@ -318,6 +320,22 @@ export default function CartScreen() {
   useEffect(() => {
     setCartStockSnapshot(null);
   }, [items]);
+
+  // Observe an actual cart stock warning once per item/selection per screen visit.
+  useEffect(() => {
+    if (step !== "cart" || items.length === 0) return;
+    const currentProducts = cartStockSnapshot?.length ? cartStockSnapshot : products;
+    if (currentProducts.length === 0) return;
+    for (const item of items) {
+      const product = currentProducts.find((entry) => entry.id === item.id);
+      const status = getCartStockStatus(item, product);
+      if (status.valid || !status.kind) continue;
+      const key = [item.id, item.color ?? "", item.size ?? "", item.quantity, status.kind].join("|");
+      if (reportedStockIssues.current.has(key)) continue;
+      reportedStockIssues.current.add(key);
+      void trackCartStockEvent("issue_seen", item, status.kind, status.availableQuantity);
+    }
+  }, [step, items, products, cartStockSnapshot]);
 
   useEffect(() => {
     if (step === "checkout" && user) {
@@ -1047,15 +1065,18 @@ export default function CartScreen() {
       }
 
       if (validationProducts.length > 0) {
-        const hasStockIssue = items.some((item) => {
+        const stockIssues = items.flatMap((item) => {
           const product = validationProducts.find(
             (entry) => entry.id === item.id,
           );
-
-          return !getCartStockStatus(item, product).valid;
+          const status = getCartStockStatus(item, product);
+          return !status.valid && status.kind ? [{ item, status }] : [];
         });
 
-        if (hasStockIssue) {
+        if (stockIssues.length > 0) {
+          for (const { item, status } of stockIssues) {
+            void trackCartStockEvent("checkout_blocked", item, status.kind!, status.availableQuantity);
+          }
           Alert.alert(
             "راجعي السلة",
             "بعض المنتجات أو الألوان أو المقاسات في سلتك لم تعد متوفرة بنفس الاختيار. عدّلي المنتجات المعلّمة أولًا ثم تابعي الطلب.",
@@ -2566,14 +2587,17 @@ export default function CartScreen() {
                           stockStatus.availableQuantity !== null &&
                           stockStatus.availableQuantity > 0 ? (
                             <Pressable
-                              onPress={() =>
+                              onPress={() => {
+                                if (stockStatus.kind) {
+                                  void trackCartStockEvent("item_corrected", item, stockStatus.kind, stockStatus.availableQuantity);
+                                }
                                 updateQuantity(
                                   item.id,
                                   stockStatus.availableQuantity!,
                                   item.size,
                                   item.color,
-                                )
-                              }
+                                );
+                              }}
                               style={{
                                 backgroundColor: "#fff",
                                 borderColor: "#FCA5A5",
@@ -2651,13 +2675,17 @@ export default function CartScreen() {
 
                         void runCartChangeWithGiftGuard(
                           nextItems,
-                          () =>
+                          () => {
+                            if (hasStockIssue && stockStatus.kind) {
+                              void trackCartStockEvent("item_removed", item, stockStatus.kind, stockStatus.availableQuantity);
+                            }
                             removeItem(
                               item.id,
                               item.size,
                               item.color,
                               item.rewardForPromotionId,
-                            ),
+                            );
+                          },
                           true,
                         );
                       }}

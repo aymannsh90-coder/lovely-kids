@@ -32,6 +32,8 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useVisibleProducts } from "@/hooks/useVisibleProducts";
 import { useColors } from "@/hooks/useColors";
+import { getCartStockStatus } from "@/utils/cartStock";
+import { trackCartStockEvent } from "@/utils/cartStockAnalytics";
 import { subscribeToStockAlert } from "@/hooks/usePushNotifications";
 import { confirmDuplicateCartItem, showStockLimit } from "@/utils/cartPrompts";
 import { Product, getAvailableStock, isSizeOutOfStock } from "@/data/products";
@@ -746,6 +748,11 @@ export default function ProductDetailScreen() {
       Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Success,
       ).catch(() => {});
+
+      const oldStockStatus = getCartStockStatus(sourceItem, product);
+      if (!oldStockStatus.valid && oldStockStatus.kind) {
+        void trackCartStockEvent("item_corrected", sourceItem, oldStockStatus.kind, oldStockStatus.availableQuantity);
+      }
 
       replaceItemVariant(
         {

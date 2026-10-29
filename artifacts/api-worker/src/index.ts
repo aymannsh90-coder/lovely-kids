@@ -37,6 +37,7 @@ import { handleLikesRequest } from "./likes-routes";
 import { handleUsersRequest } from "./users-routes";
 import { handleVisitorAnalyticsRequest } from "./visitor-analytics-routes";
 import { handleProductAnalyticsRequest } from "./product-analytics-routes";
+import { handleCartStockAnalyticsRequest } from "./cart-stock-analytics-routes";
 import { handleOwnerCostRequest } from "./owner-cost-routes";
 import { handleHistoricalInventoryValuationRequest } from "./historical-inventory-valuation-routes";
 import { handleOwnerReportRequest } from "./gross-profit-report-routes";
@@ -771,6 +772,10 @@ export default {
       if (productAnalyticsResponse) {
         return productAnalyticsResponse;
       }
+
+      const cartStockAnalyticsResponse =
+        await handleCartStockAnalyticsRequest(request, db, env);
+      if (cartStockAnalyticsResponse) return cartStockAnalyticsResponse;
 
       const visitorAnalyticsResponse =
         await handleVisitorAnalyticsRequest(

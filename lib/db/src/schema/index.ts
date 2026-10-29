@@ -39,6 +39,7 @@ export * from "./exchange-sale-items";
 export * from "./exchange-item-costs";
 
 export * from "./product-daily-analytics";
+export * from "./cart-stock-analytics-events";
 
 export * from "./assistant-drafts";
 
