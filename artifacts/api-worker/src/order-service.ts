@@ -517,6 +517,11 @@ function allocateOrderDiscountMinor(
     );
 }
 
+function isValidCustomerMobilePhone(value: string): boolean {
+  const compact = value.trim().replace(/[\s().-]/g, "");
+  return /^(?:05\d{8}|(?:\+|00)?(?:970|972)5\d{8})$/.test(compact);
+}
+
 export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
   const customerName = input.customerName.trim();
   const customerPhone = input.customerPhone.trim();
@@ -543,6 +548,12 @@ export async function createTrustedOrder(db: Db, input: TrustedOrderInput) {
 
   if (!customerName || !customerPhone) {
     throw new OrderValidationError("الاسم ورقم الهاتف مطلوبان");
+  }
+
+  if (!isValidCustomerMobilePhone(customerPhone)) {
+    throw new OrderValidationError(
+      "رقم الهاتف ناقص أو غير صحيح. أدخل رقم جوال من 10 خانات يبدأ بـ 05 أو رقمًا دوليًا صحيحًا (+970 / +972).",
+    );
   }
 
   const clientRequestIdHash =
