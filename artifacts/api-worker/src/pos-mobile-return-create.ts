@@ -1364,10 +1364,12 @@ export async function handleCreateMobileEmergencyReturn(
                 costTotalMinor:
                   costResult.costTotalMinor,
 
-                // This specific incoming movement is estimated
-                // because no original sale/cost snapshot exists.
+                // Owner-certified fixed unit cost can be trusted
+                // even without an identified original sales invoice.
                 costQuality:
-                  "estimated",
+                  costResult.costQuality === "confirmed"
+                    ? "confirmed"
+                    : "estimated",
               });
           }
 
