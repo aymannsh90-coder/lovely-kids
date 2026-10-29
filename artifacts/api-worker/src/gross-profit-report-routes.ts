@@ -1566,8 +1566,11 @@ async function handleGrossProfit(
       ? [[], [], [], []] as const
       : await Promise.all([
           db.select({ id: productsTable.id, nameAr: productsTable.nameAr,
-            productCode: productsTable.productCode })
-            .from(productsTable).where(inArray(productsTable.id, reviewIds)),
+            productCode: productsTable.productCode,
+            currentCostQuality: productCostStateTable.costQuality })
+            .from(productsTable)
+            .leftJoin(productCostStateTable, eq(productCostStateTable.productId, productsTable.id))
+            .where(inArray(productsTable.id, reviewIds)),
           db.select({ productId: exchangeReturnItemsTable.productId,
             publicId: exchangeDocumentsTable.publicId, date: exchangeDocumentsTable.businessDate,
             barcode: exchangeReturnItemsTable.barcode, color: exchangeReturnItemsTable.color,
@@ -1613,6 +1616,7 @@ async function handleGrossProfit(
     productCode: product.productCode,
     nameAr: product.nameAr,
     soldMixedQuantity: mixedQuantityByProduct.get(product.id) ?? 0,
+    currentCostQuality: product.currentCostQuality,
     sources: sources.filter((source) => source.productId === product.id).map((source) => ({
       kind: source.kind, publicId: source.publicId, date: source.date,
       barcode: source.barcode, color: source.color, size: source.size,
