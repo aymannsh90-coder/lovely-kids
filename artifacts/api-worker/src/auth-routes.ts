@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { getStaffAccess, getStaffLoginProfile } from "./staff-permissions";
 import { sessionsTable, usersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import {
@@ -59,6 +60,11 @@ async function handleLogin(request: Request, db: Db) {
     );
   }
 
+  const staffAccess = !user.isOwner && !user.isAdmin ? await getStaffAccess(db, user.id) : null;
+  if (staffAccess && !staffAccess.enabled) {
+    return json({ error: "حساب الموظف معطل من المالك" }, 403);
+  }
+
   const token = generateToken();
 
   await db.insert(sessionsTable).values({
@@ -66,7 +72,7 @@ async function handleLogin(request: Request, db: Db) {
     userId: user.id,
   });
 
-  return json({ token, user: toUser(user) });
+  return json({ token, user: { ...toUser(user), ...await getStaffLoginProfile(db, user) } });
 }
 
 export async function handleAuthRequest(
@@ -100,7 +106,7 @@ export async function handleAuthRequest(
       return json({ error: "غير مسجل الدخول" }, 401);
     }
 
-    return json(toUser(user));
+    return json({ ...toUser(user), ...await getStaffLoginProfile(db, user) });
   }
 
   if (
