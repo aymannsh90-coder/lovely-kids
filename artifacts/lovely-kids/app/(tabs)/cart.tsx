@@ -266,6 +266,7 @@ export default function CartScreen() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneConfirmation, setPhoneConfirmation] = useState("");
+  const [phoneConfirmationTouched, setPhoneConfirmationTouched] = useState(false);
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedZone, setSelectedZone] = useState<ShippingZone | null>(null);
@@ -1436,6 +1437,15 @@ export default function CartScreen() {
     const finalTotal =
       discountedProductsTotal +
       shippingCost;
+    const phoneConfirmationMatches = isMatchingPhoneConfirmation(phone, phoneConfirmation);
+    const showPhoneConfirmationError =
+      !phoneConfirmationMatches &&
+      (showValidationErrors || (
+        phoneConfirmation.trim().length > 0 &&
+        (phoneConfirmationTouched ||
+          phoneConfirmation.trim().replace(/[\s().-]/g, "").length >= phone.trim().replace(/[\s().-]/g, "").length)
+      ));
+
     const canSubmit =
       name.trim().length > 0 &&
       isValidCustomerMobilePhone(phone) &&
@@ -1970,6 +1980,7 @@ export default function CartScreen() {
                     if (f.label === "رقم الهاتف *") {
                       setPhone(value);
                       setPhoneConfirmation("");
+                      setPhoneConfirmationTouched(false);
                     } else {
                       f.set(value);
                     }
@@ -1994,8 +2005,7 @@ export default function CartScreen() {
                   <View style={[
                     styles.inputRow,
                     { backgroundColor: colors.card, borderColor: colors.border },
-                    (phoneConfirmation.trim() && !isMatchingPhoneConfirmation(phone, phoneConfirmation)) ||
-                    (showValidationErrors && !phoneConfirmation.trim())
+                    showPhoneConfirmationError
                       ? { borderColor: "#DC2626", borderWidth: 1.5 }
                       : null,
                   ]}>
@@ -2003,6 +2013,7 @@ export default function CartScreen() {
                     <TextInput
                       value={phoneConfirmation}
                       onChangeText={setPhoneConfirmation}
+                      onBlur={() => setPhoneConfirmationTouched(true)}
                       placeholder="أعيدي كتابة رقم الهاتف"
                       placeholderTextColor={colors.mutedForeground}
                       keyboardType="phone-pad"
@@ -2014,8 +2025,7 @@ export default function CartScreen() {
                       <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
                     )}
                   </View>
-                  {((phoneConfirmation.trim() && !isMatchingPhoneConfirmation(phone, phoneConfirmation)) ||
-                    (showValidationErrors && !phoneConfirmation.trim())) && (
+                  {showPhoneConfirmationError && (
                     <Text style={[styles.validationHint, { color: "#DC2626", marginTop: 0 }]}>
                       {phoneConfirmation.trim() ? "رقما الهاتف غير متطابقين" : "يرجى تأكيد رقم الهاتف"}
                     </Text>
