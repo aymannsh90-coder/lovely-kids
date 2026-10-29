@@ -54,7 +54,7 @@ export async function handleStaffAccessRequest(request: Request, db: Db, env: En
   if (request.method === "POST" && path === "/api/pos/access/staff") {
     const body = await request.json().catch(() => null) as StaffInput | null;
     const verified = await verifyOwner(db, request, env, body?.ownerPassword);
-    if ("error" in verified) return verified.error;
+    if ("error" in verified && verified.error !== undefined) return verified.error;
     if (!body || typeof body.name !== "string" || body.name.trim().length < 2 || body.name.trim().length > 100 ||
         typeof body.phone !== "string" || !body.phone.trim() ||
         typeof body.password !== "string" || body.password.length < 10 || body.password.length > 128 ||
@@ -97,7 +97,7 @@ export async function handleStaffAccessRequest(request: Request, db: Db, env: En
     if (!Number.isSafeInteger(targetId)) return json({ error: "رقم مستخدم غير صالح" }, 400);
     const body = await request.json().catch(() => null) as StaffInput | null;
     const verified = await verifyOwner(db, request, env, body?.ownerPassword);
-    if ("error" in verified) return verified.error;
+    if ("error" in verified && verified.error !== undefined) return verified.error;
     if (!body) return json({ error: "بيانات غير صحيحة" }, 400);
     const perms = body.permissions === undefined ? undefined : validateStaffPermissions(body.permissions);
     if (perms === null || (body.roleName !== undefined && !roles.has(body.roleName)) ||
