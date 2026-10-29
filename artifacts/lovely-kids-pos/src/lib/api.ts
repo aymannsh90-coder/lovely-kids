@@ -1442,6 +1442,8 @@ export function closePosEmployeeSalaryMonth(
         employeeId: e.employeeId, offsetMinor: e.offsetMinor,
         salaryAccrualMinor: e.salaryAccrualMinor,
         monthlyAdvancesMinor: e.monthlyAdvancesMinor,
+        outstandingAdvanceMinor: e.outstandingAdvanceMinor,
+        outstandingPayableMinor: e.outstandingPayableMinor,
       })),
     }),
   }, token);
