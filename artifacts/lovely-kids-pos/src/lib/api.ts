@@ -4830,6 +4830,7 @@ export interface GrossProfitMixedCostReview {
   productCode: string | null;
   nameAr: string;
   soldMixedQuantity: number;
+  currentCostQuality: string | null;
   sources: Array<{
     kind: "exchange" | "return";
     publicId: string;
@@ -4906,6 +4907,30 @@ export function getGrossProfitReport(
   );
 }
 
+
+export function attestOwnerCostQuality(
+  token: string,
+  payload: {
+    productId: string;
+    unitCostMinor: number;
+    sourcePublicIds: string[];
+    reason: string;
+  },
+) {
+  return apiRequest<{
+    ok: true;
+    productId: string;
+    unitCostMinor: number;
+    sourcePublicIds: string[];
+    auditEvent: string;
+    quantityUnchanged: number;
+    inventoryValueUnchangedMinor: number;
+    historicSnapshotsUnchanged: true;
+  }>("/api/owner/costs/quality-attestation", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }, token);
+}
 
 // ===== ONLINE ORDER EXCHANGE =====
 

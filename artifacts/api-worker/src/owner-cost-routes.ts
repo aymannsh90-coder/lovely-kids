@@ -32,6 +32,7 @@ import {
 
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
+import { handleOwnerCostQualityAttestation } from "./owner-cost-quality-attestation";
 import { getProductQuantity } from "./product-quantity";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -2825,6 +2826,10 @@ export async function handleOwnerCostRequest(
       db,
       env,
     );
+  }
+
+  if (request.method === "POST" && path === "/api/owner/costs/quality-attestation") {
+    return handleOwnerCostQualityAttestation(request, db, env);
   }
 
   return null;

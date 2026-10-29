@@ -10,6 +10,8 @@ import {
 import {
   ApiError,
   getGrossProfitReport,
+  attestOwnerCostQuality,
+  type GrossProfitMixedCostReview,
   setOwnerHistoricalCostRepair,
   setOwnerOpeningCost,
   type GrossProfitChannelSummary,
@@ -493,6 +495,9 @@ export default function GrossProfitReportPage() {
   ] =
     useState("");
 
+  const [attestingProductId, setAttestingProductId] = useState<string | null>(null);
+  const [attestationError, setAttestationError] = useState("");
+
   async function loadRange(
     nextFrom: string,
     nextTo: string,
@@ -632,6 +637,44 @@ export default function GrossProfitReportPage() {
       setSavingCostProductId(
         null,
       );
+    }
+  }
+
+  async function attestCost(product: GrossProfitMixedCostReview) {
+    if (!token || attestingProductId) return;
+    const sources = product.sources;
+    const costs = sources.map((source) => source.costMinor / source.quantity);
+    if (sources.length === 0 || costs.some((cost) =>
+      !Number.isSafeInteger(cost) || cost !== costs[0]
+    )) {
+      setAttestationError("تكاليف المرتجعات غير متطابقة؛ يلزم فحصها يدويًا قبل التأكيد.");
+      return;
+    }
+    const reason = window.prompt(
+      `لتأكيد تكلفة الصنف ${product.productCode ?? product.productId} بمبلغ ${formatReportMoney(costs[0])} للقطعة، اكتب سبب اعتماد التكلفة من سجلات الشراء. لا يتم إثبات ارتباط المرتجعات بفواتير البيع القديمة.`,
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 12) {
+      setAttestationError("اكتب سببًا واضحًا لا يقل عن 12 حرفًا.");
+      return;
+    }
+    if (!window.confirm(
+      `سيتم اعتماد تكلفة ${formatReportMoney(costs[0])} للمبيعات القادمة للصنف ${product.productCode ?? product.productId}، مع تسجيل سند مراجعة وعدم تعديل الفواتير القديمة أو المخزون. هل تؤكد؟`,
+    )) return;
+    setAttestingProductId(product.productId);
+    setAttestationError("");
+    try {
+      await attestOwnerCostQuality(token, {
+        productId: product.productId,
+        unitCostMinor: costs[0],
+        sourcePublicIds: sources.map((source) => source.publicId),
+        reason: reason.trim(),
+      });
+      await loadRange(report?.range.from ?? from, report?.range.to ?? to);
+    } catch (error) {
+      setAttestationError(errorMessage(error));
+    } finally {
+      setAttestingProductId(null);
     }
   }
 
@@ -1128,12 +1171,20 @@ export default function GrossProfitReportPage() {
                 مطابقة الباركود والتاريخ تعطي فواتير محتملة فقط، وليست إثباتًا لرجوع نفس القطعة.
                 هذا القسم للقراءة فقط ولا يعدّل المحاسبة أو المخزون.
               </p>
+              {attestationError && <div className="error-message" role="alert">{attestationError}</div>}
               {report.mixedCostReviewTruncated && <p>تم عرض أول 12 صنفًا فقط.</p>}
               {report.mixedCostReview.map((product) => (
                 <article key={product.productId} style={{ padding: 12, borderTop: "1px solid #ddd" }}>
                   <strong>{product.nameAr} — {product.productCode ?? product.productId}</strong>
                   <p>الكمية المباعة بتكلفة مختلطة: {product.soldMixedQuantity}</p>
                   {product.sources.length === 0 && <p>مصدر التكلفة المختلطة يحتاج تدقيقًا يدويًا إضافيًا.</p>}
+                  {product.currentCostQuality === "confirmed"
+                    ? <p style={{color: "#087a55", fontSize: 13, fontWeight: 700}}>تم اعتماد تكلفة المخزون الحالية؛ السجلات التاريخية باقية للتدقيق.</p>
+                    : <button type="button" className="secondary-button gross-profit-no-print"
+                        disabled={attestingProductId === product.productId || product.sources.length === 0}
+                        onClick={() => void attestCost(product)}>
+                        {attestingProductId === product.productId ? "جارٍ توثيق التسوية..." : "تأكيد تكلفة القطعة للمبيعات القادمة"}
+                      </button>}
                   {product.sources.map((source) => (
                     <div key={source.publicId} style={{ border: "1px solid #eee", padding: 8, marginBottom: 8 }}>
                       <b>{source.kind === "exchange" ? "تبديل بدون فاتورة" : "مردود بدون فاتورة"}</b>
