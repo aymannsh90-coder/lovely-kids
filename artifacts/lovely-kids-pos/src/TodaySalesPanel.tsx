@@ -1253,8 +1253,7 @@ export default function TodaySalesPanel({
           </div>
 
           {!loading &&
-            exchanges.length === 0 &&
-        webCashMovements.length === 0 && (
+            exchanges.length === 0 && (
               <div className="empty-cart">
                 لا توجد حركات تبديل
                 مسجلة في جلسة اليوم.
