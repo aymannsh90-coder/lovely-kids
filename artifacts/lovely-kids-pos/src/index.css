@@ -18059,6 +18059,15 @@ button.inventory-intelligence-metric {
   padding-top: 16px;
   gap: 10px;
 }
+.return-history-actions .return-history-void-button {
+  border-color: #e4c1c6;
+  color: #a24d56;
+  background: #fff;
+}
+.return-history-actions .return-history-void-button:hover:not(:disabled) {
+  border-color: #cc8995;
+  background: #fff5f6;
+}
 .return-history-editor {
   margin-top: 16px;
   border: 1px solid #efc5d9;
