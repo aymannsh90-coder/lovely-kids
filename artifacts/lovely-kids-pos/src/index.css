@@ -18579,3 +18579,194 @@ button.inventory-intelligence-metric {
   .today-debt-collections { padding: 12px; }
   .today-sales-collections-totals { display: grid; gap: 9px; }
 }
+
+
+/* Accounting sales invoice: clear hierarchy and immediate settlement workflow. */
+.sales-invoice-scroll-page {
+  --invoice-ink: #253a4a;
+  --invoice-muted: #687f8f;
+  --invoice-border: #dce7ed;
+}
+.sales-invoice-scroll-page .accounting-invoice-titlebar {
+  background: linear-gradient(115deg,#fff4f9,#fffafd 57%,#f5faff);
+  border-bottom: 1px solid #efd9e5;
+  padding: 13px 18px;
+}
+.sales-invoice-scroll-page .accounting-invoice-titlebar h1 {
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--invoice-ink);
+}
+.sales-invoice-scroll-page .accounting-invoice-titlebar p {
+  color: #728697;
+  font-size: 12px;
+}
+.sales-invoice-scroll-page .accounting-invoice-toolbar {
+  background: #f8fbfc;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--invoice-border);
+}
+.sales-invoice-scroll-page .accounting-invoice-toolbar > button {
+  min-height: 35px;
+  border-radius: 8px;
+}
+.sales-invoice-scroll-page .accounting-invoice-toolbar > button.is-primary-action {
+  background: #db1176;
+  border-color: #db1176;
+  color: #fff;
+  font-weight: 800;
+}
+.sales-invoice-scroll-page .accounting-invoice-information {
+  gap: 10px;
+  padding: 10px;
+}
+.sales-invoice-scroll-page .accounting-invoice-card {
+  border: 1px solid var(--invoice-border);
+  border-radius: 11px;
+  overflow: hidden;
+}
+.sales-invoice-scroll-page .accounting-invoice-card h2 {
+  color: #2a5064;
+  font-size: 13px;
+  border-bottom: 1px solid #e5eef1;
+  padding-bottom: 6px;
+}
+.sales-invoice-scroll-page .accounting-item-entry {
+  border-top: 1px solid #e1eaf0;
+  border-bottom: 1px solid #e1eaf0;
+}
+.sales-invoice-scroll-page .accounting-invoice-bottom {
+  border-top: 1px solid var(--invoice-border);
+  background: #f8fbfd;
+}
+.sales-invoice-scroll-page .accounting-invoice-totals .accounting-final-total {
+  border-radius: 9px;
+  border: 1px solid #f0bfd6;
+}
+.sales-invoice-scroll-page .accounting-customer-credit-hint {
+  margin: 1px 0 4px;
+  padding: 9px 11px;
+  background: #ecf6fe;
+  color: #285e83;
+  border-inline-start: 3px solid #72accf;
+  border-radius: 8px;
+  line-height: 1.7;
+  font-size: 12px;
+}
+.sales-invoice-scroll-page .accounting-invoice-toolbar > button.accounting-save-settle-action,
+.accounting-settlement-dialog button.accounting-save-settle-action {
+  background: #167e60;
+  border: 1px solid #167e60;
+  color: #fff;
+  font-weight: 900;
+  box-shadow: 0 3px 12px rgba(21,125,96,.12);
+}
+.sales-invoice-scroll-page .accounting-invoice-toolbar > button.accounting-save-settle-action:hover:not(:disabled),
+.accounting-settlement-dialog button.accounting-save-settle-action:hover:not(:disabled) {
+  background: #12694f;
+}
+.sales-invoice-scroll-page .accounting-invoice-toolbar > button.accounting-save-settle-action:disabled {
+  background: #dce5e3;
+  border-color: #dce5e3;
+  color: #81918e;
+  box-shadow: none;
+}
+.sales-invoice-scroll-page .accounting-settlement-notice {
+  margin: 9px 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.sales-invoice-scroll-page .accounting-settlement-notice strong { font-size: 13px; }
+.sales-invoice-scroll-page .accounting-settlement-notice.is-pending {
+  border: 1px solid #edce90; background: #fff9eb; color: #795319;
+}
+.sales-invoice-scroll-page .accounting-settlement-notice.is-complete {
+  border: 1px solid #b2dac8; background: #effaf3; color: #176c47;
+}
+.sales-invoice-scroll-page .accounting-settlement-notice button {
+  padding: 8px 12px; border-radius: 7px;
+  border: 1px solid #c99c43; background: #fff; color: #785319;
+  font-weight: 800;
+}
+.accounting-settlement-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 13000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15,35,50,.64);
+}
+.accounting-settlement-dialog {
+  display: grid;
+  gap: 13px;
+  width: min(520px,96vw);
+  max-height: 92vh;
+  overflow: auto;
+  padding: 22px;
+  border-radius: 17px;
+  border: 1px solid #e2e9ed;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(12,29,41,.25);
+  color: #253a4a;
+  text-align: right;
+}
+.accounting-settlement-dialog > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.accounting-settlement-dialog header h2 { font-size: 18px; margin: 0 0 5px; }
+.accounting-settlement-dialog header p { font-size: 12px; color: #687f8f; margin: 0; line-height: 1.6; }
+.accounting-settlement-dialog-icon {
+  display: grid; place-items: center; width: 42px; height: 42px;
+  flex: 0 0 auto; color: #147b5c; background: #e2f4ec;
+  border-radius: 11px; font-size: 23px; font-weight: 900;
+}
+.accounting-settlement-total,
+.accounting-settlement-balance {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; padding: 13px; border-radius: 9px; background: #f4f8fa;
+  font-size: 13px;
+}
+.accounting-settlement-total strong,
+.accounting-settlement-balance strong { font-size: 19px; color: #125a42; }
+.accounting-settlement-dialog fieldset {
+  min-width: 0; padding: 12px;
+  border: 1px solid #deeaef; border-radius: 11px;
+}
+.accounting-settlement-dialog legend {
+  font-weight: 800; color: #37576b; padding: 0 6px;
+}
+.accounting-settlement-dialog .accounting-settlement-radio {
+  display: flex; align-items: center; gap: 9px; padding: 8px 0;
+  font-size: 14px;
+}
+.accounting-settlement-dialog input[type="radio"] {
+  width: 16px; height: 16px; accent-color: #158361; flex: 0 0 auto;
+}
+.accounting-settlement-amount { display: grid; gap: 6px; margin-top: 7px; font-weight: 700; }
+.accounting-settlement-amount input {
+  width: 100%; min-height: 43px; padding: 8px 10px;
+  border: 1px solid #bed3df; border-radius: 8px; font-size: 17px;
+}
+.accounting-settlement-methods { display: flex; flex-wrap: wrap; gap: 8px; }
+.accounting-settlement-methods label {
+  display: flex; align-items: center; gap: 5px; cursor: pointer;
+  padding: 7px; border: 1px solid #e0e9ef; border-radius: 8px; font-size: 12px;
+}
+.accounting-settlement-error { color: #b52c44; font-size: 12px; margin: 0; }
+.accounting-settlement-dialog footer { display: flex; gap: 9px; flex-wrap: wrap; }
+.accounting-settlement-dialog footer button {
+  min-height: 42px; padding: 9px 14px; border-radius: 9px; font-weight: 700;
+}
+@media (max-width: 720px) {
+  .accounting-settlement-dialog { padding: 15px; }
+  .sales-invoice-scroll-page .accounting-invoice-toolbar > button.accounting-save-settle-action { min-height: 37px; }
+}

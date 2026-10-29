@@ -3746,6 +3746,30 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         throw new PosSaleError("لا يمكن إلغاء هذه الفاتورة", 409);
       }
 
+      // An invoice's linked initial receipt must be reversed first.
+      // Otherwise voiding the credit sale while leaving cash/card collection
+      // posted would create an artificial customer credit (double reversal).
+      const linkedReceiptRows = await tx
+        .select({ id: financeVouchersTable.id })
+        .from(financeVouchersTable)
+        .where(
+          and(
+            eq(
+              financeVouchersTable.idempotencyKey,
+              `pos_invoice_initial_receipt:${sale.publicId}`,
+            ),
+            eq(financeVouchersTable.status, "posted"),
+          ),
+        )
+        .limit(1);
+
+      if (linkedReceiptRows[0]) {
+        throw new PosSaleError(
+          "للفـاتورة سند قبض مرتبط ومعتمد. يجب عكس سند القبض أولًا من سندات الزبون قبل إلغاء الفاتورة، لتجنّب اختلال الذمم والصندوق.",
+          409,
+        );
+      }
+
       const completedReturnRows = await tx
         .select({
           id: posSaleReturnsTable.id,
@@ -5603,8 +5627,31 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       [sale.id],
     );
 
-  return json(
-    toSaleResponse(
+  // Read the real linked voucher, not the sale's original paidMinor:
+  // this stays correct after refresh and excludes reversed receipts.
+  const linkedReceiptRows =
+    sale.paymentMethod === "credit"
+      ? await db
+          .select({
+            publicId: financeVouchersTable.publicId,
+            amountMinor: financeVouchersTable.amountMinor,
+            paymentMethod: financeVouchersTable.paymentMethod,
+          })
+          .from(financeVouchersTable)
+          .where(
+            and(
+              eq(
+                financeVouchersTable.idempotencyKey,
+                `pos_invoice_initial_receipt:${sale.publicId}`,
+              ),
+              eq(financeVouchersTable.status, "posted"),
+            ),
+          )
+          .limit(1)
+      : [];
+
+  return json({
+    ...toSaleResponse(
       sale,
       items,
       false,
@@ -5617,7 +5664,8 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
         sale.id,
       ) ?? [],
     ),
-  );
+    linkedInitialReceipt: linkedReceiptRows[0] ?? null,
+  });
 }
 
 export async function handlePosSaleRequest(

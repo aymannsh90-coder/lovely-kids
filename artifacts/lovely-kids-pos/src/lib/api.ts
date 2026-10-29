@@ -454,6 +454,11 @@ export interface PosSaleItemResult {
 
 export interface PosSaleResult {
   alreadyCreated: boolean;
+  linkedInitialReceipt?: {
+    publicId: string;
+    amountMinor: number;
+    paymentMethod: "cash" | "card";
+  } | null;
   promotions: Array<{
     promotionId: number | null;
     promotionName: string;
