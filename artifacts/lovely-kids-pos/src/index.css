@@ -19692,3 +19692,249 @@ button.inventory-intelligence-metric {
     padding: 10px;
   }
 }
+
+
+/* Exchange form field styling: lively, accessible and isolated (2026-10-29) */
+#pos-sales-exchange {
+  --exchange-field-ink: #233e53;
+  --exchange-field-placeholder: #8295a4;
+  --exchange-field-border: #cddde8;
+  --exchange-field-focus: #df1680;
+  --exchange-field-ring: rgba(223, 22, 128, .13);
+}
+#pos-sales-exchange .exchange-customer-panel {
+  position: relative;
+  border-color: #e5d7e4;
+  background: linear-gradient(145deg, #fff 50%, #fff8fc 100%);
+}
+#pos-sales-exchange .exchange-mode-panel {
+  background: linear-gradient(145deg, #fff 60%, #f6faff 100%);
+}
+#pos-sales-exchange .sales-return-search-panel {
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+#pos-sales-exchange .sales-return-search-panel:focus-within {
+  border-color: #d7bfdd;
+  box-shadow: 0 3px 16px rgba(144, 69, 122, .07);
+}
+#pos-sales-exchange .sales-return-section-title h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#pos-sales-exchange .sales-return-section-title h3::before {
+  content: "";
+  width: 5px;
+  height: 19px;
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #f54ca5, #c01974);
+  box-shadow: 0 1px 4px rgba(220, 31, 128, .18);
+}
+/* Treat customer identity as a purposeful form group rather than plain
+   unstyled white rectangles. Labels are above fields and always readable. */
+#pos-sales-exchange .exchange-customer-fields > .customer-picker,
+#pos-sales-exchange .exchange-customer-fields > .sales-return-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 9px 11px;
+  border: 1px solid #e3e9ef;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .86);
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+#pos-sales-exchange .exchange-customer-fields > .customer-picker:hover,
+#pos-sales-exchange .exchange-customer-fields > .sales-return-field:hover {
+  background: #fff;
+  border-color: #c9dbe7;
+}
+#pos-sales-exchange .exchange-customer-fields > .customer-picker:focus-within,
+#pos-sales-exchange .exchange-customer-fields > .sales-return-field:focus-within {
+  border-color: #e3a4c8;
+  box-shadow: 0 0 0 3px rgba(223, 22, 128, .06);
+}
+#pos-sales-exchange .exchange-customer-fields .customer-picker-label,
+#pos-sales-exchange .exchange-customer-fields .sales-return-field > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 2px;
+  color: #34566b;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.5;
+}
+#pos-sales-exchange .exchange-customer-fields .customer-picker-label::before,
+#pos-sales-exchange .exchange-customer-fields .sales-return-field > span::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f65aab, #df1680);
+  box-shadow: 0 0 0 3px rgba(223, 22, 128, .09);
+}
+#pos-sales-exchange .exchange-customer-fields .sales-return-field > span::before {
+  background: linear-gradient(145deg, #67b7e2, #2e86b9);
+  box-shadow: 0 0 0 3px rgba(58, 148, 198, .1);
+}
+#pos-sales-exchange .customer-picker-control {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 7px;
+}
+#pos-sales-exchange .customer-picker-control > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 43px;
+  min-height: 43px;
+  padding: 9px 13px;
+  border: 1.5px solid var(--exchange-field-border);
+  border-radius: 9px;
+  background: #f9fcff;
+  color: var(--exchange-field-ink);
+  font-size: 13px;
+  font-weight: 700;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+#pos-sales-exchange .customer-picker-control > input::placeholder {
+  font-weight: 500;
+  color: var(--exchange-field-placeholder);
+}
+#pos-sales-exchange .customer-picker-control > input:hover {
+  background: #fff;
+  border-color: #a7c1d3;
+}
+#pos-sales-exchange .customer-picker-control > input:focus {
+  border-color: var(--exchange-field-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--exchange-field-ring);
+  background: #fff;
+}
+#pos-sales-exchange .customer-picker-search-button,
+#pos-sales-exchange .customer-picker-clear-button {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 43px;
+  min-height: 43px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #e7bad3;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #fff5fa, #fce5f1);
+  color: #a91969;
+  font-size: 19px;
+  transition: background .16s ease, transform .16s ease, border-color .16s ease;
+}
+#pos-sales-exchange .customer-picker-search-button:hover:not(:disabled) {
+  background: #f8cfe5;
+  border-color: #da8fb5;
+  transform: translateY(-1px);
+}
+#pos-sales-exchange .customer-picker-clear-button {
+  flex-basis: 34px;
+  width: 34px;
+  background: #f2f6f9;
+  border-color: #d7e1e8;
+  color: #657c8b;
+  font-size: 20px;
+}
+#pos-sales-exchange .customer-picker-selected-meta {
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 7px 9px;
+  border: 1px solid #cce8d8;
+  border-radius: 8px;
+  background: #effaf3;
+  color: #28714e;
+  font-size: 11px;
+}
+#pos-sales-exchange .customer-picker-selected-meta strong {
+  color: #186642;
+  font-size: 12px;
+}
+/* Apply the same premium surface and focus treatment to QR, barcode,
+   manual-name, search and settlement inputs throughout this page. */
+#pos-sales-exchange .sales-return-field input,
+#pos-sales-exchange .sales-return-field select,
+#pos-sales-exchange .sales-return-field textarea,
+#pos-sales-exchange .sales-return-table input,
+#pos-sales-exchange .sales-return-table select {
+  min-height: 41px;
+  border: 1.5px solid var(--exchange-field-border);
+  border-radius: 9px;
+  background: #f9fcff;
+  color: var(--exchange-field-ink);
+  font-size: 13px;
+  font-weight: 650;
+  transition: border-color .17s ease, box-shadow .17s ease, background-color .17s ease;
+}
+#pos-sales-exchange .sales-return-field input::placeholder,
+#pos-sales-exchange .sales-return-field textarea::placeholder {
+  color: var(--exchange-field-placeholder);
+  font-weight: 450;
+}
+#pos-sales-exchange .sales-return-field input:hover:not(:disabled),
+#pos-sales-exchange .sales-return-field select:hover:not(:disabled),
+#pos-sales-exchange .sales-return-field textarea:hover:not(:disabled) {
+  border-color: #a4c3d6;
+  background: #fff;
+}
+#pos-sales-exchange .sales-return-field input:focus,
+#pos-sales-exchange .sales-return-field select:focus,
+#pos-sales-exchange .sales-return-field textarea:focus,
+#pos-sales-exchange .sales-return-table input:focus,
+#pos-sales-exchange .sales-return-table select:focus {
+  outline: none;
+  border-color: var(--exchange-field-focus);
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--exchange-field-ring);
+}
+#pos-sales-exchange .sales-return-field:focus-within > span {
+  color: #a91368;
+}
+#pos-sales-exchange .sales-return-field input[dir="ltr"] {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .12px;
+}
+#pos-sales-exchange input:disabled,
+#pos-sales-exchange select:disabled,
+#pos-sales-exchange textarea:disabled {
+  background: #f1f4f6;
+  opacity: .66;
+}
+/* The scan/action button should look visually connected to its entry field. */
+#pos-sales-exchange .sales-return-search-form > .primary-button {
+  min-height: 41px;
+  border: 1px solid #cc1475;
+  border-radius: 9px;
+  background: linear-gradient(120deg, #ed278e, #d31475);
+  color: #fff;
+  font-weight: 900;
+  box-shadow: 0 3px 9px rgba(223, 22, 128, .13);
+  transition: box-shadow .18s ease, background .18s ease, transform .18s ease;
+}
+#pos-sales-exchange .sales-return-search-form > .primary-button:hover:not(:disabled) {
+  box-shadow: 0 5px 14px rgba(223, 22, 128, .22);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  #pos-sales-exchange .sales-return-search-panel,
+  #pos-sales-exchange .exchange-customer-fields > .customer-picker,
+  #pos-sales-exchange .exchange-customer-fields > .sales-return-field,
+  #pos-sales-exchange .customer-picker-control > input,
+  #pos-sales-exchange .customer-picker-search-button,
+  #pos-sales-exchange .customer-picker-clear-button,
+  #pos-sales-exchange .sales-return-field input,
+  #pos-sales-exchange .sales-return-field select,
+  #pos-sales-exchange .sales-return-field textarea,
+  #pos-sales-exchange .sales-return-search-form > .primary-button {
+    transition: none;
+  }
+}
