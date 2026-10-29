@@ -20,6 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { handleEmployeeMonthClose, MONTH_CLOSE_SOURCE_TYPE, MONTH_CLOSE_EVENT, salaryMonthRange } from "./employee-month-close";
 import { openDb, type Env } from "./db";
 import {
@@ -832,7 +833,12 @@ async function handleListCustomers(
     );
 
   if (!auth.ok) {
-    return auth.response;
+    // The cashier exchange form needs a customer picker; allow read-only
+    // customer lookups, never customer writes or ledger mutations.
+    const user = await getCurrentUser(db, request, env);
+    if (!user || !(await userHasPermission(db, user, "sales.exchange"))) {
+      return auth.response;
+    }
   }
 
   const url =
