@@ -22,6 +22,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @workspace/api-worker typecheck
+      - run: node --experimental-strip-types --test artifacts/api-worker/src/cost-return-confidence.test.mjs
       - run: pnpm --filter @workspace/lovely-kids typecheck
       - run: pnpm --filter @workspace/lovely-kids build
       - run: pnpm --filter @workspace/lovely-kids-pos typecheck
