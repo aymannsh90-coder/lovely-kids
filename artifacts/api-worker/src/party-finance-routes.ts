@@ -20,6 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { handleEmployeeMonthClose, MONTH_CLOSE_SOURCE_TYPE, MONTH_CLOSE_EVENT, salaryMonthRange } from "./employee-month-close";
 import { openDb, type Env } from "./db";
 import {
   customerReceivableBalances,
@@ -2440,19 +2441,13 @@ async function createVoucher(
         30,
       );
 
-    if (
-      input.voucherType ===
-        "salary_accrual" &&
-      (
-        !referencePeriod ||
-        !/^\d{4}-(0[1-9]|1[0-2])$/.test(
-          referencePeriod,
-        )
-      )
-    ) {
-      throw new PartyFinanceError(
-        "اختر شهر استحقاق الراتب بصيغة سنة-شهر",
-      );
+    if (input.voucherType === "salary_accrual" &&
+        (!referencePeriod || !salaryMonthRange(referencePeriod))) {
+      throw new PartyFinanceError("اختر شهر استحقاق الراتب بصيغة سنة-شهر");
+    }
+    if (input.voucherType === "salary_accrual" &&
+        referencePeriod! > currentPalestineDate().slice(0, 7)) {
+      throw new PartyFinanceError("لا يمكن تسجيل استحقاق راتب لشهر مستقبلي");
     }
 
     const idempotencyKey =
@@ -2607,6 +2602,19 @@ async function createVoucher(
               input.voucherType ===
               "salary_accrual"
             ) {
+              // Serialize salary creation against the month closing action.
+              await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"salary_month_close:" + referencePeriod!}))`);
+              const closedRows = await tx.select({ id: financeTransactionsTable.id })
+                .from(financeTransactionsTable)
+                .where(and(
+                  eq(financeTransactionsTable.sourceType, MONTH_CLOSE_SOURCE_TYPE),
+                  eq(financeTransactionsTable.sourceId, referencePeriod!),
+                  eq(financeTransactionsTable.sourceEvent, MONTH_CLOSE_EVENT),
+                  eq(financeTransactionsTable.status, "posted"),
+                )).limit(1);
+              if (closedRows.length > 0) {
+                throw new PartyFinanceError("شهر الرواتب مغلق؛ لا يمكن إنشاء استحقاق جديد بعد المقاصة", 409);
+              }
               const salaryLockKey =
                 `employee_salary:${party.id}:${referencePeriod}`;
 
@@ -2805,8 +2813,11 @@ async function createVoucher(
             }
           }
 
-          const businessDate =
-            currentPalestineDate();
+          // A salary accrual belongs to its reference month, even when
+          // the owner closes that month later. No cash session is involved.
+          const businessDate = input.voucherType === "salary_accrual"
+            ? salaryMonthRange(referencePeriod!)!.end
+            : currentPalestineDate();
 
           const voucherPublicId =
             (
@@ -3782,6 +3793,28 @@ async function handleVoidVoucher(
               "السند ملغى مسبقًا",
               409,
             );
+          }
+
+          if (voucher.partyType === "employee" &&
+              (voucher.voucherType === "salary_accrual" ||
+               voucher.voucherType === "employee_advance" ||
+               voucher.voucherType === "employee_repayment")) {
+              const affectedPeriod = voucher.voucherType === "salary_accrual"
+                ? voucher.referencePeriod : voucher.businessDate.slice(0, 7);
+              if (affectedPeriod) {
+                await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"salary_month_close:" + affectedPeriod}))`);
+                const closed = await tx.select({ id: financeTransactionsTable.id })
+                  .from(financeTransactionsTable)
+                  .where(and(
+                    eq(financeTransactionsTable.sourceType, MONTH_CLOSE_SOURCE_TYPE),
+                    eq(financeTransactionsTable.sourceId, affectedPeriod),
+                    eq(financeTransactionsTable.sourceEvent, MONTH_CLOSE_EVENT),
+                    eq(financeTransactionsTable.status, "posted"),
+                  )).limit(1);
+                if (closed.length > 0) {
+                  throw new PartyFinanceError("هذا الشهر مغلق؛ لا يمكن إلغاء حركة سلف أو استحقاق بعد المقاصة", 409);
+                }
+              }
           }
 
           const isForeignCustomerReceipt =
@@ -4845,6 +4878,11 @@ export async function handlePartyFinanceRequest(
           ),
       },
     );
+  }
+
+  if (path === "/api/pos/employees/month-close" &&
+      (request.method === "GET" || request.method === "POST")) {
+    return handleEmployeeMonthClose(request, db, env);
   }
 
   if (
