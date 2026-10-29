@@ -4900,6 +4900,30 @@ export function getGrossProfitReport(
 }
 
 
+export function attestOwnerCostQuality(
+  token: string,
+  payload: {
+    productId: string;
+    unitCostMinor: number;
+    sourcePublicIds: string[];
+    reason: string;
+  },
+) {
+  return apiRequest<{
+    ok: true;
+    productId: string;
+    unitCostMinor: number;
+    sourcePublicIds: string[];
+    auditEvent: string;
+    quantityUnchanged: number;
+    inventoryValueUnchangedMinor: number;
+    historicSnapshotsUnchanged: true;
+  }>("/api/owner/costs/quality-attestation", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }, token);
+}
+
 // ===== ONLINE ORDER EXCHANGE =====
 
 export type OnlineExchangeDeliveryDiscountMode =
