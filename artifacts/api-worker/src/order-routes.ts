@@ -460,6 +460,22 @@ async function handleCreateOrder(
     );
   }
 
+  // Older clients may omit confirmation; validate it whenever supplied.
+  // The manual POS uses its own trusted order-entry form.
+  const submittedConfirmation = (body as {
+    customerPhoneConfirmation?: unknown;
+  } | null)?.customerPhoneConfirmation;
+  if (!options.manualPos && submittedConfirmation !== undefined) {
+    const compact = (value: string) => value.trim().replace(/[\s().-]/g, "");
+    if (
+      typeof submittedConfirmation !== "string" ||
+      !compact(submittedConfirmation) ||
+      compact(submittedConfirmation) !== compact(parsed.data.customerPhone)
+    ) {
+      return json({ error: "رقما الهاتف غير متطابقين. يرجى إعادة إدخال الرقم." }, 400);
+    }
+  }
+
   try {
     const authUser = await getCurrentUser(
       db,

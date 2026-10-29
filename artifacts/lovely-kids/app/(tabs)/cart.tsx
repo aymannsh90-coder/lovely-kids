@@ -122,6 +122,11 @@ function isValidCustomerMobilePhone(value: string): boolean {
   return /^(?:05\d{8}|(?:\+|00)?(?:970|972)5\d{8})$/.test(compact);
 }
 
+function isMatchingPhoneConfirmation(phone: string, confirmation: string): boolean {
+  const compact = (value: string) => value.trim().replace(/[\s().-]/g, "");
+  return compact(confirmation).length > 0 && compact(phone) === compact(confirmation);
+}
+
 function createCheckoutRequestId(): string {
   return [
     "checkout",
@@ -260,6 +265,8 @@ export default function CartScreen() {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneConfirmation, setPhoneConfirmation] = useState("");
+  const [phoneConfirmationTouched, setPhoneConfirmationTouched] = useState(false);
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedZone, setSelectedZone] = useState<ShippingZone | null>(null);
@@ -706,6 +713,18 @@ export default function CartScreen() {
       return;
     }
 
+    if (!phoneConfirmation.trim()) {
+      setShowValidationErrors(true);
+      setCheckoutValidationMessage("يرجى إعادة إدخال رقم الهاتف في خانة التأكيد.");
+      return;
+    }
+
+    if (!isMatchingPhoneConfirmation(phone, phoneConfirmation)) {
+      setShowValidationErrors(true);
+      setCheckoutValidationMessage("رقما الهاتف غير متطابقين. يرجى التأكد من الرقم وإعادة إدخاله.");
+      return;
+    }
+
     // TypeScript guard — عمليًا تم التحقق منها بالأعلى
     if (!selectedZone) return;
 
@@ -784,6 +803,7 @@ export default function CartScreen() {
         body: JSON.stringify({
           customerName: name.trim(),
           customerPhone: phone.trim(),
+          customerPhoneConfirmation: phoneConfirmation.trim(),
           customerAddress: isStorePickup
             ? STORE_PICKUP_LABEL
             : address.trim(),
@@ -1417,9 +1437,19 @@ export default function CartScreen() {
     const finalTotal =
       discountedProductsTotal +
       shippingCost;
+    const phoneConfirmationMatches = isMatchingPhoneConfirmation(phone, phoneConfirmation);
+    const showPhoneConfirmationError =
+      !phoneConfirmationMatches &&
+      (showValidationErrors || (
+        phoneConfirmation.trim().length > 0 &&
+        (phoneConfirmationTouched ||
+          phoneConfirmation.trim().replace(/[\s().-]/g, "").length >= phone.trim().replace(/[\s().-]/g, "").length)
+      ));
+
     const canSubmit =
       name.trim().length > 0 &&
       isValidCustomerMobilePhone(phone) &&
+      isMatchingPhoneConfirmation(phone, phoneConfirmation) &&
       selectedZone !== null &&
       (isStorePickup || address.trim().length > 0);
     return (
@@ -1946,7 +1976,15 @@ export default function CartScreen() {
                 <Ionicons name={f.icon as "person-outline"} size={18} color={colors.mutedForeground} />
                 <TextInput
                   value={f.value}
-                  onChangeText={f.set}
+                  onChangeText={(value) => {
+                    if (f.label === "رقم الهاتف *") {
+                      setPhone(value);
+                      setPhoneConfirmation("");
+                      setPhoneConfirmationTouched(false);
+                    } else {
+                      f.set(value);
+                    }
+                  }}
                   placeholder={f.placeholder}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType={f.keyType}
@@ -1958,6 +1996,41 @@ export default function CartScreen() {
                 <Text style={[styles.validationHint, { color: "#DC2626" }]}>
                   رقم الهاتف ناقص أو غير صحيح. أدخلي 10 أرقام تبدأ بـ 05 أو رقمًا دوليًا صحيحًا.
                 </Text>
+              )}
+              {f.label === "رقم الهاتف *" && isValidCustomerMobilePhone(phone) && (
+                <View style={{ gap: 6, marginTop: 4 }}>
+                  <Text style={[styles.fieldLabel, { color: colors.foreground }]}>
+                    تأكيد رقم الهاتف *
+                  </Text>
+                  <View style={[
+                    styles.inputRow,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    showPhoneConfirmationError
+                      ? { borderColor: "#DC2626", borderWidth: 1.5 }
+                      : null,
+                  ]}>
+                    <Ionicons name="call-outline" size={18} color={colors.mutedForeground} />
+                    <TextInput
+                      value={phoneConfirmation}
+                      onChangeText={setPhoneConfirmation}
+                      onBlur={() => setPhoneConfirmationTouched(true)}
+                      placeholder="أعيدي كتابة رقم الهاتف"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="phone-pad"
+                      autoCorrect={false}
+                      style={[styles.input, { color: colors.foreground }]}
+                      textAlign="right"
+                    />
+                    {isMatchingPhoneConfirmation(phone, phoneConfirmation) && (
+                      <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
+                    )}
+                  </View>
+                  {showPhoneConfirmationError && (
+                    <Text style={[styles.validationHint, { color: "#DC2626", marginTop: 0 }]}>
+                      {phoneConfirmation.trim() ? "رقما الهاتف غير متطابقين" : "يرجى تأكيد رقم الهاتف"}
+                    </Text>
+                  )}
+                </View>
               )}
             </View>
           ))}
@@ -2193,7 +2266,7 @@ export default function CartScreen() {
 
           {showValidationErrors && !canSubmit && (
             <Text style={[styles.validationHint, { color: "#DC2626" }]}>
-              * راجعي الحقول المحددة بالأحمر ورقم الهاتف لإتمام الطلب
+              * تأكدي من البيانات ورقمي الهاتف لإتمام الطلب
             </Text>
           )}
 
