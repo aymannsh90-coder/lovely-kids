@@ -21,6 +21,7 @@ import {
   eq,
   gte,
   inArray,
+  isNull,
   lte,
 } from "drizzle-orm";
 
@@ -1535,6 +1536,98 @@ async function handleGrossProfit(
       ),
   };
 
+
+  // Read-only provenance evidence. Historical snapshots stay frozen, and
+  // barcode matches are *candidates*, never automatically linked receipts.
+  const mixedQuantityByProduct = new Map<number, number>();
+  const noteMixed = (productId: number | null | undefined, quantity: number) => {
+    if (!Number.isSafeInteger(productId) || !productId || productId <= 0 || !Number.isSafeInteger(quantity) || quantity <= 0) return;
+    mixedQuantityByProduct.set(productId, (mixedQuantityByProduct.get(productId) ?? 0) + quantity);
+  };
+  for (const item of saleItems) {
+    if (saleCostByItem.get(item.id)?.costQuality === "mixed") noteMixed(item.productId, item.quantity);
+  }
+  for (const item of exchangeSaleItems) {
+    if (exchangeSaleCostByItem.get(item.id)?.costQuality === "mixed") noteMixed(item.productId, item.quantity);
+  }
+  for (const order of onlineOrders) {
+    if (!Array.isArray(order.items)) continue;
+    for (const [index, entry] of order.items.entries()) {
+      if (onlineCostByLine.get(`${order.id}:${index + 1}`)?.costQuality !== "mixed") continue;
+      const item = entry as { id?: unknown; quantity?: unknown };
+      noteMixed(Number(item.id), Number(item.quantity));
+    }
+  }
+
+  const reviewIds = [...mixedQuantityByProduct.keys()].sort((a, b) => a - b).slice(0, 12);
+  const [reviewProducts, exchangeSources, mobileSources, candidateSales] =
+    reviewIds.length === 0
+      ? [[], [], [], []] as const
+      : await Promise.all([
+          db.select({ id: productsTable.id, nameAr: productsTable.nameAr,
+            productCode: productsTable.productCode })
+            .from(productsTable).where(inArray(productsTable.id, reviewIds)),
+          db.select({ productId: exchangeReturnItemsTable.productId,
+            publicId: exchangeDocumentsTable.publicId, date: exchangeDocumentsTable.businessDate,
+            barcode: exchangeReturnItemsTable.barcode, color: exchangeReturnItemsTable.color,
+            size: exchangeReturnItemsTable.size, quantity: exchangeReturnItemsTable.quantity,
+            priceMinor: exchangeReturnItemsTable.soldUnitPriceMinor,
+            costMinor: exchangeReturnItemCostsTable.costTotalMinor })
+            .from(exchangeReturnItemCostsTable)
+            .innerJoin(exchangeReturnItemsTable, eq(exchangeReturnItemCostsTable.returnItemId, exchangeReturnItemsTable.id))
+            .innerJoin(exchangeDocumentsTable, eq(exchangeReturnItemsTable.exchangeId, exchangeDocumentsTable.id))
+            .where(and(inArray(exchangeReturnItemCostsTable.productId, reviewIds),
+              eq(exchangeReturnItemCostsTable.costQuality, "estimated"),
+              eq(exchangeDocumentsTable.status, "completed"))).limit(120),
+          db.select({ productId: posSaleReturnItemsTable.productId,
+            publicId: posSaleReturnsTable.publicId, date: posSaleReturnsTable.businessDate,
+            barcode: posSaleReturnItemsTable.barcode, color: posSaleReturnItemsTable.color,
+            size: posSaleReturnItemsTable.size, quantity: posSaleReturnItemsTable.quantity,
+            priceMinor: posSaleReturnItemsTable.soldUnitPriceMinor,
+            costMinor: posSaleReturnItemCostsTable.costTotalMinor })
+            .from(posSaleReturnItemCostsTable)
+            .innerJoin(posSaleReturnItemsTable, eq(posSaleReturnItemCostsTable.returnItemId, posSaleReturnItemsTable.id))
+            .innerJoin(posSaleReturnsTable, eq(posSaleReturnItemsTable.returnId, posSaleReturnsTable.id))
+            .where(and(inArray(posSaleReturnItemCostsTable.productId, reviewIds),
+              eq(posSaleReturnItemCostsTable.costQuality, "estimated"),
+              eq(posSaleReturnsTable.status, "completed"),
+              isNull(posSaleReturnItemsTable.originalSaleItemId))).limit(120),
+          db.select({ productId: posSaleItemsTable.productId, barcode: posSaleItemsTable.barcode,
+            publicId: posSalesTable.publicId, date: posSalesTable.businessDate,
+            quantity: posSaleItemsTable.quantity, priceMinor: posSaleItemsTable.soldUnitPriceMinor,
+            costMinor: posSaleItemCostsTable.unitCostMinor, costQuality: posSaleItemCostsTable.costQuality })
+            .from(posSaleItemsTable)
+            .innerJoin(posSalesTable, eq(posSaleItemsTable.saleId, posSalesTable.id))
+            .leftJoin(posSaleItemCostsTable, eq(posSaleItemsTable.id, posSaleItemCostsTable.saleItemId))
+            .where(and(inArray(posSaleItemsTable.productId, reviewIds),
+              eq(posSalesTable.status, "completed")))
+            .orderBy(asc(posSalesTable.businessDate)).limit(2000),
+        ]);
+  const sources = [
+    ...exchangeSources.map((source) => ({ ...source, kind: "exchange" as const })),
+    ...mobileSources.map((source) => ({ ...source, kind: "return" as const })),
+  ];
+  const mixedCostReview = reviewProducts.map((product) => ({
+    productId: String(product.id),
+    productCode: product.productCode,
+    nameAr: product.nameAr,
+    soldMixedQuantity: mixedQuantityByProduct.get(product.id) ?? 0,
+    sources: sources.filter((source) => source.productId === product.id).map((source) => ({
+      kind: source.kind, publicId: source.publicId, date: source.date,
+      barcode: source.barcode, color: source.color, size: source.size,
+      quantity: source.quantity, priceMinor: source.priceMinor, costMinor: source.costMinor,
+      candidates: candidateSales.filter((sale) =>
+        sale.productId === product.id && sale.barcode !== null &&
+        source.barcode !== null && sale.barcode === source.barcode &&
+        sale.date <= source.date && sale.quantity >= source.quantity
+      ).slice(0, 8).map((sale) => ({
+        publicId: sale.publicId, date: sale.date, priceMinor: sale.priceMinor,
+        costMinor: sale.costMinor, costQuality: sale.costQuality,
+        priceMatches: sale.priceMinor === source.priceMinor,
+      })),
+    })),
+  }));
+
   const missingCostProductIds =
     [...missingCostByProduct.keys()];
 
@@ -1681,6 +1774,8 @@ async function handleGrossProfit(
 
     missingCostProducts,
     unresolvedMissingCostLines,
+    mixedCostReview,
+    mixedCostReviewTruncated: mixedQuantityByProduct.size > reviewIds.length,
 
     methodology: {
       posDateBasis:
