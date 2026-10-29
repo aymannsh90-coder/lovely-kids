@@ -131,6 +131,7 @@ async function buildPreview(db: Db, period: string): Promise<MonthClosePreview> 
   }
   const closeAvailable = localToday() >= range.end;
   const closed = existing.length > 0;
+  if (closed) rows.forEach((row) => { row.issue = null; });
   const totalOffsetMinor = rows.reduce((sum, x) => sum + x.offsetMinor, 0);
   const canClose = !closed && closeAvailable && rows.length > 0 &&
     rows.every((row) => row.issue === null) && totalOffsetMinor > 0;
@@ -173,7 +174,8 @@ export async function handleEmployeeMonthClose(
   if (input?.confirmed !== true || !Array.isArray(expected) || expected.length > 100 ||
       !expected.every((item) => item && typeof item === "object" &&
         Number.isSafeInteger(item.employeeId) && Number.isSafeInteger(item.offsetMinor) &&
-        Number.isSafeInteger(item.salaryAccrualMinor) && Number.isSafeInteger(item.monthlyAdvancesMinor))) {
+        Number.isSafeInteger(item.salaryAccrualMinor) && Number.isSafeInteger(item.monthlyAdvancesMinor) &&
+        Number.isSafeInteger(item.outstandingAdvanceMinor) && Number.isSafeInteger(item.outstandingPayableMinor))) {
     return json({ error: "يرجى معاينة وتسوية الشهر والتأكيد قبل التنفيذ" }, 400);
   }
   try {
@@ -185,10 +187,13 @@ export async function handleEmployeeMonthClose(
       if (preview.closed) return { alreadyClosed: true, preview };
       if (!preview.canClose) throw new Error(preview.message || "المقاصة غير مسموحة لهذه الفترة");
       const expectedRows = (expected as Array<Pick<EmployeeCloseRow,
-        "employeeId" | "offsetMinor" | "salaryAccrualMinor" | "monthlyAdvancesMinor">>)
-        .map(x => [x.employeeId, x.offsetMinor, x.salaryAccrualMinor, x.monthlyAdvancesMinor].join(":")).sort();
+        "employeeId" | "offsetMinor" | "salaryAccrualMinor" | "monthlyAdvancesMinor" |
+        "outstandingAdvanceMinor" | "outstandingPayableMinor">>)
+        .map(x => [x.employeeId, x.offsetMinor, x.salaryAccrualMinor, x.monthlyAdvancesMinor,
+          x.outstandingAdvanceMinor, x.outstandingPayableMinor].join(":")).sort();
       const actualRows = preview.employees.map(x =>
-        [x.employeeId, x.offsetMinor, x.salaryAccrualMinor, x.monthlyAdvancesMinor].join(":")).sort();
+        [x.employeeId, x.offsetMinor, x.salaryAccrualMinor, x.monthlyAdvancesMinor,
+          x.outstandingAdvanceMinor, x.outstandingPayableMinor].join(":")).sort();
       if (JSON.stringify(expectedRows) !== JSON.stringify(actualRows))
         throw new Error("تغيرت حركات السلف أو الاستحقاقات. حدّث المعاينة قبل الإغلاق.");
       const advance = await ensureEmployeeAdvanceControlAccount(tx);
