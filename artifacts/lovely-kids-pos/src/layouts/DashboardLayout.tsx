@@ -5,11 +5,12 @@ import {
   findNavigationItem,
   posNavigation,
   type NavigationGroup,
+  type PosNavigationItem,
 } from "../app/navigation";
 import { usePosRuntime } from "../app/pos-context";
 import ClockWidget from "../components/ClockWidget";
 import RequireStaffPage, { canVisitStaffPage } from "../guards/RequireStaffPage";
-import { API_BASE_URL, POS_REGISTER_KEY } from "../lib/api";
+import { API_BASE_URL, POS_REGISTER_KEY, type PosUser } from "../lib/api";
 import { formatMoney } from "../lib/format";
 
 type MenuSectionKey =
@@ -73,6 +74,18 @@ const menuSections: MenuSection[] = [
   },
 ];
 
+// Keep staff navigation tied to the same explicit route allowlist as the
+// page guard. This is presentation only: API handlers enforce permissions.
+function canSeeNavigationItem(item: PosNavigationItem, user: PosUser | null) {
+  if (!user) return false;
+  if (item.group === "purchases" && !user.isOwner) return false;
+  if (item.group === "reports" && !user.isOwner) return false;
+  if (item.group === "statements" && !user.isOwner) return false;
+  if (item.group === "vouchers" && !user.isOwner) return false;
+  if (item.ownerOnly && !user.isOwner) return false;
+  return user.isOwner || user.isAdmin || canVisitStaffPage(item.path, user.permissions ?? []);
+}
+
 function findMenuSection(group: NavigationGroup | undefined) {
   if (!group) {
     return null;
@@ -101,28 +114,35 @@ export default function DashboardLayout() {
     }
   }, [routeSection?.key]);
 
+  const visibleSections = useMemo(
+    () =>
+      menuSections.filter((section) =>
+        posNavigation.some(
+          (item) => section.groups.includes(item.group) && canSeeNavigationItem(item, user),
+        ),
+      ),
+    [user],
+  );
+
   const activeSection = useMemo(
     () =>
-      menuSections.find((section) => section.key === activeSectionKey) ??
+      visibleSections.find((section) => section.key === activeSectionKey) ??
+      visibleSections[0] ??
       menuSections[0],
-    [activeSectionKey],
+    [activeSectionKey, visibleSections],
   );
 
   const activeItems = useMemo(
     () =>
       posNavigation.filter(
-        (item) =>
-          activeSection.groups.includes(item.group) &&
-          (item.group !== "purchases" || user?.isOwner === true) &&
-          (item.group !== "reports" || user?.isOwner === true) &&
-          (item.group !== "statements" || user?.isOwner === true) &&
-          (item.group !== "vouchers" || user?.isOwner === true) &&
-          (item.ownerOnly !== true || user?.isOwner === true) &&
-          (user?.isAdmin === true || user?.isOwner === true ||
-            canVisitStaffPage(item.path, user?.permissions ?? [])),
+        (item) => activeSection.groups.includes(item.group) && canSeeNavigationItem(item, user),
       ),
-    [activeSection, user?.isOwner, user?.isAdmin, user?.permissions],
+    [activeSection, user],
   );
+
+  const limitedCashMenu = !user?.isAdmin && !user?.isOwner;
+  const sectionTitle = (section: MenuSection) =>
+    limitedCashMenu && section.key === "finance" ? "الصندوق" : section.title;
 
   const pageTitle = isDashboard
     ? "نظام إدارة Lovely Kids"
@@ -190,7 +210,7 @@ export default function DashboardLayout() {
             className="pos-shamel-primary-menu"
             aria-label="الأقسام الرئيسية"
           >
-            {menuSections.map((section) => (
+            {visibleSections.map((section) => (
               <button
                 className={
                   !isAdminPanel && activeSectionKey === section.key
@@ -207,8 +227,7 @@ export default function DashboardLayout() {
                     const firstItem = posNavigation.find(
                       (item) =>
                         section.groups.includes(item.group) &&
-                        (item.group !== "purchases" ||
-                          user?.isOwner === true),
+                        canSeeNavigationItem(item, user),
                     );
 
                     if (firstItem) {
@@ -218,7 +237,7 @@ export default function DashboardLayout() {
                 }}
               >
                 <span aria-hidden="true">{section.icon}</span>
-                {section.title}
+                {sectionTitle(section)}
               </button>
             ))}
 
@@ -249,10 +268,10 @@ export default function DashboardLayout() {
           <nav
             hidden={isAdminPanel || isAccessPage}
             className="pos-shamel-secondary-menu"
-            aria-label={`عمليات ${activeSection.title}`}
+            aria-label={`عمليات ${sectionTitle(activeSection)}`}
           >
             <strong className="pos-shamel-secondary-title">
-              {activeSection.title}
+              {sectionTitle(activeSection)}
             </strong>
 
             <div className="pos-shamel-secondary-actions">
