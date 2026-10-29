@@ -20,6 +20,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 import {
@@ -205,7 +206,9 @@ export async function handleVoidPosExchange(
 
     if (
       !user.isAdmin &&
-      !user.isOwner
+      !user.isOwner &&
+      !((await userHasPermission(db, user, "sales.exchange")) &&
+        (await userHasPermission(db, user, "sales.exchange.void")))
     ) {
       return json(
         {

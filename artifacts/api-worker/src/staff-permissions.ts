@@ -6,6 +6,7 @@ type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
 export const STAFF_PERMISSION_KEYS = [
   "sales.view", "sales.create", "sales.edit", "sales.void", "sales.returns",
+  "sales.exchange", "sales.exchange.online", "sales.exchange.void",
   "cash.view", "cash.open", "cash.close",
   "inventory.view", "inventory.edit", "inventory.cost",
   "purchases.view", "purchases.create", "purchases.edit",

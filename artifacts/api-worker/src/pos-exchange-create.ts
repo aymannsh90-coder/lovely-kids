@@ -23,6 +23,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   customerReceivableBalanceMinor,
@@ -1053,7 +1054,8 @@ export async function handleCreatePosExchange(
 
   if (
     !user.isAdmin &&
-    !user.isOwner
+    !user.isOwner &&
+    !(await userHasPermission(db, user, "sales.exchange"))
   ) {
     return json(
       {

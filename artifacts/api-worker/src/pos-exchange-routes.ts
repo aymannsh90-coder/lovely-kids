@@ -22,6 +22,7 @@ import { handleVoidPosExchange } from "./pos-exchange-void";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
@@ -67,7 +68,7 @@ async function requirePosUser(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(await userHasAnyPermission(db, user, ["sales.exchange", "sales.exchange.online"]))) {
     return {
       ok: false,
       response: json(
@@ -907,6 +908,34 @@ export async function handlePosExchangeRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  // Require the exact exchange capability before reaching any delegated
+  // handler; the handlers also check permissions for defense in depth.
+  const onlinePaths = new Set([
+    "/api/pos/exchanges/order-preview",
+    "/api/pos/exchanges/online/status",
+    "/api/pos/exchanges/online/receive-return",
+    "/api/pos/exchanges/online/void",
+    "/api/pos/exchanges/online",
+  ]);
+  const knownPaths = new Set([
+    "/api/pos/exchanges/preview",
+    "/api/pos/exchanges/by-public-id",
+    "/api/pos/exchanges",
+    "/api/pos/exchanges/void",
+    ...onlinePaths,
+  ]);
+  if (knownPaths.has(path)) {
+    const user = await getCurrentUser(db, request, env);
+    if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+    if (!user.isOwner && !user.isAdmin) {
+      const required = onlinePaths.has(path) ? "sales.exchange.online" : "sales.exchange";
+      const canOperate = await userHasPermission(db, user, required);
+      const needsVoid = path.endsWith("/void");
+      const canVoid = !needsVoid || await userHasPermission(db, user, "sales.exchange.void");
+      if (!canOperate || !canVoid) return json({ error: "لا تملك صلاحية تنفيذ عملية التبديل هذه" }, 403);
+    }
+  }
 
   if (
     request.method === "GET" &&

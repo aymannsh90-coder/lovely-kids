@@ -9,6 +9,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { cancelOrderAndRestoreStock, OrderEditError } from "./order-stock";
 import type { Env, openDb } from "./db";
 import {
@@ -767,7 +768,7 @@ export async function handleGetOnlineOrderExchangeStatus(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(await userHasPermission(db, user, "sales.exchange.online"))) {
     return json({ error: "غير مصرح باستخدام نقطة البيع" }, 403);
   }
 
@@ -824,7 +825,8 @@ export async function handleCreateOnlineOrderExchange(
 
   if (
     !user.isAdmin &&
-    !user.isOwner
+    !user.isOwner &&
+    !(await userHasPermission(db, user, "sales.exchange.online"))
   ) {
     return json(
       {
@@ -2271,7 +2273,7 @@ export async function handleVoidOnlineOrderExchange(
 ): Promise<Response> {
   const user = await getCurrentUser(db, request, env);
   if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !((await userHasPermission(db, user, "sales.exchange.online")) && (await userHasPermission(db, user, "sales.exchange.void")))) {
     return json({ error: "غير مصرح باستخدام نقطة البيع" }, 403);
   }
 

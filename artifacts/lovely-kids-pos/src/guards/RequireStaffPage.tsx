@@ -7,6 +7,7 @@ import { usePosRuntime } from "../app/pos-context";
 export function canVisitStaffPage(path: string, permissions: string[]): boolean {
   const byPath: Record<string, string[]> = {
     "/sales/pos": ["sales.create"],
+    "/sales/exchange": ["sales.exchange", "sales.exchange.online"],
     "/sales/mobile": ["sales.create"],
     "/sales/mobile/price-check": ["sales.create"],
     "/sales/mobile/manual-order": ["orders.create"],

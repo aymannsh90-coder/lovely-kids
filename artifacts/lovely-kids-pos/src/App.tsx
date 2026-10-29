@@ -176,7 +176,7 @@ export default function App() {
           getCurrentCashSession(token as string, POS_REGISTER_KEY),
         ]);
 
-        if (!currentUser.isAdmin && !currentUser.isOwner && !currentUser.permissions?.includes("sales.create")) {
+        if (!currentUser.isAdmin && !currentUser.isOwner && !["sales.create", "sales.exchange", "sales.exchange.online"].some(p => currentUser.permissions?.includes(p))) {
           throw new Error("هذا الحساب لا يملك صلاحية استخدام نقطة البيع");
         }
 
@@ -226,7 +226,7 @@ export default function App() {
     try {
       const result = await loginPos(phone.trim(), password);
 
-      if (!result.user.isAdmin && !result.user.isOwner && !result.user.permissions?.includes("sales.create")) {
+      if (!result.user.isAdmin && !result.user.isOwner && !["sales.create", "sales.exchange", "sales.exchange.online"].some(p => result.user.permissions?.includes(p))) {
         await logoutPos(result.token).catch(() => undefined);
 
         throw new Error("هذا الحساب لا يملك صلاحية استخدام نقطة البيع");
