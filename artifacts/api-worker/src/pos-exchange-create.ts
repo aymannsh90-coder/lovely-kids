@@ -4952,7 +4952,9 @@ export async function handleCreatePosExchange(
                   estimatedCost.costTotalMinor,
 
                 costQuality:
-                  "estimated",
+                  estimatedCost.costQuality === "confirmed"
+                    ? "confirmed"
+                    : "estimated",
               });
           }
 
