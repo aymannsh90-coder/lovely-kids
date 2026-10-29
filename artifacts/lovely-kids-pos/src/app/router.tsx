@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
+import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import DashboardPage from "../pages/DashboardPage";
@@ -63,9 +64,9 @@ export default function AppRouter() {
       <Route
         path="sales/mobile"
         element={
-          <RequireOpenSession>
+          <RequireStaffPage><RequireOpenSession>
             <MobileSalePage />
-          </RequireOpenSession>
+          </RequireOpenSession></RequireStaffPage>
         }
       />
 
