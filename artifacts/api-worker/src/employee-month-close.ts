@@ -10,6 +10,7 @@ import {
   ensureEmployeePayableControlAccount,
 } from "./finance-employee-ledger";
 import { postFinanceTransaction } from "./finance-posting";
+import { planSalaryAdvanceOffset } from "./salary-month-close-rules";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 const json = (value: unknown, status = 200) => Response.json(value, {
@@ -110,23 +111,19 @@ async function buildPreview(db: Db, period: string): Promise<MonthClosePreview> 
     const salaryAccrualMinor = salaries.get(e.id) ?? 0;
     if (monthlyAdvancesMinor === 0 && salaryAccrualMinor === 0) continue;
     const current = balances.get(e.id) ?? { advanceMinor: 0, payableMinor: 0 };
-    const offsetMinor = Math.max(0, Math.min(monthlyAdvancesMinor, salaryAccrualMinor));
-    let issue: string | null = null;
-    if (monthlyAdvancesMinor < 0) issue = "تسديد السلف خلال الشهر يتجاوز المسحوبات؛ يلزم تدقيق";
-    else if (monthlyAdvancesMinor > 0 && salaryAccrualMinor <= 0)
-      issue = "يجب تسجيل استحقاق راتب لهذا الحساب قبل الإغلاق";
-    else if (monthlyAdvancesMinor > salaryAccrualMinor)
-      issue = "الاستحقاق أقل من مسحوبات الشهر؛ عدّل الاستحقاق قبل الإغلاق";
-    else if (current.advanceMinor < offsetMinor || current.payableMinor < offsetMinor)
-      issue = "الأرصدة الحالية لا تكفي للمقاصة؛ راجع الحركات السابقة";
+    const decision = planSalaryAdvanceOffset({
+      monthlyAdvancesMinor, salaryAccrualMinor,
+      outstandingAdvanceMinor: current.advanceMinor,
+      outstandingPayableMinor: current.payableMinor,
+    });
     rows.push({
       employeeId: e.id, employeeName: e.name,
       monthlyAdvancesMinor, salaryAccrualMinor,
       outstandingAdvanceMinor: current.advanceMinor,
       outstandingPayableMinor: current.payableMinor,
-      offsetMinor,
-      payableRemainderMinor: salaryAccrualMinor - offsetMinor,
-      issue,
+      offsetMinor: decision.offsetMinor,
+      payableRemainderMinor: decision.remainingSalaryMinor,
+      issue: decision.issue,
     });
   }
   const closeAvailable = localToday() >= range.end;
