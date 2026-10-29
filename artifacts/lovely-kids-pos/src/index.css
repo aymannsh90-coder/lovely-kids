@@ -19169,3 +19169,283 @@ button.inventory-intelligence-metric {
     grid-template-columns: minmax(0, 1fr) 105px;
   }
 }
+
+
+/* Invoice desktop single-viewport layout (2026-10-29) */
+/* Scope the compact shell to only the sales invoice route. Short viewports,
+   narrow windows and print keep the original document flow to avoid clipping. */
+@media screen and (min-width: 1200px) and (min-height: 840px) {
+  .pos-full-page:has(.sales-invoice-scroll-page) {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .pos-full-page:has(.sales-invoice-scroll-page) > .pos-full-shell {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 5px;
+  }
+
+  .pos-full-page:has(.sales-invoice-scroll-page) .pos-shamel-menu-shell,
+  .pos-full-page:has(.sales-invoice-scroll-page) .pos-shamel-session-banner {
+    flex: 0 0 auto;
+  }
+
+  .pos-full-page:has(.sales-invoice-scroll-page) > .pos-full-shell > .route-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Older document-flow fixes used !important to force full-page scrolling.
+     Only on roomy desktop screens, the invoice owns the available viewport. */
+  .route-content > .sales-invoice-scroll-page {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin-top: 0;
+    padding-bottom: 0;
+    overflow: hidden !important;
+    border-radius: 10px;
+  }
+
+  .sales-invoice-scroll-page > .accounting-invoice-titlebar {
+    flex: 0 0 auto;
+    min-height: 47px;
+    padding: 7px 13px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-titlebar h1 {
+    font-size: 18px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-titlebar p {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .sales-invoice-scroll-page > .accounting-invoice-toolbar {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    min-height: 0;
+    gap: 5px;
+    padding: 4px 7px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-toolbar > .accounting-invoice-action-group {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 3px 4px;
+    border-radius: 8px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-toolbar .accounting-invoice-action-group > button {
+    min-height: 31px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  /* All four editable invoice areas remain visible. Only the product rows
+     scroll once there are more than fit in the remaining table space. */
+  .route-content .sales-invoice-scroll-page > .accounting-invoice-lockable {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+
+  .sales-invoice-scroll-page .accounting-invoice-information {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    min-height: 0;
+    gap: 8px;
+    padding: 7px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-card {
+    padding: 7px 10px 8px;
+    border-radius: 9px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-card h2 {
+    min-height: 23px;
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+    font-size: 12px;
+  }
+  .sales-invoice-scroll-page .accounting-section-icon {
+    width: 21px;
+    height: 21px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .sales-invoice-scroll-page .accounting-fields-grid {
+    gap: 5px 8px;
+  }
+  .sales-invoice-scroll-page .accounting-fields-grid label,
+  .sales-invoice-scroll-page .accounting-payment-grid label {
+    gap: 3px;
+    font-size: 11px;
+  }
+  .sales-invoice-scroll-page .accounting-fields-grid input,
+  .sales-invoice-scroll-page .accounting-fields-grid select,
+  .sales-invoice-scroll-page .accounting-payment-grid select,
+  .sales-invoice-scroll-page .accounting-money-input input {
+    min-height: 31px;
+    font-size: 12px;
+  }
+  .sales-invoice-scroll-page .accounting-customer-credit-hint {
+    padding: 5px 8px;
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .sales-invoice-scroll-page .accounting-item-entry {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    gap: 8px;
+  }
+  .sales-invoice-scroll-page .accounting-item-form {
+    gap: 7px;
+  }
+  .sales-invoice-scroll-page .accounting-item-form label {
+    gap: 2px;
+    font-size: 11px;
+  }
+  .sales-invoice-scroll-page .accounting-item-form input,
+  .sales-invoice-scroll-page .accounting-item-form button {
+    min-height: 32px;
+    font-size: 12px;
+  }
+  .sales-invoice-scroll-page .accounting-entry-feedback small {
+    font-size: 10px;
+  }
+
+  .route-content .sales-invoice-scroll-page .accounting-invoice-table-wrap,
+  .route-content .sales-invoice-scroll-page .accounting-invoice-table-wrap.is-empty {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-table thead th {
+    padding: 7px 5px;
+    font-size: 11px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-table tbody tr.accounting-empty-row td {
+    height: 95px;
+    padding: 6px;
+  }
+  .sales-invoice-scroll-page .accounting-empty-invoice-state {
+    gap: 3px;
+    padding: 5px;
+  }
+  .sales-invoice-scroll-page .accounting-empty-invoice-icon {
+    width: 27px;
+    height: 27px;
+    font-size: 17px;
+  }
+  .sales-invoice-scroll-page .accounting-empty-invoice-state strong {
+    font-size: 12px;
+  }
+  .sales-invoice-scroll-page .accounting-empty-invoice-state > span:last-child {
+    font-size: 10px;
+  }
+
+  .route-content .sales-invoice-scroll-page .accounting-invoice-bottom {
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr) minmax(330px, 355px);
+    gap: 7px;
+    padding: 6px 7px;
+    margin: 0;
+    align-items: start;
+  }
+  .sales-invoice-scroll-page .accounting-payment-section,
+  .sales-invoice-scroll-page .accounting-invoice-totals {
+    padding: 7px 9px;
+    border-radius: 9px;
+  }
+  .sales-invoice-scroll-page .accounting-payment-section h2 {
+    min-height: 22px;
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    font-size: 12px;
+  }
+  .sales-invoice-scroll-page .accounting-payment-description {
+    margin: 0 0 5px;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .sales-invoice-scroll-page .accounting-payment-grid {
+    gap: 6px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px 7px;
+    padding: 7px 9px 9px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals > div {
+    min-height: 22px;
+    gap: 5px;
+    padding: 2px 0;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals > label,
+  .sales-invoice-scroll-page .accounting-invoice-totals > .accounting-final-total,
+  .sales-invoice-scroll-page .accounting-invoice-totals > .accounting-due-row {
+    grid-column: 1 / -1;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals > div span,
+  .sales-invoice-scroll-page .accounting-invoice-totals label > span {
+    font-size: 11px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals > div strong {
+    font-size: 12px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals > label .accounting-money-input input {
+    min-height: 29px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals .accounting-final-total {
+    min-height: 30px;
+    padding: 5px 8px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals .accounting-final-total strong {
+    font-size: 18px;
+  }
+  .sales-invoice-scroll-page .accounting-invoice-totals .accounting-due-row {
+    min-height: 26px;
+    padding: 4px 7px;
+  }
+  .sales-invoice-scroll-page .accounting-due-row strong {
+    font-size: 14px;
+  }
+
+  /* Keep the normal footer, but avoid spending much of the viewport on it. */
+  .pos-full-page:has(.sales-invoice-scroll-page) .footer {
+    flex: 0 0 auto;
+    min-height: 0;
+    margin-top: 4px;
+    padding: 3px 10px;
+    border-radius: 7px;
+    font-size: 10px;
+  }
+  .pos-full-page:has(.sales-invoice-scroll-page) .footer code {
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+}
+/* End invoice desktop single-viewport layout */
