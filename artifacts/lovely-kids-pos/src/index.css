@@ -20547,3 +20547,40 @@ button.inventory-intelligence-metric {
   }
 }
 /* End credit sale visible-action repair */
+
+
+/* Unified POS checkout footer: restore original F4 + F3 in every mode */
+#pos-sale.sale-panel .sale-summary > .complete-sale-actions > .sale-credit-settle-action {
+  width: 92% !important;
+  max-width: 330px !important;
+  min-height: 39px !important;
+  border-radius: 9px;
+  background: #167e60;
+  border-color: #167e60;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 850;
+}
+#pos-sale.sale-panel .sale-summary > .complete-sale-actions > .sale-credit-settle-action:hover:not(:disabled) {
+  background: #116b50;
+  border-color: #116b50;
+}
+#pos-sale.sale-panel .sale-summary > .complete-sale-actions > .sale-credit-settle-action:disabled {
+  opacity: .52;
+}
+@media screen and (min-width: 1200px) and (min-height: 700px) {
+  #pos-sale.sale-panel.is-credit-sale .sale-summary > .complete-sale-actions {
+    gap: 4px;
+    padding: 5px 0 1px;
+  }
+  #pos-sale.sale-panel.is-credit-sale .sale-summary > .complete-sale-actions > button {
+    min-height: 34px !important;
+    max-width: 330px !important;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  #pos-sale.sale-panel.is-credit-sale .sale-summary > .complete-sale-actions > .complete-sale-print-button {
+    min-height: 40px !important;
+  }
+}
+/* End unified POS checkout footer */

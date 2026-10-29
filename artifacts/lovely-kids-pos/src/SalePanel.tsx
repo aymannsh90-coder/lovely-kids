@@ -1650,7 +1650,7 @@ export default function SalePanel({
       }
 
       if (isPrintShortcut) {
-        if (paymentMethod === "credit") {
+        if (paymentMethod === "credit" && !selectedCustomerId) {
           return;
         }
 
@@ -1676,6 +1676,7 @@ export default function SalePanel({
     saleBusy,
     cart.length,
     paymentMethod,
+    selectedCustomerId,
     completeSale,
   ]);
 
@@ -2668,115 +2669,79 @@ export default function SalePanel({
             )}
             </div>
 
-            {paymentMethod === "credit" && selectedCustomerId && (
-              <div className="complete-sale-actions sale-credit-actions" role="group" aria-label="حفظ فاتورة البيع الآجل">
-                  <button
-                    className="secondary-button" aria-keyshortcuts="F3"
-                    type="button"
-                    disabled={
-                      saleBusy ||
-                      cart.length === 0
-                    }
-                    onClick={() =>
-                      void completeSale()
-                    }
-                  >
+            <div className="complete-sale-actions" role="group" aria-label="إجراءات إتمام البيع">
+              <button
+                className="primary-button complete-sale-button complete-sale-print-button"
+                type="button"
+                aria-keyshortcuts="F4"
+                title={paymentMethod === "credit" && !selectedCustomerId
+                  ? "اختر حساب الزبون لإتمام البيع الآجل والطباعة"
+                  : "اختصار الحفظ والطباعة: F4"}
+                disabled={
+                  saleBusy ||
+                  cart.length === 0 ||
+                  (paymentMethod === "credit" && !selectedCustomerId)
+                }
+                onClick={() => void completeSale(undefined, true)}
+              >
+                <span className="sale-print-icon" aria-hidden="true">🖨️</span>
+                <span className="sale-print-button-label">
+                  <span>
                     {saleBusy
-                      ? "جاري الحفظ…"
-                      : (
-                        <>
-                          <span>حفظ الفاتورة</span>
-                          <kbd className="sale-shortcut-key">F3</kbd>
-                        </>
-                      )}
-                  </button>
-
-                  <button
-                    className="primary-button"
-                    type="button"
-                    disabled={
-                      saleBusy ||
-                      cart.length === 0 ||
-                      (
-                        settlementMethod ===
-                          "cash" &&
-                        !session
-                      ) ||
-                      (
-                        settlementMethod ===
-                          "card" &&
-                        !settlementCardProcessor
-                      )
-                    }
-                    onClick={() =>
-                      void completeSale(
-                        {
-                          amount:
-                            settlementAmount,
-                          method:
-                            settlementMethod,
-                        },
-                      )
-                    }
-                  >
-                    {saleBusy
-                      ? "جاري الحفظ والتسديد…"
-                      : "حفظ وتسديد"}
-                  </button>
-              </div>
-            )}
-
-            {paymentMethod !== "credit" && (
-              <div className="complete-sale-actions">
-                <button
-                  className="primary-button complete-sale-button complete-sale-print-button"
-                  type="button"
-                  aria-keyshortcuts="F4"
-                  title="اختصار الطباعة: F4"
-                  disabled={saleBusy || cart.length === 0}
-                  onClick={() => void completeSale(undefined, true)}
-                >
-                  <span
-                    className="sale-print-icon"
-                    aria-hidden="true"
-                  >
-                    🖨️
-                  </span>
-
-                  <span className="sale-print-button-label">
-                    <span>
-                      {saleBusy
-                        ? "جاري الحفظ والطباعة…"
+                      ? "جاري الحفظ والطباعة…"
+                      : paymentMethod === "credit"
+                        ? "حفظ الفاتورة + طباعة حرارية"
                         : "إتمام البيع + طباعة فاتورة حرارية"}
-                    </span>
-
-                    {!saleBusy && (
-                      <kbd className="sale-shortcut-key sale-shortcut-key-print">
-                        F4
-                      </kbd>
-                    )}
                   </span>
-                </button>
+                  {!saleBusy && (
+                    <kbd className="sale-shortcut-key sale-shortcut-key-print">F4</kbd>
+                  )}
+                </span>
+              </button>
 
+              <button
+                className="secondary-button complete-sale-button complete-sale-no-print-button"
+                type="button"
+                aria-keyshortcuts="F3"
+                title={paymentMethod === "credit" && !selectedCustomerId
+                  ? "اختر حساب الزبون لإتمام البيع الآجل"
+                  : "اختصار الحفظ: F3"}
+                disabled={
+                  saleBusy ||
+                  cart.length === 0 ||
+                  (paymentMethod === "credit" && !selectedCustomerId)
+                }
+                onClick={() => void completeSale()}
+              >
+                {saleBusy
+                  ? "جاري حفظ البيع…"
+                  : (
+                    <>
+                      <span>{paymentMethod === "credit" ? "حفظ الفاتورة" : "إتمام البيع"}</span>
+                      <kbd className="sale-shortcut-key">F3</kbd>
+                    </>
+                  )}
+              </button>
+
+              {paymentMethod === "credit" && selectedCustomerId && (
                 <button
-                  className="secondary-button complete-sale-button complete-sale-no-print-button"
+                  className="primary-button complete-sale-button sale-credit-settle-action"
                   type="button"
-                  aria-keyshortcuts="F3"
-                  title="اختصار الحفظ: F3"
-                  disabled={saleBusy || cart.length === 0}
-                  onClick={() => void completeSale()}
+                  disabled={
+                    saleBusy ||
+                    cart.length === 0 ||
+                    (settlementMethod === "cash" && !session) ||
+                    (settlementMethod === "card" && !settlementCardProcessor)
+                  }
+                  onClick={() => void completeSale({
+                    amount: settlementAmount,
+                    method: settlementMethod,
+                  })}
                 >
-                  {saleBusy
-                    ? "جاري حفظ البيع…"
-                    : (
-                      <>
-                        <span>إتمام البيع</span>
-                        <kbd className="sale-shortcut-key">F3</kbd>
-                      </>
-                    )}
+                  {saleBusy ? "جاري الحفظ والتسديد…" : "حفظ وتسديد"}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
