@@ -3382,6 +3382,7 @@ export interface PosReturnHistorySummary {
   status: string;
   originalSaleId: string | null;
   customerId: number | null;
+  customerName: string | null;
   refundMethod: string;
   refundAmountMinor: number;
   createdAt: string;
@@ -3407,6 +3408,8 @@ export interface PosReturnHistoryDetail extends PosReturnHistorySummary {
 }
 
 export interface PosReturnHistoryResponse {
+  businessDate: string;
+  truncated: boolean;
   recent: PosReturnHistorySummary[];
   selected: PosReturnHistoryDetail | null;
 }
@@ -3415,10 +3418,14 @@ export function getPosReturnHistory(
   token: string,
   registerKey: string,
   publicId?: string,
+  businessDate?: string,
 ) {
   const params = new URLSearchParams({ register: registerKey });
   if (publicId?.trim()) {
     params.set("publicId", publicId.trim().toUpperCase());
+  }
+  if (businessDate?.trim()) {
+    params.set("date", businessDate.trim());
   }
   return apiRequest<PosReturnHistoryResponse>(
     `/api/pos/sales/returns/history?${params.toString()}`,
