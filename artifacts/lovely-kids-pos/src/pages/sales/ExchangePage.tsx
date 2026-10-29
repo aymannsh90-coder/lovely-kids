@@ -4183,7 +4183,7 @@ export default function ExchangePage() {
         </div>
       )}
 
-      <article className="sales-return-search-panel">
+      <article className="sales-return-search-panel exchange-customer-panel">
         <div className="sales-return-section-title">
           <div>
             <h3>بيانات الزبون</h3>
@@ -4195,13 +4195,7 @@ export default function ExchangePage() {
           </div>
         </div>
 
-        <div
-          style={{
-            padding: "16px",
-            display: "grid",
-            gap: "12px",
-          }}
-        >
+        <div className="exchange-customer-fields">
           <CustomerPicker
             customers={customers}
             value={selectedCustomerId}
@@ -4263,7 +4257,7 @@ export default function ExchangePage() {
         </div>
       </article>
 
-      <article className="sales-return-search-panel">
+      <article className="sales-return-search-panel exchange-mode-panel">
         <div className="sales-return-section-title">
           <div>
             <h3>نوع التبديل</h3>
@@ -4275,17 +4269,10 @@ export default function ExchangePage() {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(3, minmax(0, 1fr))",
-            gap: "12px",
-            padding: "16px",
-          }}
-        >
+        <div className="exchange-mode-picker" role="group" aria-label="اختر نوع التبديل">
           <button
             type="button"
+            aria-pressed={mode === "with_receipt"}
             className={
               mode === "with_receipt"
                 ? "primary-button"
@@ -4303,6 +4290,7 @@ export default function ExchangePage() {
 
           <button
             type="button"
+            aria-pressed={mode === "no_receipt"}
             className={
               mode === "no_receipt"
                 ? "primary-button"
@@ -4320,6 +4308,7 @@ export default function ExchangePage() {
 
           <button
             type="button"
+            aria-pressed={mode === "online_order"}
             className={
               mode === "online_order"
                 ? "primary-button"
