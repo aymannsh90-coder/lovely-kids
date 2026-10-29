@@ -515,6 +515,18 @@ async function handleReturnPreview(request: Request, db: Db, env: Env) {
  * Read-only recent returns plus a selected historic return with previous/next
  * navigation. Selection is independent from the original sale invoice.
  */
+function posBusinessDate(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Hebron",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+/** Every date returns ONLY that day's returns; no mixed-date history list. */
 async function handleReturnHistory(request: Request, db: Db, env: Env) {
   const auth = await requirePosUser(request, db, env);
   if (!auth.ok) return auth.response;
@@ -524,14 +536,16 @@ async function handleReturnHistory(request: Request, db: Db, env: Env) {
   if (!/^[a-z0-9_-]{1,50}$/.test(registerKey)) {
     return json({ error: "معرّف الصندوق غير صالح" }, 400);
   }
+
   const requestedId = (url.searchParams.get("publicId") || "").trim().toUpperCase();
   if (requestedId && (requestedId.length > 80 || !/^[A-Z0-9_-]+$/.test(requestedId))) {
     return json({ error: "رقم المردود غير صالح" }, 400);
   }
 
-  const recent = await db.select().from(posSaleReturnsTable)
-    .where(eq(posSaleReturnsTable.registerKey, registerKey))
-    .orderBy(desc(posSaleReturnsTable.id)).limit(50);
+  const requestedDate = (url.searchParams.get("date") || "").trim();
+  if (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+    return json({ error: "التاريخ المحدد غير صالح" }, 400);
+  }
 
   const chosen = requestedId
     ? (await db.select().from(posSaleReturnsTable)
@@ -539,31 +553,39 @@ async function handleReturnHistory(request: Request, db: Db, env: Env) {
           eq(posSaleReturnsTable.publicId, requestedId),
           eq(posSaleReturnsTable.registerKey, registerKey),
         )).limit(1))[0] ?? null
-    : recent[0] ?? null;
+    : null;
 
   if (requestedId && !chosen) return json({ error: "المردود غير موجود" }, 404);
 
-  const [items, previous, next, customer] = chosen
-    ? await Promise.all([
-        db.select().from(posSaleReturnItemsTable)
-          .where(eq(posSaleReturnItemsTable.returnId, chosen.id))
-          .orderBy(asc(posSaleReturnItemsTable.lineNumber)),
-        db.select({ publicId: posSaleReturnsTable.publicId })
-          .from(posSaleReturnsTable)
-          .where(and(eq(posSaleReturnsTable.registerKey, registerKey),
-            lt(posSaleReturnsTable.id, chosen.id)))
-          .orderBy(desc(posSaleReturnsTable.id)).limit(1),
-        db.select({ publicId: posSaleReturnsTable.publicId })
-          .from(posSaleReturnsTable)
-          .where(and(eq(posSaleReturnsTable.registerKey, registerKey),
-            gt(posSaleReturnsTable.id, chosen.id)))
-          .orderBy(asc(posSaleReturnsTable.id)).limit(1),
-        chosen.customerId !== null
-          ? db.select({ name: customersTable.name }).from(customersTable)
-              .where(eq(customersTable.id, chosen.customerId)).limit(1)
-          : Promise.resolve([] as Array<{ name: string }>),
-      ])
-    : [[], [], [], []];
+  // Opening a linked return chooses its original business day automatically.
+  const date = requestedDate || chosen?.businessDate || posBusinessDate();
+  const dayFilter = and(
+    eq(posSaleReturnsTable.registerKey, registerKey),
+    eq(posSaleReturnsTable.businessDate, date),
+  );
+  const recent = await db.select().from(posSaleReturnsTable)
+    .where(dayFilter)
+    .orderBy(desc(posSaleReturnsTable.id))
+    .limit(200);
+
+  const customerIds = [
+    ...new Set(recent.map((row) => row.customerId).filter((id): id is number => id !== null)),
+  ];
+  const customers = customerIds.length
+    ? await db.select({ id: customersTable.id, name: customersTable.name })
+        .from(customersTable)
+        .where(inArray(customersTable.id, customerIds))
+    : [];
+  const customerNames = new Map(customers.map((row) => [row.id, row.name]));
+
+  const selected = chosen && chosen.businessDate === date ? chosen : null;
+  const items = selected
+    ? await db.select().from(posSaleReturnItemsTable)
+        .where(eq(posSaleReturnItemsTable.returnId, selected.id))
+        .orderBy(asc(posSaleReturnItemsTable.lineNumber))
+    : [];
+
+  const rowIndex = selected ? recent.findIndex((row) => row.id === selected.id) : -1;
 
   const summary = (saleReturn: typeof posSaleReturnsTable.$inferSelect) => ({
     id: String(saleReturn.id),
@@ -572,6 +594,8 @@ async function handleReturnHistory(request: Request, db: Db, env: Env) {
     originalSaleId: saleReturn.originalSaleId === null
       ? null : String(saleReturn.originalSaleId),
     customerId: saleReturn.customerId,
+    customerName: saleReturn.customerId === null
+      ? null : customerNames.get(saleReturn.customerId) ?? null,
     refundMethod: saleReturn.refundMethod,
     refundAmountMinor: saleReturn.refundAmountMinor,
     createdAt: saleReturn.createdAt.toISOString(),
@@ -579,15 +603,16 @@ async function handleReturnHistory(request: Request, db: Db, env: Env) {
   });
 
   return json({
+    businessDate: date,
+    truncated: recent.length === 200,
     recent: recent.map(summary),
-    selected: chosen ? {
-      ...summary(chosen),
-      customerName: customer[0]?.name ?? null,
-      cashSessionId: String(chosen.cashSessionId),
-      businessDate: chosen.businessDate,
-      notes: chosen.notes,
-      previousPublicId: previous[0]?.publicId ?? null,
-      nextPublicId: next[0]?.publicId ?? null,
+    selected: selected ? {
+      ...summary(selected),
+      cashSessionId: String(selected.cashSessionId),
+      businessDate: selected.businessDate,
+      notes: selected.notes,
+      previousPublicId: rowIndex >= 0 ? recent[rowIndex + 1]?.publicId ?? null : null,
+      nextPublicId: rowIndex > 0 ? recent[rowIndex - 1]?.publicId ?? null : null,
       items: items.map((item) => ({
         id: String(item.id),
         barcode: item.barcode,
