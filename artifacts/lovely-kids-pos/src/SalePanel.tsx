@@ -1681,7 +1681,7 @@ export default function SalePanel({
 
   return (
     <>
-      <section className="sale-panel" id="pos-sale">
+      <section className={`sale-panel ${paymentMethod === "credit" && selectedCustomerId ? "is-credit-sale" : ""}`} id="pos-sale">
         <div className="sale-workspace-main">
         <div className="panel-heading">
           <div className="panel-icon">🧾</div>
@@ -2663,18 +2663,13 @@ export default function SalePanel({
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display:
-                      "flex",
-                    gap: 8,
-                    marginTop: 14,
-                    flexWrap:
-                      "wrap",
-                  }}
-                >
+              </div>
+            )}
+
+            {paymentMethod === "credit" && selectedCustomerId && (
+              <div className="complete-sale-actions sale-credit-actions" role="group" aria-label="حفظ فاتورة البيع الآجل">
                   <button
-                    className="secondary-button"
+                    className="secondary-button" aria-keyshortcuts="F3"
                     type="button"
                     disabled={
                       saleBusy ||
@@ -2726,7 +2721,6 @@ export default function SalePanel({
                       ? "جاري الحفظ والتسديد…"
                       : "حفظ وتسديد"}
                   </button>
-                </div>
               </div>
             )}
 
