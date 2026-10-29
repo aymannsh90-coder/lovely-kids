@@ -117,6 +117,7 @@ function eventLabel(
     return "دفع مستحقات";
   }
 
+  if (sourceEvent === "advance_offset") return "مقاصة سلفة مع استحقاق";
   return sourceEvent ?? "حركة";
 }
 
