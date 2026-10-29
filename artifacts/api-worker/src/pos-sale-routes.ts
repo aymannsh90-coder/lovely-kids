@@ -5627,8 +5627,31 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
       [sale.id],
     );
 
-  return json(
-    toSaleResponse(
+  // Read the real linked voucher, not the sale's original paidMinor:
+  // this stays correct after refresh and excludes reversed receipts.
+  const linkedReceiptRows =
+    sale.paymentMethod === "credit"
+      ? await db
+          .select({
+            publicId: financeVouchersTable.publicId,
+            amountMinor: financeVouchersTable.amountMinor,
+            paymentMethod: financeVouchersTable.paymentMethod,
+          })
+          .from(financeVouchersTable)
+          .where(
+            and(
+              eq(
+                financeVouchersTable.idempotencyKey,
+                `pos_invoice_initial_receipt:${sale.publicId}`,
+              ),
+              eq(financeVouchersTable.status, "posted"),
+            ),
+          )
+          .limit(1)
+      : [];
+
+  return json({
+    ...toSaleResponse(
       sale,
       items,
       false,
@@ -5641,7 +5664,8 @@ async function handleSaleByPublicId(request: Request, db: Db, env: Env) {
         sale.id,
       ) ?? [],
     ),
-  );
+    linkedInitialReceipt: linkedReceiptRows[0] ?? null,
+  });
 }
 
 export async function handlePosSaleRequest(
