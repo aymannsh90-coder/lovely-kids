@@ -948,13 +948,34 @@ export default function TodaySalesPanel({
             <strong>{formatMinor(cardSalesMinor)}</strong>
           </div>
 
-          <div>
-            <span>فيزا البنك العربي</span>
+          <div className="today-summary-bank-card today-summary-bank-arab">
+            <div className="today-summary-bank-heading">
+              <span>فيزا البنك العربي</span>
+              <img
+                className="today-summary-bank-logo today-summary-bank-logo-arab"
+                src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Arab_Bank.svg/330px-Arab_Bank.svg.png"
+                alt="شعار البنك العربي"
+                width={76}
+                height={25}
+                loading="lazy"
+              />
+            </div>
             <strong>{formatMinor(arabCardSalesMinor)}</strong>
           </div>
 
-          <div>
-            <span>فيزا بنك فلسطين</span>
+          <div className="today-summary-bank-card today-summary-bank-bop">
+            <div className="today-summary-bank-heading">
+              <span>فيزا بنك فلسطين</span>
+              <img
+                className="today-summary-bank-logo today-summary-bank-logo-bop"
+                src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Logo_de_Bank_of_Palestine.jpg/240px-Logo_de_Bank_of_Palestine.jpg"
+                alt="شعار بنك فلسطين"
+                title="صورة الشعار: Isartov، Wikimedia Commons، CC BY-SA 4.0"
+                width={38}
+                height={38}
+                loading="lazy"
+              />
+            </div>
             <strong>{formatMinor(bopCardSalesMinor)}</strong>
           </div>
 
