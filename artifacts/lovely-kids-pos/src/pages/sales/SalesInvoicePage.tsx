@@ -2019,7 +2019,8 @@ export default function SalesInvoicePage() {
         </div>
       )}
 
-      <div className="accounting-invoice-toolbar">
+      <div className="accounting-invoice-toolbar" role="toolbar" aria-label="إجراءات فاتورة المبيعات">
+        <div className="accounting-invoice-action-group is-primary-group" aria-label="إنشاء وحفظ الفاتورة">
         <button
           type="button"
           disabled={invoiceBusy}
@@ -2068,6 +2069,8 @@ export default function SalesInvoicePage() {
           <span aria-hidden="true">₪</span>
           حفظ وتسديد
         </button>
+        </div>
+        <div className="accounting-invoice-action-group is-management-group" aria-label="المراجعة والتعديل">
 
         <button
           type="button"
@@ -2179,6 +2182,8 @@ export default function SalesInvoicePage() {
           <span aria-hidden="true">⧉</span>
           نسخ
         </button>
+        </div>
+        <div className="accounting-invoice-action-group is-print-group" aria-label="طباعة الفاتورة">
 
         <button
           type="button"
@@ -2200,6 +2205,7 @@ export default function SalesInvoicePage() {
           <span aria-hidden="true">👁️</span>
           معاينة الطباعة
         </button>
+        </div>
       </div>
 
       {pendingInvoiceSettlement && loadedSale?.sale.publicId === pendingInvoiceSettlement.publicId && (
@@ -2224,7 +2230,7 @@ export default function SalesInvoicePage() {
       >
         <section className="accounting-invoice-information">
           <div className="accounting-invoice-card">
-            <h2>بيانات الفاتورة</h2>
+            <h2><span className="accounting-section-icon" aria-hidden="true">▤</span> بيانات الفاتورة</h2>
 
             <div className="accounting-fields-grid">
               <label>
@@ -2268,7 +2274,7 @@ export default function SalesInvoicePage() {
           </div>
 
           <div className="accounting-invoice-card">
-            <h2>بيانات الزبون</h2>
+            <h2><span className="accounting-section-icon" aria-hidden="true">♙</span> بيانات الزبون</h2>
 
             <div className="accounting-fields-grid">
               <div className="accounting-wide-field">
@@ -2474,7 +2480,10 @@ export default function SalesInvoicePage() {
           )}
         </section>
 
-        <div ref={tableWrap} className="accounting-invoice-table-wrap">
+        <div
+          ref={tableWrap}
+          className={`accounting-invoice-table-wrap ${lines.length === 0 ? "is-empty" : "has-lines"}`}
+        >
           <table className="accounting-invoice-table">
             <thead>
               <tr>
@@ -2497,7 +2506,11 @@ export default function SalesInvoicePage() {
               {lines.length === 0 ? (
                 <tr className="accounting-empty-row">
                   <td colSpan={12}>
-                    امسح باركود صنف أو استخدم البحث لإضافته إلى الفاتورة.
+                    <div className="accounting-empty-invoice-state">
+                      <span className="accounting-empty-invoice-icon" aria-hidden="true">▦</span>
+                      <strong>الفاتورة جاهزة لإضافة الأصناف</strong>
+                      <span>امسح باركود الصنف أو استخدم حقل البحث بالأعلى، وستظهر الأصناف هنا.</span>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -2681,8 +2694,14 @@ export default function SalesInvoicePage() {
 
         <section className="accounting-invoice-bottom">
           <div className="accounting-payment-section">
-            <h2>الدفع والتسديد</h2>
+            <h2><span className="accounting-section-icon" aria-hidden="true">₪</span> الدفع والتسديد</h2>
 
+            <p className="accounting-payment-description">
+              {paymentMethod === "credit"
+                ? "هذه الفاتورة تُسجّل على حساب الزبون؛ الدفعة النقدية أو الفيزا تُسجّل بسند قبض مستقل من «حفظ وتسديد»."
+                : "بيع نقدي بدون حساب زبون؛ تظهر قيمة المقبوض والباقي للزبون."
+              }
+            </p>
             <div className="accounting-payment-grid">
               <label>
                 <span>طريقة الدفع</span>
@@ -2822,7 +2841,7 @@ export default function SalesInvoicePage() {
               <strong dir="ltr">{formatMinor(finalTotalMinor)}</strong>
             </div>
 
-            <div>
+            <div className={paymentMethod === "credit" ? "accounting-due-row is-credit" : "accounting-due-row"}>
               <span>{paymentMethod === "credit" ? "قيمة الفاتورة على حساب الزبون" : "الباقي للزبون"}</span>
               <strong dir="ltr">{formatMinor(paymentMethod === "credit" ? customerDueMinor : changeMinor)}</strong>
             </div>
