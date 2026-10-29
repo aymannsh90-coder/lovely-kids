@@ -58,7 +58,7 @@ export default function AppRouter() {
     <Routes>
       <Route
         path="sales/mobile/manual-order"
-        element={<ManualOnlineOrderPage layout="mobile" />}
+        element={<RequireStaffPage><ManualOnlineOrderPage layout="mobile" /></RequireStaffPage>}
       />
 
       <Route
@@ -73,24 +73,24 @@ export default function AppRouter() {
       <Route
         path="sales/mobile/returns"
         element={
-          <RequireOpenSession>
+          <RequireStaffPage><RequireOpenSession>
             <MobileReturnsPage />
-          </RequireOpenSession>
+          </RequireOpenSession></RequireStaffPage>
         }
       />
 
       <Route
         path="sales/mobile/price-check"
         element={
-          <RequireOpenSession>
+          <RequireStaffPage><RequireOpenSession>
             <MobilePriceCheckPage />
-          </RequireOpenSession>
+          </RequireOpenSession></RequireStaffPage>
         }
       />
 
       <Route
         path="sales/mobile/assistant"
-        element={<MobileAssistantPage />}
+        element={<RequireStaffPage><MobileAssistantPage /></RequireStaffPage>}
       />
 
       <Route element={<DashboardLayout />}>
