@@ -1682,6 +1682,7 @@ export default function SalePanel({
   return (
     <>
       <section className="sale-panel" id="pos-sale">
+        <div className="sale-workspace-main">
         <div className="panel-heading">
           <div className="panel-icon">🧾</div>
 
@@ -1722,6 +1723,7 @@ export default function SalePanel({
           </button>
         </form>
 
+        <div className="sale-main-items-region">
         {(searchBusy || searchOpen) && (
           <section className="pos-product-search-panel">
             <header>
@@ -1998,7 +2000,8 @@ export default function SalePanel({
           </div>
         )}
 
-        <div className="sale-checkout">
+        </div>
+        <div className="sale-checkout sale-customer-checkout">
           <div className="sale-customer-fields">
             <CustomerPicker
               customers={customers}
@@ -2057,7 +2060,10 @@ export default function SalePanel({
               />
             </label>
           </div>
+        </div>
+        </div>
 
+        <div className="sale-checkout sale-payment-checkout">
           <div className="sale-summary">
             <div className="sale-summary-heading">
               <div>
