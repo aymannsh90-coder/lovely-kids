@@ -1937,7 +1937,7 @@ export default function SalesInvoicePage() {
         <div>
           <span>الفواتير</span>
           <h1>فاتورة مبيعات</h1>
-          <p>واجهة محاسبية تفصيلية لإدخال ومراجعة فاتورة المبيعات.</p>
+          <p>اختر الزبون، أضف الأصناف، ثم احفظ على حسابه أو احفظ مع إصدار سند قبض كامل أو جزئي.</p>
         </div>
 
         <span
@@ -2009,6 +2009,23 @@ export default function SalesInvoicePage() {
           <span aria-hidden="true">💾</span>
           {editMode ? "حفظ التعديل" : "حفظ"}
           <kbd>F3</kbd>
+        </button>
+
+        <button
+          type="button"
+          className="accounting-save-settle-action"
+          disabled={
+            invoiceBusy ||
+            !ACCOUNTING_WRITES_ENABLED ||
+            !!loadedSale ||
+            editMode ||
+            !selectedCustomerId
+          }
+          title={selectedCustomerId ? "إصدار فاتورة آجل مع سند قبض للدفعة" : "اختر زبونًا مسجّلًا أولًا"}
+          onClick={openSettlementDialog}
+        >
+          <span aria-hidden="true">₪</span>
+          حفظ وتسديد
         </button>
 
         <button
@@ -2139,6 +2156,22 @@ export default function SalesInvoicePage() {
         </button>
       </div>
 
+      {pendingInvoiceSettlement && loadedSale?.sale.publicId === pendingInvoiceSettlement.publicId && (
+        <div className="accounting-settlement-notice is-pending" role="alert">
+          <strong>الفاتورة محفوظة على حساب الزبون، وسند القبض يحتاج تأكيدًا.</strong>
+          <span>لا تحفظ فاتورة ثانية. أعد محاولة سند القبض بنفس المفتاح لمنع التكرار.</span>
+          <button type="button" disabled={invoiceBusy} onClick={() => void retryPendingInvoiceSettlement()}>
+            {invoiceBusy ? "جاري التحقق…" : "إعادة محاولة سند القبض"}
+          </button>
+        </div>
+      )}
+      {linkedReceipt && loadedSale && (
+        <div className="accounting-settlement-notice is-complete" role="status">
+          <strong>سند قبض معتمد: {linkedReceipt.publicId}</strong>
+          <span>المقبوض {formatMinor(linkedReceipt.amountMinor)} — المتبقي من الفاتورة {formatMinor(Math.max(0, loadedSale.sale.totalMinor - linkedReceipt.amountMinor))}. البيع مسجل على حساب الزبون، والقبض حركة مستقلة.</span>
+        </div>
+      )}
+
       <fieldset
         className="accounting-invoice-lockable"
         disabled={invoiceLocked}
@@ -2172,10 +2205,7 @@ export default function SalesInvoicePage() {
                   value={invoiceType}
                   onChange={(event) => setInvoiceType(event.target.value)}
                 >
-                  <option value="cash">نقدية</option>
-                  <option value="credit" disabled>
-                    آجلة — قريبًا
-                  </option>
+                  <option value="cash">فاتورة مبيعات</option>
                 </select>
               </label>
 
@@ -2223,16 +2253,14 @@ export default function SalesInvoicePage() {
                     customer,
                   ) => {
                     if (!customer) {
-                      setSelectedCustomerId(
-                        null,
-                      );
-                      setCustomerName(
-                        "",
-                      );
-                      setCustomerPhone(
-                        "",
-                      );
-
+                      setSelectedCustomerId(null);
+                      setCustomerName("");
+                      setCustomerPhone("");
+                      if (!loadedSale) {
+                        setPaymentMethod("cash");
+                        setPaidAmountAuto(true);
+                        setPaidAmount((finalTotalMinor / 100).toFixed(2));
+                      }
                       return;
                     }
 
@@ -2249,12 +2277,24 @@ export default function SalesInvoicePage() {
                         "",
                     );
 
-                    // اختيار الزبون لا يغيّر طريقة الدفع.
-                    // المستخدم يختار نقدي أو آجل بشكل مستقل.
+                    // Registered customer invoices are recognized as receivables.
+                    // Any immediate cash/card payment is recorded by a receipt voucher.
+                    if (!loadedSale) {
+                      setPaymentMethod("credit");
+                      setPaidAmountAuto(false);
+                      setPaidAmount("0.00");
+                    }
                   }}
                 />
               </div>
 
+              {!loadedSale && (
+                <p className="accounting-customer-credit-hint accounting-wide-field">
+                  {selectedCustomerId
+                    ? "✓ الزبون مسجّل: عند الحفظ تُضاف الفاتورة لذمته. استخدم «حفظ وتسديد» لإصدار سند قبض فوري."
+                    : "اختر زبونًا مسجّلًا لربط الفاتورة بذمته، أو اترك الحقل فارغًا لبيع نقدي عادي."}
+                </p>
+              )}
               <label>
                 <span>رقم الهاتف</span>
                 <input
@@ -2602,10 +2642,7 @@ export default function SalesInvoicePage() {
                 <span>طريقة الدفع</span>
                 <select
                   value={paymentMethod}
-                  disabled={
-                    loadedSale !==
-                      null
-                  }
+                  disabled={loadedSale !== null || selectedCustomerId !== null}
                   onChange={(event) => {
                     const next =
                       event.target
@@ -2644,7 +2681,7 @@ export default function SalesInvoicePage() {
                   }}
                 >
                   <option value="cash">
-                    نقدي
+                    نقدي — بدون حساب زبون
                   </option>
 
                   <option value="credit">
@@ -2674,7 +2711,7 @@ export default function SalesInvoicePage() {
               </label>
 
               <label>
-                <span>المبلغ المدفوع</span>
+                <span>{paymentMethod === "credit" ? "المبلغ المدفوع: عبر سند قبض منفصل" : "المبلغ المدفوع"}</span>
                 <div className="accounting-money-input">
                   <input
                     dir="ltr"
@@ -2740,8 +2777,8 @@ export default function SalesInvoicePage() {
             </div>
 
             <div>
-              <span>الباقي</span>
-              <strong dir="ltr">{formatMinor(changeMinor)}</strong>
+              <span>{paymentMethod === "credit" ? "قيمة الفاتورة على حساب الزبون" : "الباقي للزبون"}</span>
+              <strong dir="ltr">{formatMinor(paymentMethod === "credit" ? customerDueMinor : changeMinor)}</strong>
             </div>
           </div>
         </section>
@@ -2753,6 +2790,93 @@ export default function SalesInvoicePage() {
           receiptRef={receiptRef}
         />
       ) : null}
+
+      {settlementOpen && (
+        <div
+          className="accounting-settlement-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !invoiceBusy) {
+              setSettlementOpen(false);
+            }
+          }}
+        >
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="accounting-settlement-heading"
+            className="accounting-settlement-dialog"
+            onSubmit={confirmSettlementDialog}
+          >
+            <header>
+              <span className="accounting-settlement-dialog-icon" aria-hidden="true">₪</span>
+              <div>
+                <h2 id="accounting-settlement-heading">حفظ الفاتورة وتسديدها</h2>
+                <p>ستُحفظ الفاتورة على حساب {customerName}، ثم يُسجّل سند قبض للدفعة.</p>
+              </div>
+            </header>
+            <div className="accounting-settlement-total">
+              <span>إجمالي الفاتورة</span>
+              <strong dir="ltr">{formatMinor(finalTotalMinor)}</strong>
+            </div>
+            <fieldset>
+              <legend>قيمة التسديد</legend>
+              <label className="accounting-settlement-radio">
+                <input type="radio" name="invoice-settlement-kind" checked={settlementKind === "full"}
+                  onChange={() => setSettlementKind("full")}/>
+                كامل المبلغ — {formatMinor(finalTotalMinor)}
+              </label>
+              <label className="accounting-settlement-radio">
+                <input type="radio" name="invoice-settlement-kind" checked={settlementKind === "partial"}
+                  onChange={() => setSettlementKind("partial")}/>
+                دفعة جزئية
+              </label>
+              {settlementKind === "partial" && (
+                <label className="accounting-settlement-amount">
+                  مبلغ الدفعة (₪)
+                  <input type="number" dir="ltr" min="0.01" max={(finalTotalMinor / 100).toFixed(2)}
+                    step="0.01" required autoFocus value={settlementAmount}
+                    onChange={(event) => setSettlementAmount(event.target.value)}/>
+                </label>
+              )}
+            </fieldset>
+            <fieldset>
+              <legend>طريقة القبض</legend>
+              <div className="accounting-settlement-methods">
+                <label><input type="radio" name="invoice-settlement-method" checked={settlementMethod === "cash"}
+                  onChange={() => { setSettlementMethod("cash"); setSettlementCardProcessor(null); }}/>
+                  نقدي — الصندوق
+                </label>
+                <label><input type="radio" name="invoice-settlement-method"
+                  checked={settlementMethod === "card" && settlementCardProcessor === "arab"}
+                  onChange={() => { setSettlementMethod("card"); setSettlementCardProcessor("arab"); }}/>
+                  فيزا البنك العربي
+                </label>
+                <label><input type="radio" name="invoice-settlement-method"
+                  checked={settlementMethod === "card" && settlementCardProcessor === "bop"}
+                  onChange={() => { setSettlementMethod("card"); setSettlementCardProcessor("bop"); }}/>
+                  فيزا بنك فلسطين
+                </label>
+              </div>
+            </fieldset>
+            <div className="accounting-settlement-balance">
+              <span>المتبقي على الزبون بعد الدفعة</span>
+              <strong dir="ltr">{formatMinor(Math.max(0, finalTotalMinor - (
+                settlementKind === "full" ? finalTotalMinor : (parseMoneyInput(settlementAmount) ?? 0)
+              )))}</strong>
+            </div>
+            {error && <p role="alert" className="accounting-settlement-error">{error}</p>}
+            <footer>
+              <button type="submit" className="accounting-save-settle-action" disabled={invoiceBusy}>
+                حفظ الفاتورة وإنشاء سند قبض
+              </button>
+              <button type="button" disabled={invoiceBusy} onClick={() => { setSettlementOpen(false); setError(""); }}>
+                رجوع دون حفظ
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
 
       {openInvoiceDialog && (
         <div
