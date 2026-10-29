@@ -2157,10 +2157,9 @@ async function handleEmployeeLedger(
               ?.businessDate ??
             null,
           referencePeriod:
-            referencePeriodByTransactionId.get(
-              line.transactionId,
-            ) ??
-            null,
+            referencePeriodByTransactionId.get(line.transactionId) ??
+            (transaction?.sourceType === MONTH_CLOSE_SOURCE_TYPE
+              ? transaction.sourceId : null),
           createdAt:
             transaction
               ?.createdAt ??
