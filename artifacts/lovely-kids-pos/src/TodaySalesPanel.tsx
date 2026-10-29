@@ -923,7 +923,7 @@ export default function TodaySalesPanel({
             <strong>{formatMinor(discountMinor)}</strong>
           </div>
 
-          <div>
+          <div className="today-summary-cash-sales">
             <span>مبيعات نقدي</span>
             <strong>{formatMinor(cashSalesMinor)}</strong>
           </div>
@@ -965,7 +965,7 @@ export default function TodaySalesPanel({
             </div>
           )}
 
-          <div>
+          <div className="today-summary-credit-sales">
             <span>مبيعات على الحساب (لم تُقبض بعد البيع)</span>
             <strong>{formatMinor(accountSalesMinor)}</strong>
           </div>
@@ -977,7 +977,7 @@ export default function TodaySalesPanel({
             <span>قبض ذمم عبر البنك أو الفيزا (غير نقدي)</span>
             <strong>{formatMinor(customerNonCashReceiptsMinor)}</strong>
           </div>
-          <div>
+          <div className="today-summary-cash-net">
             <span>صافي نقد المبيعات وقبض الذمم</span>
             <strong>{formatMinor(cashSalesAndReceiptsNetMinor)}</strong>
           </div>
