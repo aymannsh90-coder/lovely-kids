@@ -382,6 +382,41 @@ async function handleGrossProfit(
     );
   };
 
+  // Journal-backed owner confirmations change report quality only:
+  // original sale/return snapshots and monetary values remain immutable.
+  // A new unverified return makes product state mixed and disables the
+  // qualification until the owner reviews all outstanding sources again.
+  const attestationRows = await db.select({
+    productId: productCostLedgerTable.productId,
+  }).from(productCostLedgerTable)
+    .where(eq(productCostLedgerTable.sourceType, "owner_cost_quality_attestation"))
+    .limit(5000);
+  const attestedIds = [...new Set(attestationRows.map((row) => row.productId))];
+  const attestedStates = attestedIds.length > 0
+    ? await db.select({
+        productId: productCostStateTable.productId,
+        referenceCost: productCostStateTable.referenceUnitCostMinor,
+      }).from(productCostStateTable)
+        .where(and(inArray(productCostStateTable.productId, attestedIds),
+          eq(productCostStateTable.costQuality, "confirmed")))
+    : [];
+  const attestedCost = new Map(attestedStates.map((row) =>
+    [row.productId, row.referenceCost] as const));
+  const verifiedQuality = (
+    productId: number | null,
+    quantity: number,
+    totalMinor: number,
+    originalQuality: string,
+  ): string => {
+    if (productId === null || originalQuality === "confirmed") return originalQuality;
+    const cost = attestedCost.get(productId);
+    if (cost === undefined || !Number.isSafeInteger(quantity) || quantity <= 0 ||
+        BigInt(quantity) * BigInt(cost) !== BigInt(totalMinor)) {
+      return originalQuality;
+    }
+    return "confirmed";
+  };
+
   // ==========================================================
   // POS SALES
   // ==========================================================
@@ -522,7 +557,7 @@ async function handleGrossProfit(
       item.quantity;
 
     posQualities.push(
-      cost.costQuality,
+      verifiedQuality(item.productId, item.quantity, cost.costTotalMinor, cost.costQuality),
     );
   }
 
@@ -578,6 +613,9 @@ async function handleGrossProfit(
           .select({
             id:
               posSaleReturnItemsTable.id,
+
+            productId:
+              posSaleReturnItemsTable.productId,
 
             quantity:
               posSaleReturnItemsTable.quantity,
@@ -667,7 +705,7 @@ async function handleGrossProfit(
       item.quantity;
 
     posQualities.push(
-      cost.costQuality,
+      verifiedQuality(item.productId, item.quantity, cost.costTotalMinor, cost.costQuality),
     );
   }
 
@@ -741,6 +779,8 @@ async function handleGrossProfit(
             .select({
               id:
                 exchangeReturnItemsTable.id,
+              productId:
+                exchangeReturnItemsTable.productId,
               quantity:
                 exchangeReturnItemsTable.quantity,
             })
@@ -895,7 +935,7 @@ async function handleGrossProfit(
       item.quantity;
 
     exchangeQualities.push(
-      cost.costQuality,
+      verifiedQuality(item.productId, item.quantity, cost.costTotalMinor, cost.costQuality),
     );
   }
 
@@ -934,7 +974,7 @@ async function handleGrossProfit(
       item.quantity;
 
     exchangeQualities.push(
-      cost.costQuality,
+      verifiedQuality(item.productId, item.quantity, cost.costTotalMinor, cost.costQuality),
     );
   }
 
@@ -1370,7 +1410,7 @@ async function handleGrossProfit(
           quantity;
 
         onlineQualities.push(
-          cost.costQuality,
+          verifiedQuality(Number(item.id) || null, quantity, cost.costTotalMinor, cost.costQuality),
         );
       },
     );
@@ -1797,6 +1837,9 @@ async function handleGrossProfit(
 
       expensesIncluded:
         false,
+
+      verifiedOwnerAttestations:
+        attestedStates.length,
     },
   });
 }
