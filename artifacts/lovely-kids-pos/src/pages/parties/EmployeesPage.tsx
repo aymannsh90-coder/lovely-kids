@@ -1259,7 +1259,7 @@ export default function EmployeesPage() {
                 <table>
                   <thead><tr>
                     <th>الحساب</th><th>سلف الشهر</th><th>استحقاق الشهر</th>
-                    <th>المقاصة</th><th>مستحق غير مدفوع</th><th>المراجعة</th>
+                    <th>المقاصة</th><th>المستحقات المتبقية بعد المقاصة</th><th>المراجعة</th>
                   </tr></thead>
                   <tbody>{closePreview.employees.map((employee) => (
                     <tr key={employee.employeeId}>
