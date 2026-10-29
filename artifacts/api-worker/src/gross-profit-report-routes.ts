@@ -1541,7 +1541,7 @@ async function handleGrossProfit(
   // barcode matches are *candidates*, never automatically linked receipts.
   const mixedQuantityByProduct = new Map<number, number>();
   const noteMixed = (productId: number | null | undefined, quantity: number) => {
-    if (!Number.isSafeInteger(productId) || !productId || productId <= 0 || !Number.isSafeInteger(quantity) || quantity <= 0) return;
+    if (typeof productId !== "number" || !Number.isSafeInteger(productId) || productId <= 0 || !Number.isSafeInteger(quantity) || quantity <= 0) return;
     mixedQuantityByProduct.set(productId, (mixedQuantityByProduct.get(productId) ?? 0) + quantity);
   };
   for (const item of saleItems) {
