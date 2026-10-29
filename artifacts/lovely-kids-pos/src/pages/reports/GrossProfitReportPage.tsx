@@ -1118,6 +1118,46 @@ export default function GrossProfitReportPage() {
             </section>
           )}
 
+
+          {report.mixedCostReview.length > 0 && (
+            <details className="gross-profit-no-print" style={{ ...cardStyle, marginBottom: 14 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 800 }}>
+                مراجعة أسباب التكلفة المختلطة — {report.mixedCostReview.length} صنف
+              </summary>
+              <p style={{ fontSize: 13 }}>
+                مطابقة الباركود والتاريخ تعطي فواتير محتملة فقط، وليست إثباتًا لرجوع نفس القطعة.
+                هذا القسم للقراءة فقط ولا يعدّل المحاسبة أو المخزون.
+              </p>
+              {report.mixedCostReviewTruncated && <p>تم عرض أول 12 صنفًا فقط.</p>}
+              {report.mixedCostReview.map((product) => (
+                <article key={product.productId} style={{ padding: 12, borderTop: "1px solid #ddd" }}>
+                  <strong>{product.nameAr} — {product.productCode ?? product.productId}</strong>
+                  <p>الكمية المباعة بتكلفة مختلطة: {product.soldMixedQuantity}</p>
+                  {product.sources.length === 0 && <p>مصدر التكلفة المختلطة يحتاج تدقيقًا يدويًا إضافيًا.</p>}
+                  {product.sources.map((source) => (
+                    <div key={source.publicId} style={{ border: "1px solid #eee", padding: 8, marginBottom: 8 }}>
+                      <b>{source.kind === "exchange" ? "تبديل بدون فاتورة" : "مردود بدون فاتورة"}</b>
+                      {" — "}{source.publicId} ({source.date})
+                      <div>الباركود: {source.barcode ?? "—"}، {source.color ?? "—"} / {source.size ?? "—"}، الكمية: {source.quantity}</div>
+                      <div>تكلفة الإرجاع المسجلة: {formatReportMoney(source.costMinor)}</div>
+                      <b>الفواتير المحتملة:</b>
+                      {source.candidates.length === 0 ? <p>لا توجد فاتورة POS مطابقة ضمن السجلات المفحوصة.</p> : (
+                        <ul>{source.candidates.map((candidate) => (
+                          <li key={candidate.publicId}>
+                            {candidate.publicId} ({candidate.date}) —
+                            السعر {formatReportMoney(candidate.priceMinor)} ({candidate.priceMatches ? "مطابق" : "مختلف"})،
+                            التكلفة {candidate.costMinor === null ? "غير معروفة" : formatReportMoney(candidate.costMinor)}،
+                            درجة الثقة {candidate.costQuality ?? "غير معروفة"}
+                          </li>
+                        ))}</ul>
+                      )}
+                    </div>
+                  ))}
+                </article>
+              ))}
+            </details>
+          )}
+
           {report.missingCostProducts.length >
             0 && (
             <button
