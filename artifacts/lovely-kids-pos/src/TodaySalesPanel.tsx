@@ -780,6 +780,12 @@ export default function TodaySalesPanel({
     }
   }
 
+  function openReturnHistory(returnPublicId: string) {
+    navigate(
+      `/sales/returns?returnPublicId=${encodeURIComponent(returnPublicId)}`,
+    );
+  }
+
   function openSaleInvoice(publicId: string) {
     navigate(
       `/sales/invoice-check?publicId=${encodeURIComponent(publicId)}&from=today`,
@@ -1126,6 +1132,14 @@ export default function TodaySalesPanel({
 
                     <td>
                       {row.saleReturn.reason || "مردود مبيعات"}
+                      <button type="button" className="secondary-button"
+                        style={{ marginInlineStart: 8, padding: "5px 10px" }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openReturnHistory(row.saleReturn.publicId);
+                        }}>
+                        ✏️ تعديل / السابق والتالي
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1170,7 +1184,14 @@ export default function TodaySalesPanel({
                       )}
                     </td>
 
-                    <td>{row.saleReturn.reason}</td>
+                    <td>
+                      {row.saleReturn.reason}
+                      <button type="button" className="secondary-button"
+                        style={{ marginInlineStart: 8, padding: "5px 10px" }}
+                        onClick={() => openReturnHistory(row.saleReturn.publicId)}>
+                        ✏️ تعديل / السابق والتالي
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
