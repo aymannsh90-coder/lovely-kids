@@ -1163,49 +1163,144 @@ export default function GrossProfitReportPage() {
 
 
           {report.mixedCostReview.length > 0 && (
-            <details className="gross-profit-no-print" style={{ ...cardStyle, marginBottom: 14 }}>
-              <summary style={{ cursor: "pointer", fontWeight: 800 }}>
-                مراجعة أسباب التكلفة المختلطة — {report.mixedCostReview.length} صنف
+            <details className="gross-profit-review gross-profit-no-print">
+              <summary className="gross-profit-review-summary">
+                <span>مراجعة أسباب التكلفة المختلطة</span>
+                <span className="gross-profit-review-count">
+                  {report.mixedCostReview.length} صنف للمراجعة
+                </span>
               </summary>
-              <p style={{ fontSize: 13 }}>
-                مطابقة الباركود والتاريخ تعطي فواتير محتملة فقط، وليست إثباتًا لرجوع نفس القطعة.
-                هذا القسم للقراءة فقط ولا يعدّل المحاسبة أو المخزون.
-              </p>
-              {attestationError && <div className="error-message" role="alert">{attestationError}</div>}
-              {report.mixedCostReviewTruncated && <p>تم عرض أول 12 صنفًا فقط.</p>}
-              {report.mixedCostReview.map((product) => (
-                <article key={product.productId} style={{ padding: 12, borderTop: "1px solid #ddd" }}>
-                  <strong>{product.nameAr} — {product.productCode ?? product.productId}</strong>
-                  <p>الكمية المباعة بتكلفة مختلطة: {product.soldMixedQuantity}</p>
-                  {product.sources.length === 0 && <p>مصدر التكلفة المختلطة يحتاج تدقيقًا يدويًا إضافيًا.</p>}
-                  {product.currentCostQuality === "confirmed"
-                    ? <p style={{color: "#087a55", fontSize: 13, fontWeight: 700}}>تم اعتماد تكلفة المخزون الحالية؛ السجلات التاريخية باقية للتدقيق.</p>
-                    : <button type="button" className="secondary-button gross-profit-no-print"
-                        disabled={attestingProductId === product.productId || product.sources.length === 0}
-                        onClick={() => void attestCost(product)}>
-                        {attestingProductId === product.productId ? "جارٍ توثيق التسوية..." : "تأكيد تكلفة القطعة للمبيعات القادمة"}
-                      </button>}
-                  {product.sources.map((source) => (
-                    <div key={source.publicId} style={{ border: "1px solid #eee", padding: 8, marginBottom: 8 }}>
-                      <b>{source.kind === "exchange" ? "تبديل بدون فاتورة" : "مردود بدون فاتورة"}</b>
-                      {" — "}{source.publicId} ({source.date})
-                      <div>الباركود: {source.barcode ?? "—"}، {source.color ?? "—"} / {source.size ?? "—"}، الكمية: {source.quantity}</div>
-                      <div>تكلفة الإرجاع المسجلة: {formatReportMoney(source.costMinor)}</div>
-                      <b>الفواتير المحتملة:</b>
-                      {source.candidates.length === 0 ? <p>لا توجد فاتورة POS مطابقة ضمن السجلات المفحوصة.</p> : (
-                        <ul>{source.candidates.map((candidate) => (
-                          <li key={candidate.publicId}>
-                            {candidate.publicId} ({candidate.date}) —
-                            السعر {formatReportMoney(candidate.priceMinor)} ({candidate.priceMatches ? "مطابق" : "مختلف"})،
-                            التكلفة {candidate.costMinor === null ? "غير معروفة" : formatReportMoney(candidate.costMinor)}،
-                            درجة الثقة {candidate.costQuality ?? "غير معروفة"}
-                          </li>
-                        ))}</ul>
-                      )}
-                    </div>
-                  ))}
-                </article>
-              ))}
+              <div className="gross-profit-review-body">
+                <p className="gross-profit-review-intro">
+                  يعرض هذا القسم مصادر المرتجعات والفواتير المحتملة للتدقيق.
+                  تطابق الباركود لا يثبت ارتباط المرتجع بفاتورة أصلية.
+                  لا تُعدّل البيانات إلا عند تأكيد تكلفة الصنف صراحةً.
+                </p>
+                {attestationError && (
+                  <div className="error-message gross-profit-review-error" role="alert">
+                    {attestationError}
+                  </div>
+                )}
+                {report.mixedCostReviewTruncated && (
+                  <p className="gross-profit-review-intro">تظهر أول 12 صنفًا فقط ضمن هذا التقرير.</p>
+                )}
+                <div className="gross-profit-review-products">
+                  {report.mixedCostReview.map((product) => {
+                    const returnCosts = product.sources.map((source) =>
+                      source.quantity > 0 ? source.costMinor / source.quantity : NaN
+                    );
+                    const unitCost = returnCosts.length > 0 && returnCosts.every((cost) =>
+                      Number.isSafeInteger(cost) && cost === returnCosts[0]
+                    ) ? returnCosts[0] : null;
+
+                    return (
+                      <article className="gross-profit-review-product" key={product.productId}>
+                        <div className="gross-profit-review-product-head">
+                          <div className="gross-profit-review-product-info">
+                            <strong>{product.nameAr}</strong>
+                            <div className="gross-profit-review-meta">
+                              <span>كود الصنف: <b dir="ltr">{product.productCode ?? product.productId}</b></span>
+                              <span>الكمية المباعة بتكلفة مختلطة: <b>{product.soldMixedQuantity}</b></span>
+                              {unitCost !== null && (
+                                <span>تكلفة القطعة المسجلة: <b>{formatReportMoney(unitCost)}</b></span>
+                              )}
+                            </div>
+                          </div>
+                          {product.currentCostQuality === "confirmed" ? (
+                            <span className="gross-profit-review-status">
+                              تم اعتماد تكلفة المخزون الحالية
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="primary-button gross-profit-review-action gross-profit-no-print"
+                              disabled={attestingProductId !== null || product.sources.length === 0 || unitCost === null}
+                              onClick={() => void attestCost(product)}
+                            >
+                              {attestingProductId === product.productId
+                                ? "جارٍ توثيق التسوية..."
+                                : "تأكيد تكلفة القطعة"}
+                            </button>
+                          )}
+                        </div>
+                        <p className="gross-profit-review-hint">
+                          تأكيد التكلفة يتطلب التحقق من سجلات الشراء ولا يعني ربط المرتجع بفاتورة قديمة.
+                        </p>
+                        {product.sources.length === 0 ? (
+                          <p className="gross-profit-review-empty">مصدر التكلفة المختلطة يحتاج تدقيقًا إضافيًا.</p>
+                        ) : (
+                          <div className="gross-profit-review-sources">
+                            {product.sources.map((source) => (
+                              <details
+                                className="gross-profit-review-source"
+                                key={`${source.kind}:${source.publicId}:${source.barcode ?? ""}`}
+                              >
+                                <summary>
+                                  <strong>{source.kind === "exchange" ? "تبديل بدون فاتورة" : "مردود بدون فاتورة"}</strong>
+                                  <span>{source.date}</span>
+                                  <span>{source.quantity} قطعة</span>
+                                  <b>{formatReportMoney(source.costMinor)}</b>
+                                  <span className="gross-profit-review-source-count">
+                                    {source.candidates.length} فاتورة محتملة
+                                  </span>
+                                </summary>
+                                <div className="gross-profit-review-source-content">
+                                  <div className="gross-profit-review-source-meta">
+                                    <span>رقم الحركة: <b dir="ltr">{source.publicId}</b></span>
+                                    <span>الباركود: <b dir="ltr">{source.barcode ?? "غير مسجل"}</b></span>
+                                    <span>اللون والنمرة: <b>{source.color ?? "—"} / {source.size ?? "—"}</b></span>
+                                    <span>سعر البيع بالمرتجع: <b>{formatReportMoney(source.priceMinor)}</b></span>
+                                  </div>
+                                  {source.candidates.length === 0 ? (
+                                    <p className="gross-profit-review-empty">لا توجد فاتورة POS محتملة في السجلات المفحوصة.</p>
+                                  ) : (
+                                    <div className="gross-profit-review-table-wrap">
+                                      <table className="gross-profit-review-table">
+                                        <thead>
+                                          <tr>
+                                            <th>فاتورة البيع المحتملة</th>
+                                            <th>التاريخ</th>
+                                            <th>سعر البيع</th>
+                                            <th>تكلفة القطعة</th>
+                                            <th>حالة التكلفة</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {source.candidates.map((candidate) => (
+                                            <tr key={candidate.publicId}>
+                                              <td dir="ltr">{candidate.publicId}</td>
+                                              <td>{candidate.date}</td>
+                                              <td>
+                                                {formatReportMoney(candidate.priceMinor)}
+                                                {" "}
+                                                {candidate.priceMatches ? "(مطابق)" : "(مختلف)"}
+                                              </td>
+                                              <td>{candidate.costMinor === null
+                                                ? "غير معروفة"
+                                                : formatReportMoney(candidate.costMinor)}</td>
+                                              <td>{candidate.costQuality === "confirmed"
+                                                ? "مؤكدة"
+                                                : candidate.costQuality === "estimated"
+                                                  ? "تقديرية"
+                                                  : candidate.costQuality === "mixed"
+                                                    ? "مختلطة"
+                                                    : "غير معروفة"}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
             </details>
           )}
 
