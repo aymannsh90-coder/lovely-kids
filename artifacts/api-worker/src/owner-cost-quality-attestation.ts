@@ -1,5 +1,5 @@
 import {
-  and, asc, eq, inArray,
+  and, asc, eq,
 } from "drizzle-orm";
 import {
   exchangeDocumentsTable,
