@@ -274,6 +274,9 @@ export default function TodaySalesPanel({
   const [webCashMovements, setWebCashMovements] =
     useState<PosWebCashMovement[]>([]);
 
+  // Fallback to a second source, then a clean label if BOP's logo CDN fails.
+  const [bopLogoSourceIndex, setBopLogoSourceIndex] = useState(0);
+
   // Posted customer debt collections, not additional sales.
   const [customerReceipts, setCustomerReceipts] =
     useState<PosCustomerDebtReceipt[]>([]);
@@ -938,13 +941,14 @@ export default function TodaySalesPanel({
             <strong>{formatMinor(courierCashNetMinor)}</strong>
           </div>
 
-          <div>
-            <span>صافي قبض الطلبات الإلكترونية</span>
-            <strong>{formatMinor(webCashNetMinor)}</strong>
-          </div>
-
-          <div>
-            <span>مبيعات فيزا</span>
+          <div className="today-summary-bank-card today-summary-payment-networks">
+            <div className="today-summary-bank-heading">
+              <span>مبيعات فيزا / ماستركارد</span>
+              <div className="today-summary-payment-logos" dir="ltr" aria-label="Visa وMastercard">
+                <img src="/brand-visa.svg" alt="Visa" width={40} height={25} loading="lazy" />
+                <img src="/brand-mastercard.svg" alt="Mastercard" width={39} height={25} loading="lazy" />
+              </div>
+            </div>
             <strong>{formatMinor(cardSalesMinor)}</strong>
           </div>
 
@@ -953,10 +957,10 @@ export default function TodaySalesPanel({
               <span>فيزا البنك العربي</span>
               <img
                 className="today-summary-bank-logo today-summary-bank-logo-arab"
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Arab_Bank.svg/330px-Arab_Bank.svg.png"
+                src="/brand-arab-bank.svg"
                 alt="شعار البنك العربي"
-                width={76}
-                height={25}
+                width={92}
+                height={33}
                 loading="lazy"
               />
             </div>
@@ -966,17 +970,29 @@ export default function TodaySalesPanel({
           <div className="today-summary-bank-card today-summary-bank-bop">
             <div className="today-summary-bank-heading">
               <span>فيزا بنك فلسطين</span>
-              <img
-                className="today-summary-bank-logo today-summary-bank-logo-bop"
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Logo_de_Bank_of_Palestine.jpg/240px-Logo_de_Bank_of_Palestine.jpg"
-                alt="شعار بنك فلسطين"
-                title="صورة الشعار: Isartov، Wikimedia Commons، CC BY-SA 4.0"
-                width={38}
-                height={38}
-                loading="lazy"
-              />
+              {bopLogoSourceIndex < 2 ? (
+                <img
+                  className="today-summary-bank-logo today-summary-bank-logo-bop"
+                  src={bopLogoSourceIndex === 0
+                    ? "https://www.sibos.com/sites/default/files/styles/large/public/partner_portal/2026-06/BankofPalestine-logo%202026.png?itok=SGYZ9J0q"
+                    : "https://upload.wikimedia.org/wikipedia/commons/1/1c/Logo_de_Bank_of_Palestine.jpg"}
+                  alt="شعار بنك فلسطين"
+                  title="بنك فلسطين"
+                  width={48}
+                  height={48}
+                  loading="lazy"
+                  onError={() => setBopLogoSourceIndex((index) => Math.min(index + 1, 2))}
+                />
+              ) : (
+                <span className="today-summary-bank-bop-fallback" title="تعذر تحميل صورة شعار بنك فلسطين">بنك فلسطين</span>
+              )}
             </div>
             <strong>{formatMinor(bopCardSalesMinor)}</strong>
+          </div>
+
+          <div>
+            <span>صافي قبض الطلبات الإلكترونية</span>
+            <strong>{formatMinor(webCashNetMinor)}</strong>
           </div>
 
           {unassignedCardSalesMinor > 0 && (

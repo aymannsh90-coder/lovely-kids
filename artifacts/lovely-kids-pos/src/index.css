@@ -1799,14 +1799,57 @@ textarea:disabled {
   max-width: 43%;
 }
 .today-summary-bank-logo-arab {
-  width: 76px;
-  height: 27px;
+  width: 92px;
+  height: 33px;
 }
 .today-summary-bank-logo-bop {
-  width: 38px;
-  height: 38px;
+  width: 48px;
+  height: 48px;
   border-radius: 7px;
   border: 1px solid rgba(148, 23, 85, .14);
+  background: #fff;
+}
+.today-summary-bank-bop-fallback {
+  display: grid;
+  place-items: center;
+  flex: 0 0 60px;
+  min-height: 40px;
+  padding: 4px;
+  border: 1px solid #e4aac5;
+  border-radius: 7px;
+  background: #ba1766;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+.today-summary-payment-logos {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+.today-summary-payment-logos img {
+  width: 40px;
+  height: 25px;
+  display: block;
+  object-fit: contain;
+}
+.today-summary-payment-logos img:last-child {
+  width: 39px;
+}
+.today-summary > .today-summary-payment-networks {
+  border-color: #d9e1f5;
+  background: #f5f7fe;
+}
+.today-summary > .today-summary-payment-networks span {
+  color: #455d88;
+}
+.today-summary > .today-summary-payment-networks strong {
+  color: #293e73;
+  font-variant-numeric: tabular-nums;
 }
 .today-summary > .today-summary-bank-arab {
   background: #edf5fe;
