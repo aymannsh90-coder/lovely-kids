@@ -1314,16 +1314,20 @@ export default function SalesInvoicePage() {
         return;
       }
 
-      const confirmed = window.confirm(
-        [
-          `سيتم حفظ فاتورة جديدة بقيمة ${formatMinor(finalTotalMinor)}.`,
-          paymentMethod === "credit"
-            ? "سيتم خصم الكميات من المخزون وإضافة كامل قيمة الفاتورة إلى حساب الزبون."
-            : "سيتم خصم الكميات من المخزون وإضافة القيمة إلى الصندوق.",
-          "",
-          "هل تريد المتابعة؟",
-        ].join("\n"),
-      );
+      // The settlement modal's explicit submit is the user's confirmation.
+      // Keep the original confirmation for ordinary Save / Save & Print.
+      const confirmed = settlement
+        ? true
+        : window.confirm(
+            [
+              `سيتم حفظ فاتورة جديدة بقيمة ${formatMinor(finalTotalMinor)}.`,
+              paymentMethod === "credit"
+                ? "سيتم خصم الكميات من المخزون وإضافة كامل قيمة الفاتورة إلى حساب الزبون."
+                : "سيتم خصم الكميات من المخزون وإضافة القيمة إلى الصندوق.",
+              "",
+              "هل تريد المتابعة؟",
+            ].join("\n"),
+          );
 
       if (!confirmed) {
         return;
