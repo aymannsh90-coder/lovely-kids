@@ -23,7 +23,7 @@ export function planSalaryAdvanceOffset(input: {
     issue = "الأرصدة الحالية لا تكفي للمقاصة؛ راجع الحركات السابقة";
   return {
     offsetMinor,
-    remainingSalaryMinor: salaryAccrualMinor - offsetMinor,
+    remainingSalaryMinor: outstandingPayableMinor - offsetMinor,
     issue,
   };
 }
