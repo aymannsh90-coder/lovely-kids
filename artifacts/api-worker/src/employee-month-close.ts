@@ -181,7 +181,7 @@ export async function handleEmployeeMonthClose(
       // Serializes this month's closes with salary accruals; the expected
       // balances are rechecked AFTER acquiring the lock.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"salary_month_close:" + period}))`);
-      const preview = await buildPreview(tx as Db, period);
+      const preview = await buildPreview(tx as unknown as Db, period);
       if (preview.closed) return { alreadyClosed: true, preview };
       if (!preview.canClose) throw new Error(preview.message || "المقاصة غير مسموحة لهذه الفترة");
       const expectedRows = (expected as Array<Pick<EmployeeCloseRow,
