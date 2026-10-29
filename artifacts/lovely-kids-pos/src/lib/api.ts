@@ -4866,6 +4866,22 @@ export interface GrossProfitMixedCostReview {
   }>;
 }
 
+export interface GrossProfitNetResult {
+  profitAfterDeliveryMinor: number | null;
+  otherOperatingExpensesMinor: number;
+  salaryExpenseMinor: number;
+  totalOperatingExpensesMinor: number;
+  netProfitRecordedMinor: number | null;
+  salaryPosted: boolean;
+  provisional: boolean;
+  expenseAccounts: Array<{
+    code: string;
+    name: string;
+    amountMinor: number;
+    lines: number;
+  }>;
+}
+
 export interface GrossProfitReport {
   range: {
     from: string;
@@ -4886,6 +4902,7 @@ export interface GrossProfitReport {
   };
 
   warnings: string[];
+  netProfit: GrossProfitNetResult;
 
   missingCostProducts:
     GrossProfitMissingCostProduct[];
@@ -4900,6 +4917,8 @@ export interface GrossProfitReport {
     profitDefinition: string;
     deliveryDefinition: string;
     expensesIncluded: boolean;
+    netProfitDefinition: string;
+    verifiedOwnerAttestations?: number;
   };
 }
 
