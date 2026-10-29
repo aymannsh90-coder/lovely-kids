@@ -24,3 +24,5 @@ jobs:
       - run: pnpm --filter @workspace/api-worker typecheck
       - run: pnpm --filter @workspace/lovely-kids typecheck
       - run: pnpm --filter @workspace/lovely-kids build
+      - run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - run: pnpm --filter @workspace/lovely-kids-pos build

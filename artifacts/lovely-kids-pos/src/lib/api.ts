@@ -4727,6 +4727,32 @@ export interface GrossProfitMissingCostProduct {
   canSetOpeningCost: boolean;
 }
 
+export interface GrossProfitMixedCostReview {
+  productId: string;
+  productCode: string | null;
+  nameAr: string;
+  soldMixedQuantity: number;
+  sources: Array<{
+    kind: "exchange" | "return";
+    publicId: string;
+    date: string;
+    barcode: string | null;
+    color: string | null;
+    size: string | null;
+    quantity: number;
+    priceMinor: number;
+    costMinor: number;
+    candidates: Array<{
+      publicId: string;
+      date: string;
+      priceMinor: number;
+      costMinor: number | null;
+      costQuality: string | null;
+      priceMatches: boolean;
+    }>;
+  }>;
+}
+
 export interface GrossProfitReport {
   range: {
     from: string;
@@ -4752,6 +4778,8 @@ export interface GrossProfitReport {
     GrossProfitMissingCostProduct[];
 
   unresolvedMissingCostLines: number;
+  mixedCostReview: GrossProfitMixedCostReview[];
+  mixedCostReviewTruncated: boolean;
 
   methodology: {
     posDateBasis: string;
