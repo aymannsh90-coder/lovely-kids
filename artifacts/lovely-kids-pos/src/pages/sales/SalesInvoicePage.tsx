@@ -2214,7 +2214,7 @@ export default function SalesInvoicePage() {
       {linkedReceipt && loadedSale && (
         <div className="accounting-settlement-notice is-complete" role="status">
           <strong>سند قبض معتمد: {linkedReceipt.publicId}</strong>
-          <span>المقبوض {formatMinor(linkedReceipt.amountMinor)} — المتبقي من الفاتورة {formatMinor(Math.max(0, loadedSale.sale.totalMinor - linkedReceipt.amountMinor))}. البيع مسجل على حساب الزبون، والقبض حركة مستقلة.</span>
+          <span>المقبوض في السند الأول {formatMinor(linkedReceipt.amountMinor)} — فرق قيمة الفاتورة بعد الدفعة الأولى {formatMinor(Math.max(0, loadedSale.sale.totalMinor - linkedReceipt.amountMinor))}. رصيد الذمة الحالي قد يتغير بسندات لاحقة.</span>
         </div>
       )}
 
