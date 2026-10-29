@@ -2065,6 +2065,7 @@ export default function SalePanel({
 
         <div className="sale-checkout sale-payment-checkout">
           <div className="sale-summary">
+            <div className="sale-summary-scroll-content">
             <div className="sale-summary-heading">
               <div>
                 <strong>ملخص الفاتورة</strong>
@@ -2605,7 +2606,7 @@ export default function SalePanel({
                   </div>
                 </label>
 
-                <div
+                <div className="sale-credit-settlement-methods"
                   style={{
                     marginTop: 12,
                   }}
@@ -2665,6 +2666,7 @@ export default function SalePanel({
 
               </div>
             )}
+            </div>
 
             {paymentMethod === "credit" && selectedCustomerId && (
               <div className="complete-sale-actions sale-credit-actions" role="group" aria-label="حفظ فاتورة البيع الآجل">
