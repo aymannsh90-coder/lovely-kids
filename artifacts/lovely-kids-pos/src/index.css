@@ -13796,6 +13796,27 @@ textarea:disabled {
   .gross-profit-datebar .primary-button { flex: 1 1 100%; }
 }
 
+/* Owner net profit panel */
+.gross-profit-net-card { padding: 15px; border: 1px solid #dfe7ec; border-radius: 14px; background: #fff; }
+.gross-profit-net-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+.gross-profit-net-head h2 { margin:0; font-size:19px; }
+.gross-profit-net-head p, .gross-profit-net-caution { margin:6px 0 0; font-size:12px; line-height:1.6; color:#667085; }
+.gross-profit-net-caution { color:#925300; margin-top:12px; }
+.gross-profit-net-tag { border-radius:20px; background:#f2f4f7; font-size:12px; padding:5px 10px; font-weight:800; }
+.gross-profit-net-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; }
+.gross-profit-net-cell { display:grid; gap:7px; padding:12px; border:1px solid #e4e9f0; border-radius:10px; background:#fafbfd; min-width:0; }
+.gross-profit-net-cell span { font-size:12px; color:#667085; }
+.gross-profit-net-cell strong { font-size:20px; color:#213747; }
+.gross-profit-net-result { background:#f3f9f6; border-color:#b8ddc7; }
+.gross-profit-net-result strong { font-size:24px; color:#087a55; }
+.gross-profit-net-details { margin-top:12px; font-size:12px; color:#475467; }
+.gross-profit-net-details summary { cursor:pointer; font-weight:800; }
+.gross-profit-net-details p { line-height:1.7; }
+.gross-profit-net-detail-list { margin-top:9px; display:grid; gap:4px; }
+.gross-profit-net-detail-list > div { display:flex; justify-content:space-between; gap:15px; padding:7px 10px; background:#fafbfd; border-radius:6px; }
+@media(max-width:1050px){.gross-profit-net-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:560px){.gross-profit-net-grid{grid-template-columns:1fr;}.gross-profit-net-card{padding:10px;}}
+
 /* Owner-only cost review: summary first, individual evidence on demand. */
 .gross-profit-review {
   border: 1px solid #dfe7ec;

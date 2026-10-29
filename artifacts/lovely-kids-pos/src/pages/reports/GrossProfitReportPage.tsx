@@ -777,8 +777,8 @@ export default function GrossProfitReportPage() {
     ] as const;
 
     return {
-      title: "تقرير مجمل الربح",
-      subtitle: "مجمل الربح قبل المصروفات التشغيلية",
+      title: "تقرير مجمل الربح وصافي الربح",
+      subtitle: "صافي الربح حسب قيود المصروفات المسجلة — لا يشمل المبالغ غير المحمّلة على الفترة",
       period: `الفترة: ${report.range.from} — ${report.range.to}`,
       orientation: "landscape",
       summary: [
@@ -793,6 +793,18 @@ export default function GrossProfitReportPage() {
         { label: "هامش مجمل الربح", value: percent(report.channels.total.grossMarginPercent) },
         { label: "التوصيل المحصل", value: formatReportMoney(report.channels.total.shippingChargedMinor) },
         { label: "تكلفة شركة التوصيل", value: formatReportMoney(report.channels.total.deliveryCompanyCostMinor) },
+        {
+          label: "مجمل الربح بعد التوصيل",
+          value: report.channels.total.profitAfterDeliveryMinor === null
+            ? "غير مكتمل" : formatReportMoney(report.channels.total.profitAfterDeliveryMinor),
+        },
+        { label: "مصاريف التشغيل (بدون الرواتب والتوصيل)", value: formatReportMoney(report.netProfit.otherOperatingExpensesMinor) },
+        { label: "الرواتب المحمّلة على الفترة", value: formatReportMoney(report.netProfit.salaryExpenseMinor) },
+        {
+          label: "صافي الربح حسب القيود" + (report.netProfit.provisional ? " — مبدئي" : ""),
+          value: report.netProfit.netProfitRecordedMinor === null
+            ? "غير مكتمل" : formatReportMoney(report.netProfit.netProfitRecordedMinor),
+        },
       ],
       sections: [
         {
@@ -825,9 +837,21 @@ export default function GrossProfitReportPage() {
           ]],
         },
         {
+          title: "تفصيل المصاريف المسجلة (التوصيل مستثنى)",
+          headers: ["الحساب", "عدد القيود", "صافي المصروف"],
+          rows: report.netProfit.expenseAccounts.map((account) => [
+            account.name, account.lines, formatReportMoney(account.amountMinor),
+          ]),
+        },
+        {
           title: "تنبيهات",
           headers: ["التنبيه"],
-          rows: report.warnings.map((warning) => [warning]),
+          rows: [
+            ...report.warnings.map((warning) => [warning]),
+            ...(!report.netProfit.salaryPosted
+              ? [["لا توجد رواتب مسجلة كمصروف خلال الفترة؛ سلف الموظفين ليست رواتب، وصافي الربح مبدئي."]]
+              : []),
+          ],
         },
       ],
     };
@@ -1124,7 +1148,7 @@ export default function GrossProfitReportPage() {
             <div className="gross-profit-print-brand">
               Lovely Kids
             </div>
-            <h1>تقرير مجمل الربح</h1>
+            <h1>تقرير مجمل الربح وصافي الربح حسب القيود</h1>
             <p>
               الفترة: {report.range.from} — {report.range.to}
             </p>
@@ -1337,6 +1361,63 @@ export default function GrossProfitReportPage() {
             showDelivery
           />
 
+
+          <section className="gross-profit-net-card">
+            <div className="gross-profit-net-head">
+              <div>
+                <h2>صافي الربح حسب القيود</h2>
+                <p>بعد خصم المصاريف والرواتب المسجلة — من دون تكرار تكلفة التوصيل</p>
+              </div>
+              <span className="gross-profit-net-tag">
+                {report.netProfit.provisional ? "نتيجة مبدئية" : "بحسب القيود المسجلة"}
+              </span>
+            </div>
+            <div className="gross-profit-net-grid">
+              <div className="gross-profit-net-cell">
+                <span>مجمل الربح بعد التوصيل</span>
+                <strong>{report.netProfit.profitAfterDeliveryMinor === null
+                  ? "غير مكتمل" : formatReportMoney(report.netProfit.profitAfterDeliveryMinor)}</strong>
+              </div>
+              <div className="gross-profit-net-cell">
+                <span>مصاريف التشغيل المسجلة</span>
+                <strong>{formatReportMoney(report.netProfit.otherOperatingExpensesMinor)}</strong>
+              </div>
+              <div className="gross-profit-net-cell">
+                <span>الرواتب المحمّلة على الفترة</span>
+                <strong>{formatReportMoney(report.netProfit.salaryExpenseMinor)}</strong>
+              </div>
+              <div className="gross-profit-net-cell gross-profit-net-result">
+                <span>صافي الربح بعد المصاريف المسجلة</span>
+                <strong>{report.netProfit.netProfitRecordedMinor === null
+                  ? "غير مكتمل"
+                  : formatReportMoney(report.netProfit.netProfitRecordedMinor)}</strong>
+              </div>
+            </div>
+            {!report.netProfit.salaryPosted && (
+              <p className="gross-profit-net-caution">
+                لا توجد قيود مصروف رواتب في هذه الفترة. سلف الموظفين والدفعات على حسابهم لا تُخصم كرواتب؛
+                النتيجة مبدئية حتى تسجيل الرواتب المستحقة وبقية المصاريف.
+              </p>
+            )}
+            <details className="gross-profit-net-details">
+              <summary>تفاصيل المصاريف المحسوبة</summary>
+              {report.netProfit.expenseAccounts.length === 0 ? (
+                <p>لا توجد مصاريف مسجلة ضمن الفترة.</p>
+              ) : (
+                <div className="gross-profit-net-detail-list">
+                  {report.netProfit.expenseAccounts.map((account) => (
+                    <div key={account.code}>
+                      <span>{account.name}</span>
+                      <strong>{formatReportMoney(account.amountMinor)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p>المصاريف تشمل القيود المرحلة وعكسها. تكلفة التوصيل محسوبة أعلاه، ولا تُخصم مرة ثانية.
+                السلف والمسحوبات والتحويلات ومشتريات البضاعة ليست مصروفات تشغيلية في هذا الحساب.</p>
+            </details>
+          </section>
+
           <div
             style={{
               display: "grid",
@@ -1369,21 +1450,15 @@ export default function GrossProfitReportPage() {
             </strong>
 
             <p>
-              الرقم المعروض هو
-              مجمل الربح وليس صافي
-              الربح. المصروفات التشغيلية
-              المسجلة في النظام مثل
-              الإيجار والكهرباء
-              والرواتب والإعلانات
-              لا تدخل في هذا التقرير.
-              صافي الربح يحتاج تقريرًا
-              مستقلًا يجمع مجمل الربح
-              مع المصروفات التشغيلية.
+              صافي الربح محسوب من مجمل الربح بعد التوصيل، بعد خصم
+              المصروفات والرواتب المرحلة على حسابات المصروفات في الفترة.
+              لا يشمل التقرير الرواتب غير المثبتة أو المصاريف التي لم تسجل بعد.
+              السلف والمسحوبات والتحويلات ليست مصروفات، ولا يُخصم التوصيل مرتين.
             </p>
           </section>
 
           <footer className="gross-profit-print-only gross-profit-print-footer">
-            تقرير صادر من نظام Lovely Kids — مجمل الربح قبل المصروفات التشغيلية.
+            تقرير صادر من نظام Lovely Kids — صافي الربح حسب المصروفات والرواتب المسجلة فقط.
           </footer>
         </div>
       )}
