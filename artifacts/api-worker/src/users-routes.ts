@@ -248,7 +248,7 @@ async function handleDeleteUser(
     env,
   );
 
-  if (!admin?.isAdmin) {
+  if (!admin?.isOwner) {
     return json(
       { error: "غير مصرح" },
       403,
