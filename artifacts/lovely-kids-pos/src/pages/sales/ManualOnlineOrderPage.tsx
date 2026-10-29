@@ -1391,6 +1391,11 @@ export default function ManualOnlineOrderPage({
       return;
     }
 
+    if (!/^(?:05\d{8}|(?:\+|00)?(?:970|972)5\d{8})$/.test(customerPhone.trim().replace(/[\s().-]/g, ""))) {
+      setError("رقم الهاتف ناقص أو غير صحيح. أدخل 10 أرقام تبدأ بـ 05 أو رقمًا دوليًا صحيحًا.");
+      return;
+    }
+
     if (
       !shippingZone
     ) {
