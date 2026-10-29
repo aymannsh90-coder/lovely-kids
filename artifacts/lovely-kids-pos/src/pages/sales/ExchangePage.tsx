@@ -200,8 +200,14 @@ export default function ExchangePage() {
   const {
     token,
     session,
+    user,
     clearAuthentication,
   } = usePosRuntime();
+
+  const privileged = Boolean(user?.isOwner || user?.isAdmin);
+  const canLocalExchange = privileged || Boolean(user?.permissions?.includes("sales.exchange"));
+  const canOnlineExchange = privileged || Boolean(user?.permissions?.includes("sales.exchange.online"));
+  const canVoidExchange = privileged || Boolean(user?.permissions?.includes("sales.exchange.void"));
 
   const navigate =
     useNavigate();
@@ -336,9 +342,9 @@ export default function ExchangePage() {
 
   const [mode, setMode] =
     useState<ExchangeMode>(
-      session
+      session && canLocalExchange
         ? "with_receipt"
-        : "online_order",
+        : canOnlineExchange ? "online_order" : "with_receipt",
     );
 
   const [customerName, setCustomerName] =
@@ -2455,6 +2461,7 @@ export default function ExchangePage() {
   function changeMode(
     nextMode: ExchangeMode,
   ) {
+    if (nextMode === "online_order" ? !canOnlineExchange : !canLocalExchange) return;
     setMode(nextMode);
     resetOnlineExchange();
 
@@ -4076,7 +4083,7 @@ export default function ExchangePage() {
                       : "طباعة مباشرة"}
                   </button>
 
-                  {!exchangeVoided && (
+                  {!exchangeVoided && canVoidExchange && (
                     <button
                       type="button"
                       className="secondary-button"
@@ -4270,7 +4277,7 @@ export default function ExchangePage() {
         </div>
 
         <div className="exchange-mode-picker" role="group" aria-label="اختر نوع التبديل">
-          <button
+          {canLocalExchange && <button
             type="button"
             aria-pressed={mode === "with_receipt"}
             className={
@@ -4286,9 +4293,9 @@ export default function ExchangePage() {
             }
           >
             🧾 تبديل مع فاتورة
-          </button>
+          </button>}
 
-          <button
+          {canLocalExchange && <button
             type="button"
             aria-pressed={mode === "no_receipt"}
             className={
@@ -4304,9 +4311,9 @@ export default function ExchangePage() {
             }
           >
             📦 تبديل بدون فاتورة
-          </button>
+          </button>}
 
-          <button
+          {canOnlineExchange && <button
             type="button"
             aria-pressed={mode === "online_order"}
             className={
@@ -4321,7 +4328,7 @@ export default function ExchangePage() {
             }
           >
             🌐 تبديل طلب أونلاين
-          </button>
+          </button>}
         </div>
       </article>
 
@@ -6394,7 +6401,7 @@ export default function ExchangePage() {
                       : "طباعة مباشرة"}
                   </button>
 
-                  {!exchangeVoided && (
+                  {!exchangeVoided && canVoidExchange && (
                     <button
                       className="secondary-button"
                       type="button"
