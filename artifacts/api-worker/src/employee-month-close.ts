@@ -128,7 +128,10 @@ async function buildPreview(db: Db, period: string): Promise<MonthClosePreview> 
   }
   const closeAvailable = localToday() >= range.end;
   const closed = existing.length > 0;
-  if (closed) rows.forEach((row) => { row.issue = null; });
+  if (closed) rows.forEach((row) => {
+    row.issue = null;
+    row.payableRemainderMinor = row.outstandingPayableMinor;
+  });
   const totalOffsetMinor = rows.reduce((sum, x) => sum + x.offsetMinor, 0);
   const canClose = !closed && closeAvailable && rows.length > 0 &&
     rows.every((row) => row.issue === null) && totalOffsetMinor > 0;
