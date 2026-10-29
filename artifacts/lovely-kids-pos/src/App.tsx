@@ -176,7 +176,7 @@ export default function App() {
           getCurrentCashSession(token as string, POS_REGISTER_KEY),
         ]);
 
-        if (!currentUser.isAdmin && !currentUser.isOwner) {
+        if (!currentUser.isAdmin && !currentUser.isOwner && !currentUser.permissions?.includes("sales.create")) {
           throw new Error("هذا الحساب لا يملك صلاحية استخدام نقطة البيع");
         }
 
@@ -226,7 +226,7 @@ export default function App() {
     try {
       const result = await loginPos(phone.trim(), password);
 
-      if (!result.user.isAdmin && !result.user.isOwner) {
+      if (!result.user.isAdmin && !result.user.isOwner && !result.user.permissions?.includes("sales.create")) {
         await logoutPos(result.token).catch(() => undefined);
 
         throw new Error("هذا الحساب لا يملك صلاحية استخدام نقطة البيع");
@@ -412,7 +412,7 @@ export default function App() {
           <h1>تسجيل دخول نقطة البيع</h1>
 
           <p className="auth-description">
-            الدخول مخصص للمالك والمديرين المصرح لهم فقط.
+            الدخول للمالك أو المدير أو الكاشير المخوّل من المالك.
           </p>
 
           <form className="auth-form" onSubmit={handleLogin}>
