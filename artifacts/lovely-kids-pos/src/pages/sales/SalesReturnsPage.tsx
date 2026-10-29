@@ -1297,7 +1297,7 @@ export default function SalesReturnsPage() {
                     </span></td>
                     <td>
                       <button type="button"
-                        className={item.status === "completed"
+                        className={item.status === "completed" && item.refundMethod === "cash"
                           ? "return-history-edit-btn" : "return-history-view-btn"}
                         disabled={historyBusy || submitBusy}
                         onClick={() => {
@@ -1306,7 +1306,8 @@ export default function SalesReturnsPage() {
                               && item.refundMethod === "cash");
                           });
                         }}>
-                        {item.status === "completed" ? "✏️ عرض وتعديل" : "عرض"}
+                        {item.status === "completed" && item.refundMethod === "cash"
+                          ? "✏️ عرض وتعديل" : "عرض التفاصيل"}
                       </button>
                     </td>
                   </tr>
@@ -1362,14 +1363,18 @@ export default function SalesReturnsPage() {
               </div>
               {historySelected.status === "completed" && (
                 <div className="return-history-actions">
-                  <button type="button" className="primary-button"
-                    disabled={historyBusy || submitBusy}
-                    onClick={() => {
-                      setHistoryCorrectionOpen(!historyCorrectionOpen);
-                      setHistoryCorrectionCustomerId(historySelected.customerId ?? null);
-                      setHistoryError("");
-                    }}>✏️ تعديل طريقة الاسترداد</button>
-                  <button type="button" className="secondary-button"
+                  {historySelected.refundMethod === "cash" && (
+                    <button type="button" className="primary-button"
+                      disabled={historyBusy || submitBusy}
+                      onClick={() => {
+                        setHistoryCorrectionOpen(!historyCorrectionOpen);
+                        setHistoryCorrectionCustomerId(historySelected.customerId ?? null);
+                        setHistoryError("");
+                      }}>
+                      {historyCorrectionOpen ? "إغلاق التصحيح" : "✏️ تصحيح طريقة الاسترداد"}
+                    </button>
+                  )}
+                  <button type="button" className="secondary-button return-history-void-button"
                     disabled={historyBusy || submitBusy}
                     onClick={() => void handleVoidReturn(
                       historySelected.publicId,
@@ -1389,12 +1394,13 @@ export default function SalesReturnsPage() {
                   </button>
                 </div>
               )}
-              {historyCorrectionOpen && historySelected.status === "completed" && (
+              {historyCorrectionOpen &&
+                historySelected.status === "completed" &&
+                historySelected.refundMethod === "cash" && (
                 <section className="return-history-editor">
                   <h4>تصحيح طريقة الاسترداد</h4>
                   <p>التصحيح محاسبي فقط ولا يغيّر المخزون أو كمية المردود.</p>
-                  {historySelected.refundMethod === "cash" ? (
-                    <>
+                  <>
                       <div className="return-history-editor-grid">
                         <div className="return-history-customer">
                           <CustomerPicker customers={customers}
@@ -1420,11 +1426,7 @@ export default function SalesReturnsPage() {
                           حفظ التصحيح إلى حساب الزبون
                         </button>
                       </div>
-                    </>
-                  ) : (
-                    <p>يمكن تصحيح النقدي إلى حساب الزبون فقط. لتغيير الأصناف أو الكمية،
-                      استخدم إلغاء المردود وإعادة تسجيله.</p>
-                  )}
+                  </>
                 </section>
               )}
             </section>
