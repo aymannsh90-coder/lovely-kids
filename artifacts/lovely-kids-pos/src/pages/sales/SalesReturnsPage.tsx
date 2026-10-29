@@ -16,6 +16,10 @@ import {
   createPosMobileReturn,
   createPosSaleReturn,
   voidPosSaleReturn,
+  getPosReturnHistory,
+  correctPosReturnCashToCustomer,
+  type PosReturnHistoryDetail,
+  type PosReturnHistorySummary,
   getCurrentCashSession,
   getPosCustomers,
   getPosSaleReturnPreview,
@@ -136,6 +140,9 @@ export default function SalesReturnsPage() {
   const requestedPublicId =
     searchParams.get("publicId")?.trim() ?? "";
 
+  const requestedReturnPublicId =
+    searchParams.get("returnPublicId")?.trim().toUpperCase() ?? "";
+
   const autoLoadedPublicIdRef = useRef("");
 
   const returnReceiptRef =
@@ -195,6 +202,22 @@ export default function SalesReturnsPage() {
   const [submitBusy, setSubmitBusy] = useState(false);
 
   const [error, setError] = useState("");
+
+  const [historyVisible, setHistoryVisible] =
+    useState(Boolean(requestedReturnPublicId));
+  const [historyInput, setHistoryInput] =
+    useState(requestedReturnPublicId);
+  const [returnHistory, setReturnHistory] =
+    useState<PosReturnHistorySummary[]>([]);
+  const [historySelected, setHistorySelected] =
+    useState<PosReturnHistoryDetail | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyCorrectionOpen, setHistoryCorrectionOpen] = useState(false);
+  const [historyCorrectionCustomerId, setHistoryCorrectionCustomerId] =
+    useState<number | null>(null);
+  const [historyCorrectionReason, setHistoryCorrectionReason] =
+    useState("تصحيح طريقة الاسترداد من نقدي إلى حساب الزبون");
 
   const [completedReturn, setCompletedReturn] =
     useState<PosSaleReturnResult | null>(null);
@@ -379,6 +402,93 @@ export default function SalesReturnsPage() {
     session?.registerKey,
     token,
   ]);
+
+  async function loadReturnHistory(publicId?: string) {
+    if (!session) return;
+    setHistoryBusy(true);
+    setHistoryError("");
+    try {
+      const result = await getPosReturnHistory(
+        token,
+        session.registerKey,
+        publicId,
+      );
+      setReturnHistory(result.recent);
+      setHistorySelected(result.selected);
+      setHistoryInput(result.selected?.publicId ?? publicId ?? "");
+      setHistoryCorrectionCustomerId(result.selected?.customerId ?? null);
+      setHistoryCorrectionOpen(false);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        clearAuthentication();
+        return;
+      }
+      setHistoryError(errorMessage(caught));
+    } finally {
+      setHistoryBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!session) return;
+    if (requestedReturnPublicId) {
+      setHistoryVisible(true);
+      void loadReturnHistory(requestedReturnPublicId);
+    } else {
+      void loadReturnHistory();
+    }
+  }, [token, session?.registerKey, requestedReturnPublicId]);
+
+  async function handleCorrectHistoryReturn() {
+    const selected = historySelected;
+    if (!selected || selected.status !== "completed" || selected.refundMethod !== "cash") {
+      setHistoryError("هذا المردود غير قابل لتصحيح الاسترداد النقدي.");
+      return;
+    }
+    if (!historyCorrectionCustomerId) {
+      setHistoryError("اختر الزبون الذي سيُضاف المبلغ إلى حسابه.");
+      return;
+    }
+    if (historyCorrectionReason.trim().length < 3) {
+      setHistoryError("اكتب سبب التصحيح.");
+      return;
+    }
+    const customerName = customers.find(
+      (customer) => customer.id === historyCorrectionCustomerId,
+    )?.name || "الزبون المحدد";
+    if (!window.confirm([
+      "تأكيد تصحيح طريقة استرداد المردود؟",
+      `رقم المردود: ${selected.publicId}`,
+      `المبلغ: ${formatMoney(selected.refundAmountMinor)}`,
+      `حساب الزبون: ${customerName}`,
+      "",
+      "سيُعاد المبلغ لرصيد الصندوق محاسبيًا ويُسجّل كرصيد لصالح الزبون.",
+      "لن تتغير الكمية أو المخزون أو قيمة المرتجع.",
+      "أكّد فقط إذا لم يُدفع هذا المبلغ نقدًا للزبون فعلًا.",
+    ].join("\n"))) return;
+
+    setHistoryBusy(true);
+    setHistoryError("");
+    try {
+      await correctPosReturnCashToCustomer(token, {
+        publicId: selected.publicId,
+        customerId: historyCorrectionCustomerId,
+        reason: historyCorrectionReason.trim(),
+      });
+      const currentSession = await getCurrentCashSession(token, session!.registerKey);
+      setSession(currentSession.session);
+      window.alert("تم تصحيح الاسترداد إلى حساب الزبون مع عكس حركة الصندوق.");
+      await loadReturnHistory(selected.publicId);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        clearAuthentication();
+        return;
+      }
+      setHistoryError(errorMessage(caught));
+    } finally {
+      setHistoryBusy(false);
+    }
+  }
 
   if (!session) {
     return null;
@@ -1003,6 +1113,9 @@ export default function SalesReturnsPage() {
           ? "هذا المرتجع ملغى مسبقًا."
           : "تم إلغاء المرتجع بنجاح.",
       );
+      if (historyVisible || historySelected?.publicId === returnPublicId) {
+        await loadReturnHistory(returnPublicId);
+      }
     } catch (caught) {
       if (
         caught instanceof ApiError &&
@@ -1041,6 +1154,147 @@ export default function SalesReturnsPage() {
           <strong dir="ltr">{session.registerKey}</strong>
         </div>
       </header>
+
+      <article className="sales-return-search-panel" style={{ marginBottom: 16 }}>
+        <div className="sales-return-section-title">
+          <div>
+            <h3>📜 سجل المردودات السابقة</h3>
+            <p>استعرض أي مردود مسجل وتصفح السابق والتالي. تصحيح الاسترداد لا يعيد حركة المخزون.</p>
+          </div>
+          <button className="secondary-button" type="button"
+            onClick={() => {
+              setHistoryVisible(!historyVisible);
+              if (!historyVisible) void loadReturnHistory(requestedReturnPublicId || undefined);
+            }}>
+            {historyVisible ? "إخفاء السجل" : "عرض المردودات السابقة"}
+          </button>
+        </div>
+        {historyVisible && (
+          <>
+            <form className="sales-return-search-form" onSubmit={(event) => {
+              event.preventDefault();
+              void loadReturnHistory(historyInput.trim() || undefined);
+            }}>
+              <label className="sales-return-field">
+                <span>رقم المردود السابق (MRET)</span>
+                <input dir="ltr" autoComplete="off" value={historyInput}
+                  placeholder="MRET-YYYYMMDD-XXXXXXXX"
+                  onChange={(event) => setHistoryInput(event.target.value.toUpperCase())}
+                  disabled={historyBusy || submitBusy} />
+              </label>
+              <button type="submit" className="primary-button" disabled={historyBusy || submitBusy}>
+                بحث عن المردود
+              </button>
+            </form>
+            {historyError && <div className="alert error-alert">{historyError}</div>}
+            {historySelected && (
+              <div style={{ border: "1px solid #d9e0e5", borderRadius: 10, padding: 14, marginTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="secondary-button"
+                    disabled={!historySelected.previousPublicId || historyBusy || submitBusy}
+                    onClick={() => void loadReturnHistory(historySelected.previousPublicId || undefined)}>
+                    ← المردود السابق
+                  </button>
+                  <strong dir="ltr">{historySelected.publicId}</strong>
+                  <button type="button" className="secondary-button"
+                    disabled={!historySelected.nextPublicId || historyBusy || submitBusy}
+                    onClick={() => void loadReturnHistory(historySelected.nextPublicId || undefined)}>
+                    المردود التالي →
+                  </button>
+                </div>
+                <p>
+                  الحالة: <b>{historySelected.status === "completed" ? "مكتمل" : "ملغى"}</b>
+                  {" | "}المبلغ: <b>{formatMoney(historySelected.refundAmountMinor)}</b>
+                  {" | "}الاسترداد: <b>{refundMethodLabel(historySelected.refundMethod)}</b>
+                  {" | "}التاريخ: {formatDateTime(historySelected.createdAt)}
+                </p>
+                <p>الزبون: {historySelected.customerName || "غير محدد"} — السبب: {historySelected.reason}</p>
+                <div className="today-sales-table-wrap">
+                  <table className="today-sales-table">
+                    <thead>
+                      <tr><th>الصنف</th><th>الباركود</th><th>اللون / المقاس</th><th>الكمية</th><th>قيمة المردود</th></tr>
+                    </thead>
+                    <tbody>
+                      {historySelected.items.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.productNameAr}</td>
+                          <td dir="ltr">{item.barcode || "—"}</td>
+                          <td>{[item.color, item.size].filter(Boolean).join(" / ") || "—"}</td>
+                          <td>{item.quantity}</td>
+                          <td>{formatMoney(item.refundAmountMinor)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {historySelected.status === "completed" && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                    <button type="button" className="primary-button"
+                      disabled={historyBusy || submitBusy}
+                      onClick={() => {
+                        setHistoryCorrectionOpen(!historyCorrectionOpen);
+                        setHistoryCorrectionCustomerId(historySelected.customerId ?? null);
+                        setHistoryError("");
+                      }}>
+                      ✏️ تعديل المردود
+                    </button>
+                    <button type="button" className="secondary-button"
+                      disabled={historyBusy || submitBusy}
+                      onClick={() => void handleVoidReturn(
+                        historySelected.publicId,
+                        historySelected.refundAmountMinor,
+                        null,
+                        historySelected.refundMethod,
+                      )}>
+                      إلغاء هذا المردود
+                    </button>
+                  </div>
+                )}
+                {historyCorrectionOpen && historySelected.status === "completed" && (
+                  <div style={{ border: "1px solid #d9e0e5", borderRadius: 10, padding: 12, marginTop: 12 }}>
+                    <h4>تعديل طريقة الاسترداد</h4>
+                    <p>يمكن تصحيح نقدي إلى حساب الزبون دون المساس بالمخزون. لتغيير الأصناف أو الكمية استخدم إلغاء المردود ثم أعد تسجيله.</p>
+                    {historySelected.refundMethod === "cash" ? (
+                      <>
+                        <CustomerPicker customers={customers}
+                          value={historyCorrectionCustomerId}
+                          disabled={historyBusy || submitBusy}
+                          label="حساب الزبون الذي سيُضاف له رصيد المردود"
+                          placeholder="اختر الزبون"
+                          onChange={(customer) => setHistoryCorrectionCustomerId(customer?.id ?? null)} />
+                        <label className="sales-return-field">
+                          <span>سبب التصحيح</span>
+                          <input value={historyCorrectionReason}
+                            onChange={(event) => setHistoryCorrectionReason(event.target.value)}
+                            disabled={historyBusy || submitBusy} />
+                        </label>
+                        <button type="button" className="primary-button"
+                          disabled={historyBusy || submitBusy || !historyCorrectionCustomerId}
+                          onClick={() => void handleCorrectHistoryReturn()}>
+                          حفظ التصحيح إلى حساب الزبون
+                        </button>
+                      </>
+                    ) : (
+                      <p>التعديل المباشر متاح حاليًا للمردود النقدي إلى حساب الزبون فقط. يمكن إلغاء المردود الحالي وإعادة تسجيله بالطريقة المطلوبة.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {returnHistory.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                {returnHistory.slice(0, 15).map((item) => (
+                  <button type="button" key={item.id} className="secondary-button"
+                    disabled={historyBusy || submitBusy}
+                    onClick={() => void loadReturnHistory(item.publicId)}>
+                    {item.publicId.slice(-8)} · {formatMoney(item.refundAmountMinor)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </article>
 
       <article className="sales-return-search-panel">
         <div className="sales-return-section-title">
