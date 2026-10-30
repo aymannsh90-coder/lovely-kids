@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -134,8 +135,62 @@ type VisitorAnalyticsStats = {
 type CartStockReport = {
   days: number;
   summary: { seenEvents: number; seenVisitors: number; blockedAttempts: number; blockedVisitors: number; corrected: number; removed: number };
-  topIssues: { productId: number; productName: string | null; issueKind: string; color: string | null; size: string | null; seen: number; blocked: number; visitors: number }[];
+  topIssues: { productId: number; productName: string | null; issueKind: string; color: string | null; size: string | null; imageUrl: string | null; fallbackImageUrl: string | null; imageMatchesColor: boolean; seen: number; blocked: number; visitors: number }[];
 };
+
+// Show the exact selected-color photo when available; otherwise identify
+// the main product photo as a generic fallback, never as the selected color.
+function StockIssueThumbnail({
+  imageUrl,
+  fallbackImageUrl,
+  imageMatchesColor,
+}: {
+  imageUrl: string | null;
+  fallbackImageUrl: string | null;
+  imageMatchesColor: boolean;
+}) {
+  const [useFallback, setUseFallback] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setUseFallback(false);
+    setImageFailed(false);
+  }, [imageUrl, fallbackImageUrl]);
+
+  const displayedUrl = useFallback ? fallbackImageUrl : (imageUrl || fallbackImageUrl);
+  const isGeneric = !imageMatchesColor || useFallback;
+
+  return (
+    <View style={{ width: 80, alignItems: "center", gap: 4 }}>
+      <View style={{
+        width: 76, height: 82, borderRadius: 10, overflow: "hidden",
+        backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#E2E8F0",
+        alignItems: "center", justifyContent: "center",
+      }}>
+        {displayedUrl && !imageFailed ? (
+          <Image
+            source={{ uri: displayedUrl }}
+            style={{ width: 76, height: 82 }}
+            resizeMode="cover"
+            accessibilityLabel={isGeneric ? "صورة عامة للمنتج" : "صورة لون المنتج المتأثر"}
+            onError={() => {
+              if (!useFallback && fallbackImageUrl && displayedUrl !== fallbackImageUrl) {
+                setUseFallback(true);
+              } else {
+                setImageFailed(true);
+              }
+            }}
+          />
+        ) : (
+          <Ionicons name="image-outline" size={24} color="#94A3B8" />
+        )}
+      </View>
+      {isGeneric && displayedUrl && !imageFailed ? (
+        <Text style={{ fontSize: 10, color: "#64748B", textAlign: "center" }}>صورة عامة</Text>
+      ) : null}
+    </View>
+  );
+}
 
 const ANALYTICS_COUNTRY_LABELS: Record<string, string> = {
   PS: "فلسطين",
@@ -1150,16 +1205,28 @@ export default function AdminDashboardScreen() {
                       </Text>
                     ) : cartStockReport.topIssues.map((item, index) => (
                       <View key={`${item.productId}-${item.color}-${item.size}-${item.issueKind}-${index}`}
-                        style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 4 }}>
-                        <Text style={{ textAlign: "right", fontWeight: "800", color: colors.foreground }}>
-                          {item.productName || `منتج #${item.productId}`}
-                          {item.color ? ` • ${item.color}` : ""}
-                          {item.size ? ` • مقاس ${item.size}` : ""}
-                        </Text>
-                        <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 12 }}>
-                          {item.issueKind === "product_unavailable" ? "نفاد المنتج" : item.issueKind === "quantity_exceeds_stock" ? "كمية غير كافية" : "لون/مقاس غير متوفر"}
-                          {" • "}ظهور: {item.seen}{" • "}منع متابعة: {item.blocked}{" • "}زبائن: {item.visitors}
-                        </Text>
+                        style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 12 }}>
+                          <StockIssueThumbnail
+                            key={`${item.productId}-${item.color}-${item.imageUrl}`}
+                            imageUrl={item.imageUrl}
+                            fallbackImageUrl={item.fallbackImageUrl}
+                            imageMatchesColor={item.imageMatchesColor}
+                          />
+                          <View style={{ flex: 1, gap: 5, alignItems: "flex-end" }}>
+                            <Text style={{ textAlign: "right", fontWeight: "800", color: colors.foreground }}>
+                              {item.productName || `منتج #${item.productId}`}
+                            </Text>
+                            <Text style={{ textAlign: "right", color: colors.foreground, fontSize: 12 }}>
+                              {item.color ? `اللون: ${item.color}` : "اللون: غير محدد"}
+                              {item.size ? ` • المقاس: ${item.size}` : ""}
+                            </Text>
+                            <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 12 }}>
+                              {item.issueKind === "product_unavailable" ? "نفاد المنتج" : item.issueKind === "quantity_exceeds_stock" ? "كمية غير كافية" : "لون/مقاس غير متوفر"}
+                              {" • "}ظهور: {item.seen}{" • "}منع متابعة: {item.blocked}{" • "}زبائن: {item.visitors}
+                            </Text>
+                          </View>
+                        </View>
                       </View>
                     ))}
                     <Text style={{ color: colors.mutedForeground, fontSize: 11, textAlign: "right", lineHeight: 18 }}>

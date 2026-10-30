@@ -1,6 +1,7 @@
 import { cartStockAnalyticsEventsTable, productsTable } from "@workspace/db/schema";
 import { and, eq, gte, inArray, desc, sql } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
+import { toPublicMediaUrl } from "./media-url";
 import type { Env, openDb } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -96,6 +97,19 @@ async function getStockReport(request: Request, db: Db, env: Env) {
     .groupBy(t.productId, productsTable.nameAr, t.issueKind, t.selectedColor, t.selectedSize)
     .orderBy(desc(blockedCount), desc(seenCount))
     .limit(12);
+
+  // Images are fetched separately so we do not group or aggregate large
+  // JSONB color-variant payloads in the report query.
+  const productIds = [...new Set(topIssues.map((row) => row.productId))];
+  const imageRows = productIds.length
+    ? await db.select({
+        id: productsTable.id,
+        image: productsTable.image,
+        colorVariants: productsTable.colorVariants,
+      }).from(productsTable).where(inArray(productsTable.id, productIds))
+    : [];
+  const imagesByProductId = new Map(imageRows.map((row) => [row.id, row]));
+
   const numberOrZero = (x: unknown) => Number(x ?? 0);
   return json({
     days,
@@ -107,12 +121,24 @@ async function getStockReport(request: Request, db: Db, env: Env) {
       corrected: numberOrZero(metrics?.corrected),
       removed: numberOrZero(metrics?.removed),
     },
-    topIssues: topIssues.map((row) => ({
-      ...row,
-      seen: numberOrZero(row.seen),
-      blocked: numberOrZero(row.blocked),
-      visitors: numberOrZero(row.visitors),
-    })),
+    topIssues: topIssues.map((row) => {
+      const product = imagesByProductId.get(row.productId);
+      const color = row.color?.trim();
+      const colorVariant = color
+        ? product?.colorVariants?.find((variant) => variant.color.trim() === color)
+        : undefined;
+      const colorImage = colorVariant?.image?.trim() || null;
+      const mainImage = product?.image?.trim() || null;
+      return {
+        ...row,
+        imageUrl: colorImage || mainImage ? toPublicMediaUrl(colorImage || mainImage!) : null,
+        fallbackImageUrl: mainImage ? toPublicMediaUrl(mainImage) : null,
+        imageMatchesColor: Boolean(colorImage),
+        seen: numberOrZero(row.seen),
+        blocked: numberOrZero(row.blocked),
+        visitors: numberOrZero(row.visitors),
+      };
+    }),
   });
 }
 
