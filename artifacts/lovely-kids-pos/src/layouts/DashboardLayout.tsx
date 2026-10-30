@@ -213,17 +213,17 @@ export default function DashboardLayout() {
             {visibleSections.map((section) => (
               <button
                 className={
-                  !isAdminPanel && activeSectionKey === section.key
+                  !isAdminPanel && !isAccessPage && activeSectionKey === section.key
                     ? "pos-shamel-primary-button is-active"
                     : "pos-shamel-primary-button"
                 }
                 type="button"
-                aria-pressed={!isAdminPanel && activeSectionKey === section.key}
+                aria-pressed={!isAdminPanel && !isAccessPage && activeSectionKey === section.key}
                 key={section.key}
                 onClick={() => {
                   setActiveSectionKey(section.key);
 
-                  if (isAdminPanel) {
+                  if (isAdminPanel || isAccessPage) {
                     const firstItem = posNavigation.find(
                       (item) =>
                         section.groups.includes(item.group) &&
