@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -440,6 +441,7 @@ export default function HistoricalInventoryValuationReportPage() {
 
   return (
     <section
+      className="lk-report-refresh lk-report-historical"
       dir="rtl"
       style={{
         display: "grid",
@@ -447,12 +449,13 @@ export default function HistoricalInventoryValuationReportPage() {
       }}
     >
       <section
-        className="work-panel"
+        className="work-panel lk-report-historical-panel"
         style={{
           padding: 18,
         }}
       >
         <div
+          className="lk-report-historical-header"
           style={{
             display: "flex",
             justifyContent:
@@ -497,6 +500,7 @@ export default function HistoricalInventoryValuationReportPage() {
         </div>
 
         <form
+          className="lk-report-historical-filters"
           onSubmit={submit}
           style={{
             display: "flex",
@@ -707,7 +711,7 @@ export default function HistoricalInventoryValuationReportPage() {
           </section>
 
           <section
-            className="work-panel"
+            className="work-panel lk-report-historical-panel"
             style={{
               padding: 16,
             }}
