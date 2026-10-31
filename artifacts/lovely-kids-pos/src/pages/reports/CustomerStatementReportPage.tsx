@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import { useSearchParams } from "react-router-dom";
 import CustomerPicker from "../../components/CustomerPicker";
 import {
@@ -472,7 +473,7 @@ export default function CustomerStatementReportPage() {
 
   return (
     <section
-      className="work-panel customer-statement-page"
+      className="work-panel customer-statement-page lk-report-refresh"
       dir="rtl"
     >
       <style>{`
