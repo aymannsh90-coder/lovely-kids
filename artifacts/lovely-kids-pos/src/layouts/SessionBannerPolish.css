@@ -1,0 +1,47 @@
+/* Lovely Kids POS — compact workday status bar.
+   Visual-only enhancement. All existing dimensions, spacing, flex layout,
+   responsive rules, balances and session lifecycle remain unchanged. */
+.pos-shamel-session-banner.session-open {
+  border-color: #bde7d6;
+  background: linear-gradient(105deg, #f5fcf8 0%, #eefbf5 58%, #e9f9f1 100%);
+  box-shadow: 0 2px 8px rgba(21, 111, 75, .045), inset 0 1px 0 rgba(255, 255, 255, .75);
+}
+.pos-shamel-session-banner.session-closed {
+  border-color: #f1d2dd;
+  background: linear-gradient(105deg, #fffafb 0%, #fff2f7 100%);
+  box-shadow: 0 2px 8px rgba(167, 50, 99, .045), inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+.pos-shamel-session-banner .session-indicator {
+  outline: 1px solid rgba(255, 255, 255, .8);
+}
+.pos-shamel-session-banner.session-open .session-indicator {
+  background: #16a36d;
+  box-shadow: 0 0 0 4px rgba(22, 163, 109, .12);
+}
+.pos-shamel-session-banner.session-closed .session-indicator {
+  background: #d94b7b;
+  box-shadow: 0 0 0 4px rgba(217, 75, 123, .12);
+}
+.pos-shamel-session-banner .session-label,
+.pos-shamel-session-banner .session-banner-value > span {
+  color: #627c80;
+  font-weight: 750;
+}
+.pos-shamel-session-banner > .session-indicator + div > strong {
+  font-weight: 900;
+  letter-spacing: -.1px;
+}
+.pos-shamel-session-banner.session-open > .session-indicator + div > strong {
+  color: #146d52;
+}
+.pos-shamel-session-banner.session-closed > .session-indicator + div > strong {
+  color: #a83763;
+}
+.pos-shamel-session-banner .session-banner-value > strong {
+  color: #213e4c;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.pos-shamel-session-banner .session-banner-value:last-child > strong {
+  color: #a41a67;
+}
