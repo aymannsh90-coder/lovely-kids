@@ -1685,7 +1685,7 @@ async function handleEditDeliveryCompanyCost(
         const differenceMinor = Math.abs(nextCost - previousCost) * 100;
         const costReduced = nextCost < previousCost;
         const adjustmentId = randomUUID();
-        const companyDebit = receivable ? costReduced : costReduced;
+        const companyDebit = costReduced;
         await postFinanceTransaction(tx, {
           publicId: "FIN-DCOST-" + adjustmentId.slice(0, 16).toUpperCase(),
           idempotencyKey: "order:" + orderId + ":delivery-cost:" + adjustmentId,

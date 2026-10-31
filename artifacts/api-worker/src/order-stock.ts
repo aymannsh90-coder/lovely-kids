@@ -3016,7 +3016,7 @@ export async function editOrderItemsAndAdjustStock(
               ? details.localDeliveryCourierCost === undefined
                 ? order.deliveryCompanyCost
                 : Number(details.localDeliveryCourierCost)
-              : order.status === "delivering"
+              : order.status === "delivering" || order.shippingZone === shipping.label
                 ? order.deliveryCompanyCost
                 : null,
         notes,

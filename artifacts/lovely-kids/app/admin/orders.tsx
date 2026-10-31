@@ -1561,7 +1561,7 @@ export default function AdminOrdersScreen() {
 
   const saveCompanyCost = async () => {
     if (!companyCostOrder || companyCostSaving) return;
-    if (!/^\\d+$/.test(companyCostValue) || Number(companyCostValue) > 10000) {
+    if (!/^\d+$/.test(companyCostValue) || Number(companyCostValue) > 10000) {
       setCompanyCostError("أدخل تكلفة الشركة بالشيكل الصحيح");
       return;
     }
