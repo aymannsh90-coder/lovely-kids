@@ -6,6 +6,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinanceVisualRefresh.css";
 import {
   ApiError,
   getCurrentCashSession,
@@ -1052,11 +1053,11 @@ export default function VoucherRegisterPage() {
 
   return (
     <section
-      className="work-panel"
+      className="work-panel lk-finance-refresh lk-finance-voucher-register"
       dir="rtl"
     >
       <div
-        className="panel-heading"
+        className="panel-heading lk-finance-header"
         style={{
           marginBottom: 16,
         }}
@@ -1137,6 +1138,7 @@ export default function VoucherRegisterPage() {
 
       {message && (
         <div
+          className="lk-finance-success"
           style={{
             padding: 12,
             marginBottom: 12,
@@ -1150,6 +1152,7 @@ export default function VoucherRegisterPage() {
       )}
 
       <div
+        className="lk-finance-filterbar"
         style={{
           display: "grid",
           gridTemplateColumns:
@@ -1239,6 +1242,7 @@ export default function VoucherRegisterPage() {
       </div>
 
       <div
+        className="lk-finance-table-shell"
         style={{
           overflowX: "auto",
           border:
@@ -1247,6 +1251,7 @@ export default function VoucherRegisterPage() {
         }}
       >
         <table
+          className="lk-finance-table"
           style={{
             width: "100%",
             borderCollapse:
