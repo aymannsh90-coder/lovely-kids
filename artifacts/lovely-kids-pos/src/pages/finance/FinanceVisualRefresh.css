@@ -477,6 +477,51 @@
   .lk-finance-refresh .lk-finance-form-actions .primary-button { min-width: 0; flex: 1 1 100%; }
   .lk-finance-refresh .lk-finance-header :where(button, a) { flex: 1 1 auto; }
 }
+
+/* Voucher register: preserve readable dates, currency and action buttons.
+   Keep horizontal scrolling available instead of squeezing content. */
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table {
+  min-width: 1320px;
+}
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table
+  :is(th, td):nth-child(3) {
+  min-width: 112px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table
+  :is(th, td):nth-child(5) {
+  min-width: 125px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table
+  :is(th, td):last-child {
+  min-width: 185px;
+  white-space: nowrap;
+}
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table
+  td:last-child > div {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table
+  td:last-child button {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  padding-inline: 9px;
+}
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table
+  td:nth-child(5) strong {
+  white-space: nowrap;
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 @media print {
   .lk-finance-refresh { box-shadow: none; border: 0; }
   .lk-finance-refresh .lk-finance-table-shell { max-height: none; overflow: visible; }
