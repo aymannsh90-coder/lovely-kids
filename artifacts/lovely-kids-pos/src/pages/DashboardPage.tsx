@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./DashboardVisualRefresh.css";
 import { Link } from "react-router-dom";
 
 import { navigationGroups, posNavigation } from "../app/navigation";
@@ -117,7 +118,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page lk-dashboard-refresh">
       <section className="dashboard-hero">
         <div>
           <span className="dashboard-kicker">الصفحة الرئيسية</span>
