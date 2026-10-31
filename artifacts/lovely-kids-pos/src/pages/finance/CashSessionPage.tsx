@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinanceVisualRefresh.css";
 import type { CashSession } from "../../lib/api";
 import {
   formatBusinessDate,
@@ -310,7 +311,7 @@ export default function CashSessionPage() {
 
   if (!session) {
     return (
-      <section className="work-panel cash-session-page">
+      <section className="work-panel cash-session-page lk-finance-refresh lk-finance-cash-session">
         {lastClosedSession && (
           <section
             style={{
@@ -461,7 +462,7 @@ export default function CashSessionPage() {
   }
 
   return (
-    <section className="work-panel cash-session-page">
+    <section className="work-panel cash-session-page lk-finance-refresh lk-finance-cash-session">
       <div className="panel-heading">
         <div className="panel-icon">✅</div>
 
