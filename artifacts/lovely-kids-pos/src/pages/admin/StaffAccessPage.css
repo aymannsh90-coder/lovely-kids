@@ -15,7 +15,7 @@
   padding: 17px;
   background: #f5f8fa;
   color: var(--sa-ink);
-  font-size: 14px;
+  font-size: 15px;
 }
 .staff-access-page *, .staff-access-page *::before, .staff-access-page *::after {
   box-sizing: border-box;
@@ -47,7 +47,7 @@
   display: block;
   margin-bottom: 5px;
   color: #a70e62;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
 }
 .staff-access-hero h1 {
@@ -61,7 +61,7 @@
   margin: 0;
   color: var(--sa-muted);
   line-height: 1.7;
-  font-size: 12px;
+  font-size: 13px;
 }
 .staff-access-notice {
   margin: 0;
@@ -100,14 +100,14 @@
 .staff-access-panel-head h2 {
   margin: 0 0 4px;
   color: #233746;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 900;
 }
 .staff-access-panel-head p {
   margin: 0;
   color: #728493;
   line-height: 1.6;
-  font-size: 12px;
+  font-size: 13px;
 }
 .staff-access-page button.staff-access-primary,
 .staff-access-page button.staff-access-secondary {
@@ -118,7 +118,7 @@
   padding: 9px 16px;
   border-radius: 11px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.3;
   font-weight: 850;
   cursor: pointer;
@@ -151,14 +151,14 @@
   width: 100%;
   border-collapse: collapse;
   text-align: right;
-  font-size: 13px;
+  font-size: 14px;
 }
 .staff-access-table th {
   padding: 13px 12px;
   background: #f2f6fa;
   border-bottom: 1px solid #e2eaf0;
   color: #567083;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -174,7 +174,7 @@
   display: inline-block;
   padding: 5px 11px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 850;
   border: 1px solid #e8cedb;
   background: #fff3f8;
@@ -197,7 +197,7 @@
   gap: 7px;
   min-width: 0;
   color: #546e81;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 850;
 }
 .staff-access-fields :is(input, select),
@@ -212,7 +212,7 @@
   background: #fff;
   color: #263d50;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 .staff-access-fields :is(input, select):focus,
 .staff-access-owner-confirm input:focus {
@@ -234,52 +234,61 @@
   font-weight: 700;
 }
 .staff-access-page input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   accent-color: #e91e8c;
   flex: 0 0 auto;
   cursor: pointer;
 }
 .staff-access-permission-heading {
   margin: 22px 0 4px;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 900;
   color: #233746;
 }
 .staff-access-permission-note {
   margin: 0 0 15px;
   color: #718493;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.65;
 }
 .staff-access-permission-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 13px;
+  /* Each permission group has its own height; no stretched empty boxes. */
+  display: block;
+  column-count: 3;
+  column-gap: 14px;
+  column-fill: balance;
 }
 .staff-access-permission-group {
+  display: inline-block;
+  width: 100%;
   min-width: 0;
-  margin: 0;
-  padding: 11px 13px;
-  border: 1px solid #e1eaf0;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #cbdce8;
   border-radius: 13px;
-  background: #fbfdfe;
+  background: linear-gradient(160deg, #f3f8fb, #edf3f8);
+  box-shadow: 0 3px 10px rgba(38, 81, 111, .055);
+  break-inside: avoid;
+  page-break-inside: avoid;
+  vertical-align: top;
 }
 .staff-access-permission-group legend {
   padding: 0 7px;
-  color: #ad236c;
-  font-size: 13px;
+  color: #9d1e63;
+  font-size: 15px;
   font-weight: 900;
 }
 .staff-access-permission-option {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin: 5px 0;
-  padding: 7px 9px;
+  margin: 3px 0;
+  padding: 8px 9px;
   border-radius: 9px;
-  color: #314a5a;
-  font-size: 12px;
+  color: #29465b;
+  font-size: 14px;
+  font-weight: 650;
   line-height: 1.5;
   cursor: pointer;
 }
@@ -296,7 +305,7 @@
   margin: 0;
   padding: 12px 3px;
   border-bottom: 1px solid #edf1f4;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.8;
   color: #526b7c;
 }
@@ -304,12 +313,13 @@
 .staff-access-audit-entry strong { color: #a51c64; }
 @media (max-width: 1150px) {
   .staff-access-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .staff-access-permission-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .staff-access-permission-grid { column-count: 2; }
 }
 @media (max-width: 670px) {
   .staff-access-page { padding: 10px; gap: 12px; }
   .staff-access-panel, .staff-access-hero { padding: 14px; }
-  .staff-access-fields, .staff-access-permission-grid { grid-template-columns: 1fr; }
+  .staff-access-fields { grid-template-columns: 1fr; }
+  .staff-access-permission-grid { column-count: 1; }
   .staff-access-panel-head { align-items: stretch; }
   .staff-access-table { min-width: 650px; }
 }
