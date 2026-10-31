@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -753,7 +754,7 @@ export default function InventoryValuationReportPage() {
 
   return (
     <div
-      className="inventory-valuation-page"
+      className="inventory-valuation-page lk-report-refresh"
       dir="rtl"
     >
       <style>{`
