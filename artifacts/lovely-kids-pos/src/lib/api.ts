@@ -695,6 +695,13 @@ export interface PosProductCardResult {
     code: string;
     name: string;
   }>;
+  // Only returned by the server when the authenticated user is the owner.
+  cost?: null | {
+    unitCostMinor: number;
+    basis: "average" | "reference";
+    quality: "confirmed" | "estimated" | "mixed" | null;
+    stockMatchesAccounting: boolean;
+  };
 }
 
 export function getPosProductCard(
