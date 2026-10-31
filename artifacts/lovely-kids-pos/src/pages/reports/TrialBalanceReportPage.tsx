@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -323,7 +324,7 @@ export default function TrialBalanceReportPage() {
 
   return (
     <section
-      className="trial-balance-page"
+      className="trial-balance-page lk-report-refresh"
       dir="rtl"
     >
       <style>{`
