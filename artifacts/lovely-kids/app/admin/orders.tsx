@@ -615,6 +615,10 @@ export default function AdminOrdersScreen() {
     useState(false);
   const [printConfirmVisible, setPrintConfirmVisible] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [companyCostOrder, setCompanyCostOrder] = useState<Order | null>(null);
+  const [companyCostValue, setCompanyCostValue] = useState("");
+  const [companyCostError, setCompanyCostError] = useState<string | null>(null);
+  const [companyCostSaving, setCompanyCostSaving] = useState(false);
   const [editItems, setEditItems] = useState<EditableOrderItem[]>([]);
   const [editProducts, setEditProducts] = useState<AdminOrderEditProduct[]>([]);
   const [editProductsLoading, setEditProductsLoading] = useState(false);
@@ -1540,6 +1544,60 @@ export default function AdminOrdersScreen() {
       }
     } finally {
       setPickupConvertingId(null);
+    }
+  };
+
+
+  const openCompanyCostEditor = (order: Order) => {
+    const zone = settings.shippingZones?.find(
+      (entry) => entry.label === order.shippingZone,
+    );
+    const suggestedCost =
+      order.deliveryCompanyCost ?? zone?.companyCost ?? zone?.cost ?? 0;
+    setCompanyCostOrder(order);
+    setCompanyCostValue(String(suggestedCost));
+    setCompanyCostError(null);
+  };
+
+  const saveCompanyCost = async () => {
+    if (!companyCostOrder || companyCostSaving) return;
+    if (!/^\\d+$/.test(companyCostValue) || Number(companyCostValue) > 10000) {
+      setCompanyCostError("أدخل تكلفة الشركة بالشيكل الصحيح");
+      return;
+    }
+    setCompanyCostSaving(true);
+    setCompanyCostError(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة تسجيل الدخول");
+      const response = await fetch(
+        `${API_BASE}/api/orders/${companyCostOrder.id}/delivery-company-cost`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            companyCost: Number(companyCostValue),
+            expectedCost: companyCostOrder.deliveryCompanyCost ?? null,
+          }),
+        },
+      );
+      const result = await response.json().catch(() => null) as Order | { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(result && "error" in result && result.error
+          ? result.error : "تعذر تعديل تكلفة شركة التوصيل");
+      }
+      const updated = result as Order;
+      setOrders((previous) =>
+        previous.map((order) => order.id === updated.id ? { ...order, ...updated } : order),
+      );
+      setCompanyCostOrder(null);
+    } catch (error) {
+      setCompanyCostError(error instanceof Error ? error.message : "تعذر حفظ التكلفة");
+    } finally {
+      setCompanyCostSaving(false);
     }
   };
 
@@ -4857,6 +4915,33 @@ export default function AdminOrdersScreen() {
                       </Pressable>
                     )}
 
+
+                    {!isPickup &&
+                      item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                      item.status !== "cancelled" &&
+                      !!item.shippingZone &&
+                      item.mergedIntoOrderId == null &&
+                      ["new", "confirmed", "delivering", "done"].includes(item.status) &&
+                      !(item.status === "done" && item.exchangePublicId) && (
+                        <Pressable
+                          disabled={pendingOrderIds.has(item.id)}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            openCompanyCostEditor(item);
+                          }}
+                          style={[styles.editOrderBtn, {
+                            borderColor: "#0D9488",
+                            backgroundColor: "#0D948811",
+                            opacity: pendingOrderIds.has(item.id) ? 0.5 : 1,
+                          }]}
+                        >
+                          <Ionicons name="cash-outline" size={18} color="#0F766E" />
+                          <Text style={[styles.editOrderBtnText, { color: "#0F766E" }]}>
+                            تعديل تكلفة شركة التوصيل {item.deliveryCompanyCost == null ? "" : `(${item.deliveryCompanyCost}₪)`}
+                          </Text>
+                        </Pressable>
+                      )}
+
                     {item.exchangePublicId && (
                       <View
                         style={{
@@ -6194,6 +6279,77 @@ export default function AdminOrdersScreen() {
             </Pressable>
           </Pressable>
         </Pressable>
+      </Modal>
+
+
+      {/* Per-order delivery-company cost. Never changes the customer charge. */}
+      <Modal
+        visible={companyCostOrder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!companyCostSaving) setCompanyCostOrder(null); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.editOrderModalCard, {
+            backgroundColor: colors.card, borderColor: colors.border,
+            maxWidth: 440, padding: 20, gap: 14,
+          }]}>
+            <Text style={[styles.editOrderModalTitle, { color: colors.foreground, textAlign: "right" }]}>
+              تعديل تكلفة شركة التوصيل — طلب #{companyCostOrder?.id}
+            </Text>
+            <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>
+              التعديل لهذا الطلب فقط، ولا يغيّر أسعار الشركة العامة أو سعر التوصيل على الزبونة.
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "700" }}>
+              توصيل الزبونة: {companyCostOrder?.shippingCost ?? 0}₪ (ثابت)
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "700" }}>
+              تكلفة شركة التوصيل الفعلية (₪)
+            </Text>
+            <TextInput
+              value={companyCostValue}
+              onChangeText={(value) => {
+                setCompanyCostValue(value.replace(/[^0-9]/g, ""));
+                setCompanyCostError(null);
+              }}
+              keyboardType="number-pad"
+              style={[styles.editOrderFieldInput, {
+                color: colors.foreground, borderColor: colors.border,
+                backgroundColor: colors.card,
+              }]}
+              textAlign="right"
+            />
+            <Text style={{ color: "#0F766E", fontWeight: "800", textAlign: "right" }}>
+              فرق التوصيل: {(companyCostOrder?.shippingCost ?? 0) - (Number(companyCostValue) || 0)}₪
+            </Text>
+            {companyCostOrder?.status === "done" && (
+              <Text style={{ color: "#B45309", textAlign: "right" }}>
+                للطلب المكتمل، يُنشأ قيد فرق محاسبي إذا لم تتم تسويته مع شركة التوصيل.
+              </Text>
+            )}
+            {companyCostError && (
+              <Text style={{ color: "#DC2626", textAlign: "right" }}>{companyCostError}</Text>
+            )}
+            <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+              <Pressable
+                disabled={companyCostSaving}
+                onPress={() => setCompanyCostOrder(null)}
+                style={[styles.editOrderCancelBtn, { borderColor: colors.border, flex: 1 }]}
+              >
+                <Text style={{ color: colors.foreground, fontWeight: "800" }}>إلغاء</Text>
+              </Pressable>
+              <Pressable
+                disabled={companyCostSaving}
+                onPress={() => void saveCompanyCost()}
+                style={[styles.editOrderSaveBtn, { backgroundColor: "#0D9488", flex: 1 }]}
+              >
+                {companyCostSaving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.editOrderSaveBtnText}>حفظ تكلفة الشركة</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Edit Order Items Modal */}

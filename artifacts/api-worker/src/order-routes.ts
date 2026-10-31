@@ -1,13 +1,16 @@
 import {
   appSettingsTable,
   deliveryCompaniesTable,
+  deliveryCompanySettlementItemsTable,
   exchangeDocumentsTable,
+  financeAccountsTable,
+  securityAuditLogsTable,
   financeTransactionsTable,
   insertOrderSchema,
   ordersTable,
 } from "@workspace/db/schema";
 import { sql, and, desc, eq, isNull, or } from "drizzle-orm";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import {
@@ -43,6 +46,7 @@ import {
 } from "./order-local-courier-reversal";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import { sendMetaPurchaseEvent } from "./meta-capi";
+import { postFinanceTransaction } from "./finance-posting";
 import {
   mergeOnlineOrders,
   OrderMergeError,
@@ -243,10 +247,8 @@ async function getAutomaticFulfillmentUpdate(
     };
   }
 
-  // عند التسليم نحافظ على Snapshot الشركة الذي تم تثبيته
-  // عند إخراج الطلب للتوصيل.
+  // Reuse the existing dispatch snapshot on repeat transitions, not the global price.
   if (
-    targetStatus === "done" &&
     order.fulfillmentMethod === "delivery" &&
     order.deliveryCompanyId !== null &&
     order.deliveryCompanyCost !== null
@@ -318,7 +320,10 @@ async function getAutomaticFulfillmentUpdate(
       // Snapshot للتكلفة الفعلية لشركة التوصيل وقت إخراج الطلب.
       // لا نستخدم cost ولا promoCost هنا إلا كـfallback للبيانات القديمة
       // التي لم يكن فيها companyCost بعد.
+      // An admin's per-order override is authoritative; global company prices
+      // remain unchanged for every other order.
       deliveryCompanyCost:
+        order.deliveryCompanyCost ??
         shipping.companyCost ??
         shipping.cost,
     },
@@ -1246,6 +1251,14 @@ export async function handleOrderRequest(
     );
   }
 
+  const companyCostMatch = path.match(
+    /^\/api\/orders\/(\d+)\/delivery-company-cost$/,
+  );
+
+  if (request.method === "PATCH" && companyCostMatch) {
+    return handleEditDeliveryCompanyCost(request, db, env, Number(companyCostMatch[1]));
+  }
+
   const editItemsMatch = path.match(
     /^\/api\/orders\/(\d+)\/items$/,
   );
@@ -1530,6 +1543,195 @@ async function handleCustomerEditOrderItems(
       { error: "تعذر تعديل الطلب" },
       500,
     );
+  }
+}
+
+
+/**
+ * Per-order courier-company charge. Customer-facing shipping prices and
+ * shipping-zone configuration are deliberately never updated here.
+ */
+async function handleEditDeliveryCompanyCost(
+  request: Request,
+  db: Db,
+  env: Env,
+  orderId: number,
+): Promise<Response> {
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isAdmin && !user.isOwner) {
+    return json({ error: "غير مصرح بتعديل تكلفة شركة التوصيل" }, 403);
+  }
+
+  const body = await request.json().catch(() => null) as {
+    companyCost?: unknown;
+    expectedCost?: unknown;
+  } | null;
+  if (
+    !body ||
+    typeof body.companyCost !== "number" ||
+    !Number.isSafeInteger(body.companyCost) ||
+    body.companyCost < 0 ||
+    body.companyCost > 10000 ||
+    !Object.prototype.hasOwnProperty.call(body, "expectedCost") ||
+    (body.expectedCost !== null &&
+      (typeof body.expectedCost !== "number" ||
+        !Number.isSafeInteger(body.expectedCost) ||
+        body.expectedCost < 0))
+  ) {
+    return json({ error: "أدخل تكلفة الشركة بالشيكل الصحيح" }, 400);
+  }
+
+  try {
+    const updated = await db.transaction(async (tx) => {
+      const order = (await tx
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.id, orderId))
+        .for("update"))[0];
+
+      if (!order) throw new OrderEditError("الطلب غير موجود", 404);
+      if (
+        order.mergedIntoOrderId !== null ||
+        !["new", "confirmed", "delivering", "done"].includes(order.status) ||
+        !order.shippingZone ||
+        order.shippingZone === STORE_PICKUP_LABEL ||
+        order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL ||
+        order.fulfillmentMethod === "pickup"
+      ) {
+        throw new OrderEditError("التعديل متاح لطلبات شركة التوصيل فقط، ولا يشمل الديلفري المحلي أو الطلبات الملغاة", 409);
+      }
+
+      if (order.deliveryCompanyCost !== body.expectedCost) {
+        throw new OrderEditError("تغيّرت تكلفة هذا الطلب من مستخدم آخر. حدّث الطلب وأعد المحاولة", 409);
+      }
+
+      if (order.status === "done" && order.paymentMethod !== "cod" &&
+          order.paymentMethod !== "bank_transfer") {
+        throw new OrderEditError("طريقة الدفع لهذا الطلب تحتاج مراجعة محاسبية قبل تعديل تكلفة الشركة", 409);
+      }
+
+      const previousCost = order.deliveryCompanyCost;
+      const nextCost = body.companyCost as number;
+      if (previousCost === nextCost) return order;
+
+      if (order.status === "done") {
+        // Completed orders are already posted to the general ledger. Do not
+        // change their snapshot without a balancing finance adjustment.
+        if (previousCost === null || order.deliveryCompanyId === null ||
+            order.fulfillmentMethod !== "delivery") {
+          throw new OrderEditError("بيانات تسليم شركة التوصيل غير مكتملة", 409);
+        }
+
+        const exchange = await tx.select({ id: exchangeDocumentsTable.id })
+          .from(exchangeDocumentsTable)
+          .where(and(
+            eq(exchangeDocumentsTable.sourceType, "online_order"),
+            eq(exchangeDocumentsTable.replacementOrderId, orderId),
+            eq(exchangeDocumentsTable.status, "completed"),
+          )).limit(1);
+        if (exchange.length) {
+          throw new OrderEditError("الطلب مرتبط بتبديل محاسبي؛ لا يمكن تعديل تكلفته بهذه الأداة", 409);
+        }
+
+        const settlements = await tx.select({ id: deliveryCompanySettlementItemsTable.id })
+          .from(deliveryCompanySettlementItemsTable)
+          .where(and(
+            eq(deliveryCompanySettlementItemsTable.orderId, orderId),
+            eq(deliveryCompanySettlementItemsTable.status, "posted"),
+          )).limit(1);
+        if (settlements.length) {
+          throw new OrderEditError("تمت تسوية هذا الطلب مع شركة التوصيل؛ لا يمكن تغيير التكلفة بعد التسوية", 409);
+        }
+
+        const completedFinance = await tx.select({ id: financeTransactionsTable.id })
+          .from(financeTransactionsTable)
+          .where(and(
+            eq(financeTransactionsTable.sourceType, "web_order"),
+            eq(financeTransactionsTable.sourceId, String(orderId)),
+            eq(financeTransactionsTable.sourceEvent, "done"),
+            eq(financeTransactionsTable.status, "posted"),
+          )).limit(1);
+        if (!completedFinance.length) {
+          throw new OrderEditError("قيد تسليم الطلب غير موجود؛ لا يمكن تصحيح التكلفة بأمان", 409);
+        }
+
+        if (
+          order.paymentMethod === "cod" &&
+          (previousCost > order.totalPrice || nextCost > order.totalPrice)
+        ) {
+          throw new OrderEditError("تكلفة الشركة تتجاوز إجمالي الطلب؛ يلزم تصحيح محاسبي خاص", 409);
+        }
+
+        const receivable = order.paymentMethod === "cod";
+        const companyAccount = (await tx.select()
+          .from(financeAccountsTable)
+          .where(and(
+            eq(financeAccountsTable.linkedEntityType,
+              receivable ? "delivery_company_receivable" : "delivery_company_payable"),
+            eq(financeAccountsTable.linkedEntityId, order.deliveryCompanyId),
+            eq(financeAccountsTable.status, "active"),
+          )).limit(1))[0];
+        const expenseAccount = (await tx.select()
+          .from(financeAccountsTable)
+          .where(and(
+            eq(financeAccountsTable.code, "DELIVERY_EXPENSE"),
+            eq(financeAccountsTable.status, "active"),
+          )).limit(1))[0];
+        if (!companyAccount || !expenseAccount) {
+          throw new OrderEditError("حساب الشركة أو مصروف التوصيل غير موجود؛ راجع المحاسبة قبل التصحيح", 409);
+        }
+
+        const differenceMinor = Math.abs(nextCost - previousCost) * 100;
+        const costReduced = nextCost < previousCost;
+        const adjustmentId = randomUUID();
+        const companyDebit = receivable ? costReduced : costReduced;
+        await postFinanceTransaction(tx, {
+          publicId: "FIN-DCOST-" + adjustmentId.slice(0, 16).toUpperCase(),
+          idempotencyKey: "order:" + orderId + ":delivery-cost:" + adjustmentId,
+          businessDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
+          transactionType: "adjustment",
+          sourceType: "web_order",
+          sourceId: String(orderId),
+          sourceEvent: "delivery_company_cost_adjustment_" + adjustmentId,
+          createdByUserId: user.id,
+          notes: "تعديل تكلفة شركة التوصيل للطلب #" + orderId + " من " + previousCost + " إلى " + nextCost + " شيكل",
+          lines: [
+            { accountId: companyAccount.id, debitMinor: companyDebit ? differenceMinor : 0,
+              creditMinor: companyDebit ? 0 : differenceMinor,
+              memo: "تصحيح مستحقات شركة التوصيل للطلب #" + orderId },
+            { accountId: expenseAccount.id, debitMinor: costReduced ? 0 : differenceMinor,
+              creditMinor: costReduced ? differenceMinor : 0,
+              memo: "تصحيح مصروف توصيل الطلب #" + orderId },
+          ],
+        });
+      }
+
+      const result = (await tx.update(ordersTable)
+        .set({ deliveryCompanyCost: nextCost })
+        .where(eq(ordersTable.id, orderId))
+        .returning())[0];
+      if (!result) throw new OrderEditError("تعذر حفظ تكلفة شركة التوصيل", 500);
+
+      await tx.insert(securityAuditLogsTable).values({
+        actorUserId: user.id,
+        action: "order_delivery_company_cost_updated",
+        details: {
+          orderId, shippingZone: order.shippingZone,
+          oldCost: previousCost, newCost: nextCost,
+          customerShippingCost: order.shippingCost,
+          completed: order.status === "done",
+        },
+      });
+      return result;
+    });
+    return json(updated);
+  } catch (error) {
+    if (error instanceof OrderEditError) {
+      return json({ error: error.message }, error.status);
+    }
+    console.error("ORDER_COMPANY_COST_UPDATE_FAILED", error);
+    return json({ error: "تعذر حفظ تكلفة شركة التوصيل" }, 500);
   }
 }
 

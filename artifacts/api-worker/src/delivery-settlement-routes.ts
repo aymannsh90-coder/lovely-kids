@@ -14,6 +14,8 @@ import {
   desc,
   eq,
   inArray,
+  like,
+  or,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
@@ -216,12 +218,12 @@ async function loadUnsettledOrders(
           financeTransactionsTable.sourceType,
           "web_order",
         ),
-        inArray(
-          financeTransactionsTable.sourceEvent,
-          [
+        or(
+          inArray(financeTransactionsTable.sourceEvent, [
             "done",
             "delivery_cost_correction_20261019",
-          ],
+          ]),
+          like(financeTransactionsTable.sourceEvent, "delivery_company_cost_adjustment_%"),
         ),
         eq(
           financeTransactionsTable.status,
@@ -734,12 +736,12 @@ async function handleCreateSettlement(
                 financeTransactionsTable.sourceType,
                 "web_order",
               ),
-              inArray(
-                financeTransactionsTable.sourceEvent,
-                [
+              or(
+                inArray(financeTransactionsTable.sourceEvent, [
                   "done",
                   "delivery_cost_correction_20261019",
-                ],
+                ]),
+                like(financeTransactionsTable.sourceEvent, "delivery_company_cost_adjustment_%"),
               ),
               eq(
                 financeTransactionsTable.status,
