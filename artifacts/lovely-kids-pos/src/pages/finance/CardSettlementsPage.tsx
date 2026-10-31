@@ -1212,12 +1212,11 @@ export default function CardSettlementsPage() {
                         "—"}
                     </td>
                     <td>
-                      {item
-                        .transaction
-                        .status ===
-                      "posted"
-                        ? "فعال"
-                        : "ملغى"}
+                      <span className={item.transaction.status === "posted"
+                        ? "lk-finance-status"
+                        : "lk-finance-status is-voided"}>
+                        {item.transaction.status === "posted" ? "فعال" : "ملغى"}
+                      </span>
                     </td>
                     <td>
                       {item
