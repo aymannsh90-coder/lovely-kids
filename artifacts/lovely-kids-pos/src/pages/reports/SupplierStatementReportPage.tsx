@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -313,7 +314,7 @@ export default function SupplierStatementReportPage() {
 
   return (
     <section
-      className="work-panel supplier-statement-page"
+      className="work-panel supplier-statement-page lk-report-refresh"
       dir="rtl"
     >
       <style>{`
