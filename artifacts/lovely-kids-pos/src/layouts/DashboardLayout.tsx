@@ -164,7 +164,7 @@ export default function DashboardLayout() {
           <header className="pos-shamel-header">
             <Link className="pos-shamel-brand" to="/">
               <span className="pos-shamel-brand-mark" dir="ltr">
-                LK
+                <img src="/lovely-kids-logo.jpg" alt="شعار Lovely Kids" width={44} height={44} decoding="async" />
               </span>
 
               <span>

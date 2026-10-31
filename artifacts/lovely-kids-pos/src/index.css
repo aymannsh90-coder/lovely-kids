@@ -20586,33 +20586,49 @@ button.inventory-intelligence-metric {
 /* End unified POS checkout footer */
 
 
-/* Lovely Kids POS — blue-and-pink navigation inspired by the brand.
-   Scoped colors only: all menu dimensions, routes and accounting remain unchanged. */
+/* Lovely Kids POS — brand blue sampled from the blue hair and letters of the real logo.
+   Only presentation changes. Dimensions, routes and cash/accounting behavior are untouched. */
 .pos-shamel-primary-menu {
-  background: linear-gradient(180deg, #347eaf 0%, #246596 100%);
-  border-inline-color: #276795;
-  border-bottom-color: #1b547d;
+  background: linear-gradient(180deg, #54afe2 0%, #3199d5 55%, #2788c7 100%);
+  border-inline-color: #2788c7;
+  border-bottom-color: #257fb9;
   border-radius: 10px 10px 3px 3px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22);
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button {
   color: #8b2459;
-  background: linear-gradient(180deg, #fff0f7 0%, #f8d9e9 100%);
-  border-color: #f0b9d4;
+  background: linear-gradient(180deg, #fff4f9 0%, #f9dfec 100%);
+  border-color: #f2c0d9;
   border-radius: 11px;
-  box-shadow: 0 2px 4px rgba(25, 57, 92, 0.12);
+  box-shadow: 0 2px 4px rgba(20, 71, 121, .10);
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button:hover:not(.is-active),
 .pos-shamel-primary-menu .pos-shamel-primary-button:focus-visible:not(.is-active) {
-  color: #772047;
+  color: #78224d;
   background: #ffffff;
   border-color: #ffffff;
-  box-shadow: 0 2px 9px rgba(25, 57, 92, 0.18);
+  box-shadow: 0 3px 9px rgba(22, 81, 135, .17);
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button.is-active {
   color: #ffffff;
-  background: linear-gradient(180deg, #f335a0 0%, #d5127b 100%);
-  border-color: #ffbedc;
+  background: linear-gradient(180deg, #f43c9d 0%, #d8177d 100%);
+  border-color: #ffbedb;
   border-radius: 11px;
-  box-shadow: 0 3px 10px rgba(100, 15, 76, 0.26);
+  box-shadow: 0 3px 9px rgba(119, 19, 89, .23);
+}
+/* Keep the original brand artwork recognizable in the existing 44px header mark. */
+.pos-shamel-brand-mark {
+  overflow: hidden;
+  border: 1px solid #91cfe6;
+  border-radius: 9px;
+  background: #abe1f3;
+  box-shadow: 0 2px 7px rgba(37, 128, 184, .16);
+}
+.pos-shamel-brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: inherit;
 }
