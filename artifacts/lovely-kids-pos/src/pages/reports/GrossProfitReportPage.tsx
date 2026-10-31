@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useState,
@@ -870,7 +871,7 @@ export default function GrossProfitReportPage() {
   return (
     <div
       dir="rtl"
-      className="gross-profit-page"
+      className="gross-profit-page lk-report-refresh"
     >
       <style>{`
         .gross-profit-print-only {
