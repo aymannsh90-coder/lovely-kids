@@ -1611,7 +1611,12 @@ async function handleInventoryProductCard(
           ? Math.round(state.inventoryValueMinor / state.quantityOnHand)
           : state.referenceUnitCostMinor,
         basis: useAverage ? "average" : "reference",
-        quality: state.costQuality,
+        quality:
+          state.costQuality === "confirmed" ||
+          state.costQuality === "estimated" ||
+          state.costQuality === "mixed"
+            ? state.costQuality
+            : null,
         stockMatchesAccounting:
           physicalQuantity === null ||
           physicalQuantity === state.quantityOnHand,
