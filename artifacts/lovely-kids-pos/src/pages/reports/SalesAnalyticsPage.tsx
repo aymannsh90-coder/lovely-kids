@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -578,7 +579,7 @@ export default function SalesAnalyticsPage() {
 
   return (
     <div
-      className="sales-analytics-page"
+      className="sales-analytics-page lk-report-refresh"
       dir="rtl"
     >
       <section className="sales-analytics-hero">
