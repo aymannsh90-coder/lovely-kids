@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import "./PartiesVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -253,8 +254,8 @@ export default function SuppliersPage() {
   }
 
   return (
-    <section className="accounting-invoice-page suppliers-page">
-      <div className="panel-heading">
+    <section className="accounting-invoice-page suppliers-page lk-parties-refresh lk-suppliers-page">
+      <div className="panel-heading lk-parties-hero">
         <div className="panel-icon">🚚</div>
 
         <div>

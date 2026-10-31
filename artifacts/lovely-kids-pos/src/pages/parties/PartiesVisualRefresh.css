@@ -1,0 +1,266 @@
+/* Lovely Kids POS — shared Customers and Suppliers visual language.
+   Mirrors the approved Delivery Company Accounting look. Screen-only:
+   business logic, privileges, inputs, ledger, and print remain unchanged. */
+@media screen {
+  .lk-parties-refresh {
+    --lp-pink: #e91e8c;
+    --lp-ink: #233746;
+    --lp-muted: #728493;
+    --lp-line: #dce7ed;
+    --lp-shadow: 0 7px 24px rgba(45, 70, 88, .055);
+    box-sizing: border-box;
+    direction: rtl;
+    width: 100%;
+    max-width: none;
+    display: grid;
+    gap: 17px;
+    padding: 17px;
+    margin: 0;
+    height: auto;
+    min-height: 0;
+    grid-template-rows: none;
+    overflow: visible;
+    border: none;
+    border-radius: 0;
+    background: #f5f8fa;
+    color: var(--lp-ink);
+    box-shadow: none;
+    font-size: 14px;
+  }
+  .lk-parties-refresh *, .lk-parties-refresh *::before, .lk-parties-refresh *::after { box-sizing: border-box; }
+  .lk-parties-refresh :is(button, input, select, textarea):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .28);
+    outline-offset: 2px;
+  }
+  .lk-parties-refresh .lk-parties-hero {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    min-width: 0;
+    margin: 0 !important;
+    padding: 20px 24px;
+    border: 1px solid #eed9e5;
+    border-radius: 19px;
+    background: linear-gradient(115deg, #fff 22%, #fff5fa 76%, #fce7f1);
+    box-shadow: var(--lp-shadow);
+  }
+  .lk-parties-refresh .lk-parties-hero::before {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 20px;
+    bottom: 20px;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+    background: var(--lp-pink);
+  }
+  .lk-parties-refresh .lk-parties-hero h2 {
+    margin: 0 0 5px;
+    font-size: clamp(20px, 1.55vw, 27px);
+    line-height: 1.3;
+    font-weight: 900;
+    color: #203744;
+  }
+  .lk-parties-refresh .lk-parties-hero p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--lp-muted);
+  }
+  .lk-parties-refresh .lk-parties-hero .panel-icon {
+    background: #fce7f2;
+    border: 1px solid #f4d3e3;
+    border-radius: 16px;
+    box-shadow: inset 0 1px 2px #fff;
+  }
+  .lk-parties-refresh :is(.primary-button, .secondary-button, .supplier-form-actions button, .supplier-list-heading button) {
+    min-height: 42px;
+    border-radius: 11px;
+    padding: 9px 15px;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.3;
+    white-space: normal;
+  }
+  .lk-parties-refresh .primary-button {
+    background: linear-gradient(125deg, #ed3b9c, #d71980);
+    border: 1px solid #d71980;
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(193, 25, 106, .12);
+  }
+  .lk-parties-refresh .secondary-button {
+    background: #fff;
+    color: #2f4b5b;
+    border: 1px solid #d9e5ec;
+    box-shadow: 0 2px 4px rgba(35, 53, 66, .035);
+  }
+  .lk-parties-refresh :is(input:not([type="checkbox"]), select, textarea) {
+    min-height: 42px;
+    border: 1px solid #d9e5eb;
+    border-radius: 11px;
+    padding: 9px 12px;
+    background: #fff;
+    color: #263d50;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .lk-parties-refresh :is(input, select, textarea):focus {
+    border-color: var(--lp-pink);
+    box-shadow: 0 0 0 3px rgba(233, 30, 140, .08);
+  }
+  .lk-parties-refresh :is(label, .accounting-fields-grid > label) { color: #526b7c; font-size: 13px; font-weight: 800; }
+  .lk-parties-refresh :is(.accounting-invoice-card, .supplier-summary-grid article) {
+    min-width: 0;
+    border: 1px solid #e1e9ef;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lp-shadow);
+  }
+
+  /* Supplier summary, entry and list */
+  .lk-suppliers-page .supplier-summary-grid { gap: 11px; }
+  .lk-suppliers-page .supplier-summary-grid article {
+    padding: 17px 19px;
+    gap: 9px;
+    border-color: #e0e9ef;
+  }
+  .lk-suppliers-page .supplier-summary-grid article:nth-child(3n+1) { background: #fff5fa; border-color: #f5d4e3; }
+  .lk-suppliers-page .supplier-summary-grid article:nth-child(3n+2) { background: #f1f7fe; border-color: #d5e8fa; }
+  .lk-suppliers-page .supplier-summary-grid article:nth-child(3n) { background: #fff9ed; border-color: #f3e3bc; }
+  .lk-suppliers-page .supplier-summary-grid article span { color: #61788c; font-size: 12px; font-weight: 750; }
+  .lk-suppliers-page .supplier-summary-grid article strong { color: #223d53; font-size: clamp(21px, 1.6vw, 27px); font-variant-numeric: tabular-nums; }
+  .lk-suppliers-page .supplier-create-form, .lk-suppliers-page .supplier-list-card { padding: 21px; gap: 16px; }
+  .lk-suppliers-page .supplier-create-form > h2, .lk-suppliers-page .supplier-list-heading h2 {
+    color: #203744;
+    font-size: 19px;
+    margin: 0;
+    font-weight: 900;
+  }
+  .lk-suppliers-page .supplier-create-form > h2 { border-bottom: 1px solid #edf0f4; padding-bottom: 14px; }
+  .lk-suppliers-page .supplier-list-heading { padding-bottom: 13px; border-bottom: 1px solid #edf0f4; }
+  .lk-suppliers-page .supplier-list-heading p { font-size: 12px; color: var(--lp-muted); }
+  .lk-suppliers-page .accounting-fields-grid { gap: 14px; }
+  .lk-suppliers-page .accounting-fields-grid > label { min-width: 0; }
+  .lk-suppliers-page .accounting-fields-grid > label span { display: block; margin-bottom: 6px; }
+  .lk-suppliers-page .supplier-search-form {
+    gap: 10px;
+    padding: 13px;
+    border: 1px solid #e4ecf1;
+    border-radius: 13px;
+    background: #f5f9fc;
+  }
+  .lk-suppliers-page .supplier-search-form :is(input, select) { min-width: 0; }
+  .lk-suppliers-page .accounting-invoice-table-wrap {
+    border: 1px solid #e0e9ef;
+    border-radius: 13px;
+    overflow-x: auto;
+  }
+  .lk-suppliers-page .supplier-table { border-collapse: separate; border-spacing: 0; }
+  .lk-suppliers-page .supplier-table thead th {
+    background: #f1f6fa;
+    color: #506e81;
+    font-size: 12px;
+    font-weight: 900;
+    padding: 12px 11px;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .lk-suppliers-page .supplier-table tbody td {
+    padding: 12px 11px;
+    border-bottom: 1px solid #ebf0f4;
+    font-size: 12px;
+    color: #2b4759;
+    vertical-align: middle;
+  }
+  .lk-suppliers-page .supplier-table tbody tr:hover { background: #fff8fb; }
+  .lk-suppliers-page .supplier-status { padding: 5px 10px; font-size: 12px; }
+
+  /* Customer list and account panels: retain original selection/payment logic */
+  .lk-customers-page .lk-parties-create-form {
+    margin: 0 !important;
+    border-color: #e4dce5 !important;
+    border-radius: 17px !important;
+    background: #fff;
+    box-shadow: var(--lp-shadow);
+    padding: 18px !important;
+    gap: 13px !important;
+  }
+  .lk-customers-page .lk-parties-create-form label { display: grid; gap: 7px; }
+  .lk-customers-page .lk-parties-create-form label span { font-weight: 800; color: #526b7c; }
+  .lk-customers-page .lk-parties-customer-layout { direction: rtl; min-width: 0; }
+  .lk-customers-page .lk-parties-customer-list {
+    min-width: 0;
+    background: #fff;
+    border-color: #dbe7ed !important;
+    border-radius: 17px !important;
+    box-shadow: var(--lp-shadow);
+  }
+  .lk-customers-page .lk-parties-customer-list > div:first-child {
+    background: #f5f9fc;
+    border-bottom: 1px solid #e1e9ef;
+    padding: 13px !important;
+  }
+  .lk-customers-page .lk-parties-customer-entry {
+    color: #264558;
+    background: #fff !important;
+    border-bottom: 1px solid #e9eef2 !important;
+    font-size: 13px;
+    line-height: 1.6;
+    transition: background .15s ease;
+  }
+  .lk-customers-page .lk-parties-customer-entry:hover { background: #fff6fa !important; }
+  .lk-customers-page .lk-parties-customer-entry.is-active {
+    background: linear-gradient(115deg, #fff1f7, #eaf6fd) !important;
+    box-shadow: inset -4px 0 0 #e91e8c;
+  }
+  .lk-customers-page .lk-parties-customer-entry strong { color: #203744; font-weight: 900; font-size: 14px; }
+  .lk-customers-page .lk-parties-customer-main { min-width: 0; }
+  .lk-customers-page .lk-parties-empty {
+    display: grid;
+    place-items: center;
+    min-height: 185px;
+    padding: 24px;
+    border: 1px dashed #d1e2eb;
+    border-radius: 17px;
+    color: #667f91;
+    background: #fff;
+    text-align: center;
+  }
+  .lk-customers-page :is(.lk-parties-customer-card, .lk-parties-receipt-card, .lk-parties-ledger-card) {
+    border-color: #e1e9ef !important;
+    border-radius: 17px !important;
+    background: #fff;
+    box-shadow: var(--lp-shadow);
+  }
+  .lk-customers-page .lk-parties-customer-card { background: linear-gradient(115deg, #fff 35%, #fff5fa); }
+  .lk-customers-page .lk-parties-customer-main h3 { color: #203744; font-size: 18px; font-weight: 900; }
+  .lk-customers-page .lk-parties-customer-main p { color: #667c8d; line-height: 1.7; font-size: 13px; }
+  .lk-customers-page .lk-parties-receipt-card form label { display: grid; gap: 7px; }
+  .lk-customers-page .lk-parties-receipt-card form :is(.primary-button, .secondary-button) { min-height: 42px; border-radius: 11px; }
+  .lk-customers-page .lk-parties-ledger-table { width: 100%; text-align: right; font-size: 13px; }
+  .lk-customers-page .lk-parties-ledger-table th {
+    padding: 12px 11px;
+    background: #f1f6fa;
+    color: #506e81;
+    font-weight: 900;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .lk-customers-page .lk-parties-ledger-table td { padding: 12px 11px; border-bottom: 1px solid #edf1f4; }
+  .lk-customers-page .lk-parties-ledger-table tbody tr:hover { background: #fff8fb; }
+  @media (max-width: 1000px) {
+    .lk-customers-page .lk-parties-customer-layout { grid-template-columns: 1fr !important; }
+    .lk-customers-page .lk-parties-customer-list > div:nth-child(2) { max-height: 270px !important; }
+    .lk-suppliers-page .supplier-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 650px) {
+    .lk-parties-refresh { padding: 10px; gap: 12px; }
+    .lk-parties-refresh .lk-parties-hero { padding: 15px; }
+    .lk-suppliers-page .supplier-summary-grid { grid-template-columns: 1fr; }
+    .lk-suppliers-page .supplier-search-form { align-items: stretch; }
+    .lk-customers-page .lk-parties-create-form { grid-template-columns: 1fr !important; }
+    .lk-customers-page .lk-parties-receipt-card form { grid-template-columns: 1fr !important; }
+  }
+}

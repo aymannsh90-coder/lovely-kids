@@ -5,6 +5,7 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import "./PartiesVisualRefresh.css";
 
 import { usePosRuntime } from "../../app/pos-context";
 import {
@@ -482,14 +483,11 @@ export default function CustomersPage() {
 
   return (
     <section
-      className="work-panel"
+      className="work-panel lk-parties-refresh lk-customers-page"
       dir="rtl"
     >
       <div
-        className="panel-heading"
-        style={{
-          marginBottom: 18,
-        }}
+        className="panel-heading lk-parties-hero"
       >
         <div>
           <h2>
@@ -543,6 +541,7 @@ export default function CustomersPage() {
 
       {showNew && (
         <form
+          className="lk-parties-create-form"
           onSubmit={
             handleCreateCustomer
           }
@@ -631,6 +630,7 @@ export default function CustomersPage() {
       )}
 
       <div
+        className="lk-parties-customer-layout"
         style={{
           display: "grid",
           gridTemplateColumns:
@@ -640,6 +640,7 @@ export default function CustomersPage() {
         }}
       >
         <aside
+          className="lk-parties-customer-list"
           style={{
             border:
               "1px solid var(--border-color, #ddd)",
@@ -698,6 +699,7 @@ export default function CustomersPage() {
                       customer.id
                     }
                     type="button"
+                    className={customer.id === selectedId ? "lk-parties-customer-entry is-active" : "lk-parties-customer-entry"}
                     onClick={() =>
                       setSelectedId(
                         customer.id,
@@ -751,14 +753,15 @@ export default function CustomersPage() {
           </div>
         </aside>
 
-        <main>
+        <main className="lk-parties-customer-main">
           {!selected ? (
-            <div>
+            <div className="lk-parties-empty">
               اختر زبونًا لعرض حسابه.
             </div>
           ) : (
             <>
               <article
+                className="lk-parties-customer-card"
                 style={{
                   padding: 18,
                   marginBottom: 16,
@@ -868,6 +871,7 @@ export default function CustomersPage() {
               </article>
 
               <article
+                className="lk-parties-receipt-card"
                 style={{
                   padding: 18,
                   marginBottom: 16,
@@ -1046,6 +1050,7 @@ export default function CustomersPage() {
               </article>
 
               <article
+                className="lk-parties-ledger-card"
                 style={{
                   padding: 18,
                   border:
@@ -1081,6 +1086,7 @@ export default function CustomersPage() {
                     }}
                   >
                     <table
+                      className="lk-parties-ledger-table"
                       style={{
                         width: "100%",
                         borderCollapse:
