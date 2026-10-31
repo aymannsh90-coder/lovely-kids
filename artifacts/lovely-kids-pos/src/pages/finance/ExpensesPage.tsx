@@ -1903,9 +1903,9 @@ export default function ExpensesPage() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
-          <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
-            <span>من</span>
+        <div className="expense-report-toolbar" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+          <label className="expense-report-date">
+            <span>من تاريخ</span>
             <input
               type="date"
               value={reportFrom}
@@ -1913,8 +1913,8 @@ export default function ExpensesPage() {
             />
           </label>
 
-          <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
-            <span>إلى</span>
+          <label className="expense-report-date">
+            <span>إلى تاريخ</span>
             <input
               type="date"
               value={reportTo}
