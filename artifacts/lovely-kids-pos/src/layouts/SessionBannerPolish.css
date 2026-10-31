@@ -70,3 +70,27 @@
 .pos-shamel-session-banner .session-banner-value.session-balance-current > strong {
   color: #087451;
 }
+
+/* Override legacy .session-banner > div:not(.session-indicator) { display:grid; }.
+   Keep both the caption and the amount INSIDE one compact horizontal card. */
+.pos-shamel-session-banner.session-banner > div.session-banner-value.session-balance-opening,
+.pos-shamel-session-banner.session-banner > div.session-banner-value.session-balance-current {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+  height: 28px;
+  white-space: nowrap;
+}
+.pos-shamel-session-banner .session-banner-value.session-balance-opening > span,
+.pos-shamel-session-banner .session-banner-value.session-balance-opening > strong,
+.pos-shamel-session-banner .session-banner-value.session-balance-current > span,
+.pos-shamel-session-banner .session-banner-value.session-balance-current > strong {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
+  line-height: 1.25;
+}
