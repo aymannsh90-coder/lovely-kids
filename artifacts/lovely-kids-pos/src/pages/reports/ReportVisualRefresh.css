@@ -452,4 +452,218 @@
       width: 100%;
     }
   }
+  /* Unified, compact date cards (same family as the expenses date picker).
+     Native date input remains intact for keyboard/calendar accessibility. */
+  .lk-report-refresh.lk-report-refresh :is(
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters
+  ) label:has(> input[type="date"]) {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    height: 54px;
+    min-height: 54px;
+    min-width: 0;
+    padding: 5px 10px;
+    border: 1px solid #f0cee0;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(158, 44, 102, .05);
+    text-align: right;
+  }
+  .lk-report-refresh.lk-report-refresh :is(
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters
+  ) label:has(> input[type="date"]):focus-within {
+    border-color: #e91e8c;
+    box-shadow: 0 0 0 3px rgba(233, 30, 140, .11);
+  }
+  .lk-report-refresh.lk-report-refresh :is(
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters
+  ) label:has(> input[type="date"]) > span {
+    margin: 0;
+    color: #9e2368;
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1.25;
+  }
+  .lk-report-refresh.lk-report-refresh :is(
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters
+  ) label > input[type="date"] {
+    display: block;
+    height: 27px;
+    min-height: 27px;
+    width: 100%;
+    min-width: 0;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: #273e50;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.5;
+    direction: rtl;
+  }
+  .lk-report-refresh.lk-report-refresh :is(
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters
+  ) label > input[type="date"]:focus {
+    outline: none;
+    border: 0;
+    box-shadow: none;
+  }
+  .lk-report-refresh label > input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 7px;
+    background-color: #fbe9f3;
+    opacity: 1;
+  }
+
+  /* Same A4 / Excel / Refresh / Clear action design across reports. */
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .gross-profit-datebar,
+    .inventory-valuation-hero,
+    .finance-statement-filters,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters,
+    .liquidity-report-heading
+  ) :is(button.primary-button, button.secondary-button, a.secondary-button) {
+    min-height: 45px;
+    padding: 9px 13px;
+    border-radius: 11px;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .gross-profit-datebar,
+    .inventory-valuation-hero,
+    .finance-statement-filters,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters,
+    .liquidity-report-heading
+  ) :is(button.secondary-button, a.secondary-button) {
+    color: #a11c67;
+    background: #fff;
+    border: 1px solid #f0cddd;
+  }
+  .lk-report-refresh :is(
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .gross-profit-datebar,
+    .inventory-valuation-hero,
+    .product-analytics-datebar,
+    .sales-analytics-custom-range,
+    .lk-report-historical-filters
+  ) button.primary-button {
+    color: #fff;
+    border: 1px solid #d31d7a;
+    background: linear-gradient(120deg, #e91e8c, #c71675);
+  }
+  .lk-report-refresh :is(button.primary-button, button.secondary-button):disabled {
+    cursor: not-allowed;
+  }
+
+  /* Slightly stronger table headings and numerical data, without widening columns. */
+  .lk-report-refresh :is(
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table,
+    .finance-statement-table-card table,
+    .trial-balance-table,
+    .inventory-valuation-table,
+    .gross-profit-review-table,
+    .liquidity-aging-table,
+    .liquidity-checks-table
+  ) thead th {
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table,
+    .finance-statement-table-card table,
+    .trial-balance-table,
+    .inventory-valuation-table,
+    .gross-profit-review-table,
+    .liquidity-aging-table,
+    .liquidity-checks-table
+  ) tbody td {
+    font-size: 12.5px;
+  }
+  .lk-report-refresh :is(
+    .trial-balance-table,
+    .inventory-valuation-table,
+    .customer-balances-table
+  ) tbody :is(b, strong) {
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 740px) {
+    .lk-report-refresh :is(.customer-statement-filters, .supplier-statement-filters) label:has(> input[type="date"]) {
+      min-width: 0;
+      width: 100%;
+    }
+  }
+
 }
