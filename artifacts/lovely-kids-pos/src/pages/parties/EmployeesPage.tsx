@@ -8,6 +8,7 @@ import {
 import {
   usePosRuntime,
 } from "../../app/pos-context";
+import "./EmployeesVisualRefresh.css";
 import {
   ApiError,
   createPosEmployee,
@@ -1190,7 +1191,7 @@ export default function EmployeesPage() {
 
   return (
     <section
-      className="employees-page"
+      className="employees-page lk-employees-refresh"
       dir="rtl"
     >
       <div className="employees-page-head">
