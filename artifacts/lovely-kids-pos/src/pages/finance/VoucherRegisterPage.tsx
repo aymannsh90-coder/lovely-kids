@@ -1393,10 +1393,11 @@ export default function VoucherRegisterPage() {
                     </td>
 
                     <td>
-                      {voucher.status ===
-                      "posted"
-                        ? "فعال"
-                        : "ملغى"}
+                      <span className={voucher.status === "posted"
+                        ? "lk-finance-status"
+                        : "lk-finance-status is-voided"}>
+                        {voucher.status === "posted" ? "فعال" : "ملغى"}
+                      </span>
                     </td>
 
                     <td>
@@ -1486,6 +1487,7 @@ export default function VoucherRegisterPage() {
       </div>
 
       <p
+        className="lk-finance-note"
         style={{
           marginTop: 12,
           fontSize: 13,
