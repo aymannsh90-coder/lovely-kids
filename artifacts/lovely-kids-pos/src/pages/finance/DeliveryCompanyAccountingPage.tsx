@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./DeliveryCompanyAccountingPage.css";
 
 import { usePosRuntime } from "../../app/pos-context";
 import {
@@ -897,416 +898,418 @@ export default function DeliveryCompanyAccountingPage() {
   }
 
   return (
-    <section className="accounting-invoice-page delivery-company-scroll-page">
-      <div className="panel-heading">
-        <div className="panel-icon">🚚</div>
-
-        <div>
-          <h2>حساب شركة التوصيل</h2>
-          <p>
-            الطلبات المسلّمة غير المسوّاة والتحصيلات
-            المجمعة من شركة التوصيل.
-          </p>
+    <section
+      className="accounting-invoice-page delivery-company-scroll-page delivery-ledger"
+      dir="rtl"
+    >
+      <header className="delivery-ledger-hero">
+        <div className="delivery-ledger-brand">
+          <div className="delivery-ledger-hero-icon" aria-hidden="true">🚚</div>
+          <div>
+            <span className="delivery-ledger-eyebrow">المالية / شركات التوصيل</span>
+            <h1>حساب شركة التوصيل</h1>
+            <p>
+              متابعة المبالغ المستحقة، تكاليف التوصيل، وتحصيل وتسوية الطلبات المسلّمة.
+            </p>
+          </div>
         </div>
-      </div>
 
-      {error && <div className="alert">{error}</div>}
-
-      {message && (
-        <div className="alert">
-          {message}
-        </div>
-      )}
-
-      <section className="accounting-invoice-card">
-        <label>
-          <span>شركة التوصيل</span>
-
-          <select
-            value={companyId ?? ""}
-            onChange={(event) => {
-              const id = Number(event.target.value);
-
-              setCompanyId(
-                Number.isSafeInteger(id) && id > 0
-                  ? id
-                  : null,
-              );
-
-              setSelectedIds([]);
-              setSummary(null);
-            }}
-          >
-            {companies.map((company) => (
-              <option
-                value={company.id}
-                key={company.id}
-              >
-                {company.name}
-                {company.status === "inactive"
-                  ? " — موقوفة"
-                  : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="delivery-ledger-actions">
+          <label className="delivery-ledger-company-field">
+            <span>شركة التوصيل</span>
+            <select
+              aria-label="شركة التوصيل"
+              value={companyId ?? ""}
+              onChange={(event) => {
+                const id = Number(event.target.value);
+                setCompanyId(
+                  Number.isSafeInteger(id) && id > 0 ? id : null,
+                );
+                setSelectedIds([]);
+                setSummary(null);
+              }}
+            >
+              {companies.length === 0 && (
+                <option value="">لا توجد شركات</option>
+              )}
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                  {company.status === "inactive" ? " — موقوفة" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
+            className="delivery-ledger-action delivery-ledger-action-primary"
             disabled={!companyId || loading}
             onClick={() => void loadSummary()}
           >
+            <span aria-hidden="true">↻</span>
             {loading ? "جارٍ التحديث..." : "تحديث الحساب"}
           </button>
-
           <button
             type="button"
-            className="secondary-button"
+            className="delivery-ledger-action"
             disabled={!summary || loading}
             onClick={printStatement}
           >
-            🖨️ طباعة الكشف
+            <span aria-hidden="true">🖨️</span>
+            طباعة الكشف
           </button>
-
           <button
             type="button"
-            className="secondary-button"
+            className="delivery-ledger-action"
             disabled={!summary || loading}
             onClick={exportStatementToExcel}
           >
-            📊 Excel
+            <span aria-hidden="true">📊</span>
+            Excel
           </button>
         </div>
-      </section>
+      </header>
 
-      {summary && (
+      {error && (
+        <div className="delivery-ledger-message is-error" role="alert">
+          <span aria-hidden="true">⚠️</span> {error}
+        </div>
+      )}
+      {message && (
+        <div className="delivery-ledger-message" role="status">
+          <span aria-hidden="true">✓</span> {message}
+        </div>
+      )}
+
+      {summary ? (
         <>
-          <section className="supplier-summary-grid">
-            <article>
-              <span>المبلغ غير المسوّى</span>
-              <strong>
-                {formatMoney(summary.outstandingMinor)}
-              </strong>
+          <section className="delivery-ledger-metrics" aria-label="ملخص حساب شركة التوصيل">
+            <article className="delivery-ledger-metric is-highlight">
+              <div className="delivery-ledger-metric-label">
+                <span>المبلغ غير المسوّى</span>
+                <span className="dl-symbol" aria-hidden="true">₪</span>
+              </div>
+              <strong dir="ltr">{formatMoney(summary.outstandingMinor)}</strong>
+              <span className="delivery-ledger-metric-hint">
+                المستحق من شركة التوصيل عن الطلبات غير المسوّاة
+              </span>
             </article>
-
-            <article>
-              <span>طلبات غير مسوّاة</span>
-              <strong>
-                {summary.unsettledOrders.length}
-              </strong>
+            <article className="delivery-ledger-metric is-sky">
+              <div className="delivery-ledger-metric-label">
+                <span>طلبات غير مسوّاة</span>
+                <span className="dl-symbol" aria-hidden="true">📦</span>
+              </div>
+              <strong>{summary.unsettledOrders.length}</strong>
+              <span className="delivery-ledger-metric-hint">طلب بانتظار التسوية</span>
             </article>
-
-            <article>
-              <span>إيراد التوصيل من الزبائن</span>
-              <strong>
-                {formatMoney(summary.shippingChargedMinor)}
-              </strong>
+            <article className={
+              "delivery-ledger-metric " +
+              (summary.deliveryMarginMinor < 0 ? "is-negative" : "is-mint")
+            }>
+              <div className="delivery-ledger-metric-label">
+                <span>صافي ربح / خسارة التوصيل</span>
+                <span className="dl-symbol" aria-hidden="true">📈</span>
+              </div>
+              <strong dir="ltr">{formatMoney(summary.deliveryMarginMinor)}</strong>
+              <span className="delivery-ledger-metric-hint">
+                إيراد الزبائن مطروحًا منه تكلفة شركة التوصيل
+              </span>
             </article>
-
-            <article>
-              <span>تكلفة شركة التوصيل</span>
-              <strong>
-                {formatMoney(summary.deliveryCompanyCostMinor)}
-              </strong>
+            <article className="delivery-ledger-metric is-rose">
+              <div className="delivery-ledger-metric-label">
+                <span>إيراد التوصيل من الزبائن</span>
+                <span className="dl-symbol" aria-hidden="true">💳</span>
+              </div>
+              <strong dir="ltr">{formatMoney(summary.shippingChargedMinor)}</strong>
+              <span className="delivery-ledger-metric-hint">مجموع رسوم التوصيل المحمّلة على الزبائن</span>
             </article>
-
-            <article>
-              <span>صافي ربح/خسارة التوصيل</span>
-              <strong>
-                {formatMoney(summary.deliveryMarginMinor)}
-              </strong>
+            <article className="delivery-ledger-metric is-amber">
+              <div className="delivery-ledger-metric-label">
+                <span>تكلفة شركة التوصيل</span>
+                <span className="dl-symbol" aria-hidden="true">🚚</span>
+              </div>
+              <strong dir="ltr">{formatMoney(summary.deliveryCompanyCostMinor)}</strong>
+              <span className="delivery-ledger-metric-hint">تكلفة الشحن الفعلية المسجلة على الطلبات</span>
             </article>
-
-            <article>
-              <span>شركة التوصيل</span>
-              <strong>{summary.company.name}</strong>
+            <article className="delivery-ledger-metric">
+              <div className="delivery-ledger-metric-label">
+                <span>التسويات السابقة</span>
+                <span className="dl-symbol" aria-hidden="true">🧾</span>
+              </div>
+              <strong>{summary.settlements.length}</strong>
+              <span className="delivery-ledger-metric-hint">تسويات مسجلة في حساب {summary.company.name}</span>
             </article>
-
-            <article>
-              <span>التسويات السابقة</span>
-              <strong>
-                {summary.settlements.length}
-              </strong>
+            <article className="delivery-ledger-metric">
+              <div className="delivery-ledger-metric-label">
+                <span>شركة التوصيل المختارة</span>
+                <span className="dl-symbol" aria-hidden="true">✓</span>
+              </div>
+              <strong style={{ fontSize: 21 }}>{summary.company.name}</strong>
+              <span className="delivery-ledger-metric-hint">الكشف الحالي حسب الشركة المحددة</span>
             </article>
           </section>
 
-          <section className="accounting-invoice-card">
-            <div className="panel-heading">
-              <div>
-                <h2>الطلبات غير المسوّاة</h2>
-                <p>
-                  اختر الطلبات الداخلة في التحصيل الحالي.
-                </p>
+          <section className="delivery-ledger-panel" aria-labelledby="delivery-ledger-orders-title">
+            <div className="delivery-ledger-panel-head">
+              <div className="delivery-ledger-panel-heading">
+                <span className="delivery-ledger-panel-glyph" aria-hidden="true">📋</span>
+                <div>
+                  <h2 id="delivery-ledger-orders-title">الطلبات غير المسوّاة</h2>
+                  <p>حدد الطلبات المطلوب تحصيلها من شركة التوصيل.</p>
+                </div>
               </div>
-
-              {summary.unsettledOrders.length > 0 && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={toggleAll}
-                >
-                  {allSelected
-                    ? "إلغاء تحديد الكل"
-                    : "تحديد الكل"}
-                </button>
-              )}
+              <div className="delivery-ledger-head-tools">
+                <span className="delivery-ledger-count">
+                  {summary.unsettledOrders.length} طلب غير مسوّى
+                </span>
+                {summary.unsettledOrders.length > 0 && (
+                  <button
+                    type="button"
+                    className="delivery-ledger-action delivery-ledger-select-all"
+                    onClick={toggleAll}
+                  >
+                    {allSelected ? "إلغاء تحديد الكل" : "☑ تحديد الكل"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {summary.unsettledOrders.length === 0 ? (
-              <p>لا توجد طلبات معلقة حاليًا.</p>
+              <div className="delivery-ledger-empty">
+                <span className="emoji" aria-hidden="true">✅</span>
+                <strong>لا توجد طلبات معلّقة حاليًا</strong>
+                <p>جميع الطلبات المؤهلة مسوّاة لهذه الشركة.</p>
+              </div>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%" }}>
+              <div className="delivery-ledger-table-wrap" role="region" aria-label="جدول الطلبات غير المسواة" tabIndex={0}>
+                <table className="delivery-ledger-table">
                   <thead>
                     <tr>
-                      <th>اختيار</th>
-                      <th>الطلب</th>
+                      <th>تحديد</th>
+                      <th>رقم الطلب</th>
                       <th>الزبون</th>
                       <th>المنطقة</th>
                       <th>إجمالي الطلب</th>
-                      <th>التوصيل على الزبون</th>
+                      <th>توصيل الزبون</th>
                       <th>تكلفة الشركة</th>
-                      <th>ربح/خسارة التوصيل</th>
+                      <th>ربح / خسارة</th>
                       <th>المستحق لنا</th>
                     </tr>
                   </thead>
-
                   <tbody>
-                    {summary.unsettledOrders.map(
-                      (order) => (
-                        <tr key={order.id}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.includes(
-                                order.id,
-                              )}
-                              onChange={() =>
-                                toggleOrder(order.id)
-                              }
-                            />
-                          </td>
-
-                          <td>#{order.id}</td>
-                          <td>{order.customerName || "—"}</td>
-                          <td>{order.shippingZone || "—"}</td>
-
-                          <td>
-                            {formatMoney(
-                              Math.round(
-                                order.totalPrice * 100,
-                              ),
-                            )}
-                          </td>
-
-                          <td>
-                            {formatMoney(
-                              order.shippingChargedMinor,
-                            )}
-                          </td>
-
-                          <td>
-                            {formatMoney(
-                              order.deliveryCompanyCostMinor,
-                            )}
-                          </td>
-
-                          <td>
-                            <strong>
-                              {formatMoney(
-                                order.deliveryMarginMinor,
-                              )}
-                            </strong>
-                          </td>
-
-                          <td>
-                            <strong>
-                              {formatMoney(
-                                order.amountMinor,
-                              )}
-                            </strong>
-                          </td>
-                        </tr>
-                      ),
-                    )}
+                    {summary.unsettledOrders.map((order) => (
+                      <tr
+                        key={order.id}
+                        className={selectedIds.includes(order.id) ? "is-selected" : ""}
+                      >
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={"تحديد الطلب رقم " + order.id}
+                            checked={selectedIds.includes(order.id)}
+                            onChange={() => toggleOrder(order.id)}
+                          />
+                        </td>
+                        <td><span className="delivery-ledger-order-id">#{order.id}</span></td>
+                        <td className="delivery-ledger-customer">{order.customerName || "—"}</td>
+                        <td>{order.shippingZone || "—"}</td>
+                        <td>
+                          <span className="delivery-ledger-money">
+                            {formatMoney(Math.round(order.totalPrice * 100))}
+                          </span>
+                        </td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.shippingChargedMinor)}</span></td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.deliveryCompanyCostMinor)}</span></td>
+                        <td>
+                          <span
+                            className={
+                              "delivery-ledger-money " +
+                              (order.deliveryMarginMinor < 0
+                                ? "is-negative"
+                                : order.deliveryMarginMinor > 0
+                                  ? "is-positive"
+                                  : "is-neutral")
+                            }
+                          >
+                            {formatMoney(order.deliveryMarginMinor)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="delivery-ledger-money is-strong">
+                            {formatMoney(order.amountMinor)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             )}
+
+            <div className="delivery-ledger-selection">
+              <div className="delivery-ledger-selection-title">
+                <span>إجمالي المستحق عن الطلبات المحددة</span>
+                <strong dir="ltr">{formatMoney(selectedTotalMinor)}</strong>
+                <small>المبلغ الذي سيتم تسجيله عند إتمام التسوية</small>
+              </div>
+              <span className="delivery-ledger-selected-count">
+                {selectedIds.length} طلب محدد
+              </span>
+            </div>
           </section>
 
           {summary.unsettledOrders.length > 0 && (
-            <section className="accounting-invoice-card">
-              <h2>تسجيل التحصيل</h2>
-
-              <label>
-                <span>طريقة التحصيل</span>
-
-                <select
-                  value={receiptMethod}
-                  onChange={(event) =>
-                    setReceiptMethod(
-                      event.target.value === "bank"
-                        ? "bank"
-                        : "cash",
-                    )
+            <section className="delivery-ledger-panel" aria-labelledby="delivery-ledger-receipt-title">
+              <div className="delivery-ledger-panel-head">
+                <div className="delivery-ledger-panel-heading">
+                  <span className="delivery-ledger-panel-glyph" aria-hidden="true">💰</span>
+                  <div>
+                    <h2 id="delivery-ledger-receipt-title">تسجيل التحصيل والتسوية</h2>
+                    <p>تسوية مجمّعة للطلبات المحددة، مع قيد محاسبي واحد.</p>
+                  </div>
+                </div>
+                <span className="delivery-ledger-count">المحدد: {selectedIds.length} طلب</span>
+              </div>
+              <div className="delivery-ledger-settlement-body">
+                <label className="delivery-ledger-form-field">
+                  <span>طريقة التحصيل</span>
+                  <select
+                    value={receiptMethod}
+                    onChange={(event) =>
+                      setReceiptMethod(event.target.value === "bank" ? "bank" : "cash")
+                    }
+                  >
+                    <option value="cash">نقدي — يدخل الصندوق</option>
+                    <option value="bank">بنك / تحويل</option>
+                  </select>
+                </label>
+                <label className="delivery-ledger-form-field">
+                  <span>ملاحظات التسوية</span>
+                  <input
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="مثال: تحصيل أسبوعي من شركة التوصيل"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="delivery-ledger-submit"
+                  disabled={
+                    saving ||
+                    selectedIds.length === 0 ||
+                    (receiptMethod === "cash" && !session)
                   }
+                  onClick={() => void saveSettlement()}
                 >
-                  <option value="cash">
-                    نقدي — يدخل الصندوق
-                  </option>
-
-                  <option value="bank">
-                    بنك / تحويل
-                  </option>
-                </select>
-              </label>
-
-              <label>
-                <span>ملاحظات</span>
-
-                <input
-                  value={notes}
-                  onChange={(event) =>
-                    setNotes(event.target.value)
-                  }
-                  placeholder="مثال: تحصيل أسبوعي"
-                />
-              </label>
-
-              <p>
-                المحدد: {selectedIds.length} طلب —{" "}
-                <strong>
-                  {formatMoney(selectedTotalMinor)}
-                </strong>
-              </p>
-
-              <button
-                type="button"
-                className="primary-button"
-                disabled={
-                  saving ||
-                  selectedIds.length === 0 ||
-                  (receiptMethod === "cash" && !session)
-                }
-                onClick={() => void saveSettlement()}
-              >
-                {saving
-                  ? "جارٍ تسجيل التسوية..."
-                  : "تسجيل تسوية مجمعة"}
-              </button>
+                  <span aria-hidden="true">✓</span>
+                  {saving ? "جارٍ تسجيل التسوية..." : "تسجيل تسوية مجمعة"}
+                </button>
+              </div>
+              <div className={
+                "delivery-ledger-settlement-footnote " +
+                (receiptMethod === "cash" && !session ? "is-warning" : "")
+              }>
+                {receiptMethod === "cash" && !session
+                  ? "⚠️ يجب فتح يوم العمل قبل تسجيل تحصيل نقدي."
+                  : selectedIds.length === 0
+                    ? "اختر طلبًا واحدًا على الأقل من الجدول لتفعيل تسجيل التسوية."
+                    : "سيتم تسجيل المستحق المحدد حسب طريقة التحصيل المختارة دون تغيير بيانات الطلبات."}
+              </div>
             </section>
           )}
 
-          <section className="accounting-invoice-card">
-            <h2>سجل التسويات</h2>
+          <section className="delivery-ledger-panel" aria-labelledby="delivery-ledger-history-title">
+            <div className="delivery-ledger-panel-head">
+              <div className="delivery-ledger-panel-heading">
+                <span className="delivery-ledger-panel-glyph" aria-hidden="true">🗂️</span>
+                <div>
+                  <h2 id="delivery-ledger-history-title">سجل التسويات</h2>
+                  <p>التسويات السابقة مع حالة كل عملية وإمكانية عكسها.</p>
+                </div>
+              </div>
+              <span className="delivery-ledger-count">{summary.settlements.length} تسوية</span>
+            </div>
 
             {summary.settlements.length === 0 ? (
-              <p>لا توجد تسويات سابقة.</p>
+              <div className="delivery-ledger-empty">
+                <span className="emoji" aria-hidden="true">🗂️</span>
+                <strong>لا توجد تسويات سابقة</strong>
+                <p>ستظهر هنا العمليات بعد تسجيل أول تحصيل.</p>
+              </div>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%" }}>
+              <div className="delivery-ledger-table-wrap" role="region" aria-label="سجل التسويات السابقة" tabIndex={0}>
+                <table className="delivery-ledger-table delivery-ledger-settlement-table">
                   <thead>
                     <tr>
                       <th>رقم التسوية</th>
                       <th>التاريخ</th>
-                      <th>الطريقة</th>
+                      <th>طريقة التحصيل</th>
                       <th>عدد الطلبات</th>
                       <th>المبلغ</th>
-                      <th>الطلبات</th>
+                      <th>الطلبات المرتبطة</th>
                       <th>الحالة</th>
-                      <th>إجراء</th>
+                      <th>الإجراء</th>
                     </tr>
                   </thead>
-
                   <tbody>
-                    {summary.settlements.map(
-                      (settlement) => (
-                        <tr key={settlement.id}>
-                          <td dir="ltr">
+                    {summary.settlements.map((settlement) => (
+                      <tr key={settlement.id}>
+                        <td>
+                          <span className="delivery-ledger-order-id" dir="ltr">
                             {settlement.publicId}
-                          </td>
-
-                          <td>
-                            {settlement.businessDate}
-                          </td>
-
-                          <td>
-                            {settlement.receiptMethod ===
-                            "cash"
-                              ? "نقدي"
-                              : "بنك"}
-                          </td>
-
-                          <td>
-                            {settlement.orders.length}
-                          </td>
-
-                          <td>
-                            <strong>
-                              {formatMoney(
-                                settlement.totalMinor,
-                              )}
-                            </strong>
-                          </td>
-
-                          <td>
-                            {settlement.orders
-                              .map(
-                                (item) =>
-                                  `#${item.orderId}`,
-                              )
-                              .join("، ")}
-                          </td>
-
-                          <td>
-                            {settlement.status ===
-                            "posted"
-                              ? "فعّالة"
-                              : "معكوسة"}
-                          </td>
-
-                          <td>
-                            {settlement.status ===
-                            "posted" ? (
-                              <button
-                                type="button"
-                                className="danger-button delivery-settlement-danger"
-                                disabled={
-                                  reversingId !==
-                                  null
-                                }
-                                onClick={() =>
-                                  void reverseSettlement(
-                                    settlement,
-                                  )
-                                }
-                              >
-                                {reversingId ===
-                                settlement.id
-                                  ? "جارٍ العكس..."
-                                  : "عكس التسوية"}
-                              </button>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                        </tr>
-                      ),
-                    )}
+                          </span>
+                        </td>
+                        <td>{settlement.businessDate}</td>
+                        <td>{settlement.receiptMethod === "cash" ? "💵 نقدي" : "🏦 بنك"}</td>
+                        <td>{settlement.orders.length}</td>
+                        <td>
+                          <span className="delivery-ledger-money is-strong">
+                            {formatMoney(settlement.totalMinor)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="delivery-ledger-order-references">
+                            {settlement.orders.map((item) => "#" + item.orderId).join("، ")}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={
+                            "delivery-ledger-pill " +
+                            (settlement.status === "posted" ? "is-posted" : "is-reversed")
+                          }>
+                            {settlement.status === "posted" ? "● فعّالة" : "● معكوسة"}
+                          </span>
+                        </td>
+                        <td>
+                          {settlement.status === "posted" ? (
+                            <button
+                              type="button"
+                              className="delivery-ledger-danger"
+                              disabled={reversingId !== null}
+                              onClick={() => void reverseSettlement(settlement)}
+                            >
+                              {reversingId === settlement.id ? "جارٍ العكس..." : "عكس التسوية"}
+                            </button>
+                          ) : (
+                            <span className="delivery-ledger-money is-neutral">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             )}
           </section>
         </>
+      ) : (
+        <div className="delivery-ledger-panel">
+          <div className="delivery-ledger-empty">
+            <span className="emoji" aria-hidden="true">{loading ? "⏳" : "🚚"}</span>
+            <strong>{loading ? "جارٍ تحميل حساب الشركة..." : "اختر شركة التوصيل"}</strong>
+            <p>سيظهر ملخص الحساب والطلبات والتسويات هنا.</p>
+          </div>
+        </div>
       )}
     </section>
   );
