@@ -9,6 +9,7 @@ import {
 } from "../app/navigation";
 import { usePosRuntime } from "../app/pos-context";
 import ClockWidget from "../components/ClockWidget";
+import "./SessionBannerPolish.css";
 import RequireStaffPage, { canVisitStaffPage } from "../guards/RequireStaffPage";
 import { API_BASE_URL, POS_REGISTER_KEY, type PosUser } from "../lib/api";
 import { formatMoney } from "../lib/format";
