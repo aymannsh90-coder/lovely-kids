@@ -24,6 +24,7 @@ import {
 
 type CardScope =
   | "all"
+  | "color"
   | "variant";
 
 type VariantChoice = {
@@ -205,6 +206,8 @@ export default function ProductCardPage() {
     setSelectedVariantKey,
   ] = useState("");
 
+  const [selectedColor, setSelectedColor] = useState("");
+
   const [busy, setBusy] =
     useState(false);
 
@@ -248,6 +251,22 @@ export default function ProductCardPage() {
             ),
         );
     }, [card]);
+
+  const colorChoices = useMemo(() => {
+    if (!card) return [];
+    return card.product.colorVariants.map((variant) => {
+      const stocks = variant.sizes.map((size) => stockNumber(size.stock));
+      return {
+        color: variant.color,
+        stock: stocks.length > 0 && stocks.every((v) => v !== null)
+          ? stocks.reduce((sum, v) => sum + (v ?? 0), 0)
+          : null,
+      };
+    });
+  }, [card]);
+
+  const selectedColorChoice =
+    colorChoices.find((choice) => choice.color === selectedColor) ?? null;
 
   const selectedVariant =
     useMemo(
@@ -311,35 +330,45 @@ export default function ProductCardPage() {
 
   const currentStock =
     scope === "variant"
-      ? selectedVariant?.stock ??
-        null
-      : modelStock;
+      ? selectedVariant?.stock ?? null
+      : scope === "color"
+        ? selectedColorChoice?.stock ?? null
+        : modelStock;
 
-  const visibleMovements =
-    useMemo(() => {
-      if (!card) {
-        return [];
-      }
+  const activeScopeLabel =
+    scope === "variant" && selectedVariant
+      ? `اللون: ${selectedVariant.color} · النمرة: ${selectedVariant.size}`
+      : scope === "color" && selectedColorChoice
+        ? `اللون: ${selectedColorChoice.color} · كل النمر`
+        : "الموديل كامل بجميع الألوان والنمر";
 
-      if (
-        scope !== "variant" ||
-        !selectedVariant
-      ) {
-        return card.movements;
-      }
+  const inventoryValueMinor =
+    card?.cost && currentStock !== null
+      ? card.cost.unitCostMinor * currentStock
+      : null;
 
-      return card.movements.filter(
-        (movement) =>
-          movement.color ===
-            selectedVariant.color &&
-          movement.size ===
-            selectedVariant.size,
-      );
-    }, [
-      card,
-      scope,
-      selectedVariant,
-    ]);
+  const costDescription = !card?.cost
+    ? "لم تُسجّل تكلفة لهذا الموديل"
+    : [
+        card.cost.basis === "reference" ? "تكلفة مرجعية" : "متوسط التكلفة المحاسبي",
+        card.cost.quality === "estimated" ? "تقديرية" :
+          card.cost.quality === "mixed" ? "تكلفة مختلطة" : null,
+        !card.cost.stockMatchesAccounting ? "فرق بين المخزون والمحاسبة" : null,
+      ].filter(Boolean).join(" · ");
+
+  const visibleMovements = useMemo(() => {
+    if (!card) return [];
+    if (scope === "all") return card.movements;
+    if (scope === "color") {
+      return selectedColorChoice
+        ? card.movements.filter((movement) => movement.color === selectedColorChoice.color)
+        : [];
+    }
+    return selectedVariant
+      ? card.movements.filter((movement) =>
+          movement.color === selectedVariant.color && movement.size === selectedVariant.size)
+      : [];
+  }, [card, scope, selectedColorChoice, selectedVariant]);
 
   const totals =
     useMemo(() => {
@@ -462,12 +491,19 @@ export default function ProductCardPage() {
           );
 
       if (exactVariant) {
-        setSelectedVariantKey(
-          exactVariant.key,
-        );
+        setSelectedVariantKey(exactVariant.key);
+        setSelectedColor(exactVariant.color);
         setScope("variant");
+      } else if (
+        product.mappedColor &&
+        response.product.colorVariants.some((item) => item.color === product.mappedColor)
+      ) {
+        setSelectedVariantKey("");
+        setSelectedColor(product.mappedColor);
+        setScope("color");
       } else {
         setSelectedVariantKey("");
+        setSelectedColor("");
         setScope("all");
       }
     } catch (caught) {
@@ -610,17 +646,23 @@ export default function ProductCardPage() {
     setScope("all");
   }
 
-  function selectVariantMode() {
-    setScope("variant");
+  function selectColorMode() {
+    if (!colorChoices.length) return;
+    const preferredColor = selectedVariant?.color || selectedColor;
+    const validColor = colorChoices.some((item) => item.color === preferredColor)
+      ? preferredColor
+      : colorChoices[0].color;
+    setSelectedColor(validColor);
+    setScope("color");
+  }
 
-    if (
-      !selectedVariantKey &&
-      variantChoices.length
-    ) {
-      setSelectedVariantKey(
-        variantChoices[0].key,
-      );
-    }
+  function selectVariantMode() {
+    if (!variantChoices.length) return;
+    const sameColor = variantChoices.find((item) => item.color === selectedColor);
+    const nextVariant = selectedVariant ?? sameColor ?? variantChoices[0];
+    setSelectedVariantKey(nextVariant.key);
+    setSelectedColor(nextVariant.color);
+    setScope("variant");
   }
 
   return (
@@ -927,6 +969,20 @@ export default function ProductCardPage() {
 
               <button
                 type="button"
+                className={scope === "color" ? "primary-button" : undefined}
+                onClick={selectColorMode}
+                disabled={colorChoices.length === 0}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 10,
+                  cursor: colorChoices.length ? "pointer" : "not-allowed",
+                }}
+              >
+                لون كامل
+              </button>
+
+              <button
+                type="button"
                 className={
                   scope ===
                   "variant"
@@ -954,6 +1010,26 @@ export default function ProductCardPage() {
               </button>
             </div>
 
+            {scope === "color" && colorChoices.length > 0 && (
+              <label className="sales-return-field" style={{ marginBottom: 18 }}>
+                <span>اختر اللون (كل النمر)</span>
+                <select
+                  value={selectedColor}
+                  onChange={(event) => {
+                    setSelectedColor(event.target.value);
+                    setSelectedVariantKey("");
+                  }}
+                  style={{ width: "100%", padding: "11px 12px", borderRadius: 10 }}
+                >
+                  {colorChoices.map((choice) => (
+                    <option key={choice.color} value={choice.color}>
+                      {choice.color} — المخزون: {choice.stock ?? "—"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             {scope ===
               "variant" &&
               variantChoices.length >
@@ -972,14 +1048,11 @@ export default function ProductCardPage() {
                     value={
                       selectedVariantKey
                     }
-                    onChange={(
-                      event,
-                    ) =>
-                      setSelectedVariantKey(
-                        event.target
-                          .value,
-                      )
-                    }
+                    onChange={(event) => {
+                      setSelectedVariantKey(event.target.value);
+                      const choice = variantChoices.find((v) => v.key === event.target.value);
+                      if (choice) setSelectedColor(choice.color);
+                    }}
                     style={{
                       width:
                         "100%",
