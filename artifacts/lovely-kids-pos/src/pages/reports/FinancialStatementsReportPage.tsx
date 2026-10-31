@@ -1006,7 +1006,7 @@ export default function FinancialStatementsReportPage() {
       <header className="financial-statements-heading financial-statements-no-print">
         <div>
           <span>
-            Stage 7 · القوائم المالية
+            القوائم المالية · مراجعة الأرصدة
           </span>
           <h1>
             قائمة الدخل والميزانية العمومية
@@ -1125,11 +1125,11 @@ export default function FinancialStatementsReportPage() {
                   {trialBalance
                     .integrity
                     .passed
-                    ? "Integrity Gate: دفتر الأستاذ متوازن"
-                    : "Integrity Gate: يوجد فرق محاسبي"}
+                    ? "فحص توازن القيود: دفتر الأستاذ متوازن"
+                    : "فحص توازن القيود: يوجد فرق محاسبي"}
                 </strong>
                 <p>
-                  فرق الـLedger:{" "}
+                  فرق دفتر الأستاذ:{" "}
                   {money(
                     Math.abs(
                       trialBalance
