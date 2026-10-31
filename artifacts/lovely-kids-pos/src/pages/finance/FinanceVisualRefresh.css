@@ -405,6 +405,12 @@
   min-width: 0;
   text-align: right;
 }
+/* Five session facts fit on one row on wide desktops, eliminating the orphan card. */
+@media (min-width: 1200px) {
+  .lk-finance-refresh.lk-finance-cash-session .session-details {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
 .lk-finance-refresh.lk-finance-cash-session .session-details > div,
 .lk-finance-refresh.lk-finance-cash-session .close-day-heading,
 .lk-finance-refresh.lk-finance-cash-session .close-day-form label {
