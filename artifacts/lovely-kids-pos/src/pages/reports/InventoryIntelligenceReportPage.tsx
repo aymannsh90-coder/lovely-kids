@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -2353,7 +2354,7 @@ export default function InventoryIntelligenceReportPage() {
 
   if (loading) {
     return (
-      <section className="inventory-intelligence-page">
+      <section className="inventory-intelligence-page lk-report-refresh">
         <div className="inventory-intelligence-state">
           جاري تحليل حركة المخزون...
         </div>
@@ -2366,7 +2367,7 @@ export default function InventoryIntelligenceReportPage() {
     !report
   ) {
     return (
-      <section className="inventory-intelligence-page">
+      <section className="inventory-intelligence-page lk-report-refresh">
         <div className="inventory-intelligence-state is-error">
           <strong>
             تعذر تحميل التقرير
@@ -2390,7 +2391,7 @@ export default function InventoryIntelligenceReportPage() {
   }
 
   return (
-    <section className="inventory-intelligence-page">
+    <section className="inventory-intelligence-page lk-report-refresh">
       <header className="inventory-intelligence-hero">
         <div>
           <span className="inventory-intelligence-eyebrow">
