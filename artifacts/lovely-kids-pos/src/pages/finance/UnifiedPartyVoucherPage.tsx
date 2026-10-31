@@ -7,6 +7,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinanceVisualRefresh.css";
 import {
   ApiError,
   POS_REGISTER_KEY,
@@ -964,11 +965,11 @@ export default function UnifiedPartyVoucherPage({
 
   return (
     <section
-      className="work-panel"
+      className="work-panel lk-finance-refresh lk-finance-unified-party-voucher"
       dir="rtl"
     >
       <div
-        className="panel-heading"
+        className="panel-heading lk-finance-header"
         style={{
           marginBottom: 18,
         }}
@@ -1001,6 +1002,7 @@ export default function UnifiedPartyVoucherPage({
       </div>
 
       <form
+        className="lk-finance-form"
         onSubmit={submit}
         style={{
           display: "grid",
@@ -1576,7 +1578,8 @@ export default function UnifiedPartyVoucherPage({
 
         {message && (
           <div
-            style={{
+            className="lk-finance-success"
+          style={{
               padding: 12,
               borderRadius: 10,
               background:
