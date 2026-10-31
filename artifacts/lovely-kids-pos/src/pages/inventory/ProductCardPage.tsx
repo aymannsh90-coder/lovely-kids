@@ -335,51 +335,25 @@ export default function ProductCardPage() {
       ],
     );
 
-  const modelStock =
-    useMemo(() => {
-      if (!card) {
-        return null;
-      }
+  const modelStock = useMemo(() => {
+    if (!card) return null;
 
-      const directStock =
-        stockNumber(
-          card.product.stock,
-        );
+    const generalStock = stockNumber(card.product.stock);
+    const sizeStocks = card.product.colorVariants.flatMap(
+      (variant) => variant.sizes.map((size) => stockNumber(size.stock)),
+    );
+    // Only count the variant total when ALL listed sizes have known stock.
+    const variantTotal =
+      sizeStocks.length > 0 && sizeStocks.every((value) => value !== null)
+        ? sizeStocks.reduce((sum, value) => sum + (value ?? 0), 0)
+        : null;
 
-      if (directStock !== null) {
-        return directStock;
-      }
-
-      const variantStocks =
-        card.product
-          .colorVariants
-          .flatMap(
-            (variant) =>
-              variant.sizes
-                .map(
-                  (entry) =>
-                    stockNumber(
-                      entry.stock,
-                    ),
-                )
-                .filter(
-                  (
-                    value,
-                  ): value is number =>
-                    value !== null,
-                ),
-          );
-
-      if (!variantStocks.length) {
-        return null;
-      }
-
-      return variantStocks.reduce(
-        (total, value) =>
-          total + value,
-        0,
-      );
-    }, [card]);
+    // Keep model-level physical quantity aligned with the stock valuation rules.
+    if (generalStock !== null && variantTotal !== null) {
+      return Math.min(generalStock, variantTotal);
+    }
+    return generalStock ?? variantTotal;
+  }, [card]);
 
   const currentStock =
     scope === "variant"
