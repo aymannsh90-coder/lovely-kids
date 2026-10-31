@@ -1,0 +1,336 @@
+/* Lovely Kids · Finance UI alignment
+ * Opt-in styling for banking, checks and expenses only.
+ * No API, ledger, posting or print-document changes.
+ */
+.lk-finance-polish {
+  --lkf-rose: #e91e8c;
+  --lkf-rose-dark: #a81966;
+  --lkf-ink: #253d4d;
+  --lkf-muted: #6c8291;
+  --lkf-line: #dfE8ee;
+  --lkf-shadow: 0 7px 25px rgba(33, 65, 81, .055);
+  gap: 17px;
+  color: var(--lkf-ink);
+  min-width: 0;
+}
+.lk-finance-polish, .lk-finance-polish * { box-sizing: border-box; }
+.lk-finance-polish :is(button, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(233, 30, 140, .28);
+  outline-offset: 2px;
+}
+.lk-finance-polish :is(.banking-heading, .checks-heading, .expense-hub-heading) {
+  min-height: 105px;
+  border: 1px solid #f3d8e6;
+  border-right: 4px solid var(--lkf-rose);
+  border-radius: 17px;
+  background: linear-gradient(112deg, #fff 28%, #fff6fa 76%, #fdeaf4 100%);
+  box-shadow: var(--lkf-shadow);
+  padding: 20px 23px;
+  flex-wrap: wrap;
+}
+.lk-finance-polish :is(.banking-heading h2, .checks-heading h2, .expense-hub-heading h2) {
+  font-size: clamp(21px, 1.7vw, 27px);
+  font-weight: 950;
+  line-height: 1.3;
+  color: #233a49;
+  margin: 3px 0 6px;
+}
+.lk-finance-polish :is(.banking-heading p, .checks-heading p, .expense-hub-heading p) {
+  color: var(--lkf-muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+.lk-finance-polish :is(.banking-eyebrow, .checks-eyebrow, .expense-hub-eyebrow) {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--lkf-rose-dark);
+}
+.lk-finance-polish :is(.banking-section, .checks-list-section, .expense-quick-section, .expense-history-section) {
+  border-color: #e1e9ef;
+  border-radius: 18px;
+  box-shadow: var(--lkf-shadow);
+  min-width: 0;
+  padding: 19px 21px;
+}
+.lk-finance-polish :is(.banking-section-title, .expense-section-title) {
+  border-bottom: 1px solid #edf1f4;
+  padding-bottom: 13px;
+  margin-bottom: 17px;
+  flex-wrap: wrap;
+}
+.lk-finance-polish :is(.banking-section-title h3, .expense-section-title h3) {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--lkf-ink);
+}
+.lk-finance-polish :is(.banking-section-title > span, .expense-section-title > span) {
+  color: #a61765;
+  background: #fff0f8;
+  border: 1px solid #f5d4e5;
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-weight: 850;
+}
+.lk-finance-polish :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 40px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 850;
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.lk-finance-polish :is(.primary-button, .secondary-button, .danger-button):hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.lk-finance-polish .primary-button {
+  background: linear-gradient(120deg, #e91e8c, #c71375);
+  border-color: #d81e7e;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(214, 30, 124, .14);
+}
+.lk-finance-polish .secondary-button {
+  background: #fff;
+  color: #375568;
+  border-color: #d7e3ea;
+}
+.lk-finance-polish .secondary-button:hover:not(:disabled) {
+  border-color: #efbad8;
+  background: #fff6fa;
+}
+.lk-finance-polish :is(.banking-section, .checks-list-section, .expense-quick-section, .expense-history-section) :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-radius: 11px;
+  border-color: #d6e2e9;
+  color: #2c4554;
+  font-size: 13px;
+}
+.lk-finance-polish :is(.banking-section, .checks-list-section) label {
+  color: #546b7b;
+  font-size: 13px;
+  font-weight: 800;
+}
+.lk-finance-polish :is(.banking-cash-card, .banking-account-card, .banking-currency-card) {
+  border-color: #dfe8ee;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(33, 67, 87, .035);
+}
+.lk-finance-polish :is(.banking-cash-card, .banking-account-card, .banking-currency-card):hover {
+  border-color: #efbeda;
+  box-shadow: 0 8px 19px rgba(233, 30, 140, .07);
+}
+.lk-finance-polish .banking-cash-card.is-main {
+  border-color: #bfe7d8;
+  background: #edfaf5;
+}
+.lk-finance-polish .banking-account-balance {
+  background: #f2f7fa;
+  border: 1px solid #e6eef3;
+  padding: 13px;
+}
+.lk-finance-polish .banking-account-balance strong {
+  font-size: clamp(20px, 1.6vw, 25px);
+  font-variant-numeric: tabular-nums;
+  color: #20495b;
+}
+.lk-finance-polish .banking-cash-card.is-main .banking-account-balance strong {
+  color: #06775e;
+}
+.lk-finance-polish .banking-transfer-table-wrap,
+.lk-finance-polish .checks-table-wrap {
+  overflow: auto;
+  max-height: 560px;
+  border: 1px solid #e1e9ef;
+  border-radius: 13px;
+  scrollbar-color: #cedee8 #f8fafc;
+}
+.lk-finance-polish :is(.banking-transfer-table, .checks-table) {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1060px;
+}
+.lk-finance-polish :is(.banking-transfer-table, .checks-table) thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f3f7fa;
+  color: #587084;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 14px 12px;
+  white-space: nowrap;
+  border-bottom: 1px solid #e0e7ec;
+}
+.lk-finance-polish :is(.banking-transfer-table, .checks-table) tbody td {
+  font-size: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #edf1f4;
+  line-height: 1.7;
+}
+.lk-finance-polish :is(.banking-transfer-table, .checks-table) tbody tr:nth-child(even) td {
+  background: #fbfcfe;
+}
+.lk-finance-polish :is(.banking-transfer-table, .checks-table) tbody tr:hover td {
+  background: #fff5fa;
+}
+.lk-finance-polish :is(.banking-transfer-table, .checks-table) tbody tr:last-child td { border-bottom: 0; }
+.lk-finance-polish :is(.banking-transfer-status, .check-status, .check-direction, .check-due) {
+  font-size: 11px;
+  border: 1px solid rgba(90, 112, 129, .09);
+  padding: 5px 10px;
+}
+.lk-finance-polish .check-actions { flex-wrap: nowrap; gap: 6px; }
+.lk-finance-polish .check-actions button {
+  min-height: 35px;
+  border-radius: 9px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 850;
+}
+.lk-finance-polish .checks-table :is(td, th):last-child { min-width: 170px; }
+.lk-finance-polish .checks-table :is(td, th):nth-child(2) { min-width: 120px; white-space: nowrap; }
+.lk-finance-polish .checks-table td :where(strong, b) { font-variant-numeric: tabular-nums; }
+.lk-finance-polish .checks-summary-grid article {
+  border-radius: 16px;
+  min-height: 115px;
+  padding: 16px 18px;
+  box-shadow: var(--lkf-shadow);
+}
+.lk-finance-polish .checks-summary-grid article:first-child {
+  background: #fff4f9;
+  border-color: #f3d4e5;
+}
+.lk-finance-polish .checks-summary-grid article:nth-child(2) {
+  background: #f0f7ff;
+  border-color: #d9e7fa;
+}
+.lk-finance-polish .checks-summary-grid article:nth-child(3) {
+  background: #effaf6;
+  border-color: #d0eadf;
+}
+.lk-finance-polish .checks-summary-grid article.has-warning {
+  background: #fff8eb;
+  border-color: #efd59e;
+}
+.lk-finance-polish .checks-summary-grid article:nth-child(4) {
+  background: #f7f9fb;
+}
+.lk-finance-polish .checks-summary-grid article strong {
+  color: #2d4559;
+  font-size: 27px;
+  font-variant-numeric: tabular-nums;
+}
+.lk-finance-polish .checks-summary-grid article:first-child strong { color: #a91468; }
+.lk-finance-polish .checks-summary-grid article:nth-child(2) strong { color: #285c93; }
+.lk-finance-polish .checks-summary-grid article.has-warning strong { color: #a46713; }
+.lk-finance-polish .checks-toolbar select { font-weight: 750; }
+.lk-finance-polish .checks-modal {
+  border-color: #efdde8;
+  box-shadow: 0 25px 65px rgba(22, 41, 57, .24);
+}
+.lk-finance-polish .checks-modal-header {
+  background: #fff7fb;
+  border-bottom-color: #efdde8;
+}
+.lk-finance-polish .checks-modal-header h3 { color: #283e4d; font-size: 19px; }
+.lk-finance-polish .checks-modal-footer {
+  background: #f8fafb;
+  border-top-color: #e1eaf0;
+}
+.lk-finance-polish .expense-summary-grid article {
+  border-radius: 16px;
+  border-color: #dfE8ee;
+  min-height: 112px;
+  padding: 16px 17px;
+}
+.lk-finance-polish .expense-summary-grid article:first-child {
+  background: #fff4f9;
+  border-color: #f4d1e4;
+}
+.lk-finance-polish .expense-summary-grid article:nth-child(2) {
+  background: #f2f8ff;
+  border-color: #d9e6f9;
+}
+.lk-finance-polish .expense-summary-grid article:nth-child(3) {
+  background: #fff9ed;
+  border-color: #f1e1b9;
+}
+.lk-finance-polish .expense-summary-grid article:nth-child(4) {
+  background: #fff1f2;
+  border-color: #f0ced3;
+}
+.lk-finance-polish .expense-summary-grid article.expense-summary-cash {
+  background: #effbf6 !important;
+  border-color: #c6e9d8 !important;
+}
+.lk-finance-polish .expense-summary-grid strong {
+  font-size: clamp(19px, 1.6vw, 24px);
+  font-variant-numeric: tabular-nums;
+  color: #294657;
+  white-space: nowrap;
+}
+.lk-finance-polish .expense-summary-grid article:first-child strong { color: #a51464; }
+.lk-finance-polish .expense-summary-grid article:nth-child(4) strong { color: #b23343; }
+.lk-finance-polish .expense-summary-grid article.expense-summary-cash strong { color: #087657; }
+.lk-finance-polish .expense-quick-tile {
+  min-height: 143px;
+  border-radius: 16px;
+  padding: 17px;
+}
+.lk-finance-polish .expense-quick-tile:hover { border-color: var(--lkf-rose); }
+.lk-finance-polish .expense-tile-icon {
+  background: #fff0f7;
+  color: var(--lkf-rose-dark);
+  border: 1px solid #f7daea;
+}
+.lk-finance-polish .expense-history-row {
+  border-radius: 12px;
+  padding: 13px 15px;
+}
+.lk-finance-polish .expense-history-row:hover { border-color: #f1cce1; background: #fffafd; }
+.lk-finance-polish .expense-history-side > strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 17px;
+}
+.lk-finance-polish .expense-modal {
+  border-color: #efdae7;
+  border-radius: 17px;
+}
+.lk-finance-polish .expense-modal-header {
+  background: #fff6fb;
+  border-bottom-color: #efdce7;
+}
+.lk-finance-polish .expense-modal-title h3 { color: #233b4c; font-size: 19px; }
+.lk-finance-polish .expense-modal-footer {
+  background: #f9fbfc;
+  border-top-color: #e1eaf0;
+}
+.lk-finance-polish :is(.expense-modal, .checks-modal) :where(input, select, textarea) {
+  font-size: 13px;
+  border-radius: 11px;
+}
+@media (max-width: 1100px) {
+  .lk-finance-polish .expense-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lk-finance-polish .checks-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 740px) {
+  .lk-finance-polish :is(.banking-heading, .checks-heading, .expense-hub-heading) {
+    padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lk-finance-polish .expense-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lk-finance-polish .expense-history-row { flex-wrap: wrap; }
+  .lk-finance-polish .expense-history-side { width: 100%; justify-content: space-between; }
+}
+@media (max-width: 480px) {
+  .lk-finance-polish .expense-summary-grid { grid-template-columns: 1fr; }
+  .lk-finance-polish .checks-summary-grid { grid-template-columns: 1fr; }
+  .lk-finance-polish .expense-summary-grid strong { white-space: normal; }
+}
+@media print {
+  .lk-finance-polish :is(.banking-transfer-table-wrap, .checks-table-wrap) {
+    max-height: none;
+    overflow: visible;
+  }
+  .lk-finance-polish :is(.banking-transfer-table, .checks-table) thead th { position: static; }
+}
