@@ -149,6 +149,59 @@ function formatUnitCost(minor: number) {
   }).format(minor / 100)} ₪`;
 }
 
+function OwnerValueBox({
+  label,
+  value,
+  detail,
+  background,
+  border,
+  color,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  background: string;
+  border: string;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: "16px 18px",
+        borderRadius: 14,
+        border: `2px solid ${border}`,
+        background,
+        boxShadow: "0 4px 12px rgba(51,35,71,.08)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <span style={{ color, fontSize: 15, fontWeight: 800 }}>
+        {label}
+      </span>
+      <strong
+        dir="ltr"
+        style={{
+          color,
+          fontSize: 26,
+          fontWeight: 900,
+          textAlign: "right",
+          lineHeight: 1.35,
+        }}
+      >
+        {value}
+      </strong>
+      <small
+        style={{ color, fontSize: 12, opacity: 0.85, fontWeight: 600 }}
+      >
+        {detail}
+      </small>
+    </div>
+  );
+}
+
 function movementSourceHref(
   movement: PosInventoryMovement,
 ) {
@@ -1089,6 +1142,83 @@ export default function ProductCardPage() {
                 </label>
               )}
 
+            {user?.isOwner && (
+              <div style={{ marginBottom: 20 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 10,
+                    color: "#9d1762",
+                    fontWeight: 800,
+                  }}
+                >
+                  <span>ملخص الأسعار وقيمة المخزون · الأونر فقط</span>
+                  <small style={{ fontWeight: 700 }}>{activeScopeLabel}</small>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  <OwnerValueBox
+                    label="سعر البيع المسجل للقطعة"
+                    value={formatUnitCost(card.product.websiteUnitPriceMinor)}
+                    detail="سعر البيع الحالي للموديل"
+                    background="#fce8f4"
+                    border="#e31b87"
+                    color="#921456"
+                  />
+                  <OwnerValueBox
+                    label="تكلفة القطعة"
+                    value={card.cost
+                      ? formatUnitCost(card.cost.unitCostMinor)
+                      : "غير مسجلة"}
+                    detail={costDescription}
+                    background="#fff4d9"
+                    border="#e6aa2d"
+                    color="#875008"
+                  />
+                  <OwnerValueBox
+                    label="قيمة المتوفر بسعر التكلفة"
+                    value={inventoryValueMinor !== null
+                      ? formatUnitCost(inventoryValueMinor)
+                      : "غير متاحة"}
+                    detail={currentStock === null
+                      ? "لا يمكن تحديد كمية المخزون لهذا الاختيار"
+                      : card.cost
+                        ? `${currentStock} قطعة × تكلفة القطعة · ${activeScopeLabel}`
+                        : "التكلفة غير مسجلة"}
+                    background="#e3f8f3"
+                    border="#169c88"
+                    color="#066857"
+                  />
+                </div>
+                {card.cost && !card.cost.stockMatchesAccounting && (
+                  <p
+                    style={{
+                      margin: "10px 2px 0",
+                      color: "#a04715",
+                      fontWeight: 700,
+                      fontSize: 13,
+                    }}
+                  >
+                    تنبيه: يوجد فرق بين الكمية الفعلية والكمية المحاسبية؛
+                    قيمة المخزون المعروضة تقديرية حتى تتم المطابقة.
+                  </p>
+                )}
+                <p style={{ margin: "9px 2px 0", fontSize: 12, opacity: 0.8 }}>
+                  تكلفة الوحدة محفوظة على مستوى الموديل، وتُستخدم لحساب
+                  قيمة اللون أو النمرة حسب المخزون المحدد.
+                </p>
+              </div>
+            )}
+
             <div className="sales-return-summary-grid">
               <div>
                 <span>
@@ -1100,67 +1230,7 @@ export default function ProductCardPage() {
                 </strong>
               </div>
 
-              {user?.isOwner && (
-                <div
-                  style={{
-                    background: "#fff3d6",
-                    border: "2px solid #e2a12a",
-                    borderRadius: 12,
-                    boxShadow: "0 2px 8px rgba(180,115,17,.14)",
-                    padding: "13px 16px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "#854d0e",
-                      fontSize: 15,
-                      fontWeight: 800,
-                    }}
-                  >
-                    {card.cost?.basis === "average"
-                      ? "متوسط تكلفة القطعة"
-                      : "سعر تكلفة الصنف"}
-                  </span>
-                  <strong
-                    dir="ltr"
-                    style={{
-                      color: "#713f12",
-                      fontSize: 25,
-                      fontWeight: 900,
-                      textAlign: "right",
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {card.cost
-                      ? formatUnitCost(card.cost.unitCostMinor)
-                      : "غير مسجلة"}
-                  </strong>
-                  {card.cost && (
-                    <small
-                      style={{
-                        color: "#895c26",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {card.cost.basis === "reference"
-                        ? "تكلفة مرجعية لعدم وجود رصيد محاسبي"
-                        : "حسب متوسط التكلفة المحاسبي"}
-                      {card.cost.quality === "estimated"
-                        ? " · تقديرية"
-                        : card.cost.quality === "mixed"
-                          ? " · تكلفة مختلطة"
-                          : ""}
-                      {!card.cost.stockMatchesAccounting
-                        ? " · تنبيه: فرق بين المخزون والرصيد المحاسبي"
-                        : ""}
-                    </small>
-                  )}
-                </div>
-              )}
+
 
               <div>
                 <span>
