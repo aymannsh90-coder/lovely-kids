@@ -711,6 +711,7 @@ export default function CustomerReceiptsPage() {
                         {voucher.status ===
                         "posted" ? (
                           <strong
+                            className="lk-finance-status"
                             style={{
                               color:
                                 "#047857",
@@ -719,7 +720,7 @@ export default function CustomerReceiptsPage() {
                             فعال
                           </strong>
                         ) : (
-                          <span>
+                          <span className="lk-finance-status is-voided">
                             ملغى
                             {voucher.voidReason
                               ? ` — ${voucher.voidReason}`
@@ -792,6 +793,7 @@ export default function CustomerReceiptsPage() {
       </div>
 
       <p
+        className="lk-finance-note"
         style={{
           marginTop: 12,
           fontSize: 13,
