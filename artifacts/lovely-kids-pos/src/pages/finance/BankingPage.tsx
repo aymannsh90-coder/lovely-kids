@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinancePolish.css";
 import {
   ApiError,
   createPosBankAccount,
@@ -1869,7 +1870,7 @@ export default function BankingPage() {
   }
 
   return (
-    <section className="banking-page">
+    <section className="banking-page lk-finance-polish">
       <div className="banking-heading">
         <div>
           <span className="banking-eyebrow">
