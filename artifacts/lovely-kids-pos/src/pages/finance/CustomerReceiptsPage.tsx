@@ -7,6 +7,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinanceVisualRefresh.css";
 import {
   ApiError,
   POS_REGISTER_KEY,
@@ -457,11 +458,11 @@ export default function CustomerReceiptsPage() {
 
   return (
     <section
-      className="work-panel"
+      className="work-panel lk-finance-refresh lk-finance-customer-receipts"
       dir="rtl"
     >
       <div
-        className="panel-heading"
+        className="panel-heading lk-finance-header"
         style={{
           marginBottom: 16,
         }}
@@ -502,6 +503,7 @@ export default function CustomerReceiptsPage() {
 
       {message && (
         <div
+          className="lk-finance-success"
           style={{
             padding: 12,
             marginBottom: 12,
@@ -515,6 +517,7 @@ export default function CustomerReceiptsPage() {
       )}
 
       <div
+        className="lk-finance-filterbar"
         style={{
           display: "grid",
           gridTemplateColumns:
@@ -575,6 +578,7 @@ export default function CustomerReceiptsPage() {
       </div>
 
       <div
+        className="lk-finance-table-shell"
         style={{
           overflowX: "auto",
           border:
@@ -583,6 +587,7 @@ export default function CustomerReceiptsPage() {
         }}
       >
         <table
+          className="lk-finance-table"
           style={{
             width: "100%",
             borderCollapse:
@@ -803,6 +808,7 @@ export default function CustomerReceiptsPage() {
 
       {editing && (
         <div
+          className="lk-finance-edit-overlay"
           style={{
             position: "fixed",
             inset: 0,
@@ -824,6 +830,7 @@ export default function CustomerReceiptsPage() {
           }}
         >
           <form
+            className="lk-finance-edit-modal"
             onSubmit={handleEdit}
             style={{
               width:
