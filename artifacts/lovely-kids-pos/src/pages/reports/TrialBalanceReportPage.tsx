@@ -480,7 +480,7 @@ export default function TrialBalanceReportPage() {
       <header className="trial-balance-heading trial-balance-no-print">
         <div>
           <span>
-            Stage 6 · سلامة المحاسبة
+            سلامة القيود المحاسبية
           </span>
           <h1>
             ميزان المراجعة
@@ -614,8 +614,8 @@ export default function TrialBalanceReportPage() {
             <div>
               <strong>
                 {result.integrity.passed
-                  ? "Integrity Gate: سليم"
-                  : "Integrity Gate: يوجد فرق يحتاج مراجعة"}
+                  ? "فحص توازن القيود: سليم"
+                  : "فحص توازن القيود: يوجد فرق يحتاج مراجعة"}
               </strong>
 
               <p>
@@ -632,7 +632,7 @@ export default function TrialBalanceReportPage() {
 
             <div className="trial-balance-integrity-difference">
               <span>
-                فرق الـLedger
+                فرق دفتر الأستاذ
               </span>
               <b>
                 {money(
