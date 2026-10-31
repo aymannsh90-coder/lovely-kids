@@ -1193,7 +1193,7 @@ export default function InventoryStockPage() {
             role="dialog"
             aria-modal="true"
             aria-label="تفاصيل الصنف"
-            className="sales-return-invoice"
+            className="sales-return-invoice lk-stock-dialog lk-stock-dialog--details"
             style={{
               width:
                 "min(980px, 92vw)",
@@ -1242,6 +1242,7 @@ export default function InventoryStockPage() {
             >
               <a
                 href="/inventory/product-card"
+                className="lk-stock-dialog-button lk-stock-dialog-button--secondary lk-stock-dialog-link"
                 style={{
                   whiteSpace: "nowrap",
                 }}
@@ -1251,7 +1252,7 @@ export default function InventoryStockPage() {
 
               <button
                 type="button"
-                className="primary-button"
+                className="lk-stock-dialog-button lk-stock-dialog-button--secondary"
                 onClick={() => {
                   setAdjustment(null);
                   setSelectedProductId("");
@@ -1704,7 +1705,7 @@ export default function InventoryStockPage() {
             role="dialog"
             aria-modal="true"
             aria-label="تسوية جرد"
-            className="sales-return-invoice"
+            className="sales-return-invoice lk-stock-dialog lk-stock-dialog--adjustment"
             style={{
               width:
                 "min(700px, 92vw)",
@@ -1735,6 +1736,7 @@ export default function InventoryStockPage() {
 
             <button
               type="button"
+              className="lk-stock-dialog-button lk-stock-dialog-button--secondary"
               onClick={
                 closeAdjustment
               }
@@ -1745,6 +1747,7 @@ export default function InventoryStockPage() {
           </div>
 
           <form
+            className="lk-stock-adjustment-form"
             onSubmit={
               saveAdjustment
             }
@@ -1847,6 +1850,7 @@ export default function InventoryStockPage() {
 
             {adjustmentNeedsCost && (
               <div
+                className="lk-stock-cost-options"
                 style={{
                   display: "grid",
                   gap: 10,
@@ -1929,6 +1933,7 @@ export default function InventoryStockPage() {
             )}
 
             <div
+              className="lk-stock-adjustment-actions"
               style={{
                 display: "flex",
                 gap: 10,
@@ -1936,7 +1941,7 @@ export default function InventoryStockPage() {
               }}
             >
               <button
-                className="primary-button"
+                className="lk-stock-dialog-button lk-stock-dialog-button--primary"
                 type="submit"
                 disabled={
                   saving ||
@@ -1950,6 +1955,7 @@ export default function InventoryStockPage() {
 
               <button
                 type="button"
+                className="lk-stock-dialog-button lk-stock-dialog-button--secondary"
                 onClick={
                   closeAdjustment
                 }

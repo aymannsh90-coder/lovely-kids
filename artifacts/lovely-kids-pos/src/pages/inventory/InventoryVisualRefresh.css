@@ -387,3 +387,239 @@
     box-shadow: none;
   }
 }
+
+/* Portaled stock dialogs: these mount under document.body, outside .lk-inventory-stock. */
+@media screen {
+  .lk-stock-dialog {
+    direction: rtl;
+    color: #233c4d;
+    padding: 19px 21px;
+    font-size: 14px;
+  }
+  .lk-stock-dialog,
+  .lk-stock-dialog *,
+  .lk-stock-dialog *::before,
+  .lk-stock-dialog *::after { box-sizing: border-box; }
+  .lk-stock-dialog .sales-return-section-title {
+    min-width: 0;
+    margin: 0 0 15px;
+    padding: 10px 8px 15px;
+    gap: 12px;
+    border-bottom: 1px solid #e4eaf0;
+    background-image: linear-gradient(105deg, rgba(255,255,255,0) 10%, #fff3f9 100%);
+    border-radius: 12px 12px 0 0;
+  }
+  .lk-stock-dialog .sales-return-section-title h3 {
+    margin: 0;
+    color: #21394a;
+    font-size: 19px;
+    font-weight: 900;
+    line-height: 1.45;
+  }
+  .lk-stock-dialog .sales-return-section-title p {
+    margin-top: 5px;
+    color: #6b8293;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .lk-stock-dialog .sales-return-section-title > div:last-child {
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
+  /* The details/adjustment dialogs must use their own classes: parent page CSS
+     does not apply to elements rendered through createPortal(document.body). */
+  .lk-stock-dialog :is(button.lk-stock-dialog-button, a.lk-stock-dialog-button, button.inventory-stock-action-button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    min-width: 96px;
+    padding: 9px 16px;
+    border: 1px solid #edb8d4;
+    border-radius: 11px;
+    background: linear-gradient(125deg, #fffafd, #fff0f8);
+    box-shadow: 0 3px 10px rgba(193,25,106,.07);
+    color: #a51d66;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.35;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .lk-stock-dialog button.inventory-stock-action-button--table {
+    min-width: 73px;
+    min-height: 37px;
+    padding: 7px 13px;
+    font-size: 12.5px;
+  }
+  .lk-stock-dialog :is(button.lk-stock-dialog-button, a.lk-stock-dialog-button, button.inventory-stock-action-button):hover:not(:disabled) {
+    background: #ffe5f2;
+    border-color: #e889bb;
+    box-shadow: 0 4px 13px rgba(193,25,106,.11);
+  }
+  .lk-stock-dialog button.lk-stock-dialog-button--primary {
+    color: #fff;
+    border-color: #d51e7c;
+    background: linear-gradient(125deg, #ef3d9d, #d71980);
+    box-shadow: 0 4px 12px rgba(193,25,106,.15);
+  }
+  .lk-stock-dialog button.lk-stock-dialog-button--primary:hover:not(:disabled) {
+    color: #fff;
+    background: linear-gradient(125deg, #e92c94, #bf166f);
+    border-color: #bd176e;
+  }
+  .lk-stock-dialog button.lk-stock-dialog-button:disabled {
+    opacity: .53;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .lk-stock-dialog :is(button, a, input):focus-visible {
+    outline: 3px solid rgba(233,30,140,.25);
+    outline-offset: 2px;
+  }
+
+  .lk-stock-dialog .sales-return-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px;
+    margin-top: 13px;
+  }
+  .lk-stock-dialog .sales-return-summary-grid > div {
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1px solid #dce7ed;
+    border-radius: 13px;
+    background: #f5f9fc;
+  }
+  .lk-stock-dialog .sales-return-summary-grid > div:nth-child(4n+1) {
+    background: #fff1f8;
+    border-color: #f1d0e1;
+  }
+  .lk-stock-dialog .sales-return-summary-grid > div:nth-child(4n+2) {
+    background: #eaf5fc;
+    border-color: #cfe6f4;
+  }
+  .lk-stock-dialog .sales-return-summary-grid > div:nth-child(4n+3) {
+    background: #eef9f3;
+    border-color: #d3e9db;
+  }
+  .lk-stock-dialog .sales-return-summary-grid > div span {
+    color: #5b7789;
+    font-size: 12px;
+    font-weight: 750;
+    margin-bottom: 7px;
+  }
+  .lk-stock-dialog .sales-return-summary-grid > div strong {
+    color: #203c50;
+    font-size: 17px;
+    line-height: 1.4;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+  }
+
+  .lk-stock-dialog .sales-return-table-wrap {
+    border: 1px solid #d6e6f0;
+    border-radius: 13px;
+    background: #fff;
+  }
+  .lk-stock-dialog .sales-return-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .lk-stock-dialog .sales-return-table th {
+    padding: 12px 10px;
+    border-bottom: 1px solid #d6e6f0;
+    background: #eaf3f9;
+    color: #456579;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .lk-stock-dialog .sales-return-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #ebeff3;
+    color: #2c4859;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .lk-stock-dialog .sales-return-table tbody tr:nth-child(even) { background: #f8fbfd; }
+  .lk-stock-dialog .sales-return-table tbody tr:hover { background: #fff6fa; }
+
+  .lk-stock-dialog .lk-stock-adjustment-form { gap: 16px; }
+  .lk-stock-dialog .sales-return-field { gap: 7px; }
+  .lk-stock-dialog .sales-return-field > span {
+    color: #4c677a;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .lk-stock-dialog .sales-return-field input {
+    min-height: 44px;
+    width: 100%;
+    padding: 9px 14px;
+    border: 1px solid #d8e5ee;
+    border-radius: 11px;
+    background: #fcfeff;
+    color: #203c4d;
+    font-size: 14px;
+  }
+  .lk-stock-dialog .sales-return-field input:focus {
+    outline: none;
+    border-color: #e91e8c;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(233,30,140,.11);
+  }
+  .lk-stock-dialog .lk-stock-cost-options {
+    border-color: #dfebf1;
+    background: #f7fbfd;
+  }
+  .lk-stock-dialog .lk-stock-cost-options > strong {
+    color: #264b60;
+    font-size: 14px;
+  }
+  .lk-stock-dialog .lk-stock-cost-options > label:not(.sales-return-field) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border: 1px solid #e2eaf0;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+  }
+  .lk-stock-dialog .lk-stock-cost-options input[type="radio"] {
+    accent-color: #e91e8c;
+  }
+  .lk-stock-dialog .lk-stock-adjustment-actions {
+    justify-content: flex-start;
+    align-items: center;
+    padding-top: 14px;
+    border-top: 1px solid #e9eef2;
+  }
+
+  @media (max-width: 720px) {
+    .lk-stock-dialog { padding: 15px 16px; }
+    .lk-stock-dialog .sales-return-section-title {
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .lk-stock-dialog .sales-return-summary-grid {
+      grid-template-columns: repeat(2,minmax(0,1fr));
+    }
+    .lk-stock-dialog .sales-return-table th,
+    .lk-stock-dialog .sales-return-table td { padding: 9px 6px; }
+  }
+  @media (max-width: 460px) {
+    .lk-stock-dialog .sales-return-summary-grid {
+      grid-template-columns: repeat(2,minmax(0,1fr));
+    }
+    .lk-stock-dialog .lk-stock-adjustment-actions > button {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
+}
