@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -286,7 +287,7 @@ export default function CustomerBalancesReportPage() {
 
   return (
     <section
-      className="work-panel customer-balances-page"
+      className="work-panel customer-balances-page lk-report-refresh"
       dir="rtl"
     >
       <style>{`
