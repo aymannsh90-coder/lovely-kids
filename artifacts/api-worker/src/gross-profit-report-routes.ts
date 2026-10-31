@@ -393,6 +393,11 @@ async function handleGrossProfit(
   // qualification until the owner reviews all outstanding sources again.
   const attestationRows = await db.select({
     productId: productCostLedgerTable.productId,
+    quantityDelta: productCostLedgerTable.quantityDelta,
+    valueDeltaMinor: productCostLedgerTable.inventoryValueDeltaMinor,
+    quantityAfter: productCostLedgerTable.quantityAfter,
+    valueAfterMinor: productCostLedgerTable.inventoryValueAfterMinor,
+    costQuality: productCostLedgerTable.costQuality,
   }).from(productCostLedgerTable)
     .where(eq(productCostLedgerTable.sourceType, "owner_cost_quality_attestation"))
     .limit(5000);
@@ -407,6 +412,24 @@ async function handleGrossProfit(
     : [];
   const attestedCost = new Map(attestedStates.map((row) =>
     [row.productId, row.referenceCost] as const));
+  // A later purchase may change the current weighted-average unit cost.
+  // An owner's prior confirmed cost attestation remains valid for the
+  // immutable sale/return snapshots that predate that purchase. Derive its
+  // historic unit cost from the attestation's contemporaneous ledger value,
+  // never from the current product-cost-state average or a text note.
+  const attestedHistoricalCosts = new Map<number, Set<number>>();
+  for (const row of attestationRows) {
+    if (!attestedCost.has(row.productId) ||
+        row.costQuality !== "confirmed" ||
+        row.quantityDelta !== 0 || row.valueDeltaMinor !== 0 ||
+        !Number.isSafeInteger(row.quantityAfter) || row.quantityAfter <= 0 ||
+        !Number.isSafeInteger(row.valueAfterMinor) || row.valueAfterMinor <= 0) continue;
+    const unitCost = row.valueAfterMinor / row.quantityAfter;
+    if (!Number.isSafeInteger(unitCost) || unitCost <= 0) continue;
+    const costs = attestedHistoricalCosts.get(row.productId) ?? new Set<number>();
+    costs.add(unitCost);
+    attestedHistoricalCosts.set(row.productId, costs);
+  }
   const verifiedQuality = (
     productId: number | null,
     quantity: number,
@@ -414,12 +437,17 @@ async function handleGrossProfit(
     originalQuality: string,
   ): string => {
     if (productId === null || originalQuality === "confirmed") return originalQuality;
-    const cost = attestedCost.get(productId);
-    if (cost === undefined || !Number.isSafeInteger(quantity) || quantity <= 0 ||
-        BigInt(quantity) * BigInt(cost) !== BigInt(totalMinor)) {
-      return originalQuality;
+    if (!Number.isSafeInteger(quantity) || quantity <= 0 ||
+        !Number.isSafeInteger(totalMinor) || totalMinor < 0) return originalQuality;
+    const currentCost = attestedCost.get(productId);
+    const historicCosts = attestedHistoricalCosts.get(productId);
+    const matches = (unitCost: number) =>
+      BigInt(quantity) * BigInt(unitCost) === BigInt(totalMinor);
+    if ((currentCost !== undefined && matches(currentCost)) ||
+        (historicCosts !== undefined && [...historicCosts].some(matches))) {
+      return "confirmed";
     }
-    return "confirmed";
+    return originalQuality;
   };
 
   // ==========================================================
