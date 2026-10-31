@@ -8,6 +8,7 @@ import {
 import { Link } from "react-router-dom";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinanceVisualRefresh.css";
 import {
   ApiError,
   createPosCardSettlement,
@@ -655,11 +656,11 @@ export default function CardSettlementsPage() {
 
   return (
     <section
-      className="work-panel"
+      className="work-panel lk-finance-refresh lk-finance-card-settlements"
       dir="rtl"
     >
       <div
-        className="panel-heading"
+        className="panel-heading lk-finance-header"
         style={{
           marginBottom: 16,
         }}
@@ -715,6 +716,7 @@ export default function CardSettlementsPage() {
 
       {message && (
         <div
+          className="lk-finance-success"
           style={{
             marginBottom: 12,
             padding: 12,
@@ -749,6 +751,7 @@ export default function CardSettlementsPage() {
         )}
 
       <div
+        className="lk-finance-terminals"
         style={{
           display: "grid",
           gridTemplateColumns:
@@ -789,8 +792,8 @@ export default function CardSettlementsPage() {
               className={
                 processor ===
                 item.processor
-                  ? "primary-button"
-                  : "secondary-button"
+                  ? "primary-button lk-finance-terminal-card is-active"
+                  : "secondary-button lk-finance-terminal-card"
               }
               style={{
                 minHeight: 92,
@@ -844,6 +847,7 @@ export default function CardSettlementsPage() {
       </div>
 
       <form
+        className="lk-finance-payment-form"
         onSubmit={
           handleSubmit
         }
@@ -1063,6 +1067,7 @@ export default function CardSettlementsPage() {
       </form>
 
       <div
+        className="lk-finance-section-heading"
         style={{
           display: "flex",
           justifyContent:
@@ -1094,6 +1099,7 @@ export default function CardSettlementsPage() {
       </div>
 
       <div
+        className="lk-finance-table-shell"
         style={{
           overflowX:
             "auto",
@@ -1103,6 +1109,7 @@ export default function CardSettlementsPage() {
         }}
       >
         <table
+          className="lk-finance-table"
           style={{
             width: "100%",
             borderCollapse:
