@@ -601,6 +601,55 @@
     padding-block: 13px;
   }
 
+  /* Final alignment: submit action is the same size/style as other controls. */
+  .lk-employees-refresh .employees-action-card .employees-action-form
+  .employees-form-actions > button.primary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 190px;
+    min-height: 44px;
+    padding: 10px 20px;
+    border: 1px solid #d71980;
+    border-radius: 12px;
+    background: linear-gradient(125deg, #ef3b9d, #d71980);
+    box-shadow: 0 4px 12px rgba(193, 25, 106, .14);
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 850;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  .lk-employees-refresh .employees-action-card .employees-action-form
+  .employees-form-actions > button.primary-button:hover:not(:disabled) {
+    background: linear-gradient(125deg, #ea2b91, #c81573);
+    box-shadow: 0 5px 14px rgba(193, 25, 106, .2);
+  }
+  .lk-employees-refresh .employees-action-card .employees-action-form
+  .employees-form-actions > button.primary-button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* Keep the print button and movement-count badge visibly separated. */
+  .lk-employees-refresh .employees-ledger-card .employees-section-heading
+  button.secondary-button {
+    margin-inline-start: 7px;
+  }
+  .lk-employees-refresh .employees-ledger-card .employees-section-heading
+  > div:last-child {
+    row-gap: 10px;
+  }
+  @media (max-width: 650px) {
+    .lk-employees-refresh .employees-action-card .employees-action-form
+    .employees-form-actions > button.primary-button {
+      width: 100%;
+      min-width: 0;
+    }
+  }
+
   @media (max-width: 1000px) {
     .lk-employees-refresh .employees-month-close {
       grid-template-columns: minmax(0, 1fr);
