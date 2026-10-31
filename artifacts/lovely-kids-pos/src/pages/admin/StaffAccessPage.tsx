@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import "./StaffAccessPage.css";
 import { usePosRuntime } from "../../app/pos-context";
 import { API_BASE_URL } from "../../lib/api";
 
@@ -36,8 +37,6 @@ const presets: Record<Role, string[]> = {
   inventory: ["inventory.view", "inventory.edit"],
   custom: [],
 };
-const cardStyle = { background: "var(--card-bg, #fff)", border: "1px solid #dce3ed", borderRadius: 12, padding: 18, marginBottom: 16 };
-const fieldStyle = { width: "100%", padding: 10, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box" as const };
 
 export default function StaffAccessPage() {
   const { token, user } = usePosRuntime();
@@ -130,54 +129,57 @@ export default function StaffAccessPage() {
   if (!user?.isOwner) return <p>إدارة المستخدمين والصلاحيات للمالك فقط.</p>;
 
   return (
-    <div dir="rtl" style={{ maxWidth: 1080, margin: "0 auto", padding: 12 }}>
-      <header style={{ marginBottom: 20 }}>
+    <div dir="rtl" className="staff-access-page">
+      <header className="staff-access-hero">
+        <span className="staff-access-eyebrow">الإدارة / المستخدمون والصلاحيات</span>
         <h1>🔐 الصلاحيات وإدارة المستخدمين</h1>
         <p>المالك وحده يستطيع إضافة الموظفين وتعديل صلاحياتهم وتعطيلهم. كل تغيير يلغي جلسات الموظف القديمة.</p>
       </header>
-      {error && <p role="alert" style={{ padding: 12, color: "#b91c1c", background: "#fee2e2", borderRadius: 8 }}>{error}</p>}
-      {message && <p role="status" style={{ padding: 12, color: "#166534", background: "#dcfce7", borderRadius: 8 }}>{message}</p>}
+      {error && <p role="alert" className="staff-access-notice is-error">{error}</p>}
+      {message && <p role="status" className="staff-access-notice is-success">{message}</p>}
 
-      <section style={cardStyle}>
-        <h2>الموظفون ({staff.length})</h2>
-        <button type="button" className="primary-button" onClick={reset}>+ إضافة موظف جديد</button>
-        <div style={{ overflowX: "auto", marginTop: 12 }}>
-          <table style={{ width: "100%", textAlign: "right", borderCollapse: "collapse" }}>
+      <section className="staff-access-panel staff-access-people">
+        <div className="staff-access-panel-head">
+          <div><h2>الموظفون ({staff.length})</h2><p>حسابات الموظفين وأدوارهم وحالة الدخول.</p></div>
+          <button type="button" className="primary-button staff-access-primary" onClick={reset}>+ إضافة موظف جديد</button>
+        </div>
+        <div className="staff-access-table-wrap">
+          <table className="staff-access-table">
             <thead><tr><th>الاسم</th><th>رقم الجوال</th><th>الدور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
             <tbody>{staff.map(s => (
-              <tr key={s.id} style={{ borderTop: "1px solid #e2e8f0" }}>
+              <tr key={s.id}>
                 <td>{s.name}</td><td dir="ltr">{s.phone}</td>
                 <td>{roleOptions.find(r => r.value === s.roleName)?.label ?? s.roleName}</td>
-                <td>{s.enabled ? "مفعل" : "معطل"}</td>
-                <td><button type="button" onClick={() => edit(s)}>تعديل الصلاحيات</button></td>
+                <td><span className={s.enabled ? "staff-access-status is-enabled" : "staff-access-status is-disabled"}>{s.enabled ? "مفعل" : "معطل"}</span></td>
+                <td><button type="button" className="staff-access-secondary" onClick={() => edit(s)}>تعديل الصلاحيات</button></td>
               </tr>
             ))}</tbody>
           </table>
         </div>
       </section>
 
-      <section style={cardStyle}>
-        <h2>{selected ? "تعديل موظف" : "إضافة مستخدم جديد"}</h2>
+      <section className="staff-access-panel staff-access-editor">
+        <div className="staff-access-panel-head"><div><h2>{selected ? "تعديل موظف" : "إضافة مستخدم جديد"}</h2><p>تحديد الحساب والدور والصلاحيات المسموحة فقط.</p></div></div>
         <form onSubmit={save}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-            <label>اسم الموظف<input style={fieldStyle} required value={name} disabled={Boolean(selected)} onChange={e => setName(e.target.value)}/></label>
-            <label>رقم الجوال<input style={fieldStyle} required dir="ltr" value={phone} disabled={Boolean(selected)} onChange={e => setPhone(e.target.value)}/></label>
-            <label>الدور<select style={fieldStyle} value={role} onChange={e => changeRole(e.target.value as Role)}>
+          <div className="staff-access-fields">
+            <label>اسم الموظف<input required value={name} disabled={Boolean(selected)} onChange={e => setName(e.target.value)}/></label>
+            <label>رقم الجوال<input required dir="ltr" value={phone} disabled={Boolean(selected)} onChange={e => setPhone(e.target.value)}/></label>
+            <label>الدور<select value={role} onChange={e => changeRole(e.target.value as Role)}>
               {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select></label>
             <label>{selected ? "كلمة مرور جديدة (اختياري)" : "كلمة مرور الموظف"}
-              <input style={fieldStyle} dir="ltr" type="password" autoComplete="new-password" minLength={10} required={!selected} value={password} onChange={e => setPassword(e.target.value)}/>
+              <input dir="ltr" type="password" autoComplete="new-password" minLength={10} required={!selected} value={password} onChange={e => setPassword(e.target.value)}/>
             </label>
           </div>
-          {selected && <label style={{ display: "block", marginTop: 14 }}><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}/> الحساب مفعل (إلغاؤه يمنع الدخول فورًا)</label>}
-          <h3 style={{ marginTop: 22 }}>تحديد الصلاحيات</h3>
-          <p style={{ fontSize: 13 }}>الصلاحيات تبدأ مقفلة؛ اختر العمليات التي يحتاجها الموظف. لن يتم منحه صلاحية المدير.</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+          {selected && <label className="staff-access-enabled"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}/> الحساب مفعل (إلغاؤه يمنع الدخول فورًا)</label>}
+          <h3 className="staff-access-permission-heading">تحديد الصلاحيات</h3>
+          <p className="staff-access-permission-note">الصلاحيات تبدأ مقفلة؛ اختر العمليات التي يحتاجها الموظف. لن يتم منحه صلاحية المدير.</p>
+          <div className="staff-access-permission-grid">
             {permissionGroups.map(group => (
-              <fieldset key={group.title} style={{ border: "1px solid #d5dce5", borderRadius: 10, padding: 12 }}>
-                <legend style={{ fontWeight: 700 }}>{group.title}</legend>
+              <fieldset key={group.title} className="staff-access-permission-group">
+                <legend>{group.title}</legend>
                 {group.items.map(([key, label]) => (
-                  <label key={key} style={{ display: "block", margin: "7px 0" }}>
+                  <label key={key} className="staff-access-permission-option">
                     <input type="checkbox" checked={permissions.includes(key)}
                       onChange={e => setPermissions(old => e.target.checked ? [...old, key] : old.filter(p => p !== key))}/>
                     {" "}{label}
@@ -186,22 +188,22 @@ export default function StaffAccessPage() {
               </fieldset>
             ))}
           </div>
-          <div style={{ marginTop: 20, maxWidth: 420 }}>
+          <div className="staff-access-owner-confirm">
             <label>تأكيد كلمة مرور المالك (إجباري عند الحفظ)
-              <input style={fieldStyle} required type="password" autoComplete="current-password" value={ownerPassword} onChange={e => setOwnerPassword(e.target.value)}/>
+              <input required type="password" autoComplete="current-password" value={ownerPassword} onChange={e => setOwnerPassword(e.target.value)}/>
             </label>
           </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-            <button type="submit" className="primary-button" disabled={busy}>{busy ? "جاري الحفظ..." : selected ? "حفظ التغييرات" : "إضافة الموظف"}</button>
-            <button type="button" onClick={reset}>إلغاء</button>
+          <div className="staff-access-form-actions">
+            <button type="submit" className="primary-button staff-access-primary" disabled={busy}>{busy ? "جاري الحفظ..." : selected ? "حفظ التغييرات" : "إضافة الموظف"}</button>
+            <button type="button" className="staff-access-secondary" onClick={reset}>إلغاء</button>
           </div>
         </form>
       </section>
 
-      <section style={cardStyle}>
-        <h2>سجل تغييرات الصلاحيات</h2>
-        <div style={{ maxHeight: 220, overflowY: "auto" }}>
-          {audit.length ? audit.map(log => <p key={log.id} style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: 8 }}>
+      <section className="staff-access-panel staff-access-audit">
+        <div className="staff-access-panel-head"><div><h2>سجل تغييرات الصلاحيات</h2><p>سجل نشاط الصلاحيات حسب العمليات المسجلة.</p></div></div>
+        <div className="staff-access-audit-list">
+          {audit.length ? audit.map(log => <p key={log.id} className="staff-access-audit-entry">
             <strong>{log.action === "staff_created" ? "إضافة موظف" : "تعديل الصلاحيات"}</strong>
             {" — "}المستخدم #{log.targetUserId}، بواسطة #{log.actorUserId}
             {" — "}{new Date(log.createdAt).toLocaleString("ar-PS")}
