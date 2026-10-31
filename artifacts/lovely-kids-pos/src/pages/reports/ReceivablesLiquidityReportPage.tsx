@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useState,
@@ -466,7 +467,7 @@ export default function ReceivablesLiquidityReportPage() {
 
   return (
     <section
-      className="liquidity-report-page"
+      className="liquidity-report-page lk-report-refresh"
       dir="rtl"
     >
       <header className="liquidity-report-heading">
