@@ -1368,6 +1368,7 @@ export default function InventoryStockPage() {
             ) && (
               <button
                 type="button"
+                className="inventory-stock-action-button"
                 onClick={() =>
                   openAdjustment({
                     productId:
@@ -1460,6 +1461,7 @@ export default function InventoryStockPage() {
                             <td>
                               <button
                                 type="button"
+                                className="inventory-stock-action-button inventory-stock-action-button--table"
                                 onClick={() =>
                                   openAdjustment(
                                     {
@@ -1640,6 +1642,7 @@ export default function InventoryStockPage() {
                         <td>
                           <button
                             type="button"
+                            className="inventory-stock-action-button inventory-stock-action-button--table"
                             onClick={() => {
                               setSelectedProductId(
                                 product.id,
