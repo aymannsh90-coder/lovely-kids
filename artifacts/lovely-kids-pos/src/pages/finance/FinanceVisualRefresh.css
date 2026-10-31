@@ -392,6 +392,50 @@
 .lk-finance-refresh.cash-session-page .close-day-form {
   border-radius: 14px;
 }
+/* Cash session: RTL heading grouping + legible final-action button.
+   Layout and close-day posting flow remain unchanged. */
+.lk-finance-refresh.lk-finance-cash-session > .panel-heading {
+  direction: rtl;
+  justify-content: flex-start;
+  text-align: right;
+  gap: 12px;
+}
+.lk-finance-refresh.lk-finance-cash-session > .panel-heading > div:not(.panel-icon) {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: right;
+}
+.lk-finance-refresh.lk-finance-cash-session .session-details > div,
+.lk-finance-refresh.lk-finance-cash-session .close-day-heading,
+.lk-finance-refresh.lk-finance-cash-session .close-day-form label {
+  direction: rtl;
+  text-align: right;
+}
+.lk-finance-refresh.lk-finance-cash-session .close-day-form > button.danger-button {
+  color: #fff;
+  background: #b52549;
+  border: 1px solid #9c1b3c;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 900;
+  min-height: 44px;
+  box-shadow: 0 4px 12px rgba(181, 37, 73, .15);
+}
+.lk-finance-refresh.lk-finance-cash-session .close-day-form > button.danger-button:hover:not(:disabled) {
+  color: #fff;
+  background: #9f193a;
+  border-color: #88152f;
+}
+.lk-finance-refresh.lk-finance-cash-session .close-day-form > button.danger-button:disabled {
+  color: #fff;
+  opacity: .7;
+  box-shadow: none;
+}
+.lk-finance-refresh.lk-finance-cash-session .close-day-form > button.danger-button:focus-visible {
+  outline: 3px solid rgba(181, 37, 73, .28);
+  outline-offset: 3px;
+}
+
 /* Readability and layout pass after visual review (2026-10-31).
    Use the available desktop area without changing form fields or finance actions. */
 .lk-finance-refresh.lk-finance-unified-party-voucher .lk-finance-form,
