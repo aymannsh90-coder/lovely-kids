@@ -1278,6 +1278,82 @@ async function handleGrossProfit(
       ),
     );
 
+  // A web-order replacement sale books its merchandise refund in the
+  // posted SALES_RETURNS journal on the replacement's "done" date.
+  // Read the actual journal rather than inferring a refund from the
+  // current order total. This prevents counting the replacement sale
+  // while silently omitting the original returned merchandise revenue.
+  const onlineReturnJournalRows =
+    onlineOrderIds.length > 0
+      ? await db
+          .select({
+            sourceId: financeTransactionsTable.sourceId,
+            debitMinor: financeTransactionLinesTable.debitMinor,
+            creditMinor: financeTransactionLinesTable.creditMinor,
+          })
+          .from(financeTransactionLinesTable)
+          .innerJoin(
+            financeTransactionsTable,
+            eq(financeTransactionLinesTable.transactionId, financeTransactionsTable.id),
+          )
+          .innerJoin(
+            financeAccountsTable,
+            eq(financeTransactionLinesTable.accountId, financeAccountsTable.id),
+          )
+          .where(and(
+            eq(financeTransactionsTable.sourceType, "web_order"),
+            eq(financeTransactionsTable.sourceEvent, "done"),
+            eq(financeTransactionsTable.status, "posted"),
+            eq(financeAccountsTable.code, "SALES_RETURNS"),
+            inArray(financeTransactionsTable.sourceId, onlineOrderIds.map(String)),
+            gte(financeTransactionsTable.businessDate, from),
+            lte(financeTransactionsTable.businessDate, to),
+          ))
+      : [];
+
+  const onlineMerchandiseReturnsMinor =
+    sum(onlineReturnJournalRows.map((entry) => entry.debitMinor - entry.creditMinor));
+
+  // Recognition dates differ: refund revenue is booked on replacement
+  // completion, but returned stock/COGS is recognized only when the
+  // merchandise is physically received. Restrict the cost reversal to
+  // the actual receipt date; never restore COGS for an unreceived return.
+  const onlineReceivedExchanges = await db
+    .select({ id: exchangeDocumentsTable.id })
+    .from(exchangeDocumentsTable)
+    .where(and(
+      eq(exchangeDocumentsTable.status, "completed"),
+      eq(exchangeDocumentsTable.sourceType, "online_order"),
+      sql`(${exchangeDocumentsTable.returnReceivedAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
+      sql`(${exchangeDocumentsTable.returnReceivedAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
+    ));
+
+  const onlineReceivedExchangeIds = onlineReceivedExchanges.map((row) => row.id);
+  const onlineReturnItems = onlineReceivedExchangeIds.length > 0
+    ? await db.select({
+        id: exchangeReturnItemsTable.id,
+        productId: exchangeReturnItemsTable.productId,
+        quantity: exchangeReturnItemsTable.quantity,
+      }).from(exchangeReturnItemsTable)
+        .where(inArray(exchangeReturnItemsTable.exchangeId, onlineReceivedExchangeIds))
+    : [];
+
+  const onlineReturnItemIds = onlineReturnItems.map((item) => item.id);
+  const onlineReturnCosts = onlineReturnItemIds.length > 0
+    ? await db.select({
+        returnItemId: exchangeReturnItemCostsTable.returnItemId,
+        quantity: exchangeReturnItemCostsTable.quantity,
+        costTotalMinor: exchangeReturnItemCostsTable.costTotalMinor,
+        costQuality: exchangeReturnItemCostsTable.costQuality,
+      }).from(exchangeReturnItemCostsTable)
+        .where(inArray(exchangeReturnItemCostsTable.returnItemId, onlineReturnItemIds))
+    : [];
+
+  const onlineReturnCostByItem = new Map(
+    onlineReturnCosts.map((cost) => [cost.returnItemId, cost] as const),
+  );
+  const onlineReturnCogsMinor = sum(onlineReturnCosts.map((cost) => cost.costTotalMinor));
+
   let onlineSalesMinor = 0;
   let onlineShippingMinor = 0;
   let onlineDeliveryMinor = 0;
@@ -1292,6 +1368,26 @@ async function handleGrossProfit(
 
   const onlineQualities:
     string[] = [];
+
+  let onlineReturnQuantity = 0;
+  let onlineTrackedReturnQuantity = 0;
+  let onlineReturnCoverageComplete =
+    onlineReceivedExchanges.length === 0 || onlineReturnItems.length > 0;
+  let onlineMissingReceivedReturnCostLines = 0;
+
+  for (const item of onlineReturnItems) {
+    onlineReturnQuantity += item.quantity;
+    const cost = onlineReturnCostByItem.get(item.id);
+    if (!cost || cost.quantity !== item.quantity) {
+      onlineReturnCoverageComplete = false;
+      onlineMissingReceivedReturnCostLines += 1;
+      continue;
+    }
+    onlineTrackedReturnQuantity += item.quantity;
+    onlineQualities.push(
+      verifiedQuality(item.productId, item.quantity, cost.costTotalMinor, cost.costQuality),
+    );
+  }
 
   for (
     const order of onlineOrders
@@ -1426,8 +1522,14 @@ async function handleGrossProfit(
       documents:
         onlineOrders.length,
 
+      exchangeDocuments:
+        new Set(onlineReturnJournalRows.map((entry) => entry.sourceId)).size,
+
       salesMinor:
         onlineSalesMinor,
+
+      returnsMinor:
+        onlineMerchandiseReturnsMinor,
 
       cogsKnownMinor:
         sum(
@@ -1435,7 +1537,7 @@ async function handleGrossProfit(
             (cost) =>
               cost.costTotalMinor,
           ),
-        ),
+        ) - onlineReturnCogsMinor,
 
       shippingChargedMinor:
         onlineShippingMinor,
@@ -1449,8 +1551,14 @@ async function handleGrossProfit(
       trackedSaleQuantity:
         onlineTrackedSaleQuantity,
 
+      returnQuantity:
+        onlineReturnQuantity,
+
+      trackedReturnQuantity:
+        onlineTrackedReturnQuantity,
+
       costCoverageComplete:
-        onlineCoverageComplete,
+        onlineCoverageComplete && onlineReturnCoverageComplete,
 
       costQualities:
         onlineQualities,
@@ -1463,12 +1571,14 @@ async function handleGrossProfit(
   const totalCostQuantity =
     pos.saleQuantity +
     pos.returnQuantity +
-    online.saleQuantity;
+    online.saleQuantity +
+    online.returnQuantity;
 
   const totalTrackedQuantity =
     pos.trackedSaleQuantity +
     pos.trackedReturnQuantity +
-    online.trackedSaleQuantity;
+    online.trackedSaleQuantity +
+    online.trackedReturnQuantity;
 
   const totalCoverageComplete =
     pos.costCoverageComplete &&
@@ -1497,7 +1607,7 @@ async function handleGrossProfit(
       online.documents,
 
     returnDocuments:
-      pos.returnDocuments,
+      pos.returnDocuments + online.returnDocuments,
 
     exchangeDocuments:
       pos.exchangeDocuments +
@@ -1508,7 +1618,7 @@ async function handleGrossProfit(
       online.salesMinor,
 
     returnsMinor:
-      pos.returnsMinor,
+      pos.returnsMinor + online.returnsMinor,
 
     netSalesMinor:
       totalNetSalesMinor,
@@ -1557,10 +1667,10 @@ async function handleGrossProfit(
       online.trackedSaleQuantity,
 
     returnQuantity:
-      pos.returnQuantity,
+      pos.returnQuantity + online.returnQuantity,
 
     trackedReturnQuantity:
-      pos.trackedReturnQuantity,
+      pos.trackedReturnQuantity + online.trackedReturnQuantity,
 
     costCoveragePercent:
       coveragePercent(
@@ -1840,7 +1950,13 @@ async function handleGrossProfit(
     !online.costCoverageComplete
   ) {
     warnings.push(
-      "بعض الطلبات الإلكترونية المكتملة لا تحتوي تكلفة أو بيانات توصيل مكتملة، لذلك مجمل الربح لا يُعرض كرقم نهائي.",
+      "بعض الطلبات الإلكترونية المكتملة أو المرتجعات المستلمة لا تحتوي تكلفة أو بيانات توصيل مكتملة، لذلك مجمل الربح لا يُعرض كرقم نهائي.",
+    );
+  }
+
+  if (onlineMissingReceivedReturnCostLines > 0) {
+    warnings.push(
+      `يوجد ${onlineMissingReceivedReturnCostLines} سطر مرتجع إلكتروني تم استلامه دون تكلفة استرجاع موثقة؛ يلزم مطابقتها مع فواتير البيع الأصلية.`,
     );
   }
 
@@ -1912,7 +2028,7 @@ async function handleGrossProfit(
         "Finance business date when web order becomes done",
 
       profitDefinition:
-        "Gross profit before operating expenses; POS exchanges are treated as a return plus a new sale with their historical item costs",
+        "Gross profit before operating expenses. POS exchanges recognize both returned merchandise and replacement sales at their dated historic COGS; online exchanges deduct the posted SALES_RETURNS journal on replacement completion and reverse COGS only when returned merchandise is physically received.",
 
       deliveryDefinition:
         "Customer shipping charge minus actual delivery company cost",
