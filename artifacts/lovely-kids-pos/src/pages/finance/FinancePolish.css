@@ -309,6 +309,77 @@
   border-radius: 11px;
 }
 /* Modern date range: retain the browser's real date picker and existing handlers. */
+/* Expenses toolbar: same height and card styling for date pickers, A4, Excel,
+   tile management and the movement refresh button. All buttons remain native. */
+.lk-finance-polish .expense-report-date {
+  width: 164px;
+  height: 64px;
+  min-height: 64px;
+  padding: 6px 10px;
+  gap: 4px;
+  flex: 0 0 164px;
+}
+.lk-finance-polish .expense-report-date input[type="date"] {
+  height: 25px;
+  min-height: 25px;
+}
+.lk-finance-polish .expense-report-toolbar > button.secondary-button,
+.lk-finance-polish .expense-history-section .expense-section-title > button.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  vertical-align: middle;
+  flex: 0 0 164px;
+  width: 164px;
+  min-width: 164px;
+  height: 64px;
+  min-height: 64px;
+  padding: 9px 12px;
+  border: 1px solid #efd1e1;
+  border-radius: 12px;
+  background: #fff;
+  color: #9d2366;
+  box-shadow: 0 2px 9px rgba(131, 61, 96, .055);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lk-finance-polish .expense-report-toolbar > button.secondary-button:hover:not(:disabled),
+.lk-finance-polish .expense-history-section .expense-section-title > button.secondary-button:hover:not(:disabled) {
+  border-color: #e91e8c;
+  background: #fff3f9;
+  box-shadow: 0 4px 14px rgba(233, 30, 140, .10);
+}
+.lk-finance-polish .expense-report-toolbar > button.secondary-button:disabled,
+.lk-finance-polish .expense-history-section .expense-section-title > button.secondary-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+@media (max-width: 740px) {
+  .lk-finance-polish .expense-report-date,
+  .lk-finance-polish .expense-report-toolbar > button.secondary-button {
+    width: auto;
+    min-width: 145px;
+    flex: 1 1 145px;
+  }
+  .lk-finance-polish .expense-history-section .expense-section-title > button.secondary-button {
+    width: auto;
+    min-width: 145px;
+    flex: 0 1 164px;
+  }
+}
+@media (max-width: 420px) {
+  .lk-finance-polish .expense-report-date,
+  .lk-finance-polish .expense-report-toolbar > button.secondary-button {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
+
 .lk-finance-polish .expense-report-toolbar {
   gap: 10px !important;
   align-items: end;
