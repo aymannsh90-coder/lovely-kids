@@ -47,6 +47,7 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import { getProductQuantity } from "./product-quantity";
 import {
   calculatePromotions,
 } from "./promotion-engine";
@@ -1573,6 +1574,51 @@ async function handleInventoryProductCard(
     ).values(),
   ];
 
+  // Cost must not be queried or serialized for non-owner POS accounts.
+  // Authentication and authorization are enforced here, not in the UI.
+  let ownerCost:
+    | {
+        unitCostMinor: number;
+        basis: "average" | "reference";
+        quality: "confirmed" | "estimated" | "mixed" | null;
+        stockMatchesAccounting: boolean;
+      }
+    | null = null;
+
+  if (auth.user.isOwner) {
+    const costRows = await db
+      .select({
+        quantityOnHand: productCostStateTable.quantityOnHand,
+        inventoryValueMinor: productCostStateTable.inventoryValueMinor,
+        referenceUnitCostMinor: productCostStateTable.referenceUnitCostMinor,
+        costQuality: productCostStateTable.costQuality,
+      })
+      .from(productCostStateTable)
+      .where(eq(productCostStateTable.productId, productId))
+      .limit(1);
+
+    const state = costRows[0];
+
+    if (state) {
+      const useAverage = state.quantityOnHand > 0;
+      const physicalQuantity = getProductQuantity({
+        stock: product.stock,
+        colorVariants: product.colorVariants,
+      });
+
+      ownerCost = {
+        unitCostMinor: useAverage
+          ? Math.round(state.inventoryValueMinor / state.quantityOnHand)
+          : state.referenceUnitCostMinor,
+        basis: useAverage ? "average" : "reference",
+        quality: state.costQuality,
+        stockMatchesAccounting:
+          physicalQuantity === null ||
+          physicalQuantity === state.quantityOnHand,
+      };
+    }
+  }
+
   return json({
     product: toPosProductLookup(
       product,
@@ -1582,6 +1628,7 @@ async function handleInventoryProductCard(
     ),
     movements,
     suppliers,
+    ...(auth.user.isOwner ? { cost: ownerCost } : {}),
   });
 }
 
