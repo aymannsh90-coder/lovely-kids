@@ -1,0 +1,344 @@
+/* Lovely Kids POS inventory presentation. Shared across the five inventory views.
+   Screen only; calculations, product editor iframe, scanner and stock adjustments stay untouched. */
+@media screen {
+  .lk-inventory-refresh {
+    --lk-inv-ink: #233746;
+    --lk-inv-pink: #e91e8c;
+    --lk-inv-border: #dce7ed;
+    --lk-inv-shadow: 0 7px 24px rgba(45,70,88,.055);
+    direction: rtl;
+    min-width: 0;
+    gap: 16px;
+    color: var(--lk-inv-ink);
+    font-size: 14px;
+  }
+  .lk-inventory-refresh *,
+  .lk-inventory-refresh *::before,
+  .lk-inventory-refresh *::after { box-sizing: border-box; }
+  .lk-inventory-refresh :is(button, a, input, select, textarea):focus-visible {
+    outline: 3px solid rgba(233,30,140,.25);
+    outline-offset: 2px;
+  }
+
+  /* Consistent section title, matching the approved delivery-accounting and staff pages. */
+  .lk-inventory-refresh :is(.sales-return-header, .pos-products-header, .pos-product-editor-heading) {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    min-width: 0;
+    margin: 0;
+    padding: 19px 23px;
+    border: 1px solid #efd9e5;
+    border-radius: 18px;
+    background: linear-gradient(115deg, #fff 22%, #fff5fa 76%, #fce7f1);
+    box-shadow: var(--lk-inv-shadow);
+  }
+  .lk-inventory-refresh :is(.sales-return-header, .pos-products-header, .pos-product-editor-heading)::before {
+    content: "";
+    position: absolute;
+    top: 18px;
+    bottom: 18px;
+    right: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+    background: var(--lk-inv-pink);
+  }
+  .lk-inventory-refresh :is(.sales-return-header, .pos-products-header, .pos-product-editor-heading) h1 {
+    margin: 2px 0 6px;
+    color: #203744;
+    font-size: clamp(20px,1.65vw,27px);
+    font-weight: 900;
+    line-height: 1.32;
+  }
+  .lk-inventory-refresh :is(.sales-return-header, .pos-products-header, .pos-product-editor-heading) p {
+    margin: 0;
+    color: #687f90;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .lk-inventory-refresh .pos-products-eyebrow {
+    display: inline-block;
+    color: #af1768;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  /* Buttons: vibrant approved pink for primaries, very light pink for secondary actions. */
+  .lk-inventory-refresh :is(button.primary-button, a.primary-button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 43px;
+    padding: 9px 16px;
+    border: 1px solid #d71980;
+    border-radius: 11px;
+    color: #fff;
+    background: linear-gradient(125deg,#ef3b9d,#d71980);
+    box-shadow: 0 3px 10px rgba(193,25,106,.13);
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.35;
+    text-decoration: none;
+  }
+  .lk-inventory-refresh button.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 43px;
+    padding: 9px 16px;
+    border: 1px solid #eed0df;
+    border-radius: 11px;
+    color: #a51d66;
+    background: #fff8fb;
+    box-shadow: 0 2px 6px rgba(160,38,105,.05);
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.35;
+  }
+  .lk-inventory-refresh :is(button.primary-button,button.secondary-button,a.primary-button):disabled {
+    opacity: .55;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  /* Data sections: preserve forms and operational content, adjust outer surfaces. */
+  .lk-inventory-refresh :is(.sales-return-search-panel, .sales-return-invoice, .sales-return-items-panel, .pos-products-toolbar) {
+    min-width: 0;
+    padding: 19px 21px;
+    border: 1px solid #e0e9ef;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lk-inv-shadow);
+  }
+  .lk-inventory-refresh .sales-return-section-title {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-bottom: 13px;
+    border-bottom: 1px solid #e6edf2;
+  }
+  .lk-inventory-refresh .sales-return-section-title h3 {
+    color: #203744;
+    font-size: 18px;
+    font-weight: 900;
+  }
+  .lk-inventory-refresh .sales-return-section-title :is(p,span) {
+    color: #6c8292;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .lk-inventory-refresh .sales-return-field > span,
+  .lk-inventory-refresh .pos-products-search > span {
+    color: #4d687b;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .lk-inventory-refresh :is(.sales-return-field input, .sales-return-field select, .sales-return-field textarea, .pos-products-search input) {
+    min-height: 43px;
+    border: 1px solid #d8e5ec;
+    border-radius: 11px;
+    color: #263e50;
+    background: #fff;
+    font: inherit;
+    font-size: 13px;
+  }
+  .lk-inventory-refresh :is(.sales-return-field input, .sales-return-field select, .sales-return-field textarea, .pos-products-search input):focus {
+    border-color: #e91e8c;
+    box-shadow: 0 0 0 3px rgba(233,30,140,.09);
+  }
+  .lk-inventory-refresh .sales-return-search-form {
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid {
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid > div {
+    min-width: 0;
+    padding: 16px 17px;
+    border: 1px solid #dce7ed;
+    border-radius: 14px;
+    background: #f4f8fb;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid > div:nth-child(4n+1) {
+    background: #fff1f8;
+    border-color: #f2cfe1;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid > div:nth-child(4n+2) {
+    background: #edf6ff;
+    border-color: #d3e6f7;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid > div:nth-child(4n+3) {
+    background: #edf9f4;
+    border-color: #d2e9dd;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid > div:nth-child(4n) {
+    background: #fff8ed;
+    border-color: #f1e2c4;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid > div span {
+    color: #557188;
+    font-size: 12px;
+    font-weight: 850;
+  }
+  .lk-inventory-refresh .sales-return-summary-grid > div strong {
+    color: #203e54;
+    font-size: clamp(17px, 1.4vw, 22px);
+    font-weight: 900;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  /* Updated data tables, no changes to movement history or quantity inputs. */
+  .lk-inventory-refresh .sales-return-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #dce7ed;
+    border-radius: 13px;
+    background: #fff;
+  }
+  .lk-inventory-refresh .sales-return-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .lk-inventory-refresh .sales-return-table thead th,
+  .lk-inventory-refresh .sales-return-table th {
+    padding: 12px 11px;
+    background: #eaf3f9;
+    color: #49677e;
+    border-bottom: 1px solid #d9e6ef;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .lk-inventory-refresh .sales-return-table td {
+    padding: 12px 11px;
+    border-bottom: 1px solid #edf1f4;
+    color: #2b4759;
+    font-size: 13px;
+    vertical-align: middle;
+  }
+  .lk-inventory-refresh .sales-return-table tbody tr:nth-child(even) { background: #f8fbfd; }
+  .lk-inventory-refresh .sales-return-table tbody tr:hover { background: #fff7fb; }
+
+  /* Product listing — restrained highlight of selected filters and row actions. */
+  .lk-inventory-products .pos-products-toolbar { gap: 13px; }
+  .lk-inventory-products .pos-products-filters button {
+    min-height: 40px;
+    padding: 7px 13px;
+    border: 1px solid #e2d9e3;
+    border-radius: 11px;
+    color: #684f61;
+    background: #fff7fb;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .lk-inventory-products .pos-products-filters button.active {
+    border-color: #eb92bf;
+    color: #ae1d69;
+    background: #ffecf6;
+    box-shadow: 0 2px 6px rgba(233,30,140,.07);
+  }
+  .lk-inventory-products .pos-products-summary {
+    padding: 14px 17px;
+    border: 1px solid #d9e8f1;
+    border-radius: 13px;
+    background: #eef7fc;
+    color: #45677b;
+    font-size: 13px;
+  }
+  .lk-inventory-products .pos-products-summary strong { color: #17445e; font-size: 15px; }
+  .lk-inventory-products .pos-product-row {
+    padding: 15px;
+    border: 1px solid #dce7ed;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: var(--lk-inv-shadow);
+  }
+  .lk-inventory-products .pos-product-row:hover:not(.is-deleted) {
+    border-color: #e8bbd0;
+    background: #fffafd;
+  }
+  .lk-inventory-products .pos-product-image-shell {
+    border-color: #dbe6ed;
+    background: #f3f8fb;
+    border-radius: 13px;
+  }
+  .lk-inventory-products .pos-product-title-line h2 {
+    color: #203744;
+    font-size: 17px;
+    font-weight: 900;
+  }
+  .lk-inventory-products .pos-product-meta > span {
+    padding: 6px 9px;
+    border-radius: 9px;
+    background: #f1f6fa;
+    color: #486a80;
+    font-size: 12px;
+  }
+  .lk-inventory-products .pos-product-action {
+    min-height: 40px;
+    padding: 7px 10px;
+    border-radius: 10px;
+    border: 1px solid #d7e5ec;
+    background: #fff;
+    color: #3b5b6e;
+    font-size: 12px;
+    font-weight: 850;
+  }
+  .lk-inventory-products .pos-product-action.primary {
+    border-color: #f0b8d3;
+    background: #fff1f8;
+    color: #ae1768;
+  }
+  .lk-inventory-products .pos-product-action.danger {
+    border-color: #e9b5c3;
+    background: #fff6f7;
+    color: #a3294a;
+  }
+
+  /* Editor appearance is limited to the POS wrapper. Embedded storefront UI is untouched. */
+  .lk-inventory-editor .pos-product-editor-frame-shell {
+    overflow: hidden;
+    border: 1px solid #dce7ed;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lk-inv-shadow);
+  }
+  .lk-inventory-editor .pos-product-editor-frame {
+    border: 0;
+    width: 100%;
+  }
+  .lk-inventory-refresh :is(.pos-products-empty, .pos-products-denied) {
+    padding: 26px 20px;
+    border: 1px dashed #ccdfe9;
+    border-radius: 16px;
+    background: #f9fcfe;
+    color: #617a8b;
+  }
+
+  @media (max-width: 1000px) {
+    .lk-inventory-refresh .sales-return-search-form { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .lk-inventory-refresh .sales-return-search-form > button { grid-column: 1 / -1; }
+    .lk-inventory-refresh .sales-return-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  }
+  @media (max-width: 700px) {
+    .lk-inventory-refresh { gap: 12px; }
+    .lk-inventory-refresh :is(.sales-return-header, .pos-products-header, .pos-product-editor-heading) {
+      padding: 15px 17px;
+    }
+    .lk-inventory-refresh :is(.sales-return-search-panel, .sales-return-invoice, .sales-return-items-panel, .pos-products-toolbar) { padding: 15px; }
+    .lk-inventory-refresh .sales-return-search-form { grid-template-columns: minmax(0,1fr); }
+    .lk-inventory-refresh .sales-return-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .lk-inventory-products .pos-product-row { gap: 10px; }
+    .lk-inventory-products .pos-product-actions { min-width: 0; }
+  }
+  @media (max-width: 460px) {
+    .lk-inventory-refresh .sales-return-summary-grid { grid-template-columns: minmax(0,1fr); }
+    .lk-inventory-products .pos-products-header-actions { width: 100%; }
+    .lk-inventory-products .pos-products-header-actions > button { flex: 1; }
+  }
+}

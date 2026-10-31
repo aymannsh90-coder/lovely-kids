@@ -1,3 +1,4 @@
+import "./InventoryVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -286,7 +287,7 @@ export default function QuickStockCheckPage() {
   }, [product]);
 
   return (
-    <section className="sales-return-page">
+    <section className="sales-return-page lk-inventory-refresh lk-inventory-quick">
       <header className="sales-return-header">
         <div>
           <h1>فحص سريع للمخزون</h1>

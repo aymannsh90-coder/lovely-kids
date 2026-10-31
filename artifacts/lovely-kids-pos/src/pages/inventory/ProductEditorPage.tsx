@@ -1,3 +1,4 @@
+import "./InventoryVisualRefresh.css";
 import { useEffect, useMemo, useRef } from "react";
 import {
   useNavigate,
@@ -92,7 +93,7 @@ export default function ProductEditorPage() {
 
   if (!canManage) {
     return (
-      <section className="pos-product-editor-page">
+      <section className="pos-product-editor-page lk-inventory-refresh lk-inventory-editor">
         <div className="pos-products-denied">
           <strong>غير مصرح</strong>
           <p>إدارة الأصناف متاحة للمالك والمديرين فقط.</p>
@@ -102,7 +103,7 @@ export default function ProductEditorPage() {
   }
 
   return (
-    <section className="pos-product-editor-page">
+    <section className="pos-product-editor-page lk-inventory-refresh lk-inventory-editor">
       <div className="pos-product-editor-heading">
         <div>
           <span className="pos-products-eyebrow">الأصناف والمخزون</span>

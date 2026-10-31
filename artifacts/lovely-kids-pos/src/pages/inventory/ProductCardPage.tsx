@@ -1,3 +1,4 @@
+import "./InventoryVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -693,7 +694,7 @@ export default function ProductCardPage() {
   }
 
   return (
-    <section className="sales-return-page">
+    <section className="sales-return-page lk-inventory-refresh lk-inventory-card">
       <header className="sales-return-header">
         <div>
           <h1>بطاقة الصنف</h1>

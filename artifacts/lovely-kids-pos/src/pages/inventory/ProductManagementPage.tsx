@@ -1,3 +1,4 @@
+import "./InventoryVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -431,7 +432,7 @@ export default function ProductManagementPage() {
 
   if (!canManage) {
     return (
-      <section className="pos-products-page">
+      <section className="pos-products-page lk-inventory-refresh lk-inventory-products">
         <div className="pos-products-denied">
           <strong>غير مصرح</strong>
           <p>إدارة الأصناف متاحة للمالك والمديرين فقط.</p>
@@ -441,7 +442,7 @@ export default function ProductManagementPage() {
   }
 
   return (
-    <section className="pos-products-page">
+    <section className="pos-products-page lk-inventory-refresh lk-inventory-products">
       <header className="pos-products-header">
         <div>
           <span className="pos-products-eyebrow">الأصناف والمخزون</span>

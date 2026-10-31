@@ -1,3 +1,4 @@
+import "./InventoryVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -1000,7 +1001,7 @@ export default function InventoryStockPage() {
   }
 
   return (
-    <section className="sales-return-page">
+    <section className="sales-return-page lk-inventory-refresh lk-inventory-stock">
       <header className="sales-return-header">
         <div>
           <h1>
