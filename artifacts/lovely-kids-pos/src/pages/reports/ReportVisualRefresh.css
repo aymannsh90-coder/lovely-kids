@@ -1,0 +1,455 @@
+/* Lovely Kids POS — coherent report and statement visuals.
+   Screen-only presentation, scoped to opted-in report routes.
+   Print layouts, generated A4/Excel output, report APIs and values are untouched. */
+@media screen {
+  .lk-report-refresh {
+    --lkr-rose: #e91e8c;
+    --lkr-rose-ink: #a71563;
+    --lkr-ink: #233b4c;
+    --lkr-muted: #6b8090;
+    --lkr-border: #e1e9ef;
+    --lkr-shadow: 0 6px 20px rgba(33, 70, 89, .055);
+    color: var(--lkr-ink);
+    min-width: 0;
+  }
+  .lk-report-refresh :is(button, input, select, textarea):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .26);
+    outline-offset: 2px;
+  }
+  /* Section headers retain existing content/actions but share the visual hierarchy. */
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .finance-statements-heading,
+    .trial-balance-heading,
+    .financial-statements-heading,
+    .gross-profit-hero,
+    .inventory-valuation-hero,
+    .product-analytics-hero,
+    .sales-analytics-hero,
+    .liquidity-report-heading,
+    .inventory-intelligence-hero,
+    .lk-report-historical-header
+  ) {
+    border: 1px solid #f1d5e5;
+    border-right: 4px solid var(--lkr-rose);
+    border-radius: 17px;
+    background: linear-gradient(108deg, #fff 24%, #fff7fb 76%, #fdeaf4);
+    box-shadow: var(--lkr-shadow);
+    padding: 18px 21px;
+    min-width: 0;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar
+  ) {
+    gap: 14px;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .trial-balance-heading,
+    .financial-statements-heading,
+    .liquidity-report-heading
+  ) :is(h1, h2) {
+    font-size: clamp(19px, 1.65vw, 24px);
+    font-weight: 900;
+    line-height: 1.35;
+    color: var(--lkr-ink);
+  }
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .trial-balance-heading,
+    .financial-statements-heading,
+    .liquidity-report-heading
+  ) p {
+    color: var(--lkr-muted);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  /* Date and account filters: a consistent comfortable control height. */
+  .lk-report-refresh :is(
+    .customer-balances-filters,
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-filters,
+    .lk-report-historical-filters
+  ) {
+    border: 1px solid #e2e9ef;
+    border-radius: 15px;
+    background: #f8fafc;
+    padding: 14px;
+    gap: 11px;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-filters,
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-filters,
+    .lk-report-historical-filters
+  ) label {
+    min-width: 0;
+    color: #516c7d;
+    font-weight: 800;
+    font-size: 12px;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-filters,
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-filters,
+    .lk-report-historical-filters
+  ) :is(input, select) {
+    min-height: 41px;
+    border: 1px solid #d8e5ec;
+    border-radius: 10px;
+    background: #fff;
+    color: #294253;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 11px;
+    max-width: 100%;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-filters,
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .inventory-valuation-filters,
+    .gross-profit-datebar,
+    .product-analytics-datebar,
+    .sales-analytics-filters,
+    .lk-report-historical-filters
+  ) input[type="date"] {
+    min-width: 135px;
+    font-variant-numeric: tabular-nums;
+    direction: rtl;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .lk-report-historical-filters
+  ) :is(.primary-button, .secondary-button) {
+    min-height: 41px;
+    border-radius: 11px;
+    padding: 9px 15px;
+    font-size: 12px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .lk-report-historical-filters
+  ) .primary-button {
+    color: #fff;
+    background: linear-gradient(120deg, #e91e8c, #c71675);
+    border-color: #cf227b;
+    box-shadow: 0 4px 10px rgba(200, 29, 115, .11);
+  }
+  .lk-report-refresh :is(
+    .customer-balances-heading,
+    .customer-statement-toolbar,
+    .supplier-statement-toolbar,
+    .customer-statement-filters,
+    .supplier-statement-filters,
+    .finance-statement-filters,
+    .trial-balance-filters,
+    .financial-statements-filters,
+    .lk-report-historical-filters
+  ) .secondary-button {
+    background: #fff;
+    color: #365568;
+    border: 1px solid #dce6ec;
+  }
+  /* Financial statement navigation and the general reporting landing screen. */
+  .lk-report-refresh .finance-statement-tabs {
+    border: 1px solid #e3eaf0;
+    border-radius: 15px;
+    background: #fff;
+    padding: 9px;
+    gap: 7px;
+    box-shadow: var(--lkr-shadow);
+  }
+  .lk-report-refresh .finance-statement-tabs > button {
+    border-radius: 10px;
+    min-height: 39px;
+    font-size: 12px;
+    font-weight: 850;
+  }
+  .lk-report-refresh .finance-statement-tabs > button.is-active {
+    background: #fff0f8;
+    color: #ad1668;
+    border-color: #f0b9d6;
+  }
+  .lk-report-refresh :is(
+    .finance-statement-summary > article,
+    .customer-balances-card,
+    .supplier-statement-summary > article,
+    .trial-balance-metric,
+    .liquidity-summary-card
+  ) {
+    border: 1px solid #e0e9ef;
+    border-radius: 15px;
+    box-shadow: var(--lkr-shadow);
+  }
+  .lk-report-refresh .customer-balances-summary {
+    gap: 12px;
+    margin-bottom: 2px;
+  }
+  .lk-report-refresh .customer-balances-card {
+    min-height: 106px;
+    padding: 16px;
+    background: #fff;
+  }
+  .lk-report-refresh .customer-balances-card:first-child {
+    background: #effaf5;
+    border-color: #cfebdc;
+  }
+  .lk-report-refresh .customer-balances-card:nth-child(2) {
+    background: #fff3f5;
+    border-color: #f4d8dd;
+  }
+  .lk-report-refresh .customer-balances-card:nth-child(3) {
+    background: #fff5fb;
+    border-color: #f1d7e7;
+  }
+  .lk-report-refresh .customer-balances-card:nth-child(4) {
+    background: #f0f7ff;
+    border-color: #dae7f7;
+  }
+  .lk-report-refresh .customer-balances-card > span {
+    font-size: 12px;
+    color: #63798b;
+    font-weight: 800;
+  }
+  .lk-report-refresh .customer-balances-card > strong {
+    display: block;
+    font-size: clamp(19px, 1.5vw, 25px);
+    font-weight: 900;
+    color: #263f51;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .lk-report-refresh .customer-balances-card:first-child > strong { color: #087755; }
+  .lk-report-refresh .customer-balances-card:nth-child(2) > strong { color: #b62c45; }
+  .lk-report-refresh .customer-balances-card:nth-child(3) > strong { color: #a31662; }
+  .lk-report-refresh .finance-statement-summary > article:nth-child(1) { background: #f2f8ff; }
+  .lk-report-refresh .finance-statement-summary > article:nth-child(2) { background: #effbf5; }
+  .lk-report-refresh .finance-statement-summary > article:nth-child(3) { background: #fff6ed; }
+  .lk-report-refresh .finance-statement-summary > article:nth-child(4) { background: #fff1f8; }
+  /* Screen-only table readability. Never edit the print-only document templates. */
+  .lk-report-refresh :is(
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table,
+    .finance-statement-table-card table,
+    .trial-balance-table,
+    .financial-missing-cost-table-wrap table,
+    .inventory-valuation-table,
+    .gross-profit-review-table,
+    .liquidity-aging-table,
+    .liquidity-checks-table
+  ) {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table,
+    .finance-statement-table-card table,
+    .trial-balance-table,
+    .inventory-valuation-table,
+    .gross-profit-review-table,
+    .liquidity-aging-table,
+    .liquidity-checks-table
+  ) thead th {
+    background: #f2f6fa;
+    color: #506a7d;
+    font-weight: 900;
+    padding: 12px 10px;
+    border-bottom: 1px solid #dee8ef;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table,
+    .finance-statement-table-card table,
+    .trial-balance-table,
+    .inventory-valuation-table,
+    .gross-profit-review-table,
+    .liquidity-aging-table,
+    .liquidity-checks-table
+  ) tbody td {
+    padding: 11px 10px;
+    line-height: 1.65;
+    vertical-align: middle;
+    border-bottom: 1px solid #ecf0f3;
+  }
+  .lk-report-refresh :is(
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table,
+    .finance-statement-table-card table,
+    .trial-balance-table,
+    .inventory-valuation-table,
+    .gross-profit-review-table,
+    .liquidity-aging-table,
+    .liquidity-checks-table
+  ) tbody tr:hover td {
+    background: #fff7fb;
+  }
+  .lk-report-refresh :is(
+    .finance-statement-table-card,
+    .trial-balance-table-card,
+    .inventory-valuation-table-card,
+    .gross-profit-review-table-wrap,
+    .liquidity-aging-card,
+    .liquidity-checks-card
+  ) {
+    border-radius: 16px;
+    border-color: #e2e9ef;
+    box-shadow: var(--lkr-shadow);
+  }
+  /* Customer and supplier reports show print-like statements on screen.
+     Keep their printed markup unchanged; only decorate the browser view. */
+  .lk-report-refresh .customer-statement-print,
+  .lk-report-refresh .supplier-statement-print,
+  .lk-report-refresh .customer-balances-print {
+    border: 1px solid #e5ebf0;
+    border-radius: 16px;
+    box-shadow: var(--lkr-shadow);
+    padding: 18px;
+    min-width: 0;
+    background: #fff;
+  }
+  .lk-report-refresh .customer-statement-balance-strip,
+  .lk-report-refresh .supplier-statement-summary {
+    border-radius: 13px;
+    border-color: #dbe8ec;
+  }
+  /* The historical inventory report had only inline-layout styling. */
+  .lk-report-refresh.lk-report-historical .lk-report-historical-panel {
+    border: 1px solid #e0e9ef;
+    border-radius: 18px;
+    box-shadow: var(--lkr-shadow);
+  }
+  .lk-report-refresh.lk-report-historical .lk-report-historical-header {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+  .lk-report-refresh.lk-report-historical .lk-report-historical-header h1 {
+    margin: 0 0 6px;
+    font-size: clamp(20px, 1.8vw, 26px);
+    font-weight: 900;
+  }
+  .lk-report-refresh.lk-report-historical .lk-report-historical-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    margin-top: 15px;
+  }
+  .lk-report-refresh.lk-report-historical .lk-report-historical-filters > label {
+    display: grid;
+    gap: 6px;
+  }
+  .lk-report-refresh.lk-report-historical .lk-report-historical-filters > :is(button, label) {
+    flex: 0 1 auto;
+  }
+  .lk-report-refresh.lk-report-historical .lk-report-historical-filters > button {
+    min-height: 41px;
+    border-radius: 11px;
+    padding: 9px 14px;
+    font-size: 12px;
+    font-weight: 850;
+  }
+  /* Smaller enhancements on advanced dashboards without disturbing their analytics. */
+  .lk-report-refresh :is(
+    .inventory-valuation-metrics > *,
+    .product-analytics-metrics > *,
+    .sales-analytics-metrics > *,
+    .inventory-intelligence-metrics > *,
+    .gross-profit-metric,
+    .liquidity-aging-card
+  ) {
+    border-radius: 15px;
+  }
+  @media (max-width: 820px) {
+    .lk-report-refresh :is(
+      .customer-balances-heading,
+      .customer-statement-toolbar,
+      .supplier-statement-toolbar,
+      .finance-statements-heading,
+      .trial-balance-heading,
+      .financial-statements-heading,
+      .lk-report-historical-header
+    ) {
+      padding: 14px;
+    }
+    .lk-report-refresh .customer-balances-summary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .lk-report-refresh :is(.customer-statement-filters, .supplier-statement-filters) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 520px) {
+    .lk-report-refresh .customer-balances-summary {
+      grid-template-columns: 1fr;
+    }
+    .lk-report-refresh :is(.customer-statement-filters, .supplier-statement-filters) {
+      grid-template-columns: 1fr;
+    }
+    .lk-report-refresh :is(
+      .customer-statement-print,
+      .supplier-statement-print,
+      .customer-balances-print
+    ) {
+      padding: 10px;
+    }
+    .lk-report-refresh .lk-report-historical-filters > button {
+      width: 100%;
+    }
+  }
+}
