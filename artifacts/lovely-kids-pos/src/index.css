@@ -20586,23 +20586,23 @@ button.inventory-intelligence-metric {
 /* End unified POS checkout footer */
 
 
-/* Lovely Kids POS — approved petrol-blue main navigation.
-   Presentation-only: preserve menu height, spacing, active states and navigation behavior. */
+/* Lovely Kids POS — visibly lighter petrol-blue primary navigation.
+   Visual-only: preserve size, spacing, active route and navigation behavior. */
 .pos-shamel-primary-menu {
-  background: #35586b;
-  border-inline-color: #294858;
-  border-bottom-color: #294858;
+  background: linear-gradient(180deg, #d9eff4, #b9dfe8);
+  border-inline-color: #9bc8d4;
+  border-bottom-color: #91bfca;
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button {
   color: #ffffff;
-  background: linear-gradient(180deg, #486d80, #3d6072);
-  border-color: #628494;
+  background: linear-gradient(180deg, #317b91, #236a80);
+  border-color: #619aad;
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button:hover:not(.is-active),
 .pos-shamel-primary-menu .pos-shamel-primary-button:focus-visible:not(.is-active) {
   color: #ffffff;
-  background: linear-gradient(180deg, #587e90, #456c7e);
-  border-color: #a7cad7;
+  background: linear-gradient(180deg, #28738a, #175970);
+  border-color: #5d9fb5;
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button.is-active {
   color: #ffffff;
