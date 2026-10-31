@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinancePolish.css";
 import {
   ApiError,
   createPosEmployeeAdvance,
@@ -1886,7 +1887,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <section className="expense-hub-page">
+    <section className="expense-hub-page lk-finance-polish">
       <div className="expense-hub-heading">
         <div>
           <span className="expense-hub-eyebrow">
