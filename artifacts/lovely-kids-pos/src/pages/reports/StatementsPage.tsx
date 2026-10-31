@@ -1,3 +1,4 @@
+import "./ReportVisualRefresh.css";
 import {
   useEffect,
   useMemo,
@@ -406,7 +407,7 @@ export default function StatementsPage() {
 
   return (
     <section
-      className="finance-statements-page"
+      className="finance-statements-page lk-report-refresh"
       dir="rtl"
     >
       <header className="finance-statements-heading">
