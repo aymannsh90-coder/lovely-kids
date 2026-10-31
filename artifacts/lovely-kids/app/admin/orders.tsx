@@ -6292,7 +6292,8 @@ export default function AdminOrdersScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.editOrderModalCard, {
             backgroundColor: colors.card, borderColor: colors.border,
-            maxWidth: 440, padding: 20, gap: 14,
+            width: Platform.OS === "web" ? 440 : "94%",
+            height: "auto", maxWidth: 440, maxHeight: "90%", padding: 20, gap: 14,
           }]}>
             <Text style={[styles.editOrderModalTitle, { color: colors.foreground, textAlign: "right" }]}>
               تعديل تكلفة شركة التوصيل — طلب #{companyCostOrder?.id}
