@@ -20586,28 +20586,31 @@ button.inventory-intelligence-metric {
 /* End unified POS checkout footer */
 
 
-/* Lovely Kids POS — unified, calm petrol navigation.
-   Only colors and surface treatments change; sizing and behavior stay intact. */
+/* Lovely Kids POS — refined light navigation, aligned with the new card design.
+   Purely visual. Keep the existing menu height, spacing, routes and interactions. */
 .pos-shamel-primary-menu {
-  background: linear-gradient(180deg, #547b8d, #426a7c);
-  border-inline-color: #426a7c;
-  border-bottom-color: #385d6f;
+  background: linear-gradient(180deg, #f6f9fb, #eaf1f5);
+  border-inline-color: #d0dfe7;
+  border-bottom-color: #d0dfe7;
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.045);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: none;
+  color: #2f5164;
+  background: linear-gradient(180deg, #ffffff, #f5f8fb);
+  border-color: #d5e2ea;
+  border-radius: 11px;
+  box-shadow: 0 1px 3px rgba(39, 81, 104, 0.045);
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button:hover:not(.is-active),
 .pos-shamel-primary-menu .pos-shamel-primary-button:focus-visible:not(.is-active) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.36);
+  color: #1d4960;
+  background: #eaf5fa;
+  border-color: #91bfce;
+  box-shadow: 0 2px 6px rgba(39, 81, 104, 0.09);
 }
 .pos-shamel-primary-menu .pos-shamel-primary-button.is-active {
   color: #ffffff;
-  background: #e91e8c;
-  border-color: #ef74b4;
-  box-shadow: 0 2px 7px rgba(93, 28, 62, 0.2);
+  background: linear-gradient(180deg, #ef3d9b, #d7197a);
+  border-color: #de318e;
+  border-radius: 11px;
+  box-shadow: 0 2px 7px rgba(199, 29, 113, 0.18);
 }
