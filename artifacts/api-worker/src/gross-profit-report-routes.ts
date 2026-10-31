@@ -1314,6 +1314,34 @@ async function handleGrossProfit(
   const onlineMerchandiseReturnsMinor =
     sum(onlineReturnJournalRows.map((entry) => entry.debitMinor - entry.creditMinor));
 
+  // Actual delivery expense is a posted ledger amount on its business date,
+  // including retroactive carrier-cost corrections and reversals. Summing
+  // current order.deliveryCompanyCost would omit prior-period corrections
+  // and misstate the expense in the selected report period.
+  const postedOnlineDeliveryLines = await db
+    .select({
+      debitMinor: financeTransactionLinesTable.debitMinor,
+      creditMinor: financeTransactionLinesTable.creditMinor,
+    })
+    .from(financeTransactionLinesTable)
+    .innerJoin(
+      financeTransactionsTable,
+      eq(financeTransactionLinesTable.transactionId, financeTransactionsTable.id),
+    )
+    .innerJoin(
+      financeAccountsTable,
+      eq(financeTransactionLinesTable.accountId, financeAccountsTable.id),
+    )
+    .where(and(
+      eq(financeTransactionsTable.sourceType, "web_order"),
+      eq(financeTransactionsTable.status, "posted"),
+      eq(financeAccountsTable.code, "DELIVERY_EXPENSE"),
+      gte(financeTransactionsTable.businessDate, from),
+      lte(financeTransactionsTable.businessDate, to),
+    ));
+  const postedOnlineDeliveryCostMinor =
+    sum(postedOnlineDeliveryLines.map((line) => line.debitMinor - line.creditMinor));
+
   // Recognition dates differ: refund revenue is booked on replacement
   // completion, but returned stock/COGS is recognized only when the
   // merchandise is physically received. Restrict the cost reversal to
@@ -1356,7 +1384,6 @@ async function handleGrossProfit(
 
   let onlineSalesMinor = 0;
   let onlineShippingMinor = 0;
-  let onlineDeliveryMinor = 0;
 
   let onlineSaleQuantity = 0;
   let onlineTrackedSaleQuantity =
@@ -1427,9 +1454,6 @@ async function handleGrossProfit(
 
       onlineShippingMinor +=
         shippingCost * 100;
-
-      onlineDeliveryMinor +=
-        deliveryCost * 100;
     }
 
     if (
@@ -1543,7 +1567,7 @@ async function handleGrossProfit(
         onlineShippingMinor,
 
       deliveryCompanyCostMinor:
-        onlineDeliveryMinor,
+        postedOnlineDeliveryCostMinor,
 
       saleQuantity:
         onlineSaleQuantity,
@@ -2031,7 +2055,7 @@ async function handleGrossProfit(
         "Gross profit before operating expenses. POS exchanges recognize both returned merchandise and replacement sales at their dated historic COGS; online exchanges deduct the posted SALES_RETURNS journal on replacement completion and reverse COGS only when returned merchandise is physically received.",
 
       deliveryDefinition:
-        "Customer shipping charge minus actual delivery company cost",
+        "Customer shipping charge recognized on completed orders minus net posted delivery expense on journal business dates (including prior-period adjustments and reversals)",
 
       expensesIncluded:
         true,
