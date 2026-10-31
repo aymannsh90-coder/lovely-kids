@@ -392,6 +392,67 @@
 .lk-finance-refresh.cash-session-page .close-day-form {
   border-radius: 14px;
 }
+/* Readability and layout pass after visual review (2026-10-31).
+   Use the available desktop area without changing form fields or finance actions. */
+.lk-finance-refresh.lk-finance-unified-party-voucher .lk-finance-form,
+.lk-finance-refresh.lk-finance-journal-voucher .lk-finance-form {
+  width: min(100%, 1180px);
+  max-width: 1180px !important;
+  margin-inline: auto !important;
+  gap: 19px 22px;
+  padding: 23px 25px;
+}
+.lk-finance-refresh .lk-finance-form > div:last-child:has(> button) {
+  grid-column: 1 / -1;
+  padding-top: 16px;
+  border-top: 1px solid #edf1f4;
+}
+.lk-finance-refresh .lk-finance-form > label > span:first-child,
+.lk-finance-refresh .lk-finance-form > label > span,
+.lk-finance-refresh .lk-finance-account-grid label > span,
+.lk-finance-refresh .lk-finance-filterbar label > span {
+  font-size: 13px;
+  font-weight: 850;
+  color: #465f73;
+}
+.lk-finance-refresh :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  font-size: 14px;
+}
+.lk-finance-refresh .lk-finance-table thead th {
+  font-size: 13px;
+  padding: 14px 13px;
+}
+.lk-finance-refresh .lk-finance-table tbody td {
+  font-size: 13px;
+  padding: 13px;
+}
+.lk-finance-refresh .lk-finance-table tbody td > strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+.lk-finance-refresh.lk-finance-voucher-register .lk-finance-table tbody td:nth-child(5) strong,
+.lk-finance-refresh.lk-finance-customer-receipts .lk-finance-table tbody td:nth-child(4) strong {
+  color: #20475a;
+}
+.lk-finance-refresh .lk-finance-table td :where(button) {
+  font-size: 12px;
+  min-height: 36px;
+}
+.lk-finance-refresh .lk-finance-status {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.lk-finance-refresh .lk-finance-form :where(.primary-button, .secondary-button) {
+  min-height: 44px;
+}
+@media (max-width: 960px) {
+  .lk-finance-refresh.lk-finance-unified-party-voucher .lk-finance-form,
+  .lk-finance-refresh.lk-finance-journal-voucher .lk-finance-form {
+    width: 100%;
+    padding: 17px;
+  }
+}
+
 @media (max-width: 960px) {
   .lk-finance-refresh .lk-finance-filterbar,
   .lk-finance-refresh.lk-finance-receipts .lk-finance-filterbar {
