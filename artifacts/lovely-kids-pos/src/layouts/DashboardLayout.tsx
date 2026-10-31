@@ -335,7 +335,7 @@ export default function DashboardLayout() {
 
           {session && (
             <>
-              <div className="session-banner-value">
+              <div className="session-banner-value session-balance-opening">
                 <span>رصيد البداية</span>
 
                 <strong>
@@ -343,7 +343,7 @@ export default function DashboardLayout() {
                 </strong>
               </div>
 
-              <div className="session-banner-value">
+              <div className="session-banner-value session-balance-current">
                 <span>رصيد الصندوق الحالي</span>
 
                 <strong>
