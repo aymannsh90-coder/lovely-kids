@@ -293,3 +293,221 @@
     .lk-employees-refresh .employees-profile-actions { flex-wrap: wrap; }
   }
 }
+
+/* Employees final visual polish — approved Lovely Kids identity, screen only. */
+@media screen {
+  /* Avoid the tall, half-empty month settlement panel on desktop. */
+  .lk-employees-refresh .employees-month-close {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px 22px;
+    padding: 17px 21px;
+    border: 1px solid #ecd7e3;
+    border-radius: 17px;
+    background: linear-gradient(110deg, #ffffff 22%, #fff6fa 100%);
+    box-shadow: 0 6px 20px rgba(45, 70, 88, .045);
+  }
+  .lk-employees-refresh .employees-month-close > .employees-section-heading {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .lk-employees-refresh .employees-month-close .employees-section-heading h2 {
+    font-size: 19px;
+    line-height: 1.35;
+  }
+  .lk-employees-refresh .employees-month-close .employees-section-heading p {
+    max-width: 760px;
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #617b8d;
+  }
+  .lk-employees-refresh .employees-month-close-controls {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    align-self: center;
+    gap: 9px;
+    padding: 0;
+    margin: 0;
+  }
+  .lk-employees-refresh .employees-month-close-controls label {
+    min-width: 165px;
+  }
+  .lk-employees-refresh .employees-month-close-controls input {
+    min-height: 43px;
+    background: #fff;
+  }
+  .lk-employees-refresh .employees-month-close > .employees-month-close-preview {
+    grid-column: 1 / -1;
+    margin-top: 2px;
+  }
+
+  /* Make balances more legible without altering their meaning or colors. */
+  .lk-employees-refresh .employees-balance-grid {
+    gap: 12px;
+    margin-top: 15px;
+  }
+  .lk-employees-refresh .employees-balance-grid article {
+    min-height: 106px;
+    padding: 16px 17px;
+    border-width: 1px;
+    border-style: solid;
+    box-shadow: 0 3px 10px rgba(39, 73, 96, .045);
+  }
+  .lk-employees-refresh .employees-balance-grid article:nth-child(4n+1) {
+    background: #fff0f7;
+    border-color: #f2c9dd;
+  }
+  .lk-employees-refresh .employees-balance-grid article:nth-child(4n+2) {
+    background: #eaf4fd;
+    border-color: #c8e0f3;
+  }
+  .lk-employees-refresh .employees-balance-grid article:nth-child(4n+3) {
+    background: #edf9f3;
+    border-color: #cbe7d7;
+  }
+  .lk-employees-refresh .employees-balance-grid article:nth-child(4n+4) {
+    background: #fff7e9;
+    border-color: #f0dfb4;
+  }
+  .lk-employees-refresh .employees-balance-grid span {
+    margin-bottom: 8px;
+    color: #4d6980;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .lk-employees-refresh .employees-balance-grid strong {
+    color: #1d384f;
+    font-size: 22px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .lk-employees-refresh .employees-balance-grid strong.is-danger { color: #b42318; }
+  .lk-employees-refresh .employees-balance-grid strong.is-success { color: #067647; }
+  .lk-employees-refresh .employees-balance-grid small {
+    margin-top: 6px;
+    color: #627e90;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  /* Employee chooser: tighter, clearer list with the selected item accented. */
+  .lk-employees-refresh .employees-list-card {
+    border-color: #d4e4ee;
+    border-radius: 17px;
+  }
+  .lk-employees-refresh .employees-list-tools {
+    padding: 12px;
+    background: linear-gradient(180deg, #f1f8fc, #f7fbfd);
+  }
+  .lk-employees-refresh .employees-list-count {
+    font-size: 13px;
+    font-weight: 850;
+    color: #55778e;
+    background: #f2f7fb;
+  }
+  .lk-employees-refresh .employees-list-item {
+    min-height: 70px;
+    padding: 12px 14px;
+    border-bottom-color: #e5edf2;
+  }
+  .lk-employees-refresh .employees-list-item:hover:not(.is-selected) {
+    background: #fff7fb;
+  }
+  .lk-employees-refresh .employees-list-item.is-selected {
+    background: linear-gradient(115deg, #fff0f7, #edf7fc);
+    box-shadow: inset -4px 0 0 #e91e8c;
+  }
+  .lk-employees-refresh .employees-list-item strong { font-size: 15px; }
+  .lk-employees-refresh .employees-list-item small,
+  .lk-employees-refresh .employees-list-balance small {
+    font-size: 12px;
+    color: #687e8d;
+  }
+  .lk-employees-refresh .employees-list-balance span { font-size: 12px; }
+
+  /* Unified action panel and readable ledger, with original data/actions intact. */
+  .lk-employees-refresh .employees-action-card > .employees-section-heading {
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid #e5edf2;
+  }
+  .lk-employees-refresh .employees-action-tabs button {
+    border-color: #d5e5ee;
+    background: #fdfefe;
+    font-size: 14px;
+  }
+  .lk-employees-refresh .employees-action-tabs button.is-selected {
+    background: #fff0f8;
+    border-color: #eea8cd;
+    color: #ae1767;
+  }
+  .lk-employees-refresh .employees-ledger-card {
+    border: 1px solid #dce7ed;
+    border-radius: 17px;
+    box-shadow: 0 7px 24px rgba(45, 70, 88, .055);
+  }
+  .lk-employees-refresh .employees-ledger-card .employees-section-heading {
+    padding: 17px 19px;
+    background: linear-gradient(110deg, #fff 35%, #fff5fa);
+    border-bottom-color: #dce7ed;
+  }
+  .lk-employees-refresh .employees-ledger-card .employees-section-heading > div:last-child > span {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 11px;
+    border: 1px solid #f0d2e0;
+    border-radius: 999px;
+    background: #fff4fa;
+    color: #a8266c;
+    font-weight: 850;
+    font-size: 12px;
+  }
+  .lk-employees-refresh .employees-ledger-table th {
+    padding: 13px 14px;
+    background: #eaf3f9;
+    border-bottom: 1px solid #d6e4ed;
+    color: #3f637b;
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .lk-employees-refresh .employees-ledger-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #e9eff3;
+    color: #274558;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .lk-employees-refresh .employees-ledger-table td small {
+    font-size: 12px;
+    color: #718799;
+  }
+  .lk-employees-refresh .employees-ledger-table tbody tr:nth-child(even) {
+    background: #f7fafc;
+  }
+  .lk-employees-refresh .employees-ledger-table tbody tr:hover {
+    background: #fff4f9;
+  }
+  .lk-employees-refresh .employees-ledger-table td.is-danger { color: #b42318; }
+  .lk-employees-refresh .employees-ledger-table td.is-success { color: #067647; }
+
+  @media (max-width: 1000px) {
+    .lk-employees-refresh .employees-month-close {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .lk-employees-refresh .employees-month-close-controls {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+  }
+  @media (max-width: 650px) {
+    .lk-employees-refresh .employees-month-close { padding: 15px; }
+    .lk-employees-refresh .employees-month-close-controls label { min-width: 145px; }
+    .lk-employees-refresh .employees-balance-grid strong { font-size: 20px; }
+    .lk-employees-refresh .employees-ledger-table td { font-size: 13px; }
+  }
+}
