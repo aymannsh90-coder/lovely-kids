@@ -1938,11 +1938,13 @@ async function handleGrossProfit(
             Number(right.productId),
       );
 
-  // Operating net result is based on the posted general ledger,
+  // Operating net result is based on the immutable general-ledger entries,
   // not cash payouts or employee advances. Shipping/delivery expense is
   // ALREADY deducted by profitAfterDeliveryMinor, so exclude that GL account.
-  // Use business dates consistently with the sales report and include posted
-  // reversals (credits) to prevent overstating the expense total.
+  // Include both the original (marked 'reversed') and its posted reversal:
+  // otherwise the reversal credit is counted without the original debit,
+  // understating expenses and overstating profit. Use journal business dates,
+  // including reversals, to preserve the dated audit trail.
   const journalExpenseRows = await db.select({
     accountCode: financeAccountsTable.code,
     accountName: financeAccountsTable.name,
@@ -1954,7 +1956,7 @@ async function handleGrossProfit(
     .innerJoin(financeAccountsTable,
       eq(financeTransactionLinesTable.accountId, financeAccountsTable.id))
     .where(and(
-      eq(financeTransactionsTable.status, "posted"),
+      inArray(financeTransactionsTable.status, ["posted", "reversed"]),
       gte(financeTransactionsTable.businessDate, from),
       lte(financeTransactionsTable.businessDate, to),
       eq(financeAccountsTable.accountType, "expense"),
