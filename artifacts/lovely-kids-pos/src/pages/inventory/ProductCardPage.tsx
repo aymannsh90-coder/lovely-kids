@@ -141,6 +141,13 @@ function signedQuantity(
     : String(value);
 }
 
+function formatUnitCost(minor: number) {
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(minor / 100)} ₪`;
+}
+
 function movementSourceHref(
   movement: PosInventoryMovement,
 ) {
@@ -163,6 +170,7 @@ function movementSourceHref(
 export default function ProductCardPage() {
   const {
     token,
+    user,
     clearAuthentication,
   } = usePosRuntime();
 
@@ -1018,6 +1026,68 @@ export default function ProductCardPage() {
                     "—"}
                 </strong>
               </div>
+
+              {user?.isOwner && (
+                <div
+                  style={{
+                    background: "#fff3d6",
+                    border: "2px solid #e2a12a",
+                    borderRadius: 12,
+                    boxShadow: "0 2px 8px rgba(180,115,17,.14)",
+                    padding: "13px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "#854d0e",
+                      fontSize: 15,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {card.cost?.basis === "average"
+                      ? "متوسط تكلفة القطعة"
+                      : "سعر تكلفة الصنف"}
+                  </span>
+                  <strong
+                    dir="ltr"
+                    style={{
+                      color: "#713f12",
+                      fontSize: 25,
+                      fontWeight: 900,
+                      textAlign: "right",
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {card.cost
+                      ? formatUnitCost(card.cost.unitCostMinor)
+                      : "غير مسجلة"}
+                  </strong>
+                  {card.cost && (
+                    <small
+                      style={{
+                        color: "#895c26",
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {card.cost.basis === "reference"
+                        ? "تكلفة مرجعية لعدم وجود رصيد محاسبي"
+                        : "حسب متوسط التكلفة المحاسبي"}
+                      {card.cost.quality === "estimated"
+                        ? " · تقديرية"
+                        : card.cost.quality === "mixed"
+                          ? " · تكلفة مختلطة"
+                          : ""}
+                      {!card.cost.stockMatchesAccounting
+                        ? " · تنبيه: فرق بين المخزون والرصيد المحاسبي"
+                        : ""}
+                    </small>
+                  )}
+                </div>
+              )}
 
               <div>
                 <span>
