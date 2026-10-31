@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import { usePosRuntime } from "../../app/pos-context";
+import "./FinancePolish.css";
 import {
   ApiError,
   cancelPosFinanceCheck,
@@ -970,7 +971,7 @@ export default function ChecksPage() {
   }
 
   return (
-    <section className="checks-page">
+    <section className="checks-page lk-finance-polish">
       <div className="checks-heading">
         <div>
           <span className="checks-eyebrow">
