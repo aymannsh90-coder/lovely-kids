@@ -387,6 +387,44 @@
     border-color: #dde8f0;
   }
 
+
+  /* Home tiles contrast tune: slightly richer pastels, with the existing
+     dimensions, typography, responsive columns and brand palette preserved. */
+  .lk-dashboard-refresh .dashboard-card {
+    background: #edf6fc;
+    border-color: #c6dce9;
+    box-shadow: 0 3px 14px rgba(38, 88, 119, .085);
+  }
+  .lk-dashboard-refresh .dashboard-card:nth-child(4n+2) {
+    background: #fceef6;
+    border-color: #edc5da;
+  }
+  .lk-dashboard-refresh .dashboard-card:nth-child(4n+3) {
+    background: #eef7f3;
+    border-color: #cbe3d8;
+  }
+  .lk-dashboard-refresh .dashboard-card:nth-child(4n) {
+    background: #f5f6fc;
+    border-color: #d3ddec;
+  }
+  .lk-dashboard-refresh .dashboard-card:not(:disabled):hover {
+    background: #e4f2fb;
+    border-color: #78bfe4;
+    box-shadow: 0 8px 20px rgba(48, 111, 153, .12);
+  }
+  .lk-dashboard-refresh .dashboard-card:nth-child(4n+2):not(:disabled):hover {
+    background: #fbe4f0;
+    border-color: #e58dbb;
+  }
+  .lk-dashboard-refresh .dashboard-card:nth-child(4n+3):not(:disabled):hover {
+    background: #e3f3ec;
+    border-color: #94cdb2;
+  }
+  .lk-dashboard-refresh .dashboard-card:nth-child(4n):not(:disabled):hover {
+    background: #eef1fa;
+    border-color: #b2c8e0;
+  }
+
   @media (max-width: 1150px) {
     .lk-dashboard-refresh .dashboard-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
     .lk-dashboard-refresh .dashboard-fx-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
