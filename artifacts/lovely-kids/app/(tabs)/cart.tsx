@@ -1702,16 +1702,27 @@ export default function CartScreen() {
                   </View>
                 ) : (
                   <>
-                    {shippingPromotionDiscount > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryValue, { color: colors.mutedForeground }]}>
-                          {shippingOriginalCost}₪
-                        </Text>
-                        <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
-                          التوصيل الأصلي ({selectedZone.label})
-                        </Text>
-                      </View>
-                    ) : null}
+                    {/* The displayed shipping lines must add up to the actual
+                        charged amount: standard delivery plus any promotion
+                        discount. Do not repeat the net amount as a third row. */}
+                    <View style={styles.summaryRow}>
+                      <Text
+                        style={[
+                          styles.summaryValue,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {shippingPromotionDiscount > 0 ? shippingOriginalCost : shippingCost}₪
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryLabel,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        التوصيل ({selectedZone.label})
+                      </Text>
+                    </View>
 
                     {shippingPromotionDiscount > 0 ? (
                       <View style={styles.summaryRow}>
@@ -1726,48 +1737,13 @@ export default function CartScreen() {
                         <Text
                           style={[
                             styles.summaryLabel,
-                            { color: colors.mutedForeground },
+                            { color: "#16A34A" },
                           ]}
                         >
                           خصم عرض التوصيل
                         </Text>
                       </View>
                     ) : null}
-
-                    <View style={styles.summaryRow}>
-                      <View style={styles.shippingValueWrap}>
-                        <Text
-                          style={[
-                            styles.summaryValue,
-                            { color: colors.foreground },
-                          ]}
-                        >
-                          {shippingCost}₪
-                        </Text>
-                        {shippingPromotionDiscount > 0 ? (
-                          <View style={styles.shippingPromoBadge}>
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={13}
-                              color="#16A34A"
-                            />
-                            <Text style={styles.shippingPromoBadgeText}>
-                              عرض التوصيل
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text
-                        style={[
-                          styles.summaryLabel,
-                          { color: colors.mutedForeground },
-                        ]}
-                      >
-                        {shippingPromotionDiscount > 0
-                          ? "التوصيل بعد العرض"
-                          : "التوصيل"}
-                      </Text>
-                    </View>
                   </>
                 )
               ) : (
