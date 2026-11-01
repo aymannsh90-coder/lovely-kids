@@ -904,11 +904,22 @@ export default function HomeScreen() {
       <View
         style={[
           styles.header,
-          { paddingTop: topPadding + 6, backgroundColor: colors.background },
+          {
+            paddingTop: topPadding + 4,
+            backgroundColor: colors.card,
+            borderBottomColor: colors.border,
+          },
         ]}
       >
         <View style={styles.headerLeft}>
-          <CategoryMenu />
+          <View
+            style={[
+              styles.headerMenuFrame,
+              { backgroundColor: colors.muted, borderColor: colors.border },
+            ]}
+          >
+            <CategoryMenu />
+          </View>
 
           {Platform.OS !== "web" && (
             <Image
@@ -922,7 +933,7 @@ export default function HomeScreen() {
             />
           )}
 
-          {user && (
+          {user && Platform.OS !== "web" && (
             <View style={styles.greetingBlock}>
               <Text style={[styles.greetingHi, { color: colors.primary }]}>
                 أهلاً وسهلاً
@@ -945,9 +956,15 @@ export default function HomeScreen() {
         <View style={styles.headerRight}>
           <Pressable
             onPress={() => router.push("/wishlist")}
-            style={styles.iconBtn}
+            accessibilityRole="button"
+            accessibilityLabel="المفضلة"
+            style={[
+              styles.iconBtn,
+              styles.headerActionFrame,
+              { backgroundColor: colors.muted, borderColor: colors.border },
+            ]}
           >
-            <Ionicons name="heart-outline" size={24} color={colors.foreground} />
+            <Ionicons name="heart-outline" size={23} color={colors.foreground} />
             {wishlistCount > 0 && (
               <View style={[styles.wishlistBadge, { backgroundColor: colors.primary }]}>
                 <Text style={styles.wishlistBadgeText}>
@@ -956,9 +973,27 @@ export default function HomeScreen() {
               </View>
             )}
           </Pressable>
-          <CartBadge />
+          <View
+            style={[
+              styles.headerCartFrame,
+              { backgroundColor: colors.muted, borderColor: colors.border },
+            ]}
+          >
+            <CartBadge />
+          </View>
         </View>
       </View>
+      ) : null}
+
+      {Platform.OS === "web" && !isDesktopWeb && user ? (
+        <View style={styles.webWelcomeRow}>
+          <Text
+            style={[styles.webWelcomeText, { color: colors.mutedForeground }]}
+            numberOfLines={1}
+          >
+            أهلاً وسهلاً، {firstName}
+          </Text>
+        </View>
       ) : null}
 
       {Platform.OS !== "web" ? (
@@ -1813,8 +1848,10 @@ const styles = StyleSheet.create({
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    minHeight: 68,
+    borderBottomWidth: Platform.OS === "web" ? 1 : 0,
     position: "relative",
   },
   headerLeft: {
@@ -1822,11 +1859,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Platform.OS === "web" ? 4 : 8,
     flex: 1,
+    minWidth: 0,
+  },
+  headerMenuFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "flex-start",
+    gap: 7,
+    flex: 1,
+    minWidth: 0,
+  },
+  headerActionFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  headerCartFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoImage: {
     width: 110,
@@ -1837,6 +1900,16 @@ const styles = StyleSheet.create({
     left: "50%",
     transform: [{ translateX: -55 }],
     zIndex: 1,
+  },
+  webWelcomeRow: {
+    paddingHorizontal: 18,
+    paddingTop: 7,
+    alignItems: "flex-end",
+  },
+  webWelcomeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "right",
   },
   greetingBlock: {
     alignItems: "flex-end",
@@ -1878,37 +1951,44 @@ const styles = StyleSheet.create({
   },
   searchBar: {
     minHeight: 54,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 16,
+    marginHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 15,
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     shadowColor: "#24496B",
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.07,
     shadowRadius: 12,
     elevation: 1,
   },
   searchIconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
   searchPlaceholder: { fontSize: 15, fontWeight: "500", flex: 1, textAlign: "right" },
   heroBanner: {
-    marginHorizontal: 16,
-    borderRadius: 20,
+    marginHorizontal: 14,
+    borderRadius: 23,
+    borderWidth: 5,
+    borderColor: "#FFFFFF",
     overflow: "hidden",
-    marginBottom: 20,
+    marginBottom: 23,
     padding: 20,
     minHeight: 180,
+    shadowColor: "#1A3963",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   heroContent: { alignItems: "flex-end", gap: 8 },
   heroBadge: {
