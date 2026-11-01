@@ -118,8 +118,8 @@ const AGE_COLORS = [
 ];
 
 const TRUST_BADGES = [
-  { icon: "shirt-outline" as const, color: "#E91E8C", title: "خامات ناعمة", subtitle: "ومريحة" },
-  { icon: "sparkles-outline" as const, color: "#96DFEC", title: "تصاميم عصرية", subtitle: "وعملية" },
+  { icon: "shirt-outline" as const, color: "#D74789", title: "خامات ناعمة", subtitle: "ومريحة" },
+  { icon: "sparkles-outline" as const, color: "#48AEF5", title: "تصاميم عصرية", subtitle: "وعملية" },
   { icon: "ribbon-outline" as const, color: "#FFB84D", title: "جودة تدوم", subtitle: "طويلاً" },
 ];
 
@@ -597,13 +597,13 @@ export default function HomeScreen() {
         <View
           style={[
             styles.homeBannerTitleBox,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            { backgroundColor: colors.muted, borderColor: colors.border },
           ]}
         >
           <View
             style={[
               styles.homeBannerAccent,
-              { backgroundColor: colors.primary },
+              { backgroundColor: "#D74789" },
             ]}
           />
           <Text style={[styles.homeBannerTitle, { color: colors.foreground }]}>
@@ -632,7 +632,7 @@ export default function HomeScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: "#F0FAFE",
+          backgroundColor: "#FAFCFF",
         }}
       />
     );
@@ -664,7 +664,7 @@ export default function HomeScreen() {
       <View
         style={[
           styles.header,
-          { paddingTop: topPadding + 12, backgroundColor: colors.background },
+          { paddingTop: topPadding + 6, backgroundColor: colors.background },
         ]}
       >
         <View style={styles.headerLeft}>
@@ -1585,7 +1585,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 9,
     position: "relative",
   },
   headerLeft: {
@@ -1600,8 +1600,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   logoImage: {
-    width: Platform.OS === "web" ? 110 : 110,
-    height: Platform.OS === "web" ? 48 : 52,
+    width: 110,
+    height: Platform.OS === "web" ? 46 : 50,
   },
   webCenteredLogo: {
     position: "absolute",
@@ -1626,8 +1626,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1648,14 +1648,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   searchBar: {
-    flex: 1,
-    minHeight: 48,
+    minHeight: 46,
+    marginHorizontal: 16,
+    marginTop: 7,
+    marginBottom: 15,
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
-    gap: 10,
+    gap: 11,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
     borderWidth: 1,
   },
   searchPlaceholder: { fontSize: 14, flex: 1, textAlign: "right" },
@@ -1839,10 +1841,10 @@ const styles = StyleSheet.create({
   homeBannerTitleBox: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 8,
+    borderRadius: 16,
+    paddingVertical: 10,
     paddingHorizontal: 14,
   },
   homeBannerAccent: {
@@ -1851,7 +1853,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   homeBannerTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: "800",
     textAlign: "right",
   },
@@ -1861,7 +1863,7 @@ const styles = StyleSheet.create({
   },
   homeCategoryCard: {
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: "hidden",
     aspectRatio: 1,
     alignSelf: "flex-start",
@@ -1943,9 +1945,9 @@ const styles = StyleSheet.create({
   bottomViewAllButton: {
     marginHorizontal: 16,
     marginTop: 4,
-    marginBottom: 14,
-    minHeight: 48,
-    borderRadius: 16,
+    marginBottom: 16,
+    minHeight: 50,
+    borderRadius: 18,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
