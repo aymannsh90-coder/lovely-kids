@@ -2397,484 +2397,16 @@ export default function CartScreen() {
         )
       : 1;
 
-  // ── Cart ──
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          styles.cartHeader,
-          {
-            paddingTop: Platform.OS === "web" && !isDesktopWeb ? 16 : topPadding + 12,
-            backgroundColor: colors.background,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="رجوع"
-          style={[styles.cartBackButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-        >
-          <Ionicons name="arrow-forward" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={[styles.title, styles.cartPageTitle, { color: colors.foreground }]}>سلة التسوق</Text>
-        {items.length > 0 && (
-          <Pressable
-            onPress={clearCart}
-            accessibilityRole="button"
-            accessibilityLabel="مسح كل منتجات السلة"
-            style={styles.clearCartButton}
-          >
-            <Ionicons name="trash-outline" size={15} color="#C63F50" />
-            <Text style={[styles.clearText, { color: "#C63F50" }]}>مسح الكل</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {items.length === 0 ? (
-        <View style={[styles.center, styles.cartEmptyState]}>
-          <View style={[styles.cartEmptyIcon, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            <Ionicons name="bag-outline" size={44} color={colors.primary} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>السلة فارغة</Text>
-          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-            أضيفي منتجات لإتمام الطلب
-          </Text>
-          <Pressable
-            onPress={() => router.push("/products")}
-            style={[styles.shopBtn, { backgroundColor: colors.primary }]}
-          >
-            <Text style={styles.shopBtnText}>تصفحي المنتجات</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View
-          style={[
-            styles.cartBody,
-            isDesktopWeb
-              ? {
-                  width: desktopCartWidth,
-                  alignSelf: "center",
-                  flexDirection: "row-reverse",
-                  gap: 24,
-                  paddingBottom: 24,
-                }
-              : null,
-          ]}
-        >
-          <FlatList
-            style={isDesktopWeb ? { flex: 1 } : { flexGrow: 0, flexShrink: 1, minHeight: 0 }}
-            data={items}
-            keyExtractor={(item) =>
-              `${item.id}-${item.color ?? ""}-${item.size ?? ""}-${item.rewardForPromotionId ?? ""}`
-            }
-            contentContainerStyle={[
-              styles.list,
-              isDesktopWeb
-                ? {
-                    paddingHorizontal: 0,
-                    paddingTop: 0,
-                    paddingBottom: 20,
-                  }
-                : null,
-            ]}
-            renderItem={({ item }) => {
-              const product = hasCartStockData
-                ? cartProducts.find((entry) => entry.id === item.id)
-                : undefined;
-              const stockStatus = hasCartStockData
-                ? getCartStockStatus(item, product)
-                : {
-                    valid: true,
-                    kind: null,
-                    message: null,
-                    detail: null,
-                    hasAlternatives: false,
-                    availableQuantity: null,
-                  };
-              const hasStockIssue = !stockStatus.valid;
-              const isSpendGiftReward =
-                !!item.rewardForPromotionId &&
-                getPromotionById(
-                  item.rewardForPromotionId,
-                )?.kind ===
-                  "spend_x_get_gift";
-
-              return (
-                <View
-                  style={[
-                    styles.cartItem,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: hasStockIssue ? "#EF4444" : colors.border,
-                      borderWidth: hasStockIssue ? 1.5 : 1,
-                    },
-                    isDesktopWeb ? styles.desktopCartItem : null,
-                  ]}
-                >
-                  <View style={styles.itemRight}>
-                    <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
-                    {(item.size || item.color) && (
-                      <Text style={[styles.itemSize, { color: colors.mutedForeground }]}>
-                        {[item.color ? `اللون: ${item.color}` : null, item.size ? `المقاس: ${item.size}` : null]
-                          .filter(Boolean)
-                          .join(" — ")}
-                      </Text>
-                    )}
-                    <Text
-                      style={[
-                        styles.itemPrice,
-                        styles.cartItemPrice,
-                        { color: colors.primary, backgroundColor: colors.primary + "0D" },
-                      ]}
-                    >
-                      {item.price * item.quantity} ₪
-                    </Text>
-
-                    {isSpendGiftReward ? (
-                      <Text
-                        style={{
-                          color: "#16A34A",
-                          fontSize: 12,
-                          fontWeight: "900",
-                          textAlign: "right",
-                          marginTop: 3,
-                        }}
-                      >
-                        🎁 هدية من العرض
-                      </Text>
-                    ) : null}
-
-                    {hasStockIssue ? (
-                      <View
-                        style={{
-                          backgroundColor: "#FEF2F2",
-                          borderColor: "#FCA5A5",
-                          borderWidth: 1,
-                          borderRadius: 10,
-                          paddingHorizontal: 10,
-                          paddingVertical: 8,
-                          marginTop: 6,
-                          gap: 4,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: "#B91C1C",
-                            fontSize: 12,
-                            fontWeight: "900",
-                            textAlign: "right",
-                          }}
-                        >
-                          {stockStatus.message}
-                        </Text>
-                        {stockStatus.detail ? (
-                          <Text
-                            style={{
-                              color: "#7F1D1D",
-                              fontSize: 11,
-                              lineHeight: 18,
-                              textAlign: "right",
-                            }}
-                          >
-                            {stockStatus.detail}
-                          </Text>
-                        ) : null}
-
-                        <View
-                          style={{
-                            flexDirection: "row-reverse",
-                            flexWrap: "wrap",
-                            gap: 8,
-                            marginTop: 4,
-                          }}
-                        >
-                          {stockStatus.kind === "quantity_exceeds_stock" &&
-                          stockStatus.availableQuantity !== null &&
-                          stockStatus.availableQuantity > 0 ? (
-                            <Pressable
-                              onPress={() => {
-                                if (stockStatus.kind) {
-                                  void trackCartStockEvent("item_corrected", item, stockStatus.kind, stockStatus.availableQuantity);
-                                }
-                                updateQuantity(
-                                  item.id,
-                                  stockStatus.availableQuantity!,
-                                  item.size,
-                                  item.color,
-                                );
-                              }}
-                              style={{
-                                backgroundColor: "#fff",
-                                borderColor: "#FCA5A5",
-                                borderWidth: 1,
-                                borderRadius: 8,
-                                paddingHorizontal: 10,
-                                paddingVertical: 7,
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  color: "#B91C1C",
-                                  fontWeight: "800",
-                                  fontSize: 11,
-                                }}
-                              >
-                                تحديث للكمية المتوفرة
-                              </Text>
-                            </Pressable>
-                          ) : null}
-
-                          {stockStatus.hasAlternatives && product ? (
-                            <Pressable
-                              onPress={() =>
-                                router.push({
-                                  pathname: "/product/[id]",
-                                  params: {
-                                    id: item.id,
-                                    cartEdit: "1",
-                                    cartSize: item.size ?? "",
-                                    cartColor: item.color ?? "",
-                                    ...(item.rewardForPromotionId
-                                      ? {
-                                          cartRewardForPromotionId:
-                                            String(
-                                              item.rewardForPromotionId,
-                                            ),
-                                        }
-                                      : {}),
-                                  },
-                                })
-                              }
-                              style={{
-                                backgroundColor: colors.primary,
-                                borderRadius: 8,
-                                paddingHorizontal: 10,
-                                paddingVertical: 7,
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  color: "#fff",
-                                  fontWeight: "900",
-                                  fontSize: 11,
-                                }}
-                              >
-                                تعديل الاختيار
-                              </Text>
-                            </Pressable>
-                          ) : null}
-                        </View>
-                      </View>
-                    ) : null}
-
-                    <Pressable
-                      onPress={() => {
-                        const nextItems =
-                          items.filter(
-                            (entry) =>
-                              !sameCartLine(
-                                entry,
-                                item,
-                              ),
-                          );
-
-                        void runCartChangeWithGiftGuard(
-                          nextItems,
-                          () => {
-                            if (hasStockIssue && stockStatus.kind) {
-                              void trackCartStockEvent("item_removed", item, stockStatus.kind, stockStatus.availableQuantity);
-                            }
-                            removeItem(
-                              item.id,
-                              item.size,
-                              item.color,
-                              item.rewardForPromotionId,
-                            );
-                          },
-                          true,
-                        );
-                      }}
-                      style={styles.deleteBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel="حذف المنتج من السلة"
-                    >
-                      <Ionicons name="trash-outline" size={15} color="#C63F50" />
-                      <Text style={styles.deleteText}>حذف</Text>
-                    </Pressable>
-                  </View>
-                  <Image
-                    source={{ uri: item.image }}
-                    style={[
-                      styles.itemImage,
-                      { backgroundColor: colors.muted, borderColor: colors.border },
-                      isDesktopWeb ? styles.desktopItemImage : null,
-                    ]}
-                  />
-                  {isSpendGiftReward ? (
-                    <View
-                      style={[
-                        styles.quantityRow,
-                        isDesktopWeb
-                          ? styles.desktopQuantityRow
-                          : null,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.qtyBtn,
-                          {
-                            backgroundColor:
-                              colors.muted,
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name="gift-outline"
-                          size={16}
-                          color={
-                            colors.mutedForeground
-                          }
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.qty,
-                          {
-                            color:
-                              colors.foreground,
-                          },
-                        ]}
-                      >
-                        1
-                      </Text>
-                    </View>
-                  ) : (
-                                      <View
-                                        style={[
-                                          styles.quantityRow,
-                                          isDesktopWeb ? styles.desktopQuantityRow : null,
-                                        ]}
-                                      >
-                                        <Pressable
-                                          disabled={hasStockIssue}
-                                          onPress={() => {
-                                            const availableStock = product
-                                              ? getAvailableStock(product, item.size, item.color)
-                                              : null;
-                    
-                                            if (
-                                              availableStock !== null &&
-                                              item.quantity >= availableStock
-                                            ) {
-                                              showStockLimit(availableStock);
-                                              return;
-                                            }
-                    
-                                            updateQuantity(
-                                              item.id,
-                                              item.quantity + 1,
-                                              item.size,
-                                              item.color,
-                                              item.rewardForPromotionId,
-                                            );
-                                          }}
-                                          style={[
-                                            styles.qtyBtn,
-                                            {
-                                              backgroundColor: hasStockIssue
-                                                ? colors.muted
-                                                : colors.primary,
-                                            },
-                                          ]}
-                                        >
-                                          <Ionicons
-                                            name="add"
-                                            size={16}
-                                            color={
-                                              hasStockIssue
-                                                ? colors.mutedForeground
-                                                : "#fff"
-                                            }
-                                          />
-                                        </Pressable>
-                                        <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
-                                        <Pressable
-                                          onPress={() => {
-                                            const nextItems =
-                                              item.quantity ===
-                                              1
-                                                ? items.filter(
-                                                    (entry) =>
-                                                      !sameCartLine(
-                                                        entry,
-                                                        item,
-                                                      ),
-                                                  )
-                                                : items.map(
-                                                    (entry) =>
-                                                      sameCartLine(
-                                                        entry,
-                                                        item,
-                                                      )
-                                                        ? {
-                                                            ...entry,
-                                                            quantity:
-                                                              entry.quantity -
-                                                              1,
-                                                          }
-                                                        : entry,
-                                                  );
-                    
-                                            void runCartChangeWithGiftGuard(
-                                              nextItems,
-                                              () => {
-                                                if (
-                                                  item.quantity ===
-                                                  1
-                                                ) {
-                                                  removeItem(
-                                                    item.id,
-                                                    item.size,
-                                                    item.color,
-                                                    item.rewardForPromotionId,
-                                                  );
-                                                  return;
-                                                }
-                    
-                                                updateQuantity(
-                                                  item.id,
-                                                  item.quantity -
-                                                    1,
-                                                  item.size,
-                                                  item.color,
-                                                  item.rewardForPromotionId,
-                                                );
-                                              },
-                                              item.quantity ===
-                                                1,
-                                            );
-                                          }}
-                                          style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
-                                        >
-                                          <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
-                                        </Pressable>
-                                      </View>
-                  )}
-                </View>
-              );
-            }}
-          />
-
+  // The mobile cart uses one continuous scroll: every item comes before its summary.
+  // Desktop keeps its existing side-by-side layout. All pricing and actions are unchanged.
+  const cartSummary = (
           <View
             style={[
               styles.summary,
               {
                 backgroundColor: colors.card,
                 borderColor: colors.border,
-                paddingBottom: isDesktopWeb ? 20 : bottomPadding,
+                paddingBottom: 20,
               },
               isDesktopWeb ? styles.desktopSummary : styles.mobileCartSummary,
             ]}
@@ -3378,6 +2910,481 @@ export default function CartScreen() {
               </Text>
             </Pressable>
           </View>
+  );
+
+  // ── Cart ──
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.header,
+          styles.cartHeader,
+          {
+            paddingTop: Platform.OS === "web" && !isDesktopWeb ? 16 : topPadding + 12,
+            backgroundColor: colors.background,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="رجوع"
+          style={[styles.cartBackButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <Ionicons name="arrow-forward" size={22} color={colors.foreground} />
+        </Pressable>
+        <Text style={[styles.title, styles.cartPageTitle, { color: colors.foreground }]}>سلة التسوق</Text>
+        {items.length > 0 && (
+          <Pressable
+            onPress={clearCart}
+            accessibilityRole="button"
+            accessibilityLabel="مسح كل منتجات السلة"
+            style={styles.clearCartButton}
+          >
+            <Ionicons name="trash-outline" size={15} color="#C63F50" />
+            <Text style={[styles.clearText, { color: "#C63F50" }]}>مسح الكل</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {items.length === 0 ? (
+        <View style={[styles.center, styles.cartEmptyState]}>
+          <View style={[styles.cartEmptyIcon, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+            <Ionicons name="bag-outline" size={44} color={colors.primary} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>السلة فارغة</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+            أضيفي منتجات لإتمام الطلب
+          </Text>
+          <Pressable
+            onPress={() => router.push("/products")}
+            style={[styles.shopBtn, { backgroundColor: colors.primary }]}
+          >
+            <Text style={styles.shopBtnText}>تصفحي المنتجات</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.cartBody,
+            isDesktopWeb
+              ? {
+                  width: desktopCartWidth,
+                  alignSelf: "center",
+                  flexDirection: "row-reverse",
+                  gap: 24,
+                  paddingBottom: 24,
+                }
+              : null,
+          ]}
+        >
+          <FlatList
+            style={{ flex: 1, minHeight: 0 }}
+            data={items}
+            keyExtractor={(item) =>
+              `${item.id}-${item.color ?? ""}-${item.size ?? ""}-${item.rewardForPromotionId ?? ""}`
+            }
+            ListFooterComponent={isDesktopWeb ? null : cartSummary}
+            contentContainerStyle={[
+              styles.list,
+              isDesktopWeb
+                ? {
+                    paddingHorizontal: 0,
+                    paddingTop: 0,
+                    paddingBottom: 20,
+                  }
+                : { paddingBottom: bottomPadding + 16 },
+            ]}
+            renderItem={({ item }) => {
+              const product = hasCartStockData
+                ? cartProducts.find((entry) => entry.id === item.id)
+                : undefined;
+              const stockStatus = hasCartStockData
+                ? getCartStockStatus(item, product)
+                : {
+                    valid: true,
+                    kind: null,
+                    message: null,
+                    detail: null,
+                    hasAlternatives: false,
+                    availableQuantity: null,
+                  };
+              const hasStockIssue = !stockStatus.valid;
+              const isSpendGiftReward =
+                !!item.rewardForPromotionId &&
+                getPromotionById(
+                  item.rewardForPromotionId,
+                )?.kind ===
+                  "spend_x_get_gift";
+
+              return (
+                <View
+                  style={[
+                    styles.cartItem,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: hasStockIssue ? "#EF4444" : colors.border,
+                      borderWidth: hasStockIssue ? 1.5 : 1,
+                    },
+                    isDesktopWeb ? styles.desktopCartItem : null,
+                  ]}
+                >
+                  <View style={styles.itemRight}>
+                    <Text style={[styles.itemName, { color: colors.foreground }]}>{item.name}</Text>
+                    {(item.size || item.color) && (
+                      <Text style={[styles.itemSize, { color: colors.mutedForeground }]}>
+                        {[item.color ? `اللون: ${item.color}` : null, item.size ? `المقاس: ${item.size}` : null]
+                          .filter(Boolean)
+                          .join(" — ")}
+                      </Text>
+                    )}
+                    <Text
+                      style={[
+                        styles.itemPrice,
+                        styles.cartItemPrice,
+                        { color: colors.primary, backgroundColor: colors.primary + "0D" },
+                      ]}
+                    >
+                      {item.price * item.quantity} ₪
+                    </Text>
+
+                    {isSpendGiftReward ? (
+                      <Text
+                        style={{
+                          color: "#16A34A",
+                          fontSize: 12,
+                          fontWeight: "900",
+                          textAlign: "right",
+                          marginTop: 3,
+                        }}
+                      >
+                        🎁 هدية من العرض
+                      </Text>
+                    ) : null}
+
+                    {hasStockIssue ? (
+                      <View
+                        style={{
+                          backgroundColor: "#FEF2F2",
+                          borderColor: "#FCA5A5",
+                          borderWidth: 1,
+                          borderRadius: 10,
+                          paddingHorizontal: 10,
+                          paddingVertical: 8,
+                          marginTop: 6,
+                          gap: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#B91C1C",
+                            fontSize: 12,
+                            fontWeight: "900",
+                            textAlign: "right",
+                          }}
+                        >
+                          {stockStatus.message}
+                        </Text>
+                        {stockStatus.detail ? (
+                          <Text
+                            style={{
+                              color: "#7F1D1D",
+                              fontSize: 11,
+                              lineHeight: 18,
+                              textAlign: "right",
+                            }}
+                          >
+                            {stockStatus.detail}
+                          </Text>
+                        ) : null}
+
+                        <View
+                          style={{
+                            flexDirection: "row-reverse",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            marginTop: 4,
+                          }}
+                        >
+                          {stockStatus.kind === "quantity_exceeds_stock" &&
+                          stockStatus.availableQuantity !== null &&
+                          stockStatus.availableQuantity > 0 ? (
+                            <Pressable
+                              onPress={() => {
+                                if (stockStatus.kind) {
+                                  void trackCartStockEvent("item_corrected", item, stockStatus.kind, stockStatus.availableQuantity);
+                                }
+                                updateQuantity(
+                                  item.id,
+                                  stockStatus.availableQuantity!,
+                                  item.size,
+                                  item.color,
+                                );
+                              }}
+                              style={{
+                                backgroundColor: "#fff",
+                                borderColor: "#FCA5A5",
+                                borderWidth: 1,
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#B91C1C",
+                                  fontWeight: "800",
+                                  fontSize: 11,
+                                }}
+                              >
+                                تحديث للكمية المتوفرة
+                              </Text>
+                            </Pressable>
+                          ) : null}
+
+                          {stockStatus.hasAlternatives && product ? (
+                            <Pressable
+                              onPress={() =>
+                                router.push({
+                                  pathname: "/product/[id]",
+                                  params: {
+                                    id: item.id,
+                                    cartEdit: "1",
+                                    cartSize: item.size ?? "",
+                                    cartColor: item.color ?? "",
+                                    ...(item.rewardForPromotionId
+                                      ? {
+                                          cartRewardForPromotionId:
+                                            String(
+                                              item.rewardForPromotionId,
+                                            ),
+                                        }
+                                      : {}),
+                                  },
+                                })
+                              }
+                              style={{
+                                backgroundColor: colors.primary,
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#fff",
+                                  fontWeight: "900",
+                                  fontSize: 11,
+                                }}
+                              >
+                                تعديل الاختيار
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : null}
+
+                    <Pressable
+                      onPress={() => {
+                        const nextItems =
+                          items.filter(
+                            (entry) =>
+                              !sameCartLine(
+                                entry,
+                                item,
+                              ),
+                          );
+
+                        void runCartChangeWithGiftGuard(
+                          nextItems,
+                          () => {
+                            if (hasStockIssue && stockStatus.kind) {
+                              void trackCartStockEvent("item_removed", item, stockStatus.kind, stockStatus.availableQuantity);
+                            }
+                            removeItem(
+                              item.id,
+                              item.size,
+                              item.color,
+                              item.rewardForPromotionId,
+                            );
+                          },
+                          true,
+                        );
+                      }}
+                      style={styles.deleteBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="حذف المنتج من السلة"
+                    >
+                      <Ionicons name="trash-outline" size={15} color="#C63F50" />
+                      <Text style={styles.deleteText}>حذف</Text>
+                    </Pressable>
+                  </View>
+                  <Image
+                    source={{ uri: item.image }}
+                    style={[
+                      styles.itemImage,
+                      { backgroundColor: colors.muted, borderColor: colors.border },
+                      isDesktopWeb ? styles.desktopItemImage : null,
+                    ]}
+                  />
+                  {isSpendGiftReward ? (
+                    <View
+                      style={[
+                        styles.quantityRow,
+                        isDesktopWeb
+                          ? styles.desktopQuantityRow
+                          : null,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.qtyBtn,
+                          {
+                            backgroundColor:
+                              colors.muted,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="gift-outline"
+                          size={16}
+                          color={
+                            colors.mutedForeground
+                          }
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.qty,
+                          {
+                            color:
+                              colors.foreground,
+                          },
+                        ]}
+                      >
+                        1
+                      </Text>
+                    </View>
+                  ) : (
+                                      <View
+                                        style={[
+                                          styles.quantityRow,
+                                          isDesktopWeb ? styles.desktopQuantityRow : null,
+                                        ]}
+                                      >
+                                        <Pressable
+                                          disabled={hasStockIssue}
+                                          onPress={() => {
+                                            const availableStock = product
+                                              ? getAvailableStock(product, item.size, item.color)
+                                              : null;
+                    
+                                            if (
+                                              availableStock !== null &&
+                                              item.quantity >= availableStock
+                                            ) {
+                                              showStockLimit(availableStock);
+                                              return;
+                                            }
+                    
+                                            updateQuantity(
+                                              item.id,
+                                              item.quantity + 1,
+                                              item.size,
+                                              item.color,
+                                              item.rewardForPromotionId,
+                                            );
+                                          }}
+                                          style={[
+                                            styles.qtyBtn,
+                                            {
+                                              backgroundColor: hasStockIssue
+                                                ? colors.muted
+                                                : colors.primary,
+                                            },
+                                          ]}
+                                        >
+                                          <Ionicons
+                                            name="add"
+                                            size={16}
+                                            color={
+                                              hasStockIssue
+                                                ? colors.mutedForeground
+                                                : "#fff"
+                                            }
+                                          />
+                                        </Pressable>
+                                        <Text style={[styles.qty, { color: colors.foreground }]}>{item.quantity}</Text>
+                                        <Pressable
+                                          onPress={() => {
+                                            const nextItems =
+                                              item.quantity ===
+                                              1
+                                                ? items.filter(
+                                                    (entry) =>
+                                                      !sameCartLine(
+                                                        entry,
+                                                        item,
+                                                      ),
+                                                  )
+                                                : items.map(
+                                                    (entry) =>
+                                                      sameCartLine(
+                                                        entry,
+                                                        item,
+                                                      )
+                                                        ? {
+                                                            ...entry,
+                                                            quantity:
+                                                              entry.quantity -
+                                                              1,
+                                                          }
+                                                        : entry,
+                                                  );
+                    
+                                            void runCartChangeWithGiftGuard(
+                                              nextItems,
+                                              () => {
+                                                if (
+                                                  item.quantity ===
+                                                  1
+                                                ) {
+                                                  removeItem(
+                                                    item.id,
+                                                    item.size,
+                                                    item.color,
+                                                    item.rewardForPromotionId,
+                                                  );
+                                                  return;
+                                                }
+                    
+                                                updateQuantity(
+                                                  item.id,
+                                                  item.quantity -
+                                                    1,
+                                                  item.size,
+                                                  item.color,
+                                                  item.rewardForPromotionId,
+                                                );
+                                              },
+                                              item.quantity ===
+                                                1,
+                                            );
+                                          }}
+                                          style={[styles.qtyBtn, { backgroundColor: item.quantity === 1 ? colors.muted : colors.primary }]}
+                                        >
+                                          <Ionicons name="remove" size={16} color={item.quantity === 1 ? colors.mutedForeground : "#fff"} />
+                                        </Pressable>
+                                      </View>
+                  )}
+                </View>
+              );
+            }}
+          />
+
+          {isDesktopWeb ? cartSummary : null}
         </View>
       )}
     </View>
