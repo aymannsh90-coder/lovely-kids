@@ -388,15 +388,17 @@ export default function HomeScreen() {
     ? (responsiveShellWidth - 32 - (categoryColumnCount - 1) * 12) / categoryColumnCount
     : (viewportWidth - 32 - (categoryColumnCount - 1) * 12) / categoryColumnCount;
 
-  const homeProductImageHeight =
-    isDesktopWeb ? 280 : undefined;
+  const homeProductImageHeight = isDesktopWeb
+    ? 280
+    : Math.min(230, Math.max(168, homeProductCardWidth * 1.1));
 
-  const newArrivalCardWidth = isDesktopWeb
+  const newArrivalCardWidth = isWideWeb
     ? (responsiveShellWidth - 24) / 3
     : Math.max(136, (viewportWidth - 56) / 2);
 
-  const newArrivalImageHeight =
-    isDesktopWeb ? 250 : undefined;
+  const newArrivalImageHeight = isDesktopWeb
+    ? 250
+    : Math.min(222, Math.max(168, newArrivalCardWidth * 1.08));
 
   const responsiveShellStyle = isWideWeb
     ? {
@@ -1393,6 +1395,7 @@ export default function HomeScreen() {
                 <ProductCard
                   key={product.id}
                   product={product}
+                  homeCard
                   style={{ width: newArrivalCardWidth }}
                   imageHeight={newArrivalImageHeight}
                 />
@@ -1723,6 +1726,7 @@ export default function HomeScreen() {
             <ProductCard
               key={product.id}
               product={product}
+              homeCard
               style={{ width: homeProductCardWidth }}
               imageHeight={homeProductImageHeight}
             />
