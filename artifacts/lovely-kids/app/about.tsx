@@ -147,8 +147,8 @@ export default function AboutScreen() {
       label: "زائر للمتجر",
     },
     {
-      num: formatStat(storeStats?.productCount ?? (productsLoading ? null : products.length)),
-      label: storeStats ? "منتج مضاف" : "منتج في القائمة",
+      num: formatStat(storeStats?.productCount ?? (user?.isAdmin && !productsLoading ? products.length : null)),
+      label: "منتج مضاف",
     },
     { num: `${years}+`, label: "سنوات خبرة" },
   ];
