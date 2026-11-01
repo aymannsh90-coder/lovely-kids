@@ -845,17 +845,19 @@ const topPadding = getResponsiveTopPadding(insets.top);
                 accessibilityRole="button"
                 accessibilityLabel="تمرير الأقسام إلى اليمين"
                 onPress={() => scrollCategoryStrip("right")}
-                style={[styles.categoryStripArrow, styles.categoryStripArrowRight, { backgroundColor: colors.card, borderColor: colors.border }]}
+                hitSlop={8}
+                style={[styles.categoryStripArrow, !isDesktopWeb ? styles.categoryStripArrowMobile : null, styles.categoryStripArrowRight, { backgroundColor: colors.card, borderColor: colors.border }]}
               >
-                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+                <Ionicons name="chevron-forward" size={18} color={colors.primary} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="تمرير الأقسام إلى اليسار"
                 onPress={() => scrollCategoryStrip("left")}
-                style={[styles.categoryStripArrow, styles.categoryStripArrowLeft, { backgroundColor: colors.card, borderColor: colors.border }]}
+                hitSlop={8}
+                style={[styles.categoryStripArrow, !isDesktopWeb ? styles.categoryStripArrowMobile : null, styles.categoryStripArrowLeft, { backgroundColor: colors.card, borderColor: colors.border }]}
               >
-                <Ionicons name="chevron-back" size={20} color={colors.primary} />
+                <Ionicons name="chevron-back" size={18} color={colors.primary} />
               </Pressable>
             </>
           ) : null}
@@ -1206,7 +1208,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: Platform.OS === "web" ? 10 : 15,
     borderBottomWidth: Platform.OS === "web" ? 1 : 0,
-    marginBottom: Platform.OS === "web" ? 10 : 14,
+    marginBottom: Platform.OS === "web" ? 8 : 14,
   },
   headerRow: {
     flexDirection: "row-reverse",
@@ -1234,7 +1236,7 @@ const styles = StyleSheet.create({
   genderTabsRow: {
     flexDirection: "row-reverse",
     marginHorizontal: 16,
-    marginBottom: Platform.OS === "web" ? 11 : 14,
+    marginBottom: Platform.OS === "web" ? 9 : 14,
     borderRadius: 19,
     borderWidth: 1,
     overflow: "hidden",
@@ -1261,7 +1263,7 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     marginHorizontal: 16,
-    marginBottom: Platform.OS === "web" ? 11 : 15,
+    marginBottom: Platform.OS === "web" ? 9 : 15,
     minHeight: 54,
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -1343,10 +1345,18 @@ const styles = StyleSheet.create({
     shadowRadius: 7,
     elevation: 3,
   },
+  categoryStripArrowMobile: {
+    top: 33,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    shadowOpacity: 0.075,
+    elevation: 2,
+  },
   categoryStripArrowRight: { right: 5 },
   categoryStripArrowLeft: { left: 5 },
   visualCategoriesStrip: {
-    marginBottom: Platform.OS === "web" ? 8 : 12,
+    marginBottom: Platform.OS === "web" ? 6 : 12,
     height: Platform.OS === "web" ? 106 : 112,
     minHeight: Platform.OS === "web" ? 106 : 112,
     maxHeight: Platform.OS === "web" ? 106 : 112,
@@ -1388,8 +1398,8 @@ const styles = StyleSheet.create({
   categoryText: { fontSize: 13, fontWeight: "700", lineHeight: 18, textAlign: "center" },
   catalogSectionHeading: {
     paddingHorizontal: 16,
-    paddingTop: 5,
-    paddingBottom: 10,
+    paddingTop: 2,
+    paddingBottom: 8,
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 12,
@@ -1437,14 +1447,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 13,
     fontWeight: "700",
-    marginTop: 2,
-    marginBottom: Platform.OS === "web" ? 4 : 14,
+    marginTop: 0,
+    marginBottom: Platform.OS === "web" ? 1 : 14,
   },
   list: { paddingHorizontal: 16 },
   row: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 16 },
