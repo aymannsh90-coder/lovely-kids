@@ -1191,8 +1191,12 @@ export default function GrossProfitReportPage() {
           {report.historicalExchangeReconciliation &&
             (report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 ||
              report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0) && (
-            <section className="gross-profit-review" style={{ padding: 16, marginBottom: 16 }}>
-              <h3 style={{ marginTop: 0 }}>مطابقة التبديلات التاريخية — للقراءة فقط</h3>
+            <details className="gross-profit-review" style={{ marginBottom: 16 }}>
+              <summary className="gross-profit-review-summary">
+                <span>مطابقة التبديلات التاريخية — للقراءة فقط</span>
+                <span className="gross-profit-review-count">اضغط لعرض التفاصيل</span>
+              </summary>
+              <div className="gross-profit-review-body">
               <p>
                 هذا كشف مراجعة مستقل، لا يُغيّر أرباح التقرير الرسمية أو قيود
                 اليومية أو الفترات المقفلة، ولا يدل غياب قيد قبض مرتبط على ضياع النقد.
@@ -1253,7 +1257,8 @@ export default function GrossProfitReportPage() {
                   </p>
                 </>
               )}
-            </section>
+              </div>
+            </details>
           )}
 
           {report.mixedCostReview.length > 0 && (
