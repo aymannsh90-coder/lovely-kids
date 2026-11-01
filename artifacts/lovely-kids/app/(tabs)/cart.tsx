@@ -1594,15 +1594,26 @@ export default function CartScreen() {
                     >
                       {item.price * item.quantity}₪
                     </Text>
-                    <Text
-                      style={[
-                        styles.summaryItemName,
-                        { color: colors.foreground },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.name} x{item.quantity}
-                    </Text>
+                    <View style={styles.summaryItemDetails}>
+                      <Image
+                        source={{ uri: item.image }}
+                        style={[
+                          styles.summaryItemThumbnail,
+                          { backgroundColor: colors.muted, borderColor: colors.border },
+                        ]}
+                        resizeMode="cover"
+                        accessibilityLabel={`صورة ${item.name}`}
+                      />
+                      <Text
+                        style={[
+                          styles.summaryItemName,
+                          { color: colors.foreground },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.name} x{item.quantity}
+                      </Text>
+                    </View>
                   </View>
                 ))}
               </View>
@@ -3027,7 +3038,7 @@ export default function CartScreen() {
                       borderColor: hasStockIssue ? "#EF4444" : colors.border,
                       borderWidth: hasStockIssue ? 1.5 : 1,
                     },
-                    isDesktopWeb ? styles.desktopCartItem : null,
+                    isDesktopWeb ? styles.desktopCartItem : styles.mobileCartItem,
                   ]}
                 >
                   <View style={styles.itemRight}>
@@ -3226,7 +3237,7 @@ export default function CartScreen() {
                     style={[
                       styles.itemImage,
                       { backgroundColor: colors.muted, borderColor: colors.border },
-                      isDesktopWeb ? styles.desktopItemImage : null,
+                      isDesktopWeb ? styles.desktopItemImage : styles.mobileItemImage,
                     ]}
                   />
                   {isSpendGiftReward ? (
@@ -3425,7 +3436,7 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 14 },
   shopBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 8 },
   shopBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  list: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 20, gap: 12 },
+  list: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 18, gap: 10 },
   cartBody: {
     flex: 1,
   },
@@ -3453,7 +3464,7 @@ const styles = StyleSheet.create({
   },
   mobileCartSummary: {
     marginHorizontal: 14,
-    marginTop: 8,
+    marginTop: 6,
     paddingHorizontal: 17,
     paddingTop: 17,
     borderRadius: 22,
@@ -3480,6 +3491,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 1,
   },
+  mobileCartItem: {
+    padding: 10,
+    gap: 8,
+    borderRadius: 18,
+  },
+  mobileItemImage: { width: 72, height: 80, borderRadius: 12 },
   deleteBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -3495,12 +3512,12 @@ const styles = StyleSheet.create({
   },
   deleteText: { color: "#C63F50", fontSize: 12, fontWeight: "700" },
   itemImage: { width: 82, height: 92, borderRadius: 14, borderWidth: 1, resizeMode: "contain" },
-  itemRight: { flex: 1, gap: 5, alignItems: "flex-end", minWidth: 0 },
+  itemRight: { flex: 1, gap: 4, alignItems: "flex-end", minWidth: 0 },
   itemName: { fontSize: 14, lineHeight: 21, fontWeight: "800", textAlign: "right" },
   itemSize: { fontSize: 12, lineHeight: 18, textAlign: "right" },
   itemPrice: { fontSize: 15, fontWeight: "800" },
   cartItemPrice: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10, overflow: "hidden" },
-  quantityRow: { flexDirection: "column", alignItems: "center", gap: 7 },
+  quantityRow: { flexDirection: "column", alignItems: "center", gap: 5 },
   qtyBtn: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   qty: { fontSize: 16, fontWeight: "800" },
   summary: { padding: 16, borderTopWidth: 1, gap: 10 },
@@ -3527,9 +3544,11 @@ const styles = StyleSheet.create({
   summaryToggleText: { fontSize: 12, fontWeight: "800" },
   summaryItemsList: { gap: 7, borderTopWidth: 1, paddingTop: 10 },
   summaryBreakdown: { gap: 8, borderTopWidth: 1, paddingTop: 10 },
-  summaryItem: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
-  summaryItemName: { fontSize: 13, textAlign: "right", flex: 1 },
-  summaryItemPrice: { fontSize: 13, fontWeight: "700", marginLeft: 8 },
+  summaryItem: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8, minHeight: 40 },
+  summaryItemDetails: { flex: 1, minWidth: 0, flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  summaryItemThumbnail: { width: 38, height: 38, borderRadius: 10, borderWidth: 1 },
+  summaryItemName: { fontSize: 13, textAlign: "right", flex: 1, lineHeight: 18 },
+  summaryItemPrice: { fontSize: 13, fontWeight: "700", flexShrink: 0 },
   shippingValueWrap: { flexDirection: "row-reverse", alignItems: "center", gap: 7, flexWrap: "wrap" },
   shippingPromoBadge: { flexDirection: "row-reverse", alignItems: "center", gap: 3, backgroundColor: "#22C55E12", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 },
   shippingPromoBadgeText: { color: "#16A34A", fontSize: 10, fontWeight: "800" },
