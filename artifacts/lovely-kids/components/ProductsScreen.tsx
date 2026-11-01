@@ -6,7 +6,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
   SectionList,
@@ -37,8 +36,6 @@ import {
   promotionDetailText,
   usePromotions,
 } from "@/context/PromotionsContext";
-
-const { width } = Dimensions.get("window");
 
 const PRODUCT_CATEGORY_IMAGES = {
   all: require("../assets/images/category-cards/all.webp"),
@@ -209,7 +206,12 @@ export default function ProductsScreen({
 
   const desktopCardWidth = isDesktopWeb
     ? (desktopContentWidth - 32) / 3
-    : (width - 48) / 2;
+    : (viewportWidth - 48) / 2;
+
+  // Layout only: maintain a consistent image height for mobile product grids.
+  const catalogImageHeight = isDesktopWeb
+    ? 300
+    : Math.min(232, Math.max(165, desktopCardWidth * 1.15));
 
   const desktopShellStyle = isDesktopWeb
     ? {
@@ -453,6 +455,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
           {
             paddingTop: productsTopPadding,
             backgroundColor: colors.background,
+            borderBottomColor: colors.border,
           },
           desktopShellStyle,
         ]}
@@ -492,7 +495,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
 
               router.replace("/(tabs)");
             }}
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: colors.card, borderColor: colors.border }]}
             accessibilityLabel="رجوع"
           >
               <Ionicons
@@ -715,7 +718,9 @@ const topPadding = getResponsiveTopPadding(insets.top);
           desktopFlushShellStyle,
         ]}
       >
-        <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
+        <View style={[styles.searchIconFrame, { backgroundColor: colors.muted }]}>
+          <Ionicons name="search-outline" size={21} color={colors.primary} />
+        </View>
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -1011,7 +1016,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
                     validRewardPromotionId
                   }
                   style={{ width: desktopCardWidth }}
-                  imageHeight={isDesktopWeb ? 300 : undefined}
+                  catalogCard
+                  imageHeight={catalogImageHeight}
                 />
               ))}
             </View>
@@ -1097,7 +1103,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
               validRewardPromotionId
             }
             style={{ width: desktopCardWidth }}
-            imageHeight={isDesktopWeb ? 300 : undefined}
+            catalogCard
+            imageHeight={catalogImageHeight}
           />
         )}
         ListEmptyComponent={
@@ -1138,16 +1145,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  headerRow: {
+    paddingBottom: 15,
+    borderBottomWidth: Platform.OS === "web" ? 1 : 0,
+    marginBottom: 14,
+  },  headerRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 8,
     position: "relative",
-    minHeight: 38,
-  },
-  headerMenuSlot: {
+    minHeight: 42,
+  },  headerMenuSlot: {
     position: "absolute",
     left: 0,
     top: 0,
@@ -1155,30 +1162,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   backButton: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 19,
-  },
-  title: { fontSize: 24, fontWeight: "800", textAlign: "right" },
+    borderRadius: 15,
+    borderWidth: 1,
+  },  title: { fontSize: 23, lineHeight: 32, fontWeight: "800", textAlign: "right" },
   genderTabsRow: {
     flexDirection: "row-reverse",
     marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 16,
+    marginBottom: 14,
+    borderRadius: 19,
     borderWidth: 1,
     overflow: "hidden",
-  },
-  genderTab: {
+    backgroundColor: "#F3F8FD",
+    padding: 4,
+    gap: 4,
+  },  genderTab: {
     flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
-  },
-  genderEmoji: {
+    minHeight: 42,
+    paddingVertical: 9,
+    borderRadius: 15,
+  },  genderEmoji: {
     fontSize: 18,
   },
   genderTabText: {
@@ -1187,16 +1197,28 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 15,
+    minHeight: 54,
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
+    gap: 11,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 19,
     borderWidth: 1,
+    shadowColor: "#24496B",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.045,
+    shadowRadius: 9,
+    elevation: 1,
+  },  searchIconFrame: {
+    width: 39,
+    height: 39,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  searchInput: { flex: 1, fontSize: 15, fontWeight: "500", padding: 0, minHeight: 32 },
   categoriesScroll: {
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -1214,53 +1236,45 @@ const styles = StyleSheet.create({
   },
   stickyCategoriesBar: {
     borderBottomWidth: 1,
-    paddingVertical: 8,
-  },
-  stickyCategoriesScroll: {
+    paddingVertical: 7,
+  },  stickyCategoriesScroll: {
     paddingHorizontal: 12,
-    gap: 10,
+    gap: 9,
     alignItems: "center",
-  },
-  stickyCategoryCard: {
-    width: 80,
-    height: 80,
-    borderRadius: 999,
-    borderWidth: 2,
+  },  stickyCategoryCard: {
+    width: 65,
+    height: 65,
+    borderRadius: 16,
+    borderWidth: 1,
     overflow: "hidden",
     backgroundColor: "#FFFFFF",
-  },
-  stickyCategoryCardSelected: {
-    borderWidth: 3,
-  },
-  stickyCategoryImage: {
+  },  stickyCategoryCardSelected: {
+    borderWidth: 2,
+  },  stickyCategoryImage: {
     width: "100%",
     height: "100%",
   },
 
   visualCategoriesStrip: {
-    marginBottom: 10,
-    height: 106,
-    minHeight: 106,
-    maxHeight: 106,
+    marginBottom: 12,
+    height: 112,
+    minHeight: 112,
+    maxHeight: 112,
     flexShrink: 0,
-  },
-  visualCategoriesScroll: {
+  },  visualCategoriesScroll: {
     paddingHorizontal: 16,
-    gap: 9,
+    gap: 10,
     alignItems: "center",
-  },
-  visualCategoryCard: {
-    width: 82,
-    height: 82,
-    borderRadius: 999,
-    borderWidth: 2,
+  },  visualCategoryCard: {
+    width: 92,
+    height: 92,
+    borderRadius: 19,
+    borderWidth: 1,
     overflow: "hidden",
     backgroundColor: "#FFFFFF",
-  },
-  visualCategoryCardSelected: {
-    borderWidth: 3,
-  },
-  visualCategoryImage: {
+  },  visualCategoryCardSelected: {
+    borderWidth: 2,
+  },  visualCategoryImage: {
     width: "100%",
     height: "100%",
   },
@@ -1270,26 +1284,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     width: 100,
-    height: 36,
+    height: 38,
     paddingHorizontal: 8,
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     flexShrink: 0,
     marginHorizontal: 5,
-  },
-  categoryText: { fontSize: 13, fontWeight: "600", lineHeight: 18, textAlign: "center" },
+  },  categoryText: { fontSize: 13, fontWeight: "700", lineHeight: 18, textAlign: "center" },
   count: {
     textAlign: "right",
     paddingHorizontal: 16,
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  list: { paddingHorizontal: 16 },
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 4,
+    marginBottom: 14,
+  },  list: { paddingHorizontal: 16 },
   row: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
+    marginBottom: 16,
+  },  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 16 },
 });
