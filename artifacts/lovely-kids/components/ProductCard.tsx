@@ -33,6 +33,8 @@ interface Props {
   product: Product;
   style?: object;
   imageHeight?: number;
+  // Visual treatment for the homepage only; product actions are unchanged.
+  homeCard?: boolean;
   orderEdit?: {
     orderId: string;
     token?: string;
@@ -50,6 +52,7 @@ export function ProductCard({
   product,
   style,
   imageHeight,
+  homeCard = false,
   orderEdit = null,
   rewardForPromotionId,
 }: Props) {
@@ -324,18 +327,23 @@ export function ProductCard({
       onPress={() => router.push(productRoute)}
       style={({ pressed }) => [
         styles.container,
+        homeCard && styles.homeContainer,
         { backgroundColor: colors.card, borderColor: colors.border },
-        pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+        pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
         style,
       ]}
     >
       <View
         style={[
           styles.imageWrapper,
+          homeCard && styles.homeImageWrapper,
           imageHeight ? { height: imageHeight } : null,
         ]}
       >
-        <Image source={{ uri: product.image }} style={[styles.image, isOutOfStock && styles.imageDimmed]} />
+        <Image
+          source={{ uri: product.image }}
+          style={[styles.image, homeCard && styles.homeImage, isOutOfStock && styles.imageDimmed]}
+        />
 
         {/* Out of Stock Overlay */}
         {isOutOfStock && (
@@ -359,8 +367,10 @@ export function ProductCard({
 
         <Pressable
           onPress={handleToggleWishlist}
-          style={[styles.wishlistBtn, { backgroundColor: colors.card }]}
+          style={[styles.wishlistBtn, homeCard && styles.homeOverlayButton, { backgroundColor: colors.card }]}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={wishlisted ? "إزالة من المفضلة" : "إضافة للمفضلة"}
         >
           <Ionicons
             name={wishlisted ? "heart" : "heart-outline"}
@@ -371,15 +381,17 @@ export function ProductCard({
 
         <Pressable
           onPress={(e) => { e.stopPropagation(); void handleShare(); }}
-          style={[styles.shareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.shareBtn, homeCard && styles.homeOverlayButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="مشاركة المنتج"
         >
           <Ionicons name="share-social-outline" size={17} color={colors.primary} />
         </Pressable>
       </View>
 
-      <View style={styles.info}>
-        <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={2}>
+      <View style={[styles.info, homeCard && styles.homeInfo]}>
+        <Text style={[styles.name, homeCard && styles.homeName, { color: colors.foreground }]} numberOfLines={2}>
           {product.nameAr}
         </Text>
 
@@ -412,13 +424,13 @@ export function ProductCard({
           </View>
         ) : null}
 
-        <View style={styles.priceRow}>
-          <View>
-            <Text style={[styles.price, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
+        <View style={[styles.priceRow, homeCard && styles.homePriceRow]}>
+          <View style={styles.priceCopy}>
+            <Text style={[styles.price, homeCard && styles.homePrice, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
               {product.price} ₪
             </Text>
             {product.originalPrice && !isOutOfStock && (
-              <Text style={[styles.originalPrice, { color: colors.mutedForeground }]}>
+              <Text style={[styles.originalPrice, homeCard && styles.homeOriginalPrice, { color: colors.mutedForeground }]}>
                 {product.originalPrice} ₪
               </Text>
             )}
@@ -426,9 +438,11 @@ export function ProductCard({
           <Pressable
             onPress={handleAddToCart}
             disabled={isOutOfStock}
-            style={[styles.addBtn, { backgroundColor: isOutOfStock ? colors.muted : colors.primary }]}
+            style={[styles.addBtn, homeCard && styles.homeAddBtn, { backgroundColor: isOutOfStock ? colors.muted : colors.primary }]}
+            accessibilityRole="button"
+            accessibilityLabel={isOutOfStock ? "الكمية غير متوفرة" : "إضافة المنتج إلى السلة"}
           >
-            <Ionicons name={isOutOfStock ? "close" : "add"} size={18} color={isOutOfStock ? colors.mutedForeground : "#fff"} />
+            <Ionicons name={isOutOfStock ? "close" : "add"} size={homeCard ? 21 : 18} color={isOutOfStock ? colors.mutedForeground : "#fff"} />
           </Pressable>
         </View>
       </View>
@@ -455,6 +469,31 @@ const styles = StyleSheet.create({
     position: "relative",
     height: 160,
     backgroundColor: "#F7FAFD",
+  },
+  // A stronger image/price hierarchy on the homepage without affecting
+  // product lists, promotions, variants, cart, or checkout.
+  homeContainer: {
+    borderRadius: 20,
+    borderWidth: 1,
+    shadowColor: "#243B5F",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  homeImageWrapper: {
+    backgroundColor: "#F5F9FD",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EAF0F7",
+  },
+  homeImage: {
+    width: "100%",
+    height: "100%",
+  },
+  homeOverlayButton: {
+    width: 35,
+    height: 35,
+    borderRadius: 18,
   },
   image: {
     width: "100%",
@@ -539,6 +578,19 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     minHeight: 44,
   },
+  homeInfo: {
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 13,
+    gap: 9,
+    flexGrow: 1,
+  },
+  homeName: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: "700",
+    minHeight: 44,
+  },
   promotionPill: {
     alignSelf: "flex-end",
     maxWidth: "100%",
@@ -559,6 +611,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 2,
   },
+  homePriceRow: {
+    marginTop: "auto",
+    paddingTop: 7,
+    gap: 4,
+  },
+  priceCopy: {
+    flexShrink: 1,
+    alignItems: "flex-end",
+  },
   price: {
     fontSize: 17,
     fontWeight: "800",
@@ -569,11 +630,30 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
     textAlign: "right",
   },
+  homePrice: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "800",
+  },
+  homeOriginalPrice: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
   addBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
+  },
+  homeAddBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    shadowColor: "#2379BF",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 2,
   },
 });
