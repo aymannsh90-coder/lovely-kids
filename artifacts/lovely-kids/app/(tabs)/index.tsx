@@ -458,6 +458,7 @@ export default function HomeScreen() {
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
   const sectionPillShimmer = useRef(new Animated.Value(0)).current;
   const sectionPillAccentPulse = useRef(new Animated.Value(1)).current;
+  const sectionPillGlow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Decorative motion on storefront titles only. Honor reduced-motion settings.
@@ -468,10 +469,10 @@ export default function HomeScreen() {
     ) return;
 
     const shimmer = Animated.loop(Animated.sequence([
-      Animated.delay(1100),
+      Animated.delay(350),
       Animated.timing(sectionPillShimmer, {
         toValue: 1,
-        duration: 1350,
+        duration: 1600,
         easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
       }),
@@ -480,32 +481,52 @@ export default function HomeScreen() {
         duration: 0,
         useNativeDriver: true,
       }),
-      Animated.delay(4500),
+      Animated.delay(2100),
     ]));
 
     const accentPulse = Animated.loop(Animated.sequence([
       Animated.timing(sectionPillAccentPulse, {
-        toValue: 1.25,
-        duration: 850,
+        toValue: 1.4,
+        duration: 950,
         easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
       Animated.timing(sectionPillAccentPulse, {
         toValue: 1,
-        duration: 850,
+        duration: 950,
         easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
-      Animated.delay(5200),
+      Animated.delay(2100),
+    ]));
+
+    // Whole-pill tint ensures the animation is actually noticeable on phones,
+    // even when a narrow shimmer passes too quickly to catch.
+    const glow = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillGlow, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sectionPillGlow, {
+        toValue: 0,
+        duration: 1200,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.delay(1900),
     ]));
 
     shimmer.start();
     accentPulse.start();
+    glow.start();
     return () => {
       shimmer.stop();
       accentPulse.stop();
+      glow.stop();
     };
-  }, [sectionPillShimmer, sectionPillAccentPulse]);
+  }, [sectionPillShimmer, sectionPillAccentPulse, sectionPillGlow]);
   const [categoriesRevealed, setCategoriesRevealed] = useState(false);
   const categoryGridY = useRef<number | null>(null);
   const homeViewportHeight = useRef(0);
@@ -758,23 +779,37 @@ export default function HomeScreen() {
           ]}
         >
           {animatePill ? (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.homeBannerTitleShimmer,
-                {
-                  transform: [
-                    {
-                      translateX: sectionPillShimmer.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-75, 310],
-                      }),
-                    },
-                    { skewX: "-18deg" },
-                  ],
-                },
-              ]}
-            />
+            <>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.homeBannerTitleGlow,
+                  {
+                    opacity: sectionPillGlow.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.13, 0.8],
+                    }),
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.homeBannerTitleShimmer,
+                  {
+                    transform: [
+                      {
+                        translateX: sectionPillShimmer.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-110, 360],
+                        }),
+                      },
+                      { skewX: "-18deg" },
+                    ],
+                  },
+                ]}
+              />
+            </>
           ) : null}
           <Animated.View
             style={[
@@ -786,6 +821,19 @@ export default function HomeScreen() {
           <Text style={[styles.homeBannerTitle, { color: colors.foreground }]}>
             {title}
           </Text>
+          {animatePill ? (
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                opacity: sectionPillGlow.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.45, 1],
+                }),
+              }}
+            >
+              <Ionicons name="sparkles" color="#3299DC" size={16} />
+            </Animated.View>
+          ) : null}
         </View>
 
         <View
@@ -2050,13 +2098,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
   },
+  homeBannerTitleGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#D7EEFF",
+  },
   homeBannerTitleShimmer: {
     position: "absolute",
     top: 0,
     bottom: 0,
     left: 0,
-    width: 55,
-    backgroundColor: "rgba(72,174,245,0.19)",
+    width: 95,
+    backgroundColor: "rgba(72,174,245,0.34)",
   },
   homeBannerAccent: {
     width: 4,
