@@ -2,7 +2,7 @@ import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
   Platform,
@@ -15,7 +15,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { API_BASE } from "@/constants/api";
 import { useAppSettings } from "@/context/AppSettingsContext";
+import { useAuth } from "@/context/AuthContext";
+import { useProducts } from "@/context/ProductsContext";
 
 const PALETTE = {
   navy: "#17245A",
@@ -27,11 +30,38 @@ const PALETTE = {
   background: "#FAFCFF",
 } as const;
 
-const STATS = [
-  { num: "+4800", label: "عميل يثق بنا" },
-  { num: "+500", label: "منتج متنوع" },
-  { num: "7+", label: "سنوات خبرة" },
-] as const;
+const OPENING_DATE = { year: 2018, month: 4, day: 1 } as const;
+const STATS_REFRESH_MS = 10 * 60 * 1000;
+
+type StorefrontStats = {
+  visitorCount: number;
+  productCount: number;
+};
+
+function validCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+// A year is counted only after April 1 has actually passed in Palestine.
+function yearsSinceOpening(now = new Date()): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  const completed = year - OPENING_DATE.year
+    - (month < OPENING_DATE.month || (month === OPENING_DATE.month && day < OPENING_DATE.day) ? 1 : 0);
+  return Math.max(0, completed);
+}
+
+function formatStat(value: number | null): string {
+  return value === null ? "—" : new Intl.NumberFormat("en-US").format(value);
+}
 
 const FEATURE_ICONS = [
   "shield-checkmark-outline",
@@ -44,10 +74,84 @@ export default function AboutScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { settings } = useAppSettings();
+  const { user, getAuthToken } = useAuth();
+  const { products, loading: productsLoading } = useProducts();
+  const [storeStats, setStoreStats] = useState<StorefrontStats | null>(null);
+  const [ownerVisitorCount, setOwnerVisitorCount] = useState<number | null>(null);
+  const [years, setYears] = useState(() => yearsSinceOpening());
   const wideLayout = width >= 850;
   const isDesktopWeb = Platform.OS === "web" && width >= 1200;
   const topPadding = isDesktopWeb ? 24 : getResponsiveTopPadding(insets.top) + 8;
   const bottomPadding = Platform.OS === "web" ? 56 : insets.bottom + 28;
+
+  useEffect(() => {
+    const interval = setInterval(() => setYears(yearsSinceOpening()), 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function refreshCounters() {
+      try {
+        // Only two aggregated integers are exposed; the admin analytics route
+        // stays owner-only, with no visitor IDs or country breakdowns published.
+        const response = await fetch(`${API_BASE}/api/storefront/stats`, {
+          headers: { Accept: "application/json" },
+        });
+        if (response.ok) {
+          const body: unknown = await response.json();
+          if (
+            typeof body === "object" && body !== null &&
+            "visitorCount" in body && "productCount" in body &&
+            validCount(body.visitorCount) && validCount(body.productCount)
+          ) {
+            if (active) setStoreStats({
+              visitorCount: body.visitorCount,
+              productCount: body.productCount,
+            });
+            return;
+          }
+        }
+      } catch {
+        // Preview may run before the matching Worker branch is deployed.
+      }
+
+      // Preview-only graceful fallback for a logged-in owner; no protected data
+      // is sent to other visitors and no credentials are persisted.
+      if (user?.isOwner) {
+        try {
+          const token = await getAuthToken();
+          if (!token) return;
+          const response = await fetch(`${API_BASE}/api/analytics/summary`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!response.ok) return;
+          const body: unknown = await response.json();
+          if (typeof body === "object" && body !== null && "total" in body && validCount(body.total)) {
+            if (active) setOwnerVisitorCount(body.total);
+          }
+        } catch {
+          // Keep the counter unavailable rather than inventing a visitor count.
+        }
+      }
+    }
+
+    void refreshCounters();
+    const interval = setInterval(() => { void refreshCounters(); }, STATS_REFRESH_MS);
+    return () => { active = false; clearInterval(interval); };
+  }, [getAuthToken, user?.isOwner]);
+
+  const stats = [
+    {
+      num: formatStat(storeStats?.visitorCount ?? ownerVisitorCount),
+      label: "زائر للمتجر",
+    },
+    {
+      num: formatStat(storeStats?.productCount ?? (productsLoading ? null : products.length)),
+      label: storeStats ? "منتج مضاف" : "منتج في القائمة",
+    },
+    { num: `${years}+`, label: "سنوات خبرة" },
+  ];
 
   return (
     <ScrollView
@@ -87,14 +191,14 @@ export default function AboutScreen() {
               <Text style={styles.eyebrowText}>من قلب نابلس، بكل حب</Text>
             </View>
             <Text style={[styles.heroTitle, wideLayout && styles.heroTitleWide]}>
-              عالم صغير مليان فرحة
+              عالم متكامل من ملابس الاطفال وتجهيز المواليد
             </Text>
             <Text style={[styles.heroDescription, wideLayout && styles.heroDescriptionWide]}>
-              في Lovely Kids، نهتم بأدق التفاصيل عشان تختاري لطفلك ملابس ومستلزمات جميلة ومريحة بكل ثقة.
+              في Lovely Kids، نهتم بأدق التفاصيل وبنوفر افضل الخامات عشان تختاري لطفلك ملابس ومستلزمات جميلة ومريحة بكل ثقة.
             </Text>
             <View style={styles.locationPill}>
               <Ionicons name="location-outline" color={PALETTE.blue} size={17} />
-              <Text style={styles.locationText}>نابلس · فلسطين</Text>
+              <Text style={styles.locationText}>عنواننا نابلس - المركز التجاري - شارع عمر المختار</Text>
             </View>
           </View>
 
@@ -119,7 +223,7 @@ export default function AboutScreen() {
         </LinearGradient>
 
         <View style={styles.statsRow}>
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <View key={s.label} style={styles.statCard}>
               <Text style={[styles.statNumber, !wideLayout && styles.statNumberPhone]}>
                 {s.num}
@@ -135,8 +239,18 @@ export default function AboutScreen() {
             <Text style={styles.sectionTitle}>مين إحنا؟</Text>
           </View>
           <Text style={[styles.storyText, wideLayout && styles.storyTextWide]}>
-            {settings.aboutInfo.intro}
+            Lovely Kids احنا متجر متخصص في ملابس ومستلزمات الأطفال في مدينة نابلس. نقدم منتجات عالية الجودة بأسعار مناسبة لتلبية احتياجات كل مرحلة من مراحل نمو طفلك.
           </Text>
+          <View style={styles.contactDetails}>
+            <View style={styles.detailLine}>
+              <Ionicons name="location-outline" size={19} color={PALETTE.pink} />
+              <Text style={styles.detailText}>نابلس · المركز التجاري · شارع عمر المختار · طلعة بنك القدس</Text>
+            </View>
+            <View style={styles.detailLine}>
+              <Ionicons name="call-outline" size={19} color={PALETTE.blue} />
+              <Text style={styles.detailText}>092376808   ·   جوال 0595266731</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.whySection}>
@@ -407,6 +521,19 @@ const styles = StyleSheet.create({
     lineHeight: 29,
   },
   storyTextWide: { fontSize: 18, lineHeight: 33 },
+  contactDetails: { gap: 13, paddingTop: 10 },
+  detailLine: {
+    flexDirection: "row-reverse",
+    gap: 10,
+    alignItems: "center",
+  },
+  detailText: {
+    color: PALETTE.text,
+    fontSize: 15,
+    lineHeight: 25,
+    textAlign: "right",
+    flexShrink: 1,
+  },
   whySection: { marginBottom: 32, gap: 12 },
   sectionSubtitle: {
     color: PALETTE.text,
