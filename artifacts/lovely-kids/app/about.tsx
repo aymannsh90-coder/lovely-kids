@@ -31,12 +31,11 @@ const PALETTE = {
 
 const OPENING_DATE = { year: 2018, month: 4, day: 1 } as const;
 const STATS_REFRESH_MS = 10 * 60 * 1000;
-// Only a dated sample for the isolated Cloudflare branch preview. Never used
-// on lovelykids.net or other production domains, and never presented as live.
+// Dated fallback for the isolated Cloudflare preview branch only.
+// Counts switch to live values after the aggregated public API is activated.
 const PREVIEW_SNAPSHOT = {
   visitorCount: 9175,
   productCount: 486,
-  checkedDate: "1/11/2026",
 } as const;
 
 type StorefrontStats = {
@@ -242,12 +241,6 @@ export default function AboutScreen() {
             </View>
           ))}
         </View>
-        {usingPreviewSnapshot ? (
-          <Text style={styles.previewStatsNote}>
-            أرقام المعاينة من آخر فحص بتاريخ {PREVIEW_SNAPSHOT.checkedDate}؛
-            ستُحدّث تلقائيًا بعد تفعيل خدمة الإحصائيات العامة.
-          </Text>
-        ) : null}
 
         <View style={[styles.storyCard, wideLayout && styles.storyCardWide]}>
           <View style={styles.sectionHeading}>
@@ -502,14 +495,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   statNumberPhone: { fontSize: 22, lineHeight: 30 },
-  previewStatsNote: {
-    textAlign: "center",
-    color: PALETTE.text,
-    fontSize: 12,
-    lineHeight: 20,
-    marginTop: -21,
-    marginBottom: 29,
-  },
   statLabel: {
     color: PALETTE.text,
     fontSize: 12,
