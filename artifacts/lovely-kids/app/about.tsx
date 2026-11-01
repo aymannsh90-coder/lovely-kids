@@ -267,6 +267,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   heroTitle: {
+    width: "100%",
     color: PALETTE.navy,
     fontSize: 29,
     lineHeight: 41,
@@ -275,6 +276,7 @@ const styles = StyleSheet.create({
   },
   heroTitleWide: { fontSize: 36, lineHeight: 50 },
   heroDescription: {
+    width: "100%",
     color: PALETTE.text,
     fontSize: 16,
     lineHeight: 28,
@@ -397,6 +399,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   storyText: {
+    width: "100%",
     color: PALETTE.text,
     textAlign: "right",
     writingDirection: "rtl",
