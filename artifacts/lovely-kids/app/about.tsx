@@ -1,5 +1,6 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React from "react";
 import {
@@ -10,11 +11,27 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppSettings } from "@/context/AppSettingsContext";
-import { useColors } from "@/hooks/useColors";
+
+const PALETTE = {
+  navy: "#17245A",
+  blue: "#2379BF",
+  pink: "#CC4789",
+  text: "#4F627E",
+  border: "#DFEAF5",
+  surface: "#FFFFFF",
+  background: "#FAFCFF",
+} as const;
+
+const STATS = [
+  { num: "+4800", label: "عميل يثق بنا" },
+  { num: "+500", label: "منتج متنوع" },
+  { num: "7+", label: "سنوات خبرة" },
+] as const;
 
 const FEATURE_ICONS = [
   "shield-checkmark-outline",
@@ -24,189 +41,444 @@ const FEATURE_ICONS = [
 ] as const;
 
 export default function AboutScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { settings } = useAppSettings();
-
-  const topPadding = getResponsiveTopPadding(insets.top);
-  const bottomPadding = Platform.OS === "web" ? 34 : insets.bottom + 16;
+  const wideLayout = width >= 850;
+  const isDesktopWeb = Platform.OS === "web" && width >= 1200;
+  const topPadding = isDesktopWeb ? 24 : getResponsiveTopPadding(insets.top) + 8;
+  const bottomPadding = Platform.OS === "web" ? 56 : insets.bottom + 28;
 
   return (
     <ScrollView
-      style={[styles.scroll, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: bottomPadding }}
+      style={styles.scroll}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingBottom: bottomPadding },
+      ]}
     >
-      <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
-        <Pressable onPress={() => router.back()}>
-          <Ionicons name="arrow-forward" size={24} color={colors.foreground} />
-        </Pressable>
-        <Text style={[styles.title, { color: colors.foreground }]}>عن المحل</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <View style={[styles.heroBanner, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-        <View style={styles.logoFrame}>
-          <Image
-            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
+      <View style={[styles.shell, wideLayout && styles.shellWide]}>
+        <View style={[styles.header, { paddingTop: topPadding }]}>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="الرجوع"
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-forward" size={22} color={PALETTE.navy} />
+          </Pressable>
+          <Text style={styles.pageTitle}>عن Lovely Kids</Text>
+          <View style={styles.headerSpacer} />
         </View>
-        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>نابلس · فلسطين</Text>
-        <Text style={[styles.heroHeadline, { color: colors.foreground }]}>كل ما يحتاجه طفلك، بكل حب</Text>
+
+        <LinearGradient
+          colors={["#EAF5FF", "#FFF4F9", "#FFFFFF"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.hero,
+            wideLayout ? styles.heroWide : styles.heroPhone,
+          ]}
+        >
+          <View style={[styles.heroCopy, wideLayout && styles.heroCopyWide]}>
+            <View style={styles.eyebrow}>
+              <Ionicons name="heart" color={PALETTE.pink} size={15} />
+              <Text style={styles.eyebrowText}>من قلب نابلس، بكل حب</Text>
+            </View>
+            <Text style={[styles.heroTitle, wideLayout && styles.heroTitleWide]}>
+              عالم صغير مليان فرحة
+            </Text>
+            <Text style={[styles.heroDescription, wideLayout && styles.heroDescriptionWide]}>
+              في Lovely Kids، نهتم بأدق التفاصيل عشان تختاري لطفلك ملابس ومستلزمات جميلة ومريحة بكل ثقة.
+            </Text>
+            <View style={styles.locationPill}>
+              <Ionicons name="location-outline" color={PALETTE.blue} size={17} />
+              <Text style={styles.locationText}>نابلس · فلسطين</Text>
+            </View>
+          </View>
+
+          <View style={[styles.heroArt, wideLayout && styles.heroArtWide]}>
+            <View style={styles.heroArtCircle} />
+            <View style={styles.heroArtDot} />
+            <View style={styles.logoCard}>
+              <Image
+                source={
+                  settings.logoUrl
+                    ? { uri: settings.logoUrl }
+                    : require("@/assets/images/logo.jpg")
+                }
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={styles.heroHeart}>
+              <Ionicons name="heart" color={PALETTE.pink} size={20} />
+            </View>
+          </View>
+        </LinearGradient>
+
         <View style={styles.statsRow}>
-          {[
-            { num: "+4800", label: "عميل" },
-            { num: "+500", label: "منتج" },
-            { num: "7+", label: "سنوات خبرة" },
-          ].map((s) => (
-            <View key={s.label} style={styles.statItem}>
-              <Text style={styles.statNum}>{s.num}</Text>
+          {STATS.map((s) => (
+            <View key={s.label} style={styles.statCard}>
+              <Text style={[styles.statNumber, !wideLayout && styles.statNumberPhone]}>
+                {s.num}
+              </Text>
               <Text style={styles.statLabel}>{s.label}</Text>
             </View>
           ))}
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          من نحن
-        </Text>
-        <Text style={[styles.text, { color: colors.mutedForeground }]}>
-          {settings.aboutInfo.intro}
-        </Text>
-      </View>
+        <View style={[styles.storyCard, wideLayout && styles.storyCardWide]}>
+          <View style={styles.sectionHeading}>
+            <View style={styles.sectionAccent} />
+            <Text style={styles.sectionTitle}>مين إحنا؟</Text>
+          </View>
+          <Text style={[styles.storyText, wideLayout && styles.storyTextWide]}>
+            {settings.aboutInfo.intro}
+          </Text>
+        </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          لماذا تختارنا؟
-        </Text>
-        <View style={styles.features}>
-          {settings.aboutInfo.features.map((f, index) => (
-            <View
-              key={`${f.title}-${index}`}
-              style={[
-                styles.featureCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <View style={[styles.featureIcon, { backgroundColor: index % 2 === 0 ? colors.muted : colors.accent }]}>
-                <Ionicons
-                  name={FEATURE_ICONS[index % FEATURE_ICONS.length]}
-                  size={24}
-                  color={index % 2 === 0 ? colors.primary : "#C83479"}
-                />
+        <View style={styles.whySection}>
+          <View style={styles.sectionHeading}>
+            <View style={styles.sectionAccent} />
+            <Text style={styles.sectionTitle}>ليش تختاري Lovely Kids؟</Text>
+          </View>
+          <Text style={styles.sectionSubtitle}>
+            نهتم بجودة المنتجات وراحتك بكل خطوة من تجربة التسوق.
+          </Text>
+
+          <View style={[styles.features, wideLayout && styles.featuresWide]}>
+            {settings.aboutInfo.features.map((feature, index) => (
+              <View
+                key={`${feature.title}-${index}`}
+                style={[styles.featureCard, wideLayout && styles.featureCardWide]}
+              >
+                <View
+                  style={[
+                    styles.featureIcon,
+                    {
+                      backgroundColor:
+                        index % 2 === 0 ? "#E9F5FF" : "#FFF0F6",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={FEATURE_ICONS[index % FEATURE_ICONS.length]}
+                    size={24}
+                    color={index % 2 === 0 ? PALETTE.blue : PALETTE.pink}
+                  />
+                </View>
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>{feature.title}</Text>
+                  <Text style={styles.featureDescription}>{feature.desc}</Text>
+                </View>
               </View>
-              <View style={styles.featureText}>
-                <Text style={[styles.featureTitle, { color: colors.foreground }]}>
-                  {f.title}
-                </Text>
-                <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
-                  {f.desc}
-                </Text>
-              </View>
-            </View>
-          ))}
+            ))}
+          </View>
+        </View>
+
+        <View style={[styles.contactStrip, wideLayout && styles.contactStripWide]}>
+          <View style={styles.contactCopy}>
+            <Text style={styles.contactTitle}>عندك سؤال؟ إحنا هون لمساعدتك</Text>
+            <Text style={styles.contactSub}>تواصلي معنا، وبنساعدك تختاري الأنسب لطفلك.</Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/contact")}
+            accessibilityRole="button"
+            style={styles.contactButton}
+          >
+            <Text style={styles.contactButtonText}>تواصلي معنا</Text>
+            <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
+          </Pressable>
         </View>
       </View>
-
-      <Pressable
-        onPress={() => router.push("/contact")}
-        style={[styles.ctaBtn, { backgroundColor: colors.primary }]}
-      >
-        <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-        <Text style={styles.ctaBtnText}>للتواصل معنا</Text>
-      </Pressable>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
+  scroll: { flex: 1, backgroundColor: PALETTE.background },
+  scrollContent: { alignItems: "center" },
+  shell: {
+    width: "100%",
+    maxWidth: 1100,
+    paddingHorizontal: 16,
+  },
+  shellWide: { paddingHorizontal: 24 },
   header: {
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 18,
+    paddingBottom: 20,
   },
-  title: { fontSize: 21, fontWeight: "800" },
-  heroBanner: {
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderRadius: 26,
-    paddingHorizontal: 18,
-    paddingVertical: 26,
+  pageTitle: {
+    color: PALETTE.navy,
+    fontSize: 23,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  backButton: {
+    width: 42,
+    height: 42,
     alignItems: "center",
-    gap: 9,
-    marginBottom: 28,
-  },
-  logoFrame: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#DFECF6",
+    justifyContent: "center",
+    borderColor: PALETTE.border,
     borderWidth: 1,
-    borderRadius: 22,
-    padding: 12,
-    marginBottom: 6,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
   },
-  logoImage: { width: 138, height: 120, borderRadius: 12 },
-  heroSub: { fontSize: 14, fontWeight: "600" },
-  heroHeadline: { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  headerSpacer: { width: 42 },
+  hero: {
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#DDEDF9",
+    overflow: "hidden",
+    minHeight: 280,
+  },
+  heroWide: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    paddingHorizontal: 48,
+    paddingVertical: 32,
+    gap: 22,
+  },
+  heroPhone: {
+    alignItems: "center",
+    paddingHorizontal: 21,
+    paddingTop: 31,
+    paddingBottom: 23,
+    gap: 14,
+  },
+  heroCopy: { alignItems: "flex-end", gap: 15, width: "100%" },
+  heroCopyWide: { flex: 1, width: undefined, gap: 18 },
+  eyebrow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 30,
+    paddingHorizontal: 15,
+    paddingVertical: 9,
+  },
+  eyebrowText: {
+    color: PALETTE.pink,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  heroTitle: {
+    color: PALETTE.navy,
+    fontSize: 29,
+    lineHeight: 41,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  heroTitleWide: { fontSize: 36, lineHeight: 50 },
+  heroDescription: {
+    color: PALETTE.text,
+    fontSize: 16,
+    lineHeight: 28,
+    textAlign: "right",
+  },
+  heroDescriptionWide: { fontSize: 18, lineHeight: 32 },
+  locationPill: {
+    flexDirection: "row-reverse",
+    gap: 7,
+    alignItems: "center",
+  },
+  locationText: { color: PALETTE.navy, fontSize: 14, fontWeight: "600" },
+  heroArt: {
+    width: 190,
+    height: 160,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroArtWide: { width: 290, height: 270, flexShrink: 0 },
+  heroArtCircle: {
+    position: "absolute",
+    width: "90%",
+    height: "98%",
+    borderRadius: 140,
+    backgroundColor: "#D2EAFD",
+    opacity: 0.8,
+  },
+  heroArtDot: {
+    position: "absolute",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFD9EA",
+    top: 5,
+    left: 5,
+  },
+  logoCard: {
+    width: "72%",
+    aspectRatio: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 15,
+    shadowColor: "#1D4C75",
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoImage: { width: "100%", height: "100%", borderRadius: 12 },
+  heroHeart: {
+    position: "absolute",
+    right: 8,
+    bottom: 9,
+    width: 43,
+    height: 43,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   statsRow: {
     flexDirection: "row-reverse",
-    justifyContent: "space-between",
-    width: "100%",
-    gap: 8,
+    gap: 12,
     marginTop: 16,
+    marginBottom: 34,
   },
-  statItem: {
+  statCard: {
     flex: 1,
+    minWidth: 0,
+    backgroundColor: PALETTE.surface,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
+  },
+  statNumber: {
+    color: PALETTE.blue,
+    fontSize: 28,
+    lineHeight: 36,
+    fontWeight: "800",
+  },
+  statNumberPhone: { fontSize: 22, lineHeight: 30 },
+  statLabel: {
+    color: PALETTE.text,
+    fontSize: 12,
+    lineHeight: 19,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  storyCard: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#DCEAF5",
+    borderColor: PALETTE.border,
     borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 13,
-    paddingHorizontal: 2,
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 34,
+    gap: 15,
   },
-  statNum: { fontSize: 21, fontWeight: "800", color: "#2379BF" },
-  statLabel: { fontSize: 11, color: "#65748C", marginTop: 5 },
-  section: { paddingHorizontal: 18, marginBottom: 27, gap: 14 },
-  sectionTitle: { fontSize: 20, fontWeight: "800", textAlign: "right" },
-  text: { fontSize: 15, textAlign: "right", lineHeight: 27 },
-  features: { gap: 12 },
+  storyCardWide: { paddingHorizontal: 32, paddingVertical: 28 },
+  sectionHeading: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 11,
+  },
+  sectionAccent: {
+    backgroundColor: PALETTE.pink,
+    width: 5,
+    height: 27,
+    borderRadius: 4,
+  },
+  sectionTitle: {
+    color: PALETTE.navy,
+    textAlign: "right",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  storyText: {
+    color: PALETTE.text,
+    textAlign: "right",
+    writingDirection: "rtl",
+    fontSize: 16,
+    lineHeight: 29,
+  },
+  storyTextWide: { fontSize: 18, lineHeight: 33 },
+  whySection: { marginBottom: 32, gap: 12 },
+  sectionSubtitle: {
+    color: PALETTE.text,
+    fontSize: 15,
+    textAlign: "right",
+    lineHeight: 25,
+    marginBottom: 8,
+  },
+  features: { gap: 14 },
+  featuresWide: { flexDirection: "row-reverse", flexWrap: "wrap" },
   featureCard: {
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
-    padding: 15,
+    gap: 14,
+    padding: 18,
     borderRadius: 18,
+    borderColor: PALETTE.border,
     borderWidth: 1,
-    gap: 13,
+    backgroundColor: "#FFFFFF",
   },
+  featureCardWide: { width: "48.5%", flexGrow: 1 },
   featureIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 54,
+    height: 54,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },
-  featureText: {
-    flex: 1,
-    alignItems: Platform.OS === "web" ? "flex-end" : "flex-start",
-    gap: 5,
+  featureText: { flex: 1, gap: 5, alignItems: "flex-end" },
+  featureTitle: {
+    color: PALETTE.navy,
+    fontSize: 16,
+    textAlign: "right",
+    fontWeight: "800",
   },
-  featureTitle: { fontSize: 15, fontWeight: "800", textAlign: "right" },
-  featureDesc: { fontSize: 13, textAlign: "right", lineHeight: 20 },
-  ctaBtn: {
-    flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
+  featureDescription: {
+    color: PALETTE.text,
+    fontSize: 14,
+    lineHeight: 23,
+    textAlign: "right",
+  },
+  contactStrip: {
+    backgroundColor: "#E9F5FF",
+    borderRadius: 22,
+    padding: 22,
+    gap: 18,
+    alignItems: "stretch",
+  },
+  contactStripWide: {
+    flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    marginHorizontal: 18,
-    paddingVertical: 16,
-    borderRadius: 18,
-    marginBottom: 12,
+    justifyContent: "space-between",
   },
-  ctaBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  contactCopy: { flex: 1, gap: 6, alignItems: "flex-end" },
+  contactTitle: {
+    color: PALETTE.navy,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  contactSub: {
+    color: PALETTE.text,
+    fontSize: 14,
+    lineHeight: 23,
+    textAlign: "right",
+  },
+  contactButton: {
+    backgroundColor: PALETTE.blue,
+    borderRadius: 14,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    flexDirection: "row-reverse",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 9,
+  },
+  contactButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
 });
