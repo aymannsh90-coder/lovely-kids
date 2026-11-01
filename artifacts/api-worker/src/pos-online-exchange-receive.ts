@@ -3,6 +3,7 @@ import {
   exchangeReturnItemCostsTable,
   exchangeReturnItemsTable,
   inventoryMovementsTable,
+  financeAccountsTable,
   orderItemCostsTable,
   productsTable,
   type ColorVariant,
@@ -16,6 +17,13 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { randomUUID } from "node:crypto";
+import { postFinanceTransaction } from "./finance-posting";
+import {
+  ensureOnlineReturnAccount,
+  ONLINE_RETURN_IN_TRANSIT,
+  PHYSICAL_INVENTORY_ACCOUNT,
+} from "./online-exchange-return-accrual";
 import { userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 import {
@@ -646,6 +654,23 @@ export async function handleReceiveOnlineExchangeReturn(
             );
           }
 
+
+          // New exchanges have their historical return costs booked at
+          // financial completion. Legacy exchanges have no snapshot until
+          // physical receipt and retain the old pathway.
+          const preBookedRows = await tx.select()
+            .from(exchangeReturnItemCostsTable)
+            .where(inArray(exchangeReturnItemCostsTable.returnItemId,
+              returnItems.map((item) => item.id)));
+          const preBooked = preBookedRows.length > 0;
+          if (preBooked && preBookedRows.length !== returnItems.length) {
+            throw new OnlineExchangeReceiveError("تكلفة المرتجع المالي غير مكتملة؛ تعذر الاستلام بأمان", 409);
+          }
+          const preBookedByItem = new Map(
+            preBookedRows.map((row) => [row.returnItemId, row]),
+          );
+          let totalCostTransferredMinor = 0;
+
           const productIds =
             [
               ...new Set(
@@ -971,6 +996,37 @@ export async function handleReceiveOnlineExchangeReturn(
                 receivedAt,
             });
 
+
+            if (preBooked) {
+              const cost = preBookedByItem.get(returnItem.id);
+              if (!cost || cost.productId !== productId ||
+                  cost.quantity !== returnItem.quantity ||
+                  cost.costQuality !== "confirmed") {
+                throw new OnlineExchangeReceiveError(
+                  "التكلفة المثبتة ماليًا لا تطابق القطعة المرتجعة", 409,
+                );
+              }
+              const restored = await restoreExactProductCost(tx, {
+                productId, quantity: returnItem.quantity,
+                costTotalMinor: cost.costTotalMinor,
+                costQuality: "confirmed",
+                eventType: "exchange_return",
+                sourceType: "exchange",
+                sourceRef: String(exchange.id),
+                sourceItemRef: String(returnItem.id),
+                businessDate,
+                note: `Received in-transit exchange return ${exchange.publicId}`,
+                createdByUserId: user.id,
+              });
+              if (!restored.tracked) {
+                throw new OnlineExchangeReceiveError(
+                  "تعذر نقل تكلفة المرتجع من قيد الاستلام إلى المخزون", 409,
+                );
+              }
+              totalCostTransferredMinor += cost.costTotalMinor;
+              continue;
+            }
+
             const originalCost =
               originalCostByLine.get(
                 lineNumber,
@@ -1266,6 +1322,41 @@ export async function handleReceiveOnlineExchangeReturn(
               .values(
                 movementRows,
               );
+          }
+
+
+          // An asset-to-asset transfer only. No revenue, COGS or profit is
+          // posted again on parcel receipt. The frozen cost equals the
+          // amount first booked in the in-transit control account.
+          if (preBooked && totalCostTransferredMinor > 0) {
+            const transitId = await ensureOnlineReturnAccount(
+              tx, ONLINE_RETURN_IN_TRANSIT, "بضاعة مرتجعة قيد الاستلام",
+            );
+            const inventory = (await tx.select({ id: financeAccountsTable.id })
+              .from(financeAccountsTable)
+              .where(eq(financeAccountsTable.code, PHYSICAL_INVENTORY_ACCOUNT))
+              .limit(1))[0];
+            if (!inventory) {
+              throw new OnlineExchangeReceiveError(
+                "حساب المخزون الفعلي غير موجود؛ لم يتم ترحيل الطرد", 409,
+              );
+            }
+            await postFinanceTransaction(tx, {
+              publicId: "FIN-XRECEIPT-" + exchange.id + "-" +
+                randomUUID().slice(0, 8).toUpperCase(),
+              idempotencyKey: "exchange:" + exchange.id + ":return-received-transfer",
+              businessDate,
+              transactionType: "adjustment",
+              sourceType: "online_exchange",
+              sourceId: String(exchange.id),
+              sourceEvent: "return_received_transfer",
+              createdByUserId: user.id,
+              notes: "نقل البضاعة المرتجعة من قيد الاستلام للمخزون " + exchange.publicId,
+              lines: [
+                { accountId: inventory.id, debitMinor: totalCostTransferredMinor, creditMinor: 0 },
+                { accountId: transitId, debitMinor: 0, creditMinor: totalCostTransferredMinor },
+              ],
+            });
           }
 
           const updatedRows =

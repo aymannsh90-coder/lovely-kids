@@ -2,6 +2,7 @@ name: Verify Lovely Kids orders and exchange edits
 on:
   push:
     branches:
+      - main
       - fix/online-exchange-edit-and-void-20261028
   pull_request:
     branches:

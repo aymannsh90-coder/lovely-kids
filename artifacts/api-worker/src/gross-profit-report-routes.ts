@@ -1374,15 +1374,37 @@ async function handleGrossProfit(
   // completion, but returned stock/COGS is recognized only when the
   // merchandise is physically received. Restrict the cost reversal to
   // the actual receipt date; never restore COGS for an unreceived return.
-  const onlineReceivedExchanges = await db
-    .select({ id: exchangeDocumentsTable.id })
-    .from(exchangeDocumentsTable)
-    .where(and(
-      eq(exchangeDocumentsTable.status, "completed"),
-      eq(exchangeDocumentsTable.sourceType, "online_order"),
-      sql`(${exchangeDocumentsTable.returnReceivedAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
-      sql`(${exchangeDocumentsTable.returnReceivedAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
-    ));
+  // Return cost is recognized with the exchange's financial completion.
+  // Older exchanges have no accrual event: keep their historic receipt-date
+  // treatment to avoid silently restating previously closed periods.
+  const bookedReturnEvents = await db.select({
+    sourceId: financeTransactionsTable.sourceId,
+    businessDate: financeTransactionsTable.businessDate,
+  }).from(financeTransactionsTable).where(and(
+    eq(financeTransactionsTable.sourceType, "online_exchange"),
+    eq(financeTransactionsTable.sourceEvent, "return_in_transit_recorded"),
+    eq(financeTransactionsTable.status, "posted"),
+  ));
+  const bookedReturnDateById = new Map(
+    bookedReturnEvents.map((row) => [Number(row.sourceId), row.businessDate]),
+  );
+  const candidateReturnExchanges = await db.select({
+    id: exchangeDocumentsTable.id,
+    returnReceivedAt: exchangeDocumentsTable.returnReceivedAt,
+    financialBusinessDate: exchangeDocumentsTable.financialBusinessDate,
+  }).from(exchangeDocumentsTable).where(and(
+    eq(exchangeDocumentsTable.status, "completed"),
+    eq(exchangeDocumentsTable.sourceType, "online_order"),
+  ));
+  const onlineReceivedExchanges = candidateReturnExchanges.filter((exchange) => {
+    const financialDate = bookedReturnDateById.get(exchange.id);
+    if (financialDate) return financialDate >= from && financialDate <= to;
+    if (!exchange.returnReceivedAt) return false;
+    const receiptDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Hebron", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(exchange.returnReceivedAt);
+    return receiptDate >= from && receiptDate <= to;
+  });
 
   const onlineReceivedExchangeIds = onlineReceivedExchanges.map((row) => row.id);
   const onlineReturnItems = onlineReceivedExchangeIds.length > 0
