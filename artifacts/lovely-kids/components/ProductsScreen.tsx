@@ -1148,13 +1148,15 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     borderBottomWidth: Platform.OS === "web" ? 1 : 0,
     marginBottom: 14,
-  },  headerRow: {
+  },
+  headerRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 8,
     position: "relative",
     minHeight: 42,
-  },  headerMenuSlot: {
+  },
+  headerMenuSlot: {
     position: "absolute",
     left: 0,
     top: 0,
@@ -1168,7 +1170,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 15,
     borderWidth: 1,
-  },  title: { fontSize: 23, lineHeight: 32, fontWeight: "800", textAlign: "right" },
+  },
+  title: { fontSize: 23, lineHeight: 32, fontWeight: "800", textAlign: "right" },
   genderTabsRow: {
     flexDirection: "row-reverse",
     marginHorizontal: 16,
@@ -1179,7 +1182,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F8FD",
     padding: 4,
     gap: 4,
-  },  genderTab: {
+  },
+  genderTab: {
     flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -1188,7 +1192,8 @@ const styles = StyleSheet.create({
     minHeight: 42,
     paddingVertical: 9,
     borderRadius: 15,
-  },  genderEmoji: {
+  },
+  genderEmoji: {
     fontSize: 18,
   },
   genderTabText: {
@@ -1211,7 +1216,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.045,
     shadowRadius: 9,
     elevation: 1,
-  },  searchIconFrame: {
+  },
+  searchIconFrame: {
     width: 39,
     height: 39,
     borderRadius: 13,
@@ -1237,20 +1243,24 @@ const styles = StyleSheet.create({
   stickyCategoriesBar: {
     borderBottomWidth: 1,
     paddingVertical: 7,
-  },  stickyCategoriesScroll: {
+  },
+  stickyCategoriesScroll: {
     paddingHorizontal: 12,
     gap: 9,
     alignItems: "center",
-  },  stickyCategoryCard: {
+  },
+  stickyCategoryCard: {
     width: 65,
     height: 65,
     borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
     backgroundColor: "#FFFFFF",
-  },  stickyCategoryCardSelected: {
+  },
+  stickyCategoryCardSelected: {
     borderWidth: 2,
-  },  stickyCategoryImage: {
+  },
+  stickyCategoryImage: {
     width: "100%",
     height: "100%",
   },
@@ -1261,20 +1271,24 @@ const styles = StyleSheet.create({
     minHeight: 112,
     maxHeight: 112,
     flexShrink: 0,
-  },  visualCategoriesScroll: {
+  },
+  visualCategoriesScroll: {
     paddingHorizontal: 16,
     gap: 10,
     alignItems: "center",
-  },  visualCategoryCard: {
+  },
+  visualCategoryCard: {
     width: 92,
     height: 92,
     borderRadius: 19,
     borderWidth: 1,
     overflow: "hidden",
     backgroundColor: "#FFFFFF",
-  },  visualCategoryCardSelected: {
+  },
+  visualCategoryCardSelected: {
     borderWidth: 2,
-  },  visualCategoryImage: {
+  },
+  visualCategoryImage: {
     width: "100%",
     height: "100%",
   },
@@ -1290,7 +1304,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexShrink: 0,
     marginHorizontal: 5,
-  },  categoryText: { fontSize: 13, fontWeight: "700", lineHeight: 18, textAlign: "center" },
+  },
+  categoryText: { fontSize: 13, fontWeight: "700", lineHeight: 18, textAlign: "center" },
   count: {
     textAlign: "right",
     paddingHorizontal: 16,
@@ -1298,11 +1313,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 4,
     marginBottom: 14,
-  },  list: { paddingHorizontal: 16 },
+  },
+  list: { paddingHorizontal: 16 },
   row: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "space-between",
     marginBottom: 16,
-  },  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
+  },
+  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 16 },
 });
