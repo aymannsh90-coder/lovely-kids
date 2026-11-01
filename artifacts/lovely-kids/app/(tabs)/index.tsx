@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Easing,
   Image,
   Platform,
   Pressable,
@@ -236,6 +237,91 @@ function getHomeCategoryImage(label: string): any {
   return null;
 }
 
+type CategoryTileProps = {
+  id: string;
+  label: string;
+  image: any;
+  width: number;
+  borderColor: string;
+  backgroundColor: string;
+  revealed: boolean;
+  delay: number;
+};
+
+// One-time entrance + tiny interaction feedback; the route and category filter
+// remain exactly the same as the original cards.
+function AnimatedCategoryTile({
+  id, label, image, width, borderColor, backgroundColor, revealed, delay,
+}: CategoryTileProps) {
+  const entrance = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!revealed) return;
+    if (
+      Platform.OS !== "web" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    ) {
+      entrance.setValue(1);
+      return;
+    }
+    const animation = Animated.timing(entrance, {
+      toValue: 1,
+      duration: 430,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [delay, entrance, revealed]);
+
+  const animateScale = (toValue: number) => {
+    if (Platform.OS !== "web") return;
+    Animated.spring(scale, {
+      toValue,
+      friction: 7,
+      tension: 145,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={{
+        width,
+        opacity: entrance,
+        transform: [
+          { translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+          { scale },
+        ],
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onHoverIn={() => animateScale(1.025)}
+        onHoverOut={() => animateScale(1)}
+        onPressIn={() => animateScale(0.975)}
+        onPressOut={() => animateScale(1)}
+        onPress={() =>
+          router.push({
+            pathname: "/products",
+            params: { category: id },
+          })
+        }
+        style={[
+          styles.homeCategoryCard,
+          { width: "100%", borderColor, backgroundColor },
+        ]}
+      >
+        <Image source={image} style={styles.homeCategoryImage} resizeMode="cover" />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function HomeScreen() {
   const offersCtaPulse = useRef(new Animated.Value(0)).current;
 
@@ -370,6 +456,18 @@ export default function HomeScreen() {
   } = useNotificationOptIn();
 
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
+  const [categoriesRevealed, setCategoriesRevealed] = useState(false);
+  const categoryGridY = useRef<number | null>(null);
+  const homeViewportHeight = useRef(0);
+  const homeScrollY = useRef(0);
+
+  const revealCategoriesWhenVisible = () => {
+    if (categoriesRevealed || categoryGridY.current === null || !homeViewportHeight.current) return;
+    if (homeScrollY.current + homeViewportHeight.current * 0.9 >= categoryGridY.current) {
+      setCategoriesRevealed(true);
+    }
+  };
+
   const newArrivalsScrollRef = useRef<ScrollView>(null);
   const newArrivalsScrollX = useRef(0);
   const newArrivalsMaxScrollX = useRef(0);
@@ -665,6 +763,16 @@ export default function HomeScreen() {
           : null,
       ]}
       showsVerticalScrollIndicator={false}
+      scrollEventThrottle={96}
+      onLayout={(event) => {
+        homeViewportHeight.current = event.nativeEvent.layout.height;
+        revealCategoriesWhenVisible();
+      }}
+      onScroll={(event) => {
+        if (categoriesRevealed) return;
+        homeScrollY.current = event.nativeEvent.contentOffset.y;
+        revealCategoriesWhenVisible();
+      }}
       contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 }}
     >
       {/* Header — keep existing header on phone/tablet only */}
@@ -1396,38 +1504,27 @@ export default function HomeScreen() {
           )}
 
           <View
+            onLayout={(event) => {
+              categoryGridY.current = event.nativeEvent.layout.y;
+              revealCategoriesWhenVisible();
+            }}
             style={[
               styles.productsGrid,
               responsiveShellStyle,
             ]}
           >
-            {homeCategoryCards.map((category) => (
-              <Pressable
+            {homeCategoryCards.map((category, index) => (
+              <AnimatedCategoryTile
                 key={category.id}
-                accessibilityRole="button"
-                accessibilityLabel={category.label}
-                onPress={() =>
-                  router.push({
-                    pathname: "/products",
-                    params: { category: category.id },
-                  })
-                }
-                style={({ pressed }) => [
-                  styles.homeCategoryCard,
-                  {
-                    width: homeCategoryCardWidth,
-                    borderColor: colors.border,
-                    backgroundColor: colors.card,
-                    opacity: pressed ? 0.86 : 1,
-                  },
-                ]}
-              >
-                <Image
-                  source={category.image}
-                  style={styles.homeCategoryImage}
-                  resizeMode="cover"
-                />
-              </Pressable>
+                id={category.id}
+                label={category.label}
+                image={category.image}
+                width={homeCategoryCardWidth}
+                borderColor={colors.border}
+                backgroundColor={colors.card}
+                revealed={categoriesRevealed}
+                delay={Math.min(index, 9) * 65}
+              />
             ))}
           </View>
         </>
