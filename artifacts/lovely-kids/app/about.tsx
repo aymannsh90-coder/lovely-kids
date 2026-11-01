@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE } from "@/constants/api";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
-import { useProducts } from "@/context/ProductsContext";
 
 const PALETTE = {
   navy: "#17245A",
@@ -32,6 +31,13 @@ const PALETTE = {
 
 const OPENING_DATE = { year: 2018, month: 4, day: 1 } as const;
 const STATS_REFRESH_MS = 10 * 60 * 1000;
+// Only a dated sample for the isolated Cloudflare branch preview. Never used
+// on lovelykids.net or other production domains, and never presented as live.
+const PREVIEW_SNAPSHOT = {
+  visitorCount: 9175,
+  productCount: 486,
+  checkedDate: "1/11/2026",
+} as const;
 
 type StorefrontStats = {
   visitorCount: number;
@@ -75,7 +81,6 @@ export default function AboutScreen() {
   const { width } = useWindowDimensions();
   const { settings } = useAppSettings();
   const { user, getAuthToken } = useAuth();
-  const { products, loading: productsLoading } = useProducts();
   const [storeStats, setStoreStats] = useState<StorefrontStats | null>(null);
   const [ownerVisitorCount, setOwnerVisitorCount] = useState<number | null>(null);
   const [years, setYears] = useState(() => yearsSinceOpening());
@@ -83,6 +88,8 @@ export default function AboutScreen() {
   const isDesktopWeb = Platform.OS === "web" && width >= 1200;
   const topPadding = isDesktopWeb ? 24 : getResponsiveTopPadding(insets.top) + 8;
   const bottomPadding = Platform.OS === "web" ? 56 : insets.bottom + 28;
+  const isPreviewHost = Platform.OS === "web" && typeof window !== "undefined" &&
+    window.location.hostname === "preview-storefront-pastel-re.lovely-kids.pages.dev";
 
   useEffect(() => {
     const interval = setInterval(() => setYears(yearsSinceOpening()), 60 * 60 * 1000);
@@ -141,13 +148,16 @@ export default function AboutScreen() {
     return () => { active = false; clearInterval(interval); };
   }, [getAuthToken, user?.isOwner]);
 
+  const usingPreviewSnapshot = isPreviewHost && storeStats === null;
   const stats = [
     {
-      num: formatStat(storeStats?.visitorCount ?? ownerVisitorCount),
+      num: formatStat(storeStats?.visitorCount ?? ownerVisitorCount ??
+        (usingPreviewSnapshot ? PREVIEW_SNAPSHOT.visitorCount : null)),
       label: "زائر للمتجر",
     },
     {
-      num: formatStat(storeStats?.productCount ?? (user?.isAdmin && !productsLoading ? products.length : null)),
+      num: formatStat(storeStats?.productCount ??
+        (usingPreviewSnapshot ? PREVIEW_SNAPSHOT.productCount : null)),
       label: "منتج مضاف",
     },
     { num: `${years}+`, label: "سنوات خبرة" },
@@ -232,6 +242,12 @@ export default function AboutScreen() {
             </View>
           ))}
         </View>
+        {usingPreviewSnapshot ? (
+          <Text style={styles.previewStatsNote}>
+            أرقام المعاينة من آخر فحص بتاريخ {PREVIEW_SNAPSHOT.checkedDate}؛
+            ستُحدّث تلقائيًا بعد تفعيل خدمة الإحصائيات العامة.
+          </Text>
+        ) : null}
 
         <View style={[styles.storyCard, wideLayout && styles.storyCardWide]}>
           <View style={styles.sectionHeading}>
@@ -486,6 +502,14 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   statNumberPhone: { fontSize: 22, lineHeight: 30 },
+  previewStatsNote: {
+    textAlign: "center",
+    color: PALETTE.text,
+    fontSize: 12,
+    lineHeight: 20,
+    marginTop: -21,
+    marginBottom: 29,
+  },
   statLabel: {
     color: PALETTE.text,
     fontSize: 12,
