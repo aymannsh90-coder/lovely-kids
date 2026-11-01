@@ -1191,72 +1191,113 @@ export default function GrossProfitReportPage() {
           {report.historicalExchangeReconciliation &&
             (report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 ||
              report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0) && (
-            <details className="gross-profit-review" style={{ marginBottom: 16 }}>
-              <summary className="gross-profit-review-summary">
-                <span>مطابقة التبديلات التاريخية — للقراءة فقط</span>
-                <span className="gross-profit-review-count">اضغط لعرض التفاصيل</span>
+            <details className="gross-profit-review gross-profit-history" >
+              <summary className="gross-profit-history-toggle">
+                <span className="gross-profit-history-toggle-title">
+                  <span className="gross-profit-history-toggle-icon" aria-hidden="true">▾</span>
+                  مطابقة التبديلات التاريخية
+                  <small>للمراجعة فقط</small>
+                </span>
+                <span className="gross-profit-history-toggle-hint">عرض التفاصيل</span>
               </summary>
-              <div className="gross-profit-review-body">
-              <p>
-                هذا كشف مراجعة مستقل، لا يُغيّر أرباح التقرير الرسمية أو قيود
-                اليومية أو الفترات المقفلة، ولا يدل غياب قيد قبض مرتبط على ضياع النقد.
-              </p>
-              {report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 && (
-                <>
-                  <strong>فروقات توقيت تكلفة المرتجعات الإلكترونية</strong>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
-                      <thead><tr>
-                        <th>التبديل</th><th>تاريخ القيد</th><th>تاريخ الاستلام</th>
-                        <th>تكلفة المرتجع</th><th>أثر إعادة التوزيع المقترح للفترة</th>
-                      </tr></thead>
-                      <tbody>
-                        {report.historicalExchangeReconciliation.legacyOnlineReturns.map((row) => (
-                          <tr key={row.exchangeId}>
-                            <td>#{row.exchangeId}</td>
-                            <td>{row.financialBusinessDate}</td>
-                            <td>{row.receivedBusinessDate}</td>
-                            <td>{formatReportMoney(row.costMinor)}</td>
-                            <td>{formatReportMoney(row.suggestedProfitShiftMinor)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p style={{ marginTop: 10 }}>
-                    <strong>فرق إعادة توزيع أرباح الفترة المقترح (غير مرحّل):{" "}
-                      {formatReportMoney(report.historicalExchangeReconciliation.historicalProfitShiftMinor)}
-                    </strong>
-                  </p>
-                </>
-              )}
-              {report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0 && (
-                <>
-                  <strong>فروقات تبديل نقدية قديمة لم نجد لها قيدًا مرتبطًا</strong>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
-                      <thead><tr>
-                        <th>التبديل</th><th>التاريخ</th><th>جلسة الصندوق</th><th>فرق التبديل</th>
-                      </tr></thead>
-                      <tbody>
-                        {report.historicalExchangeReconciliation.unlinkedCashExchanges.map((row) => (
-                          <tr key={row.exchangeId}>
-                            <td>#{row.exchangeId}</td>
-                            <td>{row.businessDate}</td>
-                            <td>{row.cashSessionId ?? "—"}</td>
-                            <td>{formatReportMoney(row.differenceMinor)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p style={{ marginTop: 10 }}>
-                    مجموع فروقات قيد المطابقة:{" "}
-                    <b>{formatReportMoney(report.historicalExchangeReconciliation.unlinkedCashDifferenceMinor)}</b>.
-                    لا ترحّلها مرة ثانية قبل مطابقة قبض الصندوق القديم.
-                  </p>
-                </>
-              )}
+
+              <div className="gross-profit-history-content">
+                <p className="gross-profit-history-notice">
+                  هذا كشف مراجعة مستقل؛ لا يغيّر أرباح التقرير الرسمية أو قيود اليومية أو الفترات المقفلة.
+                  وعدم وجود قيد قبض مرتبط بالتبديل لا يعني أن المبلغ مفقود من الصندوق.
+                </p>
+
+                {report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 && (
+                  <section className="gross-profit-history-section" aria-label="فروقات توقيت تكلفة المرتجعات الإلكترونية">
+                    <div className="gross-profit-history-section-heading">
+                      <h3>فروقات توقيت المرتجعات الإلكترونية</h3>
+                      <span className="gross-profit-history-section-count">
+                        {report.historicalExchangeReconciliation.legacyOnlineReturns.length} تبديل
+                      </span>
+                    </div>
+                    <div className="gross-profit-history-list">
+                      {report.historicalExchangeReconciliation.legacyOnlineReturns.map((item) => (
+                        <article className="gross-profit-history-card" key={item.exchangeId}>
+                          <div className="gross-profit-history-card-title">
+                            <span className="gross-profit-history-card-tag">
+                              التبديل <b dir="ltr">#{item.exchangeId}</b>
+                            </span>
+                            <span className="gross-profit-history-card-context">توزيع تكلفة المرتجع</span>
+                          </div>
+                          <div className="gross-profit-history-fields">
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">تاريخ القيد المالي</span>
+                              <strong className="gross-profit-history-value gross-profit-history-date" dir="ltr">{item.financialBusinessDate}</strong>
+                            </div>
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">تاريخ استلام الطرد</span>
+                              <strong className="gross-profit-history-value gross-profit-history-date" dir="ltr">{item.receivedBusinessDate}</strong>
+                            </div>
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">التكلفة التاريخية للمرتجع</span>
+                              <strong className="gross-profit-history-value gross-profit-history-cost" dir="ltr">{formatReportMoney(item.costMinor)}</strong>
+                            </div>
+                            <div className="gross-profit-history-field gross-profit-history-field-impact">
+                              <span className="gross-profit-history-label">أثر إعادة التوزيع المقترح</span>
+                              <strong className="gross-profit-history-value gross-profit-history-impact" dir="ltr">
+                                {formatReportMoney(item.suggestedProfitShiftMinor)}
+                              </strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                    <div className="gross-profit-history-total">
+                      <span>فرق إعادة توزيع أرباح الفترة (غير مرحّل)</span>
+                      <strong dir="ltr">{formatReportMoney(report.historicalExchangeReconciliation.historicalProfitShiftMinor)}</strong>
+                    </div>
+                  </section>
+                )}
+
+                {report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0 && (
+                  <section className="gross-profit-history-section" aria-label="فروقات نقدية قديمة قيد المطابقة">
+                    <div className="gross-profit-history-section-heading">
+                      <h3>تبديلات نقدية قديمة قيد المطابقة</h3>
+                      <span className="gross-profit-history-section-count">
+                        {report.historicalExchangeReconciliation.unlinkedCashExchanges.length} تبديل
+                      </span>
+                    </div>
+                    <div className="gross-profit-history-list">
+                      {report.historicalExchangeReconciliation.unlinkedCashExchanges.map((item) => (
+                        <article className="gross-profit-history-card" key={item.exchangeId}>
+                          <div className="gross-profit-history-card-title">
+                            <span className="gross-profit-history-card-tag">
+                              التبديل <b dir="ltr">#{item.exchangeId}</b>
+                            </span>
+                            <span className="gross-profit-history-card-context">سجل قديم للمراجعة</span>
+                          </div>
+                          <div className="gross-profit-history-fields gross-profit-history-fields-cash">
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">تاريخ التبديل</span>
+                              <strong className="gross-profit-history-value gross-profit-history-date" dir="ltr">{item.businessDate}</strong>
+                            </div>
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">رقم جلسة الصندوق</span>
+                              <strong className="gross-profit-history-value" dir="ltr">{item.cashSessionId ?? "—"}</strong>
+                            </div>
+                            <div className="gross-profit-history-field gross-profit-history-field-impact">
+                              <span className="gross-profit-history-label">فرق التبديل المسجل</span>
+                              <strong className="gross-profit-history-value gross-profit-history-impact" dir="ltr">
+                                {formatReportMoney(item.differenceMinor)}
+                              </strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                    <div className="gross-profit-history-total">
+                      <span>مجموع الفروقات قيد المطابقة — لا يُرحّل ثانية</span>
+                      <strong dir="ltr">
+                        {formatReportMoney(report.historicalExchangeReconciliation.unlinkedCashDifferenceMinor)}
+                      </strong>
+                    </div>
+                  </section>
+                )}
               </div>
             </details>
           )}
