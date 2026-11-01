@@ -444,7 +444,11 @@ const groupedSections = shouldGroupByCategory
 
 const topPadding = getResponsiveTopPadding(insets.top);
   const productsTopPadding =
-    isDesktopWeb ? 18 : topPadding + 12;
+    isDesktopWeb
+      ? 18
+      : Platform.OS === "web"
+        ? 12
+        : topPadding + 12;
 
   const topContent = (
     <>
@@ -936,7 +940,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
               style={[
                 {
                   paddingHorizontal: 16,
-                  paddingTop: 18,
+                  paddingTop: isDesktopWeb ? 18 : 8,
                   paddingBottom: 10,
                   flexDirection: "row-reverse",
                   alignItems: "center",
@@ -1145,9 +1149,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 15,
+    paddingBottom: Platform.OS === "web" ? 10 : 15,
     borderBottomWidth: Platform.OS === "web" ? 1 : 0,
-    marginBottom: 14,
+    marginBottom: Platform.OS === "web" ? 10 : 14,
   },
   headerRow: {
     flexDirection: "row-reverse",
@@ -1175,7 +1179,7 @@ const styles = StyleSheet.create({
   genderTabsRow: {
     flexDirection: "row-reverse",
     marginHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: Platform.OS === "web" ? 11 : 14,
     borderRadius: 19,
     borderWidth: 1,
     overflow: "hidden",
@@ -1202,7 +1206,7 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     marginHorizontal: 16,
-    marginBottom: 15,
+    marginBottom: Platform.OS === "web" ? 11 : 15,
     minHeight: 54,
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -1266,10 +1270,10 @@ const styles = StyleSheet.create({
   },
 
   visualCategoriesStrip: {
-    marginBottom: 12,
-    height: 112,
-    minHeight: 112,
-    maxHeight: 112,
+    marginBottom: Platform.OS === "web" ? 8 : 12,
+    height: Platform.OS === "web" ? 106 : 112,
+    minHeight: Platform.OS === "web" ? 106 : 112,
+    maxHeight: Platform.OS === "web" ? 106 : 112,
     flexShrink: 0,
   },
   visualCategoriesScroll: {
@@ -1311,8 +1315,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 13,
     fontWeight: "700",
-    marginTop: 4,
-    marginBottom: 14,
+    marginTop: 2,
+    marginBottom: Platform.OS === "web" ? 4 : 14,
   },
   list: { paddingHorizontal: 16 },
   row: {
