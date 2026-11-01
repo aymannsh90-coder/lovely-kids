@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   outer: {
     width: "100%",
     paddingHorizontal: 14,
-    marginBottom: 24,
+    marginBottom: 14,
     alignItems: "center",
   },
   frame: {
