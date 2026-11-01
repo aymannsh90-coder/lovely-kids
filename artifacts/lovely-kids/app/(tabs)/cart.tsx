@@ -1490,7 +1490,7 @@ export default function CartScreen() {
         style={[
           styles.header,
           {
-            paddingTop: isDesktopWeb ? 28 : topPadding + 12,
+            paddingTop: isDesktopWeb ? 28 : Platform.OS === "web" ? 16 : topPadding + 12,
           },
           isDesktopWeb
             ? {
@@ -1702,24 +1702,16 @@ export default function CartScreen() {
                   </View>
                 ) : (
                   <>
-                    <View style={styles.summaryRow}>
-                      <Text
-                        style={[
-                          styles.summaryValue,
-                          { color: colors.foreground },
-                        ]}
-                      >
-                        {shippingOriginalCost}₪
-                      </Text>
-                      <Text
-                        style={[
-                          styles.summaryLabel,
-                          { color: colors.mutedForeground },
-                        ]}
-                      >
-                        التوصيل الأصلي ({selectedZone.label})
-                      </Text>
-                    </View>
+                    {shippingPromotionDiscount > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryValue, { color: colors.mutedForeground }]}>
+                          {shippingOriginalCost}₪
+                        </Text>
+                        <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>
+                          التوصيل الأصلي ({selectedZone.label})
+                        </Text>
+                      </View>
+                    ) : null}
 
                     {shippingPromotionDiscount > 0 ? (
                       <View style={styles.summaryRow}>
@@ -2437,7 +2429,7 @@ export default function CartScreen() {
           styles.header,
           styles.cartHeader,
           {
-            paddingTop: topPadding + 12,
+            paddingTop: Platform.OS === "web" && !isDesktopWeb ? 16 : topPadding + 12,
             backgroundColor: colors.background,
             borderBottomColor: colors.border,
           },
@@ -2497,7 +2489,7 @@ export default function CartScreen() {
           ]}
         >
           <FlatList
-            style={isDesktopWeb ? { flex: 1 } : undefined}
+            style={isDesktopWeb ? { flex: 1 } : { flexGrow: 0, flexShrink: 1, minHeight: 0 }}
             data={items}
             keyExtractor={(item) =>
               `${item.id}-${item.color ?? ""}-${item.size ?? ""}-${item.rewardForPromotionId ?? ""}`
