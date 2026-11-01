@@ -4969,6 +4969,26 @@ export interface GrossProfitReport {
   };
 
   warnings: string[];
+  historicalExchangeReconciliation?: {
+    mode: "read_only";
+    historicalProfitShiftMinor: number;
+    legacyOnlineReturns: Array<{
+      exchangeId: number;
+      financialBusinessDate: string;
+      receivedBusinessDate: string;
+      costMinor: number;
+      suggestedProfitShiftMinor: number;
+    }>;
+    unlinkedCashExchanges: Array<{
+      exchangeId: number;
+      publicId: string;
+      businessDate: string;
+      cashSessionId: number | null;
+      differenceMinor: number;
+    }>;
+    unlinkedCashDifferenceMinor: number;
+    note: string;
+  };
   netProfit: GrossProfitNetResult;
 
   missingCostProducts:

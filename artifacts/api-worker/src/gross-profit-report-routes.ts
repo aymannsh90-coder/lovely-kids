@@ -33,6 +33,7 @@ import {
 
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
+import { historicalReturnProfitShiftMinor } from "./historical-exchange-reconciliation";
 
 type Db =
   Awaited<ReturnType<typeof openDb>>["db"];
@@ -2011,6 +2012,104 @@ async function handleGrossProfit(
     ? null
     : total.profitAfterDeliveryMinor - totalOperatingExpensesMinor;
 
+
+  // Legacy reconciliation is READ ONLY. It compares the period of the
+  // historic return-revenue journal with the day inventory was received.
+  // No backdating, no cash posting, and no modification to displayed
+  // official profit or closed periods.
+  const legacyOnlineDocs = candidateReturnExchanges.filter((entry) =>
+    !bookedReturnDateById.has(entry.id) &&
+    entry.financialBusinessDate !== null &&
+    entry.returnReceivedAt !== null,
+  );
+  const legacyIds = legacyOnlineDocs.map((entry) => entry.id);
+  const legacyReturnRows = legacyIds.length > 0
+    ? await db.select({
+      exchangeId: exchangeReturnItemsTable.exchangeId,
+      itemId: exchangeReturnItemsTable.id,
+      quantity: exchangeReturnItemsTable.quantity,
+      costQuantity: exchangeReturnItemCostsTable.quantity,
+      costTotalMinor: exchangeReturnItemCostsTable.costTotalMinor,
+      costQuality: exchangeReturnItemCostsTable.costQuality,
+    }).from(exchangeReturnItemsTable)
+      .leftJoin(exchangeReturnItemCostsTable,
+        eq(exchangeReturnItemsTable.id, exchangeReturnItemCostsTable.returnItemId))
+      .where(inArray(exchangeReturnItemsTable.exchangeId, legacyIds))
+    : [];
+  const legacyById = new Map<number, {
+    costMinor: number; fullyCosted: boolean; rows: number;
+  }>();
+  for (const row of legacyReturnRows) {
+    const current = legacyById.get(row.exchangeId) ?? {
+      costMinor: 0, fullyCosted: true, rows: 0,
+    };
+    current.rows += 1;
+    if (row.costTotalMinor === null || row.costQuantity !== row.quantity ||
+        row.costQuality !== "confirmed" || row.costTotalMinor < 0) {
+      current.fullyCosted = false;
+    } else {
+      current.costMinor += row.costTotalMinor;
+    }
+    legacyById.set(row.exchangeId, current);
+  }
+  const legacyOnlineReturns = legacyOnlineDocs.flatMap((entry) => {
+    const original = legacyById.get(entry.id);
+    if (!original || !original.fullyCosted || original.rows === 0 ||
+        !entry.returnReceivedAt || !entry.financialBusinessDate) return [];
+    const receiptDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Hebron", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(entry.returnReceivedAt);
+    if (entry.financialBusinessDate > to && receiptDate > to) return [];
+    if (entry.financialBusinessDate < from && receiptDate < from) return [];
+    return [{
+      exchangeId: entry.id,
+      financialBusinessDate: entry.financialBusinessDate,
+      receivedBusinessDate: receiptDate,
+      costMinor: original.costMinor,
+      suggestedProfitShiftMinor: historicalReturnProfitShiftMinor(
+        from, to, entry.financialBusinessDate, receiptDate, original.costMinor,
+      ),
+    }];
+  });
+
+  // A missing historical exchange journal is NOT proof cash was unpaid.
+  const legacyCashDocs = await db.select({
+    id: exchangeDocumentsTable.id,
+    publicId: exchangeDocumentsTable.publicId,
+    businessDate: exchangeDocumentsTable.businessDate,
+    cashSessionId: exchangeDocumentsTable.cashSessionId,
+    settlementAmountMinor: exchangeDocumentsTable.settlementAmountMinor,
+  }).from(exchangeDocumentsTable).where(and(
+    eq(exchangeDocumentsTable.status, "completed"),
+    eq(exchangeDocumentsTable.settlementType, "cash"),
+    inArray(exchangeDocumentsTable.sourceType, ["pos_sale", "pos_no_receipt"]),
+    ne(exchangeDocumentsTable.settlementAmountMinor, 0),
+    gte(exchangeDocumentsTable.businessDate, from),
+    lte(exchangeDocumentsTable.businessDate, to),
+  ));
+  const historicalCashJournalRows = legacyCashDocs.length > 0
+    ? await db.select({
+      sourceId: financeTransactionsTable.sourceId,
+    }).from(financeTransactionsTable).where(and(
+      eq(financeTransactionsTable.sourceType, "exchange"),
+      eq(financeTransactionsTable.sourceEvent, "cash_settlement"),
+      eq(financeTransactionsTable.status, "posted"),
+      inArray(financeTransactionsTable.sourceId, legacyCashDocs.map((row) => String(row.id))),
+    ))
+    : [];
+  const journalCashIds = new Set(historicalCashJournalRows.map((row) => row.sourceId));
+  const unlinkedCashExchanges = legacyCashDocs
+    .filter((row) => !journalCashIds.has(String(row.id)))
+    .map((row) => ({
+      exchangeId: row.id,
+      publicId: row.publicId,
+      businessDate: row.businessDate,
+      cashSessionId: row.cashSessionId,
+      differenceMinor: row.settlementAmountMinor,
+    }));
+  const historicalProfitShiftMinor = sum(
+    legacyOnlineReturns.map((entry) => entry.suggestedProfitShiftMinor),
+  );
   const warnings: string[] =
     [];
 
@@ -2078,6 +2177,17 @@ async function handleGrossProfit(
 
     warnings,
 
+    historicalExchangeReconciliation: {
+      mode: "read_only",
+      historicalProfitShiftMinor,
+      legacyOnlineReturns,
+      unlinkedCashExchanges,
+      unlinkedCashDifferenceMinor: sum(
+        unlinkedCashExchanges.map((row) => row.differenceMinor),
+      ),
+      note: "هذه فروقات مراجعة تاريخية فقط. لا تغيّر القيود ولا تعيد فتح الفترات المقفلة. غياب قيد نقدي مرتبط بالتبديل لا يعني أن الزبون لم يدفع.",
+    },
+
     netProfit: {
       profitAfterDeliveryMinor: total.profitAfterDeliveryMinor,
       otherOperatingExpensesMinor,
@@ -2104,7 +2214,7 @@ async function handleGrossProfit(
         "Finance business date when web order becomes done",
 
       profitDefinition:
-        "Gross profit before operating expenses. POS exchanges recognize both returned merchandise and replacement sales at their dated historic COGS; online exchanges deduct the posted SALES_RETURNS journal on replacement completion and reverse COGS only when returned merchandise is physically received.",
+        "Gross profit before operating expenses. New online exchanges recognize return cost on financial completion and transfer it to physical inventory on receipt. Pre-migration historical exchanges retain receipt-date profit recognition in official figures, with any proposed earlier-period reallocation shown separately for owner review.",
 
       deliveryDefinition:
         "Customer shipping charge recognized on completed orders minus net posted delivery expense on journal business dates (including prior-period adjustments and reversals)",

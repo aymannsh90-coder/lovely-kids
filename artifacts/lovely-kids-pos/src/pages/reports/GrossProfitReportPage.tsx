@@ -1187,6 +1187,75 @@ export default function GrossProfitReportPage() {
           )}
 
 
+
+          {report.historicalExchangeReconciliation &&
+            (report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 ||
+             report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0) && (
+            <section className="gross-profit-review" style={{ padding: 16, marginBottom: 16 }}>
+              <h3 style={{ marginTop: 0 }}>مطابقة التبديلات التاريخية — للقراءة فقط</h3>
+              <p>
+                هذا كشف مراجعة مستقل، لا يُغيّر أرباح التقرير الرسمية أو قيود
+                اليومية أو الفترات المقفلة، ولا يدل غياب قيد قبض مرتبط على ضياع النقد.
+              </p>
+              {report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 && (
+                <>
+                  <strong>فروقات توقيت تكلفة المرتجعات الإلكترونية</strong>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
+                      <thead><tr>
+                        <th>التبديل</th><th>تاريخ القيد</th><th>تاريخ الاستلام</th>
+                        <th>تكلفة المرتجع</th><th>أثر إعادة التوزيع المقترح للفترة</th>
+                      </tr></thead>
+                      <tbody>
+                        {report.historicalExchangeReconciliation.legacyOnlineReturns.map((row) => (
+                          <tr key={row.exchangeId}>
+                            <td>#{row.exchangeId}</td>
+                            <td>{row.financialBusinessDate}</td>
+                            <td>{row.receivedBusinessDate}</td>
+                            <td>{formatReportMoney(row.costMinor)}</td>
+                            <td>{formatReportMoney(row.suggestedProfitShiftMinor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p style={{ marginTop: 10 }}>
+                    <strong>فرق إعادة توزيع أرباح الفترة المقترح (غير مرحّل):{" "}
+                      {formatReportMoney(report.historicalExchangeReconciliation.historicalProfitShiftMinor)}
+                    </strong>
+                  </p>
+                </>
+              )}
+              {report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0 && (
+                <>
+                  <strong>فروقات تبديل نقدية قديمة لم نجد لها قيدًا مرتبطًا</strong>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
+                      <thead><tr>
+                        <th>التبديل</th><th>التاريخ</th><th>جلسة الصندوق</th><th>فرق التبديل</th>
+                      </tr></thead>
+                      <tbody>
+                        {report.historicalExchangeReconciliation.unlinkedCashExchanges.map((row) => (
+                          <tr key={row.exchangeId}>
+                            <td>#{row.exchangeId}</td>
+                            <td>{row.businessDate}</td>
+                            <td>{row.cashSessionId ?? "—"}</td>
+                            <td>{formatReportMoney(row.differenceMinor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p style={{ marginTop: 10 }}>
+                    مجموع فروقات قيد المطابقة:{" "}
+                    <b>{formatReportMoney(report.historicalExchangeReconciliation.unlinkedCashDifferenceMinor)}</b>.
+                    لا ترحّلها مرة ثانية قبل مطابقة قبض الصندوق القديم.
+                  </p>
+                </>
+              )}
+            </section>
+          )}
+
           {report.mixedCostReview.length > 0 && (
             <details className="gross-profit-review gross-profit-no-print">
               <summary className="gross-profit-review-summary">
