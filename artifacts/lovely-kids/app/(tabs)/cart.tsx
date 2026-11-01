@@ -2432,21 +2432,44 @@ export default function CartScreen() {
   // ── Cart ──
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12 }]}>
-        <Pressable onPress={() => router.back()}>
-          <Ionicons name="arrow-forward" size={24} color={colors.foreground} />
+      <View
+        style={[
+          styles.header,
+          styles.cartHeader,
+          {
+            paddingTop: topPadding + 12,
+            backgroundColor: colors.background,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="رجوع"
+          style={[styles.cartBackButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <Ionicons name="arrow-forward" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.title, { color: colors.foreground }]}>سلة التسوق</Text>
+        <Text style={[styles.title, styles.cartPageTitle, { color: colors.foreground }]}>سلة التسوق</Text>
         {items.length > 0 && (
-          <Pressable onPress={clearCart}>
-            <Text style={[styles.clearText, { color: colors.primary }]}>مسح الكل</Text>
+          <Pressable
+            onPress={clearCart}
+            accessibilityRole="button"
+            accessibilityLabel="مسح كل منتجات السلة"
+            style={styles.clearCartButton}
+          >
+            <Ionicons name="trash-outline" size={15} color="#C63F50" />
+            <Text style={[styles.clearText, { color: "#C63F50" }]}>مسح الكل</Text>
           </Pressable>
         )}
       </View>
 
       {items.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="bag-outline" size={64} color={colors.mutedForeground} />
+        <View style={[styles.center, styles.cartEmptyState]}>
+          <View style={[styles.cartEmptyIcon, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+            <Ionicons name="bag-outline" size={44} color={colors.primary} />
+          </View>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>السلة فارغة</Text>
           <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
             أضيفي منتجات لإتمام الطلب
@@ -2532,7 +2555,13 @@ export default function CartScreen() {
                           .join(" — ")}
                       </Text>
                     )}
-                    <Text style={[styles.itemPrice, { color: colors.primary }]}>
+                    <Text
+                      style={[
+                        styles.itemPrice,
+                        styles.cartItemPrice,
+                        { color: colors.primary, backgroundColor: colors.primary + "0D" },
+                      ]}
+                    >
                       {item.price * item.quantity} ₪
                     </Text>
 
@@ -2701,8 +2730,10 @@ export default function CartScreen() {
                         );
                       }}
                       style={styles.deleteBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="حذف المنتج من السلة"
                     >
-                      <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                      <Ionicons name="trash-outline" size={15} color="#C63F50" />
                       <Text style={styles.deleteText}>حذف</Text>
                     </Pressable>
                   </View>
@@ -2710,6 +2741,7 @@ export default function CartScreen() {
                     source={{ uri: item.image }}
                     style={[
                       styles.itemImage,
+                      { backgroundColor: colors.muted, borderColor: colors.border },
                       isDesktopWeb ? styles.desktopItemImage : null,
                     ]}
                   />
@@ -2876,9 +2908,13 @@ export default function CartScreen() {
                 borderColor: colors.border,
                 paddingBottom: isDesktopWeb ? 20 : bottomPadding,
               },
-              isDesktopWeb ? styles.desktopSummary : null,
+              isDesktopWeb ? styles.desktopSummary : styles.mobileCartSummary,
             ]}
           >
+            <View style={styles.cartSummaryHeading}>
+              <Ionicons name="receipt-outline" size={19} color={colors.primary} />
+              <Text style={[styles.cartSummaryHeadingText, { color: colors.foreground }]}>ملخص السلة</Text>
+            </View>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>{totalItems} منتج</Text>
               <Text style={[styles.summaryValue, { color: colors.foreground }]}>المجموع</Text>
@@ -3403,12 +3439,18 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   title: { fontSize: 20, fontWeight: "800" },
-  clearText: { fontSize: 14, fontWeight: "600" },
+  cartHeader: { minHeight: 70, borderBottomWidth: 1, paddingBottom: 14 },
+  cartPageTitle: { fontSize: 20, fontWeight: "800", textAlign: "center" },
+  cartBackButton: { width: 44, height: 44, borderRadius: 15, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  clearCartButton: { flexDirection: "row-reverse", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#F9DDE3", backgroundColor: "#FFF4F6", paddingHorizontal: 10, minHeight: 36, borderRadius: 12 },
+  clearText: { fontSize: 12, fontWeight: "800" },
+  cartEmptyState: { paddingHorizontal: 28, gap: 12 },
+  cartEmptyIcon: { width: 88, height: 88, borderRadius: 26, borderWidth: 1, alignItems: "center", justifyContent: "center", marginBottom: 6 },
   emptyTitle: { fontSize: 20, fontWeight: "700" },
   emptySub: { fontSize: 14 },
   shopBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 8 },
   shopBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  list: { padding: 16, gap: 12 },
+  list: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 20, gap: 12 },
   cartBody: {
     flex: 1,
   },
@@ -3434,33 +3476,58 @@ const styles = StyleSheet.create({
     padding: 20,
     marginTop: 0,
   },
+  mobileCartSummary: {
+    marginHorizontal: 14,
+    marginTop: 8,
+    paddingHorizontal: 17,
+    paddingTop: 17,
+    borderRadius: 22,
+    borderWidth: 1,
+    shadowColor: "#234162",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  cartSummaryHeading: { flexDirection: "row-reverse", alignItems: "center", gap: 8, paddingBottom: 8 },
+  cartSummaryHeadingText: { fontSize: 16, fontWeight: "800" },
   cartItem: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 16,
+    padding: 13,
+    borderRadius: 20,
     borderWidth: 1,
-    gap: 12,
+    gap: 11,
     position: "relative",
+    shadowColor: "#1D395C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.045,
+    shadowRadius: 8,
+    elevation: 1,
   },
   deleteBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
     alignSelf: "flex-end",
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-    marginTop: 2,
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    marginTop: 3,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#F9DDE3",
+    backgroundColor: "#FFF4F6",
   },
-  deleteText: { color: "#dc2626", fontSize: 12, fontWeight: "600" },
-  itemImage: { width: 70, height: 70, borderRadius: 12, resizeMode: "cover" },
-  itemRight: { flex: 1, gap: 4, alignItems: "flex-end" },
-  itemName: { fontSize: 14, fontWeight: "700", textAlign: "right" },
-  itemSize: { fontSize: 12 },
-  itemPrice: { fontSize: 15, fontWeight: "700" },
-  quantityRow: { flexDirection: "column", alignItems: "center", gap: 8 },
-  qtyBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  qty: { fontSize: 16, fontWeight: "700" },
+  deleteText: { color: "#C63F50", fontSize: 12, fontWeight: "700" },
+  itemImage: { width: 82, height: 92, borderRadius: 14, borderWidth: 1, resizeMode: "contain" },
+  itemRight: { flex: 1, gap: 5, alignItems: "flex-end", minWidth: 0 },
+  itemName: { fontSize: 14, lineHeight: 21, fontWeight: "800", textAlign: "right" },
+  itemSize: { fontSize: 12, lineHeight: 18, textAlign: "right" },
+  itemPrice: { fontSize: 15, fontWeight: "800" },
+  cartItemPrice: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10, overflow: "hidden" },
+  quantityRow: { flexDirection: "column", alignItems: "center", gap: 7 },
+  qtyBtn: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  qty: { fontSize: 16, fontWeight: "800" },
   summary: { padding: 16, borderTopWidth: 1, gap: 10 },
   summaryRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
   summaryLabel: { fontSize: 14 },
@@ -3473,7 +3540,7 @@ const styles = StyleSheet.create({
   shippingProgressText: { flex: 1, fontSize: 13, fontWeight: "800", textAlign: "right" },
   shippingProgressTrack: { height: 7, borderRadius: 999, overflow: "hidden" },
   shippingProgressFill: { height: "100%", borderRadius: 999 },
-  orderBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 16, borderRadius: 16, marginTop: 4 },
+  orderBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 9, minHeight: 54, paddingVertical: 16, borderRadius: 18, marginTop: 7 },
   orderBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   formContent: { padding: 16, gap: 12 },
   orderSummary: { borderRadius: 16, borderWidth: 1, padding: 14, gap: 12 },
