@@ -1307,7 +1307,7 @@ export default function ProductDetailScreen() {
                         },
                       ]}
                     >
-                      <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 11 }}>
+                      <Text style={{ color: selectedSize === s.size ? "#fff" : colors.foreground, fontWeight: "700", fontSize: isMobileWeb ? 13 : 11 }}>
                         {s.size}
                       </Text>
                       {sizeOut && (
@@ -1334,7 +1334,7 @@ export default function ProductDetailScreen() {
                     onPress={() => !isOutOfStock && setSelectedSize(size)}
                     style={[
                       styles.sizeChip,
-                        isMobileWeb ? styles.mobileWebSizeChip : null,
+                      isMobileWeb ? styles.mobileWebSizeChip : null,
                       {
                         backgroundColor: selectedSize === size ? colors.primary : colors.card,
                         borderColor: selectedSize === size ? colors.primary : colors.border,
@@ -1342,7 +1342,7 @@ export default function ProductDetailScreen() {
                       },
                     ]}
                   >
-                    <Text style={{ color: selectedSize === size ? "#fff" : colors.foreground, fontWeight: "600", fontSize: 11 }}>
+                    <Text style={{ color: selectedSize === size ? "#fff" : colors.foreground, fontWeight: "700", fontSize: isMobileWeb ? 13 : 11 }}>
                       {size}
                     </Text>
                   </Pressable>
