@@ -401,8 +401,16 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     gap: 7,
     alignItems: "center",
+    alignSelf: "stretch",
   },
-  locationText: { color: PALETTE.navy, fontSize: 14, fontWeight: "600" },
+  locationText: {
+    color: PALETTE.navy,
+    fontSize: 14,
+    fontWeight: "600",
+    flexShrink: 1,
+    lineHeight: 22,
+    textAlign: "right",
+  },
   heroArt: {
     width: 190,
     height: 160,
