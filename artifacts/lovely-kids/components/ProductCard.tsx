@@ -324,7 +324,7 @@ export function ProductCard({
       onPress={() => router.push(productRoute)}
       style={({ pressed }) => [
         styles.container,
-        { backgroundColor: colors.card, borderColor: isOutOfStock ? colors.border : colors.border },
+        { backgroundColor: colors.card, borderColor: colors.border },
         pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
         style,
       ]}
@@ -346,7 +346,7 @@ export function ProductCard({
 
         {/* Badges — only if in stock */}
         {!isOutOfStock && discountPct ? (
-          <View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
+          <View style={[styles.discountBadge, { backgroundColor: "#D74789" }]}>
             <Text style={styles.discountText}>خصم {discountPct}%</Text>
           </View>
         ) : null}
@@ -365,7 +365,7 @@ export function ProductCard({
           <Ionicons
             name={wishlisted ? "heart" : "heart-outline"}
             size={18}
-            color={wishlisted ? "#ef4444" : "#64748b"}
+            color={wishlisted ? "#D74789" : "#65748C"}
           />
         </Pressable>
 
@@ -438,7 +438,7 @@ export function ProductCard({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
     ...Platform.select({
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   imageWrapper: {
     position: "relative",
     height: 160,
-    backgroundColor: "#f8f8f8",
+    backgroundColor: "#F7FAFD",
   },
   image: {
     width: "100%",
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     end: Platform.OS === "web" ? undefined : 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   discountText: {
     color: "#fff",
@@ -503,9 +503,9 @@ const styles = StyleSheet.create({
     top: 8,
     right: Platform.OS === "web" ? 8 : undefined,
     start: Platform.OS === "web" ? undefined : 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -519,24 +519,25 @@ const styles = StyleSheet.create({
     bottom: 8,
     left: Platform.OS === "web" ? 8 : undefined,
     end: Platform.OS === "web" ? undefined : 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     elevation: 2,
   },
   info: {
-    padding: 12,
-    gap: 6,
+    padding: 14,
+    gap: 8,
     flexShrink: 0,
   },
   name: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     textAlign: "right",
-    lineHeight: 20,
+    lineHeight: 22,
+    minHeight: 44,
   },
   promotionPill: {
     alignSelf: "flex-end",
@@ -559,8 +560,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   price: {
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: "800",
     textAlign: "right",
   },
   originalPrice: {
@@ -569,9 +570,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
