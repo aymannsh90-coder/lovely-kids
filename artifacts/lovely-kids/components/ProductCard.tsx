@@ -329,7 +329,7 @@ export function ProductCard({
         styles.container,
         homeCard && styles.homeContainer,
         { backgroundColor: colors.card, borderColor: colors.border },
-        pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
+        pressed && { opacity: homeCard ? 0.92 : 0.9, transform: [{ scale: homeCard ? 0.99 : 0.98 }] },
         style,
       ]}
     >
@@ -425,7 +425,7 @@ export function ProductCard({
         ) : null}
 
         <View style={[styles.priceRow, homeCard && styles.homePriceRow]}>
-          <View style={styles.priceCopy}>
+          <View style={homeCard && styles.priceCopy}>
             <Text style={[styles.price, homeCard && styles.homePrice, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
               {product.price} ₪
             </Text>
