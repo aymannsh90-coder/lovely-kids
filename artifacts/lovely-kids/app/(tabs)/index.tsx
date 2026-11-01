@@ -295,14 +295,19 @@ export default function HomeScreen() {
 
   const homeProductCardWidth = isWideWeb
     ? (responsiveShellWidth - 32 - 24) / 3
-    : (width - 48) / 2;
+    : (viewportWidth - 48) / 2;
+
+  const categoryColumnCount = isDesktopWeb ? 6 : isTabletWeb ? 4 : 3;
+  const homeCategoryCardWidth = isWideWeb
+    ? (responsiveShellWidth - 32 - (categoryColumnCount - 1) * 12) / categoryColumnCount
+    : (viewportWidth - 32 - (categoryColumnCount - 1) * 10) / categoryColumnCount;
 
   const homeProductImageHeight =
     isDesktopWeb ? 280 : undefined;
 
   const newArrivalCardWidth = isDesktopWeb
     ? (responsiveShellWidth - 24) / 3
-    : 170;
+    : Math.max(136, (viewportWidth - 56) / 2);
 
   const newArrivalImageHeight =
     isDesktopWeb ? 250 : undefined;
@@ -597,7 +602,7 @@ export default function HomeScreen() {
         <View
           style={[
             styles.homeBannerTitleBox,
-            { backgroundColor: colors.muted, borderColor: colors.border },
+            { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
           <View
@@ -618,10 +623,13 @@ export default function HomeScreen() {
           ]}
         />
 
-        <Pressable onPress={onPress}>
-          <Text style={[styles.seeAll, { color: colors.primary }]}>
-            عرض الكل
-          </Text>
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          style={[styles.seeAllButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <Text style={[styles.seeAll, { color: colors.primary }]}>عرض الكل</Text>
+          <Ionicons name="arrow-back" size={14} color={colors.primary} />
         </Pressable>
       </View>
     );
@@ -776,11 +784,9 @@ export default function HomeScreen() {
           desktopBannerStyle,
         ]}
       >
-        <Ionicons
-          name="search-outline"
-          size={20}
-          color={colors.mutedForeground}
-        />
+        <View style={[styles.searchIconCircle, { backgroundColor: colors.muted }]}>
+          <Ionicons name="search-outline" size={21} color={colors.primary} />
+        </View>
         <Text
           style={[
             styles.searchPlaceholder,
@@ -1055,6 +1061,117 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
 
+      {/* New Arrivals */}
+      {newArrivals.length > 0 ? (
+        <>
+          {renderHomeSectionHeader(
+            "وصل حديثاً",
+            () => router.push("/new-arrivals"),
+          )}
+
+          <View
+            style={[
+              styles.newArrivalsScrollWrapper,
+              isDesktopWeb ? responsiveShellStyle : null,
+            ]}
+          >
+            {newArrivals.length > 2 ? (
+              <>
+                <Pressable
+                  onPress={() => scrollNewArrivals("right")}
+                  style={({ pressed }) => [
+                    styles.newArrivalsArrow,
+                    styles.newArrivalsArrowRight,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 0.95,
+                    },
+                  ]}
+                  accessibilityLabel="تحريك وصل حديثاً إلى اليمين"
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => scrollNewArrivals("left")}
+                  style={({ pressed }) => [
+                    styles.newArrivalsArrow,
+                    styles.newArrivalsArrowLeft,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 0.95,
+                    },
+                  ]}
+                  accessibilityLabel="تحريك وصل حديثاً إلى اليسار"
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              </>
+            ) : null}
+
+            <ScrollView
+              ref={newArrivalsScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.newArrivalsHorizontalScroll,
+                isDesktopWeb ? { paddingHorizontal: 0 } : null,
+              ]}
+              onLayout={(event) => {
+                newArrivalsViewportWidth.current =
+                  event.nativeEvent.layout.width;
+                updateNewArrivalsBounds();
+              }}
+              onContentSizeChange={(contentWidth) => {
+                newArrivalsContentWidth.current = contentWidth;
+                updateNewArrivalsBounds();
+              }}
+              onScrollBeginDrag={() => {
+                newArrivalsAutoPaused.current = true;
+              }}
+              onScrollEndDrag={() => {
+                newArrivalsAutoPaused.current = false;
+              }}
+              onMomentumScrollEnd={() => {
+                newArrivalsAutoPaused.current = false;
+              }}
+              onScroll={(event) => {
+                const currentX = event.nativeEvent.contentOffset.x;
+                newArrivalsScrollX.current = currentX;
+
+                if (currentX <= 1) {
+                  newArrivalsDirection.current = 1;
+                } else if (
+                  currentX >= newArrivalsMaxScrollX.current - 1
+                ) {
+                  newArrivalsDirection.current = -1;
+                }
+              }}
+              scrollEventThrottle={16}
+            >
+              {newArrivals.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  style={{ width: newArrivalCardWidth }}
+                  imageHeight={newArrivalImageHeight}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        </>
+      ) : null}
+
       {Platform.OS === "web" && !isInstalled && (installPrompt || isIos) ? (
         <Pressable
           onPress={() => void handleInstall()}
@@ -1271,117 +1388,6 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      {/* New Arrivals */}
-      {newArrivals.length > 0 ? (
-        <>
-          {renderHomeSectionHeader(
-            "وصل حديثاً",
-            () => router.push("/new-arrivals"),
-          )}
-
-          <View
-            style={[
-              styles.newArrivalsScrollWrapper,
-              isDesktopWeb ? responsiveShellStyle : null,
-            ]}
-          >
-            {newArrivals.length > 2 ? (
-              <>
-                <Pressable
-                  onPress={() => scrollNewArrivals("right")}
-                  style={({ pressed }) => [
-                    styles.newArrivalsArrow,
-                    styles.newArrivalsArrowRight,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.7 : 0.95,
-                    },
-                  ]}
-                  accessibilityLabel="تحريك وصل حديثاً إلى اليمين"
-                >
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.primary}
-                  />
-                </Pressable>
-
-                <Pressable
-                  onPress={() => scrollNewArrivals("left")}
-                  style={({ pressed }) => [
-                    styles.newArrivalsArrow,
-                    styles.newArrivalsArrowLeft,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.7 : 0.95,
-                    },
-                  ]}
-                  accessibilityLabel="تحريك وصل حديثاً إلى اليسار"
-                >
-                  <Ionicons
-                    name="chevron-back"
-                    size={20}
-                    color={colors.primary}
-                  />
-                </Pressable>
-              </>
-            ) : null}
-
-            <ScrollView
-              ref={newArrivalsScrollRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.newArrivalsHorizontalScroll,
-                isDesktopWeb ? { paddingHorizontal: 0 } : null,
-              ]}
-              onLayout={(event) => {
-                newArrivalsViewportWidth.current =
-                  event.nativeEvent.layout.width;
-                updateNewArrivalsBounds();
-              }}
-              onContentSizeChange={(contentWidth) => {
-                newArrivalsContentWidth.current = contentWidth;
-                updateNewArrivalsBounds();
-              }}
-              onScrollBeginDrag={() => {
-                newArrivalsAutoPaused.current = true;
-              }}
-              onScrollEndDrag={() => {
-                newArrivalsAutoPaused.current = false;
-              }}
-              onMomentumScrollEnd={() => {
-                newArrivalsAutoPaused.current = false;
-              }}
-              onScroll={(event) => {
-                const currentX = event.nativeEvent.contentOffset.x;
-                newArrivalsScrollX.current = currentX;
-
-                if (currentX <= 1) {
-                  newArrivalsDirection.current = 1;
-                } else if (
-                  currentX >= newArrivalsMaxScrollX.current - 1
-                ) {
-                  newArrivalsDirection.current = -1;
-                }
-              }}
-              scrollEventThrottle={16}
-            >
-              {newArrivals.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  style={{ width: newArrivalCardWidth }}
-                  imageHeight={newArrivalImageHeight}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        </>
-      ) : null}
-
       {/* Shop by Category */}
       {homeCategoryCards.length > 0 ? (
         <>
@@ -1409,7 +1415,7 @@ export default function HomeScreen() {
                 style={({ pressed }) => [
                   styles.homeCategoryCard,
                   {
-                    width: homeProductCardWidth,
+                    width: homeCategoryCardWidth,
                     borderColor: colors.border,
                     backgroundColor: colors.card,
                     opacity: pressed ? 0.86 : 1,
