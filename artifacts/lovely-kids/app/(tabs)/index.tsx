@@ -939,7 +939,7 @@ export default function HomeScreen() {
                 أهلاً وسهلاً
               </Text>
               <Text style={[styles.greetingName, { color: colors.foreground }]}>
-                {Platform.OS === "web" ? firstName : user.name}
+                {user.name}
               </Text>
             </View>
           )}
