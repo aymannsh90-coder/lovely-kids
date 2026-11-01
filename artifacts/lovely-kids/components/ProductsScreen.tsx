@@ -4,8 +4,10 @@ import {
 } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   FlatList,
   Image,
   SectionList,
@@ -271,6 +273,50 @@ export default function ProductsScreen({
     .filter((item) => Boolean(item.image));
 
   const [showCompactCategories, setShowCompactCategories] = useState(false);
+
+  // UI only: make the horizontal category strip discoverable without changing filters.
+  const categoryStripRef = useRef<ScrollView>(null);
+  const categoryStripOffset = useRef(0);
+  const categoryStripContentWidth = useRef(0);
+  const categoryStripViewportWidth = useRef(0);
+  const scrollCategoryStrip = (direction: "left" | "right") => {
+    const maximum = Math.max(0, categoryStripContentWidth.current - categoryStripViewportWidth.current);
+    const step = 210;
+    const nextOffset = Math.max(0, Math.min(maximum, categoryStripOffset.current + (direction === "left" ? step : -step)));
+    categoryStripOffset.current = nextOffset;
+    categoryStripRef.current?.scrollTo({ x: nextOffset, animated: true });
+  };
+
+  // Match the homepage section-title glow and shimmer. No product/filter logic changes.
+  const sectionPillShimmer = useRef(new Animated.Value(0)).current;
+  const sectionPillGlow = useRef(new Animated.Value(0)).current;
+  const sectionPillAccent = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    ) return;
+
+    const shimmer = Animated.loop(Animated.sequence([
+      Animated.delay(350),
+      Animated.timing(sectionPillShimmer, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(sectionPillShimmer, { toValue: 0, duration: 0, useNativeDriver: true }),
+      Animated.delay(2100),
+    ]));
+    const glow = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillGlow, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(sectionPillGlow, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.delay(1900),
+    ]));
+    const accent = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillAccent, { toValue: 1.4, duration: 950, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(sectionPillAccent, { toValue: 1, duration: 950, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.delay(2100),
+    ]));
+    shimmer.start(); glow.start(); accent.start();
+    return () => { shimmer.stop(); glow.stop(); accent.stop(); };
+  }, [sectionPillShimmer, sectionPillGlow, sectionPillAccent]);
 
   const handleCatalogScroll = (event: any) => {
     if (isSpecialView || isDesktopWeb) return;
@@ -741,18 +787,29 @@ const topPadding = getResponsiveTopPadding(insets.top);
       </View>
 
       {/* Categories */}
-      {/* Visual category image strip */}
+      {/* Visual category image strip; the chevrons signal and control horizontal scrolling. */}
       {!isOffersView ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.visualCategoriesScroll}
-          style={[
-            styles.visualCategoriesStrip,
-            Platform.OS === "web" ? { direction: "rtl" } : null,
-            desktopFlushShellStyle,
-          ]}
-        >
+        <View style={[styles.visualCategoriesWrap, desktopFlushShellStyle]}>
+          <ScrollView
+            ref={categoryStripRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.visualCategoriesScroll}
+            style={[
+              styles.visualCategoriesStrip,
+              Platform.OS === "web" ? { direction: "rtl" } : null,
+            ]}
+            onLayout={(event) => {
+              categoryStripViewportWidth.current = event.nativeEvent.layout.width;
+            }}
+            onContentSizeChange={(width) => {
+              categoryStripContentWidth.current = width;
+            }}
+            onScroll={(event) => {
+              categoryStripOffset.current = event.nativeEvent.contentOffset.x;
+            }}
+            scrollEventThrottle={16}
+          >
           {visualCategories.map((item) => {
             const selected = selectedCategory === item.id;
 
@@ -781,7 +838,28 @@ const topPadding = getResponsiveTopPadding(insets.top);
               </Pressable>
             );
           })}
-        </ScrollView>
+          </ScrollView>
+          {visualCategories.length > (isDesktopWeb ? 7 : 3) ? (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="تمرير الأقسام إلى اليمين"
+                onPress={() => scrollCategoryStrip("right")}
+                style={[styles.categoryStripArrow, styles.categoryStripArrowRight, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="تمرير الأقسام إلى اليسار"
+                onPress={() => scrollCategoryStrip("left")}
+                style={[styles.categoryStripArrow, styles.categoryStripArrowLeft, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Ionicons name="chevron-back" size={20} color={colors.primary} />
+              </Pressable>
+            </>
+          ) : null}
+        </View>
       ) : (
       <ScrollView
         horizontal
@@ -936,65 +1014,42 @@ const topPadding = getResponsiveTopPadding(insets.top);
           onScroll={handleCatalogScroll}
           scrollEventThrottle={16}
           renderSectionHeader={({ section }) => (
-            <View
-              style={[
-                {
-                  paddingHorizontal: 16,
-                  paddingTop: isDesktopWeb ? 18 : 8,
-                  paddingBottom: 10,
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  gap: 10,
-                },
-                isDesktopWeb
-                  ? {
-                      width: desktopContentWidth,
-                      alignSelf: "center",
-                      paddingHorizontal: 0,
-                    }
-                  : null,
-              ]}
-            >
-              <View
-                style={{
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  gap: 8,
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                  borderRadius: 12,
-                  paddingVertical: 8,
-                  paddingHorizontal: 14,
-                }}
-              >
-                <View
-                  style={{
-                    width: 4,
-                    height: 22,
-                    borderRadius: 2,
-                    backgroundColor: colors.primary,
-                  }}
+            <View style={[styles.catalogSectionHeading, isDesktopWeb
+              ? { width: desktopContentWidth, alignSelf: "center", paddingHorizontal: 0 }
+              : null
+            ]}>
+              <View style={[styles.catalogSectionPill, { backgroundColor: colors.card, borderColor: "#D8E9F7" }]}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[styles.catalogSectionGlow, {
+                    opacity: sectionPillGlow.interpolate({ inputRange: [0, 1], outputRange: [0.13, 0.8] }),
+                  }]}
                 />
-                <Text
-                  style={{
-                    color: colors.foreground,
-                    fontSize: 18,
-                    fontWeight: "900",
-                    textAlign: "right",
-                  }}
-                >
+                <Animated.View
+                  pointerEvents="none"
+                  style={[styles.catalogSectionShimmer, {
+                    transform: [
+                      { translateX: sectionPillShimmer.interpolate({ inputRange: [0, 1], outputRange: [-110, 360] }) },
+                      { skewX: "-18deg" },
+                    ],
+                  }]}
+                />
+                <Animated.View
+                  style={[styles.catalogSectionAccent, {
+                    backgroundColor: "#D74789",
+                    transform: [{ scaleY: sectionPillAccent }],
+                  }]}
+                />
+                <Text style={[styles.catalogSectionTitle, { color: colors.foreground }]}>
                   {section.label}
                 </Text>
+                <Animated.View pointerEvents="none" style={{
+                  opacity: sectionPillGlow.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }),
+                }}>
+                  <Ionicons name="sparkles" color="#3299DC" size={16} />
+                </Animated.View>
               </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  height: 1,
-                  backgroundColor: colors.border,
-                }}
-              />
+              <View style={[styles.catalogSectionLine, { backgroundColor: colors.border }]} />
             </View>
           )}
           renderItem={({ item }) => (
@@ -1269,6 +1324,27 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
+  visualCategoriesWrap: {
+    position: "relative",
+  },
+  categoryStripArrow: {
+    position: "absolute",
+    top: 31,
+    zIndex: 5,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#24496B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 7,
+    elevation: 3,
+  },
+  categoryStripArrowRight: { right: 5 },
+  categoryStripArrowLeft: { left: 5 },
   visualCategoriesStrip: {
     marginBottom: Platform.OS === "web" ? 8 : 12,
     height: Platform.OS === "web" ? 106 : 112,
@@ -1310,6 +1386,52 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   categoryText: { fontSize: 13, fontWeight: "700", lineHeight: 18, textAlign: "center" },
+  catalogSectionHeading: {
+    paddingHorizontal: 16,
+    paddingTop: 5,
+    paddingBottom: 10,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+  },
+  catalogSectionPill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    overflow: "hidden",
+    position: "relative",
+  },
+  catalogSectionGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#D7EEFF",
+  },
+  catalogSectionShimmer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 95,
+    backgroundColor: "rgba(72,174,245,0.34)",
+  },
+  catalogSectionAccent: {
+    width: 4,
+    height: 22,
+    borderRadius: 2,
+  },
+  catalogSectionTitle: {
+    fontSize: 19,
+    lineHeight: 28,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  catalogSectionLine: {
+    flex: 1,
+    height: 1,
+  },
   count: {
     textAlign: "right",
     paddingHorizontal: 16,
