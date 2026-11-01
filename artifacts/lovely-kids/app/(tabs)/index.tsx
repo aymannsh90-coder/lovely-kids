@@ -300,7 +300,7 @@ export default function HomeScreen() {
   const categoryColumnCount = isDesktopWeb ? 6 : isTabletWeb ? 4 : 3;
   const homeCategoryCardWidth = isWideWeb
     ? (responsiveShellWidth - 32 - (categoryColumnCount - 1) * 12) / categoryColumnCount
-    : (viewportWidth - 32 - (categoryColumnCount - 1) * 10) / categoryColumnCount;
+    : (viewportWidth - 32 - (categoryColumnCount - 1) * 12) / categoryColumnCount;
 
   const homeProductImageHeight =
     isDesktopWeb ? 280 : undefined;
