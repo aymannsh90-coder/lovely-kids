@@ -1214,7 +1214,7 @@ export default function ProductDetailScreen() {
           {hasColorVariants && (
             <>
               <Text style={[styles.sectionTitle, isMobileWeb ? styles.mobileWebSectionTitle : null, { color: colors.foreground }]}>
-                اللون {needsColor ? "(مطلوب)" : ""}
+                اختاري اللون {needsColor ? "(مطلوب)" : ""}
               </Text>
               <View style={styles.sizesRow}>
                 {product.colorVariants!.map((cv) => (
@@ -1257,7 +1257,7 @@ export default function ProductDetailScreen() {
           {hasColorVariants && (
             <>
               <Text style={[styles.sectionTitle, isMobileWeb ? styles.mobileWebSectionTitle : null, { color: colors.foreground }]}>
-                المقاس {needsSize ? "(مطلوب)" : ""}
+                اختاري المقاس {needsSize ? "(مطلوب)" : ""}
               </Text>
               <View style={styles.sizesRow}>
                 {(activeColorVariant
@@ -1325,7 +1325,7 @@ export default function ProductDetailScreen() {
           {!hasColorVariants && product.sizes && product.sizes.length > 0 && (
             <>
               <Text style={[styles.sectionTitle, isMobileWeb ? styles.mobileWebSectionTitle : null, { color: colors.foreground }]}>
-                المقاس {needsSize ? "(مطلوب)" : ""}
+                اختاري المقاس {needsSize ? "(مطلوب)" : ""}
               </Text>
               <View style={styles.sizesRow}>
                 {product.sizes.map((size) => (
