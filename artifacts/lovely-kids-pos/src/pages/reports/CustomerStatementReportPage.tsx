@@ -928,6 +928,7 @@ export default function CustomerStatementReportPage() {
               marginBottom: 20,
             }}
           >
+            <img src="/lovely-kids-a4-logo.png" alt="Lovely Kids" style={{ display: "block", width: 190, height: 56, objectFit: "contain", margin: "0 auto 4px" }} />
             <h1
               style={{
                 marginBottom: 4,
