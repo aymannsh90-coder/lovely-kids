@@ -1353,6 +1353,7 @@ export default function HomeScreen() {
                   style={({ pressed }) => [
                     styles.newArrivalsArrow,
                     styles.newArrivalsArrowRight,
+                    !isWideWeb ? { top: "26%" } : null,
                     {
                       backgroundColor: colors.card,
                       borderColor: colors.border,
@@ -1373,6 +1374,7 @@ export default function HomeScreen() {
                   style={({ pressed }) => [
                     styles.newArrivalsArrow,
                     styles.newArrivalsArrowLeft,
+                    !isWideWeb ? { top: "26%" } : null,
                     {
                       backgroundColor: colors.card,
                       borderColor: colors.border,
@@ -2176,8 +2178,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 14,
   },
   homeBannerTitleBox: {
     flexDirection: "row-reverse",
@@ -2288,7 +2290,7 @@ const styles = StyleSheet.create({
     left: 6,
   },
   newArrivalsHorizontalScroll: {
-    paddingHorizontal: 28,
+    paddingHorizontal: 16,
     gap: 12,
     paddingBottom: 8,
   },
