@@ -1806,8 +1806,8 @@ const styles = StyleSheet.create({
   discountText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, gap: 8, width: "100%", maxWidth: 760, alignSelf: "center" },
   name: { fontSize: 16, fontWeight: "800", textAlign: "right", lineHeight: 21 },
-  mobileWebContent: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 18, gap: 7 },
-  mobileWebName: { fontSize: 17, lineHeight: 25 },
+  mobileWebContent: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 18, gap: 5 },
+  mobileWebName: { fontSize: 17, lineHeight: 23 },
   mobileWebPriceRow: {
     paddingHorizontal: 13,
     paddingVertical: 8,
@@ -1860,10 +1860,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionTitle: { fontSize: 12, fontWeight: "700", textAlign: "right" },
-  mobileWebSectionTitle: { fontSize: 13, fontWeight: "800", lineHeight: 20, marginTop: 2, marginBottom: 0 },
+  mobileWebSectionTitle: { fontSize: 13, fontWeight: "800", lineHeight: 19, marginTop: 0, marginBottom: 0 },
   mobileWebSizeChip: { minHeight: 38, minWidth: 49, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   mobileWebColorSwatch: { minHeight: 39, borderRadius: 13, paddingHorizontal: 11, paddingVertical: 7 },
-  mobileWebDescription: { fontSize: 13, lineHeight: 21 },
+  mobileWebDescription: { fontSize: 13, lineHeight: 19 },
   description: { fontSize: 13, textAlign: "right", lineHeight: 20 },
   detailCard: {
     borderWidth: 1,
