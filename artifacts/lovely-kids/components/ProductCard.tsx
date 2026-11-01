@@ -35,6 +35,8 @@ interface Props {
   imageHeight?: number;
   // Visual treatment for the homepage only; product actions are unchanged.
   homeCard?: boolean;
+  // Visual treatment for product listing pages; no changes to cart or navigation.
+  catalogCard?: boolean;
   orderEdit?: {
     orderId: string;
     token?: string;
@@ -53,6 +55,7 @@ export function ProductCard({
   style,
   imageHeight,
   homeCard = false,
+  catalogCard = false,
   orderEdit = null,
   rewardForPromotionId,
 }: Props) {
@@ -328,6 +331,7 @@ export function ProductCard({
       style={({ pressed }) => [
         styles.container,
         homeCard && styles.homeContainer,
+        catalogCard && styles.catalogContainer,
         { backgroundColor: colors.card, borderColor: colors.border },
         pressed && { opacity: homeCard ? 0.92 : 0.9, transform: [{ scale: homeCard ? 0.99 : 0.98 }] },
         style,
@@ -337,6 +341,7 @@ export function ProductCard({
         style={[
           styles.imageWrapper,
           homeCard && styles.homeImageWrapper,
+          catalogCard && styles.catalogImageWrapper,
           imageHeight ? { height: imageHeight } : null,
         ]}
       >
@@ -367,7 +372,7 @@ export function ProductCard({
 
         <Pressable
           onPress={handleToggleWishlist}
-          style={[styles.wishlistBtn, homeCard && styles.homeOverlayButton, { backgroundColor: colors.card }]}
+          style={[styles.wishlistBtn, homeCard && styles.homeOverlayButton, catalogCard && styles.catalogOverlayButton, { backgroundColor: colors.card }]}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={wishlisted ? "إزالة من المفضلة" : "إضافة للمفضلة"}
@@ -381,7 +386,7 @@ export function ProductCard({
 
         <Pressable
           onPress={(e) => { e.stopPropagation(); void handleShare(); }}
-          style={[styles.shareBtn, homeCard && styles.homeOverlayButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.shareBtn, homeCard && styles.homeOverlayButton, catalogCard && styles.catalogOverlayButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="مشاركة المنتج"
@@ -390,8 +395,8 @@ export function ProductCard({
         </Pressable>
       </View>
 
-      <View style={[styles.info, homeCard && styles.homeInfo]}>
-        <Text style={[styles.name, homeCard && styles.homeName, { color: colors.foreground }]} numberOfLines={2}>
+      <View style={[styles.info, homeCard && styles.homeInfo, catalogCard && styles.catalogInfo]}>
+        <Text style={[styles.name, homeCard && styles.homeName, catalogCard && styles.catalogName, { color: colors.foreground }]} numberOfLines={2}>
           {product.nameAr}
         </Text>
 
@@ -424,13 +429,13 @@ export function ProductCard({
           </View>
         ) : null}
 
-        <View style={[styles.priceRow, homeCard && styles.homePriceRow]}>
-          <View style={homeCard && styles.priceCopy}>
-            <Text style={[styles.price, homeCard && styles.homePrice, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
+        <View style={[styles.priceRow, homeCard && styles.homePriceRow, catalogCard && styles.catalogPriceRow]}>
+          <View style={homeCard || catalogCard ? styles.priceCopy : undefined}>
+            <Text style={[styles.price, homeCard && styles.homePrice, catalogCard && styles.catalogPrice, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
               {product.price} ₪
             </Text>
             {product.originalPrice && !isOutOfStock && (
-              <Text style={[styles.originalPrice, homeCard && styles.homeOriginalPrice, { color: colors.mutedForeground }]}>
+              <Text style={[styles.originalPrice, homeCard && styles.homeOriginalPrice, catalogCard && styles.catalogOriginalPrice, { color: colors.mutedForeground }]}>
                 {product.originalPrice} ₪
               </Text>
             )}
@@ -438,7 +443,7 @@ export function ProductCard({
           <Pressable
             onPress={handleAddToCart}
             disabled={isOutOfStock}
-            style={[styles.addBtn, homeCard && styles.homeAddBtn, { backgroundColor: isOutOfStock ? colors.muted : colors.primary }]}
+            style={[styles.addBtn, homeCard && styles.homeAddBtn, catalogCard && styles.catalogAddBtn, { backgroundColor: isOutOfStock ? colors.muted : colors.primary }]}
             accessibilityRole="button"
             accessibilityLabel={isOutOfStock ? "الكمية غير متوفرة" : "إضافة المنتج إلى السلة"}
           >
@@ -472,6 +477,25 @@ const styles = StyleSheet.create({
   },
   // A stronger image/price hierarchy on the homepage without affecting
   // product lists, promotions, variants, cart, or checkout.
+  catalogContainer: {
+    borderRadius: 19,
+    borderWidth: 1,
+    shadowColor: "#254369",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.055,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  catalogImageWrapper: {
+    backgroundColor: "#F8FBFE",
+    borderBottomWidth: 1,
+    borderBottomColor: "#ECF2F8",
+  },
+  catalogOverlayButton: {
+    width: 35,
+    height: 35,
+    borderRadius: 18,
+  },
   homeContainer: {
     borderRadius: 20,
     borderWidth: 1,
@@ -578,6 +602,19 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     minHeight: 44,
   },
+  catalogInfo: {
+    paddingHorizontal: 12,
+    paddingTop: 11,
+    paddingBottom: 12,
+    gap: 7,
+    flexGrow: 1,
+  },
+  catalogName: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    minHeight: 42,
+  },
   homeInfo: {
     paddingHorizontal: 12,
     paddingTop: 12,
@@ -610,6 +647,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 2,
+  },
+  catalogPriceRow: {
+    marginTop: "auto",
+    paddingTop: 8,
+    gap: 5,
+  },
+  catalogPrice: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "800",
+  },
+  catalogOriginalPrice: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   homePriceRow: {
     marginTop: "auto",
@@ -645,6 +696,11 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
+  },
+  catalogAddBtn: {
+    width: 41,
+    height: 41,
+    borderRadius: 14,
   },
   homeAddBtn: {
     width: 42,
