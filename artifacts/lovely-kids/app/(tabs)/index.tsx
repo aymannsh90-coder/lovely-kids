@@ -456,6 +456,56 @@ export default function HomeScreen() {
   } = useNotificationOptIn();
 
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
+  const sectionPillShimmer = useRef(new Animated.Value(0)).current;
+  const sectionPillAccentPulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Decorative motion on storefront titles only. Honor reduced-motion settings.
+    if (
+      Platform.OS !== "web" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    ) return;
+
+    const shimmer = Animated.loop(Animated.sequence([
+      Animated.delay(1100),
+      Animated.timing(sectionPillShimmer, {
+        toValue: 1,
+        duration: 1350,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sectionPillShimmer, {
+        toValue: 0,
+        duration: 0,
+        useNativeDriver: true,
+      }),
+      Animated.delay(4500),
+    ]));
+
+    const accentPulse = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillAccentPulse, {
+        toValue: 1.25,
+        duration: 850,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sectionPillAccentPulse, {
+        toValue: 1,
+        duration: 850,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.delay(5200),
+    ]));
+
+    shimmer.start();
+    accentPulse.start();
+    return () => {
+      shimmer.stop();
+      accentPulse.stop();
+    };
+  }, [sectionPillShimmer, sectionPillAccentPulse]);
   const [categoriesRevealed, setCategoriesRevealed] = useState(false);
   const categoryGridY = useRef<number | null>(null);
   const homeViewportHeight = useRef(0);
@@ -675,6 +725,7 @@ export default function HomeScreen() {
   const topPadding = getResponsiveTopPadding(insets.top);
 
   const renderHomeSectionHeader = (title: string, onPress: () => void) => {
+    const animatePill = title === "وصل حديثاً" || title === "تسوّق حسب القسم";
     if (Platform.OS !== "web") {
       return (
         <View style={styles.sectionHeader}>
@@ -700,13 +751,36 @@ export default function HomeScreen() {
         <View
           style={[
             styles.homeBannerTitleBox,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            {
+              backgroundColor: colors.card,
+              borderColor: animatePill ? "#D8E9F7" : colors.border,
+            },
           ]}
         >
-          <View
+          {animatePill ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.homeBannerTitleShimmer,
+                {
+                  transform: [
+                    {
+                      translateX: sectionPillShimmer.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-75, 310],
+                      }),
+                    },
+                    { skewX: "-18deg" },
+                  ],
+                },
+              ]}
+            />
+          ) : null}
+          <Animated.View
             style={[
               styles.homeBannerAccent,
               { backgroundColor: "#D74789" },
+              animatePill ? { transform: [{ scaleY: sectionPillAccentPulse }] } : null,
             ]}
           />
           <Text style={[styles.homeBannerTitle, { color: colors.foreground }]}>
@@ -1973,6 +2047,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 9,
     paddingHorizontal: 16,
+    overflow: "hidden",
+    position: "relative",
+  },
+  homeBannerTitleShimmer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 55,
+    backgroundColor: "rgba(72,174,245,0.19)",
   },
   homeBannerAccent: {
     width: 4,
