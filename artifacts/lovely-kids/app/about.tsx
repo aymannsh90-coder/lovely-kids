@@ -44,13 +44,16 @@ export default function AboutScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <View style={[styles.heroBanner, { backgroundColor: colors.primary }]}>
-        <Image
-          source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
-        <Text style={styles.heroSub}>نابلس · فلسطين</Text>
+      <View style={[styles.heroBanner, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={styles.logoFrame}>
+          <Image
+            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>نابلس · فلسطين</Text>
+        <Text style={[styles.heroHeadline, { color: colors.foreground }]}>كل ما يحتاجه طفلك، بكل حب</Text>
         <View style={styles.statsRow}>
           {[
             { num: "+4800", label: "عميل" },
@@ -87,11 +90,11 @@ export default function AboutScreen() {
                 { backgroundColor: colors.card, borderColor: colors.border },
               ]}
             >
-              <View style={[styles.featureIcon, { backgroundColor: colors.muted }]}>
+              <View style={[styles.featureIcon, { backgroundColor: index % 2 === 0 ? colors.muted : colors.accent }]}>
                 <Ionicons
                   name={FEATURE_ICONS[index % FEATURE_ICONS.length]}
                   size={24}
-                  color={colors.primary}
+                  color={index % 2 === 0 ? colors.primary : "#C83479"}
                 />
               </View>
               <View style={styles.featureText}>
@@ -124,63 +127,86 @@ const styles = StyleSheet.create({
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
   },
-  title: { fontSize: 20, fontWeight: "800" },
+  title: { fontSize: 21, fontWeight: "800" },
   heroBanner: {
     marginHorizontal: 16,
-    borderRadius: 20,
-    padding: 24,
+    borderWidth: 1,
+    borderRadius: 26,
+    paddingHorizontal: 18,
+    paddingVertical: 26,
     alignItems: "center",
-    gap: 8,
-    marginBottom: 20,
+    gap: 9,
+    marginBottom: 28,
   },
-  logoImage: { width: 160, height: 80, borderRadius: 12 },
-  heroSub: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
+  logoFrame: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#DFECF6",
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 12,
+    marginBottom: 6,
+  },
+  logoImage: { width: 138, height: 120, borderRadius: 12 },
+  heroSub: { fontSize: 14, fontWeight: "600" },
+  heroHeadline: { fontSize: 18, fontWeight: "800", textAlign: "center" },
   statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
     width: "100%",
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.3)",
+    gap: 8,
+    marginTop: 16,
   },
-  statItem: { alignItems: "center" },
-  statNum: { fontSize: 22, fontWeight: "800", color: "#fff" },
-  statLabel: { fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 2 },
-  section: { paddingHorizontal: 16, marginBottom: 20, gap: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: "700", textAlign: "right" },
-  text: { fontSize: 14, textAlign: "right", lineHeight: 22 },
-  features: { gap: 10 },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#DCEAF5",
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 2,
+  },
+  statNum: { fontSize: 21, fontWeight: "800", color: "#2379BF" },
+  statLabel: { fontSize: 11, color: "#65748C", marginTop: 5 },
+  section: { paddingHorizontal: 18, marginBottom: 27, gap: 14 },
+  sectionTitle: { fontSize: 20, fontWeight: "800", textAlign: "right" },
+  text: { fontSize: 15, textAlign: "right", lineHeight: 27 },
+  features: { gap: 12 },
   featureCard: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
-    alignItems: "flex-start",
-    padding: 14,
-    borderRadius: 14,
+    alignItems: "center",
+    padding: 15,
+    borderRadius: 18,
     borderWidth: 1,
-    gap: 12,
+    gap: 13,
   },
   featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
-  featureText: { flex: 1, alignItems: Platform.OS === "web" ? "flex-end" : "flex-start", gap: 4 },
-  featureTitle: { fontSize: 15, fontWeight: "700" },
-  featureDesc: { fontSize: 13, textAlign: "right", lineHeight: 18 },
+  featureText: {
+    flex: 1,
+    alignItems: Platform.OS === "web" ? "flex-end" : "flex-start",
+    gap: 5,
+  },
+  featureTitle: { fontSize: 15, fontWeight: "800", textAlign: "right" },
+  featureDesc: { fontSize: 13, textAlign: "right", lineHeight: 20 },
   ctaBtn: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    marginHorizontal: 16,
+    marginHorizontal: 18,
     paddingVertical: 16,
-    borderRadius: 16,
-    marginBottom: 8,
+    borderRadius: 18,
+    marginBottom: 12,
   },
-  ctaBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  ctaBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 });
