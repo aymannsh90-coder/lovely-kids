@@ -7,8 +7,8 @@ import { handleFinanceCheckRequest } from "./finance-check-routes";
 import { handleFinanceStatementRequest } from "./finance-statement-routes";
 import { handleFinanceLiquidityReportRequest } from "./finance-liquidity-report-routes";
 import { handleUnifiedVoucherRequest } from "./finance-voucher-routes";
-import { appSettingsTable, productsTable } from "@workspace/db/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { appSettingsTable, productsTable, visitorDailyVisitsTable } from "@workspace/db/schema";
+import { and, count, countDistinct, desc, eq, isNull } from "drizzle-orm";
 import { openDb, type Env } from "./db";
 import { handleAuthRequest } from "./auth-routes";
 import { handleStaffAccessRequest } from "./staff-access-routes";
@@ -71,6 +71,8 @@ const json = (data: unknown, status = 200) =>
 const PUBLIC_CACHE_TTL_SECONDS: Record<string, number> = {
   "/api/products": 60,
   "/api/settings": 300,
+  // Expensive unique-visitor aggregate must never run per page view.
+  "/api/storefront/stats": 600,
 };
 
 const PUBLIC_CACHE_TAGS = {
@@ -221,6 +223,22 @@ export class PublicAPI extends WorkerEntrypoint<Env> {
     const { client, db } = await openDb(this.env);
 
     try {
+      if (path === "/api/storefront/stats") {
+        // Public, aggregated figures only. No visitor IDs, countries, sessions,
+        // tokens or owner-only analytics are returned to the storefront.
+        const [visitorRows, productRows] = await Promise.all([
+          db.select({ value: countDistinct(visitorDailyVisitsTable.visitorId) })
+            .from(visitorDailyVisitsTable),
+          // Match the administration product counter (all added products).
+          db.select({ value: count() }).from(productsTable),
+        ]);
+
+        return new Response(JSON.stringify({
+          visitorCount: Number(visitorRows[0]?.value ?? 0),
+          productCount: Number(productRows[0]?.value ?? 0),
+        }), { headers });
+      }
+
       if (path === "/api/products") {
         const rows = await db
           .select()
@@ -322,7 +340,8 @@ export default {
       !request.headers.has("Authorization") &&
       (
         path === "/api/products" ||
-        path === "/api/settings"
+        path === "/api/settings" ||
+        path === "/api/storefront/stats"
       )
     ) {
       return fetchPublicThroughCache(
