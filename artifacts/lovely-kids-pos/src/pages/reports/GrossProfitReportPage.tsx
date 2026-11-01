@@ -1147,7 +1147,7 @@ export default function GrossProfitReportPage() {
         <div id="gross-profit-print">
           <header className="gross-profit-print-only gross-profit-print-header">
             <div className="gross-profit-print-brand">
-              Lovely Kids
+              <img src="/lovely-kids-a4-logo.png" alt="Lovely Kids" style={{ display: "block", width: 178, height: 52, objectFit: "contain", margin: "0 auto 4px" }} />
             </div>
             <h1>تقرير مجمل الربح وصافي الربح حسب القيود</h1>
             <p>
