@@ -948,7 +948,11 @@ export default function HomeScreen() {
         {Platform.OS === "web" && (
           <Image
             source={require("@/assets/images/lovely-kids-logo-horizontal.png")}
-            style={[styles.logoImage, styles.webCenteredLogo]}
+            style={[
+              styles.logoImage,
+              styles.webCenteredLogo,
+              viewportWidth < 360 && styles.webCompactLogo,
+            ]}
             resizeMode="contain"
           />
         )}
@@ -1874,7 +1878,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-start",
     gap: 7,
-    flex: 1,
+    flex: Platform.OS === "web" ? 1 : undefined,
     minWidth: 0,
   },
   headerActionFrame: {
@@ -1900,6 +1904,10 @@ const styles = StyleSheet.create({
     left: "50%",
     transform: [{ translateX: -55 }],
     zIndex: 1,
+  },
+  webCompactLogo: {
+    width: 100,
+    transform: [{ translateX: -50 }],
   },
   webWelcomeRow: {
     paddingHorizontal: 18,
