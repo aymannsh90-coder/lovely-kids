@@ -266,6 +266,8 @@ export default function ProductDetailScreen() {
   const isDesktopWeb =
     Platform.OS === "web" && viewportWidth >= 1200;
 
+  const isMobileWeb = Platform.OS === "web" && !isDesktopWeb;
+
   const desktopProductWidth = Math.min(
     Math.max(viewportWidth - 64, 0),
     1280,
@@ -866,6 +868,7 @@ export default function ProductDetailScreen() {
         <View
           style={[
             styles.carouselWrapper,
+            isMobileWeb ? styles.mobileWebCarousel : null,
             isDesktopWeb
               ? { width: desktopGalleryWidth, flexShrink: 0 }
               : null,
@@ -894,6 +897,7 @@ export default function ProductDetailScreen() {
                 style={[
                   styles.imageSlide,
                   { width: carouselPageWidth },
+                  isMobileWeb ? { height: Math.min(382, Math.max(315, viewportWidth * 0.94)) } : null,
                   isDesktopWeb
                     ? {
                         height: 600,
@@ -906,7 +910,7 @@ export default function ProductDetailScreen() {
               >
                 <Image
                   source={{ uri: item }}
-                  style={styles.slideImage}
+                  style={[styles.slideImage, isMobileWeb ? styles.mobileWebSlideImage : null]}
                   resizeMode="contain"
                 />
               </View>
@@ -925,6 +929,7 @@ export default function ProductDetailScreen() {
                   }}
                   style={[
                     styles.dot,
+                    i === activeIdx ? styles.activeDot : null,
                     { backgroundColor: i === activeIdx ? colors.primary : colors.border },
                   ]}
                 />
@@ -951,6 +956,7 @@ export default function ProductDetailScreen() {
             }}
             style={[
               styles.backBtn,
+              isMobileWeb ? styles.mobileWebGalleryAction : null,
               {
                 top: isDesktopWeb ? 14 : topOffset + 8,
                 backgroundColor: colors.card,
@@ -968,6 +974,7 @@ export default function ProductDetailScreen() {
             }}
             style={[
               styles.wishlistBtn,
+              isMobileWeb ? styles.mobileWebGalleryAction : null,
               {
                 top: isDesktopWeb ? 14 : topOffset + 8,
                 backgroundColor: colors.card,
@@ -993,7 +1000,7 @@ export default function ProductDetailScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.thumbStrip}
-              style={[styles.thumbBar, { backgroundColor: colors.background }]}
+              style={[styles.thumbBar, isMobileWeb ? styles.mobileWebThumbBar : null, { backgroundColor: colors.background }]}
             >
               {allImages.map((img, i) => (
                 <Pressable
@@ -1021,6 +1028,7 @@ export default function ProductDetailScreen() {
         <View
           style={[
             styles.content,
+            isMobileWeb ? styles.mobileWebContent : null,
             { backgroundColor: colors.background },
             isDesktopWeb
               ? {
@@ -1036,6 +1044,7 @@ export default function ProductDetailScreen() {
           <Text
             style={[
               styles.name,
+              isMobileWeb ? styles.mobileWebName : null,
               { color: colors.foreground },
               isDesktopWeb ? styles.desktopName : null,
             ]}
@@ -1079,7 +1088,8 @@ export default function ProductDetailScreen() {
             </View>
           ) : null}
 
-          <View style={styles.priceRow}>
+          <View style={[styles.priceRow, isMobileWeb ? styles.mobileWebPriceRow : null,
+            isMobileWeb ? { backgroundColor: colors.primary + "0A", borderColor: colors.primary + "25" } : null]}>
             <Text
               style={[
                 styles.price,
@@ -1089,6 +1099,7 @@ export default function ProductDetailScreen() {
                     : colors.primary,
                 },
                 isDesktopWeb ? styles.desktopPrice : null,
+                isMobileWeb ? styles.mobileWebPrice : null,
               ]}
             >
               {product.price} شيكل
@@ -1202,7 +1213,7 @@ export default function ProductDetailScreen() {
 
           {hasColorVariants && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              <Text style={[styles.sectionTitle, isMobileWeb ? styles.mobileWebSectionTitle : null, { color: colors.foreground }]}>
                 اللون {needsColor ? "(مطلوب)" : ""}
               </Text>
               <View style={styles.sizesRow}>
@@ -1228,6 +1239,7 @@ export default function ProductDetailScreen() {
                     }}
                     style={[
                       styles.colorSwatchOuter,
+                      isMobileWeb ? styles.mobileWebColorSwatch : null,
                       {
                         borderColor: selectedColor === cv.color ? colors.primary : colors.border,
                         opacity: isOutOfStock ? 0.5 : 1,
@@ -1235,7 +1247,7 @@ export default function ProductDetailScreen() {
                     ]}
                   >
                     <View style={[styles.colorSwatchInner, { backgroundColor: cv.hex }]} />
-                    <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 10 }}>{cv.color}</Text>
+                    <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: isMobileWeb ? 12 : 10 }}>{cv.color}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -1244,7 +1256,7 @@ export default function ProductDetailScreen() {
 
           {hasColorVariants && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              <Text style={[styles.sectionTitle, isMobileWeb ? styles.mobileWebSectionTitle : null, { color: colors.foreground }]}>
                 المقاس {needsSize ? "(مطلوب)" : ""}
               </Text>
               <View style={styles.sizesRow}>
@@ -1286,6 +1298,7 @@ export default function ProductDetailScreen() {
                       }}
                       style={[
                         styles.sizeChip,
+                        isMobileWeb ? styles.mobileWebSizeChip : null,
                         styles.sizeChipWithMark,
                         {
                           backgroundColor: selectedSize === s.size ? colors.primary : colors.card,
@@ -1311,7 +1324,7 @@ export default function ProductDetailScreen() {
 
           {!hasColorVariants && product.sizes && product.sizes.length > 0 && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              <Text style={[styles.sectionTitle, isMobileWeb ? styles.mobileWebSectionTitle : null, { color: colors.foreground }]}>
                 المقاس {needsSize ? "(مطلوب)" : ""}
               </Text>
               <View style={styles.sizesRow}>
@@ -1321,6 +1334,7 @@ export default function ProductDetailScreen() {
                     onPress={() => !isOutOfStock && setSelectedSize(size)}
                     style={[
                       styles.sizeChip,
+                        isMobileWeb ? styles.mobileWebSizeChip : null,
                       {
                         backgroundColor: selectedSize === size ? colors.primary : colors.card,
                         borderColor: selectedSize === size ? colors.primary : colors.border,
@@ -1343,10 +1357,10 @@ export default function ProductDetailScreen() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+            <Text style={[styles.sectionTitle, isMobileWeb ? styles.mobileWebSectionTitle : null, { color: colors.foreground }]}>
               تفاصيل المنتج
             </Text>
-            <Text style={[styles.description, { color: colors.mutedForeground }]}>
+            <Text style={[styles.description, isMobileWeb ? styles.mobileWebDescription : null, { color: colors.mutedForeground }]}>
               {product.description}
             </Text>
           </View>
@@ -1495,6 +1509,7 @@ export default function ProductDetailScreen() {
       <View
         style={[
           styles.footer,
+          isMobileWeb ? styles.mobileWebFooter : null,
           {
             backgroundColor: colors.background,
             borderColor: colors.border,
@@ -1561,6 +1576,7 @@ export default function ProductDetailScreen() {
               onPress={handleAddToCart}
               style={[
                 styles.addBtn,
+                isMobileWeb ? styles.mobileWebAddBtn : null,
                 { backgroundColor: colors.primary },
               ]}
             >
@@ -1723,6 +1739,22 @@ const styles = StyleSheet.create({
   backToShop: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, marginTop: 8 },
   backToShopText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   carouselWrapper: { position: "relative" },
+  mobileWebCarousel: {
+    backgroundColor: "#FFFFFF",
+    paddingTop: 4,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E6EEF7",
+  },
+  mobileWebSlideImage: { width: "96%", height: "96%" },
+  mobileWebGalleryAction: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#E5EDF6",
+  },
+  mobileWebThumbBar: { marginTop: 2, marginBottom: 2 },
   imageSlide: {
     width: SCREEN_WIDTH,
     height: Platform.OS === "web" ? 420 : 340,
@@ -1739,6 +1771,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
+  activeDot: { width: 20, borderRadius: 5 },
   thumbBar: { maxHeight: 72 },
   thumbStrip: { paddingHorizontal: 12, gap: 8, paddingVertical: 6 },
   thumb: {
@@ -1773,6 +1806,18 @@ const styles = StyleSheet.create({
   discountText: { color: "#fff", fontWeight: "700", fontSize: 13 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, gap: 8, width: "100%", maxWidth: 760, alignSelf: "center" },
   name: { fontSize: 16, fontWeight: "800", textAlign: "right", lineHeight: 21 },
+  mobileWebContent: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24, gap: 11 },
+  mobileWebName: { fontSize: 20, lineHeight: 29 },
+  mobileWebPriceRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 17,
+    borderWidth: 1,
+    minHeight: 56,
+    marginTop: 2,
+    marginBottom: 3,
+  },
+  mobileWebPrice: { fontSize: 23, lineHeight: 32 },
   desktopName: {
     fontSize: 24,
     lineHeight: 34,
@@ -1815,6 +1860,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionTitle: { fontSize: 12, fontWeight: "700", textAlign: "right" },
+  mobileWebSectionTitle: { fontSize: 14, fontWeight: "800", lineHeight: 22, marginTop: 5, marginBottom: 2 },
+  mobileWebSizeChip: { minHeight: 40, minWidth: 49, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  mobileWebColorSwatch: { minHeight: 42, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
+  mobileWebDescription: { fontSize: 14, lineHeight: 23 },
   description: { fontSize: 13, textAlign: "right", lineHeight: 20 },
   detailCard: {
     borderWidth: 1,
@@ -1873,6 +1922,16 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   footer: { paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1 },
+  mobileWebFooter: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    shadowColor: "#234162",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  mobileWebAddBtn: { minHeight: 54, borderRadius: 17 },
   addBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: 16 },
   addBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   outOfStockBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: 16, borderWidth: 1 },
