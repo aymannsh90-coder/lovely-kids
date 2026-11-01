@@ -316,16 +316,16 @@ const styles = StyleSheet.create({
   outer: {
     width: "100%",
     paddingHorizontal: 16,
-    marginBottom: 20,
+    marginBottom: 22,
     alignItems: "center",
   },
   slider: {
     width: "100%",
     maxWidth: 1200,
     aspectRatio: 2,
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: "hidden",
-    backgroundColor: "#e5e7eb",
+    backgroundColor: "#EAF5FF",
     position: "relative",
   },
   slide: {
