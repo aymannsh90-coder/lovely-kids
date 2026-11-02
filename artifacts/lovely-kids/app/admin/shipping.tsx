@@ -52,7 +52,7 @@ export default function AdminShippingScreen() {
     const currentZones = settings.shippingZones ?? [];
     // Public settings omit companyCost. Never silently replace it with the
     // customer price when the admin session has not finished loading.
-    if (currentZones.some((_, index) => !/^\\d+$/.test(companyDrafts[index] ?? ""))) {
+    if (currentZones.some((_, index) => !/^\d+$/.test(companyDrafts[index] ?? ""))) {
       setSaveError("تكلفة الشركة غير محمّلة أو غير مكتملة. تأكد من ظهور التكلفة الفعلية لكل منطقة قبل الحفظ.");
       return;
     }
