@@ -79,6 +79,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "staff-online-orders",
+    group: "sales",
+    path: "/orders",
+    title: "الطلبات الإلكترونية",
+    description: "قائمة الطلبات وحالاتها وفق صلاحيات الموظف.",
+    icon: "📦",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "manual-online-order",
     group: "sales",
     path: "/sales/manual-order",
