@@ -104,7 +104,10 @@ async function requireOwner(
   const staffAuthorized = !user.isAdmin && request.method === "GET" &&
     new URL(request.url).pathname === "/api/pos/finance/card-settlements" &&
     await userHasPermission(db, user, "banking.view");
-  if (!user.isOwner && !staffAuthorized) {
+  const staffCreate = !user.isAdmin && request.method === "POST" &&
+    new URL(request.url).pathname === "/api/pos/finance/card-settlements" &&
+    await userHasPermission(db, user, "banking.create");
+  if (!user.isOwner && !staffAuthorized && !staffCreate) {
     return {
       ok: false as const,
       response: json(
