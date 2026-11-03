@@ -31,7 +31,7 @@ const permissionGroups = [
   { title: "التقارير", items: [["reports.sales", "أداء المنتجات"], ["reports.financial", "الميزان والكشوف والذمم"], ["reports.cost", "الربح والتكلفة"]] },
   { title: "المصاريف", items: [["finance.expenses.view", "عرض التصنيفات"], ["finance.expenses.create", "إضافة مصروف"]] },
   { title: "شركات التوصيل", items: [["delivery.view", "عرض حسابات التوصيل"], ["delivery.manage", "إدارة الشركات"], ["delivery.settle", "إنشاء تسوية"], ["delivery.reverse", "عكس تسوية"]] },
-  { title: "الطلبات الإلكترونية", items: [["orders.view", "عرض جميع الطلبات"], ["orders.create", "إنشاء طلب يدوي"], ["orders.edit", "تعديل الطلبات وحالاتها"], ["orders.cancel", "إلغاء طلب جديد"], ["orders.confirm-payment", "تأكيد الدفع"], ["orders.delivery-cost", "تعديل تكلفة شركة التوصيل للطلب"], ["orders.courier.cash", "استلام نقدية المندوب"], ["orders.courier.reverse", "عكس استلام المندوب"]] },
+  { title: "الطلبات الإلكترونية", items: [["orders.view", "عرض جميع الطلبات"], ["orders.create", "إنشاء طلب يدوي"], ["orders.edit", "تغيير حالة الطلب"], ["orders.cancel", "إلغاء طلب جديد"], ["orders.confirm-payment", "تأكيد الدفع"], ["orders.delivery-cost", "تعديل تكلفة شركة التوصيل للطلب"], ["orders.courier.cash", "استلام نقدية المندوب"], ["orders.courier.reverse", "عكس استلام المندوب"]] },
 ] as const;
 const presets: Record<Role, string[]> = {
   cashier: ["sales.view", "sales.create", "cash.view"],
