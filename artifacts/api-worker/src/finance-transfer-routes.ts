@@ -16,7 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
-import { userHasPermission } from "./staff-permissions";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 
@@ -284,7 +284,7 @@ async function requireOwner(
   const allowedWrite = request.method === "POST" &&
     ["/api/pos/finance/cash-accounts", "/api/pos/finance/currency-conversions", "/api/pos/finance/transfers"].includes(path);
   const staffAuthorized = !user.isAdmin && (
-    (readOnly && await userHasPermission(db, user, "banking.view")) ||
+    (readOnly && await userHasAnyPermission(db, user, ["banking.view", "banking.create"])) ||
     (allowedWrite && await userHasPermission(db, user, "banking.create"))
   );
   if (!user.isOwner && !staffAuthorized) {
