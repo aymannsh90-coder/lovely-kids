@@ -341,9 +341,9 @@ export default function AppRouter() {
         <Route
           path="reports/financial-statements"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.financial","reports.cost"]} requireAll>
               <FinancialStatementsReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
@@ -369,18 +369,18 @@ export default function AppRouter() {
         <Route
           path="reports/sales"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost"]}>
               <SalesAnalyticsPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="reports/inventory-valuation"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost","inventory.cost"]}>
               <InventoryValuationReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
@@ -396,27 +396,27 @@ export default function AppRouter() {
         <Route
           path="reports/inventory-intelligence"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost"]}>
               <InventoryIntelligenceReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="reports/product-analytics"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.sales"]}>
               <ProductAnalyticsReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="reports"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost"]}>
               <GrossProfitReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
       </Route>
