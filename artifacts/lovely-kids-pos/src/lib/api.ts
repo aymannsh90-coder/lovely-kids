@@ -5841,6 +5841,11 @@ export interface PosPurchaseReturnPreview {
 export interface PosPurchaseReturnDetail {
   alreadyCreated?: boolean;
   alreadyVoided?: boolean;
+  purchase: {
+    publicId: string;
+    supplierName: string;
+    supplierInvoiceNumber: string | null;
+  };
   purchaseReturn: {
     id: number;
     publicId: string;
