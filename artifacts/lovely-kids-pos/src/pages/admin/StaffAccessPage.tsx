@@ -24,7 +24,7 @@ const permissionGroups = [
   { title: "المبيعات", items: [["sales.view", "عرض الفواتير"], ["sales.create", "إجراء بيع"], ["sales.edit", "تعديل فاتورة"], ["sales.void", "إلغاء بيع"], ["sales.returns", "مردود المبيعات"], ["sales.exchange", "إجراء فاتورة تبديل (محل)"], ["sales.exchange.online", "تبديل طلب أونلاين"], ["sales.exchange.void", "إلغاء فاتورة تبديل"]] },
   { title: "الصندوق", items: [["cash.view", "عرض الصندوق"], ["cash.open", "فتح الصندوق"], ["cash.close", "إغلاق الصندوق"]] },
   { title: "المخزون", items: [["inventory.view", "عرض المخزون"], ["inventory.edit", "تعديل الأصناف"], ["inventory.cost", "مشاهدة التكلفة"]] },
-  { title: "المشتريات", items: [["purchases.view", "عرض المشتريات"], ["purchases.create", "إضافة فاتورة"], ["purchases.edit", "تعديل فاتورة"]] },
+  { title: "المشتريات", items: [["purchases.view", "عرض المشتريات"], ["purchases.create", "إضافة فاتورة"]] },
   { title: "الزبائن والموردون", items: [["parties.view", "عرض"], ["parties.edit", "تعديل"]] },
   { title: "السندات", items: [["vouchers.view", "عرض"], ["vouchers.create", "إضافة"], ["vouchers.void", "إلغاء"]] },
   { title: "البنوك", items: [["banking.view", "عرض"], ["banking.create", "إنشاء حركة"]] },
