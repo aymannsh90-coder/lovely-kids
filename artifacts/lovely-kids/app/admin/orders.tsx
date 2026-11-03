@@ -3223,7 +3223,40 @@ export default function AdminOrdersScreen() {
     setPrintingId(order.id);
 
     try {
-      const html = await createOrderPrintHtml(order);
+      // Use the same verified historic exchange snapshot as thermal printing.
+      // A replacement order's current items alone cannot identify returned goods.
+      const exchangePrintData = order.exchangePublicId
+        ? await fetchOnlineExchangeStatus(order.exchangePublicId)
+        : null;
+
+      if (order.exchangeOriginalOrderId && !exchangePrintData) {
+        throw new Error("تعذر تحميل تفاصيل التبديل المرتجعة لطباعة A4.");
+      }
+
+      if (
+        exchangePrintData &&
+        (exchangePrintData.exchange.status !== "completed" ||
+          exchangePrintData.exchange.replacementOrderId !== String(order.id) ||
+          exchangePrintData.exchange.publicId !== order.exchangePublicId)
+      ) {
+        throw new Error("بيانات التبديل تغيرت، حدّث قائمة الطلبات قبل الطباعة.");
+      }
+
+      const html = await createOrderPrintHtml({
+        ...order,
+        ...(exchangePrintData
+          ? {
+              exchangeReturnNetMinor: exchangePrintData.exchange.returnNetMinor,
+              exchangeNewNetMinor: exchangePrintData.exchange.newNetMinor,
+              exchangeDifferenceMinor: exchangePrintData.exchange.differenceMinor,
+              exchangeDeliveryChargeMinor: exchangePrintData.exchange.deliveryChargeMinor,
+              exchangeDeliveryBaseChargeMinor: exchangePrintData.exchange.deliveryBaseChargeMinor,
+              exchangeDeliveryDiscountMinor: exchangePrintData.exchange.deliveryDiscountMinor,
+              exchangeSettlementAmountMinor: exchangePrintData.exchange.settlementAmountMinor,
+              exchangeReturnItems: exchangePrintData.returnItems,
+            }
+          : {}),
+      });
 
       if (Platform.OS === "web") {
         if (!printWindow) {
