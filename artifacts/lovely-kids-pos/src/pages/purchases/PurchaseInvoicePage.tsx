@@ -264,6 +264,7 @@ function printPurchaseA4() {
 export default function PurchaseInvoicePage() {
   const {
     token,
+    user,
     session,
     setSession,
     clearAuthentication,
@@ -2319,6 +2320,7 @@ export default function PurchaseInvoicePage() {
   }
 
   async function handleVoidInvoice() {
+    if (!user?.isOwner) return;
     const current = savedPurchase;
 
     if (!current || current.purchase.status === "voided") {
@@ -2589,7 +2591,7 @@ export default function PurchaseInvoicePage() {
           رجوع
         </button>
 
-        {savedPurchase && (
+        {savedPurchase && user?.isOwner && (
           <button
             className="is-danger-action"
             type="button"
