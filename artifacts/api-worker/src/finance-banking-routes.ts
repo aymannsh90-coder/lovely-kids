@@ -277,7 +277,7 @@ async function requirePosUser(
     !user.isOwner &&
     !(request.method === "GET" &&
       ["/api/pos/finance/banking/reference", "/api/pos/finance/bank-accounts"].includes(new URL(request.url).pathname) &&
-      await userHasAnyPermission(db, user, ["banking.view", "banking.create"])) &&
+      await userHasAnyPermission(db, user, ["banking.view", "banking.create", "vouchers.create"])) &&
     !(request.method === "POST" &&
       ["/api/pos/finance/bank-accounts", "/api/pos/finance/exchange-rates"].includes(new URL(request.url).pathname) &&
       await userHasPermission(db, user, "banking.create"))
