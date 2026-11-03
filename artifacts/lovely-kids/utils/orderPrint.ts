@@ -11,8 +11,28 @@ export interface PrintableOrderItem {
   color?: string;
 }
 
+export interface PrintableExchangeReturnItem {
+  productNameAr: string;
+  productCode?: string | null;
+  barcode?: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  returnNetMinor: number;
+}
+
 export interface PrintableOrder {
   id: number;
+  exchangeOriginalOrderId?: number | null;
+  exchangePublicId?: string | null;
+  exchangeReturnNetMinor?: number | null;
+  exchangeNewNetMinor?: number | null;
+  exchangeDifferenceMinor?: number | null;
+  exchangeDeliveryChargeMinor?: number | null;
+  exchangeDeliveryBaseChargeMinor?: number | null;
+  exchangeDeliveryDiscountMinor?: number | null;
+  exchangeSettlementAmountMinor?: number | null;
+  exchangeReturnItems?: PrintableExchangeReturnItem[];
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -60,6 +80,10 @@ function orderUrl(id: number): string {
   return `${origin}/admin/orders?orderId=${id}`;
 }
 
+function formatMinor(value: number): string {
+  return `0`;
+}
+
 export async function createOrderPrintHtml(
   order: PrintableOrder,
 ): Promise<string> {
@@ -103,6 +127,109 @@ export async function createOrderPrintHtml(
       `;
     })
     .join("");
+
+
+  const isOnlineExchange =
+    Number.isSafeInteger(order.exchangeOriginalOrderId) &&
+    Number(order.exchangeOriginalOrderId) > 0;
+
+  if (isOnlineExchange) {
+    const exchangeAmounts = [
+      order.exchangeReturnNetMinor,
+      order.exchangeNewNetMinor,
+      order.exchangeDifferenceMinor,
+      order.exchangeDeliveryChargeMinor,
+      order.exchangeDeliveryBaseChargeMinor,
+      order.exchangeDeliveryDiscountMinor,
+      order.exchangeSettlementAmountMinor,
+    ];
+
+    if (exchangeAmounts.some((value) => !Number.isSafeInteger(value))) {
+      throw new Error(
+        "بيانات تبديل الطلب غير مكتملة. حدّث صفحة الطلبات قبل طباعة A4.",
+      );
+    }
+
+    if (
+      !Array.isArray(order.exchangeReturnItems) ||
+      order.exchangeReturnItems.length === 0 ||
+      order.exchangeReturnItems.some(
+        (item) =>
+          !item ||
+          typeof item.productNameAr !== "string" ||
+          !item.productNameAr.trim() ||
+          !Number.isSafeInteger(item.quantity) ||
+          item.quantity <= 0 ||
+          !Number.isSafeInteger(item.returnNetMinor) ||
+          item.returnNetMinor < 0,
+      )
+    ) {
+      throw new Error("أصناف التبديل المرتجعة غير مكتملة، أعد تحميل الطلب قبل الطباعة.");
+    }
+
+    const returnedTotal = order.exchangeReturnItems.reduce(
+      (sum, item) => sum + item.returnNetMinor,
+      0,
+    );
+
+    if (returnedTotal !== order.exchangeReturnNetMinor) {
+      throw new Error("قيمة الأصناف المرتجعة لا تطابق ملخص التبديل.");
+    }
+
+    const base = Number(order.exchangeDeliveryBaseChargeMinor);
+    const discount = Number(order.exchangeDeliveryDiscountMinor);
+    const charge = Number(order.exchangeDeliveryChargeMinor);
+
+    if (base < 0 || discount < 0 || base < discount || base - discount !== charge) {
+      throw new Error("معلومات توصيل التبديل وخصمه غير متطابقة.");
+    }
+  }
+
+  // Print the historic return snapshot, not current stock or the original order.
+  const returnedItemRows = isOnlineExchange
+    ? (order.exchangeReturnItems ?? [])
+        .map((item) => {
+          const variants = [item.color, item.size]
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .map(escapeHtml)
+            .join(" — ");
+          const code = item.productCode?.trim() || item.barcode?.trim() || "—";
+
+          return `
+            <tr>
+              <td>
+                <strong>${escapeHtml(item.productNameAr)}</strong>
+                ${variants ? `<div class="muted">${variants}</div>` : ""}
+              </td>
+              <td>${escapeHtml(code)}</td>
+              <td>${item.quantity}</td>
+              <td>${formatMinor(item.returnNetMinor)}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : "";
+
+  const exchangeSettlementValue = Number(order.exchangeSettlementAmountMinor ?? 0);
+  const exchangeSettlementLabel = exchangeSettlementValue > 0
+    ? "المطلوب من الزبون"
+    : exchangeSettlementValue < 0
+      ? "مستحق للزبون"
+      : "صافي التبديل";
+
+  const exchangeTotalsHtml = isOnlineExchange
+    ? `
+        <div class="row"><strong>قيمة الأصناف الجديدة:</strong> ${formatMinor(Number(order.exchangeNewNetMinor))}</div>
+        <div class="row"><strong>قيمة الأصناف المرتجعة:</strong> -${formatMinor(Number(order.exchangeReturnNetMinor))}</div>
+        <div class="row"><strong>فرق البضاعة:</strong> ${formatMinor(Number(order.exchangeDifferenceMinor))}</div>
+        <div class="row"><strong>التوصيل الأساسي:</strong> ${formatMinor(Number(order.exchangeDeliveryBaseChargeMinor))}</div>
+        ${Number(order.exchangeDeliveryDiscountMinor) > 0
+          ? `<div class="row"><strong>خصم التوصيل:</strong> -${formatMinor(Number(order.exchangeDeliveryDiscountMinor))}</div>`
+          : ""}
+        <div class="row"><strong>التوصيل بعد الخصم:</strong> ${formatMinor(Number(order.exchangeDeliveryChargeMinor))}</div>
+        <div class="total">${exchangeSettlementLabel}: ${formatMinor(Math.abs(exchangeSettlementValue))}</div>
+      `
+    : "";
 
   const createdAt = new Date(order.createdAt).toLocaleString("ar-EG");
 
@@ -259,6 +386,11 @@ export async function createOrderPrintHtml(
   <div class="header">
     <div class="brand">Lovely Kids</div>
     <div class="order-number">طلب رقم #${order.id}</div>
+    ${isOnlineExchange
+      ? `<div class="box-title">طلب تبديل أونلاين</div>
+         <div>بدل الطلب الأصلي #${escapeHtml(order.exchangeOriginalOrderId)}</div>
+         ${order.exchangePublicId ? `<div>عملية التبديل: ${escapeHtml(order.exchangePublicId)}</div>` : ""}`
+      : ""}
     <div class="date">${escapeHtml(createdAt)}</div>
   </div>
 
@@ -279,8 +411,20 @@ export async function createOrderPrintHtml(
     }
   </div>
 
+  ${isOnlineExchange
+    ? `
+      <div class="box">
+        <div class="box-title">الأصناف المرتجعة من الطلب #${escapeHtml(order.exchangeOriginalOrderId)}</div>
+        <table>
+          <thead><tr><th>الصنف المرتجع</th><th>الكود</th><th>الكمية</th><th>القيمة</th></tr></thead>
+          <tbody>${returnedItemRows}</tbody>
+        </table>
+      </div>
+    `
+    : ""}
+
   <div class="box">
-    <div class="box-title">المنتجات</div>
+    <div class="box-title">${isOnlineExchange ? "الأصناف الجديدة بالطلب البديل" : "المنتجات"}</div>
     <table>
       <thead>
         <tr>
@@ -295,7 +439,8 @@ export async function createOrderPrintHtml(
     </table>
 
     <div class="totals">
-      ${
+      ${isOnlineExchange ? exchangeTotalsHtml : `
+      ${ 
         hasDiscountCode
           ? `
             <div class="row"><strong>كود الخصم:</strong> ${escapeHtml(order.discountCode)} — ${escapeHtml(order.discountCodeLabel)} (${Number(order.discountCodePercent)}%)</div>
@@ -321,6 +466,7 @@ export async function createOrderPrintHtml(
               : ""
       }
       <div class="total">${isLocalNablusDelivery && order.deliveryCompanyCost == null ? "الإجمالي المبدئي" : "الإجمالي"}: ${order.totalPrice} ₪</div>
+      `}
     </div>
   </div>
 
