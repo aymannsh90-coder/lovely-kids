@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
 import RequireStaffGrant from "../guards/RequireStaffGrant";
+import StaffOrdersPage from "../pages/sales/StaffOrdersPage";
 import RequireFinancialReports from "../guards/RequireFinancialReports";
 import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -98,6 +99,7 @@ export default function AppRouter() {
 
       <Route element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="orders" element={<StaffOrdersPage />} />
         <Route path="admin" element={<AdminPanelPage />} />
         <Route path="access" element={<RequireOwner><StaffAccessPage /></RequireOwner>} />
 
