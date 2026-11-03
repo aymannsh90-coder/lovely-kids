@@ -85,6 +85,7 @@ function validAmount(value: string) {
 export default function JournalVoucherPage() {
   const {
     token,
+    user,
     session,
     setSession,
     clearAuthentication,
@@ -168,13 +169,9 @@ export default function JournalVoucherPage() {
                 "active",
             },
           ),
-          getPosEmployees(
-            token,
-            {
-              status:
-                "active",
-            },
-          ),
+          user?.isOwner
+            ? getPosEmployees(token, { status: "active" })
+            : Promise.resolve({ results: [] as PosEmployee[] }),
           getPosSuppliers(
             token,
             {
@@ -182,9 +179,7 @@ export default function JournalVoucherPage() {
                 "active",
             },
           ),
-          getDeliveryCompanies(
-            token,
-          ),
+          getDeliveryCompanies(token).catch(() => [] as PosDeliveryCompany[]),
           getPosExpenseCategories(
             token,
           ),
