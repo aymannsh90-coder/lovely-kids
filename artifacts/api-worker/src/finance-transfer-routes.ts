@@ -284,7 +284,7 @@ async function requireOwner(
   const allowedWrite = request.method === "POST" &&
     ["/api/pos/finance/cash-accounts", "/api/pos/finance/currency-conversions", "/api/pos/finance/transfers"].includes(path);
   const staffAuthorized = !user.isAdmin && (
-    (readOnly && await userHasAnyPermission(db, user, ["banking.view", "banking.create"])) ||
+    (readOnly && await userHasAnyPermission(db, user, ["banking.view", "banking.create", "vouchers.create"])) ||
     (allowedWrite && await userHasPermission(db, user, "banking.create"))
   );
   if (!user.isOwner && !staffAuthorized) {
