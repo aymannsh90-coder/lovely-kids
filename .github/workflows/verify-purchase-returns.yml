@@ -5,6 +5,8 @@ on:
     paths:
       - 'artifacts/api-worker/src/purchase-return-*'
       - 'artifacts/api-worker/src/pos-purchase-return-*'
+      - 'artifacts/lovely-kids-pos/src/pages/purchases/PurchaseReturnsPage.tsx'
+      - 'artifacts/lovely-kids-pos/src/lib/scannerKeyboard.test.mjs'
       - 'lib/db/migrations/20261103_create_purchase_returns.sql'
       - '.github/workflows/verify-purchase-returns.yml'
 jobs:
@@ -39,6 +41,8 @@ jobs:
           node-version: '22'
       - name: Unit tests for refund rounding and stock distributions
         run: node --experimental-strip-types --test artifacts/api-worker/src/purchase-return-rules.test.mjs
+      - name: Arabic keyboard barcode scanner regression test
+        run: node --experimental-strip-types --test artifacts/lovely-kids-pos/src/lib/scannerKeyboard.test.mjs
       - name: Apply purchase return SQL on disposable PostgreSQL
         run: |
           psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/purchase-return-migration.fixture.sql
