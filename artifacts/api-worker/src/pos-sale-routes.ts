@@ -1587,7 +1587,9 @@ async function handleInventoryProductCard(
       }
     | null = null;
 
-  if (auth.user.isOwner) {
+  const canReadInventoryCost = auth.user.isOwner ||
+    (!auth.user.isAdmin && await userHasPermission(db, auth.user, "inventory.cost"));
+  if (canReadInventoryCost) {
     const costRows = await db
       .select({
         quantityOnHand: productCostStateTable.quantityOnHand,
@@ -1635,7 +1637,7 @@ async function handleInventoryProductCard(
     ),
     movements,
     suppliers,
-    ...(auth.user.isOwner ? { cost: ownerCost } : {}),
+    ...(canReadInventoryCost ? { cost: ownerCost } : {}),
   });
 }
 
