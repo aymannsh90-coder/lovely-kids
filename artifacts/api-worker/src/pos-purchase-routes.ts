@@ -16,6 +16,7 @@ import {
 import { and, asc, desc, eq, gt, lt, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 import {
   ensureSupplierPayableControlAccount,
@@ -345,6 +346,13 @@ function allocateIntegerTarget(
   );
 }
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/purchases/latest", permission: "purchases.view" },
+  { method: "GET", path: "/api/pos/purchases/by-public-id", permission: "purchases.view" },
+  { method: "POST", path: "/api/pos/purchases", permission: "purchases.create" },
+  { method: "POST", path: "/api/pos/purchases/void", permission: "purchases.void" },
+];
+
 async function requirePurchaseOwner(
   request: Request,
   db: Db,
@@ -359,7 +367,7 @@ async function requirePurchaseOwner(
     };
   }
 
-  if (!user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
