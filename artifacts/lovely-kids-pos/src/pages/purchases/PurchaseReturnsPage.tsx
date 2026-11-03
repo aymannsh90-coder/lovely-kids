@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { usePosRuntime } from "../../app/pos-context";
+import PurchaseReturnA4 from "../../components/PurchaseReturnA4";
 import { captureScannerKeyboardEvent, createScannerKeyboardBuffer } from "../../lib/scannerKeyboard";
 import { createPosPurchaseReturn, getPosPurchaseReturnDetail, getPosPurchaseReturnHistory, getPosPurchaseReturnPreview, voidPosPurchaseReturn, type PosPurchaseReturnDetail, type PosPurchaseReturnPreview } from "../../lib/api";
 import "./PurchaseReturnsPage.css";
@@ -175,6 +176,17 @@ export default function PurchaseReturnsPage() {
     catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
+  function printReturnA4() {
+    if (!saved || busy) return;
+    document.body.classList.add("pret-a4-printing");
+    const cleanup = () => document.body.classList.remove("pret-a4-printing");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+  }
+
+  // Make sure the print-only class cannot leak into another POS page.
+  useEffect(() => () => document.body.classList.remove("pret-a4-printing"), []);
+
   async function cancelReturn() {
     if (!saved || saved.purchaseReturn.status === "voided" || busy) return;
     if (voidReason.trim().length < 2) { setError("أدخل سبب الإلغاء"); return; }
@@ -301,13 +313,14 @@ export default function PurchaseReturnsPage() {
       <div className="pret-actions"><strong>قيمة المورد: {formatMoney(saved.purchaseReturn.refundAmountMinor)}</strong>
         <strong>تكلفة المخزون: {formatMoney(saved.purchaseReturn.inventoryCostMinor)}</strong></div>
       <div className="pret-toolbar pret-no-print">
-        <button type="button" onClick={() => window.print()}>🖨 طباعة A4</button>
+        <button type="button" onClick={printReturnA4} disabled={busy}>🖨 معاينة وطباعة A4</button>
         {saved.purchaseReturn.status === "completed" && <>
           <label>سبب الإلغاء<input value={voidReason} onChange={e => setVoidReason(e.target.value)} /></label>
           <button type="button" disabled={busy} onClick={() => void cancelReturn()}>إلغاء المردود وعكس حركته</button>
         </>}
       </div>
     </section>}
+    {saved && <PurchaseReturnA4 detail={saved} />}
     <section className="pret-card pret-no-print">
       <div className="pret-actions"><h2>سجل مردودات المشتريات</h2>
         <button type="button" disabled={busy} onClick={() => void refreshHistory(preview?.purchase.publicId).catch(e => setError(errorMessage(e)))}>تحديث السجل</button></div>
