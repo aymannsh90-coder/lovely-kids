@@ -350,8 +350,10 @@ async function handleListSuppliers(
     .orderBy(asc(suppliersTable.name))
     .limit(500);
 
+  const canSeeFinance = auth.user.isOwner ||
+    (!auth.user.isAdmin && await userHasPermission(db, auth.user, "reports.financial"));
   const financeBySupplier =
-    auth.user.isOwner
+    canSeeFinance
       ? await getSupplierFinanceSummaries(db)
       : new Map<number, SupplierFinanceSummary>();
 
@@ -386,7 +388,7 @@ async function handleListSuppliers(
         supplier,
         financeBySupplier.get(supplier.id) ??
           EMPTY_SUPPLIER_FINANCE,
-        auth.user.isOwner,
+        canSeeFinance,
       ),
     ),
   });
