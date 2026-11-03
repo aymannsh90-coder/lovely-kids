@@ -57,7 +57,14 @@ async function requireOwner(
     env,
   );
 
-  if (!owner || (!owner.isOwner && (owner.isAdmin || !(request.method === "GET" && new URL(request.url).pathname === "/api/owner/costs/products" && await userHasPermission(db, owner, "inventory.cost")))) {
+  if (
+    !owner ||
+    (!owner.isOwner &&
+      (owner.isAdmin ||
+        request.method !== "GET" ||
+        new URL(request.url).pathname !== "/api/owner/costs/products" ||
+        !(await userHasPermission(db, owner, "inventory.cost"))))
+  ) {
     return {
       ok: false as const,
       response: json(
