@@ -22,6 +22,7 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/inventory/products/new": ["inventory.edit"],
     "/inventory/stock-check": ["inventory.view", "inventory.edit"],
     "/purchases/new": ["purchases.create"],
+    "/purchases/history": ["purchases.view", "purchases.create"],
     "/purchases/returns": ["purchases.view"],
     "/parties/customers": ["parties.view", "parties.edit"],
     "/parties/suppliers": ["parties.view", "parties.edit", "purchases.view", "purchases.create"],
