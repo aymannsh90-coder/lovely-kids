@@ -21,7 +21,7 @@ export default function ProductEditorPage() {
   const [searchParams] = useSearchParams();
   const { token, user } = usePosRuntime();
 
-  const canManage = user?.isAdmin === true || user?.isOwner === true;
+  const canManage = user?.isAdmin === true || user?.isOwner === true || Boolean(user?.staffEnabled && user?.permissions?.includes("inventory.edit"));
   const copyFrom = searchParams.get("copyFrom")?.trim() || "";
 
   const editorUrl = useMemo(() => {
