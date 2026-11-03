@@ -5859,6 +5859,7 @@ export interface PosPurchaseReturnDetail {
     reason: string;
     notes: string | null;
     createdAt: string;
+    voidedAt: string | null;
     voidReason: string | null;
   };
   items: Array<{
