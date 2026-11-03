@@ -191,11 +191,33 @@ async function detail(db: Db | Tx, id: number) {
   const sourceItems = items.length ? await db.select({
     id: posPurchaseItemsTable.id,
     name: posPurchaseItemsTable.productNameAr,
+    productCode: posPurchaseItemsTable.productCode,
+    productImage: posPurchaseItemsTable.productImage,
   }).from(posPurchaseItemsTable).where(inArray(posPurchaseItemsTable.id, [...new Set(items.map(item => item.purchaseItemId))])) : [];
-  const names = new Map(sourceItems.map(item => [item.id, item.name]));
-  return { purchaseReturn, items: items.map(item => ({
-    ...item, productName: names.get(item.purchaseItemId) ?? "صنف غير معروف",
-  })) };
+  const sourceItemsById = new Map(sourceItems.map(item => [item.id, item]));
+  const purchaseInfo = await db.select({
+    publicId: posPurchasesTable.publicId,
+    supplierInvoiceNumber: posPurchasesTable.supplierInvoiceNumber,
+    supplierName: suppliersTable.name,
+  }).from(posPurchasesTable)
+    .innerJoin(suppliersTable, eq(suppliersTable.id, posPurchasesTable.supplierId))
+    .where(eq(posPurchasesTable.id, purchaseReturn.purchaseId)).limit(1);
+  const purchase = purchaseInfo[0];
+  if (!purchase) throw new ReturnError("فاتورة المشتريات الأصلية غير موجودة", 409);
+  return {
+    purchaseReturn,
+    purchase: {
+      publicId: purchase.publicId,
+      supplierName: purchase.supplierName,
+      supplierInvoiceNumber: purchase.supplierInvoiceNumber,
+    },
+    items: items.map(item => ({
+      ...item,
+      productName: sourceItemsById.get(item.purchaseItemId)?.name ?? "صنف غير معروف",
+      productCode: sourceItemsById.get(item.purchaseItemId)?.productCode ?? null,
+      productImage: sourceItemsById.get(item.purchaseItemId)?.productImage ?? null,
+    })),
+  };
 }
 
 async function handleCreate(request: Request, db: Db, env: Env) {

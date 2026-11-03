@@ -33,3 +33,57 @@
 .pret-option-match-label{display:inline-block;margin-right:9px;font-size:12px;color:#195a91}
 .pret-search-empty{border:1px dashed #cfdae5;border-radius:12px;padding:18px;color:#54677d;text-align:center}
 .pret-search-warning{margin:10px 0 0;padding:10px;border-radius:8px;background:#fff4de;color:#775118;font-size:13px;font-weight:650}
+
+/* A4 purchase-return print document is rendered in a body portal, outside the POS shell. */
+.pret-a4-sheet{display:none;color:#14253a;background:#fff;font-family:Arial,Tahoma,sans-serif;direction:rtl}
+@media print{
+  @page{size:A4 portrait;margin:12mm 11mm}
+  body.pret-a4-printing{background:#fff!important;margin:0!important;padding:0!important}
+  body.pret-a4-printing > :not(.pret-a4-sheet){display:none!important}
+  body.pret-a4-printing > .pret-a4-sheet{
+    display:block!important;position:static!important;width:auto!important;
+    min-height:0!important;margin:0!important;padding:0!important;
+    box-shadow:none!important;border:0!important;overflow:visible!important;
+    color:#172538!important;background:#fff!important;font-size:11px;line-height:1.6;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact
+  }
+  .pret-a4-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #233c5d;padding:0 0 14px;margin-bottom:14px}
+  .pret-a4-brand,.pret-a4-document{display:flex;flex-direction:column;gap:2px}
+  .pret-a4-brand>strong{font-size:22px;letter-spacing:.3px;color:#183b62}
+  .pret-a4-brand>span{font-size:10px;color:#344458}
+  .pret-a4-document{text-align:left;align-items:flex-start}
+  .pret-a4-document h1{font-size:20px;line-height:1.3;margin:0 0 4px;color:#183b62;font-weight:800}
+  .pret-a4-document>strong{font-size:12px}
+  .pret-a4-status{display:inline-block;border:1px solid #348066;color:#226b54;border-radius:5px;padding:2px 8px;font-weight:700}
+  .pret-a4-status.is-voided{border-color:#b91c1c;color:#b91c1c}
+  .pret-a4-cancel-banner{display:grid;gap:3px;padding:9px 12px;border:1px solid #b91c1c;border-radius:7px;color:#991b1b;margin-bottom:13px;break-inside:avoid}
+  .pret-a4-cancel-banner>strong{font-size:14px}
+  .pret-a4-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 18px;border:1px solid #d9e1ec;border-radius:8px;padding:12px;margin-bottom:15px}
+  .pret-a4-meta>div{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .pret-a4-meta span{font-size:10px;color:#5a687b}
+  .pret-a4-meta strong{font-size:12px;overflow-wrap:anywhere}
+  .pret-a4-table{width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl}
+  .pret-a4-table thead{display:table-header-group}
+  .pret-a4-table th{background:#edf2f8;color:#183b62;font-weight:700}
+  .pret-a4-table th,.pret-a4-table td{padding:8px 5px;text-align:right;vertical-align:middle;border:1px solid #d6dee8;font-size:10px;overflow-wrap:anywhere}
+  .pret-a4-table th:nth-child(1){width:4%}
+  .pret-a4-table th:nth-child(2){width:40%}
+  .pret-a4-table th:nth-child(3){width:10%}
+  .pret-a4-table th:nth-child(4){width:11%}
+  .pret-a4-table th:nth-child(5){width:7%}
+  .pret-a4-table th:nth-child(6),.pret-a4-table th:nth-child(7){width:14%}
+  .pret-a4-table tr{break-inside:avoid}
+  .pret-a4-product{display:flex;align-items:center;gap:7px}
+  .pret-a4-product img{width:34px;height:34px;flex:0 0 34px;border-radius:4px;object-fit:cover}
+  .pret-a4-product>div{display:flex;flex-direction:column;gap:2px}
+  .pret-a4-product small{font-size:9px;color:#5c6878}
+  .pret-a4-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:15px 0;break-inside:avoid}
+  .pret-a4-summary>div{border:1px solid #bdcbdc;background:#f7f9fc;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:4px}
+  .pret-a4-summary span{font-size:10px;color:#506076}
+  .pret-a4-summary strong{font-size:14px;color:#12314f}
+  .pret-a4-description{padding:8px 0;break-inside:avoid}
+  .pret-a4-description p{margin:4px 0}
+  .pret-a4-footer{border-top:1px solid #cdd5df;margin-top:20px;padding-top:12px;font-size:10px;break-inside:avoid}
+  .pret-a4-footer p{margin:0 0 30px;color:#4c5b6c}
+  .pret-a4-footer>div{display:flex;justify-content:space-between;gap:20px;font-weight:700}
+}

@@ -5841,6 +5841,11 @@ export interface PosPurchaseReturnPreview {
 export interface PosPurchaseReturnDetail {
   alreadyCreated?: boolean;
   alreadyVoided?: boolean;
+  purchase: {
+    publicId: string;
+    supplierName: string;
+    supplierInvoiceNumber: string | null;
+  };
   purchaseReturn: {
     id: number;
     publicId: string;
@@ -5854,6 +5859,7 @@ export interface PosPurchaseReturnDetail {
     reason: string;
     notes: string | null;
     createdAt: string;
+    voidedAt: string | null;
     voidReason: string | null;
   };
   items: Array<{
@@ -5862,6 +5868,8 @@ export interface PosPurchaseReturnDetail {
     purchaseItemId: number;
     productId: number;
     productName: string;
+    productCode: string | null;
+    productImage: string | null;
     color: string | null;
     size: string | null;
     quantity: number;
