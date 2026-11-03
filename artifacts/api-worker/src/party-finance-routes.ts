@@ -842,7 +842,7 @@ async function handleListCustomers(
     // The cashier exchange form needs a customer picker; allow read-only
     // customer lookups, never customer writes or ledger mutations.
     const user = await getCurrentUser(db, request, env);
-    if (!user || !(await userHasAnyPermission(db, user, ["sales.exchange", "parties.view", "parties.edit", "reports.financial", "vouchers.view", "vouchers.create", "purchases.create"]))) {
+    if (!user || !(await userHasAnyPermission(db, user, ["sales.exchange", "parties.view", "parties.edit", "reports.financial", "vouchers.view", "vouchers.create", "vouchers.void", "purchases.create"]))) {
       return auth.response;
     }
   }
@@ -3605,7 +3605,7 @@ async function handleListVouchers(
 
   if (!auth.ok) {
     const actor = await getCurrentUser(db, request, env);
-    if (!actor || !(await userHasPermission(db, actor, "vouchers.view"))) {
+    if (!actor || !(await userHasAnyPermission(db, actor, ["vouchers.view", "vouchers.void"]))) {
       return auth.response;
     }
   }
@@ -3745,16 +3745,13 @@ async function handleVoidVoucher(
   env: Env,
   voucherId: number,
 ) {
-  const auth =
-    await requireOwner(
-      request,
-      db,
-      env,
-    );
-
-  if (!auth.ok) {
-    return auth.response;
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isOwner && (user.isAdmin ||
+    !(await userHasPermission(db, user, "vouchers.void")))) {
+    return json({ error: "غير مصرح بإلغاء السند" }, 403);
   }
+  const auth = { ok: true as const, user };
 
   const body =
     (await request
