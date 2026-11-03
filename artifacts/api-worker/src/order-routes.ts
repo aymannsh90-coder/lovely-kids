@@ -12,7 +12,7 @@ import {
 import { sql, and, desc, eq, isNull, or } from "drizzle-orm";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { getCurrentUser } from "./auth";
-import { userHasPermission } from "./staff-permissions";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 import {
   createTrustedOrder,
@@ -638,7 +638,7 @@ async function handleGetOrders(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.view"))) {
+  if (!user.isAdmin && !(await userHasAnyPermission(db, user, ["orders.view", "orders.edit", "orders.cancel"]))) {
     return json({ error: "غير مصرح" }, 403);
   }
 
