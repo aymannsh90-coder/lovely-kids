@@ -111,11 +111,13 @@ async function requirePosUser(
     const method = request.method;
     let required: StaffPermission[] = [];
     if (method === "GET" && (path === "/api/pos/products/search" || path === "/api/pos/products/by-barcode" || path === "/api/pos/sales/cash-currencies")) {
-      required = ["sales.create", "sales.exchange", "purchases.create", "inventory.view", "inventory.edit"];
+      required = ["sales.create", "sales.exchange", "purchases.create", "inventory.view", "inventory.edit", "sales.returns"];
     } else if (method === "GET" && path === "/api/pos/inventory/product-card") {
       required = ["inventory.view"];
-    } else if (method === "GET" && (path === "/api/pos/sales/today" || path === "/api/pos/sales/by-public-id")) {
+    } else if (method === "GET" && path === "/api/pos/sales/today") {
       required = ["sales.view"];
+    } else if (method === "GET" && path === "/api/pos/sales/by-public-id") {
+      required = ["sales.view", "sales.exchange", "sales.exchange.online", "sales.returns", "sales.edit", "sales.void"];
     } else if (method === "POST" && path === "/api/pos/sales") {
       required = ["sales.create"];
     } else if (method === "POST" && path === "/api/pos/sales/void") {
