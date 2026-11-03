@@ -17,6 +17,7 @@ import CashSessionPage from "../pages/finance/CashSessionPage";
 import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
+import StaffDeliveryOverviewPage from "../pages/finance/StaffDeliveryOverviewPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
 import StaffExpensesPage from "../pages/finance/StaffExpensesPage";
 import { usePosRuntime } from "./pos-context";
@@ -65,6 +66,13 @@ function BankingRoute() {
   const canWrite = user?.isOwner || user?.isAdmin ||
     ["banking.create", "banking.manage", "banking.reverse"].some(p => user?.permissions?.includes(p));
   return canWrite ? <BankingPage /> : <StaffBankingOverviewPage />;
+}
+
+function DeliveryRoute() {
+  const { user } = usePosRuntime();
+  const canWrite = user?.isOwner || user?.isAdmin ||
+    ["delivery.manage", "delivery.settle", "delivery.reverse"].some(p => user?.permissions?.includes(p));
+  return canWrite ? <DeliveryCompanyAccountingPage /> : <StaffDeliveryOverviewPage />;
 }
 
 function ExpensesRoute() {
@@ -324,7 +332,7 @@ export default function AppRouter() {
 
         <Route
           path="finance/delivery-company"
-          element={<DeliveryCompanyAccountingPage />}
+          element={<DeliveryRoute />}
         />
 
         <Route
