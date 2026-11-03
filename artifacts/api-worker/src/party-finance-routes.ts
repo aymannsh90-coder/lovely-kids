@@ -111,9 +111,15 @@ async function requirePosUser(
     };
   }
 
+  const path = new URL(request.url).pathname;
+  const staffWrite = (
+    (request.method === "POST" && path === "/api/pos/customers") ||
+    (request.method === "PATCH" && /^\/api\/pos\/customers\/\d+$/.test(path))
+  ) && await userHasPermission(db, user, "parties.edit");
   if (
     !user.isAdmin &&
-    !user.isOwner
+    !user.isOwner &&
+    !staffWrite
   ) {
     return {
       ok: false,
