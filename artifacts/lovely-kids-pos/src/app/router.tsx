@@ -39,6 +39,7 @@ import PurchaseReturnsPage from "../pages/purchases/PurchaseReturnsPage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import MobileSalePage from "../pages/sales/MobileSalePage";
 import ManualOnlineOrderPage from "../pages/sales/ManualOnlineOrderPage";
+import StaffOrdersPage from "../pages/sales/StaffOrdersPage";
 import MobileReturnsPage from "../pages/sales/MobileReturnsPage";
 import MobilePriceCheckPage from "../pages/sales/MobilePriceCheckPage";
 import MobileAssistantPage from "../pages/sales/MobileAssistantPage";
@@ -126,6 +127,8 @@ export default function AppRouter() {
         <Route index element={<DashboardPage />} />
         <Route path="admin" element={<AdminPanelPage />} />
         <Route path="access" element={<RequireOwner><StaffAccessPage /></RequireOwner>} />
+
+        <Route path="sales/orders" element={<StaffOrdersPage />} />
 
         <Route
           path="sales/manual-order"
