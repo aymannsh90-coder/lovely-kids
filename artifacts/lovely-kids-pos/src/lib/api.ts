@@ -641,6 +641,8 @@ export function createManualOnlineOrder(
 export type InventoryMovementType =
   | "purchase"
   | "purchase_void"
+  | "purchase_return"
+  | "purchase_return_void"
   | "pos_sale"
   | "pos_sale_void"
   | "pos_sale_edit"
@@ -674,6 +676,7 @@ export interface PosInventoryMovement {
 
   sourceType:
     | "pos_purchase"
+    | "pos_purchase_return"
     | "pos_sale"
     | "pos_sale_return"
     | "online_order"
