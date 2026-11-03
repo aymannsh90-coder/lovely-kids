@@ -23,6 +23,8 @@ export type CostLedgerEventType =
   | "opening"
   | "purchase"
   | "purchase_void"
+  | "purchase_return"
+  | "purchase_return_void"
   | "pos_sale"
   | "pos_sale_void"
   | "pos_sale_edit_reverse"

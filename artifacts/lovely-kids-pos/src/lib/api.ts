@@ -641,6 +641,8 @@ export function createManualOnlineOrder(
 export type InventoryMovementType =
   | "purchase"
   | "purchase_void"
+  | "purchase_return"
+  | "purchase_return_void"
   | "pos_sale"
   | "pos_sale_void"
   | "pos_sale_edit"
@@ -674,6 +676,7 @@ export interface PosInventoryMovement {
 
   sourceType:
     | "pos_purchase"
+    | "pos_purchase_return"
     | "pos_sale"
     | "pos_sale_return"
     | "online_order"
@@ -5799,5 +5802,109 @@ export function createPosExchange(
       ),
     },
     token,
+  );
+}
+
+
+// Purchase returns are separate from purchase invoices: physical stock is
+// removed only through the returns workflow; invoice writes remain unchanged.
+export interface PosPurchaseReturnPreview {
+  purchase: {
+    id: number;
+    publicId: string;
+    businessDate: string;
+    supplierId: number;
+    supplierName: string;
+    totalMinor: number;
+  };
+  lines: Array<{
+    id: number;
+    productId: number | null;
+    productName: string;
+    productImage: string | null;
+    barcode: string | null;
+    color: string | null;
+    size: string | null;
+    entryMode: "historical" | "stock_receipt";
+    originalQuantity: number;
+    returnedQuantity: number;
+    availableToReturn: number;
+    originalAmountMinor: number;
+    remainingAmountMinor: number;
+    stock: number | null;
+    options: Array<{ color: string | null; size: string | null; stock: number | null }>;
+  }>;
+}
+
+export interface PosPurchaseReturnDetail {
+  alreadyCreated?: boolean;
+  alreadyVoided?: boolean;
+  purchaseReturn: {
+    id: number;
+    publicId: string;
+    idempotencyKey: string;
+    purchaseId: number;
+    supplierId: number;
+    businessDate: string;
+    status: "completed" | "voided";
+    refundAmountMinor: number;
+    inventoryCostMinor: number;
+    reason: string;
+    notes: string | null;
+    createdAt: string;
+    voidReason: string | null;
+  };
+  items: Array<{
+    id: number;
+    returnId: number;
+    purchaseItemId: number;
+    productId: number;
+    productName: string;
+    color: string | null;
+    size: string | null;
+    quantity: number;
+    refundAmountMinor: number;
+    inventoryCostMinor: number;
+    costQuality: "confirmed" | "estimated" | "mixed";
+  }>;
+}
+
+export function getPosPurchaseReturnPreview(token: string, purchasePublicId: string) {
+  return apiRequest<PosPurchaseReturnPreview>(
+    "/api/pos/purchase-returns/preview?purchasePublicId=" + encodeURIComponent(purchasePublicId),
+    {}, token,
+  );
+}
+
+export function getPosPurchaseReturnHistory(token: string, purchasePublicId?: string) {
+  return apiRequest<{ returns: PosPurchaseReturnDetail["purchaseReturn"][] }>(
+    "/api/pos/purchase-returns/history" +
+      (purchasePublicId ? "?purchasePublicId=" + encodeURIComponent(purchasePublicId) : ""),
+    {}, token,
+  );
+}
+
+export function getPosPurchaseReturnDetail(token: string, publicId: string) {
+  return apiRequest<PosPurchaseReturnDetail>(
+    "/api/pos/purchase-returns/detail?publicId=" + encodeURIComponent(publicId),
+    {}, token,
+  );
+}
+
+export function createPosPurchaseReturn(token: string, input: {
+  purchasePublicId: string;
+  idempotencyKey: string;
+  reason: string;
+  notes?: string;
+  lines: Array<{ purchaseItemId: number; color: string | null; size: string | null; quantity: number }>;
+}) {
+  return apiRequest<PosPurchaseReturnDetail>(
+    "/api/pos/purchase-returns", { method: "POST", body: JSON.stringify(input) }, token,
+  );
+}
+
+export function voidPosPurchaseReturn(token: string, input: { publicId: string; reason: string }) {
+  return apiRequest<PosPurchaseReturnDetail>(
+    "/api/pos/purchase-returns/void", { method: "POST", body: JSON.stringify(input) }, token,
   );
 }

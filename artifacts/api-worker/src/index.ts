@@ -50,6 +50,7 @@ import { handleSupplierRequest } from "./supplier-routes";
 import { handleDeliveryCompanyRequest } from "./delivery-company-routes";
 import { handleDeliverySettlementRequest } from "./delivery-settlement-routes";
 import { handlePosPurchaseRequest } from "./pos-purchase-routes";
+import { handlePosPurchaseReturnRequest } from "./pos-purchase-return-routes";
 import { handlePurchaseDraftRequest } from "./purchase-draft-routes";
 import {
   isPurchaseApiEnabled,
@@ -572,6 +573,14 @@ export default {
 
       if (purchaseDraftResponse) {
         return purchaseDraftResponse;
+      }
+
+      const purchaseReturnResponse = await handlePosPurchaseReturnRequest(request, db, env);
+      if (purchaseReturnResponse) {
+        if (purchaseReturnResponse.ok && isMutation(request)) {
+          await purgePublicTags(ctx, [PUBLIC_CACHE_TAGS.products]);
+        }
+        return purchaseReturnResponse;
       }
 
       const posPurchaseResponse =
