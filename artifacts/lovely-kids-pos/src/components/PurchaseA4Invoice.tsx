@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import type { PosPurchaseResult } from "../lib/api";
 
 interface PurchaseA4InvoiceProps {
@@ -43,7 +44,7 @@ export default function PurchaseA4Invoice({
     0,
   );
 
-  return (
+  return createPortal(
     <section className="purchase-a4-print-area" dir="rtl">
       <header className="purchase-a4-header">
         <div>
@@ -224,6 +225,7 @@ export default function PurchaseA4Invoice({
         </span>
         <span dir="ltr">{purchase.publicId}</span>
       </footer>
-    </section>
+    </section>,
+    document.body,
   );
 }
