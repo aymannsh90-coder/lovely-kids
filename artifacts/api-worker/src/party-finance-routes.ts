@@ -20,6 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
 import { handleEmployeeMonthClose, MONTH_CLOSE_SOURCE_TYPE, MONTH_CLOSE_EVENT, salaryMonthRange } from "./employee-month-close";
 import { openDb, type Env } from "./db";
@@ -86,6 +87,18 @@ type AuthResult =
       response: Response;
     };
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/customers", permission: "parties.view" },
+  { method: "POST", path: "/api/pos/customers", permission: "parties.edit" },
+  { method: "PATCH", pattern: /^\/api\/pos\/customers\/\d+$/, permission: "parties.edit" },
+  { method: "GET", pattern: /^\/api\/pos\/customers\/\d+\/ledger$/, permission: "reports.financial" },
+  { method: "POST", pattern: /^\/api\/pos\/customers\/\d+\/receipts$/, permission: "vouchers.create" },
+  { method: "GET", path: "/api/pos/finance/vouchers", permission: "vouchers.view" },
+  { method: "POST", pattern: /^\/api\/pos\/finance\/vouchers\/\d+\/void$/, permission: "vouchers.void" },
+  { method: "GET", path: "/api/pos/finance/expense-categories", permission: "finance.expenses.view" },
+  { method: "POST", path: "/api/pos/finance/expenses", permission: "finance.expenses.create" },
+];
+
 async function requirePosUser(
   request: Request,
   db: Db,
@@ -111,10 +124,7 @@ async function requirePosUser(
     };
   }
 
-  if (
-    !user.isAdmin &&
-    !user.isOwner
-  ) {
+  if (!user.isAdmin && !user.isOwner && !(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
@@ -149,7 +159,7 @@ async function requireOwner(
     return auth;
   }
 
-  if (!auth.user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, auth.user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
