@@ -2357,7 +2357,7 @@ export default function BankingPage() {
                                 </span>
                               </td>
                               <td>
-                                {isReversed ? (
+                                {isReversed || !user?.isOwner ? (
                                   <span className="banking-transfer-locked">
                                     محفوظ
                                   </span>
@@ -2752,7 +2752,7 @@ export default function BankingPage() {
                               : `لا توجد جلسة ${account.currencyCode} مفتوحة — الرصيد المعروض دفتري.`}
                           </small>
 
-                          <button
+                          {user?.isOwner && <button
                             type="button"
                             className="secondary-button"
                             disabled={
@@ -2775,7 +2775,7 @@ export default function BankingPage() {
                               : account.cashSessionId
                                 ? "إغلاق جلسة الصندوق"
                                 : "فتح جلسة الصندوق"}
-                          </button>
+                          </button>}
                         </div>
                       )}
                     </article>
@@ -3051,7 +3051,7 @@ export default function BankingPage() {
                               </span>
                             </td>
                             <td>
-                              {isReversed ? (
+                              {isReversed || !user?.isOwner ? (
                                 <span className="banking-transfer-locked">
                                   محفوظ
                                 </span>
