@@ -79,9 +79,9 @@ const menuSections: MenuSection[] = [
 // page guard. This is presentation only: API handlers enforce permissions.
 function canSeeNavigationItem(item: PosNavigationItem, user: PosUser | null) {
   if (!user) return false;
-  if (item.group === "purchases" && !user.isOwner) return false;
-  if (item.group === "vouchers" && !user.isOwner) return false;
-  if (item.ownerOnly && !user.isOwner) return false;
+  // Legacy admin users retain the prior owner-only menu restrictions.
+  // Dedicated staff may see an owner-managed screen only with a matching grant.
+  if (item.ownerOnly && user.isAdmin && !user.isOwner) return false;
   return user.isOwner || user.isAdmin || canVisitStaffPage(item.path, user.permissions ?? []);
 }
 
