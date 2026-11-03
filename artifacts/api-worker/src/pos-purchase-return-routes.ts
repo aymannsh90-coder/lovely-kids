@@ -5,6 +5,7 @@ import {
   inventoryMovementsTable,
   posPurchaseItemCostsTable,
   posPurchaseItemsTable,
+  productBarcodesTable,
   posPurchaseReturnItemsTable,
   posPurchaseReturnsTable,
   posPurchasesTable,
@@ -119,10 +120,25 @@ async function loadPurchase(db: Db, publicId: string) {
   ]);
   const values = lineValues(items, purchase.discountMinor);
   const productIds = [...new Set(items.map(i => i.productId).filter((n): n is number => n !== null))];
-  const products = productIds.length ? await db.select().from(productsTable).where(inArray(productsTable.id, productIds)) : [];
+  const [products, barcodeRows] = await Promise.all([
+    productIds.length ? db.select().from(productsTable).where(inArray(productsTable.id, productIds)) : Promise.resolve([]),
+    productIds.length ? db.select({
+      productId: productBarcodesTable.productId,
+      barcode: productBarcodesTable.barcode,
+      color: productBarcodesTable.color,
+      size: productBarcodesTable.size,
+    }).from(productBarcodesTable).where(inArray(productBarcodesTable.productId, productIds)) : Promise.resolve([]),
+  ]);
   const productsById = new Map(products.map(p => [p.id, p]));
+  const barcodesByProductId = new Map<number, typeof barcodeRows>();
+  for (const row of barcodeRows) {
+    const existing = barcodesByProductId.get(row.productId) ?? [];
+    existing.push(row);
+    barcodesByProductId.set(row.productId, existing);
+  }
   const lines = items.map(item => {
     const p = item.productId ? productsById.get(item.productId) : null;
+    const knownBarcodes = item.productId ? barcodesByProductId.get(item.productId) ?? [] : [];
     const prior = previous.get(item.id) ?? { quantity: 0, refund: 0 };
     const originalQuantity = item.quantity + item.freeQuantity;
     const value = values.get(item.id) ?? 0;
@@ -131,7 +147,12 @@ async function loadPurchase(db: Db, publicId: string) {
       productId: item.productId,
       productName: item.productNameAr,
       productImage: item.productImage,
+      productCode: item.productCode ?? p?.productCode ?? null,
       barcode: item.barcode,
+      barcodes: [...new Set(
+        [item.barcode, p?.barcode, ...knownBarcodes.map(row => row.barcode)]
+          .filter((barcode): barcode is string => typeof barcode === "string" && barcode.length > 0)
+      )],
       color: item.color,
       size: item.size,
       entryMode: item.entryMode,
@@ -145,7 +166,12 @@ async function loadPurchase(db: Db, publicId: string) {
       options: p ? stockOptions(p).filter(option =>
         (!item.color || option.color === item.color) &&
         (!item.size || option.size === item.size)
-      ) : [],
+      ).map(option => ({
+        ...option,
+        barcode: knownBarcodes.find(row =>
+          row.color === option.color && row.size === option.size
+        )?.barcode ?? null,
+      })) : [],
     };
   });
   return { purchase: { id: purchase.id, publicId: purchase.publicId, businessDate: purchase.businessDate, supplierId: purchase.supplierId, supplierName: suppliers[0]?.name ?? "", totalMinor: purchase.totalMinor }, lines };
