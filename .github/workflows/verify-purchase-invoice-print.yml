@@ -1,0 +1,21 @@
+name: Verify POS Purchase A4 Print
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/lovely-kids-pos/src/index.css'
+      - 'artifacts/lovely-kids-pos/src/components/PurchaseA4Invoice.tsx'
+      - 'artifacts/lovely-kids-pos/src/purchase-invoice-print.test.mjs'
+      - '.github/workflows/verify-purchase-invoice-print.yml'
+jobs:
+  print-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Purchase invoice A4 blank-page regression
+        run: node --test artifacts/lovely-kids-pos/src/purchase-invoice-print.test.mjs
