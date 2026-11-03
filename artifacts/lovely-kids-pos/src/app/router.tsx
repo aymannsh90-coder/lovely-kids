@@ -255,7 +255,7 @@ export default function AppRouter() {
         <Route
           path="vouchers/register"
           element={
-            <RequireStaffGrant permissions={["vouchers.view"]}>
+            <RequireStaffGrant permissions={["vouchers.view","vouchers.void"]}>
               <VoucherRegisterPage />
             </RequireStaffGrant>
           }
