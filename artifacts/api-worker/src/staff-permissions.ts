@@ -16,6 +16,7 @@ export const STAFF_PERMISSION_KEYS = [
   "reports.sales", "reports.financial", "reports.cost", "reports.inventory",
   "orders.view", "orders.create", "orders.edit", "orders.cancel",
   "finance.expenses.view", "finance.expenses.create",
+  "delivery.view", "delivery.manage", "delivery.settle", "delivery.reverse",
 ] as const;
 export type StaffPermission = (typeof STAFF_PERMISSION_KEYS)[number];
 const ALLOWED = new Set<string>(STAFF_PERMISSION_KEYS);
