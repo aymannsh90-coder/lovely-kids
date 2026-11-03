@@ -111,7 +111,7 @@ async function requirePosUser(
     const method = request.method;
     let required: StaffPermission[] = [];
     if (method === "GET" && (path === "/api/pos/products/search" || path === "/api/pos/products/by-barcode" || path === "/api/pos/sales/cash-currencies")) {
-      required = ["sales.create", "sales.exchange"];
+      required = ["sales.create", "sales.exchange", "purchases.create"];
     } else if (method === "GET" && path === "/api/pos/inventory/product-card") {
       required = ["inventory.view"];
     } else if (method === "GET" && (path === "/api/pos/sales/today" || path === "/api/pos/sales/by-public-id")) {
