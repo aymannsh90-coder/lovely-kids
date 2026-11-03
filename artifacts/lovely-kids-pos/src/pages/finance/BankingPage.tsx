@@ -888,7 +888,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       saving
     ) {
       return;
@@ -970,7 +970,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       cashAccountSaving
     ) {
       return;
@@ -1263,7 +1263,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       conversionSaving
     ) {
       return;
@@ -1564,7 +1564,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       transferSaving
     ) {
       return;
