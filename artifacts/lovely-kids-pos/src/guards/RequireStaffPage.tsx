@@ -36,10 +36,19 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/reports/customer-balances": ["reports.financial"],
     "/reports/customer-statement": ["reports.financial"],
     "/reports/supplier-statement": ["reports.financial"],
+    "/reports": ["reports.cost"],
+    "/reports/sales": ["reports.cost"],
+    "/reports/product-analytics": ["reports.sales"],
+    "/reports/inventory-intelligence": ["reports.cost"],
+    "/reports/inventory-valuation": ["reports.cost", "inventory.cost"],
+    "/reports/financial-statements": ["reports.financial", "reports.cost"],
   };
   const required = /^\/inventory\/products\/\d+\/edit$/.test(path)
     ? ["inventory.edit"]
     : byPath[path] ?? [];
+  if (path === "/reports/financial-statements") {
+    return permissions.includes("reports.financial") && permissions.includes("reports.cost");
+  }
   return required.some(p => permissions.includes(p));
 }
 
@@ -62,6 +71,8 @@ const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["vouchers.create", "/vouchers/receipt"],
   ["banking.view", "/finance/banking"],
   ["banking.create", "/finance/banking"],
+  ["reports.sales", "/reports/product-analytics"],
+  ["reports.cost", "/reports"],
 ];
 
 export function firstAuthorizedStaffPage(permissions: string[]): string | null {
