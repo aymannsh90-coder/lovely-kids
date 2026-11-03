@@ -367,6 +367,7 @@
   .lk-dashboard-refresh .badge-planned { color: #906319; background: #fff4dc; }
   .lk-dashboard-refresh .dashboard-arrow {
     display: grid;
+    margin-inline-start: auto;
     width: 32px;
     height: 32px;
     place-items: center;
