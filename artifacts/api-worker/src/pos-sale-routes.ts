@@ -27,7 +27,7 @@ import {
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
-import { userHasAnyPermission, type StaffPermission } from "./staff-permissions";
+import { userHasAnyPermission, userHasPermission, type StaffPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
