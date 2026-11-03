@@ -516,3 +516,81 @@
     .pret-page .pret-table { font-size: 13px; }
   }
 }
+
+
+/* Lovely Kids POS — purchase return section colors.
+   Screen-only decorative accents; no markup, state, behavior or print changes. */
+@media screen {
+  /* Invoice lookup: cool blue, without coloring text fields or buttons. */
+  .pret-page > section.pret-card.pret-no-print:first-of-type {
+    border-color: #c9dfea;
+    background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+    box-shadow: 0 8px 23px rgba(41, 111, 151, .055);
+  }
+
+  /* Loaded purchase invoice: soft pink distinction from the entry form. */
+  .pret-page > section.pret-card.pret-no-print:not(:first-of-type):not(:last-of-type) {
+    border-color: #f0d4e3;
+    background: linear-gradient(180deg, #fff 0%, #fffbfd 100%);
+  }
+
+  /* Previously recorded return slip: pale green for the finished document. */
+  .pret-page > section.pret-card:not(.pret-no-print) {
+    border-color: #c7e4d4;
+    background: linear-gradient(180deg, #fff 0%, #f8fcfa 100%);
+  }
+
+  /* Returns history: cool neutral tone to visually separate the ledger. */
+  .pret-page > section.pret-card.pret-no-print:last-of-type:not(:first-of-type) {
+    border-color: #d8e4ec;
+    background: linear-gradient(180deg, #fff 0%, #f7fafc 100%);
+  }
+
+  /* Alternate very light product card accents, no distracting full fill. */
+  .pret-page article.pret-line {
+    border-right-width: 5px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .pret-page article.pret-line:nth-of-type(odd) {
+    border-right-color: #e4a9cb;
+    background: linear-gradient(180deg, #fff 0%, #fffcfe 100%);
+  }
+  .pret-page article.pret-line:nth-of-type(even) {
+    border-right-color: #9dccdf;
+    background: linear-gradient(180deg, #fff 0%, #fafdff 100%);
+  }
+  .pret-page article.pret-line:hover {
+    box-shadow: 0 6px 18px rgba(45, 86, 110, .075);
+  }
+  .pret-page .pret-option:nth-of-type(even) { background: #f7fafc; }
+  .pret-page .pret-option:nth-of-type(odd) { background: #fff; }
+
+  /* Search matches and warnings retain their semantic colors. */
+  .pret-page .pret-option.pret-option-match {
+    background: #e8f4ff;
+    border-color: #b6d8eb;
+  }
+  .pret-page .pret-item-search {
+    background: linear-gradient(180deg, #f7fbfe 0%, #f1f7fc 100%);
+  }
+  .pret-page .pret-line > strong {
+    background: #fff3f9;
+    border-color: #efd0e0;
+    color: #9f236a;
+  }
+
+  /* Green and blue financial totals remain easy to tell apart. */
+  .pret-page > section.pret-card:not(.pret-no-print) .pret-actions > strong:nth-of-type(1) {
+    background: #edf8f1;
+    border-color: #c6e4d2;
+    color: #226646;
+  }
+  .pret-page > section.pret-card:not(.pret-no-print) .pret-actions > strong:nth-of-type(2) {
+    background: #eef6fc;
+    border-color: #cbdeea;
+    color: #285b77;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pret-page article.pret-line { transition: none; }
+  }
+}
