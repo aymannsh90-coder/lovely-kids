@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { usePosRuntime } from "../../app/pos-context";
+import { captureScannerKeyboardEvent, createScannerKeyboardBuffer } from "../../lib/scannerKeyboard";
 import { createPosPurchaseReturn, getPosPurchaseReturnDetail, getPosPurchaseReturnHistory, getPosPurchaseReturnPreview, voidPosPurchaseReturn, type PosPurchaseReturnDetail, type PosPurchaseReturnPreview } from "../../lib/api";
 import "./PurchaseReturnsPage.css";
 
@@ -26,6 +27,7 @@ export default function PurchaseReturnsPage() {
   const [preview, setPreview] = useState<PosPurchaseReturnPreview | null>(null);
   const [itemSearch, setItemSearch] = useState("");
   const itemSearchRef = useRef<HTMLInputElement>(null);
+  const scannerKeyboard = useRef(createScannerKeyboardBuffer());
   const [selected, setSelected] = useState<Record<string, number>>({});
   const [reason, setReason] = useState("إرجاع بضاعة إلى المورد");
   const [notes, setNotes] = useState("");
@@ -76,6 +78,32 @@ export default function PurchaseReturnsPage() {
     requested.filter(r => r.purchaseItemId === line.id).reduce((s, r) => s + r.quantity, 0) > line.availableToReturn
   ) ?? false);
 
+  // Reuse the barcode scanner's physical-key decoding from sales and stock check.
+  // It reconstructs the English barcode even when Windows is using an Arabic layout.
+  function onItemSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return;
+
+    const scannedValue = captureScannerKeyboardEvent(scannerKeyboard.current, event);
+    if (event.key === "Enter" && scannedValue) {
+      event.preventDefault();
+      setItemSearch(scannedValue.trim());
+      return;
+    }
+  }
+
+  function onItemSearchChange(value: string) {
+    // Some scanners do not send Enter. Once their physical key sequence reveals
+    // a Lovely Kids barcode, use it for the live filter instead of Arabic glyphs.
+    // Normal Arabic product-name search remains unchanged.
+    const physicalKeys = scannerKeyboard.current.chars.join("").toUpperCase();
+    if (/^LKQR-\d+-[A-Z0-9]{1,}$/i.test(physicalKeys) &&
+        /[\u0600-\u06FF]/.test(value)) {
+      setItemSearch(physicalKeys);
+    } else {
+      setItemSearch(value);
+    }
+  }
+
   async function refreshHistory(purchasePublicId?: string) {
     const result = await getPosPurchaseReturnHistory(token, purchasePublicId);
     setHistory(result.returns);
@@ -88,7 +116,7 @@ export default function PurchaseReturnsPage() {
     setBusy(true); setError(""); setSuccess(""); setSaved(null);
     try {
       const result = await getPosPurchaseReturnPreview(token, purchaseNo.trim());
-      setPreview(result); setSelected({}); setItemSearch(""); requestKey.current = null;
+      setPreview(result); setSelected({}); setItemSearch(""); scannerKeyboard.current = createScannerKeyboardBuffer(); requestKey.current = null;
       window.setTimeout(() => itemSearchRef.current?.focus(), 0);
       await refreshHistory(result.purchase.publicId);
     } catch (e) { setError(errorMessage(e)); setPreview(null); }
@@ -172,7 +200,7 @@ export default function PurchaseReturnsPage() {
         <label>رقم فاتورة المشتريات<input value={purchaseNo} onChange={e => setPurchaseNo(e.target.value)} placeholder="رقم الفاتورة" /></label>
         <button type="submit" className="pret-primary" disabled={busy}>🔎 فتح فاتورة الشراء</button>
         <button type="button" disabled={busy} onClick={() => {
-          setPreview(null); setSelected({}); setItemSearch(""); setSaved(null); setPurchaseNo("");
+          setPreview(null); setSelected({}); setItemSearch(""); scannerKeyboard.current = createScannerKeyboardBuffer(); setSaved(null); setPurchaseNo("");
           setError(""); setSuccess(""); requestKey.current = null;
           void refreshHistory().catch(() => {});
         }}>مردود جديد</button>
@@ -192,7 +220,9 @@ export default function PurchaseReturnsPage() {
             id="pret-item-search-input"
             type="search"
             value={itemSearch}
-            onChange={event => setItemSearch(event.target.value)}
+            onChange={event => onItemSearchChange(event.target.value)}
+            onKeyDown={onItemSearchKeyDown}
+            dir="auto"
             placeholder="كود الموديل (490 أو 1746)، اسم الصنف، أو الباركود"
             autoComplete="off"
             aria-describedby="pret-item-search-count"
