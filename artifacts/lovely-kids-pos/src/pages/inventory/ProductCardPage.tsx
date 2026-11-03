@@ -1119,7 +1119,7 @@ export default function ProductCardPage() {
                 </label>
               )}
 
-            {user?.isOwner && (
+            {(user?.isOwner || (user?.staffEnabled && user?.permissions?.includes("inventory.cost"))) && (
               <div style={{ marginBottom: 20 }}>
                 <div
                   style={{
