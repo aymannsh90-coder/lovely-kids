@@ -1,0 +1,70 @@
+/* Manual web orders: desktop shell only. The phone PWA stays unchanged. */
+@media screen and (min-width: 900px) {
+  .route-content .manual-order-page.manual-order-page-desktop {
+    --manual-outline: #d9e6ef;
+    --manual-pink: #e91e8c;
+    --manual-ink: #234456;
+    direction: rtl;
+  }
+  .manual-order-page-desktop :is(
+    .manual-order-customer-card,
+    .manual-order-scan-card,
+    .mobile-pos-cart,
+    .manual-order-checkout
+  ) {
+    border: 1px solid var(--manual-outline);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 5px 19px rgba(40,82,105,.055);
+  }
+  .manual-order-page-desktop .manual-order-section-title {
+    padding-bottom: 11px;
+    border-bottom: 1px solid #e4edf2;
+  }
+  .manual-order-page-desktop .manual-order-section-title :is(h1,h2,h3) {
+    color: var(--manual-ink);
+    font-weight: 900;
+  }
+  .manual-order-page-desktop .manual-order-section-title p { color: #6b8293; }
+  .manual-order-page-desktop .manual-order-fields :is(input,select),
+  .manual-order-page-desktop .manual-order-barcode-form input,
+  .manual-order-page-desktop .mobile-pos-variants select {
+    min-height: 40px;
+    border: 1px solid #d6e6ef;
+    border-radius: 10px;
+    background: #fcfeff;
+  }
+  .manual-order-page-desktop :is(
+    .manual-order-barcode-form button,
+    .manual-order-checkout > button
+  ) {
+    min-height: 43px;
+    padding: 9px 16px;
+    border: 1px solid #d91d81;
+    border-radius: 11px;
+    background: linear-gradient(120deg,#f146a1,#da1a82);
+    color: #fff;
+    font-weight: 850;
+    box-shadow: 0 4px 12px rgba(211,39,127,.12);
+  }
+  .manual-order-page-desktop .mobile-pos-cart-title {
+    padding-bottom: 11px;
+    border-bottom: 1px solid #e8edf3;
+    color: var(--manual-ink);
+  }
+  .manual-order-page-desktop .mobile-pos-line {
+    border: 1px solid #dbe8f0;
+    border-radius: 12px;
+    background: #f7fbfe;
+  }
+  .manual-order-page-desktop .mobile-pos-final-total {
+    border: 1px solid #f0cadf;
+    border-radius: 11px;
+    background: #fff0f7;
+    color: #b31e6d;
+  }
+  .manual-order-page-desktop :is(button,input,select):focus-visible {
+    outline: 3px solid rgba(233,30,140,.23);
+    outline-offset: 2px;
+  }
+}

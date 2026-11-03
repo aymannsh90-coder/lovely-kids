@@ -1,0 +1,96 @@
+/* Day sales: POS brand refresh, leaving printed reports untouched. */
+@media screen {
+  .route-content .today-sales-panel.lk-today-refresh {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    direction: rtl;
+  }
+  .lk-today-refresh .today-sales-heading {
+    min-height: 76px;
+    padding: 17px 20px;
+    gap: 12px;
+    border: 1px solid #edd6e3;
+    border-radius: 17px;
+    background: linear-gradient(110deg,#fff,#fff5fa 78%,#fcebf5);
+    box-shadow: 0 5px 19px rgba(47,84,104,.05);
+  }
+  .lk-today-refresh .today-sales-heading :is(h1,h2) {
+    color: #234253;
+    font-size: 21px;
+    font-weight: 900;
+  }
+  .lk-today-refresh .today-sales-heading p {
+    color: #6d8496;
+    font-size: 12px;
+  }
+  .lk-today-refresh .panel-icon {
+    border: 1px solid #efcbdf;
+    border-radius: 12px;
+    background: #ffedf5;
+  }
+  .lk-today-refresh .today-sales-actions input[type="date"] {
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #d6e6ef;
+    border-radius: 10px;
+    background: #fff;
+    color: #264e64;
+    font-weight: 750;
+  }
+  .lk-today-refresh :is(button.primary-button,button.secondary-button) {
+    min-height: 40px;
+    padding: 9px 14px;
+    border: 1px solid #eec0da;
+    border-radius: 11px;
+    background: linear-gradient(120deg,#fffafd,#fff0f8);
+    color: #aa206a;
+    font-weight: 850;
+  }
+  .lk-today-refresh button.primary-button {
+    border-color: #dc2887;
+    background: linear-gradient(120deg,#f24aa7,#d91c82);
+    color: #fff;
+  }
+  .lk-today-refresh :is(button,input):focus-visible {
+    outline: 3px solid rgba(233,30,140,.23);
+    outline-offset: 2px;
+  }
+  .lk-today-refresh .today-summary { gap: 11px; }
+  .lk-today-refresh .today-summary > div {
+    min-width: 0;
+    padding: 13px 15px;
+    border: 1px solid #d5e6ef;
+    border-radius: 13px;
+    background: #edf6fc;
+  }
+  .lk-today-refresh .today-summary > div:nth-child(2n) {
+    border-color: #efcbde;
+    background: #fff1f8;
+  }
+  .lk-today-refresh .today-summary :is(span,strong) { font-weight: 800; }
+  .lk-today-refresh :is(
+    .today-debt-collections,
+    .web-cash-movements,
+    .invoice-search-block,
+    .invoice-details
+  ) {
+    border: 1px solid #d9e8f0;
+    border-radius: 15px;
+    background: #fff;
+  }
+  .lk-today-refresh .today-sales-table-wrap {
+    border: 1px solid #d5e5ed;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .lk-today-refresh .today-sales-table thead th {
+    background: #e6f2f9;
+    color: #43657a;
+    font-weight: 900;
+  }
+  .lk-today-refresh .today-sales-table tbody tr:nth-child(even) {
+    background: #f8fbfd;
+  }
+  .lk-today-refresh .today-sales-table tbody tr:hover { background: #fff7fb; }
+}

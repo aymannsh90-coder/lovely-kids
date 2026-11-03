@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import JsBarcode from "jsbarcode";
+import "./pages/sales/TodaySalesVisualRefresh.css";
 import {
   useNavigate,
   useSearchParams,
@@ -839,7 +840,7 @@ export default function TodaySalesPanel({
 
   return (
     <>
-      <section className="today-sales-panel" id="pos-today-sales">
+      <section className="today-sales-panel lk-today-refresh" id="pos-today-sales">
         <div className="today-sales-heading">
           <div className="panel-heading">
             <div className="panel-icon">📋</div>

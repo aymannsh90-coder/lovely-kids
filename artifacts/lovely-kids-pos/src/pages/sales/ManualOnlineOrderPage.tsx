@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { Link } from "react-router-dom";
+import "./ManualOrderVisualRefresh.css";
 
 import { usePosRuntime } from "../../app/pos-context";
 import {
