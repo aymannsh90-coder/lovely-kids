@@ -13,6 +13,7 @@ export interface PrintableOrderItem {
 
 export interface PrintableExchangeReturnItem {
   productNameAr: string;
+  image?: string;
   productCode?: string | null;
   barcode?: string | null;
   color: string | null;
@@ -194,9 +195,17 @@ export async function createOrderPrintHtml(
             .map(escapeHtml)
             .join(" — ");
           const code = item.productCode?.trim() || item.barcode?.trim() || "—";
+          const imageUrl = safeImageUrl(item.image);
 
           return `
             <tr>
+              <td class="image-cell">
+                ${
+                  imageUrl
+                    ? `<img class="product-image" src="${imageUrl}" alt="" />`
+                    : `<div class="no-image">—</div>`
+                }
+              </td>
               <td>
                 <strong>${escapeHtml(item.productNameAr)}</strong>
                 ${variants ? `<div class="muted">${variants}</div>` : ""}
@@ -416,7 +425,7 @@ export async function createOrderPrintHtml(
       <div class="box">
         <div class="box-title">الأصناف المرتجعة من الطلب #${escapeHtml(order.exchangeOriginalOrderId)}</div>
         <table>
-          <thead><tr><th>الصنف المرتجع</th><th>الكود</th><th>الكمية</th><th>القيمة</th></tr></thead>
+          <thead><tr><th>الصورة</th><th>الصنف المرتجع</th><th>الكود</th><th>الكمية</th><th>القيمة</th></tr></thead>
           <tbody>${returnedItemRows}</tbody>
         </table>
       </div>
