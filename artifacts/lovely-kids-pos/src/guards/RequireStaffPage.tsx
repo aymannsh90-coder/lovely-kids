@@ -52,9 +52,6 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/reports/customer-statement": ["reports.financial"],
     "/reports/supplier-statement": ["reports.financial"],
   };
-  if (/^\/inventory\/products\/\d+\/edit$/.test(path) || path === "/inventory/products/new") {
-    return ["inventory.view", "inventory.edit"].every(p => permissions.includes(p));
-  }
   if (path === "/purchases/new") {
     return ["purchases.view", "purchases.create"].every(p => permissions.includes(p));
   }
@@ -82,7 +79,7 @@ const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["cash.open", "/cash-session"],
   ["cash.close", "/cash-session"],
   ["inventory.view", "/inventory/product-card"],
-  ["inventory.edit", "/inventory/products/new"],
+  ["inventory.edit", "/inventory/products"],
   ["purchases.view", "/purchases/history"],
   ["purchases.create", "/purchases/new"],
   ["purchases.returns", "/purchases/returns"],
