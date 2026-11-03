@@ -21408,3 +21408,269 @@ button.inventory-intelligence-metric {
     .mobile-price-check-page .mobile-price-summary-item { padding-inline: 5px; }
   }
 }
+
+
+/* Lovely Kids POS — mobile assistant visual refresh (CSS ONLY).
+   Applies to the existing mobile assistant shell only.
+   No microphone, form, API, approval, draft-state, or routing changes. */
+@media screen {
+  .mobile-pos-page:has(.mobile-assistant-shell) {
+    --lka-mobile-ink: #284357;
+    --lka-mobile-muted: #698194;
+    --lka-mobile-line: #dce7ee;
+    --lka-mobile-shadow: 0 7px 22px rgba(35, 77, 104, .055);
+    background: #eaf3f8;
+    color: var(--lka-mobile-ink);
+  }
+  .mobile-pos-page .mobile-assistant-shell {
+    background: #f5f9fc;
+  }
+  .mobile-assistant-shell .mobile-pos-header {
+    gap: 10px;
+    background: linear-gradient(115deg, #fff 0%, #fff5fa 80%, #fdeaf4);
+    border-bottom: 1px solid #f0d5e4;
+    box-shadow: 0 4px 14px rgba(30, 69, 98, .045);
+  }
+  .mobile-assistant-shell .mobile-pos-header > div:first-child strong {
+    font-size: 20px;
+    font-weight: 900;
+    color: #c81875;
+  }
+  .mobile-assistant-shell .mobile-pos-header > div:first-child span {
+    color: #557589;
+    font-weight: 700;
+  }
+  .mobile-assistant-shell .mobile-pos-header-actions a[href="/sales/pos"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #c8dae7;
+    border-radius: 12px;
+    background: #f0f6fa;
+    color: #315c78;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.3;
+    box-shadow: 0 3px 9px rgba(30, 70, 94, .055);
+  }
+  .mobile-assistant-shell .mobile-pos-header-actions a[href="/sales/pos"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-assistant-shell .mobile-pos-tabs {
+    gap: 6px;
+    background: #fff;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .mobile-assistant-shell .mobile-pos-tabs a {
+    border: 1px solid #e1ebf1;
+    border-radius: 11px;
+    background: #f1f6fa;
+    color: #46657b;
+    font-weight: 850;
+  }
+  .mobile-assistant-shell .mobile-pos-tabs a.is-active {
+    border-color: #d72480;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(201, 29, 116, .11);
+  }
+  .mobile-assistant-shell .mobile-pos-user {
+    background: #f0f7fb;
+    border-bottom: 1px solid #dfeaf1;
+    color: #496579;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Draft composer: prominent but calm compared to the POS sale screen. */
+  .mobile-assistant-shell .mobile-assistant-card {
+    margin: 12px 12px 14px;
+    padding: 16px;
+    border: 1px solid var(--lka-mobile-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lka-mobile-shadow);
+  }
+  .mobile-assistant-shell .mobile-assistant-heading {
+    gap: 12px;
+    margin-bottom: 13px;
+    align-items: center;
+  }
+  .mobile-assistant-shell .mobile-assistant-heading > span {
+    background: #fff1f8;
+    border: 1px solid #f1d4e5;
+    border-radius: 13px;
+    color: #bc1b70;
+  }
+  .mobile-assistant-shell .mobile-assistant-heading h1 {
+    margin: 0;
+    color: #273f52;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.35;
+  }
+  .mobile-assistant-shell .mobile-assistant-heading p {
+    margin: 5px 0 0;
+    color: #657e90;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .mobile-assistant-shell .mobile-assistant-card textarea {
+    width: 100%;
+    min-height: 122px;
+    padding: 12px 14px;
+    border: 1px solid #d4e2ea;
+    border-radius: 12px;
+    background: #fbfdfe;
+    color: #284459;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .mobile-assistant-shell .mobile-assistant-card textarea::placeholder {
+    color: #8194a2;
+  }
+  .mobile-assistant-shell .mobile-assistant-card textarea:focus-visible {
+    border-color: #e65a9f;
+    outline: 3px solid rgba(233, 30, 140, .18);
+    outline-offset: 1px;
+  }
+  .mobile-assistant-shell .mobile-assistant-actions {
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .mobile-assistant-shell .mobile-assistant-actions button {
+    min-height: 48px;
+    border-radius: 11px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 900;
+  }
+  .mobile-assistant-shell .mobile-assistant-mic {
+    border: 1px solid #c9deea;
+    background: #eef7fc;
+    color: #295c7d;
+  }
+  .mobile-assistant-shell .mobile-assistant-mic.is-listening {
+    border-color: #eaa5c9;
+    background: #fff0f8;
+    color: #b61c6c;
+    box-shadow: 0 0 0 3px rgba(233, 30, 140, .1);
+  }
+  .mobile-assistant-shell .mobile-assistant-save {
+    border: 1px solid #d01a79;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(208, 28, 122, .13);
+  }
+  .mobile-assistant-shell .mobile-assistant-actions button:disabled {
+    opacity: .5;
+    box-shadow: none;
+  }
+  .mobile-assistant-shell .mobile-assistant-safety {
+    margin-top: 13px;
+    padding: 13px 14px;
+    border: 1px solid #c6e5d2;
+    border-right: 4px solid #5eb185;
+    border-radius: 11px;
+    background: #f0faf4;
+    color: #336e4e;
+    font-size: 12px;
+    line-height: 1.8;
+    font-weight: 700;
+  }
+
+  /* Recent drafts: alternate gentle accents; preserve semantic status pills. */
+  .mobile-assistant-shell .mobile-assistant-recent {
+    margin: 0 12px 18px;
+    padding: 15px 12px;
+    border: 1px solid var(--lka-mobile-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lka-mobile-shadow);
+  }
+  .mobile-assistant-shell .mobile-assistant-section-title {
+    margin: 0 0 13px;
+  }
+  .mobile-assistant-shell .mobile-assistant-section-title strong {
+    color: #2a4b62;
+    font-size: 17px;
+    font-weight: 900;
+  }
+  .mobile-assistant-shell .mobile-assistant-section-title span {
+    min-width: 30px;
+    min-height: 30px;
+    padding: 3px 7px;
+    border: 1px solid #f0cee0;
+    background: #fff3f9;
+    color: #a51d65;
+    font-weight: 900;
+  }
+  .mobile-assistant-shell .mobile-assistant-empty {
+    min-height: 112px;
+    display: grid;
+    place-items: center;
+    padding: 17px 12px;
+    border: 1px dashed #cbddea;
+    border-radius: 13px;
+    background: #f6fafc;
+    color: #637e90;
+    font-size: 13px;
+    line-height: 1.75;
+    text-align: center;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft {
+    border: 1px solid #dce7ef;
+    border-right-width: 4px;
+    border-radius: 13px;
+    padding: 13px;
+    background: #fff;
+    min-width: 0;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft:nth-of-type(odd) {
+    border-right-color: #e5aece;
+    background: linear-gradient(180deg, #fff, #fffcfe);
+  }
+  .mobile-assistant-shell .mobile-assistant-draft:nth-of-type(even) {
+    border-right-color: #a4cfdf;
+    background: linear-gradient(180deg, #fff, #fafdff);
+  }
+  .mobile-assistant-shell .mobile-assistant-draft strong {
+    color: #29465b;
+    font-size: 14px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft small {
+    color: #71889a;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft-meta > span {
+    color: #a71b68;
+    font-size: 14px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft-meta b {
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 850;
+  }
+  .mobile-assistant-shell :is(button,a):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+  @media (max-width: 360px) {
+    .mobile-assistant-shell .mobile-pos-header { padding-inline: 10px; }
+    .mobile-assistant-shell .mobile-assistant-card,
+    .mobile-assistant-shell .mobile-assistant-recent { margin-inline: 8px; }
+    .mobile-assistant-shell .mobile-assistant-card { padding: 13px; }
+    .mobile-assistant-shell .mobile-assistant-actions { gap: 7px; }
+  }
+}
