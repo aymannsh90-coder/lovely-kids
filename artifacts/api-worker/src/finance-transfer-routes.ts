@@ -281,7 +281,12 @@ async function requireOwner(
   const path = new URL(request.url).pathname;
   const readOnly = request.method === "GET" &&
     ["/api/pos/finance/cash-accounts", "/api/pos/finance/currency-conversions", "/api/pos/finance/transfers"].includes(path);
-  const staffAuthorized = !user.isAdmin && readOnly && await userHasPermission(db, user, "banking.view");
+  const allowedWrite = request.method === "POST" &&
+    ["/api/pos/finance/cash-accounts", "/api/pos/finance/currency-conversions", "/api/pos/finance/transfers"].includes(path);
+  const staffAuthorized = !user.isAdmin && (
+    (readOnly && await userHasPermission(db, user, "banking.view")) ||
+    (allowedWrite && await userHasPermission(db, user, "banking.create"))
+  );
   if (!user.isOwner && !staffAuthorized) {
     return {
       ok: false,
