@@ -16,6 +16,7 @@ import {
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import { ensureSupplierPayableControlAccount } from "./finance-supplier-ledger";
 import { postFinanceTransaction } from "./finance-posting";
@@ -51,7 +52,11 @@ const normalizeDimension = (v: unknown) => typeof v === "string" && v.trim() ? v
 async function requireOwner(request: Request, db: Db, env: Env) {
   const user = await getCurrentUser(db, request, env);
   if (!user) return { user: null, response: json({ error: "يجب تسجيل الدخول" }, 401) };
-  if (!user.isOwner) return { user: null, response: json({ error: "مردودات المشتريات للمالك فقط" }, 403) };
+  const path = new URL(request.url).pathname;
+  const staffRead = request.method === "GET" &&
+    ["/api/pos/purchase-returns/preview", "/api/pos/purchase-returns/history", "/api/pos/purchase-returns/detail"].includes(path) &&
+    await userHasPermission(db, user, "purchases.view");
+  if (!user.isOwner && !staffRead) return { user: null, response: json({ error: "مردودات المشتريات للمالك فقط" }, 403) };
   return { user, response: null };
 }
 
