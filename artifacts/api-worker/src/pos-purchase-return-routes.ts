@@ -139,6 +139,11 @@ async function loadPurchase(db: Db, publicId: string) {
   const lines = items.map(item => {
     const p = item.productId ? productsById.get(item.productId) : null;
     const knownBarcodes = item.productId ? barcodesByProductId.get(item.productId) ?? [] : [];
+    // A color-specific purchase line must not appear for a barcode belonging to another color.
+    const searchableBarcodes = knownBarcodes.filter(row =>
+      (!item.color || row.color === item.color) &&
+      (!item.size || row.size === item.size)
+    );
     const prior = previous.get(item.id) ?? { quantity: 0, refund: 0 };
     const originalQuantity = item.quantity + item.freeQuantity;
     const value = values.get(item.id) ?? 0;
@@ -150,7 +155,7 @@ async function loadPurchase(db: Db, publicId: string) {
       productCode: item.productCode ?? p?.productCode ?? null,
       barcode: item.barcode,
       barcodes: [...new Set(
-        [item.barcode, p?.barcode, ...knownBarcodes.map(row => row.barcode)]
+        [item.barcode, p?.barcode, ...searchableBarcodes.map(row => row.barcode)]
           .filter((barcode): barcode is string => typeof barcode === "string" && barcode.length > 0)
       )],
       color: item.color,
