@@ -5,7 +5,7 @@ import type { openDb } from "./db";
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
 export const STAFF_PERMISSION_KEYS = [
-  "sales.view", "sales.create", "sales.edit", "sales.void", "sales.returns",
+  "sales.view", "sales.create", "sales.edit", "sales.void", "sales.returns", "sales.returns.void",
   "sales.exchange", "sales.exchange.online", "sales.exchange.void",
   "cash.view", "cash.open", "cash.close",
   "inventory.view", "inventory.edit", "inventory.cost",
