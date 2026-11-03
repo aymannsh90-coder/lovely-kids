@@ -16,16 +16,42 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/sales/invoice-check": ["sales.view"],
     "/cash-session": ["cash.view", "cash.open", "cash.close"],
     "/inventory/product-card": ["inventory.view"],
+    "/statements": ["reports.financial"],
+    "/reports/trial-balance": ["reports.financial"],
+    "/reports/receivables-liquidity": ["reports.financial"],
+    "/reports/customer-balances": ["reports.financial"],
+    "/reports/customer-statement": ["reports.financial"],
+    "/reports/supplier-statement": ["reports.financial"],
   };
   return (byPath[path] ?? []).some(p => permissions.includes(p));
+}
+
+const preferredStaffLandingRoutes: Array<[string, string]> = [
+  ["sales.create", "/sales/pos"],
+  ["sales.exchange", "/sales/exchange"],
+  ["sales.exchange.online", "/sales/exchange"],
+  ["reports.financial", "/reports/trial-balance"],
+  ["sales.view", "/sales/today"],
+  ["cash.view", "/cash-session"],
+  ["cash.open", "/cash-session"],
+  ["cash.close", "/cash-session"],
+  ["inventory.view", "/inventory/product-card"],
+];
+
+export function firstAuthorizedStaffPage(permissions: string[]): string | null {
+  const matching = preferredStaffLandingRoutes.find(([permission, path]) =>
+    permissions.includes(permission) && canVisitStaffPage(path, permissions),
+  );
+  return matching?.[1] ?? null;
 }
 
 export default function RequireStaffPage({ children }: { children: ReactNode }) {
   const { user } = usePosRuntime();
   const location = useLocation();
   if (user?.isOwner || user?.isAdmin) return <>{children}</>;
-  if (location.pathname === "/" && user?.permissions?.includes("sales.create")) {
-    return <Navigate to="/sales/pos" replace />;
+  if (location.pathname === "/" && user) {
+    const landing = firstAuthorizedStaffPage(user.permissions ?? []);
+    if (landing) return <Navigate to={landing} replace />;
   }
   if (user && canVisitStaffPage(location.pathname, user.permissions ?? [])) return <>{children}</>;
   return <section style={{ padding: 24 }} role="alert">

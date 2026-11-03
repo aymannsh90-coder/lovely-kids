@@ -80,8 +80,6 @@ const menuSections: MenuSection[] = [
 function canSeeNavigationItem(item: PosNavigationItem, user: PosUser | null) {
   if (!user) return false;
   if (item.group === "purchases" && !user.isOwner) return false;
-  if (item.group === "reports" && !user.isOwner) return false;
-  if (item.group === "statements" && !user.isOwner) return false;
   if (item.group === "vouchers" && !user.isOwner) return false;
   if (item.ownerOnly && !user.isOwner) return false;
   return user.isOwner || user.isAdmin || canVisitStaffPage(item.path, user.permissions ?? []);
@@ -178,7 +176,7 @@ export default function DashboardLayout() {
               <span>{pageDescription}</span>
             </div>
 
-            <div className="pos-shamel-session-state">
+            {(user?.isOwner || user?.isAdmin || ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(permission => user?.permissions?.includes(permission))) && <div className="pos-shamel-session-state">
               <span
                 className={
                   session
@@ -191,7 +189,7 @@ export default function DashboardLayout() {
               </span>
 
               <small dir="ltr">Register: {POS_REGISTER_KEY}</small>
-            </div>
+            </div>}
 
             <ClockWidget showHomeButton={false} />
 
@@ -302,6 +300,7 @@ export default function DashboardLayout() {
                         : "pos-shamel-secondary-button"
                     }
                     to={item.path}
+                    end
                     key={item.key}
                   >
                     <span aria-hidden="true">{item.icon}</span>
@@ -316,7 +315,10 @@ export default function DashboardLayout() {
         </div>
 
         <section
-          hidden={isAdminPanel}
+          hidden={isAdminPanel || (!user?.isOwner && !user?.isAdmin &&
+            !["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(
+              permission => user?.permissions?.includes(permission),
+            ))}
           className={
             session
               ? "session-banner session-open pos-shamel-session-banner"

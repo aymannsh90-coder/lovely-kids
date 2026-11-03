@@ -33,7 +33,7 @@ const permissionGroups = [
 ] as const;
 const presets: Record<Role, string[]> = {
   cashier: ["sales.view", "sales.create", "cash.view"],
-  accountant: ["sales.view", "purchases.view", "purchases.create", "parties.view", "vouchers.view", "vouchers.create", "banking.view", "reports.sales", "reports.financial"],
+  accountant: ["reports.financial"], // Read-only financial reports; never pre-grant unimplemented write privileges.
   inventory: ["inventory.view", "inventory.edit"],
   custom: [],
 };

@@ -22,6 +22,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 
 type Db =
@@ -142,7 +143,7 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  if (!user.isOwner && (user.isAdmin || !(await userHasPermission(db, user, "reports.financial")))) {
     return {
       ok: false as const,
       response: json(

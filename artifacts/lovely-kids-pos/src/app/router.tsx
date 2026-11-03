@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
+import RequireFinancialReports from "../guards/RequireFinancialReports";
 import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
@@ -312,27 +313,27 @@ export default function AppRouter() {
         <Route
           path="statements"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <StatementsPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
         <Route
           path="reports/trial-balance"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <TrialBalanceReportPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
         <Route
           path="reports/receivables-liquidity"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <ReceivablesLiquidityReportPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
@@ -358,9 +359,9 @@ export default function AppRouter() {
         <Route
           path="reports/supplier-statement"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <SupplierStatementReportPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
