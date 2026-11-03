@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
+import RequireStaffCapability from "../guards/RequireStaffCapability";
 import RequireFinancialReports from "../guards/RequireFinancialReports";
 import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -153,15 +154,15 @@ export default function AppRouter() {
         <Route
           path="purchases/new"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="purchases.create" also={["purchases.view"]}>
               <PurchaseInvoicePage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="purchases/returns"
-          element={<RequireOwner><PurchaseReturnsPage /></RequireOwner>}
+          element={<RequireStaffCapability capability="purchases.returns" also={["purchases.view"]}><PurchaseReturnsPage /></RequireStaffCapability>}
         />
 
         <Route
@@ -225,36 +226,36 @@ export default function AppRouter() {
         <Route
           path="vouchers/receipt"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="vouchers.create">
               <UnifiedPartyVoucherPage mode="receipt" />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="vouchers/payment"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="vouchers.create">
               <UnifiedPartyVoucherPage mode="payment" />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="vouchers/journal"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="vouchers.create">
               <JournalVoucherPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="vouchers/register"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="vouchers.view">
               <VoucherRegisterPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
@@ -279,27 +280,27 @@ export default function AppRouter() {
         <Route
           path="finance/banking"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="banking.view">
               <BankingPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="finance/card-settlements"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="banking.view">
               <CardSettlementsPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="finance/checks"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="banking.view">
               <ChecksPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
@@ -340,9 +341,9 @@ export default function AppRouter() {
         <Route
           path="reports/financial-statements"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="reports.financial" also={["reports.cost","inventory.cost"]}>
               <FinancialStatementsReportPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
@@ -368,54 +369,54 @@ export default function AppRouter() {
         <Route
           path="reports/sales"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="reports.cost">
               <SalesAnalyticsPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="reports/inventory-valuation"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="inventory.cost">
               <InventoryValuationReportPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="reports/inventory-valuation-history"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="reports.cost">
               <HistoricalInventoryValuationReportPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="reports/inventory-intelligence"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="reports.cost">
               <InventoryIntelligenceReportPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="reports/product-analytics"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="reports.sales">
               <ProductAnalyticsReportPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
 
         <Route
           path="reports"
           element={
-            <RequireOwner>
+            <RequireStaffCapability capability="reports.cost">
               <GrossProfitReportPage />
-            </RequireOwner>
+            </RequireStaffCapability>
           }
         />
       </Route>
