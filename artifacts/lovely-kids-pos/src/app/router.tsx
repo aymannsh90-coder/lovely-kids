@@ -17,6 +17,8 @@ import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
+import StaffExpensesPage from "../pages/finance/StaffExpensesPage";
+import { usePosRuntime } from "./pos-context";
 import AssistantInboxPage from "../pages/finance/AssistantInboxPage";
 import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
 import UnifiedPartyVoucherPage from "../pages/finance/UnifiedPartyVoucherPage";
@@ -56,6 +58,13 @@ import StatementsPage from "../pages/reports/StatementsPage";
 import TrialBalanceReportPage from "../pages/reports/TrialBalanceReportPage";
 import ReceivablesLiquidityReportPage from "../pages/reports/ReceivablesLiquidityReportPage";
 import FinancialStatementsReportPage from "../pages/reports/FinancialStatementsReportPage";
+
+function ExpensesRoute() {
+  const { user } = usePosRuntime();
+  return user?.isOwner || user?.isAdmin
+    ? <RequireOpenSession><ExpensesPage /></RequireOpenSession>
+    : <StaffExpensesPage />;
+}
 
 export default function AppRouter() {
   return (
@@ -264,11 +273,7 @@ export default function AppRouter() {
 
         <Route
           path="finance/expenses"
-          element={
-            <RequireOpenSession>
-              <ExpensesPage />
-            </RequireOpenSession>
-          }
+          element={<ExpensesRoute />}
         />
 
         <Route
