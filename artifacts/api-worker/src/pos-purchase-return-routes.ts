@@ -16,6 +16,7 @@ import {
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 import { ensureSupplierPayableControlAccount } from "./finance-supplier-ledger";
 import { postFinanceTransaction } from "./finance-posting";
@@ -48,10 +49,18 @@ const businessDate = () => {
 };
 const normalizeDimension = (v: unknown) => typeof v === "string" && v.trim() ? v.trim() : null;
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/purchase-returns/preview", permission: "purchases.view" },
+  { method: "GET", path: "/api/pos/purchase-returns/history", permission: "purchases.view" },
+  { method: "GET", path: "/api/pos/purchase-returns/detail", permission: "purchases.view" },
+  { method: "POST", path: "/api/pos/purchase-returns", permission: "purchases.returns" },
+  { method: "POST", path: "/api/pos/purchase-returns/void", permission: "purchases.returns.void" },
+];
+
 async function requireOwner(request: Request, db: Db, env: Env) {
   const user = await getCurrentUser(db, request, env);
   if (!user) return { user: null, response: json({ error: "يجب تسجيل الدخول" }, 401) };
-  if (!user.isOwner) return { user: null, response: json({ error: "مردودات المشتريات للمالك فقط" }, 403) };
+  if (!(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) return { user: null, response: json({ error: "لا تملك صلاحية عملية مردود المشتريات" }, 403) };
   return { user, response: null };
 }
 
