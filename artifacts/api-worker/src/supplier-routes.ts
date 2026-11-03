@@ -69,7 +69,9 @@ async function requirePosUser(
   }
 
   const path = new URL(request.url).pathname;
-  const isAllowedStaffRead = request.method === "GET" &&
+  const isAllowedStaffRead = request.method === "POST" && path === "/api/pos/suppliers"
+    ? await userHasPermission(db, user, "parties.edit")
+    : request.method === "GET" &&
     (path === "/api/pos/suppliers"
       ? await userHasAnyPermission(db, user, ["parties.view", "reports.financial"])
       : /^\/api\/pos\/suppliers\/\d+\/ledger$/.test(path) &&
