@@ -191,7 +191,7 @@ export default function PurchaseReturnsPage() {
       <div className="pret-scroll"><table className="pret-table"><thead><tr><th>الصنف</th><th>اللون</th><th>النمرة</th><th>الكمية</th><th>قيمة المورد</th><th>تكلفة المخزون</th></tr></thead>
         <tbody>{saved.items.map(item => {
           const line = preview?.lines.find(l => l.id === item.purchaseItemId);
-          return <tr key={item.id}><td>{line?.productName ?? "منتج #" + item.productId}</td><td>{item.color ?? "—"}</td><td>{item.size ?? "—"}</td><td>{item.quantity}</td>
+          return <tr key={item.id}><td>{item.productName || line?.productName || "منتج #" + item.productId}</td><td>{item.color ?? "—"}</td><td>{item.size ?? "—"}</td><td>{item.quantity}</td>
             <td>{formatMoney(item.refundAmountMinor)}</td><td>{formatMoney(item.inventoryCostMinor)}</td></tr>;
         })}</tbody></table></div>
       <div className="pret-actions"><strong>قيمة المورد: {formatMoney(saved.purchaseReturn.refundAmountMinor)}</strong>
