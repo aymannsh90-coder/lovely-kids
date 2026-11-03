@@ -480,7 +480,6 @@ export const posNavigation: PosNavigationItem[] = [
     description: "كشف كامل لحركات المورد والدفعات والرصيد مع طباعة A4.",
     icon: "🚚",
     requiresOpenSession: false,
-    ownerOnly: true,
     status: "ready",
   },
   {
