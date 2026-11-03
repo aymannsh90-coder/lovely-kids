@@ -171,6 +171,13 @@ export default function VoucherRegisterPage() {
     clearAuthentication,
   } = usePosRuntime();
 
+  const canEditVoucher = Boolean(
+    user?.isOwner || (!user?.isAdmin && user?.staffEnabled && user?.permissions?.includes("vouchers.edit")),
+  );
+  const canVoidVoucher = Boolean(
+    user?.isOwner || (!user?.isAdmin && user?.staffEnabled && user?.permissions?.includes("vouchers.void")),
+  );
+
   const [vouchers, setVouchers] =
     useState<PosFinanceVoucher[]>([]);
   const [customers, setCustomers] =
@@ -206,31 +213,26 @@ export default function VoucherRegisterPage() {
     setError("");
 
     try {
+      // The voucher list is mandatory; party lookups are optional because
+      // a read-only staff member may not have employee/customer permissions.
+      const voucherResult = await getPosFinanceVouchers(token);
       const [
-        voucherResult,
         customerResult,
         employeeResult,
-      ] =
-        await Promise.all([
-          getPosFinanceVouchers(token),
-          getPosCustomers(token),
-          getPosEmployees(token),
-        ]);
-
-      const [
         supplierResult,
         deliveryResult,
         expenseResult,
-      ] =
-        await Promise.allSettled([
-          getPosSuppliers(token),
-          getDeliveryCompanies(token),
-          getPosExpenseCategories(token),
-        ]);
+      ] = await Promise.allSettled([
+        getPosCustomers(token),
+        getPosEmployees(token),
+        getPosSuppliers(token),
+        getDeliveryCompanies(token),
+        getPosExpenseCategories(token),
+      ]);
 
       setVouchers(voucherResult.results);
-      setCustomers(customerResult.results);
-      setEmployees(employeeResult.results);
+      setCustomers(customerResult.status === "fulfilled" ? customerResult.value.results : []);
+      setEmployees(employeeResult.status === "fulfilled" ? employeeResult.value.results : []);
 
       setSuppliers(
         supplierResult.status === "fulfilled"
@@ -858,9 +860,9 @@ export default function VoucherRegisterPage() {
   async function handleEdit(
     voucher: PosFinanceVoucher,
   ) {
-    if (!user?.isOwner) {
+    if (!canEditVoucher) {
       setError(
-        "تعديل السندات متاح للمالك فقط.",
+        "ليست لديك صلاحية تعديل السندات.",
       );
       return;
     }
@@ -978,9 +980,9 @@ export default function VoucherRegisterPage() {
   async function handleVoid(
     voucher: PosFinanceVoucher,
   ) {
-    if (!user?.isOwner) {
+    if (!canVoidVoucher) {
       setError(
-        "إلغاء السندات متاح للمالك فقط.",
+        "ليست لديك صلاحية إلغاء السندات.",
       );
       return;
     }
@@ -1427,9 +1429,9 @@ export default function VoucherRegisterPage() {
 
                         {voucher.status ===
                           "posted" &&
-                        user?.isOwner && (
+                        (canEditVoucher || canVoidVoucher) && (
                           <>
-                            {voucher.currencyCode ===
+                            {canEditVoucher && voucher.currencyCode ===
                               "ILS" &&
                             (
                               voucher.voucherType === "receipt" ||
@@ -1456,7 +1458,7 @@ export default function VoucherRegisterPage() {
                               </button>
                             )}
 
-                            <button
+                            {canVoidVoucher && <button
                               type="button"
                               className="secondary-button"
                               disabled={
@@ -1473,7 +1475,7 @@ export default function VoucherRegisterPage() {
                               voucher.id
                                 ? "جاري الإلغاء..."
                                 : "إلغاء"}
-                            </button>
+                            </button>}
                           </>
                         )}
                       </div>
