@@ -98,6 +98,11 @@ export default function BankingPage() {
     user,
     clearAuthentication,
   } = usePosRuntime();
+  const canViewBanking = Boolean(canViewBanking || user?.isAdmin ||
+    (user?.staffEnabled && (user?.permissions?.includes("banking.view") || user?.permissions?.includes("banking.create"))));
+  const canCreateBanking = Boolean(canViewBanking ||
+    (user?.staffEnabled && !user?.isAdmin && user?.permissions?.includes("banking.create")));
+
 
   const [
     currencies,
@@ -303,7 +308,7 @@ export default function BankingPage() {
 
     try {
       const cashPromise =
-        user?.isOwner
+        canViewBanking
           ? getPosFinanceCashAccounts(
               token,
             )
@@ -313,7 +318,7 @@ export default function BankingPage() {
             });
 
       const transferPromise =
-        user?.isOwner
+        canViewBanking
           ? getPosFinanceTransfers(
               token,
             )
@@ -323,7 +328,7 @@ export default function BankingPage() {
             });
 
       const conversionPromise =
-        user?.isOwner
+        canViewBanking
           ? getPosCurrencyConversions(
               token,
             )
@@ -418,7 +423,7 @@ export default function BankingPage() {
     void loadData();
   }, [
     token,
-    user?.isOwner,
+    canViewBanking,
   ]);
 
   const currencyByCode =
@@ -672,7 +677,7 @@ export default function BankingPage() {
 
   useEffect(() => {
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       conversionCashAccounts.length ===
         0
     ) {
@@ -747,7 +752,7 @@ export default function BankingPage() {
 
   useEffect(() => {
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       transferAccounts.length ===
         0
     ) {
@@ -816,7 +821,7 @@ export default function BankingPage() {
     currencyCode: string,
   ) {
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       rateSaving
     ) {
       return;
@@ -1924,7 +1929,7 @@ export default function BankingPage() {
         </div>
       )}
 
-      {user?.isOwner && (
+      {canViewBanking && (
         <>
           <section className="banking-section banking-transfer-section">
             <div className="banking-section-title">
@@ -3176,7 +3181,7 @@ export default function BankingPage() {
                         : "لم يتم تحديد سعر بعد"}
                     </small>
 
-                    {user?.isOwner && (
+                    {canCreateBanking && (
                       <button
                         type="button"
                         className="primary-button"
@@ -3240,7 +3245,7 @@ export default function BankingPage() {
         </div>
       </section>
 
-      {user?.isOwner && (
+      {canCreateBanking && (
         <section className="banking-section">
           <div className="banking-section-title">
             <div>
