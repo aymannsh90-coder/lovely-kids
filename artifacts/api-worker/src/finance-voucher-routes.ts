@@ -20,6 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 import {
   customerReceivableBalanceMinor,
@@ -142,6 +143,14 @@ type ResolvedAccount = {
     | null;
 };
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "POST", path: "/api/pos/finance/vouchers/foreign-currency-customer-receipt", permission: "vouchers.create" },
+  { method: "POST", path: "/api/pos/finance/vouchers/receipt", permission: "vouchers.create" },
+  { method: "POST", path: "/api/pos/finance/vouchers/payment", permission: "vouchers.create" },
+  { method: "POST", path: "/api/pos/finance/vouchers/journal", permission: "vouchers.create" },
+  { method: "POST", pattern: /^\/api\/pos\/finance\/vouchers\/\d+\/replace$/, permission: "vouchers.edit" },
+];
+
 async function requireOwner(
   request: Request,
   db: Db,
@@ -176,7 +185,7 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
