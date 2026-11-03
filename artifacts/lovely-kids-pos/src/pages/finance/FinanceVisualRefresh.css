@@ -921,3 +921,50 @@
     .route-content .assistant-inbox-page button { transition: none; }
   }
 }
+
+
+/* Screenshot review: compact, readable empty assistant inbox.
+   Purely decorative; draft selection and action behavior unchanged. */
+@media screen {
+  .route-content .assistant-inbox-page .assistant-inbox-empty-card {
+    min-height: 175px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 22px 18px;
+    text-align: center;
+    line-height: 1.8;
+    border: 1px dashed #cbdde9;
+    background: linear-gradient(180deg, #fff 0%, #f5fafc 100%);
+    color: #536e83;
+    font-size: 15px;
+    font-weight: 750;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-empty-card::before {
+    content: "📋";
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border: 1px solid #d9e9f2;
+    border-radius: 14px;
+    background: #edf7fc;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-empty {
+    min-height: 100px;
+    display: grid;
+    place-items: center;
+    padding: 20px 14px;
+    text-align: center;
+  }
+  @media (max-width: 620px) {
+    .route-content .assistant-inbox-page .assistant-inbox-empty-card {
+      min-height: 145px;
+      padding: 17px 12px;
+    }
+  }
+}
