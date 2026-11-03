@@ -48,8 +48,11 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/reports/customer-statement": ["reports.financial"],
     "/reports/supplier-statement": ["reports.financial"],
   };
-  if (/^\/inventory\/products\/\d+\/edit$/.test(path)) {
-    return permissions.includes("inventory.edit");
+  if (/^\/inventory\/products\/\d+\/edit$/.test(path) || path === "/inventory/products/new") {
+    return ["inventory.view", "inventory.edit"].every(p => permissions.includes(p));
+  }
+  if (path === "/purchases/new") {
+    return ["purchases.view", "purchases.create"].every(p => permissions.includes(p));
   }
   if (path === "/reports/financial-statements") {
     return ["reports.financial", "reports.cost", "inventory.cost"].every(p => permissions.includes(p));
