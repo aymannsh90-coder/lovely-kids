@@ -2416,8 +2416,8 @@ export default function BankingPage() {
               <div className="banking-empty">
                 أضف حسابًا بنكيًا أو صندوقًا فرعيًا حتى تتمكن من تنفيذ التحويلات.
               </div>
-            ) : (
-              {canCreateBanking && <form
+            ) : canCreateBanking ? (
+              <form
                 className="banking-transfer-form"
                 onSubmit={
                   createTransfer
@@ -2629,8 +2629,8 @@ export default function BankingPage() {
                     ? "جاري التحويل…"
                     : "تنفيذ التحويل"}
                 </button>
-              </form>}
-            )}
+              </form>
+            ) : null}
           </section>
 
           <section className="banking-section">
