@@ -21,3 +21,15 @@
 .pret-edit-meta{margin-top:15px}
 .pret-scroll{overflow:auto}
 @media print{.pret-no-print{display:none!important}.pret-card{break-inside:avoid;border-color:#bbb}.pret-page{padding:0!important}}
+/* Invoice item lookup only — quantity selections remain unchanged while filtering. */
+.pret-item-search{margin:16px 0;padding:14px;border:1px solid #cfdae5;border-radius:13px;background:#f6f9fd}
+.pret-item-search>label{display:block;font-weight:750;margin-bottom:8px}
+.pret-item-search-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.pret-item-search-controls input{flex:1;min-width:210px;border:1px solid #a8bcd0;border-radius:10px;padding:12px 14px;font:inherit;background:#fff}
+.pret-item-search-controls input:focus-visible{outline:2px solid #3575ab;outline-offset:2px}
+.pret-item-search .pret-small{margin:8px 0 0}
+.pret-option-barcode{display:block;direction:ltr;text-align:right;font-size:12px;color:#62788d;margin-top:4px}
+.pret-option-match{background:#e7f4ff;border-radius:8px;padding-inline:8px}
+.pret-option-match-label{display:inline-block;margin-right:9px;font-size:12px;color:#195a91}
+.pret-search-empty{border:1px dashed #cfdae5;border-radius:12px;padding:18px;color:#54677d;text-align:center}
+.pret-search-warning{margin:10px 0 0;padding:10px;border-radius:8px;background:#fff4de;color:#775118;font-size:13px;font-weight:650}
