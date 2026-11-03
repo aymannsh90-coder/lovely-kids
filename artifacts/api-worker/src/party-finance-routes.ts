@@ -116,10 +116,18 @@ async function requirePosUser(
     (request.method === "POST" && path === "/api/pos/customers") ||
     (request.method === "PATCH" && /^\/api\/pos\/customers\/\d+$/.test(path))
   ) && await userHasPermission(db, user, "parties.edit");
+  const voucherExpense = request.method === "POST" &&
+    path === "/api/pos/finance/expenses" &&
+    await userHasPermission(db, user, "vouchers.create");
+  const voucherReference = request.method === "GET" &&
+    path === "/api/pos/finance/expense-categories" &&
+    await userHasPermission(db, user, "vouchers.create");
   if (
     !user.isAdmin &&
     !user.isOwner &&
-    !staffWrite
+    !staffWrite &&
+    !voucherExpense &&
+    !voucherReference
   ) {
     return {
       ok: false,
