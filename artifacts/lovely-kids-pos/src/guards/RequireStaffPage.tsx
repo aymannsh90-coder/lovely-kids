@@ -15,7 +15,32 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/sales/today": ["sales.view"],
     "/sales/invoice-check": ["sales.view"],
     "/cash-session": ["cash.view", "cash.open", "cash.close"],
+    "/sales/new": ["sales.create"],
+    "/sales/returns": ["sales.returns"],
+    "/finance/receipts": ["vouchers.create"],
+    "/purchases/new": ["purchases.create"],
+    "/purchases/returns": ["purchases.returns"],
+    "/inventory/products": ["inventory.view"],
+    "/inventory/products/new": ["inventory.edit"],
+    "/inventory/stock-check": ["inventory.view"],
     "/inventory/product-card": ["inventory.view"],
+    "/parties/customers": ["parties.view"],
+    "/parties/suppliers": ["parties.view"],
+    "/vouchers/receipt": ["vouchers.create"],
+    "/vouchers/payment": ["vouchers.create"],
+    "/vouchers/journal": ["vouchers.create"],
+    "/vouchers/register": ["vouchers.view"],
+    "/finance/expenses": ["finance.expenses.view", "finance.expenses.create"],
+    "/finance/banking": ["banking.view"],
+    "/finance/card-settlements": ["banking.view"],
+    "/finance/checks": ["banking.view"],
+    "/reports/financial-statements": ["reports.financial", "reports.cost"],
+    "/reports/sales": ["reports.cost"],
+    "/reports/inventory-valuation": ["inventory.cost"],
+    "/reports/inventory-valuation-history": ["reports.cost"],
+    "/reports/inventory-intelligence": ["reports.cost"],
+    "/reports/product-analytics": ["reports.sales"],
+    "/reports": ["reports.cost"],
     "/statements": ["reports.financial"],
     "/reports/trial-balance": ["reports.financial"],
     "/reports/receivables-liquidity": ["reports.financial"],
@@ -23,6 +48,15 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/reports/customer-statement": ["reports.financial"],
     "/reports/supplier-statement": ["reports.financial"],
   };
+  if (/^\/inventory\/products\/\d+\/edit$/.test(path)) {
+    return permissions.includes("inventory.edit");
+  }
+  if (path === "/reports/financial-statements") {
+    return ["reports.financial", "reports.cost", "inventory.cost"].every(p => permissions.includes(p));
+  }
+  if (path === "/purchases/returns") {
+    return ["purchases.returns", "purchases.view"].every(p => permissions.includes(p));
+  }
   return (byPath[path] ?? []).some(p => permissions.includes(p));
 }
 
@@ -36,6 +70,16 @@ const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["cash.open", "/cash-session"],
   ["cash.close", "/cash-session"],
   ["inventory.view", "/inventory/product-card"],
+  ["inventory.edit", "/inventory/products/new"],
+  ["purchases.create", "/purchases/new"],
+  ["purchases.returns", "/purchases/returns"],
+  ["parties.view", "/parties/customers"],
+  ["vouchers.view", "/vouchers/register"],
+  ["vouchers.create", "/vouchers/receipt"],
+  ["banking.view", "/finance/banking"],
+  ["reports.cost", "/reports"],
+  ["reports.sales", "/reports/product-analytics"],
+  ["finance.expenses.view", "/finance/expenses"],
 ];
 
 export function firstAuthorizedStaffPage(permissions: string[]): string | null {
