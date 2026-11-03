@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const dir = new URL("../", import.meta.url);
+const dir = new URL("./", import.meta.url);
 const globalCss = readFileSync(new URL("index.css", dir), "utf8");
 const printCss = readFileSync(new URL("pages/purchases/PurchaseReturnsPage.css", dir), "utf8");
 
