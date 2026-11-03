@@ -28,6 +28,7 @@ import CustomersPage from "../pages/parties/CustomersPage";
 import EmployeesPage from "../pages/parties/EmployeesPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
+import PurchaseReturnsPage from "../pages/purchases/PurchaseReturnsPage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import MobileSalePage from "../pages/sales/MobileSalePage";
 import ManualOnlineOrderPage from "../pages/sales/ManualOnlineOrderPage";
@@ -159,21 +160,7 @@ export default function AppRouter() {
 
         <Route
           path="purchases/returns"
-          element={
-            <RequireOwner>
-              <ComingSoonPage
-              icon="📦"
-              title="مردودات المشتريات"
-              description="إرجاع أصناف إلى المورد وربطها بفاتورة الشراء."
-              points={[
-                "البحث بفاتورة الشراء أو باركود الصنف.",
-                "اختيار الكمية المراد إرجاعها.",
-                "خصم الكمية من المخزون.",
-                "تحديث حساب المورد.",
-              ]}
-              />
-            </RequireOwner>
-          }
+          element={<RequireOwner><PurchaseReturnsPage /></RequireOwner>}
         />
 
         <Route
