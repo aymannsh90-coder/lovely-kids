@@ -10,6 +10,7 @@ import {
 import { and, asc, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
@@ -63,6 +64,19 @@ async function requirePosUser(
   }
 
   if (!user.isAdmin && !user.isOwner) {
+    const path = new URL(request.url).pathname;
+    const method = request.method;
+    const allowRead = method === "GET" &&
+      ["/api/pos/sales/returns/preview", "/api/pos/sales/returns/history"].includes(path) &&
+      await userHasAnyPermission(db, user, ["sales.returns", "sales.view"]);
+    const allowReturn = method === "POST" &&
+      ["/api/pos/sales/returns", "/api/pos/sales/returns/mobile"].includes(path) &&
+      await userHasPermission(db, user, "sales.returns");
+    const allowCorrection = method === "POST" &&
+      ["/api/pos/sales/returns/void", "/api/pos/sales/returns/correct-cash-to-customer"].includes(path) &&
+      await userHasPermission(db, user, "sales.void") &&
+      await userHasPermission(db, user, "sales.returns");
+    if (allowRead || allowReturn || allowCorrection) return { ok: true, user };
     return {
       ok: false,
       response: json(
