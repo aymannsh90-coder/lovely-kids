@@ -133,10 +133,11 @@ export const posNavigation: PosNavigationItem[] = [
     group: "purchases",
     path: "/purchases/returns",
     title: "مردودات المشتريات",
-    description: "إرجاع أصناف إلى المورد وربطها بفاتورة الشراء.",
+    description: "إرجاع أصناف المورد من المخزون الفعلي حسب اللون والنمرة.",
     icon: "📦",
     requiresOpenSession: false,
-    status: "planned",
+    ownerOnly: true,
+    status: "ready",
   },
   {
     key: "invoice-check",
