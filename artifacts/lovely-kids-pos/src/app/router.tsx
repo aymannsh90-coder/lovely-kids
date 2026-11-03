@@ -4,6 +4,7 @@ import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
 import RequireStaffGrant from "../guards/RequireStaffGrant";
 import StaffOrdersPage from "../pages/sales/StaffOrdersPage";
+import PurchaseHistoryPage from "../pages/purchases/PurchaseHistoryPage";
 import RequireFinancialReports from "../guards/RequireFinancialReports";
 import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -162,6 +163,7 @@ export default function AppRouter() {
           }
         />
 
+        <Route path="purchases/history" element={<RequireStaffGrant permissions={["purchases.view", "purchases.create"]}><PurchaseHistoryPage /></RequireStaffGrant>} />
         <Route
           path="purchases/returns"
           element={<RequireStaffGrant permissions={["purchases.view"]}><PurchaseReturnsPage /></RequireStaffGrant>}
