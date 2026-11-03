@@ -11,6 +11,7 @@ import {
 } from "@workspace/db/schema";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import type { Env, openDb } from "./db";
 import { deleteProductImageObjects, getProductImageObjectPath } from "./image-routes";
 import { rewriteMediaUrlsForPublic } from "./media-url";
@@ -222,6 +223,15 @@ function validateManualStockCostInput(
   return null;
 }
 
+// Product costs and irreversible deletion are NOT part of the inventory-edit grant.
+const STAFF_ALLOWED_PRODUCT_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/products/admin", permission: "inventory.view" },
+  { method: "GET", path: "/api/products/barcodes", permission: "inventory.view" },
+  { method: "POST", path: "/api/products", permission: "inventory.edit" },
+  { method: "PUT", pattern: /^\/api\/products\/\d+$/, permission: "inventory.edit" },
+  { method: "PATCH", pattern: /^\/api\/products\/\d+\/(stock|variant-stock|visibility|restore)$/, permission: "inventory.edit" },
+];
+
 async function requireAdminActor(
   request: Request,
   db: Db,
@@ -243,7 +253,7 @@ async function requireAdminActor(
     };
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_PRODUCT_ROUTES))) {
     return {
       ok: false as const,
       response: json(
