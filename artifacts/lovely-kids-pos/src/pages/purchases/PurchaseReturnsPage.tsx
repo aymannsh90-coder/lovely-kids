@@ -23,7 +23,8 @@ const normalizeItemSearch = (value: string) => value
   .trim().toLowerCase().replace(/\s+/g, " ");
 
 export default function PurchaseReturnsPage() {
-  const { token } = usePosRuntime();
+  const { token, user } = usePosRuntime();
+  const canWriteReturns = Boolean(user?.isOwner);
   const [purchaseNo, setPurchaseNo] = useState("");
   const [preview, setPreview] = useState<PosPurchaseReturnPreview | null>(null);
   const [itemSearch, setItemSearch] = useState("");
@@ -149,6 +150,7 @@ export default function PurchaseReturnsPage() {
   }
 
   async function saveReturn() {
+    if (!canWriteReturns) return;
     if (!preview || busy) return;
     if (!requested.length || invalidSelected) {
       setError("راجع الكميات؛ لا يمكن إرجاع أكثر من المتوفر فعليًا أو المتبقي في فاتورة المشتريات"); return;
@@ -188,6 +190,7 @@ export default function PurchaseReturnsPage() {
   useEffect(() => () => document.body.classList.remove("pret-a4-printing"), []);
 
   async function cancelReturn() {
+    if (!canWriteReturns) return;
     if (!saved || saved.purchaseReturn.status === "voided" || busy) return;
     if (voidReason.trim().length < 2) { setError("أدخل سبب الإلغاء"); return; }
     if (!window.confirm("هل تؤكد إلغاء هذا المردود؟ سيتم إعادة المخزون وعكس القيد المالي.")) return;
@@ -268,8 +271,8 @@ export default function PurchaseReturnsPage() {
               <div className="pret-small">مشتراة: {line.originalQuantity} | مردودة سابقًا: {line.returnedQuantity} | متبقية للمردود: {line.availableToReturn}</div>
               <div className="pret-small">الرصيد من قيمة الصنف: {formatMoney(line.remainingAmountMinor)} | الموجود بالمحل: {line.stock ?? "غير معروف"}</div>
             </div>
-            <button type="button" onClick={() => chooseFull(line)} disabled={busy || line.availableToReturn === 0}>إرجاع كامل المتبقي</button>
-            <button type="button" onClick={() => clearLine(line)} disabled={busy}>مردود جزئي / تصفير</button>
+            {canWriteReturns && <button type="button" onClick={() => chooseFull(line)} disabled={busy || line.availableToReturn === 0}>إرجاع كامل المتبقي</button>}
+            {canWriteReturns && <button type="button" onClick={() => clearLine(line)} disabled={busy}>مردود جزئي / تصفير</button>}
           </div>
           {line.options.map(option => {
             const key = selectionKey(line, option);
@@ -283,14 +286,14 @@ export default function PurchaseReturnsPage() {
               </span>
               <label>كمية المردود <input aria-label={"مردود " + line.productName + " " + (option.color ?? "") + " " + (option.size ?? "")} type="number" min="0"
                 max={Math.max(0, Math.min(line.availableToReturn, option.stock ?? 0))}
-                value={selected[key] ?? 0} disabled={busy || line.availableToReturn === 0 || option.stock === null}
+                value={selected[key] ?? 0} disabled={!canWriteReturns || busy || line.availableToReturn === 0 || option.stock === null}
                 onChange={e => changeQuantity(line, option, e.target.value)} /></label>
             </div>;
           })}
           <strong>مردود الصنف المحدد: {quantity} قطعة</strong>
         </article>;
       })}
-      <div className="pret-toolbar pret-edit-meta">
+      {canWriteReturns && <div className="pret-toolbar pret-edit-meta">
         <label>سبب المردود<input value={reason} onChange={e => { setReason(e.target.value); requestKey.current = null; }} /></label>
         <label>ملاحظات<textarea rows={1} value={notes} onChange={e => { setNotes(e.target.value); requestKey.current = null; }} /></label>
       </div>
@@ -298,7 +301,7 @@ export default function PurchaseReturnsPage() {
         <strong>إجمالي القطع المحددة: {requestedTotal}</strong>
         <button className="pret-primary" type="button" disabled={busy || requestedTotal === 0 || invalidSelected}
           onClick={() => void saveReturn()}>{busy ? "جارٍ الحفظ..." : "اعتماد مردود المشتريات"}</button>
-      </div>
+      </div>}
       <p className="pret-small">قيمة المردود تُسجل على حساب المورد دون حركة صندوق. يمكن قبضها أو تسويتها لاحقًا بسند مستقل.</p>
     </section>}
     {saved && <section className="pret-card">
@@ -314,7 +317,7 @@ export default function PurchaseReturnsPage() {
         <strong>تكلفة المخزون: {formatMoney(saved.purchaseReturn.inventoryCostMinor)}</strong></div>
       <div className="pret-toolbar pret-no-print">
         <button type="button" onClick={printReturnA4} disabled={busy}>🖨 معاينة وطباعة A4</button>
-        {saved.purchaseReturn.status === "completed" && <>
+        {canWriteReturns && saved.purchaseReturn.status === "completed" && <>
           <label>سبب الإلغاء<input value={voidReason} onChange={e => setVoidReason(e.target.value)} /></label>
           <button type="button" disabled={busy} onClick={() => void cancelReturn()}>إلغاء المردود وعكس حركته</button>
         </>}
