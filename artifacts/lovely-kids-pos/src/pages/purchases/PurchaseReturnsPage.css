@@ -33,3 +33,404 @@
 .pret-option-match-label{display:inline-block;margin-right:9px;font-size:12px;color:#195a91}
 .pret-search-empty{border:1px dashed #cfdae5;border-radius:12px;padding:18px;color:#54677d;text-align:center}
 .pret-search-warning{margin:10px 0 0;padding:10px;border-radius:8px;background:#fff4de;color:#775118;font-size:13px;font-weight:650}
+
+
+/* Lovely Kids POS — Purchase Returns visual alignment (screen only).
+   Deliberately CSS-only: preserve JSX, input behavior, posting, inventory,
+   supplier ledgers, cancellation rules, printing and A4 layout. */
+@media screen {
+  .pret-page {
+    --pret-ink: #274255;
+    --pret-muted: #667f90;
+    --pret-line-color: #dce7ed;
+    --pret-blue: #204d7c;
+    --pret-pink: #e91e8c;
+    direction: rtl;
+    width: min(100%, 1400px);
+    max-width: 1400px;
+    padding: clamp(12px, 1.5vw, 24px);
+    margin-inline: auto;
+    color: var(--pret-ink);
+    font-size: 14px;
+  }
+  .pret-page,
+  .pret-page * { box-sizing: border-box; }
+  .pret-page > header.pret-no-print {
+    margin: 0 0 16px;
+    padding: 19px clamp(16px, 2vw, 25px);
+    border: 1px solid #f0d5e4;
+    border-right: 4px solid var(--pret-pink);
+    border-radius: 17px;
+    background: linear-gradient(112deg, #fff, #fff5fa 72%, #fce7f2);
+    box-shadow: 0 5px 20px rgba(27, 62, 82, .035);
+    text-align: right;
+  }
+  .pret-page > header h1 {
+    margin: 0 0 6px;
+    color: #263e51;
+    font-size: clamp(20px, 1.65vw, 25px);
+    font-weight: 900;
+    line-height: 1.4;
+  }
+  .pret-page > header p.pret-small {
+    max-width: 900px;
+    margin: 0;
+    line-height: 1.9;
+    font-size: 12px;
+    color: #6b8090;
+  }
+  .pret-page > .pret-card {
+    min-width: 0;
+    margin: 0 0 17px;
+    padding: clamp(15px, 1.5vw, 23px);
+    border: 1px solid #dfe8ee;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 8px 25px rgba(29, 65, 86, .045);
+  }
+  .pret-page .pret-card > h2,
+  .pret-page .pret-actions > h2 {
+    margin: 0 0 11px;
+    color: #2a465a;
+    font-size: clamp(17px, 1.4vw, 20px);
+    line-height: 1.5;
+    font-weight: 900;
+  }
+  .pret-page .pret-card > p {
+    color: #4f6778;
+    line-height: 1.85;
+  }
+  .pret-page .pret-card > p strong { color: #294e6a; }
+  .pret-page .pret-small {
+    font-size: 12px;
+    color: var(--pret-muted);
+    line-height: 1.75;
+  }
+
+  /* Form controls: match the approved sales/purchase invoice rhythm. */
+  .pret-page .pret-toolbar {
+    gap: 11px;
+    align-items: end;
+  }
+  .pret-page .pret-toolbar > label,
+  .pret-page .pret-option > label {
+    min-width: 0;
+    color: #4b6375;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .pret-page .pret-toolbar > label {
+    flex: 1 1 230px;
+    gap: 7px;
+  }
+  .pret-page :is(input:not([type="checkbox"]), textarea) {
+    min-height: 43px;
+    border: 1px solid #d5e2ea;
+    border-radius: 11px;
+    background: #fbfdfe;
+    color: #263f52;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    max-width: 100%;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .pret-page :is(input, textarea)::placeholder { color: #8395a4; }
+  .pret-page textarea {
+    min-height: 43px;
+    resize: vertical;
+    line-height: 1.65;
+  }
+  .pret-page :is(input,textarea):focus {
+    border-color: #e365a5;
+    box-shadow: 0 0 0 3px rgba(233, 30, 140, .08);
+    outline: none;
+  }
+  .pret-page :is(button,input,textarea):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .27);
+    outline-offset: 2px;
+  }
+  .pret-page button {
+    min-height: 41px;
+    border: 1px solid #d7e3eb;
+    border-radius: 11px;
+    padding: 9px 15px;
+    background: #fff;
+    color: #36576c;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.45;
+    white-space: normal;
+    box-shadow: 0 2px 6px rgba(33, 76, 101, .035);
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .pret-page button:hover:not(:disabled) {
+    border-color: #edb6d4;
+    background: #fff3f9;
+    color: #9f145f;
+  }
+  .pret-page button:disabled {
+    opacity: .54;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .pret-page button.pret-primary {
+    border-color: #d11c7b;
+    background: linear-gradient(125deg, #e91e8c, #c51874);
+    color: #fff;
+    box-shadow: 0 5px 13px rgba(210, 33, 122, .13);
+  }
+  .pret-page button.pret-primary:hover:not(:disabled) {
+    border-color: #ac105b;
+    background: #b41465;
+    color: #fff;
+  }
+  .pret-page .pret-error,
+  .pret-page .pret-success {
+    padding: 13px 16px;
+    margin: 0 0 14px;
+    border: 1px solid #f0cbd1;
+    border-radius: 12px;
+    font-weight: 700;
+    line-height: 1.8;
+  }
+  .pret-page .pret-error { background: #fff3f4; color: #a62b41; }
+  .pret-page .pret-success {
+    border-color: #bee7d6;
+    background: #f0faf5;
+    color: #167458;
+  }
+
+  /* Item lookup and item cards. */
+  .pret-page .pret-item-search {
+    margin: 17px 0 20px;
+    padding: 16px;
+    border: 1px solid #d7e6ef;
+    border-radius: 14px;
+    background: #f3f8fc;
+  }
+  .pret-page .pret-item-search > label {
+    display: block;
+    margin-bottom: 9px;
+    color: #315a76;
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .pret-page .pret-item-search-controls { gap: 9px; }
+  .pret-page .pret-item-search-controls input {
+    flex: 1 1 300px;
+    min-width: 0;
+    min-height: 45px;
+    background: #fff;
+  }
+  .pret-page .pret-item-search .pret-small { margin: 9px 0 0; }
+  .pret-page .pret-search-empty {
+    padding: 17px;
+    border: 1px dashed #c5d8e5;
+    border-radius: 12px;
+    background: #f9fcfe;
+    color: #526d82;
+    text-align: center;
+  }
+  .pret-page .pret-search-warning {
+    margin-top: 11px;
+    padding: 12px 14px;
+    border: 1px solid #eed5a8;
+    border-right: 4px solid #c89034;
+    border-radius: 11px;
+    background: #fff8eb;
+    color: #75521d;
+    line-height: 1.75;
+  }
+  .pret-page .pret-line {
+    margin: 14px 0 0;
+    padding: 15px 17px;
+    border: 1px solid #dbe6ed;
+    border-radius: 15px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgba(32, 75, 99, .035);
+  }
+  .pret-page .pret-line-head { gap: 11px; align-items: center; }
+  .pret-page .pret-line-head img {
+    width: 62px;
+    height: 62px;
+    border: 1px solid #e2eaf0;
+    border-radius: 12px;
+    background: #f8fafc;
+  }
+  .pret-page .pret-line-title { min-width: min(100%, 215px); }
+  .pret-page .pret-line-title > strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #26475d;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.6;
+  }
+  .pret-page .pret-line-title .pret-small {
+    overflow-wrap: anywhere;
+    line-height: 1.85;
+  }
+  .pret-page .pret-line-head > button:first-of-type {
+    border-color: #bdd8e9;
+    background: #eaf5fc;
+    color: #245b80;
+  }
+  .pret-page .pret-line-head > button:first-of-type:hover:not(:disabled) {
+    background: #dceef9;
+    border-color: #a2c8df;
+  }
+  .pret-page .pret-option {
+    gap: 15px;
+    padding: 12px 11px;
+    border-top: 1px solid #eaf0f4;
+    border-radius: 8px;
+  }
+  .pret-page .pret-option:nth-of-type(even) { background: #f8fbfd; }
+  .pret-page .pret-option > span {
+    flex: 1 1 200px;
+    min-width: 0;
+    color: #334f61;
+    font-size: 13px;
+    font-weight: 750;
+    overflow-wrap: anywhere;
+  }
+  .pret-page .pret-option > label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 9px;
+    white-space: nowrap;
+  }
+  .pret-page .pret-option input[type="number"] {
+    width: 87px;
+    min-height: 41px;
+    padding: 7px 8px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    background: #fff;
+    font-size: 15px;
+    font-weight: 900;
+  }
+  .pret-page .pret-option-match {
+    border: 1px solid #b9dceb;
+    background: #eaf6ff;
+  }
+  .pret-page .pret-option-barcode { color: #74899c; font-variant-numeric: tabular-nums; }
+  .pret-page .pret-option-match-label { color: #205c83; }
+  .pret-page .pret-line > strong {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 7px 12px;
+    border: 1px solid #e9d1e0;
+    border-radius: 10px;
+    background: #fff3f9;
+    color: #9f236a;
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  /* Saved-return summary and history tables. */
+  .pret-page .pret-edit-meta {
+    margin-top: 22px;
+    padding: 16px;
+    border: 1px solid #e3ecf1;
+    border-radius: 13px;
+    background: #f8fafc;
+  }
+  .pret-page .pret-actions {
+    gap: 11px;
+    margin: 16px 0;
+    align-items: center;
+  }
+  .pret-page .pret-actions > h2 { margin: 0; }
+  .pret-page .pret-actions > strong {
+    display: inline-block;
+    padding: 10px 13px;
+    border: 1px solid #d2e6ef;
+    border-radius: 11px;
+    background: #eff7fb;
+    color: #2c5a73;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .pret-page .pret-actions > button.pret-primary { min-height: 44px; }
+  .pret-page .pret-actions > span {
+    border: 1px solid #cce7d8;
+    border-radius: 999px;
+    background: #edfaf2;
+    color: #187350;
+    font-size: 12px;
+    font-weight: 850;
+    padding: 5px 12px;
+  }
+  .pret-page .pret-scroll {
+    max-width: 100%;
+    border: 1px solid #dce7ed;
+    border-radius: 13px;
+    background: #fff;
+    overflow-x: auto;
+  }
+  .pret-page .pret-table {
+    width: 100%;
+    min-width: 625px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+  }
+  .pret-page .pret-table th {
+    padding: 13px 12px;
+    border-bottom: 1px solid #d9e5ed;
+    background: #eef5f9;
+    color: #4c6d81;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .pret-page .pret-table td {
+    padding: 12px;
+    border-bottom: 1px solid #edf1f4;
+    color: #375468;
+    text-align: right;
+    line-height: 1.65;
+    vertical-align: middle;
+  }
+  .pret-page .pret-table tbody tr:nth-child(even) td { background: #fbfcfe; }
+  .pret-page .pret-table tbody tr:hover td { background: #fff5fa; }
+  .pret-page .pret-table tbody tr:last-child td { border-bottom: 0; }
+  .pret-page .pret-table td:last-child button { min-height: 35px; padding: 6px 13px; }
+  .pret-page section.pret-card:not(.pret-no-print) > .pret-toolbar button:last-of-type:not(:first-of-type) {
+    border-color: #edcbd2;
+    background: #fff3f5;
+    color: #a72e45;
+  }
+  .pret-page section.pret-card:not(.pret-no-print) > .pret-toolbar button:last-of-type:not(:first-of-type):hover:not(:disabled) {
+    background: #ffe4e9;
+    border-color: #dcabb8;
+  }
+
+  @media (max-width: 760px) {
+    .pret-page { padding: 11px; }
+    .pret-page > header.pret-no-print { padding: 16px; }
+    .pret-page > .pret-card { padding: 14px; }
+    .pret-page .pret-toolbar > label { flex-basis: 100%; }
+    .pret-page .pret-toolbar > button { flex: 1 1 auto; }
+    .pret-page .pret-item-search { padding: 12px; }
+    .pret-page .pret-line { padding: 12px; }
+    .pret-page .pret-line-title { flex-basis: 100%; }
+    .pret-page .pret-line-head > button { flex: 1 1 140px; }
+    .pret-page .pret-option { flex-wrap: wrap; }
+    .pret-page .pret-option > label {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .pret-page .pret-actions > button.pret-primary { flex: 1 1 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pret-page :is(button, input, textarea) { transition: none; }
+  }
+}
