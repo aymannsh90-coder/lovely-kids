@@ -3598,7 +3598,10 @@ async function handleListVouchers(
     );
 
   if (!auth.ok) {
-    return auth.response;
+    const actor = await getCurrentUser(db, request, env);
+    if (!actor || !(await userHasPermission(db, actor, "vouchers.view"))) {
+      return auth.response;
+    }
   }
 
   const url =
