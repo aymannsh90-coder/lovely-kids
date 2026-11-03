@@ -290,6 +290,7 @@ export default function CashSessionPage() {
   const state = location.state as LocationState | null;
 
   const {
+    user,
     session,
     openingBalance,
     setOpeningBalance,
@@ -308,6 +309,16 @@ export default function CashSessionPage() {
     lastClosedSession,
     handleCloseDay,
   } = usePosRuntime();
+
+  const canOpen = Boolean(user?.isOwner || user?.isAdmin || user?.permissions?.includes("cash.open"));
+  const canClose = Boolean(user?.isOwner || user?.isAdmin || user?.permissions?.includes("cash.close"));
+
+  if (!session && !canOpen) {
+    return <section className="work-panel cash-session-page lk-finance-refresh">
+      <h2>الصندوق مغلق</h2>
+      <p>لا تملك صلاحية فتح يوم العمل. يُمكن للمالك أو الموظف المخوّل فتح الجلسة.</p>
+    </section>;
+  }
 
   if (!session) {
     return (
@@ -523,7 +534,7 @@ export default function CashSessionPage() {
         </div>
       )}
 
-      <div className="close-day-block">
+      {canClose && <div className="close-day-block">
         <div className="close-day-heading">
           <div>
             <h3>إغلاق يوم العمل</h3>
@@ -577,7 +588,7 @@ export default function CashSessionPage() {
             {closeBusy ? "جاري إغلاق اليوم…" : "إغلاق يوم العمل"}
           </button>
         </form>
-      </div>
+      </div>}
     </section>
   );
 }
