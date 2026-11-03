@@ -79,9 +79,8 @@ const menuSections: MenuSection[] = [
 // page guard. This is presentation only: API handlers enforce permissions.
 function canSeeNavigationItem(item: PosNavigationItem, user: PosUser | null) {
   if (!user) return false;
+  if (item.ownerOnly && !user.isOwner && item.path !== "/purchases/returns") return false;
   if (item.group === "purchases" && !user.isOwner && !canVisitStaffPage(item.path, user.permissions ?? [])) return false;
-  if (item.group === "vouchers" && !user.isOwner) return false;
-  if (item.ownerOnly && !user.isOwner) return false;
   return user.isOwner || user.isAdmin || canVisitStaffPage(item.path, user.permissions ?? []);
 }
 
