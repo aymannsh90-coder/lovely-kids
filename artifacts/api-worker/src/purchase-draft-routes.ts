@@ -8,6 +8,7 @@ import {
 import { and, asc, eq } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 import {
   appendProductToSupplierDraft,
@@ -62,6 +63,15 @@ type AuthResult =
       response: Response;
     };
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/purchases/draft", permission: "purchases.view" },
+  { method: "POST", path: "/api/pos/purchases/draft", permission: "purchases.create" },
+  { method: "DELETE", path: "/api/pos/purchases/draft", permission: "purchases.create" },
+  { method: "POST", path: "/api/pos/purchases/draft/append-item", permission: "purchases.create" },
+  { method: "POST", path: "/api/pos/purchases/draft/append-historical-product", permission: "purchases.create" },
+  { method: "POST", path: "/api/pos/purchases/draft/remove-historical-item", permission: "purchases.create" },
+];
+
 async function requireOwner(
   request: Request,
   db: Db,
@@ -76,7 +86,7 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
