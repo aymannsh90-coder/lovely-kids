@@ -842,7 +842,7 @@ async function handleListCustomers(
     // The cashier exchange form needs a customer picker; allow read-only
     // customer lookups, never customer writes or ledger mutations.
     const user = await getCurrentUser(db, request, env);
-    if (!user || !(await userHasAnyPermission(db, user, ["sales.exchange", "parties.view", "reports.financial", "vouchers.view", "vouchers.create", "purchases.create"]))) {
+    if (!user || !(await userHasAnyPermission(db, user, ["sales.exchange", "parties.view", "parties.edit", "reports.financial", "vouchers.view", "vouchers.create", "purchases.create"]))) {
       return auth.response;
     }
   }
