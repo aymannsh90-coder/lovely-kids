@@ -10,6 +10,7 @@ import {
 import { and, asc, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
@@ -62,7 +63,7 @@ async function requirePosUser(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(request.method === "GET" && ["/api/pos/sales/returns/preview", "/api/pos/sales/returns/history"].includes(new URL(request.url).pathname) && await userHasPermission(db, user, "sales.returns"))) {
     return {
       ok: false,
       response: json(
