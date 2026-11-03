@@ -231,6 +231,7 @@ export default function PurchaseReturnsPage() {
             setItemSearch(""); itemSearchRef.current?.focus();
           }}>مسح البحث / إظهار الكل</button>}
         </div>
+        <p className="pret-small">قارئ الباركود يعمل حتى لو كانت لغة لوحة المفاتيح عربية.</p>
         <p id="pret-item-search-count" className="pret-small" aria-live="polite">
           {normalizedItemSearch
             ? `النتائج: ${filteredLines.length} من ${preview.lines.length} صنف/سطر في الفاتورة`
