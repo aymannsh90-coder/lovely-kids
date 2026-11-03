@@ -23,7 +23,7 @@ const roleOptions: { value: Role; label: string }[] = [
 const permissionGroups = [
   { title: "المبيعات", items: [["sales.view", "عرض الفواتير"], ["sales.create", "إجراء بيع"], ["sales.edit", "تعديل فاتورة"], ["sales.void", "إلغاء بيع"], ["sales.returns", "مردود المبيعات"], ["sales.returns.void", "إلغاء مردود مبيعات"], ["sales.exchange", "إجراء فاتورة تبديل (محل)"], ["sales.exchange.online", "تبديل طلب أونلاين"], ["sales.exchange.void", "إلغاء فاتورة تبديل"]] },
   { title: "الصندوق", items: [["cash.view", "عرض الصندوق"], ["cash.open", "فتح الصندوق"], ["cash.close", "إغلاق الصندوق"]] },
-  { title: "المخزون", items: [["inventory.view", "عرض المخزون"], ["inventory.edit", "تعديل الأصناف"], ["inventory.cost", "مشاهدة التكلفة"]] },
+  { title: "المخزون", items: [["inventory.view", "عرض المخزون"], ["inventory.edit", "تعديل الكميات والظهور"], ["inventory.cost", "مشاهدة التكلفة"]] },
   { title: "المشتريات", items: [["purchases.view", "عرض المشتريات"], ["purchases.create", "إضافة فاتورة"], ["purchases.void", "إلغاء فاتورة مشتريات"], ["purchases.returns", "إنشاء مردود مشتريات"], ["purchases.returns.void", "إلغاء مردود مشتريات"]] },
   { title: "الزبائن والموردون", items: [["parties.view", "عرض"], ["parties.edit", "تعديل"]] },
   { title: "السندات", items: [["vouchers.view", "عرض"], ["vouchers.create", "إضافة"], ["vouchers.edit", "استبدال / تعديل سند"], ["vouchers.void", "إلغاء سند"]] },
