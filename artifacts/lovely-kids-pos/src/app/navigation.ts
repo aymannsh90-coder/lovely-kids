@@ -129,6 +129,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "purchase-history",
+    group: "purchases",
+    path: "/purchases/history",
+    title: "سجل فواتير المشتريات",
+    description: "عرض الفواتير ومراجعة تكاليف الشراء دون تعديل.",
+    icon: "📒",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "new-purchase",
     group: "purchases",
     path: "/purchases/new",
