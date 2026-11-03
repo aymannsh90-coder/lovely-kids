@@ -434,3 +434,85 @@
     .pret-page :is(button, input, textarea) { transition: none; }
   }
 }
+
+
+/* 2026-11-03 screenshot review: wider workspace, denser entry panel,
+   and readable history on wide desktop. Screen-only, no behavior changes. */
+@media screen {
+  .route-content > .pret-page {
+    width: min(100%, 1650px);
+    max-width: 1650px;
+  }
+  .pret-page {
+    font-size: 15px;
+  }
+  .pret-page > header.pret-no-print {
+    padding-block: 15px;
+    margin-bottom: 13px;
+  }
+  .pret-page > header h1 {
+    font-size: clamp(21px, 1.7vw, 26px);
+  }
+  .pret-page > header p.pret-small {
+    font-size: 13px;
+  }
+  .pret-page > .pret-card {
+    margin-bottom: 13px;
+    padding-block: 17px;
+  }
+  .pret-page .pret-toolbar > label {
+    font-size: 14px;
+  }
+  .pret-page .pret-toolbar input,
+  .pret-page .pret-toolbar textarea {
+    font-size: 14px;
+  }
+  .pret-page .pret-card > h2,
+  .pret-page .pret-actions > h2 {
+    font-size: 20px;
+  }
+  .pret-page .pret-table {
+    font-size: 14px;
+  }
+  .pret-page .pret-table th {
+    font-size: 13px;
+    padding: 13px 15px;
+  }
+  .pret-page .pret-table td {
+    font-size: 14px;
+    padding: 12px 15px;
+  }
+  .pret-page .pret-table td:first-child {
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+  }
+  .pret-page .pret-table td:last-child button {
+    font-size: 13px;
+    min-height: 38px;
+  }
+  .pret-page .pret-item-search .pret-small,
+  .pret-page .pret-line-title .pret-small,
+  .pret-page .pret-card > .pret-small {
+    font-size: 13px;
+  }
+  @media (min-width: 1100px) {
+    .pret-page > .pret-card:first-of-type {
+      padding-block: 14px;
+    }
+    .pret-page > .pret-card:first-of-type .pret-toolbar {
+      margin: 0;
+    }
+    .pret-page > .pret-card:first-of-type .pret-toolbar > label {
+      flex: 1 1 auto;
+    }
+  }
+  @media (max-width: 760px) {
+    .route-content > .pret-page {
+      width: 100%;
+      max-width: 100%;
+    }
+    .pret-page > header.pret-no-print { padding: 15px; }
+    .pret-page > .pret-card { padding: 14px; }
+    .pret-page .pret-table { font-size: 13px; }
+  }
+}
