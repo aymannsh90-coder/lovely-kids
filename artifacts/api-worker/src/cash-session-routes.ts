@@ -241,7 +241,7 @@ async function requirePosUser(
     const method = request.method;
     const required: StaffPermission[] =
       method === "GET" && path === "/api/pos/cash-sessions/current"
-        ? ["cash.view", "sales.create", "sales.exchange", "sales.exchange.online"]
+        ? ["cash.view", "sales.create", "sales.exchange", "sales.exchange.online", "finance.expenses.create"]
         : method === "POST" && path === "/api/pos/cash-sessions/open"
           ? ["cash.open"]
           : method === "POST" && path === "/api/pos/cash-sessions/close"
