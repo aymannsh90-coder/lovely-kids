@@ -1949,7 +1949,7 @@ export default function BankingPage() {
               </span>
             </div>
 
-            <form
+            {canCreateBanking && <form
               className="banking-transfer-form"
               onSubmit={
                 createCurrencyConversion
@@ -2163,7 +2163,7 @@ export default function BankingPage() {
                   ? "جاري تحويل العملة…"
                   : "تنفيذ تحويل العملة"}
               </button>
-            </form>
+            </form>}
 
             {conversionFromAccount &&
               conversionToAccount &&
@@ -2417,7 +2417,7 @@ export default function BankingPage() {
                 أضف حسابًا بنكيًا أو صندوقًا فرعيًا حتى تتمكن من تنفيذ التحويلات.
               </div>
             ) : (
-              <form
+              {canCreateBanking && <form
                 className="banking-transfer-form"
                 onSubmit={
                   createTransfer
@@ -2629,7 +2629,7 @@ export default function BankingPage() {
                     ? "جاري التحويل…"
                     : "تنفيذ التحويل"}
                 </button>
-              </form>
+              </form>}
             )}
           </section>
 
@@ -2784,7 +2784,7 @@ export default function BankingPage() {
               </div>
             )}
 
-            <form
+            {canCreateBanking && <form
               className="banking-cash-create-form"
               onSubmit={
                 createCashAccount
@@ -2904,7 +2904,7 @@ export default function BankingPage() {
                   ? "جاري الإضافة…"
                   : "إضافة صندوق فرعي"}
               </button>
-            </form>
+            </form>}
           </section>
 
           <section className="banking-section">
@@ -3258,7 +3258,7 @@ export default function BankingPage() {
             </div>
           </div>
 
-          <form
+          {canCreateBanking && <form
             className="banking-account-form"
             onSubmit={
               createAccount
@@ -3477,7 +3477,7 @@ export default function BankingPage() {
                 ? "جاري الإضافة…"
                 : "إضافة الحساب"}
             </button>
-          </form>
+          </form>}
         </section>
       )}
 
