@@ -20,6 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   customerReceivableBalanceMinor,
@@ -176,7 +177,17 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  const path = new URL(request.url).pathname;
+  const permittedCreate = request.method === "POST" &&
+    [
+      "/api/pos/finance/vouchers/receipt",
+      "/api/pos/finance/vouchers/payment",
+      "/api/pos/finance/vouchers/journal",
+      "/api/pos/finance/vouchers/foreign-currency-customer-receipt",
+    ].includes(path) &&
+    !user.isAdmin &&
+    await userHasPermission(db, user, "vouchers.create");
+  if (!user.isOwner && !permittedCreate) {
     return {
       ok: false,
       response: json(
