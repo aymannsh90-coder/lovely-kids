@@ -191,8 +191,10 @@ async function detail(db: Db | Tx, id: number) {
   const sourceItems = items.length ? await db.select({
     id: posPurchaseItemsTable.id,
     name: posPurchaseItemsTable.productNameAr,
+    productCode: posPurchaseItemsTable.productCode,
+    productImage: posPurchaseItemsTable.productImage,
   }).from(posPurchaseItemsTable).where(inArray(posPurchaseItemsTable.id, [...new Set(items.map(item => item.purchaseItemId))])) : [];
-  const names = new Map(sourceItems.map(item => [item.id, item.name]));
+  const sourceItemsById = new Map(sourceItems.map(item => [item.id, item]));
   const purchaseInfo = await db.select({
     publicId: posPurchasesTable.publicId,
     supplierInvoiceNumber: posPurchasesTable.supplierInvoiceNumber,
@@ -210,7 +212,10 @@ async function detail(db: Db | Tx, id: number) {
       supplierInvoiceNumber: purchase.supplierInvoiceNumber,
     },
     items: items.map(item => ({
-      ...item, productName: names.get(item.purchaseItemId) ?? "صنف غير معروف",
+      ...item,
+      productName: sourceItemsById.get(item.purchaseItemId)?.name ?? "صنف غير معروف",
+      productCode: sourceItemsById.get(item.purchaseItemId)?.productCode ?? null,
+      productImage: sourceItemsById.get(item.purchaseItemId)?.productImage ?? null,
     })),
   };
 }
