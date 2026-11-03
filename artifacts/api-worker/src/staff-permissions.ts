@@ -15,6 +15,7 @@ export const STAFF_PERMISSION_KEYS = [
   "banking.view", "banking.create", "banking.manage", "banking.reverse",
   "reports.sales", "reports.financial", "reports.cost", "reports.inventory",
   "orders.view", "orders.create", "orders.edit", "orders.cancel",
+  "orders.confirm-payment", "orders.delivery-cost", "orders.courier.cash", "orders.courier.reverse",
   "finance.expenses.view", "finance.expenses.create",
   "delivery.view", "delivery.manage", "delivery.settle", "delivery.reverse",
 ] as const;
