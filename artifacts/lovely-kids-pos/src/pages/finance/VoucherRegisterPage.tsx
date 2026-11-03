@@ -213,8 +213,10 @@ export default function VoucherRegisterPage() {
       ] =
         await Promise.all([
           getPosFinanceVouchers(token),
-          getPosCustomers(token),
-          getPosEmployees(token),
+          getPosCustomers(token).catch(() => ({ results: [] as PosCustomer[] })),
+          user?.isOwner
+            ? getPosEmployees(token)
+            : Promise.resolve({ results: [] as PosEmployee[] }),
         ]);
 
       const [
