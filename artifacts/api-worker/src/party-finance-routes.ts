@@ -20,7 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
-import { userHasPermission } from "./staff-permissions";
+import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
 import { handleEmployeeMonthClose, MONTH_CLOSE_SOURCE_TYPE, MONTH_CLOSE_EVENT, salaryMonthRange } from "./employee-month-close";
 import { openDb, type Env } from "./db";
 import {
@@ -836,7 +836,7 @@ async function handleListCustomers(
     // The cashier exchange form needs a customer picker; allow read-only
     // customer lookups, never customer writes or ledger mutations.
     const user = await getCurrentUser(db, request, env);
-    if (!user || !(await userHasPermission(db, user, "sales.exchange"))) {
+    if (!user || !(await userHasAnyPermission(db, user, ["sales.exchange", "parties.view", "reports.financial"]))) {
       return auth.response;
     }
   }
@@ -1281,7 +1281,10 @@ async function handleCustomerLedger(
     );
 
   if (!auth.ok) {
-    return auth.response;
+    const user = await getCurrentUser(db, request, env);
+    if (!user || !(await userHasPermission(db, user, "reports.financial"))) {
+      return auth.response;
+    }
   }
 
   const customerRows =
