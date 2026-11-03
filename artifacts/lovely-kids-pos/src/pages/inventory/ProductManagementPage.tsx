@@ -85,7 +85,7 @@ export default function ProductManagementPage() {
 
   const scannerKeyboard = useRef(createScannerKeyboardBuffer());
 
-  const canManage = user?.isAdmin === true || user?.isOwner === true;
+  const canManage = user?.isAdmin === true || user?.isOwner === true || Boolean(user?.staffEnabled && user?.permissions?.includes("inventory.edit"));
 
   useEffect(() => {
     document.title = "الأصناف | Lovely Kids POS";
