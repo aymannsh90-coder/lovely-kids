@@ -4,6 +4,7 @@ import {
 import { asc, eq } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -28,6 +29,12 @@ class DeliveryCompanyError extends Error {
   }
 }
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/delivery-companies", permission: "delivery.view" },
+  { method: "POST", path: "/api/delivery-companies", permission: "delivery.manage" },
+  { method: "PATCH", pattern: /^\/api\/delivery-companies\/\d+$/, permission: "delivery.manage" },
+];
+
 async function requireAdmin(
   request: Request,
   db: Db,
@@ -42,7 +49,7 @@ async function requireAdmin(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false as const,
       response: json(
