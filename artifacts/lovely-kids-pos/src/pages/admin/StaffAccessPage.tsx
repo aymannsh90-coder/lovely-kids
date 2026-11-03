@@ -175,7 +175,7 @@ export default function StaffAccessPage() {
           </div>
           {selected && <label className="staff-access-enabled"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}/> الحساب مفعل (إلغاؤه يمنع الدخول فورًا)</label>}
           <h3 className="staff-access-permission-heading">تحديد الصلاحيات</h3>
-          <p className="staff-access-permission-note">الصلاحيات تبدأ مقفلة؛ اختر العمليات التي يحتاجها الموظف. لن يتم منحه صلاحية المدير.</p>
+          <p className="staff-access-permission-note">الصلاحيات تبدأ مقفلة؛ اختر العمليات التي يحتاجها الموظف. لا تمنح أي صلاحية مدير. إضافة المشتريات تحتاج أيضًا عرض المشتريات، وتسجيل المصروف النقدي يحتاج صلاحية عرض الصندوق ووجود يوم عمل مفتوح، وإجراء بعض السندات يحتاج عرض الزبائن والموردين.</p>
           <div className="staff-access-permission-grid">
             {permissionGroups.map(group => (
               <fieldset key={group.title} className="staff-access-permission-group">
