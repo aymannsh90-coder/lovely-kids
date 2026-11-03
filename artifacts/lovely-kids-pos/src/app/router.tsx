@@ -30,6 +30,7 @@ import CustomersPage from "../pages/parties/CustomersPage";
 import EmployeesPage from "../pages/parties/EmployeesPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
+import PurchaseHistoryPage from "../pages/purchases/PurchaseHistoryPage";
 import PurchaseReturnsPage from "../pages/purchases/PurchaseReturnsPage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import MobileSalePage from "../pages/sales/MobileSalePage";
@@ -150,6 +151,8 @@ export default function AppRouter() {
             </RequireOpenSession>
           }
         />
+
+        <Route path="purchases/history" element={<PurchaseHistoryPage />} />
 
         <Route
           path="purchases/new"
