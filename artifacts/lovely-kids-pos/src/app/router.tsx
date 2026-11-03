@@ -11,6 +11,7 @@ import DashboardPage from "../pages/DashboardPage";
 import AdminPanelPage from "../pages/admin/AdminPanelPage";
 import StaffAccessPage from "../pages/admin/StaffAccessPage";
 import BankingPage from "../pages/finance/BankingPage";
+import StaffBankingOverviewPage from "../pages/finance/StaffBankingOverviewPage";
 import CardSettlementsPage from "../pages/finance/CardSettlementsPage";
 import CashSessionPage from "../pages/finance/CashSessionPage";
 import ChecksPage from "../pages/finance/ChecksPage";
@@ -58,6 +59,13 @@ import StatementsPage from "../pages/reports/StatementsPage";
 import TrialBalanceReportPage from "../pages/reports/TrialBalanceReportPage";
 import ReceivablesLiquidityReportPage from "../pages/reports/ReceivablesLiquidityReportPage";
 import FinancialStatementsReportPage from "../pages/reports/FinancialStatementsReportPage";
+
+function BankingRoute() {
+  const { user } = usePosRuntime();
+  const canWrite = user?.isOwner || user?.isAdmin ||
+    ["banking.create", "banking.manage", "banking.reverse"].some(p => user?.permissions?.includes(p));
+  return canWrite ? <BankingPage /> : <StaffBankingOverviewPage />;
+}
 
 function ExpensesRoute() {
   const { user } = usePosRuntime();
@@ -289,7 +297,7 @@ export default function AppRouter() {
           path="finance/banking"
           element={
             <RequireStaffCapability capability="banking.view">
-              <BankingPage />
+              <BankingRoute />
             </RequireStaffCapability>
           }
         />
