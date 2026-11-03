@@ -12,6 +12,7 @@ import {
 import { sql, and, desc, eq, isNull, or } from "drizzle-orm";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 import {
   createTrustedOrder,
@@ -492,7 +493,7 @@ async function handleCreateOrder(
       options.manualPos &&
       (
         !authUser ||
-        (!authUser.isAdmin && !authUser.isOwner)
+        (!authUser.isAdmin && !authUser.isOwner && !(await userHasPermission(db, authUser, "orders.create")))
       )
     ) {
       return json(
@@ -637,7 +638,7 @@ async function handleGetOrders(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.view"))) {
     return json({ error: "غير مصرح" }, 403);
   }
 
@@ -1012,7 +1013,7 @@ async function handleMarkOrderPrinted(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.edit"))) {
     return json({ error: "غير مصرح" }, 403);
   }
 
@@ -1559,7 +1560,7 @@ async function handleEditDeliveryCompanyCost(
 ): Promise<Response> {
   const user = await getCurrentUser(db, request, env);
   if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(await userHasPermission(db, user, "orders.edit"))) {
     return json({ error: "غير مصرح بتعديل تكلفة شركة التوصيل" }, 403);
   }
 
@@ -1747,7 +1748,7 @@ async function handleEditOrderItems(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.edit"))) {
     return json({ error: "غير مصرح" }, 403);
   }
 
@@ -1857,6 +1858,7 @@ async function handleCancelOrder(
   if (!user) {
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
+  const canCancelAnyOrder = user.isAdmin || await userHasPermission(db, user, "orders.cancel");
 
   const current = await db
     .select({
@@ -1888,7 +1890,7 @@ async function handleCancelOrder(
   }
 
   if (
-    !user.isAdmin &&
+    !canCancelAnyOrder &&
     current[0].userId !== user.id &&
     (
       current[0].userId !== null ||
@@ -1940,7 +1942,7 @@ async function handleCancelOrder(
     return json({ error: "لا يمكن إلغاء هذا الطلب" }, 409);
   }
 
-  return json(user.isAdmin ? result.order : customerOrderView(result.order));
+  return json(canCancelAnyOrder ? result.order : customerOrderView(result.order));
 }
 
 async function handleConvertOrderToStorePickup(
@@ -1955,7 +1957,7 @@ async function handleConvertOrderToStorePickup(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.edit"))) {
     return json({ error: "غير مصرح" }, 403);
   }
 
@@ -2071,7 +2073,7 @@ async function handleUpdateOrderStatus(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.edit"))) {
     return json({ error: "غير مصرح" }, 403);
   }
 
@@ -2566,7 +2568,7 @@ async function handleConfirmPayment(
     return json({ error: "يجب تسجيل الدخول" }, 401);
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.edit"))) {
     return json({ error: "غير مصرح" }, 403);
   }
 
