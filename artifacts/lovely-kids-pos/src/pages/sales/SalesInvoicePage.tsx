@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import "../InvoiceVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import SaleReceipt from "../../components/SaleReceipt";
 import { printReceiptElementDirect } from "../../lib/directReceiptPrint";
@@ -1973,7 +1974,7 @@ export default function SalesInvoicePage() {
   });
 
   return (
-    <section className="accounting-invoice-page sales-invoice-scroll-page">
+    <section className="accounting-invoice-page sales-invoice-scroll-page lk-invoice-refresh">
       <header className="accounting-invoice-titlebar">
         <div>
           <span>الفواتير</span>

@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import "../InvoiceVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
@@ -2435,7 +2436,7 @@ export default function PurchaseInvoicePage() {
   }
 
   return (
-    <section className="accounting-invoice-page purchase-invoice-page">
+    <section className="accounting-invoice-page purchase-invoice-page lk-invoice-refresh">
       <header className="accounting-invoice-titlebar">
         <div>
           <span>المشتريات والموردون</span>
