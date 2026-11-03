@@ -9,12 +9,13 @@ export const STAFF_PERMISSION_KEYS = [
   "sales.exchange", "sales.exchange.online", "sales.exchange.void",
   "cash.view", "cash.open", "cash.close",
   "inventory.view", "inventory.edit", "inventory.cost",
-  "purchases.view", "purchases.create", "purchases.edit",
+  "purchases.view", "purchases.create", "purchases.edit", "purchases.void", "purchases.returns", "purchases.returns.void",
   "parties.view", "parties.edit",
-  "vouchers.view", "vouchers.create", "vouchers.void",
-  "banking.view", "banking.create",
-  "reports.sales", "reports.financial", "reports.cost",
+  "vouchers.view", "vouchers.create", "vouchers.edit", "vouchers.void",
+  "banking.view", "banking.create", "banking.manage", "banking.reverse",
+  "reports.sales", "reports.financial", "reports.cost", "reports.inventory",
   "orders.view", "orders.create", "orders.edit", "orders.cancel",
+  "finance.expenses.view", "finance.expenses.create",
 ] as const;
 export type StaffPermission = (typeof STAFF_PERMISSION_KEYS)[number];
 const ALLOWED = new Set<string>(STAFF_PERMISSION_KEYS);
