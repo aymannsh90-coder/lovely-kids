@@ -12,6 +12,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 
+import "./SalesDocumentVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import ExchangeReceipt from "../../components/ExchangeReceipt";
 import { voidPosExchange } from "../../lib/api";
@@ -3927,7 +3928,7 @@ export default function ExchangePage() {
   if (historyPublicId) {
     return (
       <section
-        className="sales-return-page"
+        className="sales-return-page lk-sales-document-refresh"
         id="pos-sales-exchange"
       >
         <header className="sales-return-heading">
@@ -4128,7 +4129,7 @@ export default function ExchangePage() {
 
   return (
     <section
-      className="sales-return-page"
+      className="sales-return-page lk-sales-document-refresh"
       id="pos-sales-exchange"
     >
       <header className="sales-return-heading">

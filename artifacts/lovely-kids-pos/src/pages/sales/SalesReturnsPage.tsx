@@ -10,6 +10,7 @@ import {
 
 import { useSearchParams } from "react-router-dom";
 
+import "./SalesDocumentVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
@@ -1152,7 +1153,7 @@ export default function SalesReturnsPage() {
 
 
   return (
-    <section className="sales-return-page" id="pos-sales-returns">
+    <section className="sales-return-page lk-sales-document-refresh" id="pos-sales-returns">
       <header className="sales-return-heading">
         <div className="panel-heading">
           <div className="panel-icon">↩️</div>
