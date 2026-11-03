@@ -14,8 +14,9 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/sales/mobile/price-check": ["sales.create"],
     "/sales/mobile/manual-order": ["orders.create"],
     "/sales/mobile/returns": ["sales.returns"],
+    "/sales/returns": ["sales.returns"],
     "/sales/today": ["sales.view"],
-    "/sales/invoice-check": ["sales.view"],
+    "/sales/invoice-check": ["sales.view", "sales.edit", "sales.void", "sales.returns"],
     "/cash-session": ["cash.view", "cash.open", "cash.close"],
     "/inventory/product-card": ["inventory.view"],
     "/inventory/products": ["inventory.view", "inventory.edit"],
@@ -57,6 +58,9 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
 
 const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["sales.create", "/sales/pos"],
+  ["sales.returns", "/sales/returns"],
+  ["sales.edit", "/sales/invoice-check"],
+  ["sales.void", "/sales/invoice-check"],
   ["sales.exchange", "/sales/exchange"],
   ["sales.exchange.online", "/sales/exchange"],
   ["reports.financial", "/reports/trial-balance"],
