@@ -18,6 +18,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 import {
   ensureCustomerReceivableControlAccount,
@@ -339,6 +340,15 @@ type PosUser = NonNullable<
   >
 >;
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/finance/checks/reference", permission: "banking.view" },
+  { method: "GET", path: "/api/pos/finance/checks", permission: "banking.view" },
+  { method: "POST", path: "/api/pos/finance/checks/received", permission: "banking.create" },
+  { method: "POST", path: "/api/pos/finance/checks/issued", permission: "banking.create" },
+  { method: "POST", pattern: /^\/api\/pos\/finance\/checks\/\d+\/(deposit|clear)$/, permission: "banking.create" },
+  { method: "POST", pattern: /^\/api\/pos\/finance\/checks\/\d+\/(return|cancel)$/, permission: "banking.reverse" },
+];
+
 async function requirePosUser(
   request: Request,
   db: Db,
@@ -373,10 +383,7 @@ async function requirePosUser(
     };
   }
 
-  if (
-    !user.isAdmin &&
-    !user.isOwner
-  ) {
+  if (!user.isAdmin && !user.isOwner && !(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
@@ -411,7 +418,7 @@ async function requireOwner(
     return auth;
   }
 
-  if (!auth.user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, auth.user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false as const,
       response: json(
