@@ -18,6 +18,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   ensureCustomerReceivableControlAccount,
@@ -375,7 +376,10 @@ async function requirePosUser(
 
   if (
     !user.isAdmin &&
-    !user.isOwner
+    !user.isOwner &&
+    !(request.method === "GET" &&
+      ["/api/pos/finance/checks/reference", "/api/pos/finance/checks"].includes(new URL(request.url).pathname) &&
+      await userHasPermission(db, user, "banking.view"))
   ) {
     return {
       ok: false,
