@@ -3242,6 +3242,88 @@ export default function AdminOrdersScreen() {
         throw new Error("بيانات التبديل تغيرت، حدّث قائمة الطلبات قبل الطباعة.");
       }
 
+      // Match each returned variant against the original order's stored
+      // image first. This preserves the color/image at the time of purchase.
+      const originalOrder = orders.find(
+        (item) => item.id === order.exchangeOriginalOrderId,
+      );
+      const normalizeVariant = (value: string | null | undefined) =>
+        (value ?? "").trim().toLocaleLowerCase();
+
+      const returnItemsWithImages = exchangePrintData
+        ? exchangePrintData.returnItems.map((returnedItem) => {
+            const originalItem = originalOrder?.items.find(
+              (item) =>
+                (returnedItem.productId
+                  ? String(item.id) === String(returnedItem.productId)
+                  : normalizeVariant(item.name) ===
+                    normalizeVariant(returnedItem.productNameAr)) &&
+                (!returnedItem.color ||
+                  normalizeVariant(item.color) ===
+                    normalizeVariant(returnedItem.color)) &&
+                (!returnedItem.size ||
+                  normalizeVariant(item.size) ===
+                    normalizeVariant(returnedItem.size)),
+            );
+
+            return {
+              ...returnedItem,
+              image: originalItem?.image?.trim() || undefined,
+            };
+          })
+        : [];
+
+      // For older orders with no saved image, use the authenticated admin
+      // catalog (including hidden products) and the matching color variant.
+      // Missing catalog images must not prevent the order from printing.
+      if (returnItemsWithImages.some((item) => !item.image)) {
+        try {
+          const token = await getAuthToken();
+          if (token) {
+            const response = await fetch(`${API_BASE}/api/products/admin`, {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            });
+
+            if (response.ok) {
+              const payload: unknown = await response.json();
+              const products: AdminOrderEditProduct[] = Array.isArray(payload)
+                ? payload
+                : [];
+              const productsById = new Map(
+                products.map((product) => [String(product.id), product]),
+              );
+
+              for (const item of returnItemsWithImages) {
+                if (item.image) continue;
+
+                const product = item.productId
+                  ? productsById.get(String(item.productId))
+                  : products.find(
+                      (candidate) =>
+                        normalizeVariant(candidate.nameAr) ===
+                        normalizeVariant(item.productNameAr),
+                    );
+                if (!product) continue;
+
+                const variant = product.colorVariants?.find(
+                  (candidate) =>
+                    normalizeVariant(candidate.color) ===
+                    normalizeVariant(item.color),
+                );
+                item.image =
+                  variant?.image?.trim() || product.image?.trim() || undefined;
+              }
+            }
+          }
+        } catch (imageError) {
+          console.warn(
+            "تعذر تحميل صور بعض أصناف المرتجع لطباعة A4",
+            imageError,
+          );
+        }
+      }
+
       const html = await createOrderPrintHtml({
         ...order,
         ...(exchangePrintData
@@ -3253,7 +3335,7 @@ export default function AdminOrdersScreen() {
               exchangeDeliveryBaseChargeMinor: exchangePrintData.exchange.deliveryBaseChargeMinor,
               exchangeDeliveryDiscountMinor: exchangePrintData.exchange.deliveryDiscountMinor,
               exchangeSettlementAmountMinor: exchangePrintData.exchange.settlementAmountMinor,
-              exchangeReturnItems: exchangePrintData.returnItems,
+              exchangeReturnItems: returnItemsWithImages,
             }
           : {}),
       });
