@@ -16,7 +16,7 @@ import {
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
-import { userHasPermission } from "./staff-permissions";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import { ensureSupplierPayableControlAccount } from "./finance-supplier-ledger";
 import { postFinanceTransaction } from "./finance-posting";
@@ -55,8 +55,16 @@ async function requireOwner(request: Request, db: Db, env: Env) {
   const path = new URL(request.url).pathname;
   const staffRead = request.method === "GET" &&
     ["/api/pos/purchase-returns/preview", "/api/pos/purchase-returns/history", "/api/pos/purchase-returns/detail"].includes(path) &&
-    await userHasPermission(db, user, "purchases.view");
-  if (!user.isOwner && !staffRead) return { user: null, response: json({ error: "مردودات المشتريات للمالك فقط" }, 403) };
+    await userHasAnyPermission(db, user, ["purchases.view", "purchases.returns", "purchases.returns.void"]);
+  const staffCreate = request.method === "POST" &&
+    path === "/api/pos/purchase-returns" &&
+    await userHasPermission(db, user, "purchases.returns");
+  const staffVoid = request.method === "POST" &&
+    path === "/api/pos/purchase-returns/void" &&
+    await userHasPermission(db, user, "purchases.returns.void");
+  if (!user.isOwner && (user.isAdmin || !(staffRead || staffCreate || staffVoid))) {
+    return { user: null, response: json({ error: "لا توجد صلاحية لهذه العملية على مردود المشتريات" }, 403) };
+  }
   return { user, response: null };
 }
 
