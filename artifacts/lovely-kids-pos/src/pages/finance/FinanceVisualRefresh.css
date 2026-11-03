@@ -577,3 +577,393 @@
   .lk-finance-refresh .lk-finance-table-shell { max-height: none; overflow: visible; }
   .lk-finance-refresh .lk-finance-table thead th { position: static; }
 }
+
+/* Lovely Kids POS — Assistant draft-review inbox (visual only).
+   Uses existing JSX classes; no controls, form semantics, posting logic
+   or receipt/print stylesheet has been changed. */
+@media screen {
+  .route-content .assistant-inbox-page {
+    --lka-ink: #253e50;
+    --lka-muted: #6b8293;
+    --lka-line: #dfe8ee;
+    --lka-rose: #e91e8c;
+    --lka-shadow: 0 7px 24px rgba(32, 74, 98, .055);
+    gap: 16px;
+    min-width: 0;
+    color: var(--lka-ink);
+    font-size: 14px;
+    direction: rtl;
+  }
+  .route-content .assistant-inbox-page,
+  .route-content .assistant-inbox-page * { box-sizing: border-box; }
+
+  /* Page identity and status controls. */
+  .route-content .assistant-inbox-page .assistant-inbox-head {
+    align-items: center;
+    gap: 17px;
+    padding: 19px 22px;
+    margin: 0;
+    border: 1px solid #f0d2e1;
+    border-right: 4px solid var(--lka-rose);
+    border-radius: 17px;
+    background: linear-gradient(110deg, #fff 0%, #fff5fa 76%, #fce7f2 100%);
+    box-shadow: var(--lka-shadow);
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-head > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-head > div:first-child > span {
+    display: inline-block;
+    margin-bottom: 5px;
+    color: #bc2374;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-head h1 {
+    margin: 0 0 6px;
+    color: #263f52;
+    font-size: clamp(20px, 1.55vw, 24px);
+    line-height: 1.4;
+    font-weight: 900;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-head p {
+    color: #617a8c;
+    font-size: 13px;
+    line-height: 1.8;
+    margin: 0;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-filter {
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  /* Inputs and buttons: inherited POS actions stay in place. */
+  .route-content .assistant-inbox-page :is(
+    .assistant-inbox-filter select,
+    .assistant-review-form input,
+    .assistant-review-form select
+  ) {
+    min-height: 43px;
+    border: 1px solid #d5e2ea;
+    border-radius: 11px;
+    background: #fbfdfe;
+    color: #284459;
+    padding: 9px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .route-content .assistant-inbox-page :is(
+    .assistant-inbox-filter select,
+    .assistant-review-form input,
+    .assistant-review-form select
+  ):focus-visible {
+    border-color: #e65a9f;
+    outline: 3px solid rgba(233, 30, 140, .23);
+    outline-offset: 2px;
+  }
+  .route-content .assistant-inbox-page :is(
+    .assistant-inbox-filter .secondary-button,
+    .assistant-review-actions .primary-button,
+    .assistant-review-actions .secondary-button,
+    .assistant-review-actions .assistant-reject-button
+  ) {
+    min-height: 43px;
+    padding: 9px 16px;
+    border-radius: 11px;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.4;
+    white-space: normal;
+  }
+  .route-content .assistant-inbox-page .assistant-review-actions .primary-button {
+    background: linear-gradient(120deg, #e91e8c, #c71a77);
+    color: #fff;
+    border: 1px solid #cd1979;
+    box-shadow: 0 4px 12px rgba(211, 27, 121, .13);
+  }
+  .route-content .assistant-inbox-page :is(
+    .assistant-inbox-filter .secondary-button,
+    .assistant-review-actions .secondary-button
+  ) {
+    border: 1px solid #d5e3ea;
+    background: #fff;
+    color: #31536b;
+  }
+  .route-content .assistant-inbox-page .assistant-review-actions .assistant-reject-button {
+    border-color: #edcbd1;
+    background: #fff3f5;
+    color: #a82a46;
+  }
+  .route-content .assistant-inbox-page button:focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .28);
+    outline-offset: 3px;
+  }
+  .route-content .assistant-inbox-page button:disabled { opacity: .55; cursor: not-allowed; }
+
+  /* Responsive list and editable details. */
+  .route-content .assistant-inbox-page .assistant-inbox-layout {
+    grid-template-columns: minmax(280px, .8fr) minmax(0, 1.8fr);
+    align-items: start;
+    gap: 15px;
+    min-width: 0;
+  }
+  .route-content .assistant-inbox-page :is(
+    .assistant-inbox-list,
+    .assistant-review-card,
+    .assistant-inbox-empty-card
+  ) {
+    border: 1px solid var(--lka-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lka-shadow);
+    min-width: 0;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-count {
+    padding: 14px 16px;
+    background: linear-gradient(110deg, #f0f7fc, #f9fcfe);
+    border-bottom: 1px solid #dce9f0;
+    color: #375c76;
+    font-weight: 900;
+    font-size: 13px;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-item {
+    min-height: 82px;
+    align-items: flex-start;
+    padding: 15px 14px;
+    text-align: right;
+    border-bottom: 1px solid #ebf0f4;
+    background: #fff;
+    color: #2a465a;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-item:nth-of-type(even) {
+    background: #f9fbfd;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-item:hover:not(.is-selected) {
+    background: #f1f8fc;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-item.is-selected {
+    background: #fff1f8;
+    box-shadow: inset 4px 0 #e91e8c;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-item strong {
+    color: #2c4a5d;
+    font-size: 14px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-item small {
+    color: #74899a;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-item > span {
+    flex: 0 0 auto;
+    font-size: 14px;
+    font-weight: 900;
+    color: #ac1a6b;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-empty {
+    color: #71889a;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-empty-card {
+    min-height: 260px;
+    color: #6b8091;
+    background: #fbfdfe;
+    font-size: 14px;
+    font-weight: 750;
+  }
+  .route-content .assistant-inbox-page .assistant-review-card { padding: 20px; }
+
+  /* Original input transcript stays distinct from editable fields. */
+  .route-content .assistant-inbox-page .assistant-review-original {
+    padding: 16px;
+    background: #f1f7fb;
+    border: 1px solid #d8e8f1;
+    border-radius: 14px;
+  }
+  .route-content .assistant-inbox-page .assistant-review-original > span {
+    color: #54718a;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .route-content .assistant-inbox-page .assistant-review-original > strong {
+    color: #273f52;
+    font-size: 18px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  .route-content .assistant-inbox-page .assistant-review-original > small {
+    font-size: 12px;
+    color: #6c8193;
+  }
+  .route-content .assistant-inbox-page .assistant-review-parse {
+    border: 1px solid #d4e7f4;
+    background: #f1f8ff;
+    line-height: 1.8;
+    color: #426781;
+    border-radius: 12px;
+    margin-top: 12px;
+  }
+  .route-content .assistant-inbox-page .assistant-review-form {
+    gap: 15px 14px;
+    margin-top: 17px;
+    min-width: 0;
+  }
+  .route-content .assistant-inbox-page .assistant-review-form label {
+    gap: 7px;
+    min-width: 0;
+  }
+  .route-content .assistant-inbox-page .assistant-review-form label > span {
+    color: #4b6678;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .route-content .assistant-inbox-page .assistant-review-form :is(input,select):disabled {
+    color: #6e8392;
+    background: #f3f6f8;
+    border-color: #e1e8ee;
+  }
+  .route-content .assistant-inbox-page .assistant-review-summary {
+    border: 1px solid #d2e8f1;
+    border-radius: 13px;
+    background: #f1f8fc;
+    padding: 14px;
+    font-size: 13px;
+    color: #41677f;
+    flex-wrap: wrap;
+    line-height: 1.8;
+  }
+  .route-content .assistant-inbox-page .assistant-review-summary strong {
+    color: #235a7a;
+    overflow-wrap: anywhere;
+  }
+  .route-content .assistant-inbox-page .assistant-review-actions {
+    padding-top: 17px;
+    margin-top: 2px;
+    border-top: 1px solid #e9eff3;
+    gap: 10px;
+  }
+  .route-content .assistant-inbox-page .assistant-reviewed-state {
+    border: 1px solid #c7e8d5;
+    background: #eefaf2;
+    color: #197755;
+    line-height: 1.8;
+  }
+  .route-content .assistant-inbox-page .assistant-review-warning {
+    border: 1px solid #efdba9;
+    border-right: 4px solid #e6b44b;
+    background: #fff9e9;
+    color: #78541b;
+    line-height: 1.8;
+    padding: 13px 15px;
+  }
+  .route-content .assistant-inbox-page > .error-message {
+    border: 1px solid #f0cbd1;
+    border-radius: 12px;
+    background: #fff2f4;
+    color: #a42b47;
+    padding: 13px 15px;
+    line-height: 1.8;
+  }
+  .route-content .assistant-inbox-page > .employees-success {
+    border: 1px solid #c6e6d4;
+    border-radius: 12px;
+    background: #effaf3;
+    color: #19734d;
+    padding: 13px 15px;
+    line-height: 1.8;
+  }
+
+  @media (max-width: 1180px) {
+    .route-content .assistant-inbox-page .assistant-inbox-layout {
+      grid-template-columns: minmax(250px, .9fr) minmax(0, 1.5fr);
+    }
+  }
+  @media (max-width: 950px) {
+    .route-content .assistant-inbox-page .assistant-inbox-head {
+      align-items: stretch;
+      flex-direction: column;
+      padding: 17px;
+    }
+    .route-content .assistant-inbox-page .assistant-inbox-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  @media (max-width: 620px) {
+    .route-content .assistant-inbox-page { gap: 11px; }
+    .route-content .assistant-inbox-page .assistant-inbox-head { padding: 14px; }
+    .route-content .assistant-inbox-page .assistant-inbox-filter {
+      width: 100%;
+    }
+    .route-content .assistant-inbox-page .assistant-inbox-filter select {
+      flex: 1 1 150px;
+    }
+    .route-content .assistant-inbox-page .assistant-review-card { padding: 13px; }
+    .route-content .assistant-inbox-page .assistant-review-form {
+      grid-template-columns: 1fr;
+    }
+    .route-content .assistant-inbox-page .assistant-review-actions button {
+      flex: 1 1 140px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .route-content .assistant-inbox-page button { transition: none; }
+  }
+}
+
+
+/* Screenshot review: compact, readable empty assistant inbox.
+   Purely decorative; draft selection and action behavior unchanged. */
+@media screen {
+  .route-content .assistant-inbox-page .assistant-inbox-empty-card {
+    min-height: 175px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 22px 18px;
+    text-align: center;
+    line-height: 1.8;
+    border: 1px dashed #cbdde9;
+    background: linear-gradient(180deg, #fff 0%, #f5fafc 100%);
+    color: #536e83;
+    font-size: 15px;
+    font-weight: 750;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-empty-card::before {
+    content: "📋";
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border: 1px solid #d9e9f2;
+    border-radius: 14px;
+    background: #edf7fc;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .route-content .assistant-inbox-page .assistant-inbox-empty {
+    min-height: 100px;
+    display: grid;
+    place-items: center;
+    padding: 20px 14px;
+    text-align: center;
+  }
+  @media (max-width: 620px) {
+    .route-content .assistant-inbox-page .assistant-inbox-empty-card {
+      min-height: 145px;
+      padding: 17px 12px;
+    }
+  }
+}
