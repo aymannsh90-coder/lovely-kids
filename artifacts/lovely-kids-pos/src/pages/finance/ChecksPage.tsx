@@ -113,6 +113,9 @@ export default function ChecksPage() {
     user,
     clearAuthentication,
   } = usePosRuntime();
+  const canCreateChecks = Boolean(user?.isOwner ||
+    (user?.staffEnabled && !user?.isAdmin && user?.permissions?.includes("banking.create")));
+
 
   const [
     checks,
@@ -541,6 +544,7 @@ export default function ChecksPage() {
     event.preventDefault();
 
     if (
+      !canCreateChecks ||
       !createMode ||
       saving
     ) {
@@ -730,6 +734,7 @@ export default function ChecksPage() {
     event.preventDefault();
 
     if (
+      !canCreateChecks ||
       !actionCheck ||
       !actionMode ||
       saving
@@ -1004,7 +1009,7 @@ export default function ChecksPage() {
             📊 Excel
           </button>
 
-          {user?.isOwner && (
+          {canCreateChecks && (
             <>
               <button
                 type="button"
@@ -1332,7 +1337,7 @@ export default function ChecksPage() {
 
                         <td>
                           <div className="check-actions">
-                            {check.direction ===
+                            {canCreateChecks && check.direction ===
                               "received" &&
                               check.status ===
                                 "on_hand" && (
@@ -1352,7 +1357,7 @@ export default function ChecksPage() {
                                 </button>
                               )}
 
-                            {(
+                            {canCreateChecks && (
                               check.direction ===
                                 "received"
                                 ? [
