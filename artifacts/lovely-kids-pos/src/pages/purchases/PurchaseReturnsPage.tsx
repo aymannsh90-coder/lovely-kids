@@ -11,10 +11,21 @@ const newKey = () => typeof crypto !== "undefined" && typeof crypto.randomUUID =
   ? crypto.randomUUID() : "pret-" + Date.now() + "-" + Math.random().toString(36).slice(2);
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "حدث خطأ غير متوقع";
 
+// Accept Arabic/Persian numerals and Arabic spelling variants when searching invoice items.
+const normalizeItemSearch = (value: string) => value
+  .replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+  .replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+  .replace(/[\u064B-\u065F\u0670]/g, "")
+  .replace(/[أإآٱ]/g, "ا")
+  .replace(/ى/g, "ي")
+  .trim().toLowerCase().replace(/\s+/g, " ");
+
 export default function PurchaseReturnsPage() {
   const { token } = usePosRuntime();
   const [purchaseNo, setPurchaseNo] = useState("");
   const [preview, setPreview] = useState<PosPurchaseReturnPreview | null>(null);
+  const [itemSearch, setItemSearch] = useState("");
+  const itemSearchRef = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<Record<string, number>>({});
   const [reason, setReason] = useState("إرجاع بضاعة إلى المورد");
   const [notes, setNotes] = useState("");
@@ -34,6 +45,29 @@ export default function PurchaseReturnsPage() {
     })).filter(row => row.quantity > 0));
   }, [preview, selected]);
   const requestedTotal = requested.reduce((sum, item) => sum + item.quantity, 0);
+  const normalizedItemSearch = useMemo(() => normalizeItemSearch(itemSearch), [itemSearch]);
+  const filteredLines = useMemo(() => {
+    if (!preview) return [];
+    if (!normalizedItemSearch) return preview.lines;
+    return preview.lines.filter(line => {
+      const fields: Array<string | number | null | undefined> = [
+        line.productId,
+        line.productCode,
+        line.productName,
+        line.barcode,
+        ...line.barcodes,
+        ...line.options.map(option => option.barcode),
+      ];
+      return fields.some(field =>
+        field !== null && field !== undefined &&
+        normalizeItemSearch(String(field)).includes(normalizedItemSearch)
+      );
+    });
+  }, [preview, normalizedItemSearch]);
+  // Keep a visible reminder when the filter hides a previously selected return.
+  const hiddenSelectedQuantity = requested
+    .filter(row => !filteredLines.some(line => line.id === row.purchaseItemId))
+    .reduce((sum, row) => sum + row.quantity, 0);
   const invalidSelected = requested.some(row => {
     const line = preview?.lines.find(l => l.id === row.purchaseItemId);
     const option = line?.options.find(o => o.color === row.color && o.size === row.size);
@@ -54,7 +88,8 @@ export default function PurchaseReturnsPage() {
     setBusy(true); setError(""); setSuccess(""); setSaved(null);
     try {
       const result = await getPosPurchaseReturnPreview(token, purchaseNo.trim());
-      setPreview(result); setSelected({}); requestKey.current = null;
+      setPreview(result); setSelected({}); setItemSearch(""); requestKey.current = null;
+      window.setTimeout(() => itemSearchRef.current?.focus(), 0);
       await refreshHistory(result.purchase.publicId);
     } catch (e) { setError(errorMessage(e)); setPreview(null); }
     finally { setBusy(false); }
@@ -137,7 +172,7 @@ export default function PurchaseReturnsPage() {
         <label>رقم فاتورة المشتريات<input value={purchaseNo} onChange={e => setPurchaseNo(e.target.value)} placeholder="رقم الفاتورة" /></label>
         <button type="submit" className="pret-primary" disabled={busy}>🔎 فتح فاتورة الشراء</button>
         <button type="button" disabled={busy} onClick={() => {
-          setPreview(null); setSelected({}); setSaved(null); setPurchaseNo("");
+          setPreview(null); setSelected({}); setItemSearch(""); setSaved(null); setPurchaseNo("");
           setError(""); setSuccess(""); requestKey.current = null;
           void refreshHistory().catch(() => {});
         }}>مردود جديد</button>
@@ -149,12 +184,44 @@ export default function PurchaseReturnsPage() {
       <h2>فاتورة {preview.purchase.publicId}</h2>
       <p><strong>المورد:</strong> {preview.purchase.supplierName} | <strong>تاريخ الشراء:</strong> {preview.purchase.businessDate} | <strong>إجمالي الفاتورة:</strong> {formatMoney(preview.purchase.totalMinor)}</p>
       <p className="pret-small">اختر اللون والنمرة والكمية للمردود الجزئي، أو اختر «إرجاع كامل المتبقي» لتوزيع المردود على المخزون المتوفر.</p>
-      {preview.lines.map(line => {
+      <div className="pret-item-search" role="search" aria-label="البحث داخل أصناف فاتورة المشتريات">
+        <label htmlFor="pret-item-search-input">ابحث عن صنف في الفاتورة</label>
+        <div className="pret-item-search-controls">
+          <input
+            ref={itemSearchRef}
+            id="pret-item-search-input"
+            type="search"
+            value={itemSearch}
+            onChange={event => setItemSearch(event.target.value)}
+            placeholder="كود الموديل (490 أو 1746)، اسم الصنف، أو الباركود"
+            autoComplete="off"
+            aria-describedby="pret-item-search-count"
+          />
+          {itemSearch && <button type="button" onClick={() => {
+            setItemSearch(""); itemSearchRef.current?.focus();
+          }}>مسح البحث / إظهار الكل</button>}
+        </div>
+        <p id="pret-item-search-count" className="pret-small" aria-live="polite">
+          {normalizedItemSearch
+            ? `النتائج: ${filteredLines.length} من ${preview.lines.length} صنف/سطر في الفاتورة`
+            : `الأصناف في الفاتورة: ${preview.lines.length} — يمكنك البحث بالباركود أو الاسم أو الكود`}
+        </p>
+        {hiddenSelectedQuantity > 0 && <p className="pret-search-warning" role="status">
+          انتبه: يوجد {hiddenSelectedQuantity} قطعة محددة للمردود خارج نتائج البحث الحالية، وستبقى ضمن المردود عند الاعتماد. اضغط «إظهار الكل» لمراجعتها.
+        </p>}
+      </div>
+      {filteredLines.length === 0 && <p className="pret-search-empty">
+        ما لقينا صنف مطابق داخل هذه الفاتورة. جرّب كود الموديل أو اسمه أو باركود آخر.
+      </p>}
+      {filteredLines.map(line => {
         const quantity = requested.filter(row => row.purchaseItemId === line.id).reduce((s, r) => s + r.quantity, 0);
         return <article className="pret-line" key={line.id}>
           <div className="pret-line-head">
             {line.productImage && <img src={line.productImage} alt="" />}
             <div className="pret-line-title"><strong>{line.productName}</strong>
+              <div className="pret-small">
+                رقم الموديل: {line.productId ?? "—"} | كود الصنف: {line.productCode ?? "—"}
+              </div>
               <div className="pret-small">مشتراة: {line.originalQuantity} | مردودة سابقًا: {line.returnedQuantity} | متبقية للمردود: {line.availableToReturn}</div>
               <div className="pret-small">الرصيد من قيمة الصنف: {formatMoney(line.remainingAmountMinor)} | الموجود بالمحل: {line.stock ?? "غير معروف"}</div>
             </div>
@@ -163,8 +230,14 @@ export default function PurchaseReturnsPage() {
           </div>
           {line.options.map(option => {
             const key = selectionKey(line, option);
-            return <div className="pret-option" key={key}>
-              <span>{option.color ?? "بدون لون"} / {option.size ?? "بدون نمرة"} <span className="pret-small">— متوفر {option.stock ?? "غير محدد"}</span></span>
+            const barcodeMatches = normalizedItemSearch.length >= 5 &&
+              option.barcode !== null &&
+              normalizeItemSearch(option.barcode) === normalizedItemSearch;
+            return <div className={barcodeMatches ? "pret-option pret-option-match" : "pret-option"} key={key}>
+              <span>{option.color ?? "بدون لون"} / {option.size ?? "بدون نمرة"} <span className="pret-small">— متوفر {option.stock ?? "غير محدد"}</span>
+                {option.barcode && <span className="pret-option-barcode">{option.barcode}</span>}
+                {barcodeMatches && <strong className="pret-option-match-label">مطابق للباركود</strong>}
+              </span>
               <label>كمية المردود <input aria-label={"مردود " + line.productName + " " + (option.color ?? "") + " " + (option.size ?? "")} type="number" min="0"
                 max={Math.max(0, Math.min(line.availableToReturn, option.stock ?? 0))}
                 value={selected[key] ?? 0} disabled={busy || line.availableToReturn === 0 || option.stock === null}

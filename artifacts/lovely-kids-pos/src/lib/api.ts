@@ -5822,7 +5822,9 @@ export interface PosPurchaseReturnPreview {
     productId: number | null;
     productName: string;
     productImage: string | null;
+    productCode: string | null;
     barcode: string | null;
+    barcodes: string[];
     color: string | null;
     size: string | null;
     entryMode: "historical" | "stock_receipt";
@@ -5832,7 +5834,7 @@ export interface PosPurchaseReturnPreview {
     originalAmountMinor: number;
     remainingAmountMinor: number;
     stock: number | null;
-    options: Array<{ color: string | null; size: string | null; stock: number | null }>;
+    options: Array<{ color: string | null; size: string | null; stock: number | null; barcode: string | null }>;
   }>;
 }
 
