@@ -16,6 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 
@@ -78,6 +79,12 @@ class CardSettlementError extends Error {
   }
 }
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/finance/card-settlements", permission: "banking.view" },
+  { method: "POST", path: "/api/pos/finance/card-settlements", permission: "banking.create" },
+  { method: "POST", path: "/api/pos/finance/card-settlements/reverse", permission: "banking.reverse" },
+];
+
 async function requireOwner(
   request: Request,
   db: Db,
@@ -100,7 +107,7 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false as const,
       response: json(
