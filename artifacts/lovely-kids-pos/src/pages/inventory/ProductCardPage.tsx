@@ -41,6 +41,8 @@ const movementLabels: Record<
 > = {
   purchase: "شراء",
   purchase_void: "إلغاء شراء",
+  purchase_return: "مردود مشتريات",
+  purchase_return_void: "إلغاء مردود مشتريات",
   pos_sale: "بيع POS",
   pos_sale_void: "إلغاء بيع",
   pos_sale_edit: "تعديل فاتورة بيع",
