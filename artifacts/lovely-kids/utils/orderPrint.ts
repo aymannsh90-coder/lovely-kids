@@ -81,7 +81,7 @@ function orderUrl(id: number): string {
 }
 
 function formatMinor(value: number): string {
-  return `0`;
+  return `${(value / 100).toFixed(2)} ₪`;
 }
 
 export async function createOrderPrintHtml(
