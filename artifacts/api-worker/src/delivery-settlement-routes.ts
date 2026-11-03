@@ -20,6 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -44,6 +45,12 @@ class DeliverySettlementError extends Error {
   }
 }
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", pattern: /^\/api\/delivery-companies\/\d+\/settlement-summary$/, permission: "delivery.view" },
+  { method: "POST", pattern: /^\/api\/delivery-companies\/\d+\/settlements$/, permission: "delivery.settle" },
+  { method: "POST", pattern: /^\/api\/delivery-companies\/\d+\/settlements\/\d+\/reverse$/, permission: "delivery.reverse" },
+];
+
 async function requireAdmin(
   request: Request,
   db: Db,
@@ -61,7 +68,7 @@ async function requireAdmin(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false as const,
       response: json(
