@@ -70,9 +70,9 @@ function ProductListRoute() {
 
 function BankingRoute() {
   const { user } = usePosRuntime();
-  const canWrite = user?.isOwner || user?.isAdmin ||
-    ["banking.create", "banking.manage", "banking.reverse"].some(p => user?.permissions?.includes(p));
-  return canWrite ? <BankingPage /> : <StaffBankingOverviewPage />;
+  return user?.isOwner || user?.isAdmin
+    ? <BankingPage />
+    : <StaffBankingOverviewPage />;
 }
 
 function DeliveryRoute() {
