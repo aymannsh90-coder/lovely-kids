@@ -169,7 +169,14 @@ async function detail(db: Db | Tx, id: number) {
   if (!purchaseReturn) throw new ReturnError("المردود غير موجود", 404);
   const items = await db.select().from(posPurchaseReturnItemsTable)
     .where(eq(posPurchaseReturnItemsTable.returnId, id)).orderBy(asc(posPurchaseReturnItemsTable.id));
-  return { purchaseReturn, items };
+  const sourceItems = items.length ? await db.select({
+    id: posPurchaseItemsTable.id,
+    name: posPurchaseItemsTable.productNameAr,
+  }).from(posPurchaseItemsTable).where(inArray(posPurchaseItemsTable.id, [...new Set(items.map(item => item.purchaseItemId))])) : [];
+  const names = new Map(sourceItems.map(item => [item.id, item.name]));
+  return { purchaseReturn, items: items.map(item => ({
+    ...item, productName: names.get(item.purchaseItemId) ?? "صنف غير معروف",
+  })) };
 }
 
 async function handleCreate(request: Request, db: Db, env: Env) {
