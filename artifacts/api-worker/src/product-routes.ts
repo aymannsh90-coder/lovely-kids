@@ -227,9 +227,7 @@ function validateManualStockCostInput(
 const STAFF_ALLOWED_PRODUCT_ROUTES: readonly StaffRouteGrant[] = [
   { method: "GET", path: "/api/products/admin", permission: "inventory.view" },
   { method: "GET", path: "/api/products/barcodes", permission: "inventory.view" },
-  { method: "POST", path: "/api/products", permission: "inventory.edit" },
-  { method: "PUT", pattern: /^\/api\/products\/\d+$/, permission: "inventory.edit" },
-  { method: "PATCH", pattern: /^\/api\/products\/\d+\/(stock|variant-stock|visibility|restore)$/, permission: "inventory.edit" },
+  // Creating products and changing product metadata remain on the trusted admin editor.\n  { method: "PATCH", pattern: /^\/api\/products\/\d+\/(stock|variant-stock|visibility|restore)$/, permission: "inventory.edit" },
 ];
 
 async function requireAdminActor(
