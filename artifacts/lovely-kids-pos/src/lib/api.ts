@@ -5856,6 +5856,7 @@ export interface PosPurchaseReturnDetail {
     returnId: number;
     purchaseItemId: number;
     productId: number;
+    productName: string;
     color: string | null;
     size: string | null;
     quantity: number;
