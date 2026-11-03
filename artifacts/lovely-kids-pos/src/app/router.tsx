@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
+import RequireStaffGrant from "../guards/RequireStaffGrant";
 import RequireFinancialReports from "../guards/RequireFinancialReports";
 import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -153,15 +154,15 @@ export default function AppRouter() {
         <Route
           path="purchases/new"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["purchases.create"]}>
               <PurchaseInvoicePage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="purchases/returns"
-          element={<RequireOwner><PurchaseReturnsPage /></RequireOwner>}
+          element={<RequireStaffGrant permissions={["purchases.view"]}><PurchaseReturnsPage /></RequireStaffGrant>}
         />
 
         <Route
@@ -225,36 +226,36 @@ export default function AppRouter() {
         <Route
           path="vouchers/receipt"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.create"]}>
               <UnifiedPartyVoucherPage mode="receipt" />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="vouchers/payment"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.create"]}>
               <UnifiedPartyVoucherPage mode="payment" />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="vouchers/journal"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.create"]}>
               <JournalVoucherPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="vouchers/register"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.view"]}>
               <VoucherRegisterPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
@@ -279,27 +280,27 @@ export default function AppRouter() {
         <Route
           path="finance/banking"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["banking.view","banking.create"]}>
               <BankingPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="finance/card-settlements"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["banking.view","banking.create"]}>
               <CardSettlementsPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="finance/checks"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["banking.view","banking.create"]}>
               <ChecksPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
