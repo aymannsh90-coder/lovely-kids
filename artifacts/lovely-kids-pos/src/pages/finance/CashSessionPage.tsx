@@ -290,6 +290,7 @@ export default function CashSessionPage() {
   const state = location.state as LocationState | null;
 
   const {
+    user,
     session,
     openingBalance,
     setOpeningBalance,
@@ -308,6 +309,11 @@ export default function CashSessionPage() {
     lastClosedSession,
     handleCloseDay,
   } = usePosRuntime();
+  const canOpenDay = Boolean(user?.isOwner || user?.isAdmin ||
+    (user?.staffEnabled && user?.permissions?.includes("cash.open")));
+  const canCloseDay = Boolean(user?.isOwner || user?.isAdmin ||
+    (user?.staffEnabled && user?.permissions?.includes("cash.close")));
+
 
   if (!session) {
     return (
@@ -410,7 +416,7 @@ export default function CashSessionPage() {
           <div className="alert error-alert route-message">{state.message}</div>
         )}
 
-        <form className="open-day-form" onSubmit={handleOpenDay}>
+        {canOpenDay ? <form className="open-day-form" onSubmit={handleOpenDay}>
           <label>
             <span>رصيد بداية الصندوق</span>
 
@@ -456,7 +462,7 @@ export default function CashSessionPage() {
           >
             {openBusy ? "جاري فتح اليوم…" : "فتح يوم العمل"}
           </button>
-        </form>
+        </form> : <p>ليس لديك صلاحية فتح يوم العمل. يمكنك الاطلاع على حالة الصندوق فقط.</p>}
       </section>
     );
   }
@@ -534,7 +540,7 @@ export default function CashSessionPage() {
           <span className="danger-badge">إجراء نهائي</span>
         </div>
 
-        <form className="close-day-form" onSubmit={handleCloseDay}>
+        {canCloseDay ? <form className="close-day-form" onSubmit={handleCloseDay}>
           <label>
             <span>الرصيد الفعلي عند الإغلاق</span>
 
@@ -576,7 +582,7 @@ export default function CashSessionPage() {
           <button className="danger-button" type="submit" disabled={closeBusy}>
             {closeBusy ? "جاري إغلاق اليوم…" : "إغلاق يوم العمل"}
           </button>
-        </form>
+        </form> : <p>إغلاق يوم العمل يتطلب صلاحية منفصلة من المالك.</p>}
       </div>
     </section>
   );
