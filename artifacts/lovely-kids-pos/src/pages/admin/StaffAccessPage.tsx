@@ -30,10 +30,11 @@ const permissionGroups = [
   { title: "البنوك", items: [["banking.view", "عرض"], ["banking.create", "إنشاء حركة مالية"], ["banking.manage", "إدارة الحسابات وأسعار الصرف"], ["banking.reverse", "عكس حركة مالية"]] },
   { title: "التقارير", items: [["reports.sales", "أداء المنتجات"], ["reports.financial", "الميزان والكشوف والذمم"], ["reports.cost", "الربح والتكلفة"]] },
   { title: "المصاريف", items: [["finance.expenses.view", "عرض التصنيفات"], ["finance.expenses.create", "إضافة مصروف"]] },
+  { title: "شركات التوصيل", items: [["delivery.view", "عرض حسابات التوصيل"], ["delivery.manage", "إدارة الشركات"], ["delivery.settle", "إنشاء تسوية"], ["delivery.reverse", "عكس تسوية"]] },
 ] as const;
 const presets: Record<Role, string[]> = {
   cashier: ["sales.view", "sales.create", "cash.view"],
-  accountant: ["reports.financial", "parties.view", "purchases.view", "vouchers.view", "banking.view"], // Read-only by default.
+  accountant: ["reports.financial", "parties.view", "purchases.view", "vouchers.view", "banking.view", "delivery.view"], // Read-only by default.
   inventory: ["inventory.view", "inventory.edit"],
   custom: [],
 };
