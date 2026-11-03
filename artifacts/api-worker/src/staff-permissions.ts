@@ -13,7 +13,7 @@ export const STAFF_PERMISSION_KEYS = [
   "parties.view", "parties.edit",
   "vouchers.view", "vouchers.create", "vouchers.edit", "vouchers.void",
   "banking.view", "banking.create", "banking.manage", "banking.reverse",
-  "reports.sales", "reports.financial", "reports.cost", "reports.inventory",
+  "reports.sales", "reports.financial", "reports.cost",
   "orders.view", "orders.create", "orders.edit", "orders.cancel",
   "orders.confirm-payment", "orders.delivery-cost", "orders.courier.cash", "orders.courier.reverse",
   "finance.expenses.view", "finance.expenses.create",
