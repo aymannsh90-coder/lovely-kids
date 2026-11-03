@@ -21205,3 +21205,206 @@ button.inventory-intelligence-metric {
     }
   }
 }
+
+
+/* Lovely Kids POS — mobile price check, visual-only refresh.
+   Scoped to the existing .mobile-price-check-page class.
+   No scanner behavior, search result computation or stock/pricing changes. */
+@media screen {
+  .mobile-price-check-page {
+    --lkp-ink: #283f53;
+    --lkp-muted: #678094;
+    --lkp-line: #dce7ee;
+    --lkp-shadow: 0 7px 22px rgba(35, 77, 104, .055);
+    background: #eaf3f8;
+    color: var(--lkp-ink);
+  }
+  .mobile-price-check-page .mobile-pos-shell {
+    background: #f5f9fc;
+  }
+  .mobile-price-check-page .mobile-pos-header {
+    background: linear-gradient(115deg, #fff 0%, #fff5fa 80%, #fdeaf4);
+    border-bottom: 1px solid #f0d5e4;
+    box-shadow: 0 4px 14px rgba(30, 69, 98, .045);
+  }
+  .mobile-price-check-page .mobile-pos-header > div:first-child strong {
+    font-size: 20px;
+    font-weight: 900;
+    color: #c81875;
+  }
+  .mobile-price-check-page .mobile-pos-header > div:first-child span {
+    color: #557589;
+    font-weight: 700;
+  }
+  .mobile-price-check-page .mobile-pos-header-actions a[href="/sales/pos"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #c8dae7;
+    border-radius: 12px;
+    background: #f0f6fa;
+    color: #315c78;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.3;
+    box-shadow: 0 3px 9px rgba(30, 70, 94, .055);
+  }
+  .mobile-price-check-page .mobile-pos-header-actions a[href="/sales/pos"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-price-check-page .mobile-pos-tabs {
+    gap: 6px;
+    background: #fff;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .mobile-price-check-page .mobile-pos-tabs a {
+    border: 1px solid #e1ebf1;
+    border-radius: 11px;
+    background: #f1f6fa;
+    color: #46657b;
+    font-weight: 850;
+  }
+  .mobile-price-check-page .mobile-pos-tabs a.is-active {
+    border-color: #d72480;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(201, 29, 116, .11);
+  }
+  .mobile-price-check-page .mobile-pos-user {
+    background: #f0f7fb;
+    border-bottom: 1px solid #dfeaf1;
+    color: #496579;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Scanner card: preserve camera and video sizing. */
+  .mobile-price-check-page .mobile-pos-scan-card {
+    margin: 12px 12px 10px;
+    padding: 13px;
+    border: 1px solid var(--lkp-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lkp-shadow);
+  }
+  .mobile-price-check-page .mobile-pos-camera-button {
+    border-color: #e8a5c9;
+    border-radius: 14px;
+    background: linear-gradient(140deg, #fff8fc, #fff1f8);
+  }
+  .mobile-price-check-page .mobile-pos-camera-button strong {
+    color: #334e60;
+    font-weight: 900;
+  }
+  .mobile-price-check-page .mobile-pos-camera-button small {
+    color: #708797;
+  }
+
+  /* Empty/loading and actual scanned-product results. */
+  .mobile-price-check-page .mobile-price-empty,
+  .mobile-price-check-page .mobile-price-check-loading {
+    margin: 12px;
+    min-height: 135px;
+    border: 1px dashed #cfdeea;
+    border-radius: 16px;
+    background: #fff;
+    color: #516d80;
+    box-shadow: var(--lkp-shadow);
+    font-size: 14px;
+  }
+  .mobile-price-check-page .mobile-price-empty strong {
+    color: #355a74;
+    font-weight: 900;
+    line-height: 1.7;
+  }
+  .mobile-price-check-page .mobile-price-result {
+    margin: 12px 12px 16px;
+    padding: 16px 14px;
+    border: 1px solid #efc5dc;
+    border-top: 4px solid #e91e8c;
+    border-radius: 17px;
+    background: linear-gradient(180deg, #fff 0%, #fffafd 100%);
+    box-shadow: var(--lkp-shadow);
+  }
+  .mobile-price-check-page .mobile-price-product-image {
+    border: 1px solid #e1e8ed;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 3px 11px rgba(37, 77, 100, .05);
+  }
+  .mobile-price-check-page .mobile-price-result-check {
+    background: #168544;
+    box-shadow: 0 2px 10px rgba(22, 133, 68, .12);
+  }
+  .mobile-price-check-page .mobile-price-result > span {
+    color: #688093;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .mobile-price-check-page .mobile-price-result h2 {
+    color: #273f52;
+    font-size: clamp(20px, 5.2vw, 27px);
+    font-weight: 900;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .mobile-price-check-page .mobile-price-result p {
+    color: #5e778b;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .mobile-price-check-page .mobile-price-summary {
+    gap: 10px;
+  }
+  .mobile-price-check-page .mobile-price-summary-item {
+    border: 1px solid #ead4e1;
+    border-radius: 13px;
+    background: #fff4fa;
+    padding: 12px 8px;
+  }
+  .mobile-price-check-page .mobile-price-summary-item span {
+    color: #765d70;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .mobile-price-check-page .mobile-price-summary-item strong {
+    color: #b3196d;
+    font-size: clamp(17px, 4.5vw, 22px);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-price-check-page .mobile-price-summary-item.mobile-price-stock {
+    background: #f0faf4;
+    border-color: #c4e7d0;
+  }
+  .mobile-price-check-page .mobile-price-summary-item.mobile-price-stock span {
+    color: #537665;
+  }
+  .mobile-price-check-page .mobile-price-summary-item.mobile-price-stock strong {
+    color: #16764b;
+  }
+  .mobile-price-check-page .mobile-price-result small {
+    color: #75899a;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .mobile-price-check-page a:focus-visible,
+  .mobile-price-check-page button:focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+  @media (max-width: 360px) {
+    .mobile-price-check-page .mobile-pos-header { padding-inline: 10px; }
+    .mobile-price-check-page .mobile-pos-scan-card,
+    .mobile-price-check-page .mobile-price-result,
+    .mobile-price-check-page .mobile-price-empty {
+      margin-inline: 8px;
+    }
+    .mobile-price-check-page .mobile-price-summary-item { padding-inline: 5px; }
+  }
+}
