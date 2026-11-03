@@ -20873,3 +20873,86 @@ button.inventory-intelligence-metric {
     .mobile-pos-page:has(.mobile-pos-checkout) button { transition: none; }
   }
 }
+
+
+/* Lovely Kids POS — phone sales header links polish (visual only).
+   Distinguish WhatsApp orders from the back navigation without changing routes. */
+@media screen {
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions {
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"],
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 3px 9px rgba(30, 70, 94, .055);
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"] {
+    background: #e9f8ef;
+    border: 1px solid #a9ddbe;
+    color: #167347;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"]::before {
+    content: "✉";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"]:hover {
+    background: #d9f3e3;
+    border-color: #8bceaa;
+    color: #0d633a;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"] {
+    background: #f0f6fa;
+    border: 1px solid #c8dae7;
+    color: #315c78;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"]:hover {
+    background: #e1eff8;
+    border-color: #a4c7dc;
+    color: #204e6c;
+  }
+  @media (max-width: 430px) {
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions {
+      gap: 6px;
+    }
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"],
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"] {
+      min-height: 38px;
+      padding: 7px 9px;
+      font-size: 12px;
+    }
+  }
+  @media (max-width: 370px) {
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a {
+      transition: none;
+    }
+  }
+}
