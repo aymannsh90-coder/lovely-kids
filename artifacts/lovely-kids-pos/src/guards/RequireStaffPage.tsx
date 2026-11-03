@@ -7,6 +7,8 @@ import { usePosRuntime } from "../app/pos-context";
 export function canVisitStaffPage(path: string, permissions: string[]): boolean {
   const byPath: Record<string, string[]> = {
     "/sales/pos": ["sales.create"],
+    "/sales/manual-order": ["orders.create"],
+    "/orders": ["orders.view", "orders.edit", "orders.cancel"],
     "/sales/exchange": ["sales.exchange", "sales.exchange.online"],
     "/sales/mobile": ["sales.create"],
     "/sales/mobile/price-check": ["sales.create"],
@@ -71,6 +73,10 @@ const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["vouchers.create", "/vouchers/receipt"],
   ["banking.view", "/finance/banking"],
   ["banking.create", "/finance/banking"],
+  ["orders.view", "/orders"],
+  ["orders.edit", "/orders"],
+  ["orders.cancel", "/orders"],
+  ["orders.create", "/sales/manual-order"],
   ["reports.sales", "/reports/product-analytics"],
   ["reports.cost", "/reports"],
 ];
