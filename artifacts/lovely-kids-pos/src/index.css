@@ -7326,6 +7326,20 @@ textarea:disabled {
 @media print {
   body[data-print-mode="purchase-a4"] {
     background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* The old POS print rule hides body * with visibility:hidden.
+     Render the invoice outside #root and reveal all its descendants.
+     Hide the dashboard entirely so its screen layout cannot cause empty pages. */
+  body[data-print-mode="purchase-a4"] > :not(.purchase-a4-print-area) {
+    display: none !important;
+  }
+
+  body[data-print-mode="purchase-a4"] > .purchase-a4-print-area,
+  body[data-print-mode="purchase-a4"] > .purchase-a4-print-area * {
+    visibility: visible !important;
   }
 
   body[data-print-mode="purchase-a4"] .app-topbar,
@@ -7357,9 +7371,15 @@ textarea:disabled {
   }
 
   body[data-print-mode="purchase-a4"]
-    .purchase-a4-print-area {
+    > .purchase-a4-print-area {
     display: block !important;
+    position: static !important;
     width: 100%;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    break-before: auto;
     margin: 0;
     padding: 0;
     color: #000;
