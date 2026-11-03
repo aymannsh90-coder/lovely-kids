@@ -119,6 +119,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "purchase-history",
+    group: "purchases",
+    path: "/purchases/history",
+    title: "استعراض المشتريات",
+    description: "عرض آخر فاتورة أو البحث برقم الفاتورة دون تعديل.",
+    icon: "📄",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "new-purchase",
     group: "purchases",
     path: "/purchases/new",
