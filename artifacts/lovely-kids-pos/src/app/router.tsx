@@ -166,7 +166,7 @@ export default function AppRouter() {
         <Route path="purchases/history" element={<RequireStaffGrant permissions={["purchases.view", "purchases.create"]}><PurchaseHistoryPage /></RequireStaffGrant>} />
         <Route
           path="purchases/returns"
-          element={<RequireStaffGrant permissions={["purchases.view"]}><PurchaseReturnsPage /></RequireStaffGrant>}
+          element={<RequireStaffGrant permissions={["purchases.view", "purchases.returns", "purchases.returns.void"]}><PurchaseReturnsPage /></RequireStaffGrant>}
         />
 
         <Route
