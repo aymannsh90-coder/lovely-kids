@@ -1228,7 +1228,7 @@ export default function CardSettlementsPage() {
                       {item
                         .transaction
                         .status ===
-                      "posted" ? (
+                      "posted" && user?.isOwner ? (
                         <button
                           type="button"
                           className="secondary-button"
