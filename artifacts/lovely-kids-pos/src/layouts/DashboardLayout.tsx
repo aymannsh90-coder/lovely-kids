@@ -139,7 +139,10 @@ export default function DashboardLayout() {
     [activeSection, user],
   );
 
-  const limitedCashMenu = !user?.isAdmin && !user?.isOwner;
+  const limitedCashMenu = !user?.isAdmin && !user?.isOwner &&
+    !["banking.view", "banking.create", "banking.manage", "delivery.view", "finance.expenses.view"].some(
+      p => user?.permissions?.includes(p),
+    );
   const sectionTitle = (section: MenuSection) =>
     limitedCashMenu && section.key === "finance" ? "الصندوق" : section.title;
 
