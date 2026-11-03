@@ -20,6 +20,7 @@ import { ensureSupplierPayableControlAccount } from "./finance-supplier-ledger";
 import { postFinanceTransaction } from "./finance-posting";
 import { consumeProductCost, restoreExactProductCost, type CostQuality } from "./inventory-cost-engine";
 import { getProductQuantity } from "./product-quantity";
+import { allocateMinor as allocate, splitAmount, computeReturnRefundMinor } from "./purchase-return-rules";
 import { isPurchaseWriteEnabled, purchaseWritesDisabledResponse } from "./purchase-feature";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -45,23 +46,6 @@ const businessDate = () => {
   return values.year + "-" + values.month + "-" + values.day;
 };
 const normalizeDimension = (v: unknown) => typeof v === "string" && v.trim() ? v.trim() : null;
-function allocate(total: number, quantity: number, overall: number) {
-  if (overall <= 0 || quantity <= 0 || total <= 0) return 0;
-  if (quantity >= overall) return total;
-  return Number(BigInt(total) * BigInt(quantity) / BigInt(overall));
-}
-function splitAmount(total: number, weights: number[]) {
-  const sum = weights.reduce((a, b) => a + b, 0);
-  let priorWeight = 0;
-  let priorAmount = 0;
-  return weights.map(weight => {
-    priorWeight += weight;
-    const next = sum > 0 ? allocate(total, priorWeight, sum) : 0;
-    const amount = next - priorAmount;
-    priorAmount = next;
-    return amount;
-  });
-}
 
 async function requireOwner(request: Request, db: Db, env: Env) {
   const user = await getCurrentUser(db, request, env);
@@ -157,7 +141,11 @@ async function loadPurchase(db: Db, publicId: string) {
       originalAmountMinor: value,
       remainingAmountMinor: Math.max(0, value - prior.refund),
       stock: p ? getProductQuantity(p) : null,
-      options: p ? stockOptions(p) : [],
+      // Invoice lines that specify a color/size cannot return other variants.
+      options: p ? stockOptions(p).filter(option =>
+        (!item.color || option.color === item.color) &&
+        (!item.size || option.size === item.size)
+      ) : [],
     };
   });
   return { purchase: { id: purchase.id, publicId: purchase.publicId, businessDate: purchase.businessDate, supplierId: purchase.supplierId, supplierName: suppliers[0]?.name ?? "", totalMinor: purchase.totalMinor }, lines };
@@ -236,11 +224,11 @@ async function handleCreate(request: Request, db: Db, env: Env) {
         const totalValue = values.get(itemId) ?? 0;
         if (prior.quantity + quantity > originalQuantity)
           throw new ReturnError("المردود يتجاوز الكمية المتبقية من فاتورة الشراء للصنف " + item.productNameAr, 409);
-        if (quantity === originalQuantity - prior.quantity) {
-          refundByLine.set(itemId, totalValue - prior.refund);
-        } else {
-          refundByLine.set(itemId, Math.min(totalValue - prior.refund, allocate(totalValue, quantity, originalQuantity)));
-        }
+        refundByLine.set(itemId, computeReturnRefundMinor({
+          originalAmountMinor: totalValue, originalQuantity,
+          previouslyReturnedQuantity: prior.quantity,
+          previouslyRefundedMinor: prior.refund, returnQuantity: quantity,
+        }));
       }
       const requestedProductIds = [...new Set(wanted.map(w => itemsById.get(w.purchaseItemId)!.productId!))].sort((a, b) => a - b);
       const products = await tx.select().from(productsTable)
