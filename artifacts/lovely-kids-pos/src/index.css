@@ -20652,3 +20652,1044 @@ button.inventory-intelligence-metric {
   object-position: center;
   border-radius: inherit;
 }
+
+/* Lovely Kids POS · phone sales visual refresh — CSS ONLY.
+   Scoped to the mobile sale page (identified by its existing checkout).
+   Touch actions, camera, barcode scan, pricing, discounts, totals and
+   fixed checkout behavior are intentionally unchanged. Print excluded. */
+@media screen {
+  .mobile-pos-page:has(.mobile-pos-checkout) {
+    --lk-mobile-ink: #263f52;
+    --lk-mobile-muted: #6c8292;
+    --lk-mobile-rose: #e91e8c;
+    --lk-mobile-line: #dce7ed;
+    --lk-mobile-shadow: 0 7px 22px rgba(35, 77, 104, .055);
+    background: #eaf3f8;
+    color: var(--lk-mobile-ink);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-shell {
+    background: #f5f9fc;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header {
+    gap: 10px;
+    border-bottom: 1px solid #f0d5e4;
+    background: linear-gradient(115deg, #fff 0%, #fff5fa 80%, #fdeaf4);
+    box-shadow: 0 4px 14px rgba(30, 69, 98, .045);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header > div:first-child strong {
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.35;
+    color: #c81875;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header > div:first-child span {
+    color: #557589;
+    font-weight: 700;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a {
+    border-color: #e6d9e2;
+    border-radius: 10px;
+    background: #fff;
+    color: #36576c;
+    font-weight: 800;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-tabs {
+    gap: 6px;
+    background: #fff;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-tabs a {
+    background: #f1f6fa;
+    border: 1px solid #e1ebf1;
+    border-radius: 11px;
+    color: #46657b;
+    font-weight: 850;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-tabs a.is-active {
+    border-color: #d72480;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(201, 29, 116, .11);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-user {
+    background: #f0f7fb;
+    border-bottom: 1px solid #dfeaf1;
+    color: #496579;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Scanner card and search controls — existing layout unchanged. */
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-scan-card {
+    margin: 12px 12px 0;
+    padding: 13px;
+    border: 1px solid var(--lk-mobile-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lk-mobile-shadow);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-camera-button {
+    min-height: 124px;
+    border-color: #e8a5c9;
+    border-radius: 14px;
+    background: linear-gradient(140deg, #fff8fc, #fff1f8);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-camera-button strong {
+    color: #334e60;
+    font-weight: 900;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-camera-button small {
+    color: #708797;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-search input {
+    border-color: #d5e3ec;
+    border-radius: 10px;
+    background: #fbfdff;
+    color: #29485e;
+    font-size: 15px;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-search button {
+    border-radius: 10px;
+    background: #285f83;
+    color: #fff;
+    font-weight: 850;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-search-results {
+    border-color: #dbe7ee;
+    background: #fff;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-search-results button:nth-child(even) {
+    background: #f7fbfd;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) :is(
+    button,
+    a,
+    input,
+    select
+  ):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+
+  /* Shopping basket and merchandise cards. */
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-cart {
+    margin: 12px;
+    padding: 15px 13px;
+    border: 1px solid var(--lk-mobile-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lk-mobile-shadow);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-cart-title {
+    margin: 0 0 13px;
+    color: #2c4d64;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-cart-title strong {
+    font-size: 18px;
+    font-weight: 900;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-cart-title span {
+    color: #a71f6a;
+    border: 1px solid #f0d0df;
+    border-radius: 999px;
+    background: #fff2f8;
+    padding: 5px 10px;
+    font-weight: 900;
+    font-size: 12px;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-empty-cart {
+    border: 1px dashed #cfdeea;
+    border-radius: 14px;
+    background: #f7fbfd;
+    color: #536d7e;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-cart-lines {
+    gap: 11px;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-line {
+    border: 1px solid #e0e9ef;
+    border-right-width: 4px;
+    border-radius: 13px;
+    background: #fff;
+    padding: 13px;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-line:nth-child(odd) {
+    border-right-color: #e3afcd;
+    background: linear-gradient(180deg, #fff, #fffcfe);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-line:nth-child(even) {
+    border-right-color: #9bcbe1;
+    background: linear-gradient(180deg, #fff, #f9fcff);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-line-top strong {
+    color: #28485d;
+    font-weight: 900;
+    line-height: 1.6;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-line-top small {
+    color: #728697;
+    font-size: 12px;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-variants select {
+    height: 42px;
+    border-color: #d8e5ec;
+    border-radius: 9px;
+    background: #fff;
+    font-size: 14px;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-price-input,
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-quantity {
+    border-color: #d7e3eb;
+    border-radius: 10px;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-quantity button {
+    background: #edf5fa;
+    color: #285b7c;
+    font-weight: 850;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-quantity span {
+    color: #263f53;
+    font-weight: 900;
+  }
+
+  /* Checkout stays fixed and retains its original height behavior. */
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-checkout {
+    background: rgba(255, 255, 255, .97);
+    border-top: 2px solid #efc2da;
+    box-shadow: 0 -8px 24px rgba(35, 74, 96, .10);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-checkout-details {
+    color: #3a5a70;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-final-total {
+    border-top-color: #dfe9f0;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-final-total strong {
+    color: #b71769;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-checkout > button {
+    border-radius: 12px;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    font-weight: 900;
+    box-shadow: 0 4px 12px rgba(208, 28, 122, .13);
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-checkout > button:disabled {
+    box-shadow: none;
+    opacity: .45;
+  }
+  @media (max-width: 360px) {
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-scan-card,
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-cart {
+      margin-inline: 8px;
+    }
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header {
+      padding-inline: 10px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-pos-page:has(.mobile-pos-checkout) button { transition: none; }
+  }
+}
+
+
+/* Lovely Kids POS — phone sales header links polish (visual only).
+   Distinguish WhatsApp orders from the back navigation without changing routes. */
+@media screen {
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions {
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"],
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 3px 9px rgba(30, 70, 94, .055);
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"] {
+    background: #e9f8ef;
+    border: 1px solid #a9ddbe;
+    color: #167347;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"]::before {
+    content: "✉";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"]:hover {
+    background: #d9f3e3;
+    border-color: #8bceaa;
+    color: #0d633a;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"] {
+    background: #f0f6fa;
+    border: 1px solid #c8dae7;
+    color: #315c78;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"]:hover {
+    background: #e1eff8;
+    border-color: #a4c7dc;
+    color: #204e6c;
+  }
+  @media (max-width: 430px) {
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions {
+      gap: 6px;
+    }
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/mobile/manual-order"],
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a[href="/sales/pos"] {
+      min-height: 38px;
+      padding: 7px 9px;
+      font-size: 12px;
+    }
+  }
+  @media (max-width: 370px) {
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-pos-page:has(.mobile-pos-checkout) .mobile-pos-header-actions a {
+      transition: none;
+    }
+  }
+}
+
+
+/* Lovely Kids POS — mobile sales returns visual refresh (CSS-only).
+   Restricted to the existing return checkout page. No route, scanner,
+   refund, stock, cash or fixed footer behavior is modified. */
+@media screen {
+  .mobile-pos-page:has(.mobile-return-checkout) {
+    --lkr-ink: #263f52;
+    --lkr-muted: #6a8395;
+    --lkr-line: #dce7ed;
+    --lkr-pink: #e91e8c;
+    --lkr-shadow: 0 7px 22px rgba(35, 77, 104, .055);
+    background: #eaf3f8;
+    color: var(--lkr-ink);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-shell {
+    background: #f5f9fc;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-header {
+    gap: 10px;
+    background: linear-gradient(115deg, #fff 0%, #fff5fa 80%, #fdeaf4);
+    border-bottom: 1px solid #f0d5e4;
+    box-shadow: 0 4px 14px rgba(30, 69, 98, .045);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-header > div:first-child strong {
+    font-size: 20px;
+    font-weight: 900;
+    color: #c81875;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-header > div:first-child span {
+    color: #557589;
+    font-weight: 700;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-header-actions a[href="/sales/pos"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #c8dae7;
+    border-radius: 12px;
+    background: #f0f6fa;
+    color: #315c78;
+    font-weight: 850;
+    font-size: 13px;
+    line-height: 1.3;
+    box-shadow: 0 3px 9px rgba(30, 70, 94, .055);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-header-actions a[href="/sales/pos"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-tabs {
+    gap: 6px;
+    background: #fff;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-tabs a {
+    background: #f1f6fa;
+    border: 1px solid #e1ebf1;
+    border-radius: 11px;
+    color: #46657b;
+    font-weight: 850;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-tabs a.is-active {
+    border-color: #d72480;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(201, 29, 116, .11);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-user {
+    background: #f0f7fb;
+    border-bottom: 1px solid #dfeaf1;
+    color: #496579;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Barcode camera and manual lookup are intentionally untouched functionally. */
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-scan-card {
+    margin: 12px 12px 0;
+    padding: 13px;
+    border: 1px solid var(--lkr-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lkr-shadow);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-camera-button {
+    border-color: #e8a5c9;
+    border-radius: 14px;
+    background: linear-gradient(140deg, #fff8fc, #fff1f8);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-camera-button strong {
+    color: #334e60;
+    font-weight: 900;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-camera-button small {
+    color: #708797;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-search input {
+    border-color: #d5e3ec;
+    border-radius: 10px;
+    background: #fbfdff;
+    color: #29485e;
+    font-size: 15px;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-search button {
+    border-radius: 10px;
+    background: #285f83;
+    color: #fff;
+    font-weight: 850;
+  }
+
+  /* Return basket, with alternating subtle product separators. */
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-cart {
+    margin: 12px;
+    padding: 15px 13px;
+    border: 1px solid var(--lkr-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lkr-shadow);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-cart-title {
+    margin: 0 0 13px;
+    color: #2c4d64;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-cart-title strong {
+    font-size: 18px;
+    font-weight: 900;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-cart-title span {
+    color: #a71f6a;
+    border: 1px solid #f0d0df;
+    border-radius: 999px;
+    background: #fff2f8;
+    padding: 5px 10px;
+    font-weight: 900;
+    font-size: 12px;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-empty-cart {
+    border: 1px dashed #cfdeea;
+    border-radius: 14px;
+    background: #f7fbfd;
+    color: #536d7e;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-lines {
+    gap: 11px;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-line {
+    border: 1px solid #e0e9ef;
+    border-right-width: 4px;
+    border-radius: 13px;
+    padding: 13px;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-line:nth-child(odd) {
+    border-right-color: #e3afcd;
+    background: linear-gradient(180deg, #fff, #fffcfe);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-line:nth-child(even) {
+    border-right-color: #9bcbe1;
+    background: linear-gradient(180deg, #fff, #f9fcff);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-line-top strong {
+    color: #28485d;
+    font-weight: 900;
+    line-height: 1.6;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-line-top small {
+    color: #728697;
+    font-size: 12px;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-price-row {
+    border-top-color: #e5edf2;
+    gap: 12px;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-price-row > label,
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-quantity-row > span {
+    color: #49697e;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-price-row input {
+    border: 1px solid #d7e4ec;
+    border-radius: 10px;
+    background: #fff;
+    color: #28485f;
+    font-weight: 900;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-quantity {
+    border-color: #d7e3eb;
+    border-radius: 10px;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-quantity button {
+    background: #edf5fa;
+    color: #285b7c;
+    font-weight: 850;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-quantity span {
+    color: #263f53;
+    font-weight: 900;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) :is(button,a,input):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+
+  /* Retain the existing fixed two-column return confirmation footer. */
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-checkout {
+    border-top: 2px solid #efc2da;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 -8px 24px rgba(35, 74, 96, .10);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-checkout strong {
+    color: #b71769;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-checkout small {
+    color: #7a5666;
+    font-weight: 650;
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-checkout > button {
+    border-radius: 12px;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    font-weight: 900;
+    box-shadow: 0 4px 12px rgba(208, 28, 122, .13);
+  }
+  .mobile-pos-page:has(.mobile-return-checkout) .mobile-return-checkout > button:disabled {
+    box-shadow: none;
+    opacity: .45;
+  }
+  @media (max-width: 360px) {
+    .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-scan-card,
+    .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-cart {
+      margin-inline: 8px;
+    }
+    .mobile-pos-page:has(.mobile-return-checkout) .mobile-pos-header {
+      padding-inline: 10px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-pos-page:has(.mobile-return-checkout) button {
+      transition: none;
+    }
+  }
+}
+
+
+/* Lovely Kids POS — mobile price check, visual-only refresh.
+   Scoped to the existing .mobile-price-check-page class.
+   No scanner behavior, search result computation or stock/pricing changes. */
+@media screen {
+  .mobile-price-check-page {
+    --lkp-ink: #283f53;
+    --lkp-muted: #678094;
+    --lkp-line: #dce7ee;
+    --lkp-shadow: 0 7px 22px rgba(35, 77, 104, .055);
+    background: #eaf3f8;
+    color: var(--lkp-ink);
+  }
+  .mobile-price-check-page .mobile-pos-shell {
+    background: #f5f9fc;
+  }
+  .mobile-price-check-page .mobile-pos-header {
+    background: linear-gradient(115deg, #fff 0%, #fff5fa 80%, #fdeaf4);
+    border-bottom: 1px solid #f0d5e4;
+    box-shadow: 0 4px 14px rgba(30, 69, 98, .045);
+  }
+  .mobile-price-check-page .mobile-pos-header > div:first-child strong {
+    font-size: 20px;
+    font-weight: 900;
+    color: #c81875;
+  }
+  .mobile-price-check-page .mobile-pos-header > div:first-child span {
+    color: #557589;
+    font-weight: 700;
+  }
+  .mobile-price-check-page .mobile-pos-header-actions a[href="/sales/pos"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #c8dae7;
+    border-radius: 12px;
+    background: #f0f6fa;
+    color: #315c78;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.3;
+    box-shadow: 0 3px 9px rgba(30, 70, 94, .055);
+  }
+  .mobile-price-check-page .mobile-pos-header-actions a[href="/sales/pos"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-price-check-page .mobile-pos-tabs {
+    gap: 6px;
+    background: #fff;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .mobile-price-check-page .mobile-pos-tabs a {
+    border: 1px solid #e1ebf1;
+    border-radius: 11px;
+    background: #f1f6fa;
+    color: #46657b;
+    font-weight: 850;
+  }
+  .mobile-price-check-page .mobile-pos-tabs a.is-active {
+    border-color: #d72480;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(201, 29, 116, .11);
+  }
+  .mobile-price-check-page .mobile-pos-user {
+    background: #f0f7fb;
+    border-bottom: 1px solid #dfeaf1;
+    color: #496579;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Scanner card: preserve camera and video sizing. */
+  .mobile-price-check-page .mobile-pos-scan-card {
+    margin: 12px 12px 10px;
+    padding: 13px;
+    border: 1px solid var(--lkp-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lkp-shadow);
+  }
+  .mobile-price-check-page .mobile-pos-camera-button {
+    border-color: #e8a5c9;
+    border-radius: 14px;
+    background: linear-gradient(140deg, #fff8fc, #fff1f8);
+  }
+  .mobile-price-check-page .mobile-pos-camera-button strong {
+    color: #334e60;
+    font-weight: 900;
+  }
+  .mobile-price-check-page .mobile-pos-camera-button small {
+    color: #708797;
+  }
+
+  /* Empty/loading and actual scanned-product results. */
+  .mobile-price-check-page .mobile-price-empty,
+  .mobile-price-check-page .mobile-price-check-loading {
+    margin: 12px;
+    min-height: 135px;
+    border: 1px dashed #cfdeea;
+    border-radius: 16px;
+    background: #fff;
+    color: #516d80;
+    box-shadow: var(--lkp-shadow);
+    font-size: 14px;
+  }
+  .mobile-price-check-page .mobile-price-empty strong {
+    color: #355a74;
+    font-weight: 900;
+    line-height: 1.7;
+  }
+  .mobile-price-check-page .mobile-price-result {
+    margin: 12px 12px 16px;
+    padding: 16px 14px;
+    border: 1px solid #efc5dc;
+    border-top: 4px solid #e91e8c;
+    border-radius: 17px;
+    background: linear-gradient(180deg, #fff 0%, #fffafd 100%);
+    box-shadow: var(--lkp-shadow);
+  }
+  .mobile-price-check-page .mobile-price-product-image {
+    border: 1px solid #e1e8ed;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 3px 11px rgba(37, 77, 100, .05);
+  }
+  .mobile-price-check-page .mobile-price-result-check {
+    background: #168544;
+    box-shadow: 0 2px 10px rgba(22, 133, 68, .12);
+  }
+  .mobile-price-check-page .mobile-price-result > span {
+    color: #688093;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .mobile-price-check-page .mobile-price-result h2 {
+    color: #273f52;
+    font-size: clamp(20px, 5.2vw, 27px);
+    font-weight: 900;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .mobile-price-check-page .mobile-price-result p {
+    color: #5e778b;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .mobile-price-check-page .mobile-price-summary {
+    gap: 10px;
+  }
+  .mobile-price-check-page .mobile-price-summary-item {
+    border: 1px solid #ead4e1;
+    border-radius: 13px;
+    background: #fff4fa;
+    padding: 12px 8px;
+  }
+  .mobile-price-check-page .mobile-price-summary-item span {
+    color: #765d70;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .mobile-price-check-page .mobile-price-summary-item strong {
+    color: #b3196d;
+    font-size: clamp(17px, 4.5vw, 22px);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-price-check-page .mobile-price-summary-item.mobile-price-stock {
+    background: #f0faf4;
+    border-color: #c4e7d0;
+  }
+  .mobile-price-check-page .mobile-price-summary-item.mobile-price-stock span {
+    color: #537665;
+  }
+  .mobile-price-check-page .mobile-price-summary-item.mobile-price-stock strong {
+    color: #16764b;
+  }
+  .mobile-price-check-page .mobile-price-result small {
+    color: #75899a;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .mobile-price-check-page a:focus-visible,
+  .mobile-price-check-page button:focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+  @media (max-width: 360px) {
+    .mobile-price-check-page .mobile-pos-header { padding-inline: 10px; }
+    .mobile-price-check-page .mobile-pos-scan-card,
+    .mobile-price-check-page .mobile-price-result,
+    .mobile-price-check-page .mobile-price-empty {
+      margin-inline: 8px;
+    }
+    .mobile-price-check-page .mobile-price-summary-item { padding-inline: 5px; }
+  }
+}
+
+
+/* Lovely Kids POS — mobile assistant visual refresh (CSS ONLY).
+   Applies to the existing mobile assistant shell only.
+   No microphone, form, API, approval, draft-state, or routing changes. */
+@media screen {
+  .mobile-pos-page:has(.mobile-assistant-shell) {
+    --lka-mobile-ink: #284357;
+    --lka-mobile-muted: #698194;
+    --lka-mobile-line: #dce7ee;
+    --lka-mobile-shadow: 0 7px 22px rgba(35, 77, 104, .055);
+    background: #eaf3f8;
+    color: var(--lka-mobile-ink);
+  }
+  .mobile-pos-page .mobile-assistant-shell {
+    background: #f5f9fc;
+  }
+  .mobile-assistant-shell .mobile-pos-header {
+    gap: 10px;
+    background: linear-gradient(115deg, #fff 0%, #fff5fa 80%, #fdeaf4);
+    border-bottom: 1px solid #f0d5e4;
+    box-shadow: 0 4px 14px rgba(30, 69, 98, .045);
+  }
+  .mobile-assistant-shell .mobile-pos-header > div:first-child strong {
+    font-size: 20px;
+    font-weight: 900;
+    color: #c81875;
+  }
+  .mobile-assistant-shell .mobile-pos-header > div:first-child span {
+    color: #557589;
+    font-weight: 700;
+  }
+  .mobile-assistant-shell .mobile-pos-header-actions a[href="/sales/pos"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #c8dae7;
+    border-radius: 12px;
+    background: #f0f6fa;
+    color: #315c78;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.3;
+    box-shadow: 0 3px 9px rgba(30, 70, 94, .055);
+  }
+  .mobile-assistant-shell .mobile-pos-header-actions a[href="/sales/pos"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-assistant-shell .mobile-pos-tabs {
+    gap: 6px;
+    background: #fff;
+    border-bottom: 1px solid #e0e9ef;
+  }
+  .mobile-assistant-shell .mobile-pos-tabs a {
+    border: 1px solid #e1ebf1;
+    border-radius: 11px;
+    background: #f1f6fa;
+    color: #46657b;
+    font-weight: 850;
+  }
+  .mobile-assistant-shell .mobile-pos-tabs a.is-active {
+    border-color: #d72480;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(201, 29, 116, .11);
+  }
+  .mobile-assistant-shell .mobile-pos-user {
+    background: #f0f7fb;
+    border-bottom: 1px solid #dfeaf1;
+    color: #496579;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Draft composer: prominent but calm compared to the POS sale screen. */
+  .mobile-assistant-shell .mobile-assistant-card {
+    margin: 12px 12px 14px;
+    padding: 16px;
+    border: 1px solid var(--lka-mobile-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lka-mobile-shadow);
+  }
+  .mobile-assistant-shell .mobile-assistant-heading {
+    gap: 12px;
+    margin-bottom: 13px;
+    align-items: center;
+  }
+  .mobile-assistant-shell .mobile-assistant-heading > span {
+    background: #fff1f8;
+    border: 1px solid #f1d4e5;
+    border-radius: 13px;
+    color: #bc1b70;
+  }
+  .mobile-assistant-shell .mobile-assistant-heading h1 {
+    margin: 0;
+    color: #273f52;
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.35;
+  }
+  .mobile-assistant-shell .mobile-assistant-heading p {
+    margin: 5px 0 0;
+    color: #657e90;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .mobile-assistant-shell .mobile-assistant-card textarea {
+    width: 100%;
+    min-height: 122px;
+    padding: 12px 14px;
+    border: 1px solid #d4e2ea;
+    border-radius: 12px;
+    background: #fbfdfe;
+    color: #284459;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .mobile-assistant-shell .mobile-assistant-card textarea::placeholder {
+    color: #8194a2;
+  }
+  .mobile-assistant-shell .mobile-assistant-card textarea:focus-visible {
+    border-color: #e65a9f;
+    outline: 3px solid rgba(233, 30, 140, .18);
+    outline-offset: 1px;
+  }
+  .mobile-assistant-shell .mobile-assistant-actions {
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .mobile-assistant-shell .mobile-assistant-actions button {
+    min-height: 48px;
+    border-radius: 11px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 900;
+  }
+  .mobile-assistant-shell .mobile-assistant-mic {
+    border: 1px solid #c9deea;
+    background: #eef7fc;
+    color: #295c7d;
+  }
+  .mobile-assistant-shell .mobile-assistant-mic.is-listening {
+    border-color: #eaa5c9;
+    background: #fff0f8;
+    color: #b61c6c;
+    box-shadow: 0 0 0 3px rgba(233, 30, 140, .1);
+  }
+  .mobile-assistant-shell .mobile-assistant-save {
+    border: 1px solid #d01a79;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(208, 28, 122, .13);
+  }
+  .mobile-assistant-shell .mobile-assistant-actions button:disabled {
+    opacity: .5;
+    box-shadow: none;
+  }
+  .mobile-assistant-shell .mobile-assistant-safety {
+    margin-top: 13px;
+    padding: 13px 14px;
+    border: 1px solid #c6e5d2;
+    border-right: 4px solid #5eb185;
+    border-radius: 11px;
+    background: #f0faf4;
+    color: #336e4e;
+    font-size: 12px;
+    line-height: 1.8;
+    font-weight: 700;
+  }
+
+  /* Recent drafts: alternate gentle accents; preserve semantic status pills. */
+  .mobile-assistant-shell .mobile-assistant-recent {
+    margin: 0 12px 18px;
+    padding: 15px 12px;
+    border: 1px solid var(--lka-mobile-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lka-mobile-shadow);
+  }
+  .mobile-assistant-shell .mobile-assistant-section-title {
+    margin: 0 0 13px;
+  }
+  .mobile-assistant-shell .mobile-assistant-section-title strong {
+    color: #2a4b62;
+    font-size: 17px;
+    font-weight: 900;
+  }
+  .mobile-assistant-shell .mobile-assistant-section-title span {
+    min-width: 30px;
+    min-height: 30px;
+    padding: 3px 7px;
+    border: 1px solid #f0cee0;
+    background: #fff3f9;
+    color: #a51d65;
+    font-weight: 900;
+  }
+  .mobile-assistant-shell .mobile-assistant-empty {
+    min-height: 112px;
+    display: grid;
+    place-items: center;
+    padding: 17px 12px;
+    border: 1px dashed #cbddea;
+    border-radius: 13px;
+    background: #f6fafc;
+    color: #637e90;
+    font-size: 13px;
+    line-height: 1.75;
+    text-align: center;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft {
+    border: 1px solid #dce7ef;
+    border-right-width: 4px;
+    border-radius: 13px;
+    padding: 13px;
+    background: #fff;
+    min-width: 0;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft:nth-of-type(odd) {
+    border-right-color: #e5aece;
+    background: linear-gradient(180deg, #fff, #fffcfe);
+  }
+  .mobile-assistant-shell .mobile-assistant-draft:nth-of-type(even) {
+    border-right-color: #a4cfdf;
+    background: linear-gradient(180deg, #fff, #fafdff);
+  }
+  .mobile-assistant-shell .mobile-assistant-draft strong {
+    color: #29465b;
+    font-size: 14px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft small {
+    color: #71889a;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft-meta > span {
+    color: #a71b68;
+    font-size: 14px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-assistant-shell .mobile-assistant-draft-meta b {
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 850;
+  }
+  .mobile-assistant-shell :is(button,a):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+  @media (max-width: 360px) {
+    .mobile-assistant-shell .mobile-pos-header { padding-inline: 10px; }
+    .mobile-assistant-shell .mobile-assistant-card,
+    .mobile-assistant-shell .mobile-assistant-recent { margin-inline: 8px; }
+    .mobile-assistant-shell .mobile-assistant-card { padding: 13px; }
+    .mobile-assistant-shell .mobile-assistant-actions { gap: 7px; }
+  }
+}
