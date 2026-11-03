@@ -20,7 +20,7 @@ This branch extends the existing owner-managed staff table. Owner authorization,
 | POS returns | `sales.returns` | `sales.returns` | `sales.returns.void` |
 | Local/online exchange | `sales.exchange` / `sales.exchange.online` | Same for allowed type | Additional `sales.exchange.void` |
 | Cash sessions | `cash.view` | `cash.open` / `cash.close` | Separate permissions |
-| Products | `inventory.view` | `inventory.edit` | Product cost requires `inventory.cost`; permanent deletion remains legacy admin/owner only |
+| Products | `inventory.view` | `inventory.edit` | Product cost requires `inventory.cost`; staff editing is restricted to stock and visibility in POS; product creation, metadata editor and permanent deletion remain legacy admin/owner only |
 | Purchases | `purchases.view` | `purchases.create` | `purchases.void` |
 | Purchase returns | `purchases.view` | `purchases.returns` | `purchases.returns.void` |
 | Customer/supplier | `parties.view` | `parties.edit` | Payroll remains owner-only |
@@ -33,7 +33,7 @@ This branch extends the existing owner-managed staff table. Owner authorization,
 
 The following **legacy capabilities are intentionally not delegated**: employee payroll/month close, permanent product deletion, historical cost repair/attestation, bulk order merge, physical order delete, and owner withdrawals. Do not assign administrator access to work around this.
 
-Dependency notes: purchase creation needs both `purchases.view` and `purchases.create` to load draft and save; purchase returns additionally need `purchases.view`. Expense entry needs `finance.expenses.view`, `finance.expenses.create`, and `cash.view` to load a cash session. Financial statements use financial + profit + inventory-cost reports.
+Dependency notes: banking actions need `banking.view` for listing accounts; delivery changes need `delivery.view` to load summaries; online-order actions need `orders.view` to load the staff order list. Purchase creation needs both `purchases.view` and `purchases.create` to load draft and save; purchase returns additionally need `purchases.view`. Expense entry needs `finance.expenses.view`, `finance.expenses.create`, and `cash.view` to load a cash session. Financial statements use financial + profit + inventory-cost reports.
 
 ## Consolidated end-to-end acceptance (perform ONCE after the complete code is built and deployed to a controlled test environment)
 
