@@ -98,9 +98,9 @@ export default function BankingPage() {
     user,
     clearAuthentication,
   } = usePosRuntime();
-  const canViewBanking = Boolean(canViewBanking || user?.isAdmin ||
+  const canViewBanking = Boolean(user?.isOwner || user?.isAdmin ||
     (user?.staffEnabled && (user?.permissions?.includes("banking.view") || user?.permissions?.includes("banking.create"))));
-  const canCreateBanking = Boolean(canViewBanking ||
+  const canCreateBanking = Boolean(user?.isOwner ||
     (user?.staffEnabled && !user?.isAdmin && user?.permissions?.includes("banking.create")));
 
 
