@@ -175,7 +175,7 @@ export default function DashboardLayout() {
               <span>{pageDescription}</span>
             </div>
 
-            {(user?.isOwner || user?.isAdmin || ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(permission => user?.permissions?.includes(permission))) && <div className="pos-shamel-session-state">
+            {(user?.isOwner || user?.isAdmin || ["cash.view", "cash.open", "cash.close", "sales.create", "sales.view", "sales.edit", "sales.void", "sales.returns", "sales.exchange", "sales.exchange.online"].some(permission => user?.permissions?.includes(permission))) && <div className="pos-shamel-session-state">
               <span
                 className={
                   session
@@ -315,7 +315,7 @@ export default function DashboardLayout() {
 
         <section
           hidden={isAdminPanel || (!user?.isOwner && !user?.isAdmin &&
-            !["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(
+            !["cash.view", "cash.open", "cash.close", "sales.create", "sales.view", "sales.edit", "sales.void", "sales.returns", "sales.exchange", "sales.exchange.online"].some(
               permission => user?.permissions?.includes(permission),
             ))}
           className={
