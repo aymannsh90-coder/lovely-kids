@@ -293,7 +293,8 @@ export default function PurchaseReturnsPage() {
           <strong>مردود الصنف المحدد: {quantity} قطعة</strong>
         </article>;
       })}
-      {canWriteReturns && <div className="pret-toolbar pret-edit-meta">
+      {canWriteReturns && <>
+      <div className="pret-toolbar pret-edit-meta">
         <label>سبب المردود<input value={reason} onChange={e => { setReason(e.target.value); requestKey.current = null; }} /></label>
         <label>ملاحظات<textarea rows={1} value={notes} onChange={e => { setNotes(e.target.value); requestKey.current = null; }} /></label>
       </div>
@@ -301,7 +302,7 @@ export default function PurchaseReturnsPage() {
         <strong>إجمالي القطع المحددة: {requestedTotal}</strong>
         <button className="pret-primary" type="button" disabled={busy || requestedTotal === 0 || invalidSelected}
           onClick={() => void saveReturn()}>{busy ? "جارٍ الحفظ..." : "اعتماد مردود المشتريات"}</button>
-      </div>}
+      </div></>}
       <p className="pret-small">قيمة المردود تُسجل على حساب المورد دون حركة صندوق. يمكن قبضها أو تسويتها لاحقًا بسند مستقل.</p>
     </section>}
     {saved && <section className="pret-card">
