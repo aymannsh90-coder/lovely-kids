@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 import { getProductQuantity } from "./product-quantity";
 
@@ -181,7 +182,7 @@ export async function handleHistoricalInventoryValuationRequest(
       env,
     );
 
-  if (!owner?.isOwner) {
+  if (!owner || (!owner.isOwner && (owner.isAdmin || !(await userHasPermission(db, owner, "reports.cost"))))) {
     return json(
       {
         error:
