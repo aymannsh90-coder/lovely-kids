@@ -24,7 +24,8 @@ const normalizeItemSearch = (value: string) => value
 
 export default function PurchaseReturnsPage() {
   const { token, user } = usePosRuntime();
-  const canWriteReturns = Boolean(user?.isOwner);
+  const canWriteReturns = Boolean(user?.isOwner || (user?.staffEnabled && user?.permissions?.includes("purchases.returns")));
+  const canVoidReturns = Boolean(user?.isOwner || (user?.staffEnabled && user?.permissions?.includes("purchases.returns.void")));
   const [purchaseNo, setPurchaseNo] = useState("");
   const [preview, setPreview] = useState<PosPurchaseReturnPreview | null>(null);
   const [itemSearch, setItemSearch] = useState("");
@@ -190,7 +191,7 @@ export default function PurchaseReturnsPage() {
   useEffect(() => () => document.body.classList.remove("pret-a4-printing"), []);
 
   async function cancelReturn() {
-    if (!canWriteReturns) return;
+    if (!canVoidReturns) return;
     if (!saved || saved.purchaseReturn.status === "voided" || busy) return;
     if (voidReason.trim().length < 2) { setError("أدخل سبب الإلغاء"); return; }
     if (!window.confirm("هل تؤكد إلغاء هذا المردود؟ سيتم إعادة المخزون وعكس القيد المالي.")) return;
@@ -318,7 +319,7 @@ export default function PurchaseReturnsPage() {
         <strong>تكلفة المخزون: {formatMoney(saved.purchaseReturn.inventoryCostMinor)}</strong></div>
       <div className="pret-toolbar pret-no-print">
         <button type="button" onClick={printReturnA4} disabled={busy}>🖨 معاينة وطباعة A4</button>
-        {canWriteReturns && saved.purchaseReturn.status === "completed" && <>
+        {canVoidReturns && saved.purchaseReturn.status === "completed" && <>
           <label>سبب الإلغاء<input value={voidReason} onChange={e => setVoidReason(e.target.value)} /></label>
           <button type="button" disabled={busy} onClick={() => void cancelReturn()}>إلغاء المردود وعكس حركته</button>
         </>}
