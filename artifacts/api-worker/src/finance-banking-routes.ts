@@ -16,6 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 
 type Db =
@@ -237,6 +238,13 @@ type PosUser = NonNullable<
   >
 >;
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/finance/banking/reference", permission: "banking.view" },
+  { method: "GET", path: "/api/pos/finance/bank-accounts", permission: "banking.view" },
+  { method: "POST", path: "/api/pos/finance/bank-accounts", permission: "banking.manage" },
+  { method: "POST", path: "/api/pos/finance/exchange-rates", permission: "banking.manage" },
+];
+
 async function requirePosUser(
   request: Request,
   db: Db,
@@ -271,10 +279,7 @@ async function requirePosUser(
     };
   }
 
-  if (
-    !user.isAdmin &&
-    !user.isOwner
-  ) {
+  if (!user.isAdmin && !user.isOwner && !(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
@@ -309,7 +314,7 @@ async function requireOwner(
     return auth;
   }
 
-  if (!auth.user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, auth.user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false as const,
       response: json(
