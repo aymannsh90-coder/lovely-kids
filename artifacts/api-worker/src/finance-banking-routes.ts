@@ -277,7 +277,10 @@ async function requirePosUser(
     !user.isOwner &&
     !(request.method === "GET" &&
       ["/api/pos/finance/banking/reference", "/api/pos/finance/bank-accounts"].includes(new URL(request.url).pathname) &&
-      await userHasPermission(db, user, "banking.view"))
+      await userHasPermission(db, user, "banking.view")) &&
+    !(request.method === "POST" &&
+      ["/api/pos/finance/bank-accounts", "/api/pos/finance/exchange-rates"].includes(new URL(request.url).pathname) &&
+      await userHasPermission(db, user, "banking.create"))
   ) {
     return {
       ok: false,
@@ -313,7 +316,11 @@ async function requireOwner(
     return auth;
   }
 
-  if (!auth.user.isOwner) {
+  const path = new URL(request.url).pathname;
+  const allowed = !auth.user.isAdmin && request.method === "POST" &&
+    ["/api/pos/finance/bank-accounts", "/api/pos/finance/exchange-rates"].includes(path) &&
+    await userHasPermission(db, auth.user, "banking.create");
+  if (!auth.user.isOwner && !allowed) {
     return {
       ok: false as const,
       response: json(
