@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import type { PosPurchaseReturnDetail } from "../lib/api";
 
 interface PurchaseReturnA4Props {
@@ -31,7 +32,7 @@ export default function PurchaseReturnA4({ detail }: PurchaseReturnA4Props) {
   const isVoided = returned.status === "voided";
   const totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  return (
+  return createPortal(
     <article className="pret-a4-sheet" dir="rtl" aria-label="سند مردود مشتريات A4">
       <header className="pret-a4-header">
         <div className="pret-a4-brand">
@@ -118,6 +119,7 @@ export default function PurchaseReturnA4({ detail }: PurchaseReturnA4Props) {
         </p>
         <div><span>توقيع المستلم: ___________________</span><span>توقيع المورد: ___________________</span></div>
       </footer>
-    </article>
+    </article>,
+    document.body,
   );
 }
