@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import AppRouter from "./app/router";
+import { firstAuthorizedStaffPage } from "./guards/RequireStaffPage";
 import { PosRuntimeProvider } from "./app/pos-context";
 
 import {
@@ -171,18 +172,24 @@ export default function App() {
       setPhase("booting");
 
       try {
-        const [currentUser, currentSession] = await Promise.all([
-          getCurrentPosUser(token as string),
-          getCurrentCashSession(token as string, POS_REGISTER_KEY),
-        ]);
+        const currentUser = await getCurrentPosUser(token as string);
 
-        if (!currentUser.isAdmin && !currentUser.isOwner && !["sales.create", "sales.exchange", "sales.exchange.online"].some(p => currentUser.permissions?.includes(p))) {
+        if (!currentUser.isAdmin && !currentUser.isOwner && (!currentUser.staffEnabled || !firstAuthorizedStaffPage(currentUser.permissions ?? []))) {
           throw new Error("هذا الحساب لا يملك صلاحية استخدام نقطة البيع");
         }
 
+        const needsCashSession =
+          currentUser.isOwner || currentUser.isAdmin ||
+          ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(
+            permission => currentUser.permissions?.includes(permission),
+          );
+        const currentSession = needsCashSession
+          ? await getCurrentCashSession(token as string, POS_REGISTER_KEY)
+          : null;
+
         if (!cancelled) {
           setUser(currentUser);
-          setSession(currentSession.session);
+          setSession(currentSession?.session ?? null);
           setPhase("ready");
         }
       } catch {
@@ -226,21 +233,25 @@ export default function App() {
     try {
       const result = await loginPos(phone.trim(), password);
 
-      if (!result.user.isAdmin && !result.user.isOwner && !["sales.create", "sales.exchange", "sales.exchange.online"].some(p => result.user.permissions?.includes(p))) {
+      if (!result.user.isAdmin && !result.user.isOwner && (!result.user.staffEnabled || !firstAuthorizedStaffPage(result.user.permissions ?? []))) {
         await logoutPos(result.token).catch(() => undefined);
 
         throw new Error("هذا الحساب لا يملك صلاحية استخدام نقطة البيع");
       }
 
-      const current = await getCurrentCashSession(
-        result.token,
-        POS_REGISTER_KEY,
-      );
+      const needsCashSession =
+        result.user.isOwner || result.user.isAdmin ||
+        ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(
+          permission => result.user.permissions?.includes(permission),
+        );
+      const current = needsCashSession
+        ? await getCurrentCashSession(result.token, POS_REGISTER_KEY)
+        : null;
 
       storeToken(result.token);
 
       setUser(result.user);
-      setSession(current.session);
+      setSession(current?.session ?? null);
       setPassword("");
       setToken(result.token);
       setPhase("ready");
@@ -412,7 +423,7 @@ export default function App() {
           <h1>تسجيل دخول نقطة البيع</h1>
 
           <p className="auth-description">
-            الدخول للمالك أو المدير أو الكاشير المخوّل من المالك.
+            الدخول للمالك أو للموظف الذي منحه المالك صلاحيات نقطة البيع أو التقارير.
           </p>
 
           <form className="auth-form" onSubmit={handleLogin}>
