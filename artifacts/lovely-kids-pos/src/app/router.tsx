@@ -29,6 +29,7 @@ import ProductCardPage from "../pages/inventory/ProductCardPage";
 import InventoryStockPage from "../pages/inventory/InventoryStockPage";
 import QuickStockCheckPage from "../pages/inventory/QuickStockCheckPage";
 import ProductManagementPage from "../pages/inventory/ProductManagementPage";
+import StaffInventoryPage from "../pages/inventory/StaffInventoryPage";
 import ProductEditorPage from "../pages/inventory/ProductEditorPage";
 import CustomersPage from "../pages/parties/CustomersPage";
 import EmployeesPage from "../pages/parties/EmployeesPage";
@@ -61,6 +62,11 @@ import StatementsPage from "../pages/reports/StatementsPage";
 import TrialBalanceReportPage from "../pages/reports/TrialBalanceReportPage";
 import ReceivablesLiquidityReportPage from "../pages/reports/ReceivablesLiquidityReportPage";
 import FinancialStatementsReportPage from "../pages/reports/FinancialStatementsReportPage";
+
+function ProductListRoute() {
+  const { user } = usePosRuntime();
+  return user?.isOwner || user?.isAdmin ? <ProductManagementPage /> : <StaffInventoryPage />;
+}
 
 function BankingRoute() {
   const { user } = usePosRuntime();
@@ -198,7 +204,7 @@ export default function AppRouter() {
 
         <Route
           path="inventory/products"
-          element={<ProductManagementPage />}
+          element={<ProductListRoute />}
         />
 
         <Route
