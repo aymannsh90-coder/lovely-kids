@@ -5,6 +5,7 @@ import {
 } from "@workspace/db/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
+import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   supplierPayableBalances,
@@ -67,7 +68,13 @@ async function requirePosUser(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  const path = new URL(request.url).pathname;
+  const isAllowedStaffRead = request.method === "GET" &&
+    (path === "/api/pos/suppliers"
+      ? await userHasAnyPermission(db, user, ["parties.view", "reports.financial"])
+      : /^\/api\/pos\/suppliers\/\d+\/ledger$/.test(path) &&
+        await userHasPermission(db, user, "reports.financial"));
+  if (!user.isAdmin && !user.isOwner && !isAllowedStaffRead) {
     return {
       ok: false,
       response: json(
@@ -399,7 +406,7 @@ async function handleSupplierLedger(
     return auth.response;
   }
 
-  if (!auth.user.isOwner) {
+  if (!auth.user.isOwner && (auth.user.isAdmin || !(await userHasPermission(db, auth.user, "reports.financial")))) {
     return json(
       {
         error:
