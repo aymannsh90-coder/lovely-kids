@@ -58,6 +58,9 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
   if (path === "/reports/financial-statements") {
     return ["reports.financial", "reports.cost", "inventory.cost"].every(p => permissions.includes(p));
   }
+  if (path === "/finance/expenses") {
+    return permissions.includes("finance.expenses.view");
+  }
   if (path === "/purchases/returns") {
     return ["purchases.returns", "purchases.view"].every(p => permissions.includes(p));
   }
