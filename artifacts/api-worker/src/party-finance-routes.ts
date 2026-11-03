@@ -1288,7 +1288,7 @@ async function handleCustomerLedger(
 
   if (!auth.ok) {
     const user = await getCurrentUser(db, request, env);
-    if (!user || !(await userHasPermission(db, user, "reports.financial"))) {
+    if (!user || !(await userHasAnyPermission(db, user, ["reports.financial", "parties.view"]))) {
       return auth.response;
     }
   }
