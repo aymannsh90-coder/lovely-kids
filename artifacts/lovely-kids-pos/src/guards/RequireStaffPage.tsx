@@ -16,6 +16,9 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/sales/invoice-check": ["sales.view"],
     "/cash-session": ["cash.view", "cash.open", "cash.close"],
     "/inventory/product-card": ["inventory.view"],
+    "/inventory/products": ["inventory.view", "inventory.edit"],
+    "/inventory/products/new": ["inventory.edit"],
+    "/inventory/stock-check": ["inventory.view", "inventory.edit"],
     "/purchases/new": ["purchases.create"],
     "/purchases/returns": ["purchases.view"],
     "/parties/customers": ["parties.view", "parties.edit"],
@@ -34,7 +37,10 @@ export function canVisitStaffPage(path: string, permissions: string[]): boolean 
     "/reports/customer-statement": ["reports.financial"],
     "/reports/supplier-statement": ["reports.financial"],
   };
-  return (byPath[path] ?? []).some(p => permissions.includes(p));
+  const required = /^\/inventory\/products\/\d+\/edit$/.test(path)
+    ? ["inventory.edit"]
+    : byPath[path] ?? [];
+  return required.some(p => permissions.includes(p));
 }
 
 const preferredStaffLandingRoutes: Array<[string, string]> = [
@@ -46,7 +52,8 @@ const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["cash.view", "/cash-session"],
   ["cash.open", "/cash-session"],
   ["cash.close", "/cash-session"],
-  ["inventory.view", "/inventory/product-card"],
+  ["inventory.view", "/inventory/products"],
+  ["inventory.edit", "/inventory/products"],
   ["purchases.create", "/purchases/new"],
   ["purchases.view", "/purchases/returns"],
   ["parties.view", "/parties/customers"],
