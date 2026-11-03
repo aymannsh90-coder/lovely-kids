@@ -16,6 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { canAccessOwnerOnlyStaffRoute, type StaffRouteGrant } from "./staff-route-policy";
 import { openDb, type Env } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 
@@ -243,6 +244,17 @@ type PosUser = NonNullable<
   >
 >;
 
+const STAFF_ALLOWED_ROUTES: readonly StaffRouteGrant[] = [
+  { method: "GET", path: "/api/pos/finance/cash-accounts", permission: "banking.view" },
+  { method: "POST", path: "/api/pos/finance/cash-accounts", permission: "banking.manage" },
+  { method: "GET", path: "/api/pos/finance/currency-conversions", permission: "banking.view" },
+  { method: "POST", path: "/api/pos/finance/currency-conversions", permission: "banking.create" },
+  { method: "POST", path: "/api/pos/finance/currency-conversions/reverse", permission: "banking.reverse" },
+  { method: "GET", path: "/api/pos/finance/transfers", permission: "banking.view" },
+  { method: "POST", path: "/api/pos/finance/transfers", permission: "banking.create" },
+  { method: "POST", path: "/api/pos/finance/transfers/reverse", permission: "banking.reverse" },
+];
+
 async function requireOwner(
   request: Request,
   db: Db,
@@ -277,7 +289,7 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  if (!(await canAccessOwnerOnlyStaffRoute(db, user, request, STAFF_ALLOWED_ROUTES))) {
     return {
       ok: false,
       response: json(
