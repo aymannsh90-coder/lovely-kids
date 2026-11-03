@@ -180,7 +180,7 @@ export default function App() {
 
         const needsCashSession =
           currentUser.isOwner || currentUser.isAdmin ||
-          ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online", "finance.expenses.create"].some(
+          ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(
             permission => currentUser.permissions?.includes(permission),
           );
         const currentSession = needsCashSession
@@ -241,7 +241,7 @@ export default function App() {
 
       const needsCashSession =
         result.user.isOwner || result.user.isAdmin ||
-        ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online", "finance.expenses.create"].some(
+        ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(
           permission => result.user.permissions?.includes(permission),
         );
       const current = needsCashSession
