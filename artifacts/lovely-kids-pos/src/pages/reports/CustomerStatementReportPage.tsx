@@ -207,18 +207,40 @@ function StatementInvoiceItemTable({
 
 function StatementInvoiceDetails({
   document,
+  netOnly = false,
 }: {
   document: PosCustomerLedgerDocument;
+  netOnly?: boolean;
 }) {
+  const netItems = document.netSaleItems ?? document.saleItems;
   return (
     <div className="customer-statement-invoice-details">
       <div className="customer-statement-invoice-heading">
         <strong>
-          {document.kind === "sale" ? "تفاصيل فاتورة البيع" : "تفاصيل فاتورة التبديل"}
+          {netOnly
+            ? "الأصناف الصافية بعد التبديل"
+            : document.kind === "sale"
+              ? "تفاصيل فاتورة البيع"
+              : "تفاصيل فاتورة التبديل"}
           {" — "}
           <span dir="ltr">{document.publicId}</span>
         </strong>
       </div>
+      {netOnly ? (
+        netItems.length > 0 ? (
+          <StatementInvoiceItemTable
+            label={document.kind === "sale"
+              ? "الأصناف المتبقية والبدائل المرتبطة"
+              : "الأصناف الجديدة بعد التبديل"}
+            items={netItems}
+          />
+        ) : (
+          <p className="customer-statement-net-empty">
+            لا توجد أصناف صافية متبقية من هذه الفاتورة.
+          </p>
+        )
+      ) : (
+      <>
       {document.kind === "exchange" && (
         <StatementInvoiceItemTable
           label="الأصناف المرتجعة من الزبون"
@@ -248,6 +270,8 @@ function StatementInvoiceDetails({
           </>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -317,6 +341,7 @@ export default function CustomerStatementReportPage() {
     useState("");
 
   const [showItemDetails, setShowItemDetails] = useState(false);
+  const [showNetItems, setShowNetItems] = useState(false);
   const [detailsLoaded, setDetailsLoaded] = useState(false);
 
   const [
@@ -425,6 +450,7 @@ export default function CustomerStatementReportPage() {
       token,
       Number(customerId),
       showItemDetails,
+      showItemDetails ? toDate : undefined,
     )
       .then((response) => {
         if (!active) {
@@ -461,6 +487,7 @@ export default function CustomerStatementReportPage() {
     token,
     customerId,
     showItemDetails,
+    toDate,
     clearAuthentication,
   ]);
 
@@ -814,6 +841,11 @@ export default function CustomerStatementReportPage() {
           color: #667085;
           margin-top: 3px;
         }
+        .customer-statement-net-empty {
+          margin: 3px 0;
+          font-size: 11px;
+          color: #64748b;
+        }
         .customer-statement-invoice-totals {
           display: flex;
           flex-wrap: wrap;
@@ -1164,9 +1196,21 @@ export default function CustomerStatementReportPage() {
             className={showItemDetails ? "primary-button" : "secondary-button"}
             aria-pressed={showItemDetails}
             disabled={!customerId || ledgerBusy}
-            onClick={() => setShowItemDetails((current) => !current)}
+            onClick={() => {
+              setShowItemDetails((current) => !current);
+              setShowNetItems(false);
+            }}
           >
             {showItemDetails ? "✓ إخفاء تفاصيل الأصناف" : "▤ إظهار تفاصيل الأصناف"}
+          </button>
+          <button
+            type="button"
+            className={showNetItems ? "primary-button" : "secondary-button"}
+            aria-pressed={showNetItems}
+            disabled={!showItemDetails || !detailsLoaded || ledgerBusy}
+            onClick={() => setShowNetItems((current) => !current)}
+          >
+            {showNetItems ? "✓ عرض الأصناف الصافية" : "إخفاء المرتجعات (الصافي)"}
           </button>
           <button
             type="button"
@@ -1383,7 +1427,9 @@ export default function CustomerStatementReportPage() {
 
           {showItemDetails && detailsLoaded && (
             <p className="customer-statement-issued-at" style={{ textAlign: "center" }}>
-              كشف مفصّل يتضمن أصناف فواتير البيع والتبديل
+              {showNetItems
+                ? "عرض الأصناف الصافية بعد التبديل — يُخفي المرتجعات ويعرض الكميات المتبقية والبدائل؛ الحركات والأرصدة المالية دون تغيير."
+                : "كشف مفصّل يتضمن أصناف فواتير البيع والتبديل"}
             </p>
           )}
 
@@ -1553,11 +1599,12 @@ export default function CustomerStatementReportPage() {
                       </td>
                     </tr>
                     {showItemDetails && detailsLoaded &&
-                      (row.entry.sourceType === "pos_sale" || row.entry.sourceType === "exchange") && (
+                      (row.entry.sourceType === "pos_sale" || row.entry.sourceType === "exchange") &&
+                      (!showNetItems || row.entry.transactionType !== "reversal") && (
                         <tr className="customer-statement-detail-row">
                           <td colSpan={8}>
                             {row.entry.document ? (
-                              <StatementInvoiceDetails document={row.entry.document} />
+                              <StatementInvoiceDetails document={row.entry.document} netOnly={showNetItems} />
                             ) : (
                               <span>تفاصيل أصناف هذه الفاتورة غير متوفرة في السجل.</span>
                             )}
