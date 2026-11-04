@@ -60,7 +60,10 @@ export function buildDiscountNoteLines(
   positiveAccount(partyAccountId);
   if (offsetAccountId === partyAccountId) throw new Error("DISCOUNT_DUPLICATE_ACCOUNT");
   if (!Number.isSafeInteger(partyId) || partyId <= 0) throw new Error("DISCOUNT_INVALID_PARTY");
-  const isCredit = kind !== "customer_debit";
+  // Customer credit: debit allowed-discount expense, credit receivable.
+  // Supplier earned discount: debit payable, credit discount income.
+  // Customer debit note: debit receivable, credit adjustment income.
+  const isCredit = kind === "customer_credit";
   const partyDimension = kind === "supplier_earned"
     ? { supplierId: partyId }
     : { customerId: partyId };
