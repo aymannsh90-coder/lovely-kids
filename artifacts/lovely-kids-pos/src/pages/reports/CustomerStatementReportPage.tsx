@@ -65,6 +65,12 @@ function movementLabel(
   }
 
   if (
+    entry.sourceType === "exchange"
+  ) {
+    return "فاتورة تبديل";
+  }
+
+  if (
     entry.transactionType ===
       "receipt"
   ) {
@@ -389,6 +395,7 @@ export default function CustomerStatementReportPage() {
 
     let active = true;
 
+    setLedger(null);
     setLedgerBusy(true);
     setDetailsLoaded(false);
     setError("");
@@ -1370,13 +1377,18 @@ export default function CustomerStatementReportPage() {
                         )}
                       </td>
                     </tr>
-                    {showItemDetails && detailsLoaded && row.entry.document && (
-                      <tr className="customer-statement-detail-row">
-                        <td colSpan={8}>
-                          <StatementInvoiceDetails document={row.entry.document} />
-                        </td>
-                      </tr>
-                    )}
+                    {showItemDetails && detailsLoaded &&
+                      (row.entry.sourceType === "pos_sale" || row.entry.sourceType === "exchange") && (
+                        <tr className="customer-statement-detail-row">
+                          <td colSpan={8}>
+                            {row.entry.document ? (
+                              <StatementInvoiceDetails document={row.entry.document} />
+                            ) : (
+                              <span>تفاصيل أصناف هذه الفاتورة غير متوفرة في السجل.</span>
+                            )}
+                          </td>
+                        </tr>
+                      )}
                     </Fragment>
                   ),
                 )}
