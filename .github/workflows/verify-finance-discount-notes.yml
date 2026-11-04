@@ -1,0 +1,35 @@
+name: Verify finance discount notes and customer settlement
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/finance-voucher-routes.ts'
+      - 'artifacts/api-worker/src/finance-discount-rules.ts'
+      - 'artifacts/api-worker/src/finance-discount-rules.test.mjs'
+      - 'artifacts/lovely-kids-pos/src/pages/finance/DiscountNotesPage.tsx'
+      - 'artifacts/lovely-kids-pos/src/pages/finance/UnifiedPartyVoucherPage.tsx'
+      - '.github/workflows/verify-finance-discount-notes.yml'
+
+jobs:
+  finance-discount-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck API and POS
+        run: |
+          pnpm --filter @workspace/api-worker typecheck
+          pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Discount posting regression tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/finance-discount-rules.test.mjs
