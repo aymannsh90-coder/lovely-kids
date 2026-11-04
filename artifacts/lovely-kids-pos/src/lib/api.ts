@@ -1664,6 +1664,26 @@ export function voidPosFinanceVoucher(
 }
 
 
+export function createPosFinanceDiscountNote(
+  token: string,
+  input: {
+    kind: "customer_credit" | "customer_debit" | "supplier_earned";
+    partyId: number;
+    amount: string;
+    reason: string;
+    reference?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    voucher: PosFinanceVoucher;
+  }>("/api/pos/finance/discount-notes", {
+    method: "POST",
+    body: JSON.stringify(input),
+  }, token);
+}
+
 export type PosUnifiedVoucherPartyType =
   | "customer"
   | "employee"
@@ -1726,6 +1746,7 @@ export function createPosUnifiedReceiptVoucher(
     registerKey: string;
     bankAccountId?: number;
     notes?: string;
+    discountAmount?: string;
     idempotencyKey: string;
   },
 ) {
