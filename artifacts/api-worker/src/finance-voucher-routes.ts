@@ -20,6 +20,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { buildCustomerReceiptDiscountLines, buildDiscountNoteLines, validatedReceiptSettlement } from "./finance-discount-rules";
 import { openDb, type Env } from "./db";
 import {
   customerReceivableBalanceMinor,
@@ -2265,7 +2266,12 @@ async function handleDiscountNote(
       const voucher = vouchers[0];
       if (!voucher) throw new Error("DISCOUNT_NOTE_VOUCHER_INSERT_FAILED");
 
-      const isCredit = noteKind !== "customer_debit";
+      const noteLines = buildDiscountNoteLines(
+        noteKind, amountMinor, account.id, party.account.id, partyId,
+      ).map((line, index) => ({
+        ...line,
+        memo: index === 0 ? label : notes,
+      }));
       const posting = await postFinanceTransaction(tx, {
         publicId: "FIN-" + businessDate.replaceAll("-", "") + "-" + randomUUID().slice(0, 8).toUpperCase(),
         idempotencyKey: "voucher:" + voucher.id + ":posted",
@@ -2280,21 +2286,7 @@ async function handleDiscountNote(
         cashSessionId: null,
         notes,
         createdByUserId: Number(auth.user.id),
-        lines: [
-          {
-            accountId: account.id,
-            debitMinor: isCredit ? amountMinor : 0,
-            creditMinor: isCredit ? 0 : amountMinor,
-            memo: label,
-          },
-          {
-            accountId: party.account.id,
-            ...party.lineDimensions,
-            debitMinor: isCredit ? 0 : amountMinor,
-            creditMinor: isCredit ? amountMinor : 0,
-            memo: notes,
-          },
-        ],
+        lines: noteLines,
       });
 
       const updated = await tx.update(financeVouchersTable)
@@ -2489,7 +2481,9 @@ async function handlePartyVoucher(
               );
             if (discountMinor > 0) {
               const dueMinor = await customerReceivableBalanceMinor(tx, partyId);
-              if (dueMinor <= 0 || amountMinor + discountMinor > dueMinor) {
+              try {
+                validatedReceiptSettlement(amountMinor, discountMinor, dueMinor);
+              } catch {
                 throw new VoucherError(
                   "مجموع المقبوض والخصم أكبر من الرصيد المستحق على الزبون",
                   409,
@@ -2750,7 +2744,7 @@ async function handlePartyVoucher(
               "receipt"
                 ? {
                     creditMinor:
-                      amountMinor + discountMinor,
+                      amountMinor,
                   }
                 : {
                     debitMinor:
@@ -2758,14 +2752,9 @@ async function handlePartyVoucher(
                   }),
             };
 
-          const discountLine: FinancePostingLineInput | null = discountAccount
-            ? {
-                accountId: discountAccount.id,
-                debitMinor: discountMinor,
-                creditMinor: 0,
-                memo: "خصم مسموح به للزبون عند التسديد",
-              }
-            : null;
+          const receiptLines = buildCustomerReceiptDiscountLines(
+            settlementLine, partyLine, discountAccount?.id ?? null, discountMinor,
+          );
 
           const posting =
             await postFinanceTransaction(
@@ -2797,11 +2786,7 @@ async function handlePartyVoucher(
                   Number(
                     auth.user.id,
                   ),
-                lines: [
-                  settlementLine,
-                  ...(discountLine ? [discountLine] : []),
-                  partyLine,
-                ],
+                lines: receiptLines,
               },
             );
 
