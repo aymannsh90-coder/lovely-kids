@@ -5000,6 +5000,7 @@ export interface GrossProfitNetResult {
   otherOperatingExpensesMinor: number;
   salaryExpenseMinor: number;
   totalOperatingExpensesMinor: number;
+  settlementAdjustmentIncomeMinor: number;
   netProfitRecordedMinor: number | null;
   salaryPosted: boolean;
   provisional: boolean;
