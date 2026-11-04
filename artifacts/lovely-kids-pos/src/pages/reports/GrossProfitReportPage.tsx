@@ -801,6 +801,7 @@ export default function GrossProfitReportPage() {
         },
         { label: "مصاريف التشغيل (بدون الرواتب والتوصيل)", value: formatReportMoney(report.netProfit.otherOperatingExpensesMinor) },
         { label: "الرواتب المحمّلة على الفترة", value: formatReportMoney(report.netProfit.salaryExpenseMinor) },
+        { label: "خصومات مكتسبة وتسويات مدينة", value: formatReportMoney(report.netProfit.settlementAdjustmentIncomeMinor) },
         {
           label: "صافي الربح حسب القيود" + (report.netProfit.provisional ? " — مبدئي" : ""),
           value: report.netProfit.netProfitRecordedMinor === null
@@ -1482,7 +1483,7 @@ export default function GrossProfitReportPage() {
             <div className="gross-profit-net-head">
               <div>
                 <h2>صافي الربح حسب القيود</h2>
-                <p>بعد خصم المصاريف والرواتب المسجلة — من دون تكرار تكلفة التوصيل</p>
+                <p>بعد خصم المصاريف والرواتب وإضافة تسويات الخصومات المكتسبة — من دون تكرار تكلفة التوصيل</p>
               </div>
               <span className="gross-profit-net-tag">
                 {report.netProfit.provisional ? "نتيجة مبدئية" : "بحسب القيود المسجلة"}
@@ -1501,6 +1502,10 @@ export default function GrossProfitReportPage() {
               <div className="gross-profit-net-cell">
                 <span>الرواتب المحمّلة على الفترة</span>
                 <strong>{formatReportMoney(report.netProfit.salaryExpenseMinor)}</strong>
+              </div>
+              <div className="gross-profit-net-cell">
+                <span>خصومات مكتسبة وتسويات مدينة</span>
+                <strong>{formatReportMoney(report.netProfit.settlementAdjustmentIncomeMinor)}</strong>
               </div>
               <div className="gross-profit-net-cell gross-profit-net-result">
                 <span>صافي الربح بعد المصاريف المسجلة</span>
