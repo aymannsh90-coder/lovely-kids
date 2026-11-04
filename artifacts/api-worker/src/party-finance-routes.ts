@@ -29,6 +29,11 @@ import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
 import { handleEmployeeMonthClose, MONTH_CLOSE_SOURCE_TYPE, MONTH_CLOSE_EVENT, salaryMonthRange } from "./employee-month-close";
 import { openDb, type Env } from "./db";
 import {
+  getCurrentProductImageMap,
+  resolveCurrentProductImage,
+} from "./current-product-image";
+import { toPublicMediaUrl } from "./media-url";
+import {
   customerReceivableBalances,
   customerReceivableLedgerLines,
   ensureCustomerReceivableControlAccount,
@@ -1367,6 +1372,7 @@ async function handleCustomerLedger(
     productNameAr: string;
     productCode: string | null;
     barcode: string | null;
+    productImage: string | null;
     color: string | null;
     size: string | null;
     quantity: number;
@@ -1426,6 +1432,22 @@ async function handleCustomerLedger(
         : Promise.resolve([]),
     ]);
 
+  const currentImageMap = includeDetails
+    ? await getCurrentProductImageMap(
+        db,
+        [
+          ...saleItems.map((line) => line.productId),
+          ...returns.map((line) => line.productId),
+          ...exchangeItems.map((line) => line.productId),
+        ],
+      )
+    : new Map<number, string | null>();
+
+  const itemImage = (image: string | null, productId: number | null) => {
+    const url = image || resolveCurrentProductImage(currentImageMap, productId);
+    return url ? toPublicMediaUrl(url) : null;
+  };
+
   const saleById = new Map<number, Item[]>();
   const returnsById = new Map<number, Item[]>();
   const newById = new Map<number, Item[]>();
@@ -1436,6 +1458,7 @@ async function handleCustomerLedger(
       productNameAr: line.productNameAr,
       productCode: line.productCode,
       barcode: line.barcode,
+      productImage: itemImage(line.productImage, line.productId),
       color: line.color,
       size: line.size,
       quantity: line.quantity,
@@ -1451,6 +1474,7 @@ async function handleCustomerLedger(
       productNameAr: line.productNameAr,
       productCode: line.productCode,
       barcode: line.barcode,
+      productImage: itemImage(line.productImage, line.productId),
       color: line.color,
       size: line.size,
       quantity: line.quantity,
@@ -1466,6 +1490,7 @@ async function handleCustomerLedger(
       productNameAr: line.productNameAr,
       productCode: line.productCode,
       barcode: line.barcode,
+      productImage: itemImage(line.productImage, line.productId),
       color: line.color,
       size: line.size,
       quantity: line.quantity,
