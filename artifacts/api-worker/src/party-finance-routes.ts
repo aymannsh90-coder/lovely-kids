@@ -1579,7 +1579,8 @@ async function handleCustomerLedger(
   for (const sale of sales) {
     const netItems: Item[] = [];
     if (sale.status === "completed" && withinNetDate(sale.businessDate)) {
-      for (const line of saleItems.filter((item) => item.saleId === sale.id)) {
+      for (const line of saleItems) {
+        if (line.saleId !== sale.id) continue;
         const remaining = Math.max(
           0,
           line.quantity - (returnedQtyBySaleItemId.get(line.id) ?? 0),
