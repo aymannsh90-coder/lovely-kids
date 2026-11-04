@@ -2132,6 +2132,195 @@ async function handleForeignCurrencyCustomerReceipt(
   }
 }
 
+
+type DiscountNoteKind =
+  | "customer_credit"
+  | "customer_debit"
+  | "supplier_earned";
+
+async function handleDiscountNote(
+  request: Request,
+  db: Db,
+  env: Env,
+) {
+  // Notes only adjust receivables/payables; no cash or stock movements.
+  const auth = await requireOwner(request, db, env);
+  if (!auth.ok) return auth.response;
+
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body) return json({ error: "بيانات الإشعار غير صالحة" }, 400);
+
+  try {
+    const kind = body.kind;
+    if (
+      kind !== "customer_credit" &&
+      kind !== "customer_debit" &&
+      kind !== "supplier_earned"
+    ) {
+      throw new VoucherError("نوع الإشعار غير صالح");
+    }
+    const noteKind: DiscountNoteKind = kind;
+    const partyType = kind === "supplier_earned" ? "supplier" : "customer";
+    const partyId = positiveId(body.partyId, "الطرف");
+    const amountMinor = moneyMinor(body.amount);
+    const key = idempotencyKey(body.idempotencyKey);
+    const reason = textValue(body.reason, 500)?.trim();
+    if (!reason || reason.length < 5) {
+      throw new VoucherError("أدخل سبب الإشعار (خمسة أحرف على الأقل)");
+    }
+    const reference = textValue(body.reference, 100)?.trim() ?? "";
+    const businessDate = currentPalestineDate();
+    const label = noteKind === "customer_credit"
+      ? "إشعار دائن - خصم مسموح به"
+      : noteKind === "supplier_earned"
+        ? "خصم مكتسب من المورد"
+        : "إشعار مدين للزبون";
+    const notes = label + ": " + reason + (reference ? " | المرجع: " + reference : "");
+
+    const result = await db.transaction(async (tx) => {
+      const duplicate = await existingVoucher(tx, key);
+      if (duplicate) {
+        if (
+          duplicate.voucherType !== "adjustment" ||
+          duplicate.partyType !== partyType ||
+          duplicate.partyId !== partyId ||
+          duplicate.amountMinor !== amountMinor ||
+          duplicate.notes !== notes
+        ) {
+          throw new VoucherError("مفتاح الطلب مستخدم بحركة مختلفة", 409);
+        }
+        return { alreadyCreated: true, voucher: duplicate, financeTransaction: null };
+      }
+
+      // Row lock serializes owner-created notes and discounted receipts.
+      if (partyType === "customer") {
+        await tx.select({ id: customersTable.id }).from(customersTable)
+          .where(eq(customersTable.id, partyId)).for("update");
+      } else {
+        await tx.select({ id: suppliersTable.id }).from(suppliersTable)
+          .where(eq(suppliersTable.id, partyId)).for("update");
+      }
+
+      const party = await resolveAccountRef(
+        tx,
+        partyType === "customer"
+          ? { kind: "customer", customerId: partyId }
+          : { kind: "supplier", supplierId: partyId },
+      );
+
+      if (noteKind === "customer_credit") {
+        const due = await customerReceivableBalanceMinor(tx, partyId);
+        if (due <= 0 || amountMinor > due) {
+          throw new VoucherError("قيمة الخصم المسموح به أكبر من الرصيد المستحق على الزبون", 409);
+        }
+      } else if (noteKind === "supplier_earned") {
+        const due = await supplierPayableBalanceMinor(tx, partyId);
+        if (due <= 0 || amountMinor > due) {
+          throw new VoucherError("الخصم المكتسب أكبر من الرصيد المستحق للمورد", 409);
+        }
+      }
+
+      const account = noteKind === "customer_credit"
+        ? await ensureFinanceAccount(tx, {
+            code: "EXPENSE_CUSTOMER_SETTLEMENT_DISCOUNT",
+            name: "خصومات مسموح بها للزبائن",
+            accountType: "expense",
+          })
+        : noteKind === "supplier_earned"
+          ? await ensureFinanceAccount(tx, {
+              code: "INCOME_SUPPLIER_SETTLEMENT_DISCOUNT",
+              name: "خصومات مكتسبة من الموردين - تسويات",
+              accountType: "income",
+            })
+          : await ensureFinanceAccount(tx, {
+              code: "INCOME_CUSTOMER_DEBIT_ADJUSTMENT",
+              name: "تسويات مدينة لحسابات الزبائن",
+              accountType: "income",
+            });
+
+      const prefix = noteKind === "customer_credit" ? "CRN" : noteKind === "customer_debit" ? "DBN" : "SDS";
+      const publicId = prefix + "-" + businessDate.replaceAll("-", "") +
+        "-" + randomUUID().slice(0, 8).toUpperCase();
+
+      const vouchers = await tx.insert(financeVouchersTable).values({
+        publicId,
+        idempotencyKey: key,
+        voucherType: "adjustment",
+        voucherPurpose: null,
+        partyType,
+        partyId,
+        paymentMethod: "non_cash",
+        amountMinor,
+        currencyCode: "ILS",
+        transactionAmountMinor: amountMinor,
+        exchangeRateMicros: 1_000_000,
+        bankAccountId: null,
+        businessDate,
+        cashSessionId: null,
+        financeTransactionId: null,
+        status: "posted",
+        notes,
+        createdByUserId: Number(auth.user.id),
+      }).returning();
+      const voucher = vouchers[0];
+      if (!voucher) throw new Error("DISCOUNT_NOTE_VOUCHER_INSERT_FAILED");
+
+      const isCredit = noteKind !== "customer_debit";
+      const posting = await postFinanceTransaction(tx, {
+        publicId: "FIN-" + businessDate.replaceAll("-", "") + "-" + randomUUID().slice(0, 8).toUpperCase(),
+        idempotencyKey: "voucher:" + voucher.id + ":posted",
+        businessDate,
+        transactionType: "adjustment",
+        sourceType: "finance_voucher",
+        sourceId: String(voucher.id),
+        sourceEvent:
+          noteKind === "customer_credit" ? "customer_credit_note"
+          : noteKind === "customer_debit" ? "customer_debit_note"
+          : "supplier_earned_discount",
+        cashSessionId: null,
+        notes,
+        createdByUserId: Number(auth.user.id),
+        lines: [
+          {
+            accountId: account.id,
+            debitMinor: isCredit ? amountMinor : 0,
+            creditMinor: isCredit ? 0 : amountMinor,
+            memo: label,
+          },
+          {
+            accountId: party.account.id,
+            ...party.lineDimensions,
+            debitMinor: isCredit ? 0 : amountMinor,
+            creditMinor: isCredit ? amountMinor : 0,
+            memo: notes,
+          },
+        ],
+      });
+
+      const updated = await tx.update(financeVouchersTable)
+        .set({
+          financeTransactionId: posting.transaction.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(financeVouchersTable.id, voucher.id))
+        .returning();
+      return {
+        alreadyCreated: false,
+        voucher: updated[0] ?? voucher,
+        financeTransaction: posting.transaction,
+      };
+    });
+
+    return json(result, result.alreadyCreated ? 200 : 201);
+  } catch (caught) {
+    if (caught instanceof VoucherError) {
+      return json({ error: caught.message }, caught.status);
+    }
+    console.error("FINANCE_DISCOUNT_NOTE_FAILED", caught);
+    return json({ error: "تعذر تسجيل إشعار الخصم" }, 500);
+  }
+}
+
 async function handlePartyVoucher(
   request: Request,
   db: Db,
@@ -3769,6 +3958,10 @@ export async function handleUnifiedVoucherRequest(
     new URL(
       request.url,
     ).pathname;
+
+  if (request.method === "POST" && path === "/api/pos/finance/discount-notes") {
+    return handleDiscountNote(request, db, env);
+  }
 
   if (
     request.method === "POST" &&
