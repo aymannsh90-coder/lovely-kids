@@ -2,6 +2,7 @@ import "./ReportVisualRefresh.css";
 import { useSearchParams } from "react-router-dom";
 import CustomerPicker from "../../components/CustomerPicker";
 import {
+  Fragment,
   useEffect,
   useMemo,
   useState,
@@ -13,6 +14,8 @@ import {
   getPosCustomers,
   type PosCustomer,
   type PosCustomerLedgerEntry,
+  type PosCustomerLedgerDocument,
+  type PosCustomerLedgerDocumentItem,
   type PosCustomerLedgerResult,
 } from "../../lib/api";
 
@@ -129,6 +132,99 @@ function errorText(
     : "حدث خطأ غير متوقع";
 }
 
+
+function StatementInvoiceItemTable({
+  label,
+  items,
+}: {
+  label: string;
+  items: PosCustomerLedgerDocumentItem[];
+}) {
+  if (!items.length) return null;
+
+  return (
+    <div className="customer-statement-invoice-group">
+      <h4>{label}</h4>
+      <table className="customer-statement-invoice-table">
+        <thead>
+          <tr>
+            <th>الصنف / الكود</th>
+            <th>اللون والمقاس</th>
+            <th>الكمية</th>
+            <th>سعر القطعة</th>
+            <th>خصم الصنف</th>
+            <th>صافي السطر</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, index) => (
+            <tr key={index}>
+              <td className="customer-statement-invoice-name">
+                <strong>{item.productNameAr}</strong>
+                {(item.productCode || item.barcode) && (
+                  <small dir="ltr">{item.productCode || item.barcode}</small>
+                )}
+              </td>
+              <td>{[item.color, item.size].filter(Boolean).join(" / ") || "—"}</td>
+              <td>{item.quantity}</td>
+              <td>{money(item.unitPriceMinor)}</td>
+              <td>{item.discountMinor ? money(item.discountMinor) : "—"}</td>
+              <td>{money(item.lineTotalMinor)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StatementInvoiceDetails({
+  document,
+}: {
+  document: PosCustomerLedgerDocument;
+}) {
+  return (
+    <div className="customer-statement-invoice-details">
+      <div className="customer-statement-invoice-heading">
+        <strong>
+          {document.kind === "sale" ? "تفاصيل فاتورة البيع" : "تفاصيل فاتورة التبديل"}
+          {" — "}
+          <span dir="ltr">{document.publicId}</span>
+        </strong>
+      </div>
+      {document.kind === "exchange" && (
+        <StatementInvoiceItemTable
+          label="الأصناف المرتجعة من الزبون"
+          items={document.returnItems}
+        />
+      )}
+      <StatementInvoiceItemTable
+        label={document.kind === "exchange" ? "الأصناف الجديدة للزبون" : "الأصناف المباعة"}
+        items={document.saleItems}
+      />
+      <div className="customer-statement-invoice-totals">
+        {document.kind === "sale" ? (
+          <>
+            <span>قبل الخصم: {money(document.subtotalMinor ?? 0)}</span>
+            <span>إجمالي الخصومات: {money(document.discountMinor ?? 0)}</span>
+            <strong>إجمالي الفاتورة: {money(document.totalMinor ?? 0)}</strong>
+          </>
+        ) : (
+          <>
+            <span>قيمة المرتجع: {money(document.returnNetMinor ?? 0)}</span>
+            <span>قيمة الأصناف الجديدة: {money(document.newNetMinor ?? 0)}</span>
+            <span>فرق التبديل: {balanceLabel(document.differenceMinor ?? 0)}</span>
+            {(document.deliveryChargeMinor ?? 0) > 0 && (
+              <span>رسوم التوصيل: {money(document.deliveryChargeMinor ?? 0)}</span>
+            )}
+            <strong>صافي تسوية التبديل: {balanceLabel(document.settlementAmountMinor ?? 0)}</strong>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerStatementReportPage() {
   const {
     token,
@@ -192,6 +288,9 @@ export default function CustomerStatementReportPage() {
     setToDate,
   ] =
     useState("");
+
+  const [showItemDetails, setShowItemDetails] = useState(false);
+  const [detailsLoaded, setDetailsLoaded] = useState(false);
 
   const [
     selectedMovement,
@@ -284,17 +383,20 @@ export default function CustomerStatementReportPage() {
   useEffect(() => {
     if (!customerId) {
       setLedger(null);
+      setDetailsLoaded(false);
       return;
     }
 
     let active = true;
 
     setLedgerBusy(true);
+    setDetailsLoaded(false);
     setError("");
 
     void getPosCustomerLedger(
       token,
       Number(customerId),
+      showItemDetails,
     )
       .then((response) => {
         if (!active) {
@@ -302,6 +404,7 @@ export default function CustomerStatementReportPage() {
         }
 
         setLedger(response);
+        setDetailsLoaded(showItemDetails);
       })
       .catch((caught) => {
         if (
@@ -329,6 +432,7 @@ export default function CustomerStatementReportPage() {
   }, [
     token,
     customerId,
+    showItemDetails,
     clearAuthentication,
   ]);
 
@@ -604,6 +708,62 @@ export default function CustomerStatementReportPage() {
           font-weight: 700;
         }
 
+
+        .customer-statement-toolbar-actions {
+          display: flex;
+          gap: 9px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .customer-statement-detail-row > td {
+          background: #f8fbfd;
+          padding: 12px 14px;
+          text-align: right;
+        }
+        .customer-statement-invoice-details {
+          text-align: right;
+          color: #1f2937;
+        }
+        .customer-statement-invoice-heading {
+          margin-bottom: 10px;
+          font-size: 13px;
+        }
+        .customer-statement-invoice-group + .customer-statement-invoice-group {
+          margin-top: 13px;
+        }
+        .customer-statement-invoice-group h4 {
+          font-size: 12px;
+          margin: 8px 0;
+          color: #344054;
+        }
+        .customer-statement-invoice-table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: auto;
+          font-size: 11px;
+        }
+        .customer-statement-invoice-table th,
+        .customer-statement-invoice-table td {
+          padding: 6px;
+          border: 1px solid #dfe7ec;
+          text-align: center;
+          overflow-wrap: anywhere;
+        }
+        .customer-statement-invoice-table th { background: #edf5f8; }
+        .customer-statement-invoice-name { text-align: right !important; }
+        .customer-statement-invoice-name small {
+          display: block;
+          color: #667085;
+          margin-top: 3px;
+        }
+        .customer-statement-invoice-totals {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px 18px;
+          margin-top: 10px;
+          font-size: 11px;
+        }
+
         .customer-statement-clickable-row {
           cursor: pointer;
         }
@@ -790,6 +950,12 @@ export default function CustomerStatementReportPage() {
             page-break-inside: avoid;
           }
 
+          .customer-statement-detail-row > td { padding: 1.5mm 2mm; }
+          .customer-statement-invoice-table th,
+          .customer-statement-invoice-table td { padding: 1.2mm; font-size: 8px; }
+          .customer-statement-invoice-group { break-inside: avoid; }
+          .customer-statement-invoice-totals { font-size: 9px; }
+
           .customer-statement-clickable-row {
             cursor: default;
           }
@@ -812,16 +978,25 @@ export default function CustomerStatementReportPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="primary-button"
-          disabled={!ledger}
-          onClick={() =>
-            window.print()
-          }
-        >
-          🖨️ طباعة A4
-        </button>
+        <div className="customer-statement-toolbar-actions">
+          <button
+            type="button"
+            className={showItemDetails ? "primary-button" : "secondary-button"}
+            aria-pressed={showItemDetails}
+            disabled={!customerId || ledgerBusy}
+            onClick={() => setShowItemDetails((current) => !current)}
+          >
+            {showItemDetails ? "✓ إخفاء تفاصيل الأصناف" : "▤ إظهار تفاصيل الأصناف"}
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!ledger || ledgerBusy || (showItemDetails && !detailsLoaded)}
+            onClick={() => window.print()}
+          >
+            🖨️ طباعة A4
+          </button>
+        </div>
       </div>
 
       <div className="customer-statement-no-print customer-statement-filters">
@@ -1024,6 +1199,12 @@ export default function CustomerStatementReportPage() {
             )}
           </div>
 
+          {showItemDetails && detailsLoaded && (
+            <p className="customer-statement-issued-at" style={{ textAlign: "center" }}>
+              كشف مفصّل يتضمن أصناف فواتير البيع والتبديل
+            </p>
+          )}
+
           <div className="customer-statement-balance-strip">
             <div>
               <span>
@@ -1109,8 +1290,8 @@ export default function CustomerStatementReportPage() {
                     row,
                     index,
                   ) => (
+                    <Fragment key={`${row.entry.transactionId ?? "x"}_${index}`}>
                     <tr
-                      key={`${row.entry.transactionId ?? "x"}_${index}`}
                       className="customer-statement-clickable-row"
                       role="button"
                       tabIndex={0}
@@ -1189,6 +1370,14 @@ export default function CustomerStatementReportPage() {
                         )}
                       </td>
                     </tr>
+                    {showItemDetails && detailsLoaded && row.entry.document && (
+                      <tr className="customer-statement-detail-row">
+                        <td colSpan={8}>
+                          <StatementInvoiceDetails document={row.entry.document} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ),
                 )}
               </tbody>
