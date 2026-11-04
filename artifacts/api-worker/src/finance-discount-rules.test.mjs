@@ -52,7 +52,9 @@ test("customer debit note raises receivable, supplier earned discount lowers pay
   assert.equal(debtor[1].debitMinor, 1000);
   const supplier = buildDiscountNoteLines("supplier_earned", 500, 33, 22, 3);
   assert.equal(supplier[1].supplierId, 3);
-  assert.equal(supplier[1].creditMinor, 500);
+  assert.equal(supplier[0].creditMinor, 500);
+  assert.equal(supplier[1].debitMinor, 500);
+  assert.equal(supplier[1].creditMinor, 0);
   assert.equal(sum(supplier, "debitMinor"), sum(supplier, "creditMinor"));
 });
 
