@@ -261,6 +261,17 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "discount-notes",
+    group: "vouchers",
+    path: "/finance/discount-notes",
+    title: "الإشعارات والخصومات",
+    description: "إشعار دائن أو مدين للزبون، وخصومات تسوية الموردين دون تعديل الفاتورة.",
+    icon: "🏷️",
+    ownerOnly: true,
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "voucher-journal",
     group: "vouchers",
     path: "/vouchers/journal",
