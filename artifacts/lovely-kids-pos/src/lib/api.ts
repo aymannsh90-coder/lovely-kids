@@ -784,6 +784,7 @@ export interface PosCustomerLedgerDocumentItem {
   productNameAr: string;
   productCode: string | null;
   barcode: string | null;
+  productImage: string | null;
   color: string | null;
   size: string | null;
   quantity: number;
