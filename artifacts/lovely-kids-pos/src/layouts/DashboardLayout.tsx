@@ -19,6 +19,7 @@ type MenuSectionKey =
   | "inventory"
   | "parties"
   | "vouchers"
+  | "discounts"
   | "finance"
   | "statements"
   | "reports";
@@ -56,6 +57,12 @@ const menuSections: MenuSection[] = [
     groups: ["vouchers"],
   },
   {
+    key: "discounts",
+    title: "الإشعارات والخصومات",
+    icon: "🏷️",
+    groups: ["discounts"],
+  },
+  {
     key: "finance",
     title: "المالية",
     icon: "💰",
@@ -80,7 +87,7 @@ const menuSections: MenuSection[] = [
 function canSeeNavigationItem(item: PosNavigationItem, user: PosUser | null) {
   if (!user) return false;
   if (item.group === "purchases" && !user.isOwner) return false;
-  if (item.group === "vouchers" && !user.isOwner) return false;
+  if ((item.group === "vouchers" || item.group === "discounts") && !user.isOwner) return false;
   if (item.ownerOnly && !user.isOwner) return false;
   return user.isOwner || user.isAdmin || canVisitStaffPage(item.path, user.permissions ?? []);
 }

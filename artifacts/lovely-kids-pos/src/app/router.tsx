@@ -19,6 +19,7 @@ import ExpensesPage from "../pages/finance/ExpensesPage";
 import AssistantInboxPage from "../pages/finance/AssistantInboxPage";
 import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
 import UnifiedPartyVoucherPage from "../pages/finance/UnifiedPartyVoucherPage";
+import DiscountNotesPage from "../pages/finance/DiscountNotesPage";
 import JournalVoucherPage from "../pages/finance/JournalVoucherPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
 import InventoryStockPage from "../pages/inventory/InventoryStockPage";
@@ -236,6 +237,15 @@ export default function AppRouter() {
           element={
             <RequireOwner>
               <UnifiedPartyVoucherPage mode="payment" />
+            </RequireOwner>
+          }
+        />
+
+        <Route
+          path="finance/discount-notes"
+          element={
+            <RequireOwner>
+              <DiscountNotesPage />
             </RequireOwner>
           }
         />
