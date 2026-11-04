@@ -65,7 +65,8 @@ function movementLabel(
   }
 
   if (
-    entry.sourceType === "exchange"
+    entry.sourceType === "exchange" &&
+    entry.transactionType !== "reversal"
   ) {
     return "فاتورة تبديل";
   }
