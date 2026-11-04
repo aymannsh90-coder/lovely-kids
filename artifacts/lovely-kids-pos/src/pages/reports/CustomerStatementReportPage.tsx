@@ -167,10 +167,30 @@ function StatementInvoiceItemTable({
           {items.map((item, index) => (
             <tr key={index}>
               <td className="customer-statement-invoice-name">
-                <strong>{item.productNameAr}</strong>
-                {(item.productCode || item.barcode) && (
-                  <small dir="ltr">{item.productCode || item.barcode}</small>
-                )}
+                <div className="customer-statement-invoice-product">
+                  {item.productImage ? (
+                    <img
+                      className="customer-statement-invoice-image"
+                      src={item.productImage}
+                      alt={item.productNameAr}
+                      loading="eager"
+                      decoding="sync"
+                    />
+                  ) : (
+                    <span
+                      className="customer-statement-invoice-no-image"
+                      aria-label="لا توجد صورة محفوظة"
+                    >
+                      بدون صورة
+                    </span>
+                  )}
+                  <div>
+                    <strong>{item.productNameAr}</strong>
+                    {(item.productCode || item.barcode) && (
+                      <small dir="ltr">{item.productCode || item.barcode}</small>
+                    )}
+                  </div>
+                </div>
               </td>
               <td>{[item.color, item.size].filter(Boolean).join(" / ") || "—"}</td>
               <td>{item.quantity}</td>
@@ -759,6 +779,36 @@ export default function CustomerStatementReportPage() {
         }
         .customer-statement-invoice-table th { background: #edf5f8; }
         .customer-statement-invoice-name { text-align: right !important; }
+        .customer-statement-invoice-product {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 9px;
+          min-width: 0;
+        }
+        .customer-statement-invoice-product > div { min-width: 0; }
+        .customer-statement-invoice-image {
+          display: block;
+          flex: 0 0 46px;
+          width: 46px;
+          height: 46px;
+          border: 1px solid #e3eaf1;
+          border-radius: 6px;
+          object-fit: contain;
+          background: #fff;
+        }
+        .customer-statement-invoice-no-image {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 46px;
+          width: 46px;
+          height: 46px;
+          border: 1px dashed #d1d5db;
+          border-radius: 6px;
+          color: #98a2b3;
+          font-size: 8px;
+        }
         .customer-statement-invoice-name small {
           display: block;
           color: #667085;
@@ -961,6 +1011,14 @@ export default function CustomerStatementReportPage() {
           .customer-statement-detail-row > td { padding: 1.5mm 2mm; }
           .customer-statement-invoice-table th,
           .customer-statement-invoice-table td { padding: 1.2mm; font-size: 8px; }
+          .customer-statement-invoice-image,
+          .customer-statement-invoice-no-image {
+            flex-basis: 11mm;
+            width: 11mm;
+            height: 11mm;
+            border-radius: 1mm;
+          }
+          .customer-statement-invoice-product { gap: 1.5mm; }
           .customer-statement-invoice-group { break-inside: avoid; }
           .customer-statement-invoice-totals { font-size: 9px; }
 
