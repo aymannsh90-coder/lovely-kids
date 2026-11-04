@@ -4,10 +4,15 @@ import {
   customersTable,
   employeesTable,
   expenseCategoriesTable,
+  exchangeDocumentsTable,
+  exchangeReturnItemsTable,
+  exchangeSaleItemsTable,
   financeAccountsTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
   financeVouchersTable,
+  posSaleItemsTable,
+  posSalesTable,
 } from "@workspace/db/schema";
 import {
   and,
@@ -1356,6 +1361,147 @@ async function handleCustomerLedger(
       ),
     );
 
+
+  // Optional invoice snapshots; do not alter receivable ledger arithmetic.
+  type Item = {
+    productNameAr: string;
+    productCode: string | null;
+    barcode: string | null;
+    color: string | null;
+    size: string | null;
+    quantity: number;
+    unitPriceMinor: number;
+    discountMinor: number;
+    lineTotalMinor: number;
+  };
+  type Document = {
+    kind: "sale" | "exchange";
+    publicId: string;
+    saleItems: Item[];
+    returnItems: Item[];
+    subtotalMinor?: number;
+    discountMinor?: number;
+    totalMinor?: number;
+    returnNetMinor?: number;
+    newNetMinor?: number;
+    differenceMinor?: number;
+    settlementAmountMinor?: number;
+    deliveryChargeMinor?: number;
+  };
+
+  const includeDetails =
+    new URL(request.url).searchParams.get("includeDetails") === "1";
+  const idsFor = (kind: string) =>
+    [...new Set(
+      transactions.filter((tx) => tx.sourceType === kind)
+        .map((tx) => Number(tx.sourceId))
+        .filter((id) => Number.isSafeInteger(id) && id > 0),
+    )];
+
+  const saleIds = includeDetails ? idsFor("pos_sale") : [];
+  const exchangeIds = includeDetails ? idsFor("exchange") : [];
+  const [sales, saleItems, exchanges, returns, exchangeItems] =
+    await Promise.all([
+      saleIds.length
+        ? db.select().from(posSalesTable).where(inArray(posSalesTable.id, saleIds))
+        : Promise.resolve([]),
+      saleIds.length
+        ? db.select().from(posSaleItemsTable)
+            .where(inArray(posSaleItemsTable.saleId, saleIds))
+            .orderBy(asc(posSaleItemsTable.saleId), asc(posSaleItemsTable.lineNumber))
+        : Promise.resolve([]),
+      exchangeIds.length
+        ? db.select().from(exchangeDocumentsTable)
+            .where(inArray(exchangeDocumentsTable.id, exchangeIds))
+        : Promise.resolve([]),
+      exchangeIds.length
+        ? db.select().from(exchangeReturnItemsTable)
+            .where(inArray(exchangeReturnItemsTable.exchangeId, exchangeIds))
+            .orderBy(asc(exchangeReturnItemsTable.exchangeId), asc(exchangeReturnItemsTable.lineNumber))
+        : Promise.resolve([]),
+      exchangeIds.length
+        ? db.select().from(exchangeSaleItemsTable)
+            .where(inArray(exchangeSaleItemsTable.exchangeId, exchangeIds))
+            .orderBy(asc(exchangeSaleItemsTable.exchangeId), asc(exchangeSaleItemsTable.lineNumber))
+        : Promise.resolve([]),
+    ]);
+
+  const saleById = new Map<number, Item[]>();
+  const returnsById = new Map<number, Item[]>();
+  const newById = new Map<number, Item[]>();
+
+  for (const line of saleItems) {
+    const items = saleById.get(line.saleId) ?? [];
+    items.push({
+      productNameAr: line.productNameAr,
+      productCode: line.productCode,
+      barcode: line.barcode,
+      color: line.color,
+      size: line.size,
+      quantity: line.quantity,
+      unitPriceMinor: line.soldUnitPriceMinor,
+      discountMinor: line.lineDiscountMinor + line.promotionDiscountMinor,
+      lineTotalMinor: line.lineTotalMinor,
+    });
+    saleById.set(line.saleId, items);
+  }
+  for (const line of returns) {
+    const items = returnsById.get(line.exchangeId) ?? [];
+    items.push({
+      productNameAr: line.productNameAr,
+      productCode: line.productCode,
+      barcode: line.barcode,
+      color: line.color,
+      size: line.size,
+      quantity: line.quantity,
+      unitPriceMinor: line.soldUnitPriceMinor,
+      discountMinor: line.allocatedDiscountMinor,
+      lineTotalMinor: line.returnNetMinor,
+    });
+    returnsById.set(line.exchangeId, items);
+  }
+  for (const line of exchangeItems) {
+    const items = newById.get(line.exchangeId) ?? [];
+    items.push({
+      productNameAr: line.productNameAr,
+      productCode: line.productCode,
+      barcode: line.barcode,
+      color: line.color,
+      size: line.size,
+      quantity: line.quantity,
+      unitPriceMinor: line.soldUnitPriceMinor,
+      discountMinor: line.allocatedDiscountMinor,
+      lineTotalMinor: line.lineNetMinor,
+    });
+    newById.set(line.exchangeId, items);
+  }
+
+  const documents = new Map<string, Document>();
+  for (const sale of sales) {
+    documents.set("pos_sale:" + sale.id, {
+      kind: "sale",
+      publicId: sale.publicId,
+      saleItems: saleById.get(sale.id) ?? [],
+      returnItems: [],
+      subtotalMinor: sale.subtotalMinor,
+      discountMinor: sale.discountMinor,
+      totalMinor: sale.totalMinor,
+    });
+  }
+  for (const exchange of exchanges) {
+    documents.set("exchange:" + exchange.id, {
+      kind: "exchange",
+      publicId: exchange.publicId,
+      saleItems: newById.get(exchange.id) ?? [],
+      returnItems: returnsById.get(exchange.id) ?? [],
+      returnNetMinor: exchange.returnNetMinor,
+      newNetMinor: exchange.newNetMinor,
+      differenceMinor: exchange.differenceMinor,
+      settlementAmountMinor: exchange.settlementAmountMinor,
+      deliveryChargeMinor: exchange.deliveryChargeMinor,
+    });
+  }
+
   let runningBalanceMinor =
     0;
 
@@ -1419,6 +1565,11 @@ async function handleCustomerLedger(
           runningBalanceMinor,
           memo:
             line.memo,
+          ...(includeDetails ? {
+            document: transaction
+              ? documents.get(transaction.sourceType + ":" + transaction.sourceId) ?? null
+              : null,
+          } : {}),
         };
       },
     );
