@@ -55,6 +55,9 @@ function movementLabel(
   entry:
     PosCustomerLedgerEntry,
 ) {
+  if (entry.sourceEvent === "customer_credit_note") return "إشعار دائن / خصم مسموح";
+  if (entry.sourceEvent === "customer_debit_note") return "إشعار مدين للزبون";
+  if (entry.sourceEvent === "receipt_with_discount") return "سند قبض مع خصم مسموح";
   if (
     entry.sourceType ===
       "pos_sale" ||
