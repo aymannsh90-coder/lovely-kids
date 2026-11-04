@@ -2439,6 +2439,21 @@ async function handlePartyVoucher(
             );
 
           if (duplicate) {
+            const requestedDiscount = discountMinor > 0
+              ? "خصم مسموح به عند التسديد: " + (discountMinor / 100).toFixed(2) + " ₪"
+              : null;
+            if (
+              duplicate.voucherType !== voucherType ||
+              duplicate.partyType !== partyType ||
+              duplicate.partyId !== partyId ||
+              duplicate.amountMinor !== amountMinor ||
+              (requestedDiscount !== null &&
+                !duplicate.notes?.includes(requestedDiscount)) ||
+              (requestedDiscount === null &&
+                duplicate.notes?.includes("خصم مسموح به عند التسديد:"))
+            ) {
+              throw new VoucherError("تم استخدام مفتاح السند مع بيانات أو خصم مختلف", 409);
+            }
             return {
               alreadyCreated: true,
               voucher:
@@ -2736,9 +2751,10 @@ async function handlePartyVoucher(
                 party.account.id,
               ...party.lineDimensions,
               memo:
-                voucherType ===
-                  "receipt"
-                  ? `قبض من ${party.label}`
+                voucherType === "receipt"
+                  ? discountMinor > 0
+                    ? `قبض من ${party.label}: ${(amountMinor / 100).toFixed(2)} ₪ + خصم مسموح ${(discountMinor / 100).toFixed(2)} ₪`
+                    : `قبض من ${party.label}`
                   : `صرف إلى ${party.label}`,
               ...(voucherType ===
               "receipt"
