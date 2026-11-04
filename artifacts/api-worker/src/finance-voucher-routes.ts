@@ -2362,6 +2362,11 @@ async function handlePartyVoucher(
       moneyMinor(
         body.amount,
       );
+    const discountMinor =
+      body.discountAmount === undefined || body.discountAmount === null ||
+      body.discountAmount === "" || body.discountAmount === "0"
+        ? 0
+        : moneyMinor(body.discountAmount);
 
     const key =
       idempotencyKey(
@@ -2390,6 +2395,13 @@ async function handlePartyVoucher(
         body.partyId,
         "الطرف",
       );
+
+    if (discountMinor > 0 && !(voucherType === "receipt" && partyType === "customer")) {
+      throw new VoucherError("خصم عند التسديد متاح لقبض ذمم الزبائن فقط");
+    }
+    if (!Number.isSafeInteger(amountMinor + discountMinor) || amountMinor + discountMinor > MAX_MINOR) {
+      throw new VoucherError("إجمالي التسوية غير صالح");
+    }
 
     const method =
       body.paymentMethod;
@@ -2462,6 +2474,9 @@ async function handlePartyVoucher(
             partyType ===
               "customer"
           ) {
+            // Lock the customer, protecting settlement discounts from concurrent notes.
+            await tx.select({ id: customersTable.id }).from(customersTable)
+              .where(eq(customersTable.id, partyId)).for("update");
             party =
               await resolveAccountRef(
                 tx,
@@ -2472,6 +2487,15 @@ async function handlePartyVoucher(
                     partyId,
                 },
               );
+            if (discountMinor > 0) {
+              const dueMinor = await customerReceivableBalanceMinor(tx, partyId);
+              if (dueMinor <= 0 || amountMinor + discountMinor > dueMinor) {
+                throw new VoucherError(
+                  "مجموع المقبوض والخصم أكبر من الرصيد المستحق على الزبون",
+                  409,
+                );
+              }
+            }
           } else if (
             partyType ===
               "employee"
@@ -2617,6 +2641,14 @@ async function handlePartyVoucher(
             );
           }
 
+          const discountAccount = discountMinor > 0
+            ? await ensureFinanceAccount(tx, {
+                code: "EXPENSE_CUSTOMER_SETTLEMENT_DISCOUNT",
+                name: "خصومات مسموح بها للزبائن",
+                accountType: "expense",
+              })
+            : null;
+
           const voucherPurpose =
             voucherType === "receipt"
               ? partyType === "customer"
@@ -2669,7 +2701,10 @@ async function handlePartyVoucher(
                 cashSessionId:
                   cashSession?.id ??
                   null,
-                notes,
+                notes: discountMinor > 0
+                  ? (notes ? notes + " | " : "") +
+                    "خصم مسموح به عند التسديد: " + (discountMinor / 100).toFixed(2) + " ₪"
+                  : notes,
                 userId:
                   Number(
                     auth.user.id,
@@ -2715,13 +2750,22 @@ async function handlePartyVoucher(
               "receipt"
                 ? {
                     creditMinor:
-                      amountMinor,
+                      amountMinor + discountMinor,
                   }
                 : {
                     debitMinor:
                       amountMinor,
                   }),
             };
+
+          const discountLine: FinancePostingLineInput | null = discountAccount
+            ? {
+                accountId: discountAccount.id,
+                debitMinor: discountMinor,
+                creditMinor: 0,
+                memo: "خصم مسموح به للزبون عند التسديد",
+              }
+            : null;
 
           const posting =
             await postFinanceTransaction(
@@ -2741,19 +2785,21 @@ async function handlePartyVoucher(
                     voucher.id,
                   ),
                 sourceEvent:
-                  voucherType,
+                  discountMinor > 0 ? "receipt_with_discount" : voucherType,
                 cashSessionId:
                   cashSession?.id ??
                   null,
-                notes:
-                  notes ??
-                  voucher.publicId,
+                notes: discountMinor > 0
+                  ? (notes ? notes + " | " : "") +
+                    "خصم مسموح به عند التسديد: " + (discountMinor / 100).toFixed(2) + " ₪"
+                  : notes ?? voucher.publicId,
                 createdByUserId:
                   Number(
                     auth.user.id,
                   ),
                 lines: [
                   settlementLine,
+                  ...(discountLine ? [discountLine] : []),
                   partyLine,
                 ],
               },
@@ -2790,6 +2836,8 @@ async function handlePartyVoucher(
             expectedCashAfterMinor:
               cashState?.after ??
               null,
+            discountMinor,
+            settledMinor: amountMinor + discountMinor,
           };
         },
       );
