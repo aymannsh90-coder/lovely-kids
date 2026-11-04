@@ -4,12 +4,15 @@ const MAX_MINOR = 2_147_483_647;
 
 type Line = {
   accountId: number;
-  debitMinor: number;
-  creditMinor: number;
+  debitMinor?: number;
+  creditMinor?: number;
   customerId?: number | null;
+  employeeId?: number | null;
   supplierId?: number | null;
-  memo?: string;
-  [dimension: string]: unknown;
+  currencyCode?: string | null;
+  currencyAmountMinor?: number | null;
+  exchangeRateMicros?: number | null;
+  memo?: string | null;
 };
 
 function positiveMinor(value: number, field: string): number {
@@ -82,9 +85,9 @@ export function buildCustomerReceiptDiscountLines(
   discountAccountId: number | null,
   discountMinor: number,
 ): Line[] {
-  const cashMinor = positiveMinor(cashOrBankLine.debitMinor, "RECEIPT");
-  if (cashOrBankLine.creditMinor !== 0 ||
-    customerReceivableLine.debitMinor !== 0 ||
+  const cashMinor = positiveMinor(cashOrBankLine.debitMinor ?? 0, "RECEIPT");
+  if ((cashOrBankLine.creditMinor ?? 0) !== 0 ||
+    (customerReceivableLine.debitMinor ?? 0) !== 0 ||
     customerReceivableLine.creditMinor !== cashMinor) {
     throw new Error("DISCOUNT_RECEIPT_LINES_INVALID");
   }
