@@ -12,6 +12,8 @@ import {
   financeTransactionsTable,
   financeVouchersTable,
   posSaleItemsTable,
+  posSaleReturnsTable,
+  posSaleReturnItemsTable,
   posSalesTable,
 } from "@workspace/db/schema";
 import {
@@ -1385,6 +1387,7 @@ async function handleCustomerLedger(
     publicId: string;
     saleItems: Item[];
     returnItems: Item[];
+    netSaleItems: Item[];
     subtotalMinor?: number;
     discountMinor?: number;
     totalMinor?: number;
@@ -1395,8 +1398,15 @@ async function handleCustomerLedger(
     deliveryChargeMinor?: number;
   };
 
+  const statementUrl = new URL(request.url);
   const includeDetails =
-    new URL(request.url).searchParams.get("includeDetails") === "1";
+    statementUrl.searchParams.get("includeDetails") === "1";
+  // A date-scoped statement shows net items as of the selected end date.
+  const requestedAsOf = statementUrl.searchParams.get("netAsOf") ?? "";
+  const netAsOf = /^\d{4}-\d{2}-\d{2}$/.test(requestedAsOf)
+    ? requestedAsOf
+    : null;
+  const withinNetDate = (date: string) => !netAsOf || date <= netAsOf;
   const idsFor = (kind: string) =>
     [...new Set(
       transactions.filter((tx) => tx.sourceType === kind)
@@ -1432,13 +1442,77 @@ async function handleCustomerLedger(
         : Promise.resolve([]),
     ]);
 
+  // Exchanges/returns can settle in cash and have no receivable ledger line.
+  // They still remove items from a credit sale in the net-items view.
+  const linkedExchanges = saleIds.length
+    ? await db.select().from(exchangeDocumentsTable)
+        .where(inArray(exchangeDocumentsTable.originalPosSaleId, saleIds))
+    : [];
+  const extraExchangeIds = linkedExchanges
+    .map((exchange) => exchange.id)
+    .filter((id) => !exchangeIds.includes(id));
+  const linkedSaleReturns = saleIds.length
+    ? await db.select().from(posSaleReturnsTable)
+        .where(inArray(posSaleReturnsTable.originalSaleId, saleIds))
+    : [];
+
+  const [extraReturnItems, extraExchangeSaleItems, saleReturnLines] =
+    await Promise.all([
+      extraExchangeIds.length
+        ? db.select().from(exchangeReturnItemsTable)
+            .where(inArray(exchangeReturnItemsTable.exchangeId, extraExchangeIds))
+            .orderBy(asc(exchangeReturnItemsTable.exchangeId), asc(exchangeReturnItemsTable.lineNumber))
+        : Promise.resolve([]),
+      extraExchangeIds.length
+        ? db.select().from(exchangeSaleItemsTable)
+            .where(inArray(exchangeSaleItemsTable.exchangeId, extraExchangeIds))
+            .orderBy(asc(exchangeSaleItemsTable.exchangeId), asc(exchangeSaleItemsTable.lineNumber))
+        : Promise.resolve([]),
+      linkedSaleReturns.length
+        ? db.select().from(posSaleReturnItemsTable)
+            .where(inArray(posSaleReturnItemsTable.returnId, linkedSaleReturns.map((r) => r.id)))
+        : Promise.resolve([]),
+    ]);
+
+  const allReturnItems = [...returns, ...extraReturnItems];
+  const allExchangeSaleItems = [...exchangeItems, ...extraExchangeSaleItems];
+  const allExchanges = [
+    ...exchanges,
+    ...linkedExchanges.filter((exchange) => !exchangeIds.includes(exchange.id)),
+  ];
+  const exchangeById = new Map(allExchanges.map((exchange) => [exchange.id, exchange]));
+  const saleReturnById = new Map(linkedSaleReturns.map((saleReturn) => [saleReturn.id, saleReturn]));
+
+  // Only a definitive original sale-line reference can subtract quantities.
+  // Never guess from product names, colors, or sizes across multiple invoices.
+  const returnedQtyBySaleItemId = new Map<number, number>();
+  const countReturned = (originalItemId: number | null, quantity: number) => {
+    if (originalItemId == null) return;
+    returnedQtyBySaleItemId.set(
+      originalItemId,
+      (returnedQtyBySaleItemId.get(originalItemId) ?? 0) + quantity,
+    );
+  };
+  for (const item of allReturnItems) {
+    const exchange = exchangeById.get(item.exchangeId);
+    if (exchange?.status === "completed" && withinNetDate(exchange.businessDate)) {
+      countReturned(item.originalPosSaleItemId, item.quantity);
+    }
+  }
+  for (const item of saleReturnLines) {
+    const saleReturn = saleReturnById.get(item.returnId);
+    if (saleReturn?.status === "completed" && withinNetDate(saleReturn.businessDate)) {
+      countReturned(item.originalSaleItemId, item.quantity);
+    }
+  }
+
   const currentImageMap = includeDetails
     ? await getCurrentProductImageMap(
         db,
         [
           ...saleItems.map((line) => line.productId),
-          ...returns.map((line) => line.productId),
-          ...exchangeItems.map((line) => line.productId),
+          ...allReturnItems.map((line) => line.productId),
+          ...allExchangeSaleItems.map((line) => line.productId),
         ],
       )
     : new Map<number, string | null>();
@@ -1468,7 +1542,7 @@ async function handleCustomerLedger(
     });
     saleById.set(line.saleId, items);
   }
-  for (const line of returns) {
+  for (const line of allReturnItems) {
     const items = returnsById.get(line.exchangeId) ?? [];
     items.push({
       productNameAr: line.productNameAr,
@@ -1484,7 +1558,7 @@ async function handleCustomerLedger(
     });
     returnsById.set(line.exchangeId, items);
   }
-  for (const line of exchangeItems) {
+  for (const line of allExchangeSaleItems) {
     const items = newById.get(line.exchangeId) ?? [];
     items.push({
       productNameAr: line.productNameAr,
@@ -1503,11 +1577,50 @@ async function handleCustomerLedger(
 
   const documents = new Map<string, Document>();
   for (const sale of sales) {
+    const netItems: Item[] = [];
+    if (sale.status === "completed" && withinNetDate(sale.businessDate)) {
+      for (const line of saleItems.filter((item) => item.saleId === sale.id)) {
+        const remaining = Math.max(
+          0,
+          line.quantity - (returnedQtyBySaleItemId.get(line.id) ?? 0),
+        );
+        if (remaining === 0) continue;
+        const unitFraction = remaining / line.quantity;
+        netItems.push({
+          productNameAr: line.productNameAr,
+          productCode: line.productCode,
+          barcode: line.barcode,
+          productImage: itemImage(line.productImage, line.productId),
+          color: line.color,
+          size: line.size,
+          quantity: remaining,
+          unitPriceMinor: line.soldUnitPriceMinor,
+          discountMinor: Math.round(
+            (line.lineDiscountMinor + line.promotionDiscountMinor) * unitFraction,
+          ),
+          lineTotalMinor: Math.round(line.lineTotalMinor * unitFraction),
+        });
+      }
+
+      // If the replacement was settled without affecting the customer account,
+      // show it with the originating sale so it isn't lost from the net view.
+      for (const exchange of linkedExchanges) {
+        if (
+          exchange.originalPosSaleId === sale.id &&
+          exchange.status === "completed" &&
+          withinNetDate(exchange.businessDate) &&
+          !exchangeIds.includes(exchange.id)
+        ) {
+          netItems.push(...(newById.get(exchange.id) ?? []));
+        }
+      }
+    }
     documents.set("pos_sale:" + sale.id, {
       kind: "sale",
       publicId: sale.publicId,
       saleItems: saleById.get(sale.id) ?? [],
       returnItems: [],
+      netSaleItems: netItems,
       subtotalMinor: sale.subtotalMinor,
       discountMinor: sale.discountMinor,
       totalMinor: sale.totalMinor,
@@ -1519,6 +1632,10 @@ async function handleCustomerLedger(
       publicId: exchange.publicId,
       saleItems: newById.get(exchange.id) ?? [],
       returnItems: returnsById.get(exchange.id) ?? [],
+      netSaleItems:
+        exchange.status === "completed" && withinNetDate(exchange.businessDate)
+          ? newById.get(exchange.id) ?? []
+          : [],
       returnNetMinor: exchange.returnNetMinor,
       newNetMinor: exchange.newNetMinor,
       differenceMinor: exchange.differenceMinor,
