@@ -798,6 +798,7 @@ export interface PosCustomerLedgerDocument {
   publicId: string;
   saleItems: PosCustomerLedgerDocumentItem[];
   returnItems: PosCustomerLedgerDocumentItem[];
+  netSaleItems?: PosCustomerLedgerDocumentItem[];
   subtotalMinor?: number;
   discountMinor?: number;
   totalMinor?: number;
@@ -876,9 +877,16 @@ export function getPosCustomerLedger(
   token: string,
   customerId: number,
   includeDetails = false,
+  netAsOf?: string,
 ) {
+  const search = new URLSearchParams();
+  if (includeDetails) {
+    search.set("includeDetails", "1");
+    if (netAsOf) search.set("netAsOf", netAsOf);
+  }
+  const query = search.toString();
   return apiRequest<PosCustomerLedgerResult>(
-    `/api/pos/customers/${customerId}/ledger${includeDetails ? "?includeDetails=1" : ""}`,
+    `/api/pos/customers/${customerId}/ledger${query ? `?${query}` : ""}`,
     {},
     token,
   );
