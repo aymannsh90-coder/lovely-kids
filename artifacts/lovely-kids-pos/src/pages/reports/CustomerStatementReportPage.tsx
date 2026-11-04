@@ -914,8 +914,8 @@ export default function CustomerStatementReportPage() {
 
         @media print {
           @page {
-            size: A4 landscape;
-            margin: 12mm 9mm;
+            size: A4 portrait;
+            margin: 7mm 6mm;
           }
 
           html,
@@ -954,31 +954,59 @@ export default function CustomerStatementReportPage() {
             font-size: 10.5px;
           }
 
+          /* Compact print header: the screen layout remains unchanged. */
+          .customer-statement-print-header {
+            margin-bottom: 2mm !important;
+          }
+
           #customer-statement-print h1 {
-            margin: 0 0 2mm;
-            font-size: 20px;
+            margin: 0 0 0.5mm !important;
+            font-size: 16px;
+            line-height: 1.15;
           }
 
           #customer-statement-print h2 {
-            margin: 0;
-            font-size: 16px;
+            margin: 0 !important;
+            font-size: 12px;
+            line-height: 1.15;
           }
 
           .customer-statement-issued-at {
-            margin-top: 2mm;
-            font-size: 9px;
+            margin: 0.6mm 0 0 !important;
+            font-size: 8px;
+            line-height: 1.2;
+          }
+
+          .customer-statement-customer-info {
+            gap: 1mm 3mm !important;
+            margin-bottom: 2mm !important;
+            padding: 1.8mm 2mm !important;
+            border-radius: 0 !important;
+            font-size: 8px;
+            line-height: 1.25;
           }
 
           .customer-statement-balance-strip {
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 3mm;
-            margin-bottom: 4mm;
+            gap: 1.5mm;
+            margin-bottom: 2mm;
           }
 
           .customer-statement-balance-strip > div {
             min-height: 0;
-            padding: 3mm;
+            padding: 1.4mm 1.8mm;
             border-radius: 0;
+          }
+
+          .customer-statement-balance-strip span {
+            margin-bottom: 0.5mm;
+            font-size: 7px;
+            line-height: 1.15;
+          }
+
+          .customer-statement-balance-strip strong {
+            font-size: 9px;
+            line-height: 1.2;
           }
 
           .customer-statement-table {
@@ -993,34 +1021,120 @@ export default function CustomerStatementReportPage() {
 
           .customer-statement-table th,
           .customer-statement-table td {
-            padding: 2mm 1.5mm;
-            font-size: 9px;
-            line-height: 1.35;
+            padding: 1mm 0.8mm;
+            font-size: 7.5px;
+            line-height: 1.2;
             text-align: center;
+          }
+
+          .customer-statement-table > tbody > tr > td[dir="ltr"] {
+            font-size: 6.7px;
+            overflow-wrap: anywhere;
           }
 
           .customer-statement-table th {
             background: #f3f4f6 !important;
           }
 
-          .customer-statement-table tr {
+          /*
+           * Preserve single-line movements, but allow long invoice detail
+           * sections to continue on the next page. Keeping the entire
+           * nested detail row unbreakable caused nearly empty pages.
+           */
+          .customer-statement-clickable-row,
+          .customer-statement-invoice-table tbody tr {
             break-inside: avoid;
             page-break-inside: avoid;
           }
 
-          .customer-statement-detail-row > td { padding: 1.5mm 2mm; }
+          .customer-statement-table > tbody > tr.customer-statement-detail-row,
+          .customer-statement-invoice-details,
+          .customer-statement-invoice-group {
+            break-inside: auto !important;
+            page-break-inside: auto !important;
+          }
+
+          .customer-statement-detail-row > td {
+            padding: 1mm !important;
+            text-align: right !important;
+          }
+
+          .customer-statement-invoice-heading {
+            margin-bottom: 0.8mm;
+            font-size: 8.5px;
+            line-height: 1.2;
+          }
+
+          .customer-statement-invoice-group + .customer-statement-invoice-group {
+            margin-top: 1.2mm;
+          }
+
+          .customer-statement-invoice-group h4 {
+            margin: 0 0 0.8mm;
+            font-size: 8px;
+            line-height: 1.2;
+          }
+
+          .customer-statement-invoice-table {
+            table-layout: fixed;
+            font-size: 7.5px;
+          }
+
+          .customer-statement-invoice-table thead {
+            display: table-header-group;
+          }
+
           .customer-statement-invoice-table th,
-          .customer-statement-invoice-table td { padding: 1.2mm; font-size: 8px; }
+          .customer-statement-invoice-table td {
+            padding: 0.7mm 0.7mm;
+            font-size: 7px;
+            line-height: 1.15;
+            vertical-align: middle;
+          }
+
+          /* Give product names room on narrow portrait paper. */
+          .customer-statement-invoice-table th:first-child,
+          .customer-statement-invoice-table td:first-child { width: 38%; }
+          .customer-statement-invoice-table th:nth-child(2),
+          .customer-statement-invoice-table td:nth-child(2) { width: 20%; }
+          .customer-statement-invoice-table th:nth-child(3),
+          .customer-statement-invoice-table td:nth-child(3) { width: 7%; }
+          .customer-statement-invoice-table th:nth-child(4),
+          .customer-statement-invoice-table td:nth-child(4) { width: 12%; }
+          .customer-statement-invoice-table th:nth-child(5),
+          .customer-statement-invoice-table td:nth-child(5) { width: 11%; }
+          .customer-statement-invoice-table th:nth-child(6),
+          .customer-statement-invoice-table td:nth-child(6) { width: 12%; }
+
           .customer-statement-invoice-image,
           .customer-statement-invoice-no-image {
-            flex-basis: 11mm;
-            width: 11mm;
-            height: 11mm;
-            border-radius: 1mm;
+            flex: 0 0 8mm;
+            width: 8mm;
+            height: 8mm;
+            border-radius: 0.7mm;
           }
-          .customer-statement-invoice-product { gap: 1.5mm; }
-          .customer-statement-invoice-group { break-inside: avoid; }
-          .customer-statement-invoice-totals { font-size: 9px; }
+          .customer-statement-invoice-product { gap: 1mm; }
+          .customer-statement-invoice-name small {
+            margin-top: 0.3mm;
+            font-size: 6px;
+          }
+          .customer-statement-invoice-totals {
+            margin-top: 1mm;
+            gap: 1mm 3mm;
+            font-size: 7.5px;
+            line-height: 1.2;
+          }
+
+          .customer-statement-bottom-balance {
+            margin-top: 2mm !important;
+            padding-top: 1.5mm !important;
+            font-size: 11px !important;
+            break-inside: avoid;
+          }
+          .customer-statement-footer {
+            margin-top: 2mm !important;
+            font-size: 8px !important;
+          }
 
           .customer-statement-clickable-row {
             cursor: default;
@@ -1163,6 +1277,7 @@ export default function CustomerStatementReportPage() {
           className="customer-statement-print"
         >
           <div
+            className="customer-statement-print-header"
             style={{
               textAlign:
                 "center",
@@ -1202,6 +1317,7 @@ export default function CustomerStatementReportPage() {
           </div>
 
           <div
+            className="customer-statement-customer-info"
             style={{
               display: "grid",
               gridTemplateColumns:
@@ -1456,6 +1572,7 @@ export default function CustomerStatementReportPage() {
           )}
 
           <div
+            className="customer-statement-bottom-balance"
             style={{
               display: "flex",
               justifyContent:
@@ -1484,6 +1601,7 @@ export default function CustomerStatementReportPage() {
           </div>
 
           <div
+            className="customer-statement-footer"
             style={{
               marginTop: 20,
               textAlign:
