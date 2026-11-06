@@ -4,6 +4,7 @@ export type NavigationGroup =
   | "inventory"
   | "parties"
   | "vouchers"
+  | "discounts"
   | "finance"
   | "statements"
   | "reports";
@@ -49,6 +50,11 @@ export const navigationGroups: Array<{
     key: "vouchers",
     title: "السندات",
     description: "سندات القبض والصرف والقيد وسجل السندات.",
+  },
+  {
+    key: "discounts",
+    title: "الإشعارات والخصومات",
+    description: "الخصومات المسموحة والمكتسبة والإشعارات الدائنة والمدينة.",
   },
   {
     key: "finance",
@@ -277,6 +283,17 @@ export const posNavigation: PosNavigationItem[] = [
     title: "سند صرف",
     description: "صرف لموظف أو مورد أو زبون أو مصروف من الصندوق أو البنك.",
     icon: "💸",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
+    key: "discount-notes",
+    group: "discounts",
+    path: "/finance/discount-notes",
+    title: "الإشعارات والخصومات",
+    description: "إشعار دائن أو مدين للزبون، وخصومات تسوية الموردين دون تعديل الفاتورة.",
+    icon: "🏷️",
+    ownerOnly: true,
     requiresOpenSession: false,
     status: "ready",
   },

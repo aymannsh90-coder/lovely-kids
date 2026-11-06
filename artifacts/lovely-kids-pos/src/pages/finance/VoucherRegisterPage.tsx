@@ -81,6 +81,9 @@ function errorText(error: unknown) {
 }
 
 function voucherLabel(voucher: PosFinanceVoucher) {
+  if (voucher.publicId.startsWith("CRN-")) return "إشعار دائن / خصم مسموح";
+  if (voucher.publicId.startsWith("DBN-")) return "إشعار مدين للزبون";
+  if (voucher.publicId.startsWith("SDS-")) return "خصم مكتسب من مورد";
   if (voucher.voucherPurpose === "customer_receipt") {
     return "سند قبض / دفعة زبون";
   }

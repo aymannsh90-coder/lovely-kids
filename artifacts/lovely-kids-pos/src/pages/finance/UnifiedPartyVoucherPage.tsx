@@ -182,6 +182,7 @@ export default function UnifiedPartyVoucherPage({
 
   const [amount, setAmount] =
     useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
 
   const [
     paymentMethod,
@@ -585,6 +586,23 @@ export default function UnifiedPartyVoucherPage({
       );
       return;
     }
+    if (discountAmount.trim() && !validAmount(discountAmount)) {
+      setError("مبلغ الخصم يجب أن يكون رقمًا موجبًا بدقتين عشريتين.");
+      return;
+    }
+    if (discountAmount.trim() &&
+      !(mode === "receipt" && partyType === "customer" && !foreignCashMode)) {
+      setError("الخصم عند التسديد متاح لقبض الزبائن بالشيكل فقط.");
+      return;
+    }
+    if (discountAmount.trim() && partyId) {
+      const customer = customers.find((item) => String(item.id) === partyId);
+      if (customer &&
+        Math.round((Number(normalizedAmount) + Number(discountAmount)) * 100) > customer.balanceMinor) {
+        setError("المقبوض مع الخصم أكبر من الرصيد المستحق على الزبون.");
+        return;
+      }
+    }
 
     if (
       paymentMethod ===
@@ -904,6 +922,9 @@ export default function UnifiedPartyVoucherPage({
         notes:
           notes.trim() ||
           undefined,
+        ...(mode === "receipt" && partyType === "customer" && discountAmount.trim()
+          ? { discountAmount: validAmount(discountAmount)! }
+          : {}),
         idempotencyKey:
           newIdempotencyKey(
             mode === "receipt"
@@ -933,9 +954,13 @@ export default function UnifiedPartyVoucherPage({
       await refreshSession();
 
       setMessage(
-        `تم حفظ ${mode === "receipt" ? "سند القبض" : "سند الصرف"} ${result.voucher.publicId} بنجاح.`,
+        `تم حفظ ${mode === "receipt" ? "سند القبض" : "سند الصرف"} ${result.voucher.publicId} بنجاح.` +
+          (mode === "receipt" && partyType === "customer" && discountAmount
+            ? ` المقبوض ${normalizedAmount} ₪، والخصم ${discountAmount} ₪؛ كلاهما خفّض الذمة.`
+            : ""),
       );
       setAmount("");
+      setDiscountAmount("");
       setNotes("");
     } catch (caught) {
       if (
@@ -1208,6 +1233,27 @@ export default function UnifiedPartyVoucherPage({
             disabled={saving}
           />
         </label>
+        {isReceipt && partyType === "customer" && !foreignCashMode && (
+          <div style={{ display: "grid", gap: 8, padding: 12, border: "1px solid #dce7ec", borderRadius: 10 }}>
+            <label>
+              <span>خصم مسموح به عند التسديد ₪ (اختياري)</span>
+              <input type="number" dir="ltr" inputMode="decimal" min="0.01" step="0.01"
+                placeholder="مثال: 10.00" value={discountAmount}
+                onChange={(event) => setDiscountAmount(event.target.value)} disabled={saving}/>
+            </label>
+            <small>المبلغ المقبوض يدخل الصندوق؛ الخصم يخفض ذمة الزبون فقط ولا يدخل الصندوق.</small>
+            {partyId && (() => {
+              const customer = customers.find((item) => String(item.id) === partyId);
+              const settled = Number(amount || 0) + Number(discountAmount || 0);
+              return (
+                <div>
+                  {customer && <span>رصيد الزبون: {(customer.balanceMinor / 100).toFixed(2)} ₪ | </span>}
+                  إجمالي تخفيض الذمة: {settled.toFixed(2)} ₪
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         <label>
           <span>
@@ -1273,6 +1319,7 @@ export default function UnifiedPartyVoucherPage({
                   setForeignCashMode(
                     checked,
                   );
+                  if (checked) setDiscountAmount("");
 
                   if (!checked) {
                     setForeignCashAccountId(
@@ -1617,6 +1664,7 @@ export default function UnifiedPartyVoucherPage({
             disabled={saving}
             onClick={() => {
               setAmount("");
+              setDiscountAmount("");
               setForeignAmount("");
               setForeignExchangeRate("");
               setForeignCashAccountId("");

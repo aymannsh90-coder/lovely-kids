@@ -2009,9 +2009,34 @@ async function handleGrossProfit(
     .map((account) => account.amountMinor));
   const totalOperatingExpensesMinor = salaryExpenseMinor + otherOperatingExpensesMinor;
   const salaryPosted = expenseAccounts.some((account) => account.code === "EXPENSE_SALARY");
+  // Income adjustments created by owner credit/debit notes are outside the
+  // item-level sales gross margin above. Add ONLY those documented adjustment
+  // accounts here, not all income accounts (which would double-count sales).
+  // A posted reversal and its reversed original net to zero in the period.
+  const adjustmentIncomeRows = await db.select({
+    netMinor: sql<string>`COALESCE(SUM(${financeTransactionLinesTable.creditMinor} - ${financeTransactionLinesTable.debitMinor}), 0)::text`,
+  }).from(financeTransactionLinesTable)
+    .innerJoin(financeTransactionsTable,
+      eq(financeTransactionLinesTable.transactionId, financeTransactionsTable.id))
+    .innerJoin(financeAccountsTable,
+      eq(financeTransactionLinesTable.accountId, financeAccountsTable.id))
+    .where(and(
+      inArray(financeTransactionsTable.status, ["posted", "reversed"]),
+      gte(financeTransactionsTable.businessDate, from),
+      lte(financeTransactionsTable.businessDate, to),
+      inArray(financeAccountsTable.code, [
+        "INCOME_SUPPLIER_SETTLEMENT_DISCOUNT",
+        "INCOME_CUSTOMER_DEBIT_ADJUSTMENT",
+      ]),
+    ));
+  const settlementAdjustmentIncomeMinor = Number(adjustmentIncomeRows[0]?.netMinor ?? "0");
+  if (!Number.isSafeInteger(settlementAdjustmentIncomeMinor)) {
+    throw new Error("GROSS_PROFIT_SETTLEMENT_INCOME_OUT_OF_RANGE");
+  }
   const netProfitRecordedMinor = total.profitAfterDeliveryMinor === null
     ? null
-    : total.profitAfterDeliveryMinor - totalOperatingExpensesMinor;
+    : total.profitAfterDeliveryMinor - totalOperatingExpensesMinor +
+        settlementAdjustmentIncomeMinor;
 
 
   // Legacy reconciliation is READ ONLY. It compares the period of the
@@ -2194,6 +2219,7 @@ async function handleGrossProfit(
       otherOperatingExpensesMinor,
       salaryExpenseMinor,
       totalOperatingExpensesMinor,
+      settlementAdjustmentIncomeMinor,
       netProfitRecordedMinor,
       salaryPosted,
       expenseAccounts,
@@ -2224,7 +2250,7 @@ async function handleGrossProfit(
         true,
 
       netProfitDefinition:
-        "Recorded operating result: profit after delivery minus posted general-ledger expense account debits net of reversals, excluding delivery already included, with salaries separated. Owner withdrawals, employee advances, supplier payments, transfers, and purchases are not expenses here. Unrecorded accruals are not estimated.",
+        "Recorded operating result: profit after delivery minus posted general-ledger expense account debits net of reversals, excluding delivery already included, with salaries separated, plus designated supplier settlement discounts and customer debit adjustments. Other sales income is not added twice. Owner withdrawals, employee advances, supplier payments, transfers, and purchases are not expenses here. Unrecorded accruals are not estimated.",
 
       verifiedOwnerAttestations:
         attestedStates.length,

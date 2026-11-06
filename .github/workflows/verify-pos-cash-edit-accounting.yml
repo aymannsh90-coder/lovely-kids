@@ -1,0 +1,33 @@
+name: Verify POS cash sale edit and void accounting
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/pos-sale-edit.ts'
+      - 'artifacts/api-worker/src/pos-sale-routes.ts'
+      - 'artifacts/api-worker/src/pos-sale-cash-ledger.ts'
+      - 'artifacts/api-worker/src/pos-sale-cash-adjustment-rules.ts'
+      - 'artifacts/api-worker/src/pos-sale-cash-adjustment.test.mjs'
+      - '.github/workflows/verify-pos-cash-edit-accounting.yml'
+
+jobs:
+  accounting-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install without altering lockfile
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck API and finance posting
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: Cash sale journal regression tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/pos-sale-cash-adjustment.test.mjs

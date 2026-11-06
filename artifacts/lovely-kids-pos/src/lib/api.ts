@@ -780,6 +780,35 @@ export function getPosCustomers(
 }
 
 
+export interface PosCustomerLedgerDocumentItem {
+  productNameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  productImage: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  unitPriceMinor: number;
+  discountMinor: number;
+  lineTotalMinor: number;
+}
+
+export interface PosCustomerLedgerDocument {
+  kind: "sale" | "exchange";
+  publicId: string;
+  saleItems: PosCustomerLedgerDocumentItem[];
+  returnItems: PosCustomerLedgerDocumentItem[];
+  netSaleItems?: PosCustomerLedgerDocumentItem[];
+  subtotalMinor?: number;
+  discountMinor?: number;
+  totalMinor?: number;
+  returnNetMinor?: number;
+  newNetMinor?: number;
+  differenceMinor?: number;
+  settlementAmountMinor?: number;
+  deliveryChargeMinor?: number;
+}
+
 export interface PosCustomerLedgerEntry {
   transactionId:
     | number
@@ -799,6 +828,7 @@ export interface PosCustomerLedgerEntry {
   creditMinor: number;
 
   memo: string | null;
+  document?: PosCustomerLedgerDocument | null;
 }
 
 export interface PosCustomerLedgerResult {
@@ -846,9 +876,17 @@ export function createPosCustomer(
 export function getPosCustomerLedger(
   token: string,
   customerId: number,
+  includeDetails = false,
+  netAsOf?: string,
 ) {
+  const search = new URLSearchParams();
+  if (includeDetails) {
+    search.set("includeDetails", "1");
+    if (netAsOf) search.set("netAsOf", netAsOf);
+  }
+  const query = search.toString();
   return apiRequest<PosCustomerLedgerResult>(
-    `/api/pos/customers/${customerId}/ledger`,
+    `/api/pos/customers/${customerId}/ledger${query ? `?${query}` : ""}`,
     {},
     token,
   );
@@ -1626,6 +1664,26 @@ export function voidPosFinanceVoucher(
 }
 
 
+export function createPosFinanceDiscountNote(
+  token: string,
+  input: {
+    kind: "customer_credit" | "customer_debit" | "supplier_earned";
+    partyId: number;
+    amount: string;
+    reason: string;
+    reference?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    voucher: PosFinanceVoucher;
+  }>("/api/pos/finance/discount-notes", {
+    method: "POST",
+    body: JSON.stringify(input),
+  }, token);
+}
+
 export type PosUnifiedVoucherPartyType =
   | "customer"
   | "employee"
@@ -1688,6 +1746,7 @@ export function createPosUnifiedReceiptVoucher(
     registerKey: string;
     bankAccountId?: number;
     notes?: string;
+    discountAmount?: string;
     idempotencyKey: string;
   },
 ) {
@@ -4941,6 +5000,7 @@ export interface GrossProfitNetResult {
   otherOperatingExpensesMinor: number;
   salaryExpenseMinor: number;
   totalOperatingExpensesMinor: number;
+  settlementAdjustmentIncomeMinor: number;
   netProfitRecordedMinor: number | null;
   salaryPosted: boolean;
   provisional: boolean;
