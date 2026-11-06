@@ -9,7 +9,7 @@ export const STAFF_PERMISSION_KEYS = [
   "sales.exchange", "sales.exchange.online", "sales.exchange.void",
   "cash.view", "cash.open", "cash.close",
   "inventory.view", "inventory.edit", "inventory.cost",
-  "purchases.view", "purchases.create", "purchases.edit",
+  "purchases.view", "purchases.create",
   "purchases.returns", "purchases.returns.void",
   "parties.view", "parties.edit",
   "vouchers.view", "vouchers.create", "vouchers.void",

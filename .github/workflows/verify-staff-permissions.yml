@@ -23,6 +23,8 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Test staff grant isolation and disabled accounts
+        run: node --experimental-strip-types --test artifacts/api-worker/src/staff-permissions.test.mjs
       - name: Typecheck API worker
         run: pnpm --filter @workspace/api-worker typecheck
       - name: Typecheck POS
