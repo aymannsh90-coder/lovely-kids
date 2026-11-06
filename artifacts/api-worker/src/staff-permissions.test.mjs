@@ -41,6 +41,7 @@ function dbFor(record) {
 
 test("permission inputs reject unknown and unsupported grant keys", () => {
   assert.ok(STAFF_PERMISSION_KEYS.includes("vouchers.create"));
+  assert.ok(STAFF_PERMISSION_KEYS.includes("delivery.view"));
   assert.ok(!STAFF_PERMISSION_KEYS.includes("purchases.edit"));
   assert.deepEqual(validateStaffPermissions(["sales.create", "sales.create", "cash.view"]), ["sales.create", "cash.view"]);
   for (const input of [null, "sales.create", ["purchases.edit"], ["admin"], [123], Array(200).fill("sales.create")]) {

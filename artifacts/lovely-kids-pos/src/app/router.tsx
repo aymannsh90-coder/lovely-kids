@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
 import RequireStaffGrant from "../guards/RequireStaffGrant";
+import { usePosRuntime } from "../app/pos-context";
 import StaffOrdersPage from "../pages/sales/StaffOrdersPage";
 import PurchaseHistoryPage from "../pages/purchases/PurchaseHistoryPage";
 import RequireFinancialReports from "../guards/RequireFinancialReports";
@@ -19,6 +20,8 @@ import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
+import StaffExpensesPage from "../pages/finance/StaffExpensesPage";
+import StaffDeliveryOverviewPage from "../pages/finance/StaffDeliveryOverviewPage";
 import AssistantInboxPage from "../pages/finance/AssistantInboxPage";
 import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
 import UnifiedPartyVoucherPage from "../pages/finance/UnifiedPartyVoucherPage";
@@ -58,6 +61,18 @@ import StatementsPage from "../pages/reports/StatementsPage";
 import TrialBalanceReportPage from "../pages/reports/TrialBalanceReportPage";
 import ReceivablesLiquidityReportPage from "../pages/reports/ReceivablesLiquidityReportPage";
 import FinancialStatementsReportPage from "../pages/reports/FinancialStatementsReportPage";
+
+function StaffAwareExpenses() {
+  const { user } = usePosRuntime();
+  if (user?.isOwner || user?.isAdmin) return <ExpensesPage />;
+  return <RequireStaffGrant permissions={["vouchers.create"]}><StaffExpensesPage /></RequireStaffGrant>;
+}
+
+function StaffAwareDelivery() {
+  const { user } = usePosRuntime();
+  if (user?.isOwner || user?.isAdmin) return <DeliveryCompanyAccountingPage />;
+  return <RequireStaffGrant permissions={["delivery.view"]}><StaffDeliveryOverviewPage /></RequireStaffGrant>;
+}
 
 export default function AppRouter() {
   return (
@@ -277,7 +292,7 @@ export default function AppRouter() {
           path="finance/expenses"
           element={
             <RequireOpenSession>
-              <ExpensesPage />
+              <StaffAwareExpenses />
             </RequireOpenSession>
           }
         />
@@ -322,7 +337,7 @@ export default function AppRouter() {
 
         <Route
           path="finance/delivery-company"
-          element={<DeliveryCompanyAccountingPage />}
+          element={<StaffAwareDelivery />}
         />
 
         <Route

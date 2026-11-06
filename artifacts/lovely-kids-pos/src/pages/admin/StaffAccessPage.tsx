@@ -29,6 +29,7 @@ const permissionGroups = [
   { title: "السندات", items: [["vouchers.view", "عرض"], ["vouchers.create", "إضافة"], ["vouchers.void", "إلغاء"]] },
   { title: "البنوك", items: [["banking.view", "عرض"], ["banking.create", "إنشاء حركة"]] },
   { title: "التقارير", items: [["reports.sales", "المبيعات"], ["reports.financial", "المالية"], ["reports.cost", "الربح والتكلفة"]] },
+  { title: "شركات التوصيل", items: [["delivery.view", "عرض تقرير شركة التوصيل فقط"]] },
   { title: "الطلبات الإلكترونية", items: [["orders.view", "عرض"], ["orders.create", "إنشاء طلب"], ["orders.edit", "تعديل"], ["orders.cancel", "إلغاء"]] },
 ] as const;
 const presets: Record<Role, string[]> = {
