@@ -72,11 +72,11 @@ async function requirePosUser(
     const allowReturn = method === "POST" &&
       ["/api/pos/sales/returns", "/api/pos/sales/returns/mobile"].includes(path) &&
       await userHasPermission(db, user, "sales.returns");
-    const allowCorrection = method === "POST" &&
-      ["/api/pos/sales/returns/void", "/api/pos/sales/returns/correct-cash-to-customer"].includes(path) &&
+    const allowVoid = method === "POST" &&
+      path === "/api/pos/sales/returns/void" &&
       await userHasPermission(db, user, "sales.void") &&
       await userHasPermission(db, user, "sales.returns");
-    if (allowRead || allowReturn || allowCorrection) return { ok: true, user };
+    if (allowRead || allowReturn || allowVoid) return { ok: true, user };
     return {
       ok: false,
       response: json(

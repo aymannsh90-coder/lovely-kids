@@ -1,12 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  STAFF_PERMISSION_KEYS,
-  validateStaffPermissions,
-  userHasPermission,
-  userHasAnyPermission,
-  getStaffLoginProfile,
-} from "./staff-permissions.ts";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+
+// Isolate the actual TS permission implementation from the database package's
+// extensionless schema imports. Real Drizzle query behavior is tested elsewhere.
+const moduleSource = readFileSync(new URL("./staff-permissions.ts", import.meta.url), "utf8")
+  .replace('import { staffAccessTable } from "@workspace/db/schema";', 'const staffAccessTable = { userId: "staff_user_id" };')
+  .replace('import { eq } from "drizzle-orm";', 'const eq = () => true;')
+  .replace('import type { openDb } from "./db";', "");
+const compiled = ts.transpileModule(moduleSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+}).outputText;
+const {
+  STAFF_PERMISSION_KEYS, validateStaffPermissions, userHasPermission,
+  userHasAnyPermission, getStaffLoginProfile,
+} = await import("data:text/javascript;base64," + Buffer.from(compiled).toString("base64"));
 
 const owner = { id: 1, isOwner: true, isAdmin: false };
 const admin = { id: 2, isOwner: false, isAdmin: true };
