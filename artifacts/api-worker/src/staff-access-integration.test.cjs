@@ -37,14 +37,33 @@ function request(p, method="GET", token=null, body=null) {
 async function buildHandlers(){
   await build({entryPoints:[
     path.join(__dirname,"staff-access-routes.ts"),
-    path.join(__dirname,"auth-routes.ts")],
+    path.join(__dirname,"auth-routes.ts"),
+    path.join(__dirname,"pos-sale-routes.ts"),
+    path.join(__dirname,"finance-voucher-routes.ts"),
+    path.join(__dirname,"finance-banking-routes.ts"),
+    path.join(__dirname,"cash-session-routes.ts"),
+    path.join(__dirname,"pos-purchase-return-routes.ts"),
+    path.join(__dirname,"finance-card-settlement-routes.ts")],
     outdir:buildDir,outExtension:{".js":".mjs"},
     bundle:true,platform:"node",target:"node22",format:"esm",
     external:["bcryptjs","pg","drizzle-orm","drizzle-orm/*","drizzle-zod",
       "zod","zod/*","@clerk/backend"],logLevel:"warning"});
   const access=await import(pathToFileURL(path.join(buildDir,"staff-access-routes.mjs")).href);
   const auth=await import(pathToFileURL(path.join(buildDir,"auth-routes.mjs")).href);
-  return {access:access.handleStaffAccessRequest,auth:auth.handleAuthRequest};
+  const extra = {};
+  for (const [key, file, exported] of [
+    ["sale","pos-sale-routes.mjs","handlePosSaleRequest"],
+    ["voucher","finance-voucher-routes.mjs","handleUnifiedVoucherRequest"],
+    ["bank","finance-banking-routes.mjs","handleFinanceBankingRequest"],
+    ["cash","cash-session-routes.mjs","handleCashSessionRequest"],
+    ["purchaseReturn","pos-purchase-return-routes.mjs","handlePosPurchaseReturnRequest"],
+    ["card","finance-card-settlement-routes.mjs","handleCardSettlementRequest"],
+  ]) {
+    const loaded=await import(pathToFileURL(path.join(buildDir,file)).href);
+    extra[key]=loaded[exported];
+    assert.equal(typeof extra[key], "function", file+" export missing");
+  }
+  return {access:access.handleStaffAccessRequest,auth:auth.handleAuthRequest,...extra};
 }
 async function seed(client){
   await client.query([
@@ -97,6 +116,21 @@ test("owner-only staff API; login; grant revocation and disabled tokens", {timeo
     assert.deepEqual(s1.user.permissions,["sales.create","cash.view"]);
     assert.equal((await h.access(request(p,"GET",s1.token),db,env)).status,403);
     assert.equal((await h.access(request(a,"GET",s1.token),db,env)).status,403);
+    // Direct API probes: authorization must deny BEFORE touching sale, bank, stock,
+    // voucher or cash-session rows. These tables are absent on purpose.
+    const blocked = [
+      ["sale","/api/pos/sales/void","POST"],
+      ["sale","/api/pos/sales/today","GET"],
+      ["voucher","/api/pos/finance/vouchers/journal","POST"],
+      ["bank","/api/pos/finance/bank-accounts","POST"],
+      ["cash","/api/pos/cash-sessions/close","POST"],
+      ["purchaseReturn","/api/pos/purchase-returns/history","GET"],
+      ["card","/api/pos/finance/card-settlements/reverse","POST"],
+    ];
+    for (const [moduleName,url,method] of blocked) {
+      const response=await h[moduleName](request(url,method,s1.token,method==="POST"?{}:null),db,env);
+      assert.equal(response.status,403,moduleName+" "+method+" "+url+" should reject cashier");
+    }
     assert.equal((await h.access(request(p+"/"+sid,"PATCH",s1.token,
       {ownerPassword:OWNER_PWD,permissions:["sales.void"]}),db,env)).status,403);
     const list=await h.access(request(p,"GET",ot),db,env);

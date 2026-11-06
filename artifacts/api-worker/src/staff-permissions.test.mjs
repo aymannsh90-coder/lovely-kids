@@ -75,3 +75,37 @@ test("disabled and unregistered staff receive no grants", async () => {
   assert.equal((await getStaffLoginProfile(revoked, cashier)).staffEnabled, false);
   assert.equal(await userHasPermission(absent, cashier, "sales.create"), false);
 });
+
+
+test("staff navigation gates exactly the authorized POS pages", async () => {
+  const source = readFileSync(new URL("../../lovely-kids-pos/src/guards/RequireStaffPage.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("export function canVisitStaffPage");
+  const end = source.indexOf("export default function RequireStaffPage");
+  assert.ok(start >= 0 && end > start, "Expected page-policy exports");
+  const policy = ts.transpileModule(source.slice(start, end),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const { canVisitStaffPage, firstAuthorizedStaffPage } =
+    await import("data:text/javascript;base64," + Buffer.from(policy).toString("base64"));
+  const cashier = ["sales.create", "cash.view"];
+  assert.equal(canVisitStaffPage("/sales/pos", cashier), true);
+  assert.equal(canVisitStaffPage("/cash-session", cashier), true);
+  assert.equal(canVisitStaffPage("/vouchers/receipt", cashier), false);
+  assert.equal(canVisitStaffPage("/purchases/new", cashier), false);
+  assert.equal(canVisitStaffPage("/reports/trial-balance", cashier), false);
+  assert.equal(canVisitStaffPage("/orders", cashier), false);
+  assert.equal(firstAuthorizedStaffPage(cashier), "/sales/pos");
+
+  const accountant = ["reports.financial"];
+  assert.equal(canVisitStaffPage("/reports/trial-balance", accountant), true);
+  assert.equal(canVisitStaffPage("/reports", accountant), false);
+  assert.equal(canVisitStaffPage("/reports/financial-statements", accountant), false);
+  assert.equal(canVisitStaffPage("/vouchers/journal", accountant), false);
+
+  const inventory = ["inventory.view"];
+  assert.equal(canVisitStaffPage("/inventory/products", inventory), true);
+  assert.equal(canVisitStaffPage("/inventory/products/12/edit", inventory), false);
+  assert.equal(canVisitStaffPage("/inventory/products/12/edit", ["inventory.edit"]), true);
+  assert.equal(canVisitStaffPage("/finance/delivery-company", ["delivery.view"]), true);
+  assert.equal(canVisitStaffPage("/finance/expenses", ["vouchers.create"]), true);
+  assert.equal(canVisitStaffPage("/vouchers/register", ["vouchers.create"]), false);
+});
