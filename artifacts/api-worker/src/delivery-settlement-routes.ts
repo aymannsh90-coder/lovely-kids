@@ -1976,6 +1976,18 @@ async function handleReverseSettlement(
           );
         }
 
+        // Release only offsets consumed by this settlement. Historical
+        // courier deductions remain historical and cannot be reversed here.
+        await tx
+          .update(deliveryCompanyExchangeOffsetsTable)
+          .set({ status: "reversed", updatedAt: new Date() })
+          .where(
+            and(
+              eq(deliveryCompanyExchangeOffsetsTable.settlementId, settlement.id),
+              eq(deliveryCompanyExchangeOffsetsTable.status, "posted"),
+            ),
+          );
+
         const reversedSettlementRows =
           await tx
             .update(
