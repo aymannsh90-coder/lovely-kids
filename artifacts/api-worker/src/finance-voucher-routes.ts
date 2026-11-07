@@ -19,6 +19,8 @@ import {
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
+import { isCustomerCreditPayoutWithinBalance } from "./customer-credit-payout-rules";
+
 import { getCurrentUser } from "./auth";
 import { userHasPermission } from "./staff-permissions";
 import { buildCustomerReceiptDiscountLines, buildDiscountNoteLines, validatedReceiptSettlement } from "./finance-discount-rules";
@@ -2507,7 +2509,7 @@ async function handlePartyVoucher(
               );
             if (voucherType === "payment") {
               const customerBalanceMinor = await customerReceivableBalanceMinor(tx, partyId);
-              if (customerBalanceMinor >= 0 || amountMinor > -customerBalanceMinor) {
+              if (!isCustomerCreditPayoutWithinBalance(customerBalanceMinor, amountMinor)) {
                 throw new VoucherError(
                   "لا يوجد رصيد دائن كافٍ للزبون لتسجيل سند الصرف",
                   409,
@@ -3693,7 +3695,7 @@ async function handleReplaceUnifiedVoucher(
             await tx.select({ id: customersTable.id }).from(customersTable)
               .where(eq(customersTable.id, voucher.partyId)).for("update");
             const customerBalanceMinor = await customerReceivableBalanceMinor(tx, voucher.partyId);
-            if (customerBalanceMinor >= 0 || amountMinor > -customerBalanceMinor) {
+            if (!isCustomerCreditPayoutWithinBalance(customerBalanceMinor, amountMinor)) {
               throw new VoucherError(
                 "المبلغ الجديد أكبر من الرصيد الدائن للزبون",
                 409,
