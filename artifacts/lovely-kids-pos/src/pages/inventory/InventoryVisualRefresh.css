@@ -734,3 +734,24 @@
     border-top-color: #e1eaf0;
   }
 }
+
+/* Product card has one input and one submit button, not the three fields of
+   the generic returns search form. Keep its desktop button compact. */
+@media screen and (min-width: 1001px) {
+  .lk-inventory-card .sales-return-search-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 148px;
+    align-items: end;
+    gap: 12px;
+  }
+  .lk-inventory-card .sales-return-search-form > .sales-return-field {
+    min-width: 0;
+  }
+  .lk-inventory-card .sales-return-search-form > button[type="submit"] {
+    width: 148px;
+    min-width: 0;
+    min-height: 43px;
+    grid-column: 2;
+    font-weight: 850;
+  }
+}
