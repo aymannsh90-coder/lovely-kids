@@ -21700,10 +21700,11 @@ button.inventory-intelligence-metric {
    printing rules; no changes to session state, clock time or login logic. */
 @media screen and (min-width: 1151px) {
   .pos-full-page .pos-shamel-menu-shell > .pos-shamel-header {
+    position: relative;
+    /* Four in-flow areas; center register badge independently. */
     grid-template-columns:
       minmax(155px, max-content)
-      minmax(195px, 305px)
-      minmax(155px, 1fr)
+      minmax(190px, 1fr)
       max-content
       minmax(185px, max-content);
     min-height: 59px;
@@ -21764,6 +21765,9 @@ button.inventory-intelligence-metric {
   }
 
   .pos-full-page .pos-shamel-header .pos-shamel-page-title {
+    justify-self: start;
+    width: max-content;
+    max-width: min(100%, 320px);
     gap: 2px;
     padding-inline: 11px;
     border-inline-start: 3px solid #edb3d2;
@@ -21782,10 +21786,14 @@ button.inventory-intelligence-metric {
   }
 
   .pos-full-page .pos-shamel-header .pos-shamel-session-state {
+    position: absolute;
+    inset-inline-start: 50%;
+    top: 50%;
+    transform: translate(50%, -50%);
     display: grid;
+    min-width: 122px;
     min-height: 44px;
     height: 44px;
-    justify-self: center;
     align-content: center;
     justify-items: center;
     gap: 2px;
@@ -21863,21 +21871,12 @@ button.inventory-intelligence-metric {
     outline-offset: 2px;
   }
 
-  /* No register indicator for roles without cash privileges. */
-  .pos-full-page .pos-shamel-menu-shell > .pos-shamel-header:not(:has(> .pos-shamel-session-state)) {
-    grid-template-columns:
-      minmax(155px, max-content)
-      minmax(195px, 1fr)
-      max-content
-      minmax(185px, max-content);
-  }
 }
 @media screen and (min-width: 1151px) and (max-width: 1320px) {
   .pos-full-page .pos-shamel-menu-shell > .pos-shamel-header {
     grid-template-columns:
       minmax(150px, max-content)
-      minmax(165px, 220px)
-      minmax(155px, 1fr)
+      minmax(165px, 1fr)
       max-content
       minmax(160px, max-content);
     gap: 7px;
