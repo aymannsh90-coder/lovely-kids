@@ -47,7 +47,7 @@ async function buildHandlers(){
     path.join(__dirname,"product-routes.ts")],
     outdir:buildDir,outExtension:{".js":".mjs"},
     bundle:true,platform:"node",target:"node22",format:"esm",
-    external:["bcryptjs","pg","drizzle-orm","drizzle-orm/*","drizzle-zod",
+    external:["bcryptjs","pg","web-push","drizzle-orm","drizzle-orm/*","drizzle-zod",
       "zod","zod/*","@clerk/backend"],logLevel:"warning"});
   const access=await import(pathToFileURL(path.join(buildDir,"staff-access-routes.mjs")).href);
   const auth=await import(pathToFileURL(path.join(buildDir,"auth-routes.mjs")).href);
