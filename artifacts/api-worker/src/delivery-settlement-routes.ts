@@ -427,6 +427,16 @@ async function loadUnsettledOrders(
     })
     .sort((left, right) => left.id - right.id);
 
+  const activeExchangeParcelIds = new Set(
+    mappedOrders
+      .filter(
+        (order) =>
+          order.parcelType === "exchange" &&
+          (order.amountMinor > 0 || order.payableMinor > 0),
+      )
+      .map((order) => order.id),
+  );
+
   return {
     // Keep the existing positive-only selection/settlement contract untouched.
     unsettledOrders: mappedOrders.filter((order) => order.amountMinor > 0),
@@ -434,6 +444,16 @@ async function loadUnsettledOrders(
     // without silently turning them into a bank/cash receipt.
     payableExchangeOrders: mappedOrders.filter(
       (order) => order.parcelType === "exchange" && order.payableMinor > 0,
+    ),
+    // Previously collected originals are references only. Never add their
+    // original invoice totals back into the current outstanding balance.
+    settledOriginalParcels: mappedOrders.filter(
+      (order) =>
+        order.parcelType === "original" &&
+        order.relatedOrderId !== null &&
+        activeExchangeParcelIds.has(order.relatedOrderId) &&
+        order.amountMinor === 0 &&
+        order.settledMinor > 0,
     ),
   };
 }
@@ -474,7 +494,7 @@ async function handleSummary(
     );
   }
 
-  const { unsettledOrders, payableExchangeOrders } =
+  const { unsettledOrders, payableExchangeOrders, settledOriginalParcels } =
     await loadUnsettledOrders(
       db,
       companyId,
@@ -586,6 +606,7 @@ async function handleSummary(
 
     unsettledOrders,
     payableExchangeOrders,
+    settledOriginalParcels,
 
     settlements: settlements.map(
       (settlement) => {
