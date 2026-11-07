@@ -162,7 +162,7 @@ async function loadUnsettledOrders(
     );
 
   if (orderRows.length === 0) {
-    return [];
+    return { unsettledOrders: [], payableExchangeOrders: [] };
   }
 
   const orderIds = orderRows.map(
@@ -241,7 +241,7 @@ async function loadUnsettledOrders(
     );
 
   if (financeRows.length === 0) {
-    return [];
+    return { unsettledOrders: [], payableExchangeOrders: [] };
   }
 
   const sourceIdByTransactionId =
@@ -263,7 +263,7 @@ async function loadUnsettledOrders(
   ];
 
   if (financeIds.length === 0) {
-    return [];
+    return { unsettledOrders: [], payableExchangeOrders: [] };
   }
 
   const lineRows = await db
