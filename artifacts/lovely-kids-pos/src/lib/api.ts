@@ -4257,6 +4257,11 @@ export interface PosDeliverySettlementSummary {
       amount: number;
       status: "posted" | "reversed";
     }>;
+    exchangeOffsets: Array<{
+      orderId: number;
+      amountMinor: number;
+      status: "posted" | "reversed" | "historical";
+    }>;
   }>;
 }
 
