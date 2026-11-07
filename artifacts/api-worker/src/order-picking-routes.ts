@@ -174,7 +174,9 @@ export async function handleOrderPickingRequest(
 
     let body: { barcode?: unknown; requestId?: unknown } | null = null;
     if (scan) {
-      body = await request.json().catch(() => null) as typeof body;
+      const parsed: unknown = await request.json().catch(() => null);
+      body = parsed !== null && typeof parsed === "object"
+        ? (parsed as { barcode?: unknown; requestId?: unknown }) : null;
       if (!body || typeof body.barcode !== "string" || typeof body.requestId !== "string" ||
           !body.barcode.trim() || body.barcode.length > 160 ||
           !/^[a-zA-Z0-9-]{8,100}$/.test(body.requestId)) {
