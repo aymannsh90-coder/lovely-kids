@@ -2509,11 +2509,10 @@ async function handlePartyVoucher(
               const customerBalanceMinor = await customerReceivableBalanceMinor(tx, partyId);
               if (customerBalanceMinor >= 0 || amountMinor > -customerBalanceMinor) {
                 throw new VoucherError(
-                  "لا يمكن صرف مبلغ أكبر من الرصيد الدائن للزبون، أو صرف مبلغ لزبون لا يوجد له رصيد دائن",
+                  "لا يوجد رصيد دائن كافٍ للزبون لتسجيل سند الصرف",
                   409,
                 );
               }
-
             }
 
             if (discountMinor > 0) {
@@ -3688,20 +3687,19 @@ async function handleReplaceUnifiedVoucher(
           if (
             voucher.voucherPurpose === "customer_cash_loan" &&
             voucher.partyId
-
-
           ) {
+            // The original voucher has been reversed within this transaction.
+            // Compare the replacement against the restored customer credit.
             await tx.select({ id: customersTable.id }).from(customersTable)
               .where(eq(customersTable.id, voucher.partyId)).for("update");
             const customerBalanceMinor = await customerReceivableBalanceMinor(tx, voucher.partyId);
             if (customerBalanceMinor >= 0 || amountMinor > -customerBalanceMinor) {
-              throw new VoucherError("المبلغ الجديد أكبر من الرصيد الدائن للزبون", 409);
+              throw new VoucherError(
+                "المبلغ الجديد أكبر من الرصيد الدائن للزبون",
+                409,
+              );
             }
-
-
           }
-
-
 
           if (
             voucher.voucherPurpose ===
