@@ -43,7 +43,8 @@ async function buildHandlers(){
     path.join(__dirname,"finance-banking-routes.ts"),
     path.join(__dirname,"cash-session-routes.ts"),
     path.join(__dirname,"pos-purchase-return-routes.ts"),
-    path.join(__dirname,"finance-card-settlement-routes.ts")],
+    path.join(__dirname,"finance-card-settlement-routes.ts"),
+    path.join(__dirname,"product-routes.ts")],
     outdir:buildDir,outExtension:{".js":".mjs"},
     bundle:true,platform:"node",target:"node22",format:"esm",
     external:["bcryptjs","pg","drizzle-orm","drizzle-orm/*","drizzle-zod",
@@ -58,6 +59,7 @@ async function buildHandlers(){
     ["cash","cash-session-routes.mjs","handleCashSessionRequest"],
     ["purchaseReturn","pos-purchase-return-routes.mjs","handlePosPurchaseReturnRequest"],
     ["card","finance-card-settlement-routes.mjs","handleCardSettlementRequest"],
+    ["product","product-routes.mjs","handleProductRequest"],
   ]) {
     const loaded=await import(pathToFileURL(path.join(buildDir,file)).href);
     extra[key]=loaded[exported];
@@ -148,6 +150,20 @@ test("owner-only staff API; login; grant revocation and disabled tokens", {timeo
     const s2=await l2.json();
     assert.deepEqual(s2.user.permissions,["reports.financial"]);
     assert.equal(s2.user.staffRole,"accountant");
+    // Regression: inventory.edit must never grant permanent product deletion.
+    const inventoryGrant=await h.access(request(p+"/"+sid,"PATCH",ot,
+      {ownerPassword:OWNER_PWD,roleName:"inventory",permissions:["inventory.edit"]}),db,env);
+    assert.equal(inventoryGrant.status,200);
+    assert.equal((await h.auth(request("/api/auth/me","GET",s2.token),db,env)).status,401);
+    const inventoryLogin=await login();
+    assert.equal(inventoryLogin.status,200);
+    const sInventory=await inventoryLogin.json();
+    const deniedDeletion=await h.product(request("/api/products/999","DELETE",sInventory.token),db,env);
+    assert.equal(deniedDeletion.status,403,await deniedDeletion.clone().text());
+    // Return to an accountant profile so the disabled-login test also covers role transitions.
+    const restoredRole=await h.access(request(p+"/"+sid,"PATCH",ot,
+      {ownerPassword:OWNER_PWD,roleName:"accountant",permissions:["reports.financial"]}),db,env);
+    assert.equal(restoredRole.status,200);
     const disabled=await h.access(request(p+"/"+sid,"PATCH",ot,
       {ownerPassword:OWNER_PWD,enabled:false}),db,env);
     assert.equal(disabled.status,200,await disabled.clone().text());
@@ -161,7 +177,7 @@ test("owner-only staff API; login; grant revocation and disabled tokens", {timeo
     const sec=(await client.query("SELECT c.relrowsecurity AS rls, has_table_privilege('anon','public.staff_access','SELECT') AS anon_read,has_table_privilege('authenticated','public.staff_access','SELECT') AS auth_read FROM pg_class c WHERE c.oid='public.staff_access'::regclass")).rows[0];
     assert.deepEqual(sec,{rls:true,anon_read:false,auth_read:false});
     const logs=(await client.query("SELECT count(*)::int AS n FROM security_audit_logs WHERE action LIKE 'staff_%'")).rows[0];
-    assert.equal(logs.n,4);
+    assert.equal(logs.n,6);
   } finally {
     await client.end();
     fs.rmSync(buildDir,{recursive:true,force:true});

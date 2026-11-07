@@ -251,10 +251,9 @@ async function requireAdminActor(
   const canEdit = (
     (request.method === "POST" && path === "/api/products") ||
     (request.method === "PUT" && /^\/api\/products\/\d+$/.test(path)) ||
-    (request.method === "DELETE" && /^\/api\/products\/\d+$/.test(path)) ||
     (request.method === "PATCH" && /^\/api\/products\/\d+\/(stock|variant-stock|visibility|restore)$/.test(path))
   ) && await userHasPermission(db, user, "inventory.edit");
-  // Soft archiving is allowed by inventory.edit; permanent deletion and supplier-cost preview stay owner/admin only.
+  // Explicitly never delegate permanent DELETE to inventory.edit. Only pre-existing owner/admin may purge products.\n  // Staff may archive (soft DELETE is handled as an authenticated update), restore, and edit stock.
   if (!user.isAdmin && !user.isOwner && !canRead && !canEdit) {
     return {
       ok: false as const,
