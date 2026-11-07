@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'artifacts/api-worker/src/finance-voucher-routes.ts'
+      - 'artifacts/api-worker/src/customer-credit-payout-rules.ts'
+      - 'artifacts/api-worker/src/customer-credit-payout-rules.test.mjs'
+      - 'artifacts/lovely-kids-pos/src/pages/parties/CustomersPage.tsx'
       - 'artifacts/api-worker/src/finance-discount-rules.ts'
       - 'artifacts/api-worker/src/finance-discount-rules.test.mjs'
       - 'artifacts/lovely-kids-pos/src/pages/finance/DiscountNotesPage.tsx'
@@ -33,3 +36,5 @@ jobs:
           pnpm --filter @workspace/lovely-kids-pos typecheck
       - name: Discount posting regression tests
         run: node --experimental-strip-types --test artifacts/api-worker/src/finance-discount-rules.test.mjs
+      - name: Customer credit payout ceiling tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/customer-credit-payout-rules.test.mjs
