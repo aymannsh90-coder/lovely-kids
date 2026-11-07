@@ -191,7 +191,7 @@ export default function DiscountNotesPage() {
       : "خصم مكتسب من المورد";
 
   return (
-    <section className="work-panel lk-finance-refresh" dir="rtl">
+    <section className="work-panel lk-finance-refresh lk-finance-discount-notes" dir="rtl">
       <div className="panel-heading lk-finance-header">
         <div>
           <h2>الإشعارات والخصومات</h2>
