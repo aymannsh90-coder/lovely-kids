@@ -1,0 +1,299 @@
+/*
+ * Lovely Kids POS — Purchase invoices history (read-only).
+ * Visual refresh on desktop only: existing mobile and print layout untouched.
+ * The page keeps all original API requests, data, navigation, and permissions.
+ */
+@media screen and (min-width: 1001px) {
+  .lk-purchase-history {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 13px 16px 22px !important;
+    display: grid;
+    gap: 14px;
+    color: #2a4659;
+  }
+
+  .lk-purchase-history .purchase-history-hero {
+    min-width: 0;
+    margin: 0 !important;
+    padding: 20px 24px 23px !important;
+    display: grid;
+    gap: 10px;
+    border: 1px solid #f2d5e5;
+    border-right: 4px solid #e91e8c;
+    border-radius: 18px !important;
+    background: linear-gradient(110deg, #fff 35%, #fff8fb 75%, #fcebf5) !important;
+    box-shadow: 0 6px 20px rgba(30, 74, 101, .055);
+  }
+
+  .lk-purchase-history .purchase-history-hero::before {
+    content: "المشتريات / سجل الفواتير";
+    display: block;
+    color: #dc167e;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .lk-purchase-history .purchase-history-title {
+    margin: 0 !important;
+    color: #244055;
+    font-size: clamp(21px, 1.6vw, 26px);
+    font-weight: 900;
+    line-height: 1.35;
+  }
+
+  .lk-purchase-history .purchase-history-hero > p:not([role="alert"]) {
+    margin: 0 0 6px;
+    color: #75899a;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+
+  .lk-purchase-history .purchase-history-search {
+    display: grid !important;
+    grid-template-columns: minmax(240px, 1fr) 142px 142px;
+    align-items: center;
+    gap: 10px !important;
+    min-width: 0;
+    padding: 13px;
+    border: 1px solid #dfe9ef;
+    border-radius: 13px;
+    background: #f7fafc;
+  }
+
+  .lk-purchase-history .purchase-history-search-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0 !important;
+    height: 43px;
+    border: 1px solid #d3e1ea !important;
+    border-radius: 10px !important;
+    background: #fff;
+    padding: 8px 13px !important;
+    color: #2e495d;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lk-purchase-history .purchase-history-search button {
+    min-height: 43px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 900;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+
+  .lk-purchase-history .purchase-history-search-primary {
+    border: 1px solid #df1981;
+    color: #fff;
+    background: #e91e8c;
+    box-shadow: 0 3px 10px rgba(233, 30, 140, .12);
+  }
+  .lk-purchase-history .purchase-history-search-primary:hover:not(:disabled) {
+    border-color: #c71970;
+    background: #d41479;
+  }
+  .lk-purchase-history .purchase-history-search-latest {
+    border: 1px solid #dfc7d4;
+    color: #99416e;
+    background: #fff;
+  }
+  .lk-purchase-history .purchase-history-search-latest:hover:not(:disabled) {
+    background: #fff4fa;
+    border-color: #e8abca;
+  }
+  .lk-purchase-history button:disabled {
+    opacity: .63;
+    cursor: not-allowed;
+  }
+  .lk-purchase-history :is(input,button):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+  .lk-purchase-history .purchase-history-error {
+    margin: 3px 0 0;
+    padding: 11px 14px;
+    border: 1px solid #f4c7ce;
+    border-radius: 10px;
+    background: #fff5f7;
+    font-size: 12px;
+  }
+
+  .lk-purchase-history .purchase-history-invoice {
+    min-width: 0;
+    padding: 21px 22px 22px !important;
+    border: 1px solid #dfeaf0;
+    border-radius: 18px !important;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(30, 74, 101, .045);
+  }
+
+  .lk-purchase-history .purchase-history-invoice-summary {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 295px);
+    align-items: start;
+    gap: 20px !important;
+    padding: 1px 1px 19px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #e4edf2;
+  }
+
+  .lk-purchase-history .purchase-history-invoice-details {
+    min-width: 0;
+  }
+  .lk-purchase-history .purchase-history-invoice-details h2 {
+    margin: 0 0 13px;
+    color: #244154;
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .lk-purchase-history .purchase-history-invoice-details p {
+    margin: 7px 0;
+    color: #566e81;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+  .lk-purchase-history .purchase-history-invoice-details p strong {
+    color: #38576b;
+    font-weight: 900;
+  }
+
+  .lk-purchase-history .purchase-history-invoice-totals {
+    box-sizing: border-box;
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+    padding: 13px 17px;
+    border: 1px solid #f0d5e3;
+    border-radius: 14px;
+    background: #fff7fb;
+  }
+  .lk-purchase-history .purchase-history-invoice-totals p {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 9px;
+    margin: 0;
+    color: #37536a;
+    font-size: 13px;
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+  }
+  .lk-purchase-history .purchase-history-invoice-totals p strong {
+    color: #6b7385;
+    font-weight: 800;
+  }
+  .lk-purchase-history .purchase-history-invoice-totals p:first-child {
+    color: #af146a;
+    font-size: 16px;
+    font-weight: 900;
+  }
+  .lk-purchase-history .purchase-history-invoice-totals p + p {
+    padding-top: 9px;
+    border-top: 1px dashed #efd9e3;
+  }
+
+  .lk-purchase-history .purchase-history-navigation {
+    display: flex;
+    align-items: center;
+    gap: 9px !important;
+    margin-bottom: 15px !important;
+  }
+  .lk-purchase-history .purchase-history-navigation button {
+    min-height: 34px;
+    padding: 7px 14px;
+    border: 1px solid #d7e4ed;
+    border-radius: 9px;
+    background: #f7fbfd;
+    color: #35556c;
+    font-size: 12px;
+    font-weight: 850;
+    cursor: pointer;
+  }
+  .lk-purchase-history .purchase-history-navigation button:hover:not(:disabled) {
+    background: #f1f7fb;
+    border-color: #b9d1e0;
+  }
+
+  .lk-purchase-history .purchase-history-table-scroll {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid #dae7ef;
+    border-radius: 13px;
+    scrollbar-color: #bed4e1 #f8fbfd;
+    overscroll-behavior-x: contain;
+  }
+  .lk-purchase-history .purchase-history-table {
+    width: 100%;
+    min-width: 940px;
+    border-collapse: separate !important;
+    border-spacing: 0;
+    text-align: right;
+    color: #344e62;
+    font-size: 13px;
+  }
+  .lk-purchase-history .purchase-history-table thead th {
+    padding: 13px 12px !important;
+    border-bottom: 1px solid #d6e4ed !important;
+    background: #edf6fa;
+    color: #3a5b70;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .lk-purchase-history .purchase-history-table tbody td {
+    padding: 12px !important;
+    border-bottom: 1px solid #e8eff3 !important;
+    line-height: 1.65;
+    vertical-align: middle;
+  }
+  .lk-purchase-history .purchase-history-table tbody tr:last-child td {
+    border-bottom: 0 !important;
+  }
+  .lk-purchase-history .purchase-history-table tbody tr:nth-child(even) {
+    background: #f9fcfd;
+  }
+  .lk-purchase-history .purchase-history-table tbody tr:hover {
+    background: #fff4fa;
+  }
+  .lk-purchase-history .purchase-history-table tbody td:nth-child(2) {
+    color: #2c485a;
+    font-weight: 850;
+  }
+  .lk-purchase-history .purchase-history-table tbody td:nth-child(2) small {
+    display: inline-block;
+    margin-inline-start: 6px;
+    color: #8294a1;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .lk-purchase-history .purchase-history-table tbody td:last-child {
+    color: #b41870;
+    font-weight: 900;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .lk-purchase-history .purchase-history-table tbody td:nth-child(4),
+  .lk-purchase-history .purchase-history-table tbody td:nth-child(5),
+  .lk-purchase-history .purchase-history-table tbody td:nth-child(6) {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media screen and (min-width: 1001px) and (max-width: 1250px) {
+  .lk-purchase-history .purchase-history-search {
+    grid-template-columns: minmax(180px, 1fr) 120px 120px;
+  }
+  .lk-purchase-history .purchase-history-invoice-summary {
+    grid-template-columns: minmax(0, 1fr) minmax(205px, 250px);
+  }
+}
