@@ -101,7 +101,7 @@ function voucherLabel(voucher: PosFinanceVoucher) {
   }
 
   if (voucher.voucherPurpose === "customer_cash_loan") {
-    return "سند صرف / زبون على الحساب";
+    return "سند صرف / تسوية حساب الزبون";
   }
 
   if (voucher.voucherPurpose === "employee_advance") {

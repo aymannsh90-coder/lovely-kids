@@ -19,6 +19,8 @@ import {
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
+import { isCustomerCreditPayoutWithinBalance } from "./customer-credit-payout-rules";
+
 import { getCurrentUser } from "./auth";
 import { userHasPermission } from "./staff-permissions";
 import { buildCustomerReceiptDiscountLines, buildDiscountNoteLines, validatedReceiptSettlement } from "./finance-discount-rules";
@@ -2505,6 +2507,16 @@ async function handlePartyVoucher(
                     partyId,
                 },
               );
+            if (voucherType === "payment") {
+              const customerBalanceMinor = await customerReceivableBalanceMinor(tx, partyId);
+              if (!isCustomerCreditPayoutWithinBalance(customerBalanceMinor, amountMinor)) {
+                throw new VoucherError(
+                  "لا يوجد رصيد دائن كافٍ للزبون لتسجيل سند الصرف",
+                  409,
+                );
+              }
+            }
+
             if (discountMinor > 0) {
               const dueMinor = await customerReceivableBalanceMinor(tx, partyId);
               try {
@@ -3673,6 +3685,23 @@ async function handleReplaceUnifiedVoucher(
                 originalFinance.id,
               ),
             );
+
+          if (
+            voucher.voucherPurpose === "customer_cash_loan" &&
+            voucher.partyId
+          ) {
+            // The original voucher has been reversed within this transaction.
+            // Compare the replacement against the restored customer credit.
+            await tx.select({ id: customersTable.id }).from(customersTable)
+              .where(eq(customersTable.id, voucher.partyId)).for("update");
+            const customerBalanceMinor = await customerReceivableBalanceMinor(tx, voucher.partyId);
+            if (!isCustomerCreditPayoutWithinBalance(customerBalanceMinor, amountMinor)) {
+              throw new VoucherError(
+                "المبلغ الجديد أكبر من الرصيد الدائن للزبون",
+                409,
+              );
+            }
+          }
 
           if (
             voucher.voucherPurpose ===
