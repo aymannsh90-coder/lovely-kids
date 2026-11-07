@@ -21787,9 +21787,9 @@ button.inventory-intelligence-metric {
 
   .pos-full-page .pos-shamel-header .pos-shamel-session-state {
     position: absolute;
-    inset-inline-start: 50%;
+    left: 50%;
     top: 50%;
-    transform: translate(50%, -50%);
+    transform: translate(-50%, -50%);
     display: grid;
     min-width: 122px;
     min-height: 44px;
