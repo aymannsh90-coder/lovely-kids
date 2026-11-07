@@ -2791,9 +2791,13 @@ async function handlePartyVoucher(
                   }),
             };
 
-          const receiptLines = buildCustomerReceiptDiscountLines(
-            settlementLine, partyLine, discountAccount?.id ?? null, discountMinor,
-          );
+          // Payment vouchers CREDIT the cash/bank account. The discounted receipt
+          // builder expects a DEBIT to cash and must not process payment lines.
+          const postingLines = voucherType === "receipt"
+            ? buildCustomerReceiptDiscountLines(
+                settlementLine, partyLine, discountAccount?.id ?? null, discountMinor,
+              )
+            : [settlementLine, partyLine];
 
           const posting =
             await postFinanceTransaction(
@@ -2825,7 +2829,7 @@ async function handlePartyVoucher(
                   Number(
                     auth.user.id,
                   ),
-                lines: receiptLines,
+                lines: postingLines,
               },
             );
 
