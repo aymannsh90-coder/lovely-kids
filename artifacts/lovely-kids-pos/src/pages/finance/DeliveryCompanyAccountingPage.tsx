@@ -1389,6 +1389,7 @@ export default function DeliveryCompanyAccountingPage() {
                 <table className="delivery-ledger-table">
                   <thead>
                     <tr>
+                      <th>خصم من التحصيل</th>
                       <th>طرد التبديل</th>
                       <th>الطرد الأصلي</th>
                       <th>الزبون</th>
@@ -1400,12 +1401,31 @@ export default function DeliveryCompanyAccountingPage() {
                   <tbody>
                     {summary.payableExchangeOrders.map((order) => (
                       <tr key={order.id}>
+                        <td>
+                          {order.remainingPayableMinor > 0 ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedExchangeOffsetIds.includes(order.id)}
+                              onChange={() => toggleExchangeOffset(order.id)}
+                              aria-label={`خصم طرد التبديل رقم ${order.id} من التسوية`}
+                            />
+                          ) : (
+                            <span title="محسوم في كشف سابق">مسوّى سابقًا</span>
+                          )}
+                        </td>
                         <td><span className="delivery-ledger-order-id">#{order.id}</span></td>
                         <td>{order.relatedOrderId === null ? "—" : `#${order.relatedOrderId}`}</td>
                         <td className="delivery-ledger-customer">{order.customerName || "—"}</td>
                         <td><span className="delivery-ledger-money">{formatMoney(order.parcelGrossMinor)}</span></td>
                         <td><span className="delivery-ledger-money">{formatMoney(order.deliveryCompanyCostMinor)}</span></td>
-                        <td><span className="delivery-ledger-money is-negative">{formatMoney(-order.payableMinor)}</span></td>
+                        <td>
+                          <span className="delivery-ledger-money is-negative">
+                            {formatMoney(-order.remainingPayableMinor)}
+                          </span>
+                          {order.accountedPayableMinor > 0 && (
+                            <small>محسوم سابقًا: {formatMoney(order.accountedPayableMinor)}</small>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1413,7 +1433,9 @@ export default function DeliveryCompanyAccountingPage() {
               </div>
             )}
             <p className="delivery-ledger-metric-hint">
-              هذه الذمم لا تدخل تلقائيًا في إجمالي التحصيل؛ يجب مطابقتها مع كشوف الشركة القديمة والحالية أولًا.
+              المبلغ المتبقي من التبديلات يُخصم من صافي الرصيد الرئيسي.
+              حدّد التبديلات التي سيخصمها المندوب مع التحصيل الحالي ليُنشأ قيد التسوية الصحيح.
+              المسوّى سابقًا لا يُخصم مرة ثانية.
             </p>
           </section>
 
@@ -1456,6 +1478,7 @@ export default function DeliveryCompanyAccountingPage() {
                   disabled={
                     saving ||
                     selectedIds.length === 0 ||
+                    selectedTotalMinor <= 0 ||
                     (receiptMethod === "cash" && !session)
                   }
                   onClick={() => void saveSettlement()}
