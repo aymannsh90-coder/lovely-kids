@@ -1614,7 +1614,6 @@ async function insertVoucher(
       | "supplier_refund"
       | "delivery_company_settlement"
       | "customer_cash_loan"
-      | "customer_refund"
       | "employee_advance"
       | "employee_payment"
       | "supplier_payment"
@@ -2689,7 +2688,7 @@ async function handlePartyVoucher(
                   ? "employee_repayment"
                   : "supplier_refund"
               : partyType === "customer"
-                ? "customer_refund"
+                ? "customer_cash_loan"
                 : partyType === "employee"
                   ? body.employeePaymentType === "payable"
                     ? "employee_payment"
@@ -3687,7 +3686,7 @@ async function handleReplaceUnifiedVoucher(
             );
 
           if (
-            voucher.voucherPurpose === "customer_refund" &&
+            voucher.voucherPurpose === "customer_cash_loan" &&
             voucher.partyId
 
 
