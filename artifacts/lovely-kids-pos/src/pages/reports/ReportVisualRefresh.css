@@ -1091,3 +1091,197 @@
     }
   }
 }
+
+
+/* Lovely Kids POS | Final desktop design pass | 2026-11-07.
+   Applies only on desktop screens. No print output, storefront iframe,
+   inventory figures, filters or report logic are modified. */
+@media screen and (min-width: 1001px) {
+  /* Intelligence: retain existing risk/status colors and grid structure. */
+  .lk-report-refresh.inventory-intelligence-page {
+    --lk-intel-line: #dfeaf0;
+    --lk-intel-shadow: 0 7px 22px rgba(40, 79, 104, .052);
+    min-width: 0;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-owner-dashboard,
+    .inventory-variant-intelligence,
+    .inventory-intelligence-table-card
+  ) {
+    min-width: 0;
+    border: 1px solid var(--lk-intel-line);
+    border-radius: 18px;
+    box-shadow: var(--lk-intel-shadow);
+  }
+  .inventory-intelligence-page :is(
+    .inventory-owner-dashboard-head,
+    .inventory-owner-priority-head,
+    .inventory-variant-head,
+    .inventory-intelligence-table-head
+  ) {
+    min-width: 0;
+    gap: 12px;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-owner-dashboard-head,
+    .inventory-owner-priority-head,
+    .inventory-variant-head,
+    .inventory-intelligence-table-head
+  ) :is(h2, h3) {
+    color: #274354;
+    font-weight: 900;
+    line-height: 1.4;
+  }
+  .inventory-intelligence-page .inventory-owner-action-grid {
+    gap: 11px;
+  }
+  .inventory-intelligence-page .inventory-owner-action-card {
+    border-radius: 14px;
+    box-shadow: 0 4px 11px rgba(41, 74, 100, .045);
+    transition: box-shadow .16s ease, transform .16s ease;
+  }
+  .inventory-intelligence-page .inventory-owner-action-card:hover {
+    box-shadow: 0 8px 20px rgba(41, 74, 100, .1);
+    transform: translateY(-1px);
+  }
+  .inventory-intelligence-page .inventory-owner-action-card:focus-visible {
+    outline: 3px solid rgba(233,30,140,.25);
+    outline-offset: 2px;
+  }
+  .inventory-intelligence-page .inventory-owner-priority {
+    min-width: 0;
+    border-radius: 15px;
+  }
+  .inventory-intelligence-page .inventory-owner-priority-row {
+    border-radius: 11px;
+    transition: box-shadow .16s ease;
+  }
+  .inventory-intelligence-page .inventory-owner-priority-row:hover {
+    box-shadow: inset 0 0 0 1px #d8e5ed;
+  }
+  .inventory-intelligence-page .inventory-owner-finance-grid > article {
+    border-radius: 13px;
+    min-width: 0;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-variant-toolbar,
+    .inventory-intelligence-filters
+  ) {
+    min-width: 0;
+    gap: 11px;
+    border-color: #deeaef;
+    border-radius: 14px;
+    background: #f7fafc;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-variant-toolbar,
+    .inventory-intelligence-filters
+  ) :is(input, select) {
+    border-color: #d7e4ec;
+    border-radius: 10px;
+    background: #fff;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-variant-filter-buttons,
+    .inventory-intelligence-table-head
+  ) button {
+    border-radius: 10px;
+    font-weight: 800;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-variant-table-wrap,
+    .inventory-intelligence-table-wrap
+  ) {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-color: #bdd4e2 #f6fafc;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-variant-table,
+    .inventory-intelligence-table
+  ) thead th {
+    color: #365970;
+    font-weight: 900;
+    white-space: nowrap;
+    background: #eff6fa;
+    border-bottom-color: #d6e4ec;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-variant-table,
+    .inventory-intelligence-table
+  ) tbody tr:hover {
+    background: #fff4fa;
+  }
+  .inventory-intelligence-page :is(
+    .inventory-variant-table,
+    .inventory-intelligence-table
+  ) tbody td {
+    line-height: 1.6;
+  }
+
+  /* Remaining reports: same table treatment without changing columns,
+     print CSS, calculation cards, charts, or exported documents. */
+  .lk-report-refresh :is(
+    .trial-balance-table-card,
+    .finance-statement-table-card,
+    .inventory-valuation-table-card,
+    .liquidity-aging-card,
+    .liquidity-checks-card,
+    .financial-statement-card,
+    .product-analytics-ranking,
+    .sales-analytics-channel
+  ) {
+    min-width: 0;
+    border-color: #e0e9ef;
+    border-radius: 15px;
+    box-shadow: 0 5px 17px rgba(35, 76, 101, .045);
+  }
+  .lk-report-refresh :is(
+    .trial-balance-table-wrap,
+    .finance-statement-table-wrap,
+    .inventory-valuation-table-wrap,
+    .liquidity-table-wrap
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    border-radius: 11px;
+    scrollbar-color: #c5d9e5 #f8fbfd;
+  }
+  .lk-report-refresh :is(
+    .trial-balance-table,
+    .finance-statement-table,
+    .inventory-valuation-table,
+    .liquidity-aging-table,
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table
+  ) thead th {
+    color: #37566d;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .lk-report-refresh :is(
+    .trial-balance-table,
+    .finance-statement-table,
+    .inventory-valuation-table,
+    .liquidity-aging-table,
+    .customer-balances-table,
+    .customer-statement-table,
+    .supplier-statement-table
+  ) tbody tr:hover {
+    background: #fff5fa;
+  }
+  .lk-report-refresh :is(
+    .trial-balance-metrics,
+    .inventory-valuation-metrics,
+    .financial-statement-metrics,
+    .sales-analytics-channel-grid
+  ) > * {
+    min-width: 0;
+  }
+}
