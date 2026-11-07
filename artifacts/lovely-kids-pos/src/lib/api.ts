@@ -4204,6 +4204,7 @@ export interface PosDeliveryUnsettledOrder {
   createdAt: string;
   amountMinor: number;
   amount: number;
+  settledMinor: number;
 
   // Each parcel is represented separately, even in an online exchange.
   parcelType: "regular" | "original" | "exchange";
