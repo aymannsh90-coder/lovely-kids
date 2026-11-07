@@ -4,7 +4,7 @@ import {
 } from "@workspace/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
-import { userHasAnyPermission, type StaffPermission } from "./staff-permissions";
+import { userHasAnyPermission, userHasPermission, type StaffPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
