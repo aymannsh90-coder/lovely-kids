@@ -157,6 +157,22 @@ function buildDeliveryCompanyStatementDocument(
           )
           .join("");
 
+  const settledOriginalRows = summary.settledOriginalParcels
+    .map(
+      (order) => `
+        <tr>
+          <td>${order.id}</td>
+          <td>${order.relatedOrderId ?? "—"}</td>
+          <td>${escapeHtml(order.customerName || "—")}</td>
+          <td class="money">${money(order.parcelGrossMinor)}</td>
+          <td class="money">${money(order.deliveryCompanyCostMinor)}</td>
+          <td class="money">${money(order.settledMinor)}</td>
+          <td>مسوّى سابقًا — مرجع فقط</td>
+        </tr>
+      `,
+    )
+    .join("");
+
   const payableExchangeRows = summary.payableExchangeOrders
     .map(
       (order) => `
@@ -513,6 +529,29 @@ function buildDeliveryCompanyStatementDocument(
     الطرد الأصلي وطرد التبديل مستقلان. قيمة طرد التبديل هنا هي
     فرق التبديل ورسومه، وليس القيمة الكاملة لفاتورة الأصناف البديلة.
   </p>
+
+  <h2>الطرود الأصلية المسوّاة سابقًا — مرجع منفصل</h2>
+  <p class="meta">
+    تظهر الطرود الأصلية المرتبطة بتبديلات لم تُحسم بعد، حتى لو كان
+    تحصيل الطرد الأصلي تم في كشف سابق. هذا القسم معلوماتي فقط، ولا
+    يُضاف إلى إجمالي المستحق الحالي.
+  </p>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>الطرد الأصلي</th>
+        <th>طرد التبديل</th>
+        <th>الزبون</th>
+        <th>القيمة الأصلية</th>
+        <th>تكلفة الشركة</th>
+        <th>المسوى سابقًا</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${settledOriginalRows || '<tr><td colspan="7">لا توجد طرود أصلية مسوّاة مرتبطة بالتبديلات الحالية.</td></tr>'}
+    </tbody>
+  </table>
 
   <h2>طرود التبديل التي عليها مبلغ لصالح الشركة — للمطابقة فقط</h2>
   <p class="meta">
@@ -1238,6 +1277,51 @@ export default function DeliveryCompanyAccountingPage() {
               </span>
             </div>
           </section>
+
+          {summary.settledOriginalParcels.length > 0 && (
+            <section className="delivery-ledger-panel" aria-labelledby="delivery-ledger-original-parcels-title">
+              <div className="delivery-ledger-panel-head">
+                <div className="delivery-ledger-panel-heading">
+                  <span className="delivery-ledger-panel-glyph" aria-hidden="true">📦</span>
+                  <div>
+                    <h2 id="delivery-ledger-original-parcels-title">الطرود الأصلية المسوّاة سابقًا</h2>
+                    <p>
+                      مرجع مستقل للطرود الأصلية المرتبطة بالتبديلات الظاهرة.
+                      لا تدخل هذه القيم مجددًا في المستحق أو سند التحصيل.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="delivery-ledger-table-wrap" role="region" aria-label="الطرود الأصلية المسواة سابقا" tabIndex={0}>
+                <table className="delivery-ledger-table">
+                  <thead>
+                    <tr>
+                      <th>الطرد الأصلي</th>
+                      <th>طرد التبديل</th>
+                      <th>الزبون</th>
+                      <th>قيمة الطرد الأصلي</th>
+                      <th>تكلفة الشركة</th>
+                      <th>المسوى سابقًا</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.settledOriginalParcels.map((order) => (
+                      <tr key={order.id}>
+                        <td><span className="delivery-ledger-order-id">#{order.id}</span></td>
+                        <td>{order.relatedOrderId === null ? "—" : `#${order.relatedOrderId}`}</td>
+                        <td className="delivery-ledger-customer">{order.customerName || "—"}</td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.parcelGrossMinor)}</span></td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.deliveryCompanyCostMinor)}</span></td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.settledMinor)}</span></td>
+                        <td>مسوّى سابقًا — مرجع فقط</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <section className="delivery-ledger-panel" aria-labelledby="delivery-ledger-exchange-payables-title">
             <div className="delivery-ledger-panel-head">
