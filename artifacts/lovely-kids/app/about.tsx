@@ -46,7 +46,7 @@ export default function AboutScreen() {
 
       <View style={[styles.heroBanner, { backgroundColor: colors.primary }]}>
         <Image
-          source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
+          source={require("@/assets/images/logo.jpg")}
           style={styles.logoImage}
           resizeMode="contain"
         />
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 20,
   },
-  logoImage: { width: 160, height: 80, borderRadius: 12 },
+  logoImage: { width: 116, height: 116, borderRadius: 16 },
   heroSub: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
   statsRow: {
     flexDirection: "row",

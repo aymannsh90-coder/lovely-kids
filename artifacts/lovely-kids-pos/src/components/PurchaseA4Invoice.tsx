@@ -48,6 +48,7 @@ export default function PurchaseA4Invoice({
     <section className="purchase-a4-print-area" dir="rtl">
       <header className="purchase-a4-header">
         <div>
+          <img src="/lovely-kids-a4-logo.png" alt="Lovely Kids" style={{ width: 180, height: 54, display: "block", objectFit: "contain", marginBottom: 5 }} />
           <h1>Lovely Kids</h1>
           <strong>فاتورة مشتريات</strong>
           <span>ملابس ومستلزمات الأطفال</span>

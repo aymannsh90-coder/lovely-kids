@@ -588,7 +588,7 @@ export default function TrialBalanceReportPage() {
         <div id="trial-balance-print">
           <header className="trial-balance-print-only trial-balance-print-header">
             <div className="trial-balance-print-brand">
-              Lovely Kids
+              <img src="/lovely-kids-a4-logo.png" alt="Lovely Kids" style={{ display: "block", width: 178, height: 52, objectFit: "contain", margin: "0 auto 4px" }} />
             </div>
             <h1>ميزان المراجعة</h1>
             <p>
