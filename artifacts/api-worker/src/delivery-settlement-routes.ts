@@ -3,6 +3,7 @@ import {
   deliveryCompaniesTable,
   deliveryCompanySettlementItemsTable,
   deliveryCompanySettlementsTable,
+  deliveryCompanyExchangeOffsetsTable,
   exchangeDocumentsTable,
   financeAccountsTable,
   financeTransactionLinesTable,
@@ -189,6 +190,27 @@ async function loadUnsettledOrders(
         ),
       ),
     );
+
+  const offsetRows = await db
+    .select({
+      orderId: deliveryCompanyExchangeOffsetsTable.orderId,
+      amountMinor: deliveryCompanyExchangeOffsetsTable.amountMinor,
+    })
+    .from(deliveryCompanyExchangeOffsetsTable)
+    .where(
+      and(
+        eq(deliveryCompanyExchangeOffsetsTable.deliveryCompanyId, companyId),
+        inArray(deliveryCompanyExchangeOffsetsTable.orderId, orderIds),
+        inArray(deliveryCompanyExchangeOffsetsTable.status, ["historical", "posted"]),
+      ),
+    );
+  const accountedPayableMinorByOrderId = new Map<number, number>();
+  for (const offset of offsetRows) {
+    accountedPayableMinorByOrderId.set(
+      offset.orderId,
+      (accountedPayableMinorByOrderId.get(offset.orderId) ?? 0) + offset.amountMinor,
+    );
+  }
 
   const settledMinorByOrderId =
     new Map<number, number>();
@@ -380,6 +402,8 @@ async function loadUnsettledOrders(
 
       const amountMinor = Math.max(0, grossReceivableMinor - settledMinor);
       const payableMinor = Math.max(0, payableByOrderId.get(order.id) ?? 0);
+      const accountedPayableMinor = accountedPayableMinorByOrderId.get(order.id) ?? 0;
+      const remainingPayableMinor = Math.max(0, payableMinor - accountedPayableMinor);
       const replacementExchange = replacementExchangeByOrderId.get(order.id);
       const replacementOrderId = originalExchangeByOrderId.get(order.id);
       const parcelType = replacementExchange
@@ -417,6 +441,8 @@ async function loadUnsettledOrders(
         amountMinor,
         amount: amountMinor / 100,
         payableMinor,
+        accountedPayableMinor,
+        remainingPayableMinor,
         parcelType,
         relatedOrderId,
         parcelGrossMinor,
@@ -500,26 +526,30 @@ async function handleSummary(
       companyId,
     );
 
-  const outstandingMinor =
-    unsettledOrders.reduce(
-      (sum, order) =>
-        sum + order.amountMinor,
-      0,
-    );
+  const grossOutstandingMinor = unsettledOrders.reduce(
+    (sum, order) => sum + order.amountMinor,
+    0,
+  );
+  // Only current negative exchange balances are deducted. Historical rows
+  // already reflected in older Shiply statements must not be applied twice.
+  const exchangeOffsetsMinor = payableExchangeOrders.reduce(
+    (sum, order) => sum + order.remainingPayableMinor,
+    0,
+  );
+  const outstandingMinor = grossOutstandingMinor - exchangeOffsetsMinor;
 
+  const currentPayableExchangeOrders = payableExchangeOrders.filter(
+    (order) => order.remainingPayableMinor > 0,
+  );
   const shippingChargedMinor =
-    unsettledOrders.reduce(
-      (sum, order) =>
-        sum +
-        order.shippingChargedMinor,
+    [...unsettledOrders, ...currentPayableExchangeOrders].reduce(
+      (sum, order) => sum + order.shippingChargedMinor,
       0,
     );
 
   const deliveryCompanyCostMinor =
-    unsettledOrders.reduce(
-      (sum, order) =>
-        sum +
-        order.deliveryCompanyCostMinor,
+    [...unsettledOrders, ...currentPayableExchangeOrders].reduce(
+      (sum, order) => sum + order.deliveryCompanyCostMinor,
       0,
     );
 
@@ -597,8 +627,9 @@ async function handleSummary(
     },
 
     outstandingMinor,
-    outstanding:
-      outstandingMinor / 100,
+    outstanding: outstandingMinor / 100,
+    grossOutstandingMinor,
+    exchangeOffsetsMinor,
 
     shippingChargedMinor,
     deliveryCompanyCostMinor,
