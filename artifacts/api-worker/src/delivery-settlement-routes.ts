@@ -733,6 +733,10 @@ async function handleCreateSettlement(
 
   try {
     const orderIds = parseOrderIds(body.orderIds);
+    if (body.exchangeOffsetOrderIds !== undefined &&
+        !Array.isArray(body.exchangeOffsetOrderIds)) {
+      throw new DeliverySettlementError("طرود التبديل المحددة غير صالحة");
+    }
     const exchangeOffsetOrderIds =
       Array.isArray(body.exchangeOffsetOrderIds) && body.exchangeOffsetOrderIds.length > 0
         ? parseOrderIds(body.exchangeOffsetOrderIds)
