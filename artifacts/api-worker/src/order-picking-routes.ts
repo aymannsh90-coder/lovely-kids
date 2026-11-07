@@ -197,6 +197,9 @@ export async function handleOrderPickingRequest(
         .where(eq(orderPickingSessionsTable.orderId, orderId)).limit(1);
 
       if (reset) {
+        if (!["new", "confirmed"].includes(order.status)) {
+          throw new PickingError("لا يمكن مسح سجل التحضير بعد إرسال الطلب أو إغلاقه");
+        }
         if (existing) await tx.delete(orderPickingSessionsTable)
           .where(eq(orderPickingSessionsTable.orderId, orderId));
         return pickingView(order, undefined, canScan);
