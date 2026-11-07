@@ -22,6 +22,10 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import {
+  remainingExchangePayableMinor,
+  netCourierReceivableMinor,
+} from "./delivery-exchange-offset-math";
 import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 
@@ -403,7 +407,7 @@ async function loadUnsettledOrders(
       const amountMinor = Math.max(0, grossReceivableMinor - settledMinor);
       const payableMinor = Math.max(0, payableByOrderId.get(order.id) ?? 0);
       const accountedPayableMinor = accountedPayableMinorByOrderId.get(order.id) ?? 0;
-      const remainingPayableMinor = Math.max(0, payableMinor - accountedPayableMinor);
+      const remainingPayableMinor = remainingExchangePayableMinor(payableMinor, accountedPayableMinor);
       const replacementExchange = replacementExchangeByOrderId.get(order.id);
       const replacementOrderId = originalExchangeByOrderId.get(order.id);
       const parcelType = replacementExchange
@@ -536,7 +540,7 @@ async function handleSummary(
     (sum, order) => sum + order.remainingPayableMinor,
     0,
   );
-  const outstandingMinor = grossOutstandingMinor - exchangeOffsetsMinor;
+  const outstandingMinor = netCourierReceivableMinor(grossOutstandingMinor, exchangeOffsetsMinor);
 
   const currentPayableExchangeOrders = payableExchangeOrders.filter(
     (order) => order.remainingPayableMinor > 0,
@@ -1139,7 +1143,7 @@ async function handleCreateSettlement(
         if (totalOffsetMinor > 0 && payableAccountId === null) {
           throw new DeliverySettlementError("حساب الذمم الدائنة لشركة التوصيل مفقود", 409);
         }
-        const totalMinor = grossTotalMinor - totalOffsetMinor;
+        const totalMinor = netCourierReceivableMinor(grossTotalMinor, totalOffsetMinor);
 
         if (
           !Number.isSafeInteger(
