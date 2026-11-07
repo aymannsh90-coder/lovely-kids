@@ -3,6 +3,7 @@ import {
   deliveryCompaniesTable,
   deliveryCompanySettlementItemsTable,
   deliveryCompanySettlementsTable,
+  exchangeDocumentsTable,
   financeAccountsTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
@@ -161,7 +162,7 @@ async function loadUnsettledOrders(
     );
 
   if (orderRows.length === 0) {
-    return [];
+    return { unsettledOrders: [], payableExchangeOrders: [], settledOriginalParcels: [] };
   }
 
   const orderIds = orderRows.map(
@@ -240,7 +241,7 @@ async function loadUnsettledOrders(
     );
 
   if (financeRows.length === 0) {
-    return [];
+    return { unsettledOrders: [], payableExchangeOrders: [], settledOriginalParcels: [] };
   }
 
   const sourceIdByTransactionId =
@@ -262,7 +263,7 @@ async function loadUnsettledOrders(
   ];
 
   if (financeIds.length === 0) {
-    return [];
+    return { unsettledOrders: [], payableExchangeOrders: [], settledOriginalParcels: [] };
   }
 
   const lineRows = await db
@@ -273,6 +274,7 @@ async function loadUnsettledOrders(
         financeTransactionLinesTable.debitMinor,
       creditMinor:
         financeTransactionLinesTable.creditMinor,
+      linkedEntityType: financeAccountsTable.linkedEntityType,
     })
     .from(financeTransactionLinesTable)
     .innerJoin(
@@ -288,10 +290,10 @@ async function loadUnsettledOrders(
           financeTransactionLinesTable.transactionId,
           financeIds,
         ),
-        eq(
-          financeAccountsTable.linkedEntityType,
+        inArray(financeAccountsTable.linkedEntityType, [
           "delivery_company_receivable",
-        ),
+          "delivery_company_payable",
+        ]),
         eq(
           financeAccountsTable.linkedEntityId,
           companyId,
@@ -299,10 +301,8 @@ async function loadUnsettledOrders(
       ),
     );
 
-  const amountByOrderId = new Map<
-    number,
-    number
-  >();
+  const amountByOrderId = new Map<number, number>();
+  const payableByOrderId = new Map<number, number>();
 
   for (const line of lineRows) {
     const orderId =
@@ -312,17 +312,63 @@ async function loadUnsettledOrders(
 
     if (!orderId) continue;
 
-    const amount =
-      line.debitMinor - line.creditMinor;
-
-    amountByOrderId.set(
-      orderId,
-      (amountByOrderId.get(orderId) ?? 0) +
-        amount,
-    );
+    if (line.linkedEntityType === "delivery_company_payable") {
+      const payable = line.creditMinor - line.debitMinor;
+      payableByOrderId.set(
+        orderId,
+        (payableByOrderId.get(orderId) ?? 0) + payable,
+      );
+    } else {
+      const amount = line.debitMinor - line.creditMinor;
+      amountByOrderId.set(
+        orderId,
+        (amountByOrderId.get(orderId) ?? 0) + amount,
+      );
+    }
   }
 
-  return candidates
+  // Original and replacement parcels are separate financial events.
+  // Never combine the replacement invoice's entire value with the original:
+  // the courier collects only the exchange difference plus delivery.
+  const exchanges = await db
+    .select({
+      originalOrderId: exchangeDocumentsTable.originalOrderId,
+      replacementOrderId: exchangeDocumentsTable.replacementOrderId,
+      settlementAmountMinor: exchangeDocumentsTable.settlementAmountMinor,
+    })
+    .from(exchangeDocumentsTable)
+    .where(
+      and(
+        eq(exchangeDocumentsTable.sourceType, "online_order"),
+        eq(exchangeDocumentsTable.status, "completed"),
+        or(
+          inArray(exchangeDocumentsTable.originalOrderId, orderIds),
+          inArray(exchangeDocumentsTable.replacementOrderId, orderIds),
+        ),
+      ),
+    );
+
+  const originalExchangeByOrderId = new Map<number, number>();
+  const replacementExchangeByOrderId = new Map<
+    number,
+    { originalOrderId: number; settlementAmountMinor: number }
+  >();
+
+  for (const exchange of exchanges) {
+    if (exchange.originalOrderId === null || exchange.replacementOrderId === null) {
+      continue;
+    }
+    originalExchangeByOrderId.set(
+      exchange.originalOrderId,
+      exchange.replacementOrderId,
+    );
+    replacementExchangeByOrderId.set(exchange.replacementOrderId, {
+      originalOrderId: exchange.originalOrderId,
+      settlementAmountMinor: exchange.settlementAmountMinor,
+    });
+  }
+
+  const mappedOrders = candidates
     .map((order) => {
       const grossReceivableMinor =
         amountByOrderId.get(order.id) ?? 0;
@@ -332,12 +378,21 @@ async function loadUnsettledOrders(
           order.id,
         ) ?? 0;
 
-      const amountMinor =
-        Math.max(
-          0,
-          grossReceivableMinor -
-            settledMinor,
-        );
+      const amountMinor = Math.max(0, grossReceivableMinor - settledMinor);
+      const payableMinor = Math.max(0, payableByOrderId.get(order.id) ?? 0);
+      const replacementExchange = replacementExchangeByOrderId.get(order.id);
+      const replacementOrderId = originalExchangeByOrderId.get(order.id);
+      const parcelType = replacementExchange
+        ? "exchange" as const
+        : replacementOrderId !== undefined
+          ? "original" as const
+          : "regular" as const;
+      const relatedOrderId = replacementExchange?.originalOrderId
+        ?? replacementOrderId
+        ?? null;
+      const parcelGrossMinor = replacementExchange
+        ? replacementExchange.settlementAmountMinor
+        : Math.round(order.totalPrice * 100);
 
       const shippingChargedMinor =
         Number.isSafeInteger(order.shippingCost) &&
@@ -361,17 +416,46 @@ async function loadUnsettledOrders(
         settledMinor,
         amountMinor,
         amount: amountMinor / 100,
+        payableMinor,
+        parcelType,
+        relatedOrderId,
+        parcelGrossMinor,
         shippingChargedMinor,
         deliveryCompanyCostMinor,
         deliveryMarginMinor,
       };
     })
-    .filter(
-      (order) => order.amountMinor > 0,
-    )
-    .sort((left, right) =>
-      left.id - right.id
-    );
+    .sort((left, right) => left.id - right.id);
+
+  const activeExchangeParcelIds = new Set(
+    mappedOrders
+      .filter(
+        (order) =>
+          order.parcelType === "exchange" &&
+          (order.amountMinor > 0 || order.payableMinor > 0),
+      )
+      .map((order) => order.id),
+  );
+
+  return {
+    // Keep the existing positive-only selection/settlement contract untouched.
+    unsettledOrders: mappedOrders.filter((order) => order.amountMinor > 0),
+    // Negative exchange parcels must remain visible for reconciliation,
+    // without silently turning them into a bank/cash receipt.
+    payableExchangeOrders: mappedOrders.filter(
+      (order) => order.parcelType === "exchange" && order.payableMinor > 0,
+    ),
+    // Previously collected originals are references only. Never add their
+    // original invoice totals back into the current outstanding balance.
+    settledOriginalParcels: mappedOrders.filter(
+      (order) =>
+        order.parcelType === "original" &&
+        order.relatedOrderId !== null &&
+        activeExchangeParcelIds.has(order.relatedOrderId) &&
+        order.amountMinor === 0 &&
+        order.settledMinor > 0,
+    ),
+  };
 }
 
 async function handleSummary(
@@ -410,7 +494,7 @@ async function handleSummary(
     );
   }
 
-  const unsettledOrders =
+  const { unsettledOrders, payableExchangeOrders, settledOriginalParcels } =
     await loadUnsettledOrders(
       db,
       companyId,
@@ -521,6 +605,8 @@ async function handleSummary(
     deliveryMarginMinor,
 
     unsettledOrders,
+    payableExchangeOrders,
+    settledOriginalParcels,
 
     settlements: settlements.map(
       (settlement) => {

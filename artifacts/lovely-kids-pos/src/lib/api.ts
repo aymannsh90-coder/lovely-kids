@@ -4204,6 +4204,13 @@ export interface PosDeliveryUnsettledOrder {
   createdAt: string;
   amountMinor: number;
   amount: number;
+  settledMinor: number;
+
+  // Each parcel is represented separately, even in an online exchange.
+  parcelType: "regular" | "original" | "exchange";
+  relatedOrderId: number | null;
+  parcelGrossMinor: number;
+  payableMinor: number;
 
   // التوصيل على الزبون، تكلفة الشركة، وصافي الربح/الخسارة.
   shippingChargedMinor: number;
@@ -4226,6 +4233,10 @@ export interface PosDeliverySettlementSummary {
   deliveryMarginMinor: number;
 
   unsettledOrders: PosDeliveryUnsettledOrder[];
+  // Read-only: negative exchange parcels are not cash/bank receipts.
+  payableExchangeOrders: PosDeliveryUnsettledOrder[];
+  // Historical reference rows: already paid originals linked to active exchanges.
+  settledOriginalParcels: PosDeliveryUnsettledOrder[];
   settlements: Array<{
     id: number;
     publicId: string;
