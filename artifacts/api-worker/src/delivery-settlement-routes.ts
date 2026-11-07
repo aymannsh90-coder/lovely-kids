@@ -162,7 +162,7 @@ async function loadUnsettledOrders(
     );
 
   if (orderRows.length === 0) {
-    return { unsettledOrders: [], payableExchangeOrders: [] };
+    return { unsettledOrders: [], payableExchangeOrders: [], settledOriginalParcels: [] };
   }
 
   const orderIds = orderRows.map(
@@ -241,7 +241,7 @@ async function loadUnsettledOrders(
     );
 
   if (financeRows.length === 0) {
-    return { unsettledOrders: [], payableExchangeOrders: [] };
+    return { unsettledOrders: [], payableExchangeOrders: [], settledOriginalParcels: [] };
   }
 
   const sourceIdByTransactionId =
@@ -263,7 +263,7 @@ async function loadUnsettledOrders(
   ];
 
   if (financeIds.length === 0) {
-    return { unsettledOrders: [], payableExchangeOrders: [] };
+    return { unsettledOrders: [], payableExchangeOrders: [], settledOriginalParcels: [] };
   }
 
   const lineRows = await db
