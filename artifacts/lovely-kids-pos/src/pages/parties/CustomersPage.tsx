@@ -198,15 +198,6 @@ export default function CustomersPage() {
       .catch(() => setBankAccounts([]));
   }, [token, user?.isOwner]);
 
-  useEffect(() => {
-    // Default to settling a credit whenever the selected customer owes nothing
-    // and has a positive amount to receive from the shop.
-    resetVoucherForm(
-      selected?.balanceMinor != null && selected.balanceMinor < 0
-        ? "payment" : "receipt",
-    );
-  }, [selectedId]);
-
   const selected =
     useMemo(
       () =>
@@ -219,6 +210,12 @@ export default function CustomersPage() {
         selectedId,
       ],
     );
+
+  useEffect(() => {
+    // The selection or its actual balance determines the initial voucher type.
+    // After a full refund the customer returns to receipt mode.
+    resetVoucherForm(selected && selected.balanceMinor < 0 ? "payment" : "receipt");
+  }, [selected?.id, selected?.balanceMinor]);
 
   async function loadCustomers(
     keepSelected = true,
@@ -478,7 +475,7 @@ export default function CustomersPage() {
         ? await createPosUnifiedPaymentVoucher(token, {
             partyType: "customer",
             partyId: selected.id,
-            amount: amountMinor.toFixed(0) === "0" ? "0.00" : (amountMinor / 100).toFixed(2),
+            amount: (amountMinor / 100).toFixed(2),
             paymentMethod,
             registerKey: session?.registerKey ?? POS_REGISTER_KEY,
             bankAccountId: paymentMethod === "bank" ? Number(paymentBankAccountId) : undefined,
