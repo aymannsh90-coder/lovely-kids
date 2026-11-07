@@ -552,7 +552,32 @@ export default function AdminOrdersScreen() {
   const params = useLocalSearchParams<{ orderId?: string | string[] }>();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [verifiedPickingIds, setVerifiedPickingIds] = useState<Set<number>>(new Set());
   const [now, setNow] = useState(Date.now());
+
+  // Optional verification is loaded separately: missing migration/API must never
+  // prevent the existing orders list and status workflows from working.
+  useEffect(() => {
+    if (!orders.length) { setVerifiedPickingIds(new Set()); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const response = await fetch(`${API_BASE}/api/orders/picking/summaries`, {
+          headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+        });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (!cancelled && Array.isArray(result?.verifiedIds)) {
+          setVerifiedPickingIds(new Set(
+            result.verifiedIds.filter((id: unknown) => Number.isSafeInteger(id) && Number(id) > 0),
+          ));
+        }
+      } catch { /* Verification display never blocks normal order management. */ }
+    })();
+    return () => { cancelled = true; };
+  }, [orders, getAuthToken]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOrders, setHasLoadedOrders] = useState(false);
@@ -4241,6 +4266,11 @@ export default function AdminOrdersScreen() {
                         </View>
                       ) : null}
 
+                      {verifiedPickingIds.has(item.id) && (
+                        <View style={[styles.newDot, { backgroundColor: "#15803D" }]}>
+                          <Text style={styles.newDotText}>✓ تم التحقق بالباركود</Text>
+                        </View>
+                      )}
                       {item.status === "new" && (
                         <View style={[styles.newDot, { backgroundColor: colors.primary }]}>
                           <Text style={styles.newDotText}>جديد</Text>
@@ -4976,6 +5006,31 @@ export default function AdminOrdersScreen() {
                         </Text>
                       </Pressable>
                     </View>
+
+                    {["new", "confirmed"].includes(item.status) &&
+                      item.mergedIntoOrderId == null && (
+                        <Pressable
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            router.push(`/admin/order-picking?orderId=${item.id}` as any);
+                          }}
+                          style={[styles.editOrderBtn, {
+                            backgroundColor: verifiedPickingIds.has(item.id) ? "#DCFCE7" : "#EFF6FF",
+                            borderColor: verifiedPickingIds.has(item.id) ? "#15803D" : "#2563EB",
+                            marginBottom: 10,
+                          }]}
+                        >
+                          <Ionicons name="scan-outline" size={19}
+                            color={verifiedPickingIds.has(item.id) ? "#15803D" : "#2563EB"} />
+                          <Text style={[styles.editOrderBtnText, {
+                            color: verifiedPickingIds.has(item.id) ? "#15803D" : "#1D4ED8",
+                          }]}>
+                            {verifiedPickingIds.has(item.id)
+                              ? "✓ تم الفحص بالباركود — عرض التفاصيل"
+                              : "تحضير الطلب — فحص QR / الباركود (اختياري)"}
+                          </Text>
+                        </Pressable>
+                      )}
 
                     {/* Contact Buttons */}
                     <View style={styles.contactBtns}>
