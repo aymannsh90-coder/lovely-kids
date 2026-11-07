@@ -4211,6 +4211,8 @@ export interface PosDeliveryUnsettledOrder {
   relatedOrderId: number | null;
   parcelGrossMinor: number;
   payableMinor: number;
+  accountedPayableMinor: number;
+  remainingPayableMinor: number;
 
   // التوصيل على الزبون، تكلفة الشركة، وصافي الربح/الخسارة.
   shippingChargedMinor: number;
@@ -4227,6 +4229,8 @@ export interface PosDeliverySettlementSummary {
   };
   outstandingMinor: number;
   outstanding: number;
+  grossOutstandingMinor: number;
+  exchangeOffsetsMinor: number;
 
   shippingChargedMinor: number;
   deliveryCompanyCostMinor: number;
@@ -4280,6 +4284,7 @@ export function createDeliveryCompanySettlement(
   companyId: number,
   input: {
     orderIds: number[];
+    exchangeOffsetOrderIds?: number[];
     receiptMethod: "cash" | "bank";
     notes?: string;
   },
