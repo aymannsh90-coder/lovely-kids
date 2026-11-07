@@ -676,8 +676,7 @@ export default {
       let orderResponse: Response | null;
       try {
         orderResponse = await handleOrderPickingRequest(request, db, env);
-        if (orderResponse) return orderResponse;
-        orderResponse = await handleOrderRequest(request, db, env);
+        if (!orderResponse) orderResponse = await handleOrderRequest(request, db, env);
       } catch (error) {
         console.error("ORDER_REQUEST_UNHANDLED_FAILURE", {
           method: request.method,
