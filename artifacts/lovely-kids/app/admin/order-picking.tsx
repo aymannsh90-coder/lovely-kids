@@ -172,11 +172,12 @@ export default function OrderPickingScreen() {
       const value = captureScannerKeyboardEvent(scannerKeyboardRef.current, event);
       if (value) {
         event.preventDefault();
+        event.stopPropagation();
         void scanBarcode(value);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [scanBarcode]);
 
   useEffect(() => {
