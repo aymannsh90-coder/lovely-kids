@@ -4234,6 +4234,8 @@ export interface PosDeliverySettlementSummary {
   unsettledOrders: PosDeliveryUnsettledOrder[];
   // Read-only: negative exchange parcels are not cash/bank receipts.
   payableExchangeOrders: PosDeliveryUnsettledOrder[];
+  // Historical reference rows: already paid originals linked to active exchanges.
+  settledOriginalParcels: PosDeliveryUnsettledOrder[];
   settlements: Array<{
     id: number;
     publicId: string;
