@@ -1614,6 +1614,7 @@ async function insertVoucher(
       | "supplier_refund"
       | "delivery_company_settlement"
       | "customer_cash_loan"
+      | "customer_refund"
       | "employee_advance"
       | "employee_payment"
       | "supplier_payment"
@@ -2505,6 +2506,17 @@ async function handlePartyVoucher(
                     partyId,
                 },
               );
+            if (voucherType === "payment") {
+              const customerBalanceMinor = await customerReceivableBalanceMinor(tx, partyId);
+              if (customerBalanceMinor >= 0 || amountMinor > -customerBalanceMinor) {
+                throw new VoucherError(
+                  "لا يمكن صرف مبلغ أكبر من الرصيد الدائن للزبون، أو صرف مبلغ لزبون لا يوجد له رصيد دائن",
+                  409,
+                );
+              }
+
+            }
+
             if (discountMinor > 0) {
               const dueMinor = await customerReceivableBalanceMinor(tx, partyId);
               try {
@@ -2677,7 +2689,7 @@ async function handlePartyVoucher(
                   ? "employee_repayment"
                   : "supplier_refund"
               : partyType === "customer"
-                ? "customer_cash_loan"
+                ? "customer_refund"
                 : partyType === "employee"
                   ? body.employeePaymentType === "payable"
                     ? "employee_payment"
@@ -3673,6 +3685,24 @@ async function handleReplaceUnifiedVoucher(
                 originalFinance.id,
               ),
             );
+
+          if (
+            voucher.voucherPurpose === "customer_refund" &&
+            voucher.partyId
+
+
+          ) {
+            await tx.select({ id: customersTable.id }).from(customersTable)
+              .where(eq(customersTable.id, voucher.partyId)).for("update");
+            const customerBalanceMinor = await customerReceivableBalanceMinor(tx, voucher.partyId);
+            if (customerBalanceMinor >= 0 || amountMinor > -customerBalanceMinor) {
+              throw new VoucherError("المبلغ الجديد أكبر من الرصيد الدائن للزبون", 409);
+            }
+
+
+          }
+
+
 
           if (
             voucher.voucherPurpose ===
