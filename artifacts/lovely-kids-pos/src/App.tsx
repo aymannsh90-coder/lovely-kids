@@ -216,7 +216,11 @@ export default function App() {
 
     const expected = session.expectedBalance ?? session.openingBalance;
 
-    setClosingBalance(expected.toFixed(2));
+    setClosingBalance(
+      session.balancesVisible === false || !Number.isFinite(expected)
+        ? ""
+        : expected.toFixed(2),
+    );
   }, [session]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {

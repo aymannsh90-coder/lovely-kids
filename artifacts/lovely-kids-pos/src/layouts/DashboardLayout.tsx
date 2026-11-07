@@ -344,6 +344,7 @@ export default function DashboardLayout() {
 
           {session && (
             <>
+              {session.balancesVisible !== false && <>
               <div className="session-banner-value session-balance-opening">
                 <span>رصيد البداية</span>
 
@@ -362,6 +363,8 @@ export default function DashboardLayout() {
                   )}
                 </strong>
               </div>
+
+              </>}
 
               <div className="session-banner-value">
                 <span>رقم الجلسة</span>

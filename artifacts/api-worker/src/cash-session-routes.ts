@@ -375,11 +375,29 @@ async function handleCurrentSession(
     registerKey,
   );
 
-  return json({
-    session: session
-      ? toCashSession(session)
-      : null,
-  });
+  if (!session) return json({ session: null });
+  const fullSession = toCashSession(session);
+  // A sale permission permits checking that a day is open, but must not expose
+  // the till amount unless the employee has the independent cash.view grant.
+  const balancesVisible = auth.user.isOwner || auth.user.isAdmin ||
+    await userHasPermission(db, auth.user, "cash.view");
+  if (!balancesVisible) {
+    return json({
+      session: {
+        ...fullSession,
+        balancesVisible: false,
+        openingBalanceMinor: 0,
+        openingBalance: 0,
+        closingBalanceMinor: null,
+        closingBalance: null,
+        expectedBalanceMinor: null,
+        expectedBalance: null,
+        openingNote: null,
+        closingNote: null,
+      },
+    });
+  }
+  return json({ session: { ...fullSession, balancesVisible: true } });
 }
 
 async function handleOpenSession(

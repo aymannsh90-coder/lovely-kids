@@ -26,6 +26,8 @@ export interface PosUser {
 
 export interface CashSession {
   id: string;
+  /** False means financial amounts were redacted by the API for this user. */
+  balancesVisible?: boolean;
   registerKey: string;
   businessDate: string;
   openedByUserId: string;

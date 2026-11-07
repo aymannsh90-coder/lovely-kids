@@ -500,7 +500,7 @@ export default function CashSessionPage() {
           <span>رصيد البداية</span>
 
           <strong>
-            {formatMoney(session.openingBalance, session.currencyCode)}
+            {session.balancesVisible === false ? "مخفي حسب الصلاحيات" : formatMoney(session.openingBalance, session.currencyCode)}
           </strong>
         </div>
 
@@ -508,7 +508,7 @@ export default function CashSessionPage() {
           <span>رصيد الصندوق الحالي</span>
 
           <strong>
-            {formatMoney(
+            {session.balancesVisible === false ? "مخفي حسب الصلاحيات" : formatMoney(
               session.expectedBalance ?? session.openingBalance,
               session.currencyCode,
             )}
