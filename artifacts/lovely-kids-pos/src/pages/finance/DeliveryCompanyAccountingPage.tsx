@@ -182,16 +182,14 @@ function buildDeliveryCompanyStatementDocument(
           <td>${escapeHtml(order.customerName || "—")}</td>
           <td class="money">${money(order.parcelGrossMinor)}</td>
           <td class="money">${money(order.deliveryCompanyCostMinor)}</td>
-          <td class="money strong">${money(-order.payableMinor)}</td>
+          <td class="money strong">${money(-order.remainingPayableMinor)}</td>
+          <td>${order.remainingPayableMinor > 0 ? "خصم على الكشف الحالي" : "محسوم في كشف سابق"}</td>
         </tr>
       `,
     )
     .join("");
 
-  const payableExchangeMinor = summary.payableExchangeOrders.reduce(
-    (total, order) => total + order.payableMinor,
-    0,
-  );
+  const payableExchangeMinor = summary.exchangeOffsetsMinor;
 
   const settlementRows =
     summary.settlements.length === 0
@@ -437,12 +435,18 @@ function buildDeliveryCompanyStatementDocument(
     </colgroup>
     <tbody>
       <tr>
-        <td class="label">المبلغ غير المسوّى</td>
+        <td class="label">صافي المستحق بعد خصم التبديلات</td>
         <td class="money strong">${money(
           summary.outstandingMinor,
         )}</td>
         <td class="label">طلبات غير مسوّاة</td>
         <td>${summary.unsettledOrders.length} (دون قيود التبديل السالبة)</td>
+      </tr>
+      <tr>
+        <td class="label">الإجمالي الموجب قبل خصم التبديلات</td>
+        <td class="money">${money(summary.grossOutstandingMinor)}</td>
+        <td class="label">خصومات التبديل الحالية</td>
+        <td class="money">${money(-summary.exchangeOffsetsMinor)}</td>
       </tr>
       <tr>
         <td class="label">إيراد التوصيل من الزبائن</td>
@@ -519,6 +523,14 @@ function buildDeliveryCompanyStatementDocument(
                 totals.amountMinor,
               )}</td>
             </tr>
+            <tr>
+              <td colspan="10">خصومات التبديلات الحالية (دون المحسومة سابقًا)</td>
+              <td class="money">${money(-summary.exchangeOffsetsMinor)}</td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="10">الصافي المستحق فعليًا</td>
+              <td class="money">${money(summary.outstandingMinor)}</td>
+            </tr>
           `
           : ""
       }
@@ -566,13 +578,14 @@ function buildDeliveryCompanyStatementDocument(
         <th>الزبون</th>
         <th>قيمة طرد التبديل</th>
         <th>تكلفة الشركة</th>
-        <th>صافي المبلغ لصالح الشركة</th>
+        <th>صافي الخصم الحالي</th>
+        <th>حالة الخصم</th>
       </tr>
     </thead>
     <tbody>
-      ${payableExchangeRows || '<tr><td colspan="6">لا توجد قيود تبديل سالبة.</td></tr>'}
+      ${payableExchangeRows || '<tr><td colspan="7">لا توجد قيود تبديل سالبة.</td></tr>'}
       ${payableExchangeRows
-        ? `<tr class="total-row"><td colspan="5">الإجمالي للمطابقة فقط</td><td class="money">${money(-payableExchangeMinor)}</td></tr>`
+        ? `<tr class="total-row"><td colspan="5">خصومات التبديل الحالية فقط</td><td class="money">${money(-payableExchangeMinor)}</td><td>لا يشمل المحسومة سابقًا</td></tr>`
         : ""}
     </tbody>
   </table>
