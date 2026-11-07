@@ -605,6 +605,26 @@ async function handleSummary(
           )
       : [];
 
+  const exchangeOffsetRows = settlementIds.length > 0
+    ? await db
+        .select({
+          settlementId: deliveryCompanyExchangeOffsetsTable.settlementId,
+          orderId: deliveryCompanyExchangeOffsetsTable.orderId,
+          amountMinor: deliveryCompanyExchangeOffsetsTable.amountMinor,
+          status: deliveryCompanyExchangeOffsetsTable.status,
+        })
+        .from(deliveryCompanyExchangeOffsetsTable)
+        .where(inArray(deliveryCompanyExchangeOffsetsTable.settlementId, settlementIds))
+    : [];
+
+  const offsetsBySettlement = new Map<number, typeof exchangeOffsetRows>();
+  for (const offset of exchangeOffsetRows) {
+    if (offset.settlementId === null) continue;
+    const list = offsetsBySettlement.get(offset.settlementId) ?? [];
+    list.push(offset);
+    offsetsBySettlement.set(offset.settlementId, list);
+  }
+
   const itemsBySettlement =
     new Map<number, typeof itemRows>();
 
@@ -668,9 +688,13 @@ async function handleSummary(
           orders: items.map((item) => ({
             orderId: item.orderId,
             amountMinor: item.amountMinor,
-            amount:
-              item.amountMinor / 100,
+            amount: item.amountMinor / 100,
             status: item.status,
+          })),
+          exchangeOffsets: (offsetsBySettlement.get(settlement.id) ?? []).map((offset) => ({
+            orderId: offset.orderId,
+            amountMinor: offset.amountMinor,
+            status: offset.status,
           })),
         };
       },
