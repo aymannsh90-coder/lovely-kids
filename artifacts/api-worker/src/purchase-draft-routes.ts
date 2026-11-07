@@ -8,6 +8,7 @@ import {
 import { and, asc, eq } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   appendProductToSupplierDraft,
@@ -76,7 +77,13 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  const path = new URL(request.url).pathname;
+  const draftPath = path === "/api/pos/purchases/draft" ||
+    path === "/api/pos/purchases/draft/append-item" ||
+    path === "/api/pos/purchases/draft/append-historical-product" ||
+    path === "/api/pos/purchases/draft/remove-historical-item";
+  const allowed = !user.isAdmin && draftPath && await userHasPermission(db, user, "purchases.create");
+  if (!user.isOwner && !allowed) {
     return {
       ok: false,
       response: json(

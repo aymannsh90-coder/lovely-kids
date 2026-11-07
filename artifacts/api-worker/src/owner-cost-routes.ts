@@ -31,6 +31,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasAnyPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 import { handleOwnerCostQualityAttestation } from "./owner-cost-quality-attestation";
 import { getProductQuantity } from "./product-quantity";
@@ -56,7 +57,10 @@ async function requireOwner(
     env,
   );
 
-  if (!owner?.isOwner) {
+  const allowedRead = owner && !owner.isAdmin && request.method === "GET" &&
+    new URL(request.url).pathname === "/api/owner/costs/products" &&
+    await userHasAnyPermission(db, owner, ["inventory.cost", "reports.cost"]);
+  if (!owner?.isOwner && !allowedRead) {
     return {
       ok: false as const,
       response: json(

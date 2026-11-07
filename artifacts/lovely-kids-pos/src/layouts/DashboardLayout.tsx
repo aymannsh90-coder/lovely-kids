@@ -86,9 +86,9 @@ const menuSections: MenuSection[] = [
 // page guard. This is presentation only: API handlers enforce permissions.
 function canSeeNavigationItem(item: PosNavigationItem, user: PosUser | null) {
   if (!user) return false;
-  if (item.group === "purchases" && !user.isOwner) return false;
-  if ((item.group === "vouchers" || item.group === "discounts") && !user.isOwner) return false;
-  if (item.ownerOnly && !user.isOwner) return false;
+  if (item.group === "discounts" && !user.isOwner) return false;
+  if (item.ownerOnly && !user.isOwner && item.path !== "/purchases/returns") return false;
+  if (item.group === "purchases" && !user.isOwner && !canVisitStaffPage(item.path, user.permissions ?? [])) return false;
   return user.isOwner || user.isAdmin || canVisitStaffPage(item.path, user.permissions ?? []);
 }
 
@@ -183,7 +183,7 @@ export default function DashboardLayout() {
               <span>{pageDescription}</span>
             </div>
 
-            {(user?.isOwner || user?.isAdmin || ["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(permission => user?.permissions?.includes(permission))) && <div className="pos-shamel-session-state">
+            {(user?.isOwner || user?.isAdmin || ["cash.view", "cash.open", "cash.close", "sales.create", "sales.view", "sales.edit", "sales.void", "sales.returns", "sales.exchange", "sales.exchange.online", "vouchers.create"].some(permission => user?.permissions?.includes(permission))) && <div className="pos-shamel-session-state">
               <span
                 className={
                   session
@@ -323,7 +323,7 @@ export default function DashboardLayout() {
 
         <section
           hidden={isAdminPanel || (!user?.isOwner && !user?.isAdmin &&
-            !["cash.view", "cash.open", "cash.close", "sales.create", "sales.exchange", "sales.exchange.online"].some(
+            !["cash.view", "cash.open", "cash.close", "sales.create", "sales.view", "sales.edit", "sales.void", "sales.returns", "sales.exchange", "sales.exchange.online", "vouchers.create"].some(
               permission => user?.permissions?.includes(permission),
             ))}
           className={
@@ -344,6 +344,7 @@ export default function DashboardLayout() {
 
           {session && (
             <>
+              {session.balancesVisible !== false && <>
               <div className="session-banner-value session-balance-opening">
                 <span>رصيد البداية</span>
 
@@ -362,6 +363,8 @@ export default function DashboardLayout() {
                   )}
                 </strong>
               </div>
+
+              </>}
 
               <div className="session-banner-value">
                 <span>رقم الجلسة</span>

@@ -16,6 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 
@@ -100,7 +101,13 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  const staffAuthorized = !user.isAdmin && request.method === "GET" &&
+    new URL(request.url).pathname === "/api/pos/finance/card-settlements" &&
+    await userHasPermission(db, user, "banking.view");
+  const staffCreate = !user.isAdmin && request.method === "POST" &&
+    new URL(request.url).pathname === "/api/pos/finance/card-settlements" &&
+    await userHasPermission(db, user, "banking.create");
+  if (!user.isOwner && !staffAuthorized && !staffCreate) {
     return {
       ok: false as const,
       response: json(

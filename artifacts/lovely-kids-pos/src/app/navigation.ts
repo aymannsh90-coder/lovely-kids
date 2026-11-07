@@ -85,6 +85,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "staff-online-orders",
+    group: "sales",
+    path: "/orders",
+    title: "الطلبات الإلكترونية",
+    description: "قائمة الطلبات وحالاتها وفق صلاحيات الموظف.",
+    icon: "📦",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "manual-online-order",
     group: "sales",
     path: "/sales/manual-order",
@@ -122,6 +132,16 @@ export const posNavigation: PosNavigationItem[] = [
     description: "مرتجع بباركود الفاتورة أو باركود الصنف.",
     icon: "↩️",
     requiresOpenSession: true,
+    status: "ready",
+  },
+  {
+    key: "purchase-history",
+    group: "purchases",
+    path: "/purchases/history",
+    title: "سجل فواتير المشتريات",
+    description: "عرض الفواتير ومراجعة تكاليف الشراء دون تعديل.",
+    icon: "📒",
+    requiresOpenSession: false,
     status: "ready",
   },
   {
@@ -477,7 +497,6 @@ export const posNavigation: PosNavigationItem[] = [
     description: "كشف كامل لحركات المورد والدفعات والرصيد مع طباعة A4.",
     icon: "🚚",
     requiresOpenSession: false,
-    ownerOnly: true,
     status: "ready",
   },
   {

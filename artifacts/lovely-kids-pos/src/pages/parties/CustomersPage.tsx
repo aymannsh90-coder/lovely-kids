@@ -72,9 +72,15 @@ export default function CustomersPage() {
 
   const {
     token,
+    user,
     session,
     clearAuthentication,
   } = usePosRuntime();
+  const canEditCustomers = Boolean(user?.isOwner || user?.isAdmin ||
+    (user?.staffEnabled && user?.permissions?.includes("parties.edit")));
+  const canSell = Boolean(user?.isOwner || user?.isAdmin ||
+    (user?.staffEnabled && user?.permissions?.includes("sales.create")));
+
 
   const [
     customers,
@@ -299,6 +305,7 @@ export default function CustomersPage() {
       FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+    if (!canEditCustomers) return;
 
     if (!newName.trim()) {
       setError(
@@ -500,7 +507,7 @@ export default function CustomersPage() {
           </p>
         </div>
 
-        <button
+        {canEditCustomers && <button
           type="button"
           className="primary-button"
           onClick={() =>
@@ -511,7 +518,7 @@ export default function CustomersPage() {
           }
         >
           + زبون جديد
-        </button>
+        </button>}
       </div>
 
       {error && (
@@ -539,7 +546,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {showNew && (
+      {showNew && canEditCustomers && (
         <form
           className="lk-parties-create-form"
           onSubmit={
@@ -834,7 +841,7 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div
+                {canSell && <div
                   style={{
                     display: "flex",
                     gap: 10,
@@ -867,10 +874,10 @@ export default function CustomersPage() {
                       لإنشاء فاتورة بيع.
                     </span>
                   )}
-                </div>
+                </div>}
               </article>
 
-              <article
+              {user?.isOwner && <article
                 className="lk-parties-receipt-card"
                 style={{
                   padding: 18,
@@ -1047,7 +1054,7 @@ export default function CustomersPage() {
                       : "حفظ سند القبض"}
                   </button>
                 </form>
-              </article>
+              </article>}
 
               <article
                 className="lk-parties-ledger-card"

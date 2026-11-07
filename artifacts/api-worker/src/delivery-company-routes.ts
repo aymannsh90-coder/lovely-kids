@@ -4,6 +4,7 @@ import {
 import { asc, eq } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -42,7 +43,9 @@ async function requireAdmin(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner &&
+      !(request.method === "GET" && new URL(request.url).pathname === "/api/delivery-companies" &&
+        await userHasPermission(db, user, "delivery.view"))) {
     return {
       ok: false as const,
       response: json(

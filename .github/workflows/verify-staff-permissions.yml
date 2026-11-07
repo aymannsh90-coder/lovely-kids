@@ -1,0 +1,72 @@
+name: Verify POS staff permissions
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/**'
+      - 'artifacts/lovely-kids-pos/src/**'
+      - '.github/workflows/verify-staff-permissions.yml'
+  workflow_dispatch:
+jobs:
+  permission-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test staff grant isolation and disabled accounts
+        run: node --experimental-strip-types --test artifacts/api-worker/src/staff-permissions.test.mjs
+      - name: Typecheck API worker
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: Typecheck POS
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Build POS for Cloudflare Pages
+        run: pnpm --filter @workspace/lovely-kids-pos build
+
+  staff-postgres-acceptance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: staff_permissions_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d staff_permissions_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: staff_permissions_test
+      STAFF_PERMISSIONS_DISPOSABLE_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run true staff auth handlers and migration against disposable Postgres
+        run: node --test artifacts/api-worker/src/staff-access-integration.test.cjs

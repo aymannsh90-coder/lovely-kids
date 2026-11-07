@@ -100,6 +100,7 @@ export default function UnifiedPartyVoucherPage({
 
   const {
     token,
+    user,
     session,
     setSession,
     clearAuthentication,
@@ -243,13 +244,9 @@ export default function UnifiedPartyVoucherPage({
                 "active",
             },
           ),
-          getPosEmployees(
-            token,
-            {
-              status:
-                "active",
-            },
-          ),
+          user?.isOwner
+            ? getPosEmployees(token, { status: "active" })
+            : Promise.resolve({ results: [] as PosEmployee[] }),
           getPosSuppliers(
             token,
             {
@@ -257,9 +254,7 @@ export default function UnifiedPartyVoucherPage({
                 "active",
             },
           ),
-          getDeliveryCompanies(
-            token,
-          ),
+          getDeliveryCompanies(token).catch(() => [] as PosDeliveryCompany[]),
           getPosExpenseCategories(
             token,
           ),

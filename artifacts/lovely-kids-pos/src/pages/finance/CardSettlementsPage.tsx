@@ -110,8 +110,12 @@ function processorLabel(
 export default function CardSettlementsPage() {
   const {
     token,
+    user,
     clearAuthentication,
   } = usePosRuntime();
+  const canCreateSettlements = Boolean(user?.isOwner ||
+    (user?.staffEnabled && !user?.isAdmin && user?.permissions?.includes("banking.create")));
+
 
   const [
     data,
@@ -343,6 +347,7 @@ export default function CardSettlementsPage() {
       FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+    if (!canCreateSettlements) return;
 
     if (
       !terminal ||
@@ -512,6 +517,7 @@ export default function CardSettlementsPage() {
     publicId: string,
     transactionId: number,
   ) {
+    if (!user?.isOwner) return;
     const reason =
       window.prompt(
         `سبب إلغاء التسوية ${publicId}:`,
@@ -846,7 +852,7 @@ export default function CardSettlementsPage() {
         )}
       </div>
 
-      <form
+      {canCreateSettlements && <form
         className="lk-finance-payment-form"
         onSubmit={
           handleSubmit
@@ -1064,7 +1070,7 @@ export default function CardSettlementsPage() {
             ? "جاري تسجيل التسوية…"
             : "تسجيل التسوية"}
         </button>
-      </form>
+      </form>}
 
       <div
         className="lk-finance-section-heading"
@@ -1222,7 +1228,7 @@ export default function CardSettlementsPage() {
                       {item
                         .transaction
                         .status ===
-                      "posted" ? (
+                      "posted" && user?.isOwner ? (
                         <button
                           type="button"
                           className="secondary-button"

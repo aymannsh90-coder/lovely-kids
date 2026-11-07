@@ -71,10 +71,13 @@ async function requirePosUser(
   const path = new URL(request.url).pathname;
   const isAllowedStaffRead = request.method === "GET" &&
     (path === "/api/pos/suppliers"
-      ? await userHasAnyPermission(db, user, ["parties.view", "reports.financial"])
+      ? await userHasAnyPermission(db, user, ["parties.view", "parties.edit", "reports.financial", "purchases.create", "purchases.view", "vouchers.create", "vouchers.view", "vouchers.void"])
       : /^\/api\/pos\/suppliers\/\d+\/ledger$/.test(path) &&
         await userHasPermission(db, user, "reports.financial"));
-  if (!user.isAdmin && !user.isOwner && !isAllowedStaffRead) {
+  const isAllowedStaffWrite = request.method === "POST" &&
+    path === "/api/pos/suppliers" &&
+    await userHasPermission(db, user, "parties.edit");
+  if (!user.isAdmin && !user.isOwner && !isAllowedStaffRead && !isAllowedStaffWrite) {
     return {
       ok: false,
       response: json(
@@ -347,8 +350,10 @@ async function handleListSuppliers(
     .orderBy(asc(suppliersTable.name))
     .limit(500);
 
+  const canSeeFinance = auth.user.isOwner ||
+    (!auth.user.isAdmin && await userHasPermission(db, auth.user, "reports.financial"));
   const financeBySupplier =
-    auth.user.isOwner
+    canSeeFinance
       ? await getSupplierFinanceSummaries(db)
       : new Map<number, SupplierFinanceSummary>();
 
@@ -383,7 +388,7 @@ async function handleListSuppliers(
         supplier,
         financeBySupplier.get(supplier.id) ??
           EMPTY_SUPPLIER_FINANCE,
-        auth.user.isOwner,
+        canSeeFinance,
       ),
     ),
   });

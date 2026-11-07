@@ -16,6 +16,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
 
@@ -277,7 +278,16 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  const path = new URL(request.url).pathname;
+  const readOnly = request.method === "GET" &&
+    ["/api/pos/finance/cash-accounts", "/api/pos/finance/currency-conversions", "/api/pos/finance/transfers"].includes(path);
+  const allowedWrite = request.method === "POST" &&
+    ["/api/pos/finance/cash-accounts", "/api/pos/finance/currency-conversions", "/api/pos/finance/transfers"].includes(path);
+  const staffAuthorized = !user.isAdmin && (
+    (readOnly && await userHasAnyPermission(db, user, ["banking.view", "banking.create", "vouchers.create"])) ||
+    (allowedWrite && await userHasPermission(db, user, "banking.create"))
+  );
+  if (!user.isOwner && !staffAuthorized) {
     return {
       ok: false,
       response: json(

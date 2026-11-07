@@ -98,6 +98,11 @@ export default function BankingPage() {
     user,
     clearAuthentication,
   } = usePosRuntime();
+  const canViewBanking = Boolean(user?.isOwner ||
+    (user?.staffEnabled && (user?.permissions?.includes("banking.view") || user?.permissions?.includes("banking.create"))));
+  const canCreateBanking = Boolean(user?.isOwner ||
+    (user?.staffEnabled && !user?.isAdmin && user?.permissions?.includes("banking.create")));
+
 
   const [
     currencies,
@@ -303,7 +308,7 @@ export default function BankingPage() {
 
     try {
       const cashPromise =
-        user?.isOwner
+        canViewBanking
           ? getPosFinanceCashAccounts(
               token,
             )
@@ -313,7 +318,7 @@ export default function BankingPage() {
             });
 
       const transferPromise =
-        user?.isOwner
+        canViewBanking
           ? getPosFinanceTransfers(
               token,
             )
@@ -323,7 +328,7 @@ export default function BankingPage() {
             });
 
       const conversionPromise =
-        user?.isOwner
+        canViewBanking
           ? getPosCurrencyConversions(
               token,
             )
@@ -418,7 +423,7 @@ export default function BankingPage() {
     void loadData();
   }, [
     token,
-    user?.isOwner,
+    canViewBanking,
   ]);
 
   const currencyByCode =
@@ -672,7 +677,7 @@ export default function BankingPage() {
 
   useEffect(() => {
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       conversionCashAccounts.length ===
         0
     ) {
@@ -747,7 +752,7 @@ export default function BankingPage() {
 
   useEffect(() => {
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       transferAccounts.length ===
         0
     ) {
@@ -816,7 +821,7 @@ export default function BankingPage() {
     currencyCode: string,
   ) {
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       rateSaving
     ) {
       return;
@@ -883,7 +888,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       saving
     ) {
       return;
@@ -965,7 +970,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       cashAccountSaving
     ) {
       return;
@@ -1258,7 +1263,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       conversionSaving
     ) {
       return;
@@ -1559,7 +1564,7 @@ export default function BankingPage() {
     event.preventDefault();
 
     if (
-      !user?.isOwner ||
+      !canCreateBanking ||
       transferSaving
     ) {
       return;
@@ -1924,7 +1929,7 @@ export default function BankingPage() {
         </div>
       )}
 
-      {user?.isOwner && (
+      {canViewBanking && (
         <>
           <section className="banking-section banking-transfer-section">
             <div className="banking-section-title">
@@ -1944,7 +1949,7 @@ export default function BankingPage() {
               </span>
             </div>
 
-            <form
+            {canCreateBanking && <form
               className="banking-transfer-form"
               onSubmit={
                 createCurrencyConversion
@@ -2158,7 +2163,7 @@ export default function BankingPage() {
                   ? "جاري تحويل العملة…"
                   : "تنفيذ تحويل العملة"}
               </button>
-            </form>
+            </form>}
 
             {conversionFromAccount &&
               conversionToAccount &&
@@ -2352,7 +2357,7 @@ export default function BankingPage() {
                                 </span>
                               </td>
                               <td>
-                                {isReversed ? (
+                                {isReversed || !user?.isOwner ? (
                                   <span className="banking-transfer-locked">
                                     محفوظ
                                   </span>
@@ -2411,7 +2416,7 @@ export default function BankingPage() {
               <div className="banking-empty">
                 أضف حسابًا بنكيًا أو صندوقًا فرعيًا حتى تتمكن من تنفيذ التحويلات.
               </div>
-            ) : (
+            ) : canCreateBanking ? (
               <form
                 className="banking-transfer-form"
                 onSubmit={
@@ -2625,7 +2630,7 @@ export default function BankingPage() {
                     : "تنفيذ التحويل"}
                 </button>
               </form>
-            )}
+            ) : null}
           </section>
 
           <section className="banking-section">
@@ -2747,7 +2752,7 @@ export default function BankingPage() {
                               : `لا توجد جلسة ${account.currencyCode} مفتوحة — الرصيد المعروض دفتري.`}
                           </small>
 
-                          <button
+                          {user?.isOwner && <button
                             type="button"
                             className="secondary-button"
                             disabled={
@@ -2770,7 +2775,7 @@ export default function BankingPage() {
                               : account.cashSessionId
                                 ? "إغلاق جلسة الصندوق"
                                 : "فتح جلسة الصندوق"}
-                          </button>
+                          </button>}
                         </div>
                       )}
                     </article>
@@ -2779,7 +2784,7 @@ export default function BankingPage() {
               </div>
             )}
 
-            <form
+            {canCreateBanking && <form
               className="banking-cash-create-form"
               onSubmit={
                 createCashAccount
@@ -2899,7 +2904,7 @@ export default function BankingPage() {
                   ? "جاري الإضافة…"
                   : "إضافة صندوق فرعي"}
               </button>
-            </form>
+            </form>}
           </section>
 
           <section className="banking-section">
@@ -3046,7 +3051,7 @@ export default function BankingPage() {
                               </span>
                             </td>
                             <td>
-                              {isReversed ? (
+                              {isReversed || !user?.isOwner ? (
                                 <span className="banking-transfer-locked">
                                   محفوظ
                                 </span>
@@ -3176,7 +3181,7 @@ export default function BankingPage() {
                         : "لم يتم تحديد سعر بعد"}
                     </small>
 
-                    {user?.isOwner && (
+                    {canCreateBanking && (
                       <button
                         type="button"
                         className="primary-button"
@@ -3240,7 +3245,7 @@ export default function BankingPage() {
         </div>
       </section>
 
-      {user?.isOwner && (
+      {canCreateBanking && (
         <section className="banking-section">
           <div className="banking-section-title">
             <div>
@@ -3253,7 +3258,7 @@ export default function BankingPage() {
             </div>
           </div>
 
-          <form
+          {canCreateBanking && <form
             className="banking-account-form"
             onSubmit={
               createAccount
@@ -3472,7 +3477,7 @@ export default function BankingPage() {
                 ? "جاري الإضافة…"
                 : "إضافة الحساب"}
             </button>
-          </form>
+          </form>}
         </section>
       )}
 

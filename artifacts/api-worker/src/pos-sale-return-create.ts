@@ -18,6 +18,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   ensureCustomerReceivableControlAccount,
@@ -106,7 +107,7 @@ async function requirePosUser(
     };
   }
 
-  if (!user.isAdmin && !user.isOwner) {
+  if (!user.isAdmin && !user.isOwner && !(await userHasPermission(db, user, "sales.returns"))) {
     return {
       ok: false,
       response: json(

@@ -27,7 +27,7 @@ import {
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
-import { userHasAnyPermission, type StaffPermission } from "./staff-permissions";
+import { userHasAnyPermission, userHasPermission, type StaffPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
@@ -116,11 +116,13 @@ async function requirePosUser(
     const method = request.method;
     let required: StaffPermission[] = [];
     if (method === "GET" && (path === "/api/pos/products/search" || path === "/api/pos/products/by-barcode" || path === "/api/pos/sales/cash-currencies")) {
-      required = ["sales.create", "sales.exchange"];
+      required = ["sales.create", "sales.exchange", "purchases.create", "inventory.view", "inventory.edit", "sales.returns"];
     } else if (method === "GET" && path === "/api/pos/inventory/product-card") {
       required = ["inventory.view"];
-    } else if (method === "GET" && (path === "/api/pos/sales/today" || path === "/api/pos/sales/by-public-id")) {
+    } else if (method === "GET" && path === "/api/pos/sales/today") {
       required = ["sales.view"];
+    } else if (method === "GET" && path === "/api/pos/sales/by-public-id") {
+      required = ["sales.view", "sales.exchange", "sales.exchange.online", "sales.returns", "sales.edit", "sales.void"];
     } else if (method === "POST" && path === "/api/pos/sales") {
       required = ["sales.create"];
     } else if (method === "POST" && path === "/api/pos/sales/void") {
@@ -1590,7 +1592,9 @@ async function handleInventoryProductCard(
       }
     | null = null;
 
-  if (auth.user.isOwner) {
+  const canReadInventoryCost = auth.user.isOwner ||
+    (!auth.user.isAdmin && await userHasPermission(db, auth.user, "inventory.cost"));
+  if (canReadInventoryCost) {
     const costRows = await db
       .select({
         quantityOnHand: productCostStateTable.quantityOnHand,
@@ -1638,7 +1642,7 @@ async function handleInventoryProductCard(
     ),
     movements,
     suppliers,
-    ...(auth.user.isOwner ? { cost: ownerCost } : {}),
+    ...(canReadInventoryCost ? { cost: ownerCost } : {}),
   });
 }
 

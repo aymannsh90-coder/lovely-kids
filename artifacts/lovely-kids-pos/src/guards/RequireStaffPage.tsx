@@ -7,27 +7,62 @@ import { usePosRuntime } from "../app/pos-context";
 export function canVisitStaffPage(path: string, permissions: string[]): boolean {
   const byPath: Record<string, string[]> = {
     "/sales/pos": ["sales.create"],
+    "/sales/manual-order": ["orders.create"],
+    "/orders": ["orders.view", "orders.edit", "orders.cancel"],
     "/sales/exchange": ["sales.exchange", "sales.exchange.online"],
     "/sales/mobile": ["sales.create"],
     "/sales/mobile/price-check": ["sales.create"],
     "/sales/mobile/manual-order": ["orders.create"],
     "/sales/mobile/returns": ["sales.returns"],
+    "/sales/returns": ["sales.returns"],
     "/sales/today": ["sales.view"],
-    "/sales/invoice-check": ["sales.view"],
+    "/sales/invoice-check": ["sales.view", "sales.edit", "sales.void", "sales.returns"],
     "/cash-session": ["cash.view", "cash.open", "cash.close"],
     "/inventory/product-card": ["inventory.view"],
+    "/inventory/products": ["inventory.view", "inventory.edit"],
+    "/inventory/products/new": ["inventory.edit"],
+    "/inventory/stock-check": ["inventory.view", "inventory.edit"],
+    "/purchases/new": ["purchases.create"],
+    "/purchases/history": ["purchases.view", "purchases.create"],
+    "/purchases/returns": ["purchases.view", "purchases.returns", "purchases.returns.void"],
+    "/parties/customers": ["parties.view", "parties.edit"],
+    "/parties/suppliers": ["parties.view", "parties.edit", "purchases.view", "purchases.create"],
+    "/vouchers/receipt": ["vouchers.create"],
+    "/vouchers/payment": ["vouchers.create"],
+    "/vouchers/journal": ["vouchers.create"],
+    "/vouchers/register": ["vouchers.view", "vouchers.void"],
+    "/finance/banking": ["banking.view", "banking.create"],
+    "/finance/card-settlements": ["banking.view", "banking.create"],
+    "/finance/checks": ["banking.view", "banking.create"],
+    "/finance/expenses": ["vouchers.create"],
+    "/finance/delivery-company": ["delivery.view"],
     "/statements": ["reports.financial"],
     "/reports/trial-balance": ["reports.financial"],
     "/reports/receivables-liquidity": ["reports.financial"],
     "/reports/customer-balances": ["reports.financial"],
     "/reports/customer-statement": ["reports.financial"],
     "/reports/supplier-statement": ["reports.financial"],
+    "/reports": ["reports.cost"],
+    "/reports/sales": ["reports.cost"],
+    "/reports/product-analytics": ["reports.sales"],
+    "/reports/inventory-intelligence": ["reports.cost"],
+    "/reports/inventory-valuation": ["reports.cost", "inventory.cost"],
+    "/reports/financial-statements": ["reports.financial", "reports.cost"],
   };
-  return (byPath[path] ?? []).some(p => permissions.includes(p));
+  const required = /^\/inventory\/products\/\d+\/edit$/.test(path)
+    ? ["inventory.edit"]
+    : byPath[path] ?? [];
+  if (path === "/reports/financial-statements") {
+    return permissions.includes("reports.financial") && permissions.includes("reports.cost");
+  }
+  return required.some(p => permissions.includes(p));
 }
 
 const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["sales.create", "/sales/pos"],
+  ["sales.returns", "/sales/returns"],
+  ["sales.edit", "/sales/invoice-check"],
+  ["sales.void", "/sales/invoice-check"],
   ["sales.exchange", "/sales/exchange"],
   ["sales.exchange.online", "/sales/exchange"],
   ["reports.financial", "/reports/trial-balance"],
@@ -35,7 +70,26 @@ const preferredStaffLandingRoutes: Array<[string, string]> = [
   ["cash.view", "/cash-session"],
   ["cash.open", "/cash-session"],
   ["cash.close", "/cash-session"],
-  ["inventory.view", "/inventory/product-card"],
+  ["inventory.view", "/inventory/products"],
+  ["inventory.edit", "/inventory/products"],
+  ["purchases.create", "/purchases/new"],
+  ["purchases.view", "/purchases/history"],
+  ["purchases.returns", "/purchases/returns"],
+  ["purchases.returns.void", "/purchases/returns"],
+  ["parties.view", "/parties/customers"],
+  ["parties.edit", "/parties/customers"],
+  ["vouchers.view", "/vouchers/register"],
+  ["vouchers.void", "/vouchers/register"],
+  ["vouchers.create", "/vouchers/receipt"],
+  ["banking.view", "/finance/banking"],
+  ["banking.create", "/finance/banking"],
+  ["delivery.view", "/finance/delivery-company"],
+  ["orders.view", "/orders"],
+  ["orders.edit", "/orders"],
+  ["orders.cancel", "/orders"],
+  ["orders.create", "/sales/manual-order"],
+  ["reports.sales", "/reports/product-analytics"],
+  ["reports.cost", "/reports"],
 ];
 
 export function firstAuthorizedStaffPage(permissions: string[]): string | null {
