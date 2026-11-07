@@ -100,6 +100,10 @@ function voucherLabel(voucher: PosFinanceVoucher) {
     return "سند قبض / شركة توصيل";
   }
 
+  if (voucher.voucherPurpose === "customer_refund") {
+    return "سند صرف / تسوية رصيد دائن للزبون";
+  }
+
   if (voucher.voucherPurpose === "customer_cash_loan") {
     return "سند صرف / زبون على الحساب";
   }
