@@ -3,6 +3,7 @@ import {
   deliveryCompaniesTable,
   deliveryCompanySettlementItemsTable,
   deliveryCompanySettlementsTable,
+  deliveryCompanyExchangeOffsetsTable,
   exchangeDocumentsTable,
   financeAccountsTable,
   financeTransactionLinesTable,
@@ -21,6 +22,10 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import {
+  remainingExchangePayableMinor,
+  netCourierReceivableMinor,
+} from "./delivery-exchange-offset-math";
 import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 
@@ -189,6 +194,27 @@ async function loadUnsettledOrders(
         ),
       ),
     );
+
+  const offsetRows = await db
+    .select({
+      orderId: deliveryCompanyExchangeOffsetsTable.orderId,
+      amountMinor: deliveryCompanyExchangeOffsetsTable.amountMinor,
+    })
+    .from(deliveryCompanyExchangeOffsetsTable)
+    .where(
+      and(
+        eq(deliveryCompanyExchangeOffsetsTable.deliveryCompanyId, companyId),
+        inArray(deliveryCompanyExchangeOffsetsTable.orderId, orderIds),
+        inArray(deliveryCompanyExchangeOffsetsTable.status, ["historical", "posted"]),
+      ),
+    );
+  const accountedPayableMinorByOrderId = new Map<number, number>();
+  for (const offset of offsetRows) {
+    accountedPayableMinorByOrderId.set(
+      offset.orderId,
+      (accountedPayableMinorByOrderId.get(offset.orderId) ?? 0) + offset.amountMinor,
+    );
+  }
 
   const settledMinorByOrderId =
     new Map<number, number>();
@@ -380,6 +406,8 @@ async function loadUnsettledOrders(
 
       const amountMinor = Math.max(0, grossReceivableMinor - settledMinor);
       const payableMinor = Math.max(0, payableByOrderId.get(order.id) ?? 0);
+      const accountedPayableMinor = accountedPayableMinorByOrderId.get(order.id) ?? 0;
+      const remainingPayableMinor = remainingExchangePayableMinor(payableMinor, accountedPayableMinor);
       const replacementExchange = replacementExchangeByOrderId.get(order.id);
       const replacementOrderId = originalExchangeByOrderId.get(order.id);
       const parcelType = replacementExchange
@@ -417,6 +445,8 @@ async function loadUnsettledOrders(
         amountMinor,
         amount: amountMinor / 100,
         payableMinor,
+        accountedPayableMinor,
+        remainingPayableMinor,
         parcelType,
         relatedOrderId,
         parcelGrossMinor,
@@ -500,26 +530,30 @@ async function handleSummary(
       companyId,
     );
 
-  const outstandingMinor =
-    unsettledOrders.reduce(
-      (sum, order) =>
-        sum + order.amountMinor,
-      0,
-    );
+  const grossOutstandingMinor = unsettledOrders.reduce(
+    (sum, order) => sum + order.amountMinor,
+    0,
+  );
+  // Only current negative exchange balances are deducted. Historical rows
+  // already reflected in older Shiply statements must not be applied twice.
+  const exchangeOffsetsMinor = payableExchangeOrders.reduce(
+    (sum, order) => sum + order.remainingPayableMinor,
+    0,
+  );
+  const outstandingMinor = netCourierReceivableMinor(grossOutstandingMinor, exchangeOffsetsMinor);
 
+  const currentPayableExchangeOrders = payableExchangeOrders.filter(
+    (order) => order.remainingPayableMinor > 0,
+  );
   const shippingChargedMinor =
-    unsettledOrders.reduce(
-      (sum, order) =>
-        sum +
-        order.shippingChargedMinor,
+    [...unsettledOrders, ...currentPayableExchangeOrders].reduce(
+      (sum, order) => sum + order.shippingChargedMinor,
       0,
     );
 
   const deliveryCompanyCostMinor =
-    unsettledOrders.reduce(
-      (sum, order) =>
-        sum +
-        order.deliveryCompanyCostMinor,
+    [...unsettledOrders, ...currentPayableExchangeOrders].reduce(
+      (sum, order) => sum + order.deliveryCompanyCostMinor,
       0,
     );
 
@@ -571,6 +605,26 @@ async function handleSummary(
           )
       : [];
 
+  const exchangeOffsetRows = settlementIds.length > 0
+    ? await db
+        .select({
+          settlementId: deliveryCompanyExchangeOffsetsTable.settlementId,
+          orderId: deliveryCompanyExchangeOffsetsTable.orderId,
+          amountMinor: deliveryCompanyExchangeOffsetsTable.amountMinor,
+          status: deliveryCompanyExchangeOffsetsTable.status,
+        })
+        .from(deliveryCompanyExchangeOffsetsTable)
+        .where(inArray(deliveryCompanyExchangeOffsetsTable.settlementId, settlementIds))
+    : [];
+
+  const offsetsBySettlement = new Map<number, typeof exchangeOffsetRows>();
+  for (const offset of exchangeOffsetRows) {
+    if (offset.settlementId === null) continue;
+    const list = offsetsBySettlement.get(offset.settlementId) ?? [];
+    list.push(offset);
+    offsetsBySettlement.set(offset.settlementId, list);
+  }
+
   const itemsBySettlement =
     new Map<number, typeof itemRows>();
 
@@ -597,8 +651,9 @@ async function handleSummary(
     },
 
     outstandingMinor,
-    outstanding:
-      outstandingMinor / 100,
+    outstanding: outstandingMinor / 100,
+    grossOutstandingMinor,
+    exchangeOffsetsMinor,
 
     shippingChargedMinor,
     deliveryCompanyCostMinor,
@@ -633,9 +688,13 @@ async function handleSummary(
           orders: items.map((item) => ({
             orderId: item.orderId,
             amountMinor: item.amountMinor,
-            amount:
-              item.amountMinor / 100,
+            amount: item.amountMinor / 100,
             status: item.status,
+          })),
+          exchangeOffsets: (offsetsBySettlement.get(settlement.id) ?? []).map((offset) => ({
+            orderId: offset.orderId,
+            amountMinor: offset.amountMinor,
+            status: offset.status,
           })),
         };
       },
@@ -673,8 +732,18 @@ async function handleCreateSettlement(
   }
 
   try {
-    const orderIds =
-      parseOrderIds(body.orderIds);
+    const orderIds = parseOrderIds(body.orderIds);
+    if (body.exchangeOffsetOrderIds !== undefined &&
+        !Array.isArray(body.exchangeOffsetOrderIds)) {
+      throw new DeliverySettlementError("طرود التبديل المحددة غير صالحة");
+    }
+    const exchangeOffsetOrderIds =
+      Array.isArray(body.exchangeOffsetOrderIds) && body.exchangeOffsetOrderIds.length > 0
+        ? parseOrderIds(body.exchangeOffsetOrderIds)
+        : [];
+    if (exchangeOffsetOrderIds.some((id) => orderIds.includes(id))) {
+      throw new DeliverySettlementError("طرد التبديل لا يمكن أن يكون ضمن التحصيل والخصم معًا");
+    }
 
     const receiptMethod =
       body.receiptMethod;
@@ -809,6 +878,48 @@ async function handleCreateSettlement(
           );
         }
 
+
+        const exchangeOffsetOrders = exchangeOffsetOrderIds.length
+          ? await tx
+              .select({
+                id: ordersTable.id,
+                status: ordersTable.status,
+                fulfillmentMethod: ordersTable.fulfillmentMethod,
+                paymentMethod: ordersTable.paymentMethod,
+                deliveryCompanyId: ordersTable.deliveryCompanyId,
+              })
+              .from(ordersTable)
+              .where(inArray(ordersTable.id, exchangeOffsetOrderIds))
+              .for("update")
+          : [];
+
+        if (exchangeOffsetOrders.length !== exchangeOffsetOrderIds.length ||
+          exchangeOffsetOrders.some((order) =>
+            order.status !== "done" ||
+            order.fulfillmentMethod !== "delivery" ||
+            order.paymentMethod !== "cod" ||
+            order.deliveryCompanyId !== companyId
+          )) {
+          throw new DeliverySettlementError("أحد طرود التبديل المحددة غير مؤهل للخصم", 409);
+        }
+
+        if (exchangeOffsetOrderIds.length > 0) {
+          const exchangeDocs = await tx
+            .select({ replacementOrderId: exchangeDocumentsTable.replacementOrderId })
+            .from(exchangeDocumentsTable)
+            .where(
+              and(
+                inArray(exchangeDocumentsTable.replacementOrderId, exchangeOffsetOrderIds),
+                eq(exchangeDocumentsTable.sourceType, "online_order"),
+                eq(exchangeDocumentsTable.status, "completed"),
+              ),
+            );
+          const verified = new Set(exchangeDocs.map((row) => row.replacementOrderId));
+          if (exchangeOffsetOrderIds.some((id) => !verified.has(id))) {
+            throw new DeliverySettlementError("يجب أن يكون الخصم تابعًا لطرد تبديل أون لاين مكتمل", 409);
+          }
+        }
+
         const financeRows = await tx
           .select({
             id:
@@ -838,7 +949,7 @@ async function handleCreateSettlement(
               ),
               inArray(
                 financeTransactionsTable.sourceId,
-                orderIds.map(String),
+                [...orderIds, ...exchangeOffsetOrderIds].map(String),
               ),
             ),
           )
@@ -902,6 +1013,7 @@ async function handleCreateSettlement(
                 financeTransactionLinesTable.debitMinor,
               creditMinor:
                 financeTransactionLinesTable.creditMinor,
+              linkedEntityType: financeAccountsTable.linkedEntityType,
             })
             .from(
               financeTransactionLinesTable,
@@ -919,10 +1031,10 @@ async function handleCreateSettlement(
                   financeTransactionLinesTable.transactionId,
                   financeIds,
                 ),
-                eq(
-                  financeAccountsTable.linkedEntityType,
+                inArray(financeAccountsTable.linkedEntityType, [
                   "delivery_company_receivable",
-                ),
+                  "delivery_company_payable",
+                ]),
                 eq(
                   financeAccountsTable.linkedEntityId,
                   companyId,
@@ -933,6 +1045,8 @@ async function handleCreateSettlement(
 
         const amountByOrderId =
           new Map<number, number>();
+        const payableByOrderId = new Map<number, number>();
+        let payableAccountId: number | null = null;
 
         let receivableAccountId:
           | number
@@ -948,19 +1062,20 @@ async function handleCreateSettlement(
 
           if (!orderId) continue;
 
-          const amount =
-            line.debitMinor -
-            line.creditMinor;
-
-          amountByOrderId.set(
-            orderId,
-            (amountByOrderId.get(
+          if (line.linkedEntityType === "delivery_company_payable") {
+            payableByOrderId.set(
               orderId,
-            ) ?? 0) + amount,
-          );
-
-          receivableAccountId =
-            line.accountId;
+              (payableByOrderId.get(orderId) ?? 0) + line.creditMinor - line.debitMinor,
+            );
+            payableAccountId = line.accountId;
+          } else {
+            const amount = line.debitMinor - line.creditMinor;
+            amountByOrderId.set(
+              orderId,
+              (amountByOrderId.get(orderId) ?? 0) + amount,
+            );
+            receivableAccountId = line.accountId;
+          }
         }
 
         const outstandingByOrderId =
@@ -1003,15 +1118,60 @@ async function handleCreateSettlement(
           );
         }
 
-        const totalMinor =
-          orderIds.reduce(
-            (sum, orderId) =>
-              sum +
-              (outstandingByOrderId.get(
-                orderId,
-              ) ?? 0),
-            0,
+        const grossTotalMinor = orderIds.reduce(
+          (sum, orderId) => sum + (outstandingByOrderId.get(orderId) ?? 0),
+          0,
+        );
+        const currentAppliedOffsets = exchangeOffsetOrderIds.length
+          ? await tx
+              .select({
+                orderId: deliveryCompanyExchangeOffsetsTable.orderId,
+                amountMinor: deliveryCompanyExchangeOffsetsTable.amountMinor,
+              })
+              .from(deliveryCompanyExchangeOffsetsTable)
+              .where(
+                and(
+                  eq(deliveryCompanyExchangeOffsetsTable.deliveryCompanyId, companyId),
+                  inArray(deliveryCompanyExchangeOffsetsTable.orderId, exchangeOffsetOrderIds),
+                  inArray(deliveryCompanyExchangeOffsetsTable.status, ["historical", "posted"]),
+                ),
+              )
+              .for("update")
+          : [];
+        const offsetAlreadyApplied = new Map<number, number>();
+        for (const offset of currentAppliedOffsets) {
+          offsetAlreadyApplied.set(
+            offset.orderId,
+            (offsetAlreadyApplied.get(offset.orderId) ?? 0) + offset.amountMinor,
           );
+        }
+        const currentOffsetByOrderId = new Map<number, number>();
+        for (const offsetOrderId of exchangeOffsetOrderIds) {
+          if (!doneOrderIds.has(offsetOrderId)) {
+            throw new DeliverySettlementError(
+              `طرد التبديل #${offsetOrderId} ليس له قيد مالي مكتمل`,
+              409,
+            );
+          }
+          const outstandingPayable =
+            (payableByOrderId.get(offsetOrderId) ?? 0) -
+            (offsetAlreadyApplied.get(offsetOrderId) ?? 0);
+          if (!Number.isSafeInteger(outstandingPayable) || outstandingPayable <= 0) {
+            throw new DeliverySettlementError(
+              `تبديل #${offsetOrderId} محسوم سابقًا أو لا يحمل مبلغًا مستحقًا للشركة`,
+              409,
+            );
+          }
+          currentOffsetByOrderId.set(offsetOrderId, outstandingPayable);
+        }
+        const totalOffsetMinor = [...currentOffsetByOrderId.values()].reduce(
+          (sum, amount) => sum + amount,
+          0,
+        );
+        if (totalOffsetMinor > 0 && payableAccountId === null) {
+          throw new DeliverySettlementError("حساب الذمم الدائنة لشركة التوصيل مفقود", 409);
+        }
+        const totalMinor = netCourierReceivableMinor(grossTotalMinor, totalOffsetMinor);
 
         if (
           !Number.isSafeInteger(
@@ -1274,20 +1434,24 @@ async function handleCreateSettlement(
               creditMinor: 0,
               memo:
                 receiptMethod === "cash"
-                  ? `تحصيل نقدي مجمع من ${company.name}`
-                  : `تحصيل بنكي مجمع من ${company.name}`,
+                  ? `صافي التحصيل النقدي من ${company.name}`
+                  : `صافي التحصيل البنكي من ${company.name}`,
             },
-            {
-              transactionId:
-                financeTransaction.id,
+            ...(totalOffsetMinor > 0 && payableAccountId !== null ? [{
+              transactionId: financeTransaction.id,
               lineNumber: 2,
-              accountId:
-                receivableAccountId,
+              accountId: payableAccountId,
+              debitMinor: totalOffsetMinor,
+              creditMinor: 0,
+              memo: `خصم طرود التبديل من حساب ${company.name}`,
+            }] : []),
+            {
+              transactionId: financeTransaction.id,
+              lineNumber: totalOffsetMinor > 0 ? 3 : 2,
+              accountId: receivableAccountId,
               debitMinor: 0,
-              creditMinor: totalMinor,
-              memo:
-                `تسوية ذمم ${company.name} ` +
-                `لـ ${orderIds.length} طلب`,
+              creditMinor: grossTotalMinor,
+              memo: `تسوية ذمم ${company.name} لـ ${orderIds.length} طلب`,
             },
           ]);
 
@@ -1307,6 +1471,19 @@ async function handleCreateSettlement(
               status: "posted",
             })),
           );
+
+        if (currentOffsetByOrderId.size > 0) {
+          await tx.insert(deliveryCompanyExchangeOffsetsTable).values(
+            [...currentOffsetByOrderId.entries()].map(([orderId, amountMinor]) => ({
+              deliveryCompanyId: companyId,
+              orderId,
+              settlementId: settlement.id,
+              amountMinor,
+              status: "posted",
+              notes: `خصم طرد التبديل #${orderId} ضمن التسوية ${settlement.publicId}`,
+            })),
+          );
+        }
 
         const linkedSettlementRows =
           await tx
@@ -1372,6 +1549,9 @@ async function handleCreateSettlement(
             linkedSettlementRows[0],
           financeTransaction,
           orderIds,
+          exchangeOffsetOrderIds,
+          grossTotalMinor,
+          exchangeOffsetMinor: totalOffsetMinor,
           totalMinor,
           total: totalMinor / 100,
         };
@@ -1827,6 +2007,18 @@ async function handleReverseSettlement(
             409,
           );
         }
+
+        // Release only offsets consumed by this settlement. Historical
+        // courier deductions remain historical and cannot be reversed here.
+        await tx
+          .update(deliveryCompanyExchangeOffsetsTable)
+          .set({ status: "reversed", updatedAt: new Date() })
+          .where(
+            and(
+              eq(deliveryCompanyExchangeOffsetsTable.settlementId, settlement.id),
+              eq(deliveryCompanyExchangeOffsetsTable.status, "posted"),
+            ),
+          );
 
         const reversedSettlementRows =
           await tx
