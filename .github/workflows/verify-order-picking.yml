@@ -1,0 +1,90 @@
+name: Verify optional order barcode picking
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/order-picking-routes.ts'
+      - 'artifacts/api-worker/src/index.ts'
+      - 'artifacts/lovely-kids/app/admin/order-picking.tsx'
+      - 'artifacts/lovely-kids/app/admin/orders.tsx'
+      - 'lib/db/src/schema/order-picking.ts'
+      - 'lib/db/src/schema/index.ts'
+      - 'lib/db/migrations/20261107_create_order_picking_sessions.sql'
+      - '.github/workflows/verify-order-picking.yml'
+  workflow_dispatch:
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck API Worker
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: Typecheck storefront
+        run: pnpm --filter @workspace/lovely-kids typecheck
+      - name: Build storefront
+        run: pnpm --filter @workspace/lovely-kids build
+
+  migration-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: picking_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d picking_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: picking_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create disposable reference tables
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE public.users (id integer PRIMARY KEY);
+          CREATE TABLE public.orders (id integer PRIMARY KEY);
+          INSERT INTO public.users VALUES (1);
+          INSERT INTO public.orders VALUES (318);
+          SQL
+      - name: Apply order picking migration twice (idempotence)
+        run: |
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261107_create_order_picking_sessions.sql
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261107_create_order_picking_sessions.sql
+      - name: Check constraints, persistence and RLS
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.order_picking_sessions
+            (order_id, items_signature, scans, verified_at, verified_by_user_id)
+          VALUES (318, 'fixture-signature', '[{"id":"sample"}]'::jsonb, now(), 1);
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_class
+              WHERE oid = 'public.order_picking_sessions'::regclass AND relrowsecurity
+            ) THEN RAISE EXCEPTION 'RLS disabled'; END IF;
+            IF (SELECT jsonb_array_length(scans) FROM public.order_picking_sessions
+                WHERE order_id=318) <> 1 THEN RAISE EXCEPTION 'scans not persisted'; END IF;
+          END $$;
+          SQL

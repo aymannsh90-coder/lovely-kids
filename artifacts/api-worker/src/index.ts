@@ -22,6 +22,7 @@ import {
   sanitizePublicSettingsData,
 } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
+import { handleOrderPickingRequest } from "./order-picking-routes";
 import { handleMetaWebEventRequest } from "./meta-capi";
 import { handleDiscountCodeRequest } from "./discount-code-routes";
 import { handlePromotionRequest } from "./promotion-routes";
@@ -674,7 +675,8 @@ export default {
       // can report a real server error instead of the opaque "Failed to fetch".
       let orderResponse: Response | null;
       try {
-        orderResponse = await handleOrderRequest(request, db, env);
+        orderResponse = await handleOrderPickingRequest(request, db, env);
+        if (!orderResponse) orderResponse = await handleOrderRequest(request, db, env);
       } catch (error) {
         console.error("ORDER_REQUEST_UNHANDLED_FAILURE", {
           method: request.method,
