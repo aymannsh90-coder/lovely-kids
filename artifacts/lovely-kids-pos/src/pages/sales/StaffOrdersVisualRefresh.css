@@ -1,0 +1,255 @@
+/* Lovely Kids POS | Online orders visual unification.
+   Screen-only and page-scoped. No order workflow, permissions, API,
+   status transition, embedded storefront or print rules are changed. */
+@media screen {
+  .lk-online-orders-page {
+    --lk-order-ink: #263f51;
+    --lk-order-muted: #738899;
+    --lk-order-pink: #e91e8c;
+    --lk-order-line: #dfe8ee;
+    --lk-order-shadow: 0 6px 22px rgba(36, 73, 93, .055);
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 1450px;
+    color: var(--lk-order-ink);
+  }
+  .lk-online-orders-page *,
+  .lk-online-orders-page *::before,
+  .lk-online-orders-page *::after {
+    box-sizing: border-box;
+  }
+  .lk-online-orders-page > section:first-child {
+    position: relative;
+    border: 1px solid #f0d5e3 !important;
+    border-right: 4px solid var(--lk-order-pink) !important;
+    border-radius: 18px !important;
+    padding: 20px 23px !important;
+    background: linear-gradient(110deg, #fff 24%, #fff5fa 79%, #fdeaf4) !important;
+    box-shadow: var(--lk-order-shadow);
+    min-width: 0;
+  }
+  .lk-online-orders-page > section:first-child h1 {
+    color: #254154;
+    font-size: clamp(20px, 1.8vw, 26px);
+    font-weight: 900;
+    line-height: 1.4;
+    margin: 0 0 6px !important;
+  }
+  .lk-online-orders-page > section:first-child > p {
+    max-width: 980px;
+    color: var(--lk-order-muted);
+    font-size: 12px;
+    line-height: 1.8;
+    margin: 6px 0 13px;
+  }
+  .lk-online-orders-page > section:first-child > p:last-child {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    margin: 11px 0 0;
+    padding: 4px 11px;
+    border: 1px solid #ebc8dc;
+    border-radius: 9px;
+    background: #fff;
+    color: #aa236a;
+    font-weight: 850;
+  }
+  .lk-online-orders-page > section:first-child > [role="alert"],
+  .lk-online-orders-page > section:first-child > [role="status"] {
+    padding: 9px 12px;
+    border-radius: 11px;
+    background: #fff;
+    border: 1px solid #eed9e6;
+    font-weight: 750;
+  }
+  .lk-online-orders-page > section:first-child > div {
+    min-width: 0;
+    padding: 13px;
+    border: 1px solid #e5edf1;
+    border-radius: 13px;
+    background: #f8fafc;
+    align-items: stretch;
+  }
+  .lk-online-orders-page :is(input, select, button) {
+    font-family: inherit;
+    font-size: 13px;
+    min-height: 42px;
+    max-width: 100%;
+    color: #314b5c;
+  }
+  .lk-online-orders-page :is(input, select) {
+    border: 1px solid #d8e4ec !important;
+    border-radius: 10px !important;
+    background: #fff;
+    padding: 9px 12px;
+  }
+  .lk-online-orders-page input {
+    min-width: 0 !important;
+  }
+  .lk-online-orders-page button {
+    border: 1px solid #e8c8db !important;
+    border-radius: 10px !important;
+    background: #fff !important;
+    color: #a61e68 !important;
+    padding: 9px 14px !important;
+    font-size: 13px;
+    font-weight: 850;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color .15s ease, border-color .15s ease;
+  }
+  .lk-online-orders-page button:hover:not(:disabled) {
+    border-color: #eaa3c7 !important;
+    background: #fff2f8 !important;
+  }
+  .lk-online-orders-page button:disabled {
+    cursor: not-allowed;
+    opacity: .58;
+  }
+  .lk-online-orders-page :is(input, select, button):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .24);
+    outline-offset: 2px;
+  }
+  .lk-online-orders-page > div:last-child {
+    min-width: 0;
+    max-width: 100%;
+    padding: 14px !important;
+    border: 1px solid var(--lk-order-line) !important;
+    border-radius: 17px !important;
+    background: #fff;
+    box-shadow: var(--lk-order-shadow);
+    overflow-x: auto !important;
+    overscroll-behavior-x: contain;
+  }
+  .lk-online-orders-page > div:last-child table {
+    width: 100%;
+    min-width: 970px;
+    border-collapse: separate !important;
+    border-spacing: 0;
+    color: #344e60;
+    font-size: 13px;
+  }
+  .lk-online-orders-page table thead th {
+    background: #f0f6f9;
+    color: #36586c;
+    font-size: 12px;
+    font-weight: 900;
+    border-block-end: 1px solid #d9e5ec !important;
+    padding: 12px 10px !important;
+    white-space: nowrap;
+  }
+  .lk-online-orders-page table thead th:first-child {
+    border-start-start-radius: 10px;
+  }
+  .lk-online-orders-page table thead th:last-child {
+    border-end-start-radius: 10px;
+  }
+  .lk-online-orders-page table tbody tr:nth-child(even) {
+    background: #f9fcfd;
+  }
+  .lk-online-orders-page table tbody tr:hover {
+    background: #fff5fa;
+  }
+  .lk-online-orders-page table tbody td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #e9eff3;
+    vertical-align: middle;
+    line-height: 1.55;
+  }
+  .lk-online-orders-page table tbody td:first-child {
+    color: #bb216d;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .lk-online-orders-page table tbody td:nth-child(2) {
+    min-width: 140px;
+    font-weight: 750;
+  }
+  .lk-online-orders-page table tbody td:nth-child(3),
+  .lk-online-orders-page table tbody td:nth-child(4),
+  .lk-online-orders-page table tbody td:nth-child(6) {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .lk-online-orders-page table tbody td:nth-child(4) {
+    color: #ad216b;
+    font-weight: 900;
+  }
+  .lk-online-orders-page table tbody td:nth-child(7) {
+    font-weight: 850;
+    color: #376880;
+  }
+  .lk-online-orders-page table tbody td:last-child {
+    min-width: 235px;
+    white-space: nowrap;
+  }
+  .lk-online-orders-page table tbody td:last-child > div {
+    display: inline-flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .lk-online-orders-page table tbody td:last-child select {
+    min-width: 128px;
+    width: auto;
+  }
+  .lk-online-orders-page table tbody td:last-child > div button {
+    background: #e91e8c !important;
+    border-color: #d41a78 !important;
+    color: #fff !important;
+  }
+  .lk-online-orders-page table tbody td:last-child > div button:hover:not(:disabled) {
+    background: #c71773 !important;
+  }
+  .lk-online-orders-page table tbody td:last-child > button {
+    border: 1px solid #f0c5ca !important;
+    background: #fff5f6 !important;
+    color: #b4233e !important;
+  }
+  .lk-online-orders-page table tbody td:last-child > button:hover:not(:disabled) {
+    background: #fee9ec !important;
+  }
+  .lk-online-orders-page > div:last-child > p {
+    margin: 14px auto;
+    color: #71899a;
+    font-weight: 750;
+    text-align: center;
+    font-size: 13px;
+  }
+  @media (max-width: 700px) {
+    .lk-online-orders-page {
+      padding: 8px !important;
+    }
+    .lk-online-orders-page > section:first-child {
+      padding: 15px !important;
+      border-radius: 15px !important;
+    }
+    .lk-online-orders-page > section:first-child > div {
+      padding: 10px;
+    }
+    .lk-online-orders-page > section:first-child > div input {
+      flex: 1 1 100% !important;
+      width: 100%;
+    }
+    .lk-online-orders-page > section:first-child > div select,
+    .lk-online-orders-page > section:first-child > div button {
+      flex: 1 1 auto;
+    }
+    .lk-online-orders-page > div:last-child {
+      padding: 8px !important;
+      border-radius: 14px !important;
+    }
+  }
+  @media (max-width: 430px) {
+    .lk-online-orders-page > section:first-child > div select,
+    .lk-online-orders-page > section:first-child > div button {
+      flex: 1 1 100%;
+      width: 100%;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lk-online-orders-page button {
+      transition: none;
+    }
+  }
+}
