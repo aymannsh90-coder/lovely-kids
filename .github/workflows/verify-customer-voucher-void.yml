@@ -1,0 +1,50 @@
+name: Verify customer payout and cancellation against disposable PostgreSQL
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/customer-voucher-payout-void-integration.test.cjs'
+      - 'artifacts/api-worker/src/finance-voucher-routes.ts'
+      - 'artifacts/api-worker/src/party-finance-routes.ts'
+      - '.github/workflows/verify-customer-voucher-void.yml'
+
+jobs:
+  payout-void-acceptance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: customer_voucher_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d customer_voucher_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: customer_voucher_test
+      CUSTOMER_VOUCHER_DISPOSABLE_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies from lockfile
+        run: pnpm install --frozen-lockfile
+      - name: Exercise real payment and void endpoints; verify balances and idempotency
+        run: node --test artifacts/api-worker/src/customer-voucher-payout-void-integration.test.cjs
