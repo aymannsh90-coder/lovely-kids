@@ -31,7 +31,16 @@ class PickingError extends Error {
 }
 
 const reply = (data: unknown, status = 200) =>
-  Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
+  Response.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      // Picking is called from the HTTPS storefront/POS embedded admin, which
+      // lives on a different origin from api.lovelykids.net. Preflight alone
+      // is insufficient: every actual GET/POST/DELETE response needs CORS.
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
 
 const normalized = (value: unknown) =>
   typeof value === "string" ? value.trim().normalize("NFKC").toLowerCase() : "";
