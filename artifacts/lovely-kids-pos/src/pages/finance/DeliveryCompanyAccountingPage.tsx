@@ -217,7 +217,10 @@ function buildDeliveryCompanyStatementDocument(
                   settlement.orders
                     .map((item) => `#${item.orderId}`)
                     .join("، "),
-                )}</td>
+                )}
+                ${settlement.exchangeOffsets.length
+                  ? `<div>خصم تبديل ${escapeHtml(settlement.exchangeOffsets.map((offset) => `#${offset.orderId}`).join("، "))}: ${money(-settlement.exchangeOffsets.reduce((sum, offset) => sum + offset.amountMinor, 0))}</div>`
+                  : ""}</td>
                 <td>${
                   settlement.status === "posted"
                     ? "فعّالة"
@@ -1566,6 +1569,13 @@ export default function DeliveryCompanyAccountingPage() {
                           <span className="delivery-ledger-order-references">
                             {settlement.orders.map((item) => "#" + item.orderId).join("، ")}
                           </span>
+                          {settlement.exchangeOffsets.length > 0 && (
+                            <div className="delivery-ledger-metric-hint">
+                              خصم تبديل: {settlement.exchangeOffsets.map((o) => "#" + o.orderId).join("، ")}
+                              {" • "}
+                              {formatMoney(-settlement.exchangeOffsets.reduce((sum, o) => sum + o.amountMinor, 0))}
+                            </div>
+                          )}
                         </td>
                         <td>
                           <span className={
