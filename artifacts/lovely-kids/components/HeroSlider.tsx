@@ -256,6 +256,7 @@ export function HeroSlider({ slides }: Props) {
 
   return (
     <View style={styles.outer}>
+      <View style={styles.frame}>
       <View style={styles.slider}>
         <Animated.View
           {...(Platform.OS === "web"
@@ -308,6 +309,7 @@ export function HeroSlider({ slides }: Props) {
           </View>
         ) : null}
       </View>
+      </View>
     </View>
   );
 }
@@ -315,17 +317,31 @@ export function HeroSlider({ slides }: Props) {
 const styles = StyleSheet.create({
   outer: {
     width: "100%",
-    paddingHorizontal: 16,
-    marginBottom: 20,
+    paddingHorizontal: 14,
+    marginBottom: 14,
     alignItems: "center",
+  },
+  frame: {
+    width: "100%",
+    maxWidth: 1210,
+    padding: 5,
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: "#DBEAF6",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#1A3963",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.09,
+    shadowRadius: 14,
+    elevation: 2,
   },
   slider: {
     width: "100%",
     maxWidth: 1200,
     aspectRatio: 2,
-    borderRadius: 20,
+    borderRadius: 21,
     overflow: "hidden",
-    backgroundColor: "#e5e7eb",
+    backgroundColor: "#EAF5FF",
     position: "relative",
   },
   slide: {
@@ -342,23 +358,24 @@ const styles = StyleSheet.create({
   },
   dots: {
     position: "absolute",
-    bottom: 10,
+    bottom: 11,
     alignSelf: "center",
     flexDirection: "row",
-    gap: 6,
-    backgroundColor: "rgba(0,0,0,0.28)",
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "rgba(23,36,90,0.40)",
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   dot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.55)",
+    backgroundColor: "rgba(255,255,255,0.58)",
   },
   activeDot: {
-    width: 18,
+    width: 20,
     backgroundColor: "#fff",
   },
 });

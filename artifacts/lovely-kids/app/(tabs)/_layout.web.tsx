@@ -143,18 +143,19 @@ export default function TabLayout() {
         header: desktopHeader,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: colors.background,
+          backgroundColor: colors.card,
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          height: 84,
+          height: 80,
+          paddingTop: 5,
           display: isDesktopWeb ? "none" : "flex",
         },
         tabBarBackground: () => (
           <View
             style={[
               StyleSheet.absoluteFill,
-              { backgroundColor: colors.background },
+              { backgroundColor: colors.card },
             ]}
           />
         ),

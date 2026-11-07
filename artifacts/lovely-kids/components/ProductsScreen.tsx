@@ -4,9 +4,10 @@ import {
 } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
+  Animated,
+  Easing,
   FlatList,
   Image,
   SectionList,
@@ -37,8 +38,6 @@ import {
   promotionDetailText,
   usePromotions,
 } from "@/context/PromotionsContext";
-
-const { width } = Dimensions.get("window");
 
 const PRODUCT_CATEGORY_IMAGES = {
   all: require("../assets/images/category-cards/all.webp"),
@@ -209,7 +208,12 @@ export default function ProductsScreen({
 
   const desktopCardWidth = isDesktopWeb
     ? (desktopContentWidth - 32) / 3
-    : (width - 48) / 2;
+    : (viewportWidth - 48) / 2;
+
+  // Layout only: maintain a consistent image height for mobile product grids.
+  const catalogImageHeight = isDesktopWeb
+    ? 300
+    : Math.min(232, Math.max(165, desktopCardWidth * 1.15));
 
   const desktopShellStyle = isDesktopWeb
     ? {
@@ -269,6 +273,50 @@ export default function ProductsScreen({
     .filter((item) => Boolean(item.image));
 
   const [showCompactCategories, setShowCompactCategories] = useState(false);
+
+  // UI only: make the horizontal category strip discoverable without changing filters.
+  const categoryStripRef = useRef<ScrollView>(null);
+  const categoryStripOffset = useRef(0);
+  const categoryStripContentWidth = useRef(0);
+  const categoryStripViewportWidth = useRef(0);
+  const scrollCategoryStrip = (direction: "left" | "right") => {
+    const maximum = Math.max(0, categoryStripContentWidth.current - categoryStripViewportWidth.current);
+    const step = 210;
+    const nextOffset = Math.max(0, Math.min(maximum, categoryStripOffset.current + (direction === "left" ? step : -step)));
+    categoryStripOffset.current = nextOffset;
+    categoryStripRef.current?.scrollTo({ x: nextOffset, animated: true });
+  };
+
+  // Match the homepage section-title glow and shimmer. No product/filter logic changes.
+  const sectionPillShimmer = useRef(new Animated.Value(0)).current;
+  const sectionPillGlow = useRef(new Animated.Value(0)).current;
+  const sectionPillAccent = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    ) return;
+
+    const shimmer = Animated.loop(Animated.sequence([
+      Animated.delay(350),
+      Animated.timing(sectionPillShimmer, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(sectionPillShimmer, { toValue: 0, duration: 0, useNativeDriver: true }),
+      Animated.delay(2100),
+    ]));
+    const glow = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillGlow, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(sectionPillGlow, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.delay(1900),
+    ]));
+    const accent = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillAccent, { toValue: 1.4, duration: 950, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(sectionPillAccent, { toValue: 1, duration: 950, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.delay(2100),
+    ]));
+    shimmer.start(); glow.start(); accent.start();
+    return () => { shimmer.stop(); glow.stop(); accent.stop(); };
+  }, [sectionPillShimmer, sectionPillGlow, sectionPillAccent]);
 
   const handleCatalogScroll = (event: any) => {
     if (isSpecialView || isDesktopWeb) return;
@@ -442,7 +490,11 @@ const groupedSections = shouldGroupByCategory
 
 const topPadding = getResponsiveTopPadding(insets.top);
   const productsTopPadding =
-    isDesktopWeb ? 18 : topPadding + 12;
+    isDesktopWeb
+      ? 18
+      : Platform.OS === "web"
+        ? 12
+        : topPadding + 12;
 
   const topContent = (
     <>
@@ -453,6 +505,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
           {
             paddingTop: productsTopPadding,
             backgroundColor: colors.background,
+            borderBottomColor: colors.border,
           },
           desktopShellStyle,
         ]}
@@ -492,7 +545,7 @@ const topPadding = getResponsiveTopPadding(insets.top);
 
               router.replace("/(tabs)");
             }}
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: colors.card, borderColor: colors.border }]}
             accessibilityLabel="رجوع"
           >
               <Ionicons
@@ -715,7 +768,9 @@ const topPadding = getResponsiveTopPadding(insets.top);
           desktopFlushShellStyle,
         ]}
       >
-        <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
+        <View style={[styles.searchIconFrame, { backgroundColor: colors.muted }]}>
+          <Ionicons name="search-outline" size={21} color={colors.primary} />
+        </View>
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -732,18 +787,29 @@ const topPadding = getResponsiveTopPadding(insets.top);
       </View>
 
       {/* Categories */}
-      {/* Visual category image strip */}
+      {/* Visual category image strip; the chevrons signal and control horizontal scrolling. */}
       {!isOffersView ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.visualCategoriesScroll}
-          style={[
-            styles.visualCategoriesStrip,
-            Platform.OS === "web" ? { direction: "rtl" } : null,
-            desktopFlushShellStyle,
-          ]}
-        >
+        <View style={[styles.visualCategoriesWrap, desktopFlushShellStyle]}>
+          <ScrollView
+            ref={categoryStripRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.visualCategoriesScroll}
+            style={[
+              styles.visualCategoriesStrip,
+              Platform.OS === "web" ? { direction: "rtl" } : null,
+            ]}
+            onLayout={(event) => {
+              categoryStripViewportWidth.current = event.nativeEvent.layout.width;
+            }}
+            onContentSizeChange={(width) => {
+              categoryStripContentWidth.current = width;
+            }}
+            onScroll={(event) => {
+              categoryStripOffset.current = event.nativeEvent.contentOffset.x;
+            }}
+            scrollEventThrottle={16}
+          >
           {visualCategories.map((item) => {
             const selected = selectedCategory === item.id;
 
@@ -772,7 +838,30 @@ const topPadding = getResponsiveTopPadding(insets.top);
               </Pressable>
             );
           })}
-        </ScrollView>
+          </ScrollView>
+          {visualCategories.length > (isDesktopWeb ? 7 : 3) ? (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="تمرير الأقسام إلى اليمين"
+                onPress={() => scrollCategoryStrip("right")}
+                hitSlop={8}
+                style={[styles.categoryStripArrow, !isDesktopWeb ? styles.categoryStripArrowMobile : null, styles.categoryStripArrowRight, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="تمرير الأقسام إلى اليسار"
+                onPress={() => scrollCategoryStrip("left")}
+                hitSlop={8}
+                style={[styles.categoryStripArrow, !isDesktopWeb ? styles.categoryStripArrowMobile : null, styles.categoryStripArrowLeft, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Ionicons name="chevron-back" size={18} color={colors.primary} />
+              </Pressable>
+            </>
+          ) : null}
+        </View>
       ) : (
       <ScrollView
         horizontal
@@ -927,65 +1016,42 @@ const topPadding = getResponsiveTopPadding(insets.top);
           onScroll={handleCatalogScroll}
           scrollEventThrottle={16}
           renderSectionHeader={({ section }) => (
-            <View
-              style={[
-                {
-                  paddingHorizontal: 16,
-                  paddingTop: 18,
-                  paddingBottom: 10,
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  gap: 10,
-                },
-                isDesktopWeb
-                  ? {
-                      width: desktopContentWidth,
-                      alignSelf: "center",
-                      paddingHorizontal: 0,
-                    }
-                  : null,
-              ]}
-            >
-              <View
-                style={{
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  gap: 8,
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                  borderRadius: 12,
-                  paddingVertical: 8,
-                  paddingHorizontal: 14,
-                }}
-              >
-                <View
-                  style={{
-                    width: 4,
-                    height: 22,
-                    borderRadius: 2,
-                    backgroundColor: colors.primary,
-                  }}
+            <View style={[styles.catalogSectionHeading, isDesktopWeb
+              ? { width: desktopContentWidth, alignSelf: "center", paddingHorizontal: 0 }
+              : null
+            ]}>
+              <View style={[styles.catalogSectionPill, { backgroundColor: colors.card, borderColor: "#D8E9F7" }]}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[styles.catalogSectionGlow, {
+                    opacity: sectionPillGlow.interpolate({ inputRange: [0, 1], outputRange: [0.13, 0.8] }),
+                  }]}
                 />
-                <Text
-                  style={{
-                    color: colors.foreground,
-                    fontSize: 18,
-                    fontWeight: "900",
-                    textAlign: "right",
-                  }}
-                >
+                <Animated.View
+                  pointerEvents="none"
+                  style={[styles.catalogSectionShimmer, {
+                    transform: [
+                      { translateX: sectionPillShimmer.interpolate({ inputRange: [0, 1], outputRange: [-110, 360] }) },
+                      { skewX: "-18deg" },
+                    ],
+                  }]}
+                />
+                <Animated.View
+                  style={[styles.catalogSectionAccent, {
+                    backgroundColor: "#D74789",
+                    transform: [{ scaleY: sectionPillAccent }],
+                  }]}
+                />
+                <Text style={[styles.catalogSectionTitle, { color: colors.foreground }]}>
                   {section.label}
                 </Text>
+                <Animated.View pointerEvents="none" style={{
+                  opacity: sectionPillGlow.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }),
+                }}>
+                  <Ionicons name="sparkles" color="#3299DC" size={16} />
+                </Animated.View>
               </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  height: 1,
-                  backgroundColor: colors.border,
-                }}
-              />
+              <View style={[styles.catalogSectionLine, { backgroundColor: colors.border }]} />
             </View>
           )}
           renderItem={({ item }) => (
@@ -1011,7 +1077,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
                     validRewardPromotionId
                   }
                   style={{ width: desktopCardWidth }}
-                  imageHeight={isDesktopWeb ? 300 : undefined}
+                  catalogCard
+                  imageHeight={catalogImageHeight}
                 />
               ))}
             </View>
@@ -1097,7 +1164,8 @@ const topPadding = getResponsiveTopPadding(insets.top);
               validRewardPromotionId
             }
             style={{ width: desktopCardWidth }}
-            imageHeight={isDesktopWeb ? 300 : undefined}
+            catalogCard
+            imageHeight={catalogImageHeight}
           />
         )}
         ListEmptyComponent={
@@ -1138,14 +1206,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: Platform.OS === "web" ? 10 : 15,
+    borderBottomWidth: Platform.OS === "web" ? 1 : 0,
+    marginBottom: Platform.OS === "web" ? 8 : 14,
   },
   headerRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 8,
     position: "relative",
-    minHeight: 38,
+    minHeight: 42,
   },
   headerMenuSlot: {
     position: "absolute",
@@ -1155,20 +1225,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   backButton: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 19,
+    borderRadius: 15,
+    borderWidth: 1,
   },
-  title: { fontSize: 24, fontWeight: "800", textAlign: "right" },
+  title: { fontSize: 23, lineHeight: 32, fontWeight: "800", textAlign: "right" },
   genderTabsRow: {
     flexDirection: "row-reverse",
     marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 16,
+    marginBottom: Platform.OS === "web" ? 9 : 14,
+    borderRadius: 19,
     borderWidth: 1,
     overflow: "hidden",
+    backgroundColor: "#F3F8FD",
+    padding: 4,
+    gap: 4,
   },
   genderTab: {
     flex: 1,
@@ -1176,7 +1250,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
+    minHeight: 42,
+    paddingVertical: 9,
+    borderRadius: 15,
   },
   genderEmoji: {
     fontSize: 18,
@@ -1187,16 +1263,29 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: Platform.OS === "web" ? 9 : 15,
+    minHeight: 54,
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
+    gap: 11,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 19,
     borderWidth: 1,
+    shadowColor: "#24496B",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.045,
+    shadowRadius: 9,
+    elevation: 1,
   },
-  searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  searchIconFrame: {
+    width: 39,
+    height: 39,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchInput: { flex: 1, fontSize: 15, fontWeight: "500", padding: 0, minHeight: 32 },
   categoriesScroll: {
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -1214,51 +1303,80 @@ const styles = StyleSheet.create({
   },
   stickyCategoriesBar: {
     borderBottomWidth: 1,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   stickyCategoriesScroll: {
     paddingHorizontal: 12,
-    gap: 10,
+    gap: 9,
     alignItems: "center",
   },
   stickyCategoryCard: {
-    width: 80,
-    height: 80,
-    borderRadius: 999,
-    borderWidth: 2,
+    width: 65,
+    height: 65,
+    borderRadius: 16,
+    borderWidth: 1,
     overflow: "hidden",
     backgroundColor: "#FFFFFF",
   },
   stickyCategoryCardSelected: {
-    borderWidth: 3,
+    borderWidth: 2,
   },
   stickyCategoryImage: {
     width: "100%",
     height: "100%",
   },
 
+  visualCategoriesWrap: {
+    position: "relative",
+  },
+  categoryStripArrow: {
+    position: "absolute",
+    top: 31,
+    zIndex: 5,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#24496B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 7,
+    elevation: 3,
+  },
+  categoryStripArrowMobile: {
+    top: 33,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    shadowOpacity: 0.075,
+    elevation: 2,
+  },
+  categoryStripArrowRight: { right: 5 },
+  categoryStripArrowLeft: { left: 5 },
   visualCategoriesStrip: {
-    marginBottom: 10,
-    height: 106,
-    minHeight: 106,
-    maxHeight: 106,
+    marginBottom: Platform.OS === "web" ? 6 : 12,
+    height: Platform.OS === "web" ? 106 : 112,
+    minHeight: Platform.OS === "web" ? 106 : 112,
+    maxHeight: Platform.OS === "web" ? 106 : 112,
     flexShrink: 0,
   },
   visualCategoriesScroll: {
     paddingHorizontal: 16,
-    gap: 9,
+    gap: 10,
     alignItems: "center",
   },
   visualCategoryCard: {
-    width: 82,
-    height: 82,
-    borderRadius: 999,
-    borderWidth: 2,
+    width: 92,
+    height: 92,
+    borderRadius: 19,
+    borderWidth: 1,
     overflow: "hidden",
     backgroundColor: "#FFFFFF",
   },
   visualCategoryCardSelected: {
-    borderWidth: 3,
+    borderWidth: 2,
   },
   visualCategoryImage: {
     width: "100%",
@@ -1270,25 +1388,73 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     width: 100,
-    height: 36,
+    height: 38,
     paddingHorizontal: 8,
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     flexShrink: 0,
     marginHorizontal: 5,
   },
-  categoryText: { fontSize: 13, fontWeight: "600", lineHeight: 18, textAlign: "center" },
+  categoryText: { fontSize: 13, fontWeight: "700", lineHeight: 18, textAlign: "center" },
+  catalogSectionHeading: {
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+  },
+  catalogSectionPill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    overflow: "hidden",
+    position: "relative",
+  },
+  catalogSectionGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#D7EEFF",
+  },
+  catalogSectionShimmer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 95,
+    backgroundColor: "rgba(72,174,245,0.34)",
+  },
+  catalogSectionAccent: {
+    width: 4,
+    height: 22,
+    borderRadius: 2,
+  },
+  catalogSectionTitle: {
+    fontSize: 19,
+    lineHeight: 28,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  catalogSectionLine: {
+    flex: 1,
+    height: 1,
+  },
   count: {
     textAlign: "right",
     paddingHorizontal: 16,
-    fontSize: 12,
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 0,
+    marginBottom: Platform.OS === "web" ? 1 : 14,
   },
   list: { paddingHorizontal: 16 },
   row: {
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 14,
   },
   empty: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 16 },
