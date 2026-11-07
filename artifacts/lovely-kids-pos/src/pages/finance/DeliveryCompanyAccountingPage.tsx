@@ -775,8 +775,10 @@ export default function DeliveryCompanyAccountingPage() {
 
   const allSelected =
     !!summary?.unsettledOrders.length &&
-    selectedIds.length ===
-      summary.unsettledOrders.length;
+    selectedIds.length === summary.unsettledOrders.length &&
+    summary.payableExchangeOrders
+      .filter((order) => order.remainingPayableMinor > 0)
+      .every((order) => selectedExchangeOffsetIds.includes(order.id));
 
   function toggleOrder(orderId: number) {
     setSelectedIds((current) =>
