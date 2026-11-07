@@ -598,6 +598,15 @@ export function getManualOrderSettings() {
   );
 }
 
+/** Read-only labels from the storefront settings; never changes product categories. */
+export function getPosCategoryDisplaySettings(token: string) {
+  return apiRequest<{ categoryLabels?: Record<string, string> }>(
+    "/api/settings",
+    {},
+    token,
+  );
+}
+
 export function createManualOnlineOrder(
   token: string,
   input: {

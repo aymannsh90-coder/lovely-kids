@@ -11,6 +11,7 @@ import {
 } from "../../app/pos-context";
 import {
   ApiError,
+  getPosCategoryDisplaySettings,
   getHistoricalInventoryValuation,
   type HistoricalInventoryValuationProduct,
   type HistoricalInventoryValuationReport,
@@ -53,6 +54,16 @@ function numberValue(
     "en-US",
   ).format(value);
 }
+
+const DEFAULT_CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  all: "الكل",
+  clothes: "ملابس",
+  stroller: "عربات",
+  feeding: "تغذية",
+  bath: "استحمام",
+  toys: "ألعاب",
+  accessories: "إكسسوارات",
+};
 
 function sourceLabel(
   product:
@@ -152,6 +163,35 @@ export default function HistoricalInventoryValuationReportPage() {
   ] =
     useState(false);
 
+  const [storeCategoryLabels, setStoreCategoryLabels] =
+    useState<Record<string, string>>({});
+
+  // Categories are created and named by the storefront. Read their labels
+  // without changing stored category IDs or any inventory/valuation data.
+  useEffect(() => {
+    let active = true;
+    void getPosCategoryDisplaySettings(token)
+      .then((settings) => {
+        if (active && settings?.categoryLabels && typeof settings.categoryLabels === "object") {
+          setStoreCategoryLabels(settings.categoryLabels);
+        }
+      })
+      .catch(() => {
+        // Preserve the original category code if storefront settings are unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  function categoryName(categoryId: string) {
+    const configured = storeCategoryLabels[categoryId];
+    if (typeof configured === "string" && configured.trim()) {
+      return configured.trim();
+    }
+    return DEFAULT_CATEGORY_DISPLAY_NAMES[categoryId] ?? categoryId;
+  }
+
   async function loadReport(
     nextDate = asOf,
   ) {
@@ -245,6 +285,7 @@ export default function HistoricalInventoryValuationReportPage() {
               product.barcode ??
                 "",
               product.category,
+              categoryName(product.category),
               product.productId,
             ]
               .join(" ")
@@ -259,6 +300,7 @@ export default function HistoricalInventoryValuationReportPage() {
       report,
       query,
       showZero,
+      storeCategoryLabels,
     ]);
 
   const visibleSummary =
@@ -388,7 +430,7 @@ export default function HistoricalInventoryValuationReportPage() {
                 product.productCode ??
                   "—",
                 product.nameAr,
-                product.category,
+                categoryName(product.category),
                 product.quantity ??
                   "غير متتبع",
                 product.unitCostMinor ===
@@ -881,7 +923,7 @@ export default function HistoricalInventoryValuationReportPage() {
                               "1px solid #eef2f7",
                           }}
                         >
-                          {product.category}
+                          {categoryName(product.category)}
                         </td>
 
                         <td

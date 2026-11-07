@@ -1,3 +1,4 @@
+import "./StaffOrdersVisualRefresh.css";
 import { useEffect, useMemo, useState } from "react";
 import { usePosRuntime } from "../../app/pos-context";
 import { API_BASE_URL } from "../../lib/api";
@@ -98,7 +99,7 @@ export default function StaffOrdersPage() {
     finally { setBusyId(null); }
   }
 
-  return <div dir="rtl" style={{ maxWidth: 1450, margin: "0 auto", padding: 16 }}>
+  return <div className="lk-online-orders-page" dir="rtl" style={{ maxWidth: 1450, margin: "0 auto", padding: 16 }}>
     <section style={{ ...card, marginBottom: 14 }}>
       <h1 style={{ marginTop: 0 }}>إدارة الطلبات الإلكترونية</h1>
       <p>عرض الطلبات وصلاحيات تعديل الحالة والإلغاء حسب التفويض من المالك. لا تتوفر هنا وظيفة الحذف النهائي أو عكس قيد الديلفري.</p>
