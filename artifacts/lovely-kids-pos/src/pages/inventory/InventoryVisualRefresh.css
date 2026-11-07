@@ -623,3 +623,114 @@
     }
   }
 }
+
+
+/* Lovely Kids POS | Final desktop inventory/product-card review.
+   Screen-only, scoped to native POS inventory views. The storefront product
+   editor iframe, stock logic and adjustments remain completely unchanged. */
+@media screen and (min-width: 1001px) {
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) {
+    min-width: 0;
+    gap: 15px;
+    color: #293f50;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) > .sales-return-header {
+    border-color: #f0d5e4;
+    box-shadow: 0 7px 22px rgba(41, 79, 103, .052);
+    padding: 18px 23px;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) > .sales-return-header h1 {
+    color: #254154;
+    font-weight: 900;
+    line-height: 1.35;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) > .sales-return-header p {
+    color: #708697;
+    line-height: 1.7;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) > :is(
+    .sales-return-search-panel,
+    .sales-return-invoice,
+    .sales-return-items-panel
+  ) {
+    min-width: 0;
+    border: 1px solid #dfe9f0;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(33, 76, 102, .047);
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-section-title {
+    min-width: 0;
+    gap: 12px;
+    border-bottom-color: #e5edf2;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-section-title h3 {
+    color: #27475a;
+    font-weight: 900;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-search-form {
+    min-width: 0;
+    align-items: end;
+    gap: 12px;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-field {
+    min-width: 0;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-field :is(input,select) {
+    min-width: 0;
+    border-radius: 10px;
+    background: #fbfdff;
+    border-color: #d7e5ed;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-summary-grid > div {
+    border-radius: 14px;
+    box-shadow: 0 3px 11px rgba(43, 83, 102, .03);
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-summary-grid > div strong {
+    font-variant-numeric: tabular-nums;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-table-wrap {
+    min-width: 0;
+    max-width: 100%;
+    border-color: #dae7ef;
+    border-radius: 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-color: #c2d5e1 #f8fbfd;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-table thead th {
+    color: #345871;
+    background: #eef6fa;
+    border-bottom-color: #d8e4ec;
+    white-space: nowrap;
+    font-weight: 900;
+  }
+  .lk-inventory-refresh:is(.lk-inventory-card, .lk-inventory-stock) .sales-return-table tbody tr:hover {
+    background: #fff4fa;
+  }
+  .lk-inventory-stock .inventory-stock-action-button {
+    border-radius: 10px;
+    font-weight: 850;
+  }
+  /* Portaled dialogs: desktop presentation only, no positioning changes. */
+  .lk-stock-dialog {
+    border: 1px solid #d9e7ef;
+    border-radius: 17px;
+    box-shadow: 0 25px 78px rgba(22, 48, 63, .22);
+  }
+  .lk-stock-dialog .sales-return-section-title {
+    border-bottom-color: #e4ebf1;
+    padding-bottom: 12px;
+  }
+  .lk-stock-dialog .sales-return-table-wrap {
+    border-radius: 11px;
+    border-color: #dce9ef;
+  }
+  .lk-stock-dialog .sales-return-table thead th {
+    color: #34556d;
+    font-weight: 900;
+  }
+  .lk-stock-dialog .lk-stock-adjustment-actions {
+    border-top-color: #e1eaf0;
+  }
+}
