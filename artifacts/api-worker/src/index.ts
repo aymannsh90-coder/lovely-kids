@@ -294,12 +294,32 @@ export class PublicAPI extends WorkerEntrypoint<Env> {
   }
 }
 
+function isTransientDatabaseError(error: unknown): boolean {
+  if (error === null || typeof error !== "object") return false;
+
+  const code = "code" in error ? error.code : undefined;
+  if (
+    typeof code === "string" &&
+    /^(?:08[A-Z0-9]{3}|57P0[123]|53300|53400|58000|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN)$/i.test(code)
+  ) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : "";
+  return /failed to acquire a connection from the pool|server connection attempt failed|connection (?:timed out|timeout|terminated|reset by peer|refused)/i.test(message);
+}
+
 export default {
   async fetch(
     request: Request,
     env: Env,
     ctx: GatewayContext,
   ): Promise<Response> {
+    const requestId = crypto.randomUUID();
+    const startedAt = Date.now();
+    let connectingToDatabase = false;
+
+    try {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -353,7 +373,9 @@ export default {
       return purchaseWritesDisabledResponse();
     }
 
+    connectingToDatabase = true;
     const { client, db } = await openDb(env);
+    connectingToDatabase = false;
 
     try {
       const metaCatalogResponse =
@@ -840,7 +862,42 @@ export default {
     } finally {
       await client.end().catch(() => {});
     }
+    } catch (error) {
+      const temporaryConnectionFailure =
+        connectingToDatabase || isTransientDatabaseError(error);
 
+      console.error("API_UNHANDLED_FAILURE", {
+        requestId,
+        method: request.method,
+        path: new URL(request.url).pathname,
+        durationMs: Date.now() - startedAt,
+        phase: connectingToDatabase ? "db-connect" : "request",
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorCode:
+          error !== null && typeof error === "object" && "code" in error
+            ? String(error.code)
+            : undefined,
+        errorMessage:
+          error instanceof Error ? error.message.slice(0, 500) : undefined,
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: temporaryConnectionFailure
+            ? "تعذر الاتصال بقاعدة البيانات مؤقتًا. أعد تحميل البيانات، وتحقق من حالة أي عملية مالية قبل تكرارها."
+            : "حدث خطأ مؤقت بالخادم. تحقق من حالة أي عملية مالية قبل إعادة تنفيذها.",
+          requestId,
+        }),
+        {
+          status: temporaryConnectionFailure ? 503 : 500,
+          headers: {
+            ...headers,
+            "Cache-Control": "no-store",
+            "X-Request-ID": requestId,
+          },
+        },
+      );
+    }
   },
 
   async scheduled(

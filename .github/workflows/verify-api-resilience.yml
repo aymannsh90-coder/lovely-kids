@@ -1,0 +1,35 @@
+name: Verify API resilience without replaying writes
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/index.ts'
+      - 'artifacts/api-worker/src/db.ts'
+      - 'artifacts/lovely-kids-pos/src/lib/api.ts'
+      - 'artifacts/lovely-kids-pos/src/lib/apiRetryPolicy.ts'
+      - 'artifacts/lovely-kids-pos/src/lib/apiRetryPolicy.test.mjs'
+      - '.github/workflows/verify-api-resilience.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: API Worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: POS typecheck
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Verify no replay of mutations
+        run: node --experimental-strip-types --test artifacts/lovely-kids-pos/src/lib/apiRetryPolicy.test.mjs
+      - name: POS production build
+        run: pnpm --filter @workspace/lovely-kids-pos build

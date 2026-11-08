@@ -25,6 +25,8 @@ export interface Env {
 export async function openDb(env: Env) {
   const client = new Client({
     connectionString: env.HYPERDRIVE.connectionString,
+    // Bound connection setup only; long financial reports keep their existing query time.
+    connectionTimeoutMillis: 10_000,
   });
 
   await client.connect();
