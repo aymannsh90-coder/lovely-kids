@@ -8,6 +8,7 @@ import {
   financeTransactionsTable,
   insertOrderSchema,
   ordersTable,
+  orderFailedDeliveryReturnsTable,
 } from "@workspace/db/schema";
 import { sql, and, desc, eq, isNull, or } from "drizzle-orm";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
@@ -47,6 +48,11 @@ import {
 } from "./order-local-courier-reversal";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import { sendMetaPurchaseEvent } from "./meta-capi";
+import {
+  FailedDeliveryReturnError,
+  reportFailedDeliveryReturn,
+  receiveFailedDeliveryReturn,
+} from "./order-failed-delivery-returns";
 import { postFinanceTransaction } from "./finance-posting";
 import {
   mergeOnlineOrders,
@@ -674,6 +680,11 @@ async function handleGetOrders(
     courierReversals.map((row) => [row.sourceId, row.createdAt.toISOString()]),
   );
 
+  const refusedParcelRows = await db.select().from(orderFailedDeliveryReturnsTable);
+  const refusedParcelByOrder = new Map(
+    refusedParcelRows.map(row => [row.orderId, row]),
+  );
+
   const exchangeLinks =
     await db
       .select({
@@ -765,6 +776,11 @@ async function handleGetOrders(
         ...order,
         courierCashReceivedAt: courierCashByOrder.get(String(order.id)) ?? null,
         courierCashReversedAt: courierCashReversedByOrder.get(String(order.id)) ?? null,
+        failedDeliveryReturnStatus: refusedParcelByOrder.get(order.id)?.status ?? null,
+        failedDeliveryReturnReason: refusedParcelByOrder.get(order.id)?.reason ?? null,
+        failedDeliveryReturnReportedAt: refusedParcelByOrder.get(order.id)?.reportedAt?.toISOString() ?? null,
+        failedDeliveryReturnReceivedAt: refusedParcelByOrder.get(order.id)?.receivedAt?.toISOString() ?? null,
+        failedDeliveryReturnCostMinor: refusedParcelByOrder.get(order.id)?.returnDeliveryCostMinor ?? null,
         mergedOrderIds,
         mergedOrderCount:
           mergedOrderIds.length,
@@ -1110,6 +1126,55 @@ async function handleLocalCourierCashReversal(
   }
 }
 
+async function handleReportFailedDeliveryParcel(request: Request, db: Db, env: Env, orderId: number) {
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.edit")))
+    return json({ error: "غير مصرح" }, 403);
+  const payload: unknown = await request.json().catch(() => null);
+  const body = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as { reason?: unknown } : {};
+  try {
+    const result = await reportFailedDeliveryReturn(
+      db, orderId, user.id, typeof body.reason === "string" ? body.reason : "",
+    );
+    return json(result);
+  } catch (error) {
+    if (error instanceof FailedDeliveryReturnError || error instanceof OrderEditError)
+      return json({ error: error.message }, error.status);
+    console.error("REPORT_FAILED_DELIVERY_RETURN", error);
+    return json({ error: "تعذر تسجيل الطرد الراجع" }, 500);
+  }
+}
+
+async function handleReceiveFailedDeliveryParcel(request: Request, db: Db, env: Env, orderId: number) {
+  const user = await getCurrentUser(db, request, env);
+  if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
+  if (!user.isAdmin && !(await userHasPermission(db, user, "orders.cancel")))
+    return json({ error: "غير مصرح باستلام الطرد الراجع وإلغاء الطلب" }, 403);
+  const payload: unknown = await request.json().catch(() => null);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
+      (payload as { confirmPhysicalReceipt?: unknown }).confirmPhysicalReceipt !== true)
+    return json({ error: "يلزم تأكيد وصول جميع قطع الطرد فعليًا للمحل" }, 400);
+  try {
+    const result = await receiveFailedDeliveryReturn(db, orderId, user.id);
+    // Do not notify with a shipping status until stock/cost restoration commits.
+    if (!result.alreadyReceived && result.order.customerPhone) {
+      try {
+        await sendOrderStatusNotification(db, env, orderId, result.order.customerPhone, "cancelled");
+      } catch (error) {
+        console.error("FAILED_DELIVERY_RECEIPT_NOTIFICATION_FAILED", error);
+      }
+    }
+    return json(result);
+  } catch (error) {
+    if (error instanceof FailedDeliveryReturnError || error instanceof OrderEditError)
+      return json({ error: error.message }, error.status);
+    console.error("RECEIVE_FAILED_DELIVERY_RETURN", error);
+    return json({ error: "تعذر استلام الطرد الراجع وإرجاع المخزون" }, 500);
+  }
+}
+
 export async function handleOrderRequest(
   request: Request,
   db: Db,
@@ -1309,6 +1374,16 @@ export async function handleOrderRequest(
       request, db, env, Number(courierReversalMatch[1]),
     );
   }
+
+  const refusedMarkMatch =
+    path.match(/^\/api\/orders\/(\d+)\/failed-delivery-return$/);
+  if (request.method === "POST" && refusedMarkMatch)
+    return handleReportFailedDeliveryParcel(request, db, env, Number(refusedMarkMatch[1]));
+
+  const refusedReceiveMatch =
+    path.match(/^\/api\/orders\/(\d+)\/failed-delivery-return\/receive$/);
+  if (request.method === "POST" && refusedReceiveMatch)
+    return handleReceiveFailedDeliveryParcel(request, db, env, Number(refusedReceiveMatch[1]));
 
   const statusMatch = path.match(
     /^\/api\/orders\/(\d+)\/status$/,
