@@ -658,6 +658,8 @@ export default function AdminOrdersScreen() {
   const [editCustomerPhone, setEditCustomerPhone] = useState("");
   const [editCustomerAddress, setEditCustomerAddress] = useState("");
   const [editShippingZone, setEditShippingZone] = useState("");
+  const [editManualShippingEnabled, setEditManualShippingEnabled] = useState(false);
+  const [editManualShippingCost, setEditManualShippingCost] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
   const [editLocalDiscount, setEditLocalDiscount] = useState("0");
@@ -1794,6 +1796,23 @@ export default function AdminOrdersScreen() {
     setEditShippingZone(
       order.shippingZone ?? "",
     );
+    const configuredZone = (
+      settings.shippingZones?.length
+        ? settings.shippingZones
+        : ADMIN_DEFAULT_SHIPPING_ZONES
+    ).find((zone) => zone.label === order.shippingZone);
+    // A manual quote is stored as the original charge, without a shipping
+    // promotion discount. Restore it when the same order is edited again.
+    const manualQuote =
+      order.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+      order.shippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+      !order.exchangePublicId &&
+      order.shippingOriginalCost != null &&
+      order.shippingOriginalCost !== (configuredZone?.cost ?? 0) &&
+      (order.shippingPromotionDiscount ?? 0) === 0 &&
+      order.shippingCost === order.shippingOriginalCost;
+    setEditManualShippingEnabled(manualQuote);
+    setEditManualShippingCost(String(order.shippingCost ?? configuredZone?.cost ?? 0));
     // Preserve previously quoted prices when reopening existing local orders.
     const storedLocalCharge =
       order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
@@ -2066,6 +2085,16 @@ export default function AdminOrdersScreen() {
       }
     }
 
+    if (editManualShippingEnabled &&
+        editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+        editShippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+        !editingOrder.exchangePublicId &&
+        (!/^\d+$/.test(editManualShippingCost) ||
+          Number(editManualShippingCost) > 10000)) {
+      setEditOrderError("أجرة التوصيل اليدوية يجب أن تكون مبلغ شيكل صحيحاً من 0 إلى 10000");
+      return;
+    }
+
     if (editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL && editPaymentMethod === "local_store_cash") {
       setEditOrderError("اختر طريقة دفع عادية عند الخروج من الديلفري المحلي");
       return;
@@ -2109,6 +2138,12 @@ export default function AdminOrdersScreen() {
                   localDeliveryCharge: editLocalCharge,
                   localDeliveryCourierCost: Number(editLocalCourierCost),
                 }
+              : {}),
+            ...(editManualShippingEnabled &&
+                editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                editShippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+                !editingOrder.exchangePublicId
+              ? { manualShippingCost: Number(editManualShippingCost) }
               : {}),
             ...(editingOrder.exchangePublicId
               ? {
@@ -2322,6 +2357,8 @@ export default function AdminOrdersScreen() {
   const editShippingCost = editSelectedShippingZone
     ? editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
       ? Number(editLocalCharge) || 0
+    : editManualShippingEnabled && !editingOrder?.exchangePublicId
+      ? Number(editManualShippingCost) || 0
     : editingOrder?.exchangePublicId
       ? Math.max(
           0,
@@ -6681,6 +6718,10 @@ export default function AdminOrdersScreen() {
                       <Pressable
                         key={zone.label}
                         onPress={() => {
+                          if (zone.label !== editShippingZone) {
+                            setEditManualShippingEnabled(false);
+                            setEditManualShippingCost(String(cost));
+                          }
                           setEditShippingZone(zone.label);
                           setEditOrderError(null);
                           if (zone.label === ADMIN_LOCAL_DELIVERY_LABEL) {
@@ -6740,6 +6781,51 @@ export default function AdminOrdersScreen() {
                     );
                   })}
                 </View>
+
+                {editShippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+                  editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                  !editingOrder?.exchangePublicId && (
+                  <View style={{ gap: 8, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.card }}>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                      أجرة التوصيل على الزبون — لهذا الطلب فقط
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        if (!editManualShippingEnabled) {
+                          setEditManualShippingCost(String(editShippingCost));
+                        }
+                        setEditManualShippingEnabled(!editManualShippingEnabled);
+                        setEditOrderError(null);
+                      }}
+                      style={[styles.editOrderShippingZoneBtn, { borderColor: colors.primary, alignSelf: "flex-end" }]}
+                    >
+                      <Text style={{ color: colors.primary, fontWeight: "700" }}>
+                        {editManualShippingEnabled ? "الرجوع لسعر المنطقة التلقائي" : "تعديل السعر يدوياً"}
+                      </Text>
+                    </Pressable>
+                    {editManualShippingEnabled ? (
+                      <TextInput
+                        value={editManualShippingCost}
+                        onChangeText={(value) => {
+                          setEditManualShippingCost(value.replace(/[^0-9]/g, ""));
+                          setEditOrderError(null);
+                        }}
+                        keyboardType="number-pad"
+                        placeholder="أجرة التوصيل بالشيكل"
+                        placeholderTextColor={colors.mutedForeground}
+                        style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+                        textAlign="right"
+                      />
+                    ) : (
+                      <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>
+                        السعر المحسوب تلقائياً: {editShippingCost}₪
+                      </Text>
+                    )}
+                    <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>
+                      لا يتغير سعر المنطقة العام أو تكلفة شركة التوصيل. الإجمالي يتحدث مباشرة.
+                    </Text>
+                  </View>
+                )}
 
                 {editShippingZone !== ADMIN_STORE_PICKUP_LABEL ? (
                   <>
