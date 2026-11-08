@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextInput, View,
+  ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, Text, TextInput, View,
 } from "react-native";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
@@ -41,6 +41,7 @@ export default function ExchangeReturnPickingPanel({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [previewLine, setPreviewLine] = useState<Line | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const busyRef = useRef(false);
   const cameraResultRef = useRef(false);
@@ -259,21 +260,61 @@ export default function ExchangeReturnPickingPanel({
           ) : null}
           {feedback ? <Text style={{ backgroundColor: "#DCFCE7", color: "#166534", padding: 9,
             textAlign: "right", borderRadius: 8, fontWeight: "800" }}>{feedback}</Text> : null}
-          <ScrollView style={{ maxHeight: 185 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+          {previewLine?.image ? (
+            <View style={{ padding: 10, backgroundColor: "#F8FAFC", borderWidth: 1,
+              borderColor: "#CBD5E1", borderRadius: 12, gap: 8 }}>
+              <Pressable onPress={() => setPreviewLine(null)}
+                accessibilityRole="button"
+                accessibilityLabel="إغلاق الصورة المكبرة"
+                style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
+                <Ionicons name="close-circle-outline" color="#475569" size={20} />
+                <Text style={{ color: "#475569", fontWeight: "800", fontSize: 12 }}>
+                  إغلاق الصورة
+                </Text>
+              </Pressable>
+              <Image source={{ uri: previewLine.image }}
+                resizeMode="contain"
+                style={{ width: "100%", height: 215, borderRadius: 9, backgroundColor: "#fff" }} />
+              <Text style={{ textAlign: "right", color: "#334155", fontWeight: "700", fontSize: 12 }}>
+                {previewLine.name} · {previewLine.color || "بدون لون"} · {previewLine.size || "بدون مقاس"}
+              </Text>
+            </View>
+          ) : null}
+          <ScrollView style={{ maxHeight: 235 }}
+            nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {data.lines.map(line => (
               <View key={line.key} style={{
-                flexDirection: "row-reverse", justifyContent: "space-between",
-                borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingVertical: 8, gap: 6,
+                flexDirection: "row-reverse", alignItems: "center",
+                borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingVertical: 8, gap: 9,
               }}>
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={{ fontWeight: "800", color: "#1E293B", textAlign: "right", fontSize: 12 }}>
+                {line.image ? (
+                  <Pressable onPress={() => setPreviewLine(line)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`تكبير صورة ${line.name}، اللون ${line.color || "بدون لون"}، المقاس ${line.size || "بدون مقاس"}`}
+                    style={{ borderWidth: 1, borderColor: "#E2E8F0",
+                      borderRadius: 9, overflow: "hidden", backgroundColor: "#F8FAFC" }}>
+                    <Image source={{ uri: line.image }} resizeMode="cover"
+                      style={{ width: 58, height: 63 }} />
+                  </Pressable>
+                ) : (
+                  <View style={{ width: 60, height: 65, borderRadius: 9,
+                    backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="image-outline" size={23} color="#94A3B8" />
+                  </View>
+                )}
+                <View style={{ flex: 1, alignItems: "flex-end", gap: 3 }}>
+                  <Text style={{ fontWeight: "800", color: "#1E293B",
+                    textAlign: "right", fontSize: 12 }} numberOfLines={2}>
                     {line.name}
                   </Text>
                   <Text style={{ color: "#64748B", textAlign: "right", fontSize: 12 }}>
                     {line.color || "بدون لون"} · {line.size || "بدون مقاس"}
                   </Text>
                 </View>
-                <Text style={{ color: line.scanned === line.required ? "#15803D" : "#475569", fontWeight: "900" }}>
+                <Text style={{ color: line.scanned === line.required ? "#15803D" : "#475569",
+                  backgroundColor: line.scanned === line.required ? "#DCFCE7" : "#F1F5F9",
+                  paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7,
+                  fontWeight: "900", fontSize: 12 }}>
                   {line.scanned}/{line.required}
                 </Text>
               </View>
