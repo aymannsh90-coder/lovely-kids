@@ -5504,7 +5504,6 @@ export default function AdminOrdersScreen() {
                           item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
                           item.paymentMethod === "cod" &&
                           item.paymentStatus === "pending" &&
-                          item.deliveryCompanyCost != null &&
                           !item.exchangePublicId && (
                             <Pressable
                               disabled={pendingOrderIds.has(item.id) || failedReturnBusy}
