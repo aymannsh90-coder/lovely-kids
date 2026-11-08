@@ -5719,6 +5719,12 @@ export default function AdminOrdersScreen() {
                     >
                       {statusOptions.map(
                         (s) => {
+                          const mustReceiveReturnedParcelFirst =
+                            item.status === "delivering" &&
+                            s.key === "cancelled" &&
+                            !isPickup &&
+                            item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                            item.paymentMethod === "cod";
                           const canMove =
                             (
                               orderTransitions[
@@ -5726,7 +5732,7 @@ export default function AdminOrdersScreen() {
                               ] ?? []
                             ).includes(
                               s.key,
-                            );
+                            ) && !mustReceiveReturnedParcelFirst;
 
                           return (
                             <Pressable
