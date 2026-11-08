@@ -1,3 +1,4 @@
+import { bankDisplayBalanceMinor } from "./finance-bank-currency-rules";
 import {
   bankAccountsTable,
   banksTable,
@@ -612,10 +613,14 @@ async function handleListBankAccounts(
               balance
                 ?.baseBalanceMinor ??
               0,
+            // ILS bank balances come from the actual accounting ledger.
+            // Some older journals lack optional currency metadata.
             currencyBalanceMinor:
-              balance
-                ?.currencyBalanceMinor ??
-              0,
+              bankDisplayBalanceMinor(
+                account.currencyCode,
+                balance?.baseBalanceMinor ?? 0,
+                balance?.currencyBalanceMinor ?? 0,
+              ),
           };
         },
       ),
