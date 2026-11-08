@@ -3813,8 +3813,10 @@ export default function AdminOrdersScreen() {
         })}
       </ScrollView>
 
-      {/* Exchange return parcels are separate from the replacement's delivery status.
-          Counts are based on the server's returnReceivedAt / financialCompletedAt fields. */}
+      {/* Keep receipt counters inside the Exchange Orders tab and its own
+          sub-filters only; don't occupy space in All or regular status tabs.
+          Physical return receipt is independent of replacement delivery. */}
+      {["exchange", "exchange_return_pending", "exchange_return_received"].includes(orderStatusFilter) && (
       <View style={{ marginHorizontal: 12, marginTop: 5, marginBottom: 7, gap: 7 }}>
         <Text style={{ textAlign: "right", fontSize: 13, fontWeight: "900", color: colors.foreground }}>
           📦 متابعة استلام طرود التبديل المرتجعة
@@ -3890,6 +3892,7 @@ export default function AdminOrdersScreen() {
           اضغط على أي عدّاد لعرض طروده فقط. «لم يتم الاستلام» يعني لم يُسجّل وصول المرتجع للمحل، وليس تأكيدًا بوجوده لدى شركة التوصيل.
         </Text>
       </View>
+      )}
 
       <View
         style={[
