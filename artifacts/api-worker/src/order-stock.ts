@@ -4,6 +4,7 @@ import {
   inventoryMovementsTable,
   appSettingsTable,
   orderItemCostsTable,
+  orderFailedDeliveryReturnsTable,
   orderPromotionsTable,
   ordersTable,
   productsTable,
@@ -3268,6 +3269,19 @@ export async function restoreCancelledOrderAndDeductStock(
     if (order.status !== "cancelled") {
       throw new OrderEditError(
         "يمكن استخدام هذه العملية للطلبات الملغية فقط",
+        409,
+      );
+    }
+
+    // A refused parcel has physically returned and the old sale was fully
+    // cancelled. Reopening it would erase the delivery return audit trail.
+    const [physicalReturn] = await tx.select({ orderId: orderFailedDeliveryReturnsTable.orderId })
+      .from(orderFailedDeliveryReturnsTable)
+      .where(eq(orderFailedDeliveryReturnsTable.orderId, orderId))
+      .limit(1);
+    if (physicalReturn) {
+      throw new OrderEditError(
+        "هذا الطلب راجع وتم استلامه وإلغاء بيعه؛ أنشئ طلبًا جديدًا بدل إعادة تفعيله",
         409,
       );
     }
