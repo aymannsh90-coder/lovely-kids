@@ -1,0 +1,98 @@
+name: Verify online exchange return barcode receipt
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/online-exchange-return-picking.ts'
+      - 'artifacts/api-worker/src/pos-online-exchange-receive.ts'
+      - 'artifacts/api-worker/src/pos-exchange-routes.ts'
+      - 'artifacts/lovely-kids/components/ExchangeReturnPickingPanel.tsx'
+      - 'artifacts/lovely-kids/app/admin/orders.tsx'
+      - 'lib/db/src/schema/exchange-return-picking.ts'
+      - 'lib/db/src/schema/index.ts'
+      - 'lib/db/migrations/20261108_create_exchange_return_picking_sessions.sql'
+      - '.github/workflows/verify-exchange-return-picking.yml'
+  workflow_dispatch:
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: API Worker TypeScript
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: Storefront TypeScript
+        run: pnpm --filter @workspace/lovely-kids typecheck
+      - name: Storefront web build
+        run: pnpm --filter @workspace/lovely-kids build
+
+  migration-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: exchange_return_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d exchange_return_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: exchange_return_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reference tables
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE public.users(id integer PRIMARY KEY);
+          CREATE TABLE public.exchange_documents(id integer PRIMARY KEY);
+          INSERT INTO public.users VALUES (1);
+          INSERT INTO public.exchange_documents VALUES (110);
+          SQL
+      - name: Apply migration twice
+        run: |
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261108_create_exchange_return_picking_sessions.sql
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261108_create_exchange_return_picking_sessions.sql
+      - name: Verify FK, RLS, audit persistence and missing public policies
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.exchange_return_picking_sessions
+          (exchange_id,items_signature,scans,verified_at,verified_by_user_id)
+          VALUES (110,'fixed-fixture','[{"id":"sample"}]'::jsonb,now(),1);
+          DO $$
+          BEGIN
+            IF NOT (SELECT relrowsecurity FROM pg_class
+               WHERE oid='public.exchange_return_picking_sessions'::regclass)
+            THEN RAISE EXCEPTION 'RLS must be enabled'; END IF;
+            IF (SELECT count(*) FROM pg_policies
+                WHERE schemaname='public' AND tablename='exchange_return_picking_sessions') <> 0
+            THEN RAISE EXCEPTION 'Unexpected public RLS policy'; END IF;
+            IF (SELECT jsonb_array_length(scans) FROM public.exchange_return_picking_sessions
+                WHERE exchange_id=110) <> 1
+            THEN RAISE EXCEPTION 'Scan audit not persisted'; END IF;
+            IF (SELECT count(*) FROM pg_constraint
+                WHERE conrelid='public.exchange_return_picking_sessions'::regclass
+                  AND contype='f') <> 2
+            THEN RAISE EXCEPTION 'Missing foreign key'; END IF;
+          END $$;
+          SQL
