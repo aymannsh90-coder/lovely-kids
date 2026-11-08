@@ -67,6 +67,11 @@ const STATUS_MAP: Record<
     color: "#ef4444",
     icon: "close-circle-outline",
   },
+  returning: {
+    label: "طرد راجع — لم يتم الاستلام",
+    color: "#D97706",
+    icon: "return-down-back-outline",
+  },
 };
 
 const STORE_PICKUP_LABEL = "استلام من المحل";
