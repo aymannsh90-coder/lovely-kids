@@ -14,6 +14,7 @@ import {
   handleVoidOnlineOrderExchange,
 } from "./pos-online-exchange-create";
 import { handleReceiveOnlineExchangeReturn } from "./pos-online-exchange-receive";
+import { handleOnlineExchangeReturnPicking } from "./online-exchange-return-picking";
 import {
   handleGetPosExchangeByPublicId,
   handleListPosExchanges,
@@ -908,6 +909,10 @@ export async function handlePosExchangeRequest(
   env: Env,
 ): Promise<Response | null> {
   const path = new URL(request.url).pathname;
+
+  // Return parcel barcode checking is its own authenticated, permission-gated route.
+  const returnPicking = await handleOnlineExchangeReturnPicking(request, db, env);
+  if (returnPicking) return returnPicking;
 
   // Require the exact exchange capability before reaching any delegated
   // handler; the handlers also check permissions for defense in depth.
