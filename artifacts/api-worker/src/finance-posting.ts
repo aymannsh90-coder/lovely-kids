@@ -1,8 +1,10 @@
+import { ensureBankPostingCurrency } from "./finance-bank-currency-rules";
 import {
+  bankAccountsTable,
   financeTransactionLinesTable,
   financeTransactionsTable,
 } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 const MAX_MINOR = 2_147_483_647;
 
@@ -565,6 +567,34 @@ export async function postFinanceTransaction(
     };
   }
 
+  // Only bank-linked lines need mandatory currency metadata. Normal postings
+  // still pass the existing balanced-journal check; do not infer a foreign
+  // exchange rate or modify any ledger amounts.
+  const accountIds = [...new Set(normalized.lines.map((line) => line.accountId))];
+  const bankRows = await tx
+    .select({
+      accountId: bankAccountsTable.financeAccountId,
+      currencyCode: bankAccountsTable.currencyCode,
+    })
+    .from(bankAccountsTable)
+    .where(inArray(bankAccountsTable.financeAccountId, accountIds));
+  const bankCurrencyByAccount = new Map(
+    bankRows.map((row) => [row.accountId, row.currencyCode]),
+  );
+  const postingLines = normalized.lines.map((line) => {
+    try {
+      return ensureBankPostingCurrency(
+        line,
+        bankCurrencyByAccount.get(line.accountId) ?? null,
+      );
+    } catch {
+      throw new FinancePostingError(
+        "FINANCE_POSTING_BANK_CURRENCY_INVALID",
+        "بيانات عملة الحساب البنكي غير متطابقة مع مبلغ القيد",
+      );
+    }
+  });
+
   const insertedRows = await tx
     .insert(financeTransactionsTable)
     .values({
@@ -594,7 +624,7 @@ export async function postFinanceTransaction(
   await tx
     .insert(financeTransactionLinesTable)
     .values(
-      normalized.lines.map((line) => ({
+      postingLines.map((line) => ({
         transactionId: transaction.id,
         lineNumber: line.lineNumber,
         accountId: line.accountId,
