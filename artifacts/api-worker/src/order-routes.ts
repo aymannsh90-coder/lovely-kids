@@ -1804,6 +1804,7 @@ async function handleEditOrderItems(
         exchangeManualDeliveryDiscountMinor?: unknown;
         localDeliveryCharge?: unknown;
         localDeliveryCourierCost?: unknown;
+        manualShippingCost?: unknown;
       }
     | null;
 
@@ -1828,6 +1829,7 @@ async function handleEditOrderItems(
         exchangeManualDeliveryDiscountMinor: body.exchangeManualDeliveryDiscountMinor,
         localDeliveryCharge: body.localDeliveryCharge,
         localDeliveryCourierCost: body.localDeliveryCourierCost,
+        manualShippingCost: body.manualShippingCost,
       },
       user.id,
     );
