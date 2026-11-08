@@ -894,6 +894,7 @@ export default {
             ...headers,
             "Cache-Control": "no-store",
             "X-Request-ID": requestId,
+            "Access-Control-Expose-Headers": "X-Request-ID",
           },
         },
       );
