@@ -3821,7 +3821,11 @@ export default function AdminOrdersScreen() {
       >
         {ORDER_FILTER_OPTIONS.map((option) => {
           const selected = orderStatusFilter === option.key;
-          const count = hasLoadedOrders ? (orderStatusCounts[option.key] ?? 0) : "—";
+          const count = hasLoadedOrders
+            ? option.key === "returning"
+              ? failedReturnCounts.pending
+              : (orderStatusCounts[option.key] ?? 0)
+            : "—";
 
           return (
             <Pressable
@@ -3882,6 +3886,37 @@ export default function AdminOrdersScreen() {
           );
         })}
       </ScrollView>
+
+      {orderStatusFilter === "returning" && (
+        <View style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 7, gap: 7 }}>
+          <Text style={{ textAlign: "right", fontSize: 14, fontWeight: "900", color: colors.foreground }}>
+            📦 طرود رفضت الزبونة استلامها — متابعة شركة التوصيل
+          </Text>
+          <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+            <View style={{ flex: 1, padding: 12, backgroundColor: "#FFFBEB",
+              borderRadius: 11, borderColor: "#FCD34D", borderWidth: 1 }}>
+              <Text style={{ textAlign: "right", color: "#92400E", fontSize: 12, fontWeight: "800" }}>
+                لسه عند شركة التوصيل
+              </Text>
+              <Text style={{ textAlign: "right", color: "#92400E", fontSize: 24, fontWeight: "900" }}>
+                {failedReturnCounts.pending}
+              </Text>
+            </View>
+            <View style={{ flex: 1, padding: 12, backgroundColor: "#F0FDF4",
+              borderRadius: 11, borderColor: "#86EFAC", borderWidth: 1 }}>
+              <Text style={{ textAlign: "right", color: "#166534", fontSize: 12, fontWeight: "800" }}>
+                تم استلام الراجع
+              </Text>
+              <Text style={{ textAlign: "right", color: "#166534", fontSize: 24, fontWeight: "900" }}>
+                {failedReturnCounts.received}
+              </Text>
+            </View>
+          </View>
+          <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 11 }}>
+            تكلفة إرجاع الطرد من الشركة 0 ₪. البضاعة غير متاحة للبيع حتى تأكيد وصولها للمحل.
+          </Text>
+        </View>
+      )}
 
       {/* Keep receipt counters inside the Exchange Orders tab and its own
           sub-filters only; don't occupy space in All or regular status tabs.
@@ -4283,6 +4318,7 @@ export default function AdminOrdersScreen() {
             const pst = paymentStatusInfo(item.paymentStatus);
             const isOpen = expanded === item.id;
             const returnParcelState = getExchangeReturnParcelState(item);
+            const failedReturnState = getFailedDeliveryReturnState(item);
             const statusOptions =
               isPickup
                 ? STATUS_OPTIONS
@@ -4425,6 +4461,26 @@ export default function AdminOrdersScreen() {
                         <View style={[styles.newDot, { backgroundColor: "#7C3AED" }]}>
                           <Text style={styles.newDotText}>
                             طلب تبديل — بدل الطلب #{item.exchangeOriginalOrderId}
+                          </Text>
+                        </View>
+                      )}
+
+                      {failedReturnState && (
+                        <View style={[
+                          styles.newDot,
+                          {
+                            backgroundColor: failedReturnState === "received" ? "#DCFCE7" : "#FEF3C7",
+                            borderColor: failedReturnState === "received" ? "#86EFAC" : "#FCD34D",
+                            borderWidth: 1, paddingVertical: 4, paddingHorizontal: 8,
+                          },
+                        ]}>
+                          <Text style={[styles.newDotText, {
+                            color: failedReturnState === "received" ? "#166534" : "#92400E",
+                            fontWeight: "900", fontSize: 12,
+                          }]}>
+                            {failedReturnState === "received"
+                              ? "✓ تم استلام الطرد الراجع وإرجاع المخزون"
+                              : "📦 راجع — لم يتم استلامه من شركة التوصيل"}
                           </Text>
                         </View>
                       )}
@@ -5426,6 +5482,59 @@ export default function AdminOrdersScreen() {
                               ✅ تم تسليم الطرد
                             </Text>
                           </Pressable>
+                        )}
+
+                        {item.status === "delivering" &&
+                          !isPickup &&
+                          item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                          item.paymentMethod === "cod" &&
+                          item.paymentStatus === "pending" &&
+                          item.deliveryCompanyCost != null &&
+                          !item.exchangePublicId && (
+                            <Pressable
+                              disabled={pendingOrderIds.has(item.id) || failedReturnBusy}
+                              onPress={event => {
+                                event.stopPropagation();
+                                setFailedReturnTarget(item);
+                                setFailedReturnReason("");
+                                setFailedReturnError("");
+                              }}
+                              style={[styles.editOrderBtn, {
+                                backgroundColor: "#FFFBEB", borderColor: "#D97706",
+                              }]}
+                            >
+                              <Ionicons name="return-down-back-outline" size={19} color="#92400E" />
+                              <Text style={[styles.editOrderBtnText, { color: "#92400E" }]}>
+                                📦 الزبونة رفضت الطرد — تحويل إلى راجع
+                              </Text>
+                            </Pressable>
+                          )}
+
+                        {failedReturnState === "pending" && (
+                          <Pressable
+                            disabled={failedReceiptBusy || pendingOrderIds.has(item.id)}
+                            onPress={event => {
+                              event.stopPropagation();
+                              setFailedReceiptTarget(item);
+                            }}
+                            style={[styles.editOrderBtn, {
+                              backgroundColor: "#F0FDF4", borderColor: "#16A34A",
+                            }]}
+                          >
+                            <Ionicons name="checkmark-done-outline" size={19} color="#166534" />
+                            <Text style={[styles.editOrderBtnText, { color: "#166534" }]}>
+                              ✓ استلام الطرد الراجع وإلغاء البيع وإرجاع المخزون
+                            </Text>
+                          </Pressable>
+                        )}
+
+                        {failedReturnState === "received" && (
+                          <View style={{ padding: 10, borderRadius: 10, backgroundColor: "#DCFCE7",
+                            borderWidth: 1, borderColor: "#86EFAC" }}>
+                            <Text style={{ color: "#166534", fontWeight: "900", textAlign: "right" }}>
+                              ✓ تم استلام الراجع وإرجاع مخزونه — تكلفة الرجوع 0 ₪
+                            </Text>
+                          </View>
                         )}
 
                         {item.status === "done" &&
@@ -6493,6 +6602,77 @@ export default function AdminOrdersScreen() {
             </Pressable>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Recording a refused parcel does not cancel the sale or restore stock. */}
+      <Modal visible={failedReturnTarget !== null} transparent animationType="fade"
+        onRequestClose={() => { if (!failedReturnBusy) setFailedReturnTarget(null); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.printConfirmCard, {
+            backgroundColor: colors.card, borderColor: colors.border, gap: 12,
+          }]}>
+            <Text style={{ fontSize: 19, fontWeight: "900", textAlign: "right", color: "#92400E" }}>
+              📦 تسجيل طرد راجع — الطلب #{failedReturnTarget?.id}
+            </Text>
+            <Text style={{ textAlign: "right", color: colors.foreground }}>
+              الزبونة رفضت استلام الطرد. رح يظل الطلب «راجع» وبضاعته خارج المخزون المتاح حتى تستلمه فعليًا من شركة التوصيل. تكلفة إرجاع الطرد 0 ₪.
+            </Text>
+            <TextInput
+              multiline numberOfLines={3} value={failedReturnReason}
+              onChangeText={setFailedReturnReason}
+              editable={!failedReturnBusy}
+              placeholder="سبب الرجوع (رفض الاستلام، الزبونة غير متاحة...)"
+              style={{ textAlign: "right", textAlignVertical: "top", minHeight: 86,
+                borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background,
+                borderRadius: 10, padding: 12, color: colors.foreground }}
+            />
+            {!!failedReturnError && <Text style={{ textAlign: "right", color: "#B91C1C" }}>
+              {failedReturnError}
+            </Text>}
+            <Pressable disabled={failedReturnBusy || failedReturnReason.trim().length < 3}
+              onPress={() => void reportRefusedParcel()}
+              style={{ backgroundColor: "#D97706", borderRadius: 11, padding: 13,
+                opacity: failedReturnBusy || failedReturnReason.trim().length < 3 ? 0.5 : 1 }}>
+              <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>
+                {failedReturnBusy ? "جاري التسجيل..." : "تأكيد: طرد راجع وبانتظار استلامه"}
+              </Text>
+            </Pressable>
+            <Pressable disabled={failedReturnBusy} onPress={() => setFailedReturnTarget(null)}
+              style={{ padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ textAlign: "center", color: colors.foreground, fontWeight: "800" }}>رجوع</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Physical receipt is the ONLY time the existing cancellation restores stock/cost. */}
+      <Modal visible={failedReceiptTarget !== null} transparent animationType="fade"
+        onRequestClose={() => { if (!failedReceiptBusy) setFailedReceiptTarget(null); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.printConfirmCard, {
+            backgroundColor: colors.card, borderColor: colors.border, gap: 13,
+          }]}>
+            <Text style={{ fontSize: 19, fontWeight: "900", textAlign: "right", color: "#166534" }}>
+              تأكيد وصول الطرد الراجع #{failedReceiptTarget?.id}
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "600" }}>
+              اضغط تأكيد فقط إذا استلمت الطرد فعلًا من شركة التوصيل وتأكدت من وجود جميع قطعه وسلامتها. سيُلغى البيع وتُعاد قطع الطلب للمخزون وتكلفتها التاريخية مرة واحدة. لا يوجد أي رسم لإرجاع الطرد (0 ₪).
+            </Text>
+            <Pressable disabled={failedReceiptBusy} onPress={() => void receiveRefusedParcel()}
+              style={{ backgroundColor: "#16A34A", borderRadius: 11, padding: 14,
+                opacity: failedReceiptBusy ? 0.5 : 1 }}>
+              <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>
+                {failedReceiptBusy ? "جاري ترحيل الاستلام..." : "نعم، استلمت كامل الطرد — إلغاء وإرجاع المخزون"}
+              </Text>
+            </Pressable>
+            <Pressable disabled={failedReceiptBusy} onPress={() => setFailedReceiptTarget(null)}
+              style={{ padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10 }}>
+              <Text style={{ color: colors.foreground, fontWeight: "800", textAlign: "center" }}>
+                رجوع بدون استلام
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Print Confirmation Modal */}
