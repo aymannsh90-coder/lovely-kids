@@ -2992,8 +2992,10 @@ export default function AdminOrdersScreen() {
       }
 
       if (
-        orderStatusFilter === "returning"
-          ? getFailedDeliveryReturnState(order) === null
+        ["returning", "failed_return_pending", "failed_return_received"].includes(orderStatusFilter)
+          ? (orderStatusFilter === "returning"
+              ? getFailedDeliveryReturnState(order) === null
+              : getFailedDeliveryReturnState(order) !== (orderStatusFilter === "failed_return_pending" ? "pending" : "received"))
           : !["all", "exchange", "exchange_return_pending", "exchange_return_received"].includes(orderStatusFilter) &&
             order.status !== orderStatusFilter
       ) {
@@ -3823,7 +3825,7 @@ export default function AdminOrdersScreen() {
           const selected = orderStatusFilter === option.key;
           const count = hasLoadedOrders
             ? option.key === "returning"
-              ? failedReturnCounts.pending
+              ? failedReturnCounts.pending + failedReturnCounts.received
               : (orderStatusCounts[option.key] ?? 0)
             : "—";
 
@@ -3887,31 +3889,44 @@ export default function AdminOrdersScreen() {
         })}
       </ScrollView>
 
-      {orderStatusFilter === "returning" && (
+      {["returning", "failed_return_pending", "failed_return_received"].includes(orderStatusFilter) && (
         <View style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 7, gap: 7 }}>
           <Text style={{ textAlign: "right", fontSize: 14, fontWeight: "900", color: colors.foreground }}>
             📦 طرود رفضت الزبونة استلامها — متابعة شركة التوصيل
           </Text>
           <View style={{ flexDirection: "row-reverse", gap: 8 }}>
-            <View style={{ flex: 1, padding: 12, backgroundColor: "#FFFBEB",
-              borderRadius: 11, borderColor: "#FCD34D", borderWidth: 1 }}>
+            <Pressable
+              onPress={() => { setOrderStatusFilter(orderStatusFilter === "failed_return_pending" ? "returning" : "failed_return_pending"); setExpanded(null); }}
+              accessibilityRole="button"
+              accessibilityLabel="عرض الطرود الراجعة غير المستلمة"
+              style={{ flex: 1, padding: 12, backgroundColor: "#FFFBEB",
+                borderRadius: 11, borderColor: orderStatusFilter === "failed_return_pending" ? "#D97706" : "#FCD34D",
+                borderWidth: orderStatusFilter === "failed_return_pending" ? 2 : 1 }}>
               <Text style={{ textAlign: "right", color: "#92400E", fontSize: 12, fontWeight: "800" }}>
                 لسه عند شركة التوصيل
               </Text>
               <Text style={{ textAlign: "right", color: "#92400E", fontSize: 24, fontWeight: "900" }}>
                 {failedReturnCounts.pending}
               </Text>
-            </View>
-            <View style={{ flex: 1, padding: 12, backgroundColor: "#F0FDF4",
-              borderRadius: 11, borderColor: "#86EFAC", borderWidth: 1 }}>
+            </Pressable>
+            <Pressable
+              onPress={() => { setOrderStatusFilter(orderStatusFilter === "failed_return_received" ? "returning" : "failed_return_received"); setExpanded(null); }}
+              accessibilityRole="button"
+              accessibilityLabel="عرض الطرود الراجعة التي تم استلامها"
+              style={{ flex: 1, padding: 12, backgroundColor: "#F0FDF4",
+                borderRadius: 11, borderColor: orderStatusFilter === "failed_return_received" ? "#16A34A" : "#86EFAC",
+                borderWidth: orderStatusFilter === "failed_return_received" ? 2 : 1 }}>
               <Text style={{ textAlign: "right", color: "#166534", fontSize: 12, fontWeight: "800" }}>
                 تم استلام الراجع
               </Text>
               <Text style={{ textAlign: "right", color: "#166534", fontSize: 24, fontWeight: "900" }}>
                 {failedReturnCounts.received}
               </Text>
-            </View>
+            </Pressable>
           </View>
+          <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 11 }}>
+            اضغط على عدّاد المستلم أو غير المستلم لعرض طروده فقط.
+          </Text>
           <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 11 }}>
             تكلفة إرجاع الطرد من الشركة 0 ₪. البضاعة غير متاحة للبيع حتى تأكيد وصولها للمحل.
           </Text>
