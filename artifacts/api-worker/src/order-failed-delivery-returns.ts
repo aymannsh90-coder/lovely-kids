@@ -116,10 +116,32 @@ export async function receiveFailedDeliveryReturn(db: Db, orderId: number, userI
     if (returnParcel.status !== "pending" || order.status !== "returning")
       throw new FailedDeliveryReturnError("حالة الطرد الراجع غير متطابقة؛ تم منع ترحيل المخزون");
 
-    // Existing, proven cancellation routine carries stock and cost reversal.
-    // A failure anywhere rolls back BOTH the cancellation and receipt marker.
+    // Revalidate against intervening finance/settlement changes at receipt
+    // time too. Neither a paid invoice nor a courier settlement can be
+    // silently undone by an inventory-only cancellation.
+    const postedFinance = await tx.select({ id: financeTransactionsTable.id })
+      .from(financeTransactionsTable)
+      .where(and(
+        eq(financeTransactionsTable.sourceType, "web_order"),
+        eq(financeTransactionsTable.sourceId, String(orderId)),
+        eq(financeTransactionsTable.status, "posted"),
+      )).limit(1);
+    if (postedFinance.length)
+      throw new FailedDeliveryReturnError("ظهر قيد مالي مرحّل بعد تسجيل الرجوع؛ يلزم تسوية محاسبية قبل الاستلام");
+    const settlement = await tx.select({ id: deliveryCompanySettlementItemsTable.id })
+      .from(deliveryCompanySettlementItemsTable)
+      .where(and(
+        eq(deliveryCompanySettlementItemsTable.orderId, orderId),
+        eq(deliveryCompanySettlementItemsTable.status, "posted"),
+      )).limit(1);
+    if (settlement.length)
+      throw new FailedDeliveryReturnError("الطلب أُدرج في تسوية شركة التوصيل؛ يجب مراجعة التسوية أولًا");
+
+    // Existing cancellation restores the exact historical item stock and
+    // cost, with strict validation. One transaction protects both receipt
+    // audit and stock ledger; on any error all changes roll back together.
     const cancelled = await cancelOrderAndRestoreStockInTransaction(
-      tx, orderId, ["returning"], userId, undefined,
+      tx, orderId, ["returning"], userId, undefined, false, true,
     );
     if (cancelled.kind !== "updated")
       throw new FailedDeliveryReturnError("تعذّر إلغاء الطلب وإرجاع القطع للمخزون");
