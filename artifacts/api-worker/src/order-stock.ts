@@ -565,6 +565,7 @@ interface EditOrderDetailsInput {
   exchangeManualDeliveryDiscountMinor?: unknown;
   localDeliveryCharge?: unknown;
   localDeliveryCourierCost?: unknown;
+  manualShippingCost?: unknown;
 }
 
 function parseRequiredOrderEditText(
@@ -1361,7 +1362,8 @@ export async function editOrderItemsAndAdjustStock(
 
     if (options?.restrictToPublicCatalog && (
       rawDetails?.localDeliveryCharge !== undefined ||
-      rawDetails?.localDeliveryCourierCost !== undefined
+      rawDetails?.localDeliveryCourierCost !== undefined ||
+      rawDetails?.manualShippingCost !== undefined
     )) {
       throw new OrderEditError("تسعير ديلفري نابلس من صلاحية الإدارة فقط", 403);
     }
@@ -2389,13 +2391,36 @@ export async function editOrderItemsAndAdjustStock(
       }
     }
 
-    // Keep the fixed Nablus base separate from any customer-approved
-    // discount or surcharge. Do not treat these as a global shipping promo.
+    // Per-order customer quote. Never change the company's cost, zone
+    // defaults, or exchange/local-courier pricing through this field.
+    const hasManualShippingCost =
+      details.manualShippingCost !== undefined;
+    if (hasManualShippingCost) {
+      if (isLocalDelivery || shipping.label === STORE_PICKUP_LABEL || linkedOnlineExchange) {
+        throw new OrderEditError("أجرة التوصيل اليدوية متاحة لطلبات شركة التوصيل العادية فقط", 400);
+      }
+      if (
+        typeof details.manualShippingCost !== "number" ||
+        !Number.isSafeInteger(details.manualShippingCost) ||
+        details.manualShippingCost < 0 ||
+        details.manualShippingCost > 10000
+      ) {
+        throw new OrderEditError("أجرة التوصيل اليدوية يجب أن تكون مبلغ شيكل صحيحاً من 0 إلى 10000", 400);
+      }
+      shippingCost = details.manualShippingCost;
+    }
+
+    // A manual quote is the original customer charge, not a shipping promotion;
+    // this keeps reports and future edits from treating a surcharge as a discount.
     const shippingOriginalCost =
-      isLocalDelivery ? LOCAL_NABLUS_DELIVERY_BASE_ILS : shipping.cost;
+      isLocalDelivery
+        ? LOCAL_NABLUS_DELIVERY_BASE_ILS
+        : hasManualShippingCost
+          ? shippingCost
+          : shipping.cost;
 
     const shippingPromotionDiscount =
-      linkedOnlineExchange || isLocalDelivery
+      linkedOnlineExchange || isLocalDelivery || hasManualShippingCost
         ? 0
         : Math.max(
             0,
