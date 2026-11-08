@@ -6240,11 +6240,13 @@ export default function AdminOrdersScreen() {
               </Text>
             </View>
 
+            {/* One scroll surface for progress, camera, items, and scan history.
+                The receipt/return buttons stay outside and always visible. */}
             <ScrollView
-              style={{ maxHeight: 430, width: "100%" }}
-              contentContainerStyle={{ gap: 10 }}
+              key={exchangeReturnConfirm?.publicId ?? "closed"}
+              style={{ maxHeight: 460, width: "100%", flexShrink: 1 }}
+              contentContainerStyle={{ gap: 10, paddingBottom: 10 }}
               keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
             >
               {exchangeReturnConfirm ? (
                 <ExchangeReturnPickingPanel
