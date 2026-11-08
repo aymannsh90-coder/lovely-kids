@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, Text, TextInput, View,
+  ActivityIndicator, Alert, Image, Platform, Pressable, Text, TextInput, View,
 } from "react-native";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
@@ -280,12 +280,11 @@ export default function ExchangeReturnPickingPanel({
               </Text>
             </View>
           ) : null}
-          <ScrollView style={{ maxHeight: 235 }}
-            nestedScrollEnabled keyboardShouldPersistTaps="handled">
+          <View style={{ gap: 2 }}>
             {data.lines.map(line => (
               <View key={line.key} style={{
                 flexDirection: "row-reverse", alignItems: "center",
-                borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingVertical: 8, gap: 9,
+                borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingVertical: 7, gap: 9,
               }}>
                 {line.image ? (
                   <Pressable onPress={() => setPreviewLine(line)}
@@ -304,22 +303,22 @@ export default function ExchangeReturnPickingPanel({
                 )}
                 <View style={{ flex: 1, alignItems: "flex-end", gap: 3 }}>
                   <Text style={{ fontWeight: "800", color: "#1E293B",
-                    textAlign: "right", fontSize: 12 }} numberOfLines={2}>
+                    textAlign: "right", fontSize: 14 }} numberOfLines={2}>
                     {line.name}
                   </Text>
-                  <Text style={{ color: "#64748B", textAlign: "right", fontSize: 12 }}>
+                  <Text style={{ color: "#64748B", textAlign: "right", fontSize: 13 }}>
                     {line.color || "بدون لون"} · {line.size || "بدون مقاس"}
                   </Text>
                 </View>
                 <Text style={{ color: line.scanned === line.required ? "#15803D" : "#475569",
                   backgroundColor: line.scanned === line.required ? "#DCFCE7" : "#F1F5F9",
                   paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7,
-                  fontWeight: "900", fontSize: 12 }}>
+                  fontWeight: "900", fontSize: 13 }}>
                   {line.scanned}/{line.required}
                 </Text>
               </View>
             ))}
-          </ScrollView>
+          </View>
           {!!data.scans.length && !data.stale ? (
             <View style={{ gap: 4 }}>
               <Text style={{ fontWeight: "800", color: "#334155", textAlign: "right" }}>آخر المسحات</Text>
