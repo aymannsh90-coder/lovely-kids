@@ -1,3 +1,9 @@
+import {
+  API_READ_MAX_ATTEMPTS,
+  apiReadRetryDelayMs,
+  canRetryApiRead,
+} from "./apiRetryPolicy";
+
 const fallbackApiBaseUrl = "https://api.lovelykids.net";
 
 export const API_BASE_URL = (
@@ -75,44 +81,80 @@ async function apiRequest<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const method = (options.method ?? "GET").toUpperCase();
+  const attempts = method === "GET" ? API_READ_MAX_ATTEMPTS : 1;
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const text = await response.text();
-  let payload: unknown = null;
-
-  if (text) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = { error: text };
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers,
+      });
+
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      const text = await response.text();
+      let payload: unknown = null;
+
+      if (text) {
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          payload = { error: text };
+        }
+      }
+
+      if (!response.ok) {
+        let message = `فشل الطلب برمز ${response.status}`;
+
+        if (
+          payload &&
+          typeof payload === "object" &&
+          "error" in payload &&
+          typeof payload.error === "string"
+        ) {
+          message = payload.error;
+        }
+
+        const requestId = response.headers.get("X-Request-ID");
+        if (response.status >= 500 && requestId) {
+          message += ` (رقم المتابعة: ${requestId})`;
+        }
+
+        throw new ApiError(message, response.status);
+      }
+
+      return payload as T;
+    } catch (error) {
+      const serverStatus = error instanceof ApiError ? error.status : undefined;
+      const transportFailure = error instanceof TypeError;
+      const shouldRetry = (transportFailure || serverStatus !== undefined) &&
+        canRetryApiRead(method, attempt, serverStatus);
+
+      if (shouldRetry && !options.signal?.aborted) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, apiReadRetryDelayMs(attempt));
+        });
+        continue;
+      }
+
+      if (transportFailure && !options.signal?.aborted) {
+        throw new ApiError(
+          method === "GET"
+            ? "تعذر الاتصال بالخادم بعد إعادة المحاولة. تحقق من الإنترنت ثم حاول تحميل البيانات من جديد."
+            : "انقطع الاتصال بالخادم. تأكد من حالة العملية قبل إعادة تنفيذها حتى لا تتكرر.",
+          0,
+        );
+      }
+
+      throw error;
     }
   }
 
-  if (!response.ok) {
-    let message = `فشل الطلب برمز ${response.status}`;
-
-    if (
-      payload &&
-      typeof payload === "object" &&
-      "error" in payload &&
-      typeof payload.error === "string"
-    ) {
-      message = payload.error;
-    }
-
-    throw new ApiError(message, response.status);
-  }
-
-  return payload as T;
+  throw new ApiError("تعذر تحميل البيانات مؤقتًا.", 0);
 }
-
 export function loginPos(phone: string, password: string) {
   return apiRequest<{
     token: string;
