@@ -34,6 +34,10 @@ import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
 import ExchangeReturnPickingPanel from "@/components/ExchangeReturnPickingPanel";
+import {
+  countExchangeReturnParcels,
+  getExchangeReturnParcelState,
+} from "@/utils/exchangeReturnParcelStatus";
 import { createOrderPrintHtml } from "@/utils/orderPrint";
 import { printOrderThermalReceipt } from "@/utils/orderThermalReceipt";
 import { buildCustomerWhatsappUrl } from "@/utils/whatsappPhone";
@@ -2889,6 +2893,12 @@ export default function AdminOrdersScreen() {
     return counts;
   }, [orders]);
 
+  // Physical receipt of the old parcel; not delivery of the replacement to the customer.
+  const exchangeReturnParcelCounts = useMemo(
+    () => countExchangeReturnParcels(orders),
+    [orders],
+  );
+
   const filteredOrders = useMemo(() => {
     const search = normalizeOrderLookup(orderSearch);
     const needle = search.replace(/^#/, "");
@@ -2896,22 +2906,25 @@ export default function AdminOrdersScreen() {
 
     return orders.filter((order) => {
       if (
-        order.mergedIntoOrderId !== null &&
-        !needle
+        order.mergedIntoOrderId != null &&
+        (!needle || orderStatusFilter.startsWith("exchange_return_"))
       ) {
         return false;
       }
 
-      if (
-        orderStatusFilter === "exchange" &&
-        !order.exchangePublicId
-      ) {
+      const parcelState = getExchangeReturnParcelState(order);
+      if (orderStatusFilter === "exchange" && !order.exchangePublicId) {
+        return false;
+      }
+      if (orderStatusFilter === "exchange_return_pending" && parcelState !== "pending") {
+        return false;
+      }
+      if (orderStatusFilter === "exchange_return_received" && parcelState !== "received") {
         return false;
       }
 
       if (
-        orderStatusFilter !== "all" &&
-        orderStatusFilter !== "exchange" &&
+        !["all", "exchange", "exchange_return_pending", "exchange_return_received"].includes(orderStatusFilter) &&
         order.status !== orderStatusFilter
       ) {
         return false;
@@ -3800,6 +3813,84 @@ export default function AdminOrdersScreen() {
         })}
       </ScrollView>
 
+      {/* Exchange return parcels are separate from the replacement's delivery status.
+          Counts are based on the server's returnReceivedAt / financialCompletedAt fields. */}
+      <View style={{ marginHorizontal: 12, marginTop: 5, marginBottom: 7, gap: 7 }}>
+        <Text style={{ textAlign: "right", fontSize: 13, fontWeight: "900", color: colors.foreground }}>
+          📦 متابعة استلام طرود التبديل المرتجعة
+        </Text>
+        <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 9 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="فلترة طرود التبديل المرتجعة التي لم تُستلم"
+            onPress={() => {
+              setOrderStatusFilter(
+                orderStatusFilter === "exchange_return_pending" ? "exchange" : "exchange_return_pending",
+              );
+              setExpanded(null);
+            }}
+            style={{
+              flexGrow: 1, flexBasis: 190,
+              flexDirection: "row-reverse", alignItems: "center", gap: 9,
+              paddingHorizontal: 12, paddingVertical: 10,
+              borderRadius: 12, borderWidth: orderStatusFilter === "exchange_return_pending" ? 2 : 1,
+              borderColor: "#D97706", backgroundColor: "#FFFBEB",
+            }}
+          >
+            <Ionicons name="cube-outline" size={22} color="#B45309" />
+            <View style={{ flex: 1, alignItems: "flex-end", gap: 2 }}>
+              <Text style={{ color: "#92400E", fontWeight: "900", fontSize: 13 }}>
+                لم يتم استلام المرتجع
+              </Text>
+              <Text style={{ color: "#92400E", fontSize: 11, textAlign: "right" }}>
+                بعد تسليم البديل · للمتابعة مع شركة التوصيل
+              </Text>
+            </View>
+            <Text style={{ color: "#92400E", fontWeight: "900", fontSize: 21 }}>
+              {hasLoadedOrders ? exchangeReturnParcelCounts.pending : "—"}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="فلترة طرود التبديل المرتجعة المستلمة"
+            onPress={() => {
+              setOrderStatusFilter(
+                orderStatusFilter === "exchange_return_received" ? "exchange" : "exchange_return_received",
+              );
+              setExpanded(null);
+            }}
+            style={{
+              flexGrow: 1, flexBasis: 190,
+              flexDirection: "row-reverse", alignItems: "center", gap: 9,
+              paddingHorizontal: 12, paddingVertical: 10,
+              borderRadius: 12, borderWidth: orderStatusFilter === "exchange_return_received" ? 2 : 1,
+              borderColor: "#16A34A", backgroundColor: "#F0FDF4",
+            }}
+          >
+            <Ionicons name="checkmark-circle-outline" size={22} color="#15803D" />
+            <View style={{ flex: 1, alignItems: "flex-end", gap: 2 }}>
+              <Text style={{ color: "#166534", fontWeight: "900", fontSize: 13 }}>
+                تم استلام المرتجع
+              </Text>
+              <Text style={{ color: "#166534", fontSize: 11, textAlign: "right" }}>
+                وصلت القطع للمحل وتم إرجاعها للمخزون
+              </Text>
+            </View>
+            <Text style={{ color: "#166534", fontWeight: "900", fontSize: 21 }}>
+              {hasLoadedOrders ? exchangeReturnParcelCounts.received : "—"}
+            </Text>
+          </Pressable>
+        </View>
+        {hasLoadedOrders && exchangeReturnParcelCounts.awaiting_delivery > 0 && (
+          <Text style={{ color: colors.mutedForeground, textAlign: "right", fontSize: 11 }}>
+            {exchangeReturnParcelCounts.awaiting_delivery} تبديل بانتظار تسليم الطلب البديل؛ لا يُحتسب ضمن المرتجعات المطلوب استلامها بعد.
+          </Text>
+        )}
+        <Text style={{ color: colors.mutedForeground, textAlign: "right", fontSize: 11 }}>
+          اضغط على أي عدّاد لعرض طروده فقط. «لم يتم الاستلام» يعني لم يُسجّل وصول المرتجع للمحل، وليس تأكيدًا بوجوده لدى شركة التوصيل.
+        </Text>
+      </View>
+
       <View
         style={[
           styles.orderSearchBar,
@@ -4118,6 +4209,7 @@ export default function AdminOrdersScreen() {
               );
             const pst = paymentStatusInfo(item.paymentStatus);
             const isOpen = expanded === item.id;
+            const returnParcelState = getExchangeReturnParcelState(item);
             const statusOptions =
               isPickup
                 ? STATUS_OPTIONS
@@ -4260,6 +4352,35 @@ export default function AdminOrdersScreen() {
                         <View style={[styles.newDot, { backgroundColor: "#7C3AED" }]}>
                           <Text style={styles.newDotText}>
                             طلب تبديل — بدل الطلب #{item.exchangeOriginalOrderId}
+                          </Text>
+                        </View>
+                      )}
+
+                      {returnParcelState && (
+                        <View style={[
+                          styles.newDot,
+                          {
+                            backgroundColor: returnParcelState === "received"
+                              ? "#DCFCE7" : returnParcelState === "pending" ? "#FEF3C7" : "#E2E8F0",
+                            borderWidth: 1,
+                            borderColor: returnParcelState === "received"
+                              ? "#86EFAC" : returnParcelState === "pending" ? "#FCD34D" : "#CBD5E1",
+                            paddingVertical: 4, paddingHorizontal: 8,
+                          },
+                        ]}>
+                          <Text style={[
+                            styles.newDotText,
+                            {
+                              fontSize: 11, fontWeight: "900",
+                              color: returnParcelState === "received"
+                                ? "#166534" : returnParcelState === "pending" ? "#92400E" : "#475569",
+                            },
+                          ]}>
+                            {returnParcelState === "received"
+                              ? "✓ تم استلام طرد التبديل المرتجع"
+                              : returnParcelState === "pending"
+                                ? "📦 لم يتم استلام طرد التبديل المرتجع"
+                                : "بانتظار تسليم الطلب البديل"}
                           </Text>
                         </View>
                       )}
@@ -5235,7 +5356,7 @@ export default function AdminOrdersScreen() {
                         )}
 
                         {item.status === "done" &&
-                          !item.exchangeReturnReceivedAt && (
+                          returnParcelState === "pending" && (
                             <Pressable
                               disabled={exchangeReturnBusyId === item.id}
                               onPress={(event) => {
@@ -5272,7 +5393,7 @@ export default function AdminOrdersScreen() {
                                   { color: "#B45309" },
                                 ]}
                               >
-                                📦 تم استلام الطرد المرتجع
+                                📦 فحص واستلام الطرد المرتجع
                               </Text>
                             </Pressable>
                           )}
