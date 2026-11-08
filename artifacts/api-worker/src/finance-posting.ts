@@ -578,8 +578,11 @@ export async function postFinanceTransaction(
     })
     .from(bankAccountsTable)
     .where(inArray(bankAccountsTable.financeAccountId, accountIds));
-  const bankCurrencyByAccount = new Map(
-    bankRows.map((row) => [row.accountId, row.currencyCode]),
+  const bankCurrencyByAccount = new Map<number, string>(
+    bankRows.map((row: { accountId: number; currencyCode: string }) => [
+      row.accountId,
+      row.currencyCode,
+    ]),
   );
   const postingLines = normalized.lines.map((line) => {
     try {
