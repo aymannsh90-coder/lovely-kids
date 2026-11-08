@@ -1076,6 +1076,9 @@ async function handleCreateSettlement(
             {
               accountId:
                 bank.finance.id,
+              currencyCode: "ILS",
+              currencyAmountMinor: netMinor,
+              exchangeRateMicros: 1_000_000,
               debitMinor:
                 netMinor,
               creditMinor:
