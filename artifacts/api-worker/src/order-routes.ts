@@ -2446,6 +2446,23 @@ async function handleUpdateOrderStatus(
     }
   }
 
+  // A COD parcel already handed to an external courier is NOT physically
+  // back in the shop when the customer refuses it. Direct cancellation would
+  // instantly restore saleable stock while the parcel is still with the courier.
+  // Use the audited 'راجع' -> 'استلام الطرد' flow instead.
+  if (
+    current[0].status === "delivering" &&
+    body.status === "cancelled" &&
+    current[0].fulfillmentMethod === "delivery" &&
+    current[0].deliveryCompanyId !== null &&
+    current[0].paymentMethod === "cod" &&
+    current[0].shippingZone !== LOCAL_NABLUS_DELIVERY_LABEL
+  ) {
+    return json({
+      error: "الطرد عند شركة التوصيل؛ سجّله «راجع» ثم أكّد استلامه الفعلي قبل إلغاء البيع وإرجاع المخزون",
+    }, 409);
+  }
+
   if (body.status === "cancelled") {
     let result: Awaited<ReturnType<typeof cancelOrderAndRestoreStock>>;
     try {
