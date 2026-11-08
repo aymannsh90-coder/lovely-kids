@@ -59,6 +59,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; icon: string }>
   delivering: { label: "قيد التوصيل",  color: "#FF9800", icon: "bicycle-outline" },
   done:       { label: "تم التسليم",   color: "#22c55e", icon: "bag-check-outline" },
   cancelled:  { label: "ملغي",         color: "#ef4444", icon: "close-circle-outline" },
+  returning:  { label: "راجع لشركة التوصيل", color: "#D97706", icon: "return-down-back-outline" },
 };
 
 function statusInfo(

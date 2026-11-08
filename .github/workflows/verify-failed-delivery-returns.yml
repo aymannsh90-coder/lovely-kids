@@ -1,0 +1,109 @@
+name: Verify failed delivery return receipt
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/order-routes.ts'
+      - 'artifacts/api-worker/src/order-failed-delivery-returns.ts'
+      - 'artifacts/api-worker/src/order-stock.ts'
+      - 'artifacts/lovely-kids/app/admin/orders.tsx'
+      - 'artifacts/lovely-kids/utils/failedDeliveryReturnStatus*'
+      - 'lib/db/src/schema/order-failed-delivery-returns.ts'
+      - 'lib/db/src/schema/index.ts'
+      - 'lib/db/migrations/20261108_order_failed_delivery_returns.sql'
+      - '.github/workflows/verify-failed-delivery-returns.yml'
+  workflow_dispatch:
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refused parcel logic tests
+        run: node --experimental-strip-types --test artifacts/lovely-kids/utils/failedDeliveryReturnStatus.test.mjs
+      - name: API typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: Storefront typecheck
+        run: pnpm --filter @workspace/lovely-kids typecheck
+      - name: POS typecheck (shared DB)
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Storefront build
+        run: pnpm --filter @workspace/lovely-kids build
+
+  migration-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: returned_parcels
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d returned_parcels"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: returned_parcels
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create minimal FK fixtures
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE public.users(id integer PRIMARY KEY);
+          CREATE TABLE public.orders(id integer PRIMARY KEY);
+          INSERT INTO public.users VALUES (1);
+          INSERT INTO public.orders VALUES (42);
+          SQL
+      - name: Apply migration twice and verify RLS, zero-return-cost and receipts
+        run: |
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261108_order_failed_delivery_returns.sql
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261108_order_failed_delivery_returns.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.order_failed_delivery_returns
+            (order_id,reason,reported_by_user_id)
+          VALUES (42,'رفضت الزبونة استلام الطرد',1);
+          DO $$
+          BEGIN
+            IF NOT (SELECT relrowsecurity FROM pg_class
+                WHERE oid='public.order_failed_delivery_returns'::regclass)
+            THEN RAISE EXCEPTION 'Missing RLS'; END IF;
+            IF (SELECT count(*) FROM pg_policies
+                WHERE schemaname='public' AND tablename='order_failed_delivery_returns') <> 0
+            THEN RAISE EXCEPTION 'Unexpected client policies'; END IF;
+            IF (SELECT return_delivery_cost_minor FROM public.order_failed_delivery_returns WHERE order_id=42) <> 0
+            THEN RAISE EXCEPTION 'Return fee not zero'; END IF;
+          END $$;
+          UPDATE public.order_failed_delivery_returns SET
+            status='received',received_at=now(),received_by_user_id=1
+          WHERE order_id=42;
+          DO $$
+          BEGIN
+            IF (SELECT status FROM public.order_failed_delivery_returns WHERE order_id=42) <> 'received'
+            THEN RAISE EXCEPTION 'Physical receipt was not persisted'; END IF;
+          END $$;
+          SQL
+      - name: Reject nonzero return freight
+        run: |
+          if psql -v ON_ERROR_STOP=1 -c "UPDATE public.order_failed_delivery_returns SET return_delivery_cost_minor = 500 WHERE order_id = 42"; then
+            echo "ERROR: zero-fee invariant violated"
+            exit 1
+          fi

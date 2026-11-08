@@ -4,6 +4,7 @@ import {
   inventoryMovementsTable,
   appSettingsTable,
   orderItemCostsTable,
+  orderFailedDeliveryReturnsTable,
   orderPromotionsTable,
   ordersTable,
   productsTable,
@@ -76,6 +77,7 @@ export async function cancelOrderAndRestoreStockInTransaction(
   actorUserId: number | null | undefined,
   exchangeVoidReason: string | undefined,
   allowAuditedLocalCourierReversal = false,
+  strictPhysicalReturnReceipt = false,
 ) {
     const rows = await tx
       .select({
@@ -96,6 +98,9 @@ export async function cancelOrderAndRestoreStockInTransaction(
     const auditedLocalReversal =
       allowAuditedLocalCourierReversal &&
       order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL;
+    // A physically received refused parcel must restore the FULL original
+    // product, variant, and historical cost without silent skips.
+    const requireFullStockRestore = auditedLocalReversal || strictPhysicalReturnReceipt;
 
     if (
       order.status === "cancelled" ||
@@ -175,6 +180,11 @@ export async function cancelOrderAndRestoreStockInTransaction(
       ? (order.items as StoredOrderItem[])
       : [];
 
+    if (strictPhysicalReturnReceipt &&
+        (!Array.isArray(order.items) || (order.items as StoredOrderItem[]).length === 0)) {
+      throw new OrderEditError("هذا الطرد لا يحتوي على قطع صالحة لإعادة المخزون", 409);
+    }
+
     const stockCardOccurredAt = new Date();
     const stockCardOperationId =
       crypto.randomUUID();
@@ -213,7 +223,7 @@ export async function cancelOrderAndRestoreStockInTransaction(
       const quantity = Number(item.quantity);
 
       if (!Number.isInteger(productId) || !Number.isInteger(quantity) || quantity <= 0) {
-        if (auditedLocalReversal) {
+        if (requireFullStockRestore) {
           throw new OrderEditError("تعذر تحديد أحد الأصناف المطلوب إرجاعها للمخزون", 409);
         }
         continue;
@@ -235,7 +245,7 @@ export async function cancelOrderAndRestoreStockInTransaction(
       const product = productRows[0];
 
       if (!product) {
-        if (auditedLocalReversal) {
+        if (requireFullStockRestore) {
           throw new OrderEditError("صنف من الطلب لم يعد موجوداً؛ تم منع الإلغاء المالي", 409);
         }
         continue;
@@ -262,7 +272,7 @@ export async function cancelOrderAndRestoreStockInTransaction(
       const colorVariants =
         (product.colorVariants as ColorVariant[] | null) ?? [];
 
-      if (auditedLocalReversal && item.color && item.size &&
+      if (requireFullStockRestore && item.color && item.size &&
           !colorVariants.some((variant) =>
             variant.color === item.color &&
             variant.sizes.some((size) => size.size === item.size && size.stock !== null && size.stock !== undefined)
@@ -319,7 +329,7 @@ export async function cancelOrderAndRestoreStockInTransaction(
         }
       }
 
-      if (auditedLocalReversal && Object.keys(updates).length === 0) {
+      if (requireFullStockRestore && Object.keys(updates).length === 0) {
         throw new OrderEditError("لا يمكن إعادة الصنف للمخزون آلياً", 409);
       }
 
@@ -373,7 +383,7 @@ export async function cancelOrderAndRestoreStockInTransaction(
       const originalCost =
         costByLineNumber.get(lineNumber);
 
-      if (auditedLocalReversal && !originalCost) {
+      if (requireFullStockRestore && !originalCost) {
         throw new OrderEditError(
           "لا توجد تكلفة تاريخية موثوقة لهذا الصنف؛ الإلغاء التلقائي موقوف",
           409,
@@ -3259,6 +3269,19 @@ export async function restoreCancelledOrderAndDeductStock(
     if (order.status !== "cancelled") {
       throw new OrderEditError(
         "يمكن استخدام هذه العملية للطلبات الملغية فقط",
+        409,
+      );
+    }
+
+    // A refused parcel has physically returned and the old sale was fully
+    // cancelled. Reopening it would erase the delivery return audit trail.
+    const [physicalReturn] = await tx.select({ orderId: orderFailedDeliveryReturnsTable.orderId })
+      .from(orderFailedDeliveryReturnsTable)
+      .where(eq(orderFailedDeliveryReturnsTable.orderId, orderId))
+      .limit(1);
+    if (physicalReturn) {
+      throw new OrderEditError(
+        "هذا الطلب راجع وتم استلامه وإلغاء بيعه؛ أنشئ طلبًا جديدًا بدل إعادة تفعيله",
         409,
       );
     }
