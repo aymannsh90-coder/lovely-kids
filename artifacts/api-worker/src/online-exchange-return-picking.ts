@@ -215,7 +215,7 @@ export async function handleOnlineExchangeReturnPicking(
         .where(eq(exchangeDocumentsTable.publicId, publicId)).for("update");
       if (!exchange || exchange.sourceType !== "online_order")
         throw new ReturnPickingError("عملية التبديل غير موجودة", 404);
-      const items = await lookupLines(tx as Db, exchange.id);
+      const items = await lookupLines(tx as unknown as Db, exchange.id);
       const signature = exchangeReturnSignature(items);
       const [existing] = await tx.select().from(exchangeReturnPickingSessionsTable)
         .where(eq(exchangeReturnPickingSessionsTable.exchangeId, exchange.id)).limit(1);
@@ -240,7 +240,7 @@ export async function handleOnlineExchangeReturnPicking(
         const requestId = body.requestId as string;
         if (scans.some(x => x.requestId === requestId)) return view(exchange, items, existing);
         const barcode = (body.barcode as string).trim();
-        const line = await scanLine(tx as Db, exchangeReturnLines(items), scans, barcode);
+        const line = await scanLine(tx as unknown as Db, exchangeReturnLines(items), scans, barcode);
         scans.push({
           id: randomUUID(), requestId, lineKey: line.key, barcode,
           scannedAt: new Date().toISOString(), scannedByUserId: user.id,
