@@ -33,6 +33,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
+import ExchangeReturnPickingPanel from "@/components/ExchangeReturnPickingPanel";
 import { createOrderPrintHtml } from "@/utils/orderPrint";
 import { printOrderThermalReceipt } from "@/utils/orderThermalReceipt";
 import { buildCustomerWhatsappUrl } from "@/utils/whatsappPhone";
@@ -622,6 +623,8 @@ export default function AdminOrdersScreen() {
   const [exchangeVoidError, setExchangeVoidError] = useState("");
   const [exchangeReturnConfirm, setExchangeReturnConfirm] =
     useState<ExchangeReturnConfirmation | null>(null);
+  const [exchangeReturnVerified, setExchangeReturnVerified] = useState(false);
+  const updateExchangeReturnVerified = useCallback((value: boolean) => setExchangeReturnVerified(value), []);
   const [exchangeReturnBusyId, setExchangeReturnBusyId] =
     useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
@@ -932,6 +935,7 @@ export default function AdminOrdersScreen() {
         throw new Error("لا توجد أصناف مرتجعة مرتبطة بعملية التبديل");
       }
 
+      setExchangeReturnVerified(false);
       setExchangeReturnConfirm({
         orderId: order.id,
         publicId,
@@ -957,6 +961,10 @@ export default function AdminOrdersScreen() {
     const confirmation = exchangeReturnConfirm;
 
     if (!confirmation || exchangeReturnBusyId !== null) {
+      return;
+    }
+    if (!exchangeReturnVerified) {
+      showError("يجب فحص جميع القطع المرتجعة بالباركود أولاً (100%).");
       return;
     }
 
@@ -6189,9 +6197,9 @@ export default function AdminOrdersScreen() {
             style={[
               styles.deleteConfirmCard,
               {
-                width: 440,
+                width: 510,
                 maxWidth: "92%",
-                maxHeight: "82%",
+                maxHeight: "90%",
                 backgroundColor: colors.card,
                 borderColor: colors.border,
                 alignItems: "stretch",
@@ -6233,48 +6241,23 @@ export default function AdminOrdersScreen() {
             </View>
 
             <ScrollView
-              style={{ maxHeight: 300, width: "100%" }}
-              contentContainerStyle={{ gap: 8 }}
+              style={{ maxHeight: 430, width: "100%" }}
+              contentContainerStyle={{ gap: 10 }}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
             >
-              {exchangeReturnConfirm?.items.map((returnItem, index) => (
-                <View
-                  key={
-                    returnItem.id ??
-                    `${returnItem.productId ?? "item"}-${index}`
-                  }
-                  style={{
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    gap: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: colors.foreground,
-                      fontWeight: "900",
-                      textAlign: "right",
-                    }}
-                  >
-                    {returnItem.productNameAr}
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.mutedForeground,
-                      textAlign: "right",
-                    }}
-                  >
-                    اللون: {returnItem.color || "—"} · المقاس:{" "}
-                    {returnItem.size || "—"} · الكمية:{" "}
-                    {returnItem.quantity}
-                  </Text>
-                </View>
-              ))}
+              {exchangeReturnConfirm ? (
+                <ExchangeReturnPickingPanel
+                  key={exchangeReturnConfirm.publicId}
+                  publicId={exchangeReturnConfirm.publicId}
+                  onVerifiedChange={updateExchangeReturnVerified}
+                  disabled={exchangeReturnBusyId !== null}
+                />
+              ) : null}
             </ScrollView>
 
             <Pressable
-              disabled={exchangeReturnBusyId !== null}
+              disabled={exchangeReturnBusyId !== null || !exchangeReturnVerified}
               onPress={() => {
                 void confirmReceiveOnlineExchangeReturn();
               }}
@@ -6282,7 +6265,7 @@ export default function AdminOrdersScreen() {
                 styles.deleteConfirmBtn,
                 {
                   backgroundColor: "#F59E0B",
-                  opacity: exchangeReturnBusyId !== null ? 0.55 : 1,
+                  opacity: exchangeReturnBusyId !== null || !exchangeReturnVerified ? 0.55 : 1,
                 },
               ]}
             >
@@ -6290,7 +6273,7 @@ export default function AdminOrdersScreen() {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={styles.deleteConfirmBtnText}>
-                  تأكيد الاستلام وإرجاع المخزون
+                  {exchangeReturnVerified ? "تأكيد الاستلام وإرجاع المخزون" : "أكمل فحص الباركود 100% أولاً"}
                 </Text>
               )}
             </Pressable>
