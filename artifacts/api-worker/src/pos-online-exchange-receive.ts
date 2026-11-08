@@ -2,6 +2,7 @@ import {
   exchangeDocumentsTable,
   exchangeReturnItemCostsTable,
   exchangeReturnItemsTable,
+  exchangeReturnPickingSessionsTable,
   inventoryMovementsTable,
   financeAccountsTable,
   orderItemCostsTable,
@@ -18,6 +19,7 @@ import {
 
 import { getCurrentUser } from "./auth";
 import { randomUUID } from "node:crypto";
+import { isExchangeReturnPickingVerified } from "./online-exchange-return-picking";
 import { postFinanceTransaction } from "./finance-posting";
 import {
   ensureOnlineReturnAccount,
@@ -654,6 +656,19 @@ export async function handleReceiveOnlineExchangeReturn(
             );
           }
 
+
+          // Guard the PHYSICAL stock and cost transfer, not merely the UI button.
+          // This runs under the locked exchange row, so concurrent scans, reset,
+          // and receipt cannot race one another or bypass the full verification.
+          const [picking] = await tx.select().from(exchangeReturnPickingSessionsTable)
+            .where(eq(exchangeReturnPickingSessionsTable.exchangeId, exchange.id))
+            .for("update");
+          if (!isExchangeReturnPickingVerified(picking, returnItems)) {
+            throw new OnlineExchangeReceiveError(
+              "يجب فحص جميع القطع المرتجعة بالباركود (100%) قبل تأكيد استلام الطرد",
+              409,
+            );
+          }
 
           // New exchanges have their historical return costs booked at
           // financial completion. Legacy exchanges have no snapshot until
