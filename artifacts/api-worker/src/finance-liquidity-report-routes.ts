@@ -1,3 +1,4 @@
+import { bankDisplayBalanceMinor } from "./finance-bank-currency-rules";
 import {
   bankAccountsTable,
   banksTable,
@@ -1304,12 +1305,11 @@ async function handleLiquidityReport(
           0;
 
         const currencyBalanceMinor =
-          account.currencyCode ===
-            "ILS"
-            ? baseBalanceMinor
-            : balance
-                ?.currencyBalanceMinor ??
-              0;
+          bankDisplayBalanceMinor(
+            account.currencyCode,
+            baseBalanceMinor,
+            balance?.currencyBalanceMinor ?? 0,
+          );
 
         bankBaseMinor +=
           baseBalanceMinor;
