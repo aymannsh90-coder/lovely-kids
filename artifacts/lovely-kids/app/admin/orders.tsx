@@ -35,6 +35,10 @@ import { useColors } from "@/hooks/useColors";
 import { API_BASE } from "@/constants/api";
 import ExchangeReturnPickingPanel from "@/components/ExchangeReturnPickingPanel";
 import {
+  countFailedDeliveryReturns,
+  getFailedDeliveryReturnState,
+} from "@/utils/failedDeliveryReturnStatus";
+import {
   countExchangeReturnParcels,
   getExchangeReturnParcelState,
 } from "@/utils/exchangeReturnParcelStatus";
@@ -128,6 +132,11 @@ interface Order {
   deliveryCompanyCost?: number | null;
   courierCashReceivedAt?: string | null;
   courierCashReversedAt?: string | null;
+  failedDeliveryReturnStatus?: "pending" | "received" | null;
+  failedDeliveryReturnReason?: string | null;
+  failedDeliveryReturnReportedAt?: string | null;
+  failedDeliveryReturnReceivedAt?: string | null;
+  failedDeliveryReturnCostMinor?: number | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   promotionDiscountAmount?: number;
@@ -279,6 +288,7 @@ const STATUS_OPTIONS = [
   { key: "delivering", label: "قيد التوصيل", color: "#FF9800", icon: "bicycle-outline" as const },
   { key: "done", label: "تم التسليم", color: "#22c55e", icon: "bag-check-outline" as const },
   { key: "cancelled", label: "ملغي", color: "#ef4444", icon: "close-circle-outline" as const },
+  { key: "returning", label: "راجع", color: "#D97706", icon: "return-down-back-outline" as const },
 ];
 
 const ORDER_FILTER_OPTIONS = [
@@ -621,6 +631,12 @@ export default function AdminOrdersScreen() {
   ] = useState<
     "arab" | "bop" | null
   >(null);
+  const [failedReturnTarget, setFailedReturnTarget] = useState<Order | null>(null);
+  const [failedReturnReason, setFailedReturnReason] = useState("");
+  const [failedReturnError, setFailedReturnError] = useState("");
+  const [failedReturnBusy, setFailedReturnBusy] = useState(false);
+  const [failedReceiptTarget, setFailedReceiptTarget] = useState<Order | null>(null);
+  const [failedReceiptBusy, setFailedReceiptBusy] = useState(false);
   const [exchangeVoidTarget, setExchangeVoidTarget] = useState<Order | null>(null);
   const [exchangeVoidReason, setExchangeVoidReason] = useState("");
   const [exchangeVoidBusy, setExchangeVoidBusy] = useState(false);
@@ -2899,6 +2915,58 @@ export default function AdminOrdersScreen() {
     [orders],
   );
 
+  const failedReturnCounts = useMemo(() => countFailedDeliveryReturns(orders), [orders]);
+
+  const reportRefusedParcel = async () => {
+    if (!failedReturnTarget || failedReturnBusy) return;
+    const reason = failedReturnReason.trim();
+    if (reason.length < 3 || reason.length > 500) {
+      setFailedReturnError("اكتب سبب رجوع الطرد (3–500 حرف)");
+      return;
+    }
+    setFailedReturnBusy(true);
+    setFailedReturnError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة الدخول");
+      const res = await fetch(`${API_BASE}/api/orders/${failedReturnTarget.id}/failed-delivery-return`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "تعذر تسجيل الطرد الراجع");
+      setFailedReturnTarget(null);
+      setFailedReturnReason("");
+      await fetchOrders();
+    } catch (error) {
+      setFailedReturnError(error instanceof Error ? error.message : "تعذر تسجيل الطرد الراجع");
+    } finally { setFailedReturnBusy(false); }
+  };
+
+  const receiveRefusedParcel = async () => {
+    if (!failedReceiptTarget || failedReceiptBusy) return;
+    setFailedReceiptBusy(true);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة الدخول");
+      const res = await fetch(`${API_BASE}/api/orders/${failedReceiptTarget.id}/failed-delivery-return/receive`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmPhysicalReceipt: true }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "تعذر استلام الراجع");
+      setFailedReceiptTarget(null);
+      await fetchOrders();
+      if (Platform.OS !== "web") Alert.alert("تم الاستلام", "تم إلغاء البيع وإرجاع مخزون القطع وتكاليفها مرة واحدة.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر تأكيد الاستلام";
+      showError(message);
+      if (Platform.OS !== "web") Alert.alert("تعذر الاستلام", message);
+    } finally { setFailedReceiptBusy(false); }
+  };
+
   const filteredOrders = useMemo(() => {
     const search = normalizeOrderLookup(orderSearch);
     const needle = search.replace(/^#/, "");
@@ -2924,8 +2992,10 @@ export default function AdminOrdersScreen() {
       }
 
       if (
-        !["all", "exchange", "exchange_return_pending", "exchange_return_received"].includes(orderStatusFilter) &&
-        order.status !== orderStatusFilter
+        orderStatusFilter === "returning"
+          ? getFailedDeliveryReturnState(order) === null
+          : !["all", "exchange", "exchange_return_pending", "exchange_return_received"].includes(orderStatusFilter) &&
+            order.status !== orderStatusFilter
       ) {
         return false;
       }
