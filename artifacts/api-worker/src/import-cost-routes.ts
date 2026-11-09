@@ -19,6 +19,7 @@ import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierA
 import { parseImportDirectCostRequest, postImportDirectCost } from "./import-direct-payment-posting";
 import { previewImportClosing } from "./import-close-readiness";
 import { previewImportClearingSettlement } from "./import-clearing-settlement";
+import { supplierPayableBalances } from "./finance-supplier-ledger";
 import { inspectRecordedImportPayments } from "./import-payment-evidence-service";
 import { attachApprovedPurchase,detachApprovedPurchase,getPurchaseLinks,ImportPurchaseLinkError } from "./import-purchase-link-service";
 import { assignImportSupplierVoucher, detachImportSupplierVoucher, getImportSupplierVoucherClaims, ImportSupplierVoucherError } from "./import-supplier-voucher-claim-service";
@@ -437,20 +438,46 @@ async function detail(db: Db, id: number, env: Env) {
     travelCapitalizableIlsMinor:draft.allocations.reduce((sum,a)=>
       sum+a.travelCapitalizableIlsMinor,0),
   });
+  // Aggregate supplier control-account is a second, independent guard.
+  // This cannot replace invoice-specific voucher attribution; it only blocks
+  // settlements that would debit more than the supplier currently owes.
+  const supplierBalances=await supplierPayableBalances(db);
+  const plannedSupplierDebits=new Map<number,number>();
+  for(const line of clearingCandidate.journalLines){
+    if(line.accountCode!=="SUPPLIER_PAYABLE_CONTROL" || line.supplierId===null)continue;
+    plannedSupplierDebits.set(line.supplierId,
+      (plannedSupplierDebits.get(line.supplierId)??0)+line.debitMinor);
+  }
+  const supplierBalanceWarnings=[...plannedSupplierDebits].flatMap(([supplierId,plannedDebit])=>{
+    const outstanding=supplierBalances.get(supplierId)??0;
+    return outstanding<plannedDebit
+      ? ["رصيد ذمة المورد #"+supplierId+" الحالي ("+(outstanding/100).toFixed(2)+
+        " ₪) أقل من قيد التسوية المطلوب ("+(plannedDebit/100).toFixed(2)+
+        " ₪)؛ تحقق من السندات والمشتريات السابقة"]
+      : [];
+  });
   const clearingPreview={
     ...clearingCandidate,
     ready:clearingCandidate.ready && allGroupsMatched && comparison.balanced &&
-      inspectedPayments.allVerified && invalidVoucherClaims.length===0,
+      inspectedPayments.allVerified && invalidVoucherClaims.length===0 &&
+      supplierBalanceWarnings.length===0,
     blockers:[
       ...clearingCandidate.blockers,
       ...journalWarnings,
       ...invalidVoucherClaims,
+      ...supplierBalanceWarnings,
       ...(!allGroupsMatched ? ["سجلات تكلفة المشتريات المعتمدة لا تطابق جميع مجموعات الإكسل"] : []),
       ...(!comparison.balanced ? ["توزيع الإكسل لم يطابق فواتير الموردين والشحنات"] : []),
     ],
     /** NOT an accounting posting or permission to close. */
     journalPosted:false,
     canExecute:false,
+    supplierBalanceChecks:[...plannedSupplierDebits].map(([supplierId,plannedDebitIlsMinor])=>({
+      supplierId,
+      currentPayableIlsMinor:supplierBalances.get(supplierId)??0,
+      plannedDebitIlsMinor,
+      sufficient:(supplierBalances.get(supplierId)??0)>=plannedDebitIlsMinor,
+    })),
   };
   const closePreview = previewImportClosing({
     excelBalanced: comparison.balanced,
@@ -499,9 +526,9 @@ async function detail(db: Db, id: number, env: Env) {
     inventoryCostEngineReconciled: allGroupsMatched,
     settlementJournalVerified: false, // financial clearing journal is NOT wired yet
   });
-  if(journalWarnings.length||invalidVoucherClaims.length){
+  if(journalWarnings.length||invalidVoucherClaims.length||supplierBalanceWarnings.length){
     closePreview.canCloseAccounting=false;
-    closePreview.reasons.push(...journalWarnings,...invalidVoucherClaims);
+    closePreview.reasons.push(...journalWarnings,...invalidVoucherClaims,...supplierBalanceWarnings);
   }
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
