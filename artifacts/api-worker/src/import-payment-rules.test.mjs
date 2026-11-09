@@ -73,8 +73,8 @@ test("do not silently round an impossible bank ledger rate", () => {
   // Very small USD amount can have an ILS book credit whose exact micro rate
   // cannot reproduce the already-rounded source posting.
   assert.throws(() => planUsdSupplierAdvance({
-    paymentUsdMinor: 1,
-    sourceUsdBalanceMinor: 2,
+    paymentUsdMinor: 2000001,
+    sourceUsdBalanceMinor: 2000001,
     sourceIlsBookBalanceMinor: 1,
     paymentSpotRateMicros: 3500000,
   }));
