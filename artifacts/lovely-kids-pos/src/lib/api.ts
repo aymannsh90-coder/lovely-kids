@@ -6113,6 +6113,13 @@ export interface ImportCostPreview {
 }
 export interface ImportCostCaseResult {
   advancePostingEnabled: boolean;
+  closingEnabled:boolean;
+  closePlanHash:string;
+  closure:null|{
+    id:number;status:"posted"|"reversed";debitIlsMinor:number;
+    financeTransactionId:number|null;reversalFinanceTransactionId:number|null;
+    businessDate:string;travelClassificationApproved:boolean;
+  };
   supplierVoucherClaims: Array<{
     id:number;
     invoiceId:number;
@@ -6184,7 +6191,7 @@ export interface ImportCostCaseResult {
     id: number;
     publicId: string;
     revision: number;
-    status: "draft";
+    status: "draft"|"closed";
     createdAt: string;
   };
   draft: ImportCostDraft;
@@ -6325,5 +6332,28 @@ export function detachImportSupplierVoucherClaim(
 ){
   return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/voucher-claims/${claimId}`,{
     method:"DELETE",body:JSON.stringify({expectedRevision}),
+  },token);
+}
+
+/** Guarded financial close. No duplicate inventory cost, bank or cash payment. */
+export function postImportAccountingClose(token:string,caseId:number,input:{
+  expectedRevision:number;expectedPlanHash:string;travelClassificationConfirmed:boolean;
+  businessDate:string;idempotencyKey:string;
+}) {
+  return apiRequest<{
+    posting:{closureId:number;financeTransactionId:number|null;alreadyPosted:boolean};
+    case:ImportCostCaseResult;
+  }>(`/api/pos/import-costs/${caseId}/close`,{
+    method:"POST",body:JSON.stringify(input),
+  },token);
+}
+export function reverseImportAccountingClose(token:string,caseId:number,input:{
+  expectedRevision:number;businessDate:string;reason:string;idempotencyKey:string;
+}) {
+  return apiRequest<{
+    reversal:{closureId:number;financeTransactionId:number|null;alreadyReversed:boolean};
+    case:ImportCostCaseResult;
+  }>(`/api/pos/import-costs/${caseId}/reverse-close`,{
+    method:"POST",body:JSON.stringify(input),
   },token);
 }
