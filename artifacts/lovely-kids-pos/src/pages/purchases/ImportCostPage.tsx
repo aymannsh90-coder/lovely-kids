@@ -267,17 +267,17 @@ export default function ImportCostPage() {
 
   async function assignExistingVoucher() {
     if(!selected || busy)return;
-    const voucherId=Number(voucherIdText);
+    const voucherPublicId=voucherIdText.trim();
     const amountIlsMinor=minor(voucherClaimAmount);
-    if(!voucherInvoiceRef || !Number.isSafeInteger(voucherId) || voucherId<=0 ||
+    if(!voucherInvoiceRef || voucherPublicId.length<1 || voucherPublicId.length>100 ||
       amountIlsMinor<=0) {
-      setError("اختر فاتورة المورد وأدخل رقم سند الصرف الداخلي والمبلغ المخصص بالشيكل");
+      setError("اختر فاتورة المورد وأدخل رقم سند الصرف الموجود والمبلغ المخصص بالشيكل");
       return;
     }
     setBusy(true);setError("");setNotice("");
     try{
       const result=await claimImportSupplierVoucher(token,selected.case.id,{
-        invoiceRef:voucherInvoiceRef,voucherId,amountIlsMinor,
+        invoiceRef:voucherInvoiceRef,voucherPublicId,amountIlsMinor,
         expectedRevision:selected.case.revision,
       });
       setSelected(result);setDraft(result.draft);setPreview(result.preview);
@@ -570,7 +570,7 @@ export default function ImportCostPage() {
             <thead><tr>{["فاتورة المورد","السند","المخصص","قيمة السند","صحة القيد","المرجع"].map(h=>
               <th key={h} style={{ padding:8,borderBottom:"1px solid #cbd5e1" }}>{h}</th>)}</tr></thead>
             <tbody>{selected.supplierVoucherClaims.map(claim=><tr key={claim.id}>
-              <td>{claim.invoiceRef}</td><td>{claim.voucherId}</td>
+              <td>{claim.invoiceRef}</td><td>{claim.voucherPublicId}</td>
               <td>{money(claim.amountIlsMinor)} ₪</td>
               <td>{money(claim.voucherAmountIlsMinor)} ₪</td>
               <td style={{ color:claim.verified?"#166534":"#b91c1c" }}>
@@ -590,9 +590,9 @@ export default function ImportCostPage() {
                 {i.invoiceNumber}
               </option>)}
             </select></label>
-          <label><span style={label}>الرقم الداخلي لسند الصرف الموجود</span>
-            <input style={field} type="number" min="1" step="1" value={voucherIdText}
-              onChange={e=>setVoucherIdText(e.target.value)} placeholder="رقم السند الداخلي"/></label>
+          <label><span style={label}>رقم سند الصرف الظاهر بالنظام</span>
+            <input style={field} type="text" maxLength={100} value={voucherIdText}
+              onChange={e=>setVoucherIdText(e.target.value)} placeholder="مثال: PAY-20261109-..."/></label>
           <label><span style={label}>المبلغ المخصص لهذه الفاتورة ₪</span>
             <input style={field} type="number" min="0.01" step="0.01"
               value={voucherClaimAmount} onChange={e=>setVoucherClaimAmount(e.target.value)}/>
