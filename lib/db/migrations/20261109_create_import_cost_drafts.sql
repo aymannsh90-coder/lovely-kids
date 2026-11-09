@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.import_cost_invoices (
   goods_usd_minor integer NOT NULL,
   goods_booked_ils_minor integer NOT NULL,
   CONSTRAINT import_cost_invoices_case_ref_unique UNIQUE(case_id, line_ref),
+  CONSTRAINT import_cost_invoices_case_id_unique UNIQUE(case_id, id),
   CONSTRAINT import_cost_invoices_amounts_nonnegative CHECK (goods_usd_minor >= 0 AND goods_booked_ils_minor >= 0),
   CONSTRAINT import_cost_invoices_ref_valid CHECK (length(btrim(line_ref)) BETWEEN 1 AND 100)
 );
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS public.import_cost_shipments (
   local_transport_ils_minor integer NOT NULL DEFAULT 0,
   freight_clearing_ils_minor integer NOT NULL,
   CONSTRAINT import_cost_shipments_case_ref_unique UNIQUE(case_id, line_ref),
+  CONSTRAINT import_cost_shipments_case_id_unique UNIQUE(case_id, id),
   CONSTRAINT import_cost_shipments_freight_nonnegative CHECK (
     LEAST(freight_ils_minor, customs_ils_minor, local_transport_ils_minor) >= 0
     AND freight_clearing_ils_minor = freight_ils_minor + customs_ils_minor + local_transport_ils_minor
@@ -64,6 +66,10 @@ CREATE TABLE IF NOT EXISTS public.import_cost_allocations (
   travel_capitalizable_ils_minor integer NOT NULL DEFAULT 0,
   excel_landed_ils_minor integer NOT NULL,
   CONSTRAINT import_cost_allocations_case_ref_unique UNIQUE(case_id, line_ref),
+  CONSTRAINT import_cost_allocations_same_case_invoice_fk FOREIGN KEY (case_id, invoice_id)
+    REFERENCES public.import_cost_invoices(case_id, id) ON DELETE CASCADE,
+  CONSTRAINT import_cost_allocations_same_case_shipment_fk FOREIGN KEY (case_id, shipment_id)
+    REFERENCES public.import_cost_shipments(case_id, id) ON DELETE CASCADE,
   CONSTRAINT import_cost_allocations_nonnegative CHECK (
     LEAST(goods_ils_minor,freight_ils_minor,travel_managerial_ils_minor,travel_capitalizable_ils_minor,excel_landed_ils_minor) >= 0
   ),
