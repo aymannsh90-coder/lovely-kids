@@ -645,6 +645,48 @@ export default function ImportCostPage() {
             حتى لو تطابقت الأرقام، لا يجوز اعتماد قيود مالية قبل ربط دفعات الدولار والشحن الحقيقية ومراجعة أهلية مصاريف السفر.
           </p>
         </div>}
+        {selected?.clearingPreview && <div style={{
+          marginTop:14,borderTop:"1px solid #e2e8f0",paddingTop:12,
+        }}>
+          <h3 style={{ fontSize:17,marginTop:0 }}>معاينة تسوية المقدمات والشحن والسفر — بدون ترحيل</h3>
+          <p style={{ fontSize:13,color:"#475569",lineHeight:1.8 }}>
+            التسوية المقترحة تنقل المدفوعات من الحسابات الوسيطة لمقابلة ذمم الموردين،
+            ولا تنشئ أي قيد شراء أو مخزون ثاني. لا يجوز اعتمادها قبل التأكد من الربط والمطابقة.
+          </p>
+          <div style={wrap}>
+            <div><span style={label}>مقدمات الموردين التي ستُسوّى</span>
+              <b>{money(selected.clearingPreview.reclassifiedAdvanceIlsMinor)} ₪</b></div>
+            <div><span style={label}>الشحن والنقل والتخليص</span>
+              <b>{money(selected.clearingPreview.reclassifiedShipmentFreightIlsMinor)} ₪</b></div>
+            <div><span style={label}>السفر المؤهل ضمن تكلفة المخزون</span>
+              <b>{money(selected.clearingPreview.reclassifiedCapitalizableTravelIlsMinor)} ₪</b></div>
+            <div><span style={label}>السفر غير المؤهل كمصروف منفصل</span>
+              <b>{money(selected.clearingPreview.recognizedTravelExpenseIlsMinor)} ₪</b></div>
+            <div><span style={label}>ذمة المورد المتبقية بعد التسوية</span>
+              <b>{money(selected.clearingPreview.remainingSupplierLiabilityIlsMinor)} ₪</b></div>
+          </div>
+          <p style={{ fontWeight:800,color:selected.clearingPreview.ready?"#166534":"#92400e" }}>
+            {selected.clearingPreview.ready
+              ? "خطة التسوية متوازنة حسابيًا فقط، ولم تُرحّل للأستاذ."
+              : "خطة التسوية غير مطابقة، وتحتاج معالجة الفروقات التالية."}
+          </p>
+          {!!selected.clearingPreview.blockers.length && <ul style={{ fontSize:13,lineHeight:1.7,paddingRight:20 }}>
+            {selected.clearingPreview.blockers.map((x,i)=><li key={i}>{x}</li>)}
+          </ul>}
+          <details>
+            <summary style={{ cursor:"pointer",fontWeight:700 }}>عرض مسودة سطور القيد المحاسبي (للمراجعة فقط)</summary>
+            <div style={{ overflowX:"auto",marginTop:10 }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",textAlign:"right",fontSize:12 }}>
+                <thead><tr>{["الحساب","المورد","مدين ₪","دائن ₪"].map(x=>
+                  <th key={x} style={{ padding:6,borderBottom:"1px solid #cbd5e1" }}>{x}</th>)}</tr></thead>
+                <tbody>{selected.clearingPreview.journalLines.map((line,i)=><tr key={i}>
+                  <td>{line.accountCode}</td><td>{line.supplierId??"—"}</td>
+                  <td>{money(line.debitMinor)}</td><td>{money(line.creditMinor)}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+          </details>
+        </div>}
         {selected?.closePreview && <div style={{
           marginTop: 14, borderTop: "1px solid #e2e8f0", paddingTop: 14,
         }}>
