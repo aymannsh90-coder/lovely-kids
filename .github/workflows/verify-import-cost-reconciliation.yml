@@ -8,6 +8,7 @@ on:
       - 'artifacts/api-worker/src/import-payment-*'
       - 'artifacts/api-worker/src/import-direct-payment-*'
       - 'artifacts/api-worker/src/import-close-*'
+      - 'artifacts/api-worker/src/import-clearing-*'
       - 'artifacts/api-worker/src/import-purchase-*'
       - 'artifacts/api-worker/src/import-purchase-currency-guard*'
       - 'artifacts/api-worker/src/pos-purchase-routes.ts'
@@ -49,7 +50,7 @@ jobs:
       - name: POS build
         run: pnpm --filter @workspace/lovely-kids-pos build
       - name: Import cost and USD advance FX unit tests
-        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs artifacts/api-worker/src/import-close-readiness.test.mjs artifacts/api-worker/src/import-purchase-currency-guard.test.mjs artifacts/api-worker/src/import-purchase-evidence.test.mjs
+        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs artifacts/api-worker/src/import-close-readiness.test.mjs artifacts/api-worker/src/import-purchase-currency-guard.test.mjs artifacts/api-worker/src/import-purchase-evidence.test.mjs artifacts/api-worker/src/import-clearing-settlement.test.mjs
 
   validate-import-migration:
     runs-on: ubuntu-latest
