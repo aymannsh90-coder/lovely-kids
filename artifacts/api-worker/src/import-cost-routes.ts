@@ -287,6 +287,18 @@ async function detail(db: Db, id: number, env: Env) {
     .innerJoin(financeTransactionsTable, eq(
       importCostAdvancePaymentsTable.financeTransactionId, financeTransactionsTable.id,
     )).where(eq(importCostAdvancePaymentsTable.caseId, id));
+  const directRecords = await db.select({
+    paymentId: importCostDirectPaymentsTable.id,
+    shipmentId: importCostDirectPaymentsTable.shipmentId,
+    costType: importCostDirectPaymentsTable.costType,
+    paymentMethod: importCostDirectPaymentsTable.paymentMethod,
+    amountIlsMinor: importCostDirectPaymentsTable.amountIlsMinor,
+    financeTransactionId: importCostDirectPaymentsTable.financeTransactionId,
+    financeStatus: financeTransactionsTable.status,
+  }).from(importCostDirectPaymentsTable)
+    .innerJoin(financeTransactionsTable, eq(
+      importCostDirectPaymentsTable.financeTransactionId, financeTransactionsTable.id,
+    )).where(eq(importCostDirectPaymentsTable.caseId, id));
   const paidByInvoiceId = new Map<number, number>();
   for (const payment of paymentRecords) {
     if (payment.financeStatus !== "posted") continue;
@@ -346,6 +358,10 @@ async function detail(db: Db, id: number, env: Env) {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
     advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
     draft,
+    directPayments: directRecords.map((payment) => ({
+      ...payment,
+      shipmentRef: shipments.find((shipment) => shipment.id === payment.shipmentId)?.lineRef ?? null,
+    })),
     advances: paymentRecords.map((payment) => ({
       ...payment,
       invoiceRef: invById.get(payment.invoiceId) ?? "",
@@ -356,7 +372,16 @@ async function detail(db: Db, id: number, env: Env) {
       // freight and travel costs still have no payment links, hence no close.
       ledgerVerified: false,
       canPost: false,
-      paymentStatus: paymentRecords.length ? "advances_posted" : "not_connected",
+      paymentStatus:
+        paymentRecords.length && directRecords.length ? "mixed_payments_posted" :
+        directRecords.length ? "costs_posted" :
+        paymentRecords.length ? "advances_posted" : "not_connected",
+      paidShipmentCostsIlsMinor: directRecords.filter((payment) =>
+        payment.costType !== "travel" && payment.financeStatus === "posted"
+      ).reduce((sum, payment) => sum + payment.amountIlsMinor, 0),
+      paidTravelIlsMinor: directRecords.filter((payment) =>
+        payment.costType === "travel" && payment.financeStatus === "posted"
+      ).reduce((sum, payment) => sum + payment.amountIlsMinor, 0),
     },
   };
 }
