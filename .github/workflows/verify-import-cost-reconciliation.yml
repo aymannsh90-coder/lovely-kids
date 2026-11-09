@@ -40,3 +40,36 @@ jobs:
         run: pnpm --filter @workspace/lovely-kids-pos build
       - name: Import cost unit tests
         run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs
+
+  validate-import-migration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: import_cost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d import_cost_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: import_cost_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create mock referenced tables
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-migration.fixture.sql
+      - name: Apply draft-only migration to disposable database
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_create_import_cost_drafts.sql
+      - name: Verify FK, unique, amount and RLS constraints
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-migration.verify.sql
