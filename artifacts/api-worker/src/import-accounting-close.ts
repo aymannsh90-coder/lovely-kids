@@ -184,7 +184,7 @@ export async function postImportAccountingClose(
     const [sameKey]=await tx.select().from(importCostClosuresTable)
       .where(eq(importCostClosuresTable.idempotencyKey,input.idempotencyKey)).limit(1);
     if(sameKey){
-      if(sameKey.caseId!==input.caseId||sameKey.status!=="posted" ||
+      if(sameKey.caseId!==input.caseId||sameKey.status!=="posted" || file.status!=="closed" ||
          sameKey.planHash!==input.expectedPlanHash ||
          sameKey.businessDate!==input.businessDate ||
          sameKey.travelClassificationApproved!==(input.travelClassificationConfirmed || !file.withTravel))
@@ -259,7 +259,7 @@ export async function reverseImportAccountingClose(
     const [oldReverse]=await tx.select().from(importCostClosuresTable)
       .where(eq(importCostClosuresTable.reversalKey,input.idempotencyKey)).limit(1);
     if(oldReverse){
-      if(oldReverse.caseId!==input.caseId||oldReverse.status!=="reversed" ||
+      if(oldReverse.caseId!==input.caseId||oldReverse.status!=="reversed" || file.status!=="draft" ||
          oldReverse.reversalReason!==input.reason ||
          oldReverse.reversalBusinessDate!==input.businessDate)
         throw new ImportCloseError("مفتاح العكس مستخدم لملف أو عملية أخرى");
