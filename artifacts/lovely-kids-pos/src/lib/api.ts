@@ -6129,6 +6129,27 @@ export interface ImportCostCaseResult {
     linkedAccountingIlsMinor:number;
     valid:boolean;
   }>;
+  clearingPreview:{
+    ready:boolean;
+    balanced:boolean;
+    journalPosted:false;
+    canExecute:false;
+    blockers:string[];
+    debitMinor:number;
+    creditMinor:number;
+    remainingSupplierLiabilityIlsMinor:number;
+    recognizedTravelExpenseIlsMinor:number;
+    reclassifiedAdvanceIlsMinor:number;
+    reclassifiedShipmentFreightIlsMinor:number;
+    reclassifiedCapitalizableTravelIlsMinor:number;
+    journalLines:Array<{
+      accountCode:string;
+      supplierId:number|null;
+      debitMinor:number;
+      creditMinor:number;
+      memo:string;
+    }>;
+  };
   closePreview: {
     canCloseAccounting: boolean;
     reasons: string[];
