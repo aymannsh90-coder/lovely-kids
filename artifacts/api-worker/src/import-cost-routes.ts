@@ -324,6 +324,15 @@ async function detail(db: Db, id: number, env: Env) {
     ...inspectedPayments.directCosts.filter(check=>!check.verified)
       .map(check=>"مصروف الاستيراد #"+check.paymentId+": "+check.errors.join("؛ ")),
   ];
+  const supplierVoucherClaims=await getImportSupplierVoucherClaims(db,id);
+  const verifiedSupplierVoucherClaims=supplierVoucherClaims.filter(claim=>claim.verified);
+  const voucherPaidByInvoiceId=new Map<number,number>();
+  for(const claim of verifiedSupplierVoucherClaims){
+    voucherPaidByInvoiceId.set(claim.invoiceId,
+      (voucherPaidByInvoiceId.get(claim.invoiceId)??0)+claim.amountIlsMinor);
+  }
+  const invalidVoucherClaims=supplierVoucherClaims.filter(claim=>!claim.verified)
+    .map(claim=>"تخصيص سند المورد #"+claim.voucherId+": "+claim.errors.join("؛ "));
   const paidByInvoiceId = new Map<number, number>();
   for (const payment of paymentRecords) {
     if (!verifiedAdvances.has(payment.paymentId)) continue;
@@ -403,6 +412,7 @@ async function detail(db: Db, id: number, env: Env) {
         invoiceRef:inv.lineRef,supplierId:inv.supplierId,
         goodsIlsMinor:inv.goodsBookedIlsMinor,
         supplierAdvanceIlsMinor:stored?(paidByInvoiceId.get(stored.id)??0):0,
+        supplierVoucherAlreadyPaidIlsMinor:stored?(voucherPaidByInvoiceId.get(stored.id)??0):0,
         freightAllocatedIlsMinor:rows.reduce((sum,a)=>sum+a.freightIlsMinor,0),
         capitalizableTravelIlsMinor:rows.reduce((sum,a)=>sum+a.travelCapitalizableIlsMinor,0),
         purchaseLiabilityIlsMinor:rows.reduce((sum,a)=>
@@ -429,10 +439,12 @@ async function detail(db: Db, id: number, env: Env) {
   });
   const clearingPreview={
     ...clearingCandidate,
-    ready:clearingCandidate.ready && allGroupsMatched && comparison.balanced && inspectedPayments.allVerified,
+    ready:clearingCandidate.ready && allGroupsMatched && comparison.balanced &&
+      inspectedPayments.allVerified && invalidVoucherClaims.length===0,
     blockers:[
       ...clearingCandidate.blockers,
       ...journalWarnings,
+      ...invalidVoucherClaims,
       ...(!allGroupsMatched ? ["سجلات تكلفة المشتريات المعتمدة لا تطابق جميع مجموعات الإكسل"] : []),
       ...(!comparison.balanced ? ["توزيع الإكسل لم يطابق فواتير الموردين والشحنات"] : []),
     ],
@@ -453,7 +465,8 @@ async function detail(db: Db, id: number, env: Env) {
         goodsBookedIlsMinor: invoice.goodsBookedIlsMinor,
         paidUsdMinor: paid.reduce((sum,payment) => sum + payment.usdAmountMinor, 0),
         advanceIlsMinor,
-        remainingPayableIlsMinor: Math.max(0, invoice.goodsBookedIlsMinor - advanceIlsMinor),
+        remainingPayableIlsMinor: Math.max(0, invoice.goodsBookedIlsMinor - advanceIlsMinor -
+          (voucherPaidByInvoiceId.get(invoice.id)??0)),
         // No supplier payable integration on import invoices yet.
         payableJournalVerified: false,
       };
@@ -485,14 +498,15 @@ async function detail(db: Db, id: number, env: Env) {
     inventoryCostEngineReconciled: allGroupsMatched,
     settlementJournalVerified: false, // financial clearing journal is NOT wired yet
   });
-  if(journalWarnings.length){
+  if(journalWarnings.length||invalidVoucherClaims.length){
     closePreview.canCloseAccounting=false;
-    closePreview.reasons.push(...journalWarnings);
+    closePreview.reasons.push(...journalWarnings,...invalidVoucherClaims);
   }
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
     advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
     draft,
+    supplierVoucherClaims,
     purchaseLinks,
     clearingPreview,
     costGroupMatching: draft.allocations.map(a=>({
