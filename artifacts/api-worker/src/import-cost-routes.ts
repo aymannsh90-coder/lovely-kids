@@ -4,6 +4,7 @@ import {
   importCostShipmentsTable,
   importCostAllocationsTable,
   importCostAdvancePaymentsTable,
+  importCostDirectPaymentsTable,
   financeTransactionsTable,
   suppliersTable,
 } from "@workspace/db/schema";
@@ -13,6 +14,7 @@ import { getCurrentUser } from "./auth";
 import type { openDb, Env } from "./db";
 import { previewImportCostSettlement, type ImportCostDraft } from "./import-cost-reconciliation";
 import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierAdvance } from "./import-payment-posting";
+import { parseImportDirectCostRequest, postImportDirectCost } from "./import-direct-payment-posting";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -361,8 +363,9 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   const path = new URL(request.url).pathname;
   const single = /^\/api\/pos\/import-costs\/([1-9]\d*)$/.exec(path);
   const advancePath = /^\/api\/pos\/import-costs\/([1-9]\d*)\/advance-payment$/.exec(path);
+  const directPaymentPath = /^\/api\/pos\/import-costs\/([1-9]\d*)\/direct-payment$/.exec(path);
   const collection = path === "/api/pos/import-costs";
-  if (!collection && !single && !advancePath) return null;
+  if (!collection && !single && !advancePath && !directPaymentPath) return null;
   if (!["GET", "POST", "PUT"].includes(request.method)) {
     return json({ error: "عملية غير متاحة في مسودات الاستيراد" }, 405);
   }
@@ -370,6 +373,13 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
   if (!user.isOwner) return json({ error: "ملفات الاستيراد متاحة للمالك فقط" }, 403);
   try {
+    if (directPaymentPath && request.method === "POST") {
+      const paymentCaseId = normalizeId(directPaymentPath[1]!);
+      if (!paymentCaseId) throw new ImportDraftError("رقم الاستيراد غير صالح");
+      const paymentRequest = parseImportDirectCostRequest(await request.json(), paymentCaseId);
+      const payment = await postImportDirectCost(db, env, user.id, paymentRequest);
+      return json({ payment, accountingPosted: true });
+    }
     if (advancePath && request.method === "POST") {
       const paymentCaseId = normalizeId(advancePath[1]!);
       if (!paymentCaseId) throw new ImportDraftError("رقم الاستيراد غير صالح");
