@@ -18,22 +18,22 @@ BEGIN
     RAISE EXCEPTION 'CLOSING_STATUS_UPDATE_FAILED';
   END IF;
   INSERT INTO public.import_cost_closures
-    (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id)
-  VALUES (id1,'closing-key-00000001','posted','2026-11-09',0,1)
+    (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id,plan_hash)
+  VALUES (id1,'closing-key-00000001','posted','2026-11-09',0,1,repeat('a',64))
   RETURNING id INTO close_id;
 
   BEGIN
     INSERT INTO public.import_cost_closures
-      (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id)
-    VALUES (id1,'closing-key-00000002','posted','2026-11-09',100,1);
+      (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id,plan_hash)
+    VALUES (id1,'closing-key-00000002','posted','2026-11-09',100,1,repeat('a',64));
     RAISE EXCEPTION 'DUPLICATE_LIVE_CLOSURE_ACCEPTED';
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
 
   BEGIN
     INSERT INTO public.import_cost_closures
-      (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id)
-    VALUES (id1,'closing-key-00000001','posted','2026-11-09',100,1);
+      (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id,plan_hash)
+    VALUES (id1,'closing-key-00000001','posted','2026-11-09',100,1,repeat('a',64));
     RAISE EXCEPTION 'DUPLICATE_CLOSE_KEY_ACCEPTED';
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
@@ -47,18 +47,18 @@ BEGIN
 
   UPDATE public.import_cost_closures SET
     status='reversed',reversal_key='reverse-closing-key-1',
-    reversal_reason='Test reversal on isolated PostgreSQL',
+    reversal_reason='Test reversal on isolated PostgreSQL',reversal_business_date='2026-11-09',
     reversed_at=now(),reversed_by_user_id=1
   WHERE id=close_id;
   UPDATE public.import_cost_cases SET status='draft' WHERE id=id1;
   INSERT INTO public.import_cost_closures
-    (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id)
-  VALUES (id1,'closing-key-00000003','posted','2026-11-09',0,1);
+    (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id,plan_hash)
+  VALUES (id1,'closing-key-00000003','posted','2026-11-09',0,1,repeat('a',64));
 
   BEGIN
     INSERT INTO public.import_cost_closures
-      (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id)
-    VALUES (id1,'closing-key-00000004','pending','2026-11-09',0,1);
+      (case_id,idempotency_key,status,business_date,debit_ils_minor,closed_by_user_id,plan_hash)
+    VALUES (id1,'closing-key-00000004','pending','2026-11-09',0,1,repeat('a',64));
     RAISE EXCEPTION 'INVALID_CLOSURE_STATUS_ACCEPTED';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
