@@ -272,7 +272,7 @@ async function insertChildren(
   }
 }
 
-async function detail(db: Db, id: number, env: Env) {
+async function detail(db: Db | Tx, id: number, env: Env) {
   const [found] = await db.select().from(importCostCasesTable)
     .where(eq(importCostCasesTable.id, id)).limit(1);
   if (!found) throw new ImportDraftError("ملف الاستيراد غير موجود", 404);
