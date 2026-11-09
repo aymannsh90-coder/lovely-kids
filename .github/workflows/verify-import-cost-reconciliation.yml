@@ -76,3 +76,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_create_import_cost_drafts.sql
       - name: Verify FK, unique, amount and RLS constraints
         run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-migration.verify.sql
+      - name: Apply advance posting table migration to disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_usd_supplier_advances.sql
+      - name: Verify supplier advance journal metadata constraints
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-advance-migration.verify.sql
