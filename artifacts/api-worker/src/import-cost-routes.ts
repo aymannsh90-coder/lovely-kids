@@ -196,7 +196,11 @@ async function assertSuppliers(tx: Tx, invoices: InvoiceInput[]): Promise<void> 
   if (suppliers.length !== ids.length) throw new ImportDraftError("مورد واحد على الأقل غير موجود", 409);
 }
 
-async function insertChildren(tx: Tx, caseId: number, draft: DraftInput, protectedInvoices = new Map<string, number>()) {
+async function insertChildren(
+  tx: Tx, caseId: number, draft: DraftInput,
+  protectedInvoices = new Map<string, number>(),
+  protectedShipments = new Map<string, number>(),
+) {
   const invoiceIds = new Map<string, number>();
   const shipmentIds = new Map<string, number>();
   for (const invoice of draft.invoices) {
@@ -220,6 +224,18 @@ async function insertChildren(tx: Tx, caseId: number, draft: DraftInput, protect
     invoiceIds.set(invoice.lineRef, inserted.id);
   }
   for (const shipment of draft.shipments) {
+    const existingId = protectedShipments.get(shipment.lineRef);
+    if (existingId) {
+      await tx.update(importCostShipmentsTable).set({
+        trackingNumber: shipment.trackingNumber,
+        freightIlsMinor: shipment.freightIlsMinor,
+        customsIlsMinor: shipment.customsIlsMinor,
+        localTransportIlsMinor: shipment.localTransportIlsMinor,
+        freightClearingIlsMinor: shipment.freightClearingIlsMinor,
+      }).where(eq(importCostShipmentsTable.id, existingId));
+      shipmentIds.set(shipment.lineRef, existingId);
+      continue;
+    }
     const [inserted] = await tx.insert(importCostShipmentsTable).values({
       caseId, lineRef: shipment.lineRef,
       trackingNumber: shipment.trackingNumber,
@@ -462,8 +478,39 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
           if (protectedInvoices.has(invoice.lineRef)) continue;
           await tx.delete(importCostInvoicesTable).where(eq(importCostInvoicesTable.id, invoice.id));
         }
-        await tx.delete(importCostShipmentsTable).where(eq(importCostShipmentsTable.caseId, caseId));
-        await insertChildren(tx, caseId, draft, protectedInvoices);
+        const oldShipments = await tx.select().from(importCostShipmentsTable)
+          .where(eq(importCostShipmentsTable.caseId, caseId));
+        const directPayments = await tx.select().from(importCostDirectPaymentsTable)
+          .where(eq(importCostDirectPaymentsTable.caseId, caseId));
+        const protectedShipmentIds = new Set(directPayments
+          .map((payment) => payment.shipmentId)
+          .filter((value): value is number => value !== null));
+        const protectedShipments = new Map<string, number>();
+        for (const shipment of oldShipments) {
+          if (!protectedShipmentIds.has(shipment.id)) continue;
+          const requested = draft.shipments.find((item) => item.lineRef === shipment.lineRef);
+          if (!requested) throw new ImportDraftError("لا يمكن حذف شحنة تحتوي مصاريف مدفوعة", 409);
+          const paid = (kind: "freight"|"customs"|"local_transport") =>
+            directPayments.filter((payment) => payment.shipmentId === shipment.id &&
+              payment.costType === kind).reduce((sum, payment) => sum + payment.amountIlsMinor, 0);
+          if (paid("freight") > requested.freightIlsMinor ||
+              paid("customs") > requested.customsIlsMinor ||
+              paid("local_transport") > requested.localTransportIlsMinor) {
+            throw new ImportDraftError("لا يمكن تقليل تكلفة الشحنة دون المبالغ المدفوعة بالفعل", 409);
+          }
+          protectedShipments.set(shipment.lineRef, shipment.id);
+        }
+        const paidTravel = directPayments
+          .filter((payment) => payment.costType === "travel")
+          .reduce((sum, payment) => sum + payment.amountIlsMinor, 0);
+        if (paidTravel > draft.travelRecordedIlsMinor) {
+          throw new ImportDraftError("مصاريف السفر الموزعة أقل من الدفعات المسجلة", 409);
+        }
+        for (const shipment of oldShipments) {
+          if (protectedShipments.has(shipment.lineRef)) continue;
+          await tx.delete(importCostShipmentsTable).where(eq(importCostShipmentsTable.id, shipment.id));
+        }
+        await insertChildren(tx, caseId, draft, protectedInvoices, protectedShipments);
         await tx.update(importCostCasesTable).set({
           title: draft.title, businessDate: draft.businessDate, withTravel: draft.withTravel,
           travelRecordedIlsMinor: draft.travelRecordedIlsMinor, notes: draft.notes,
