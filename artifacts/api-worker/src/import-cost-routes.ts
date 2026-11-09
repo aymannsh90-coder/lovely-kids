@@ -3,6 +3,7 @@ import {
   importCostInvoicesTable,
   importCostShipmentsTable,
   importCostAllocationsTable,
+  importCostAdvancePaymentsTable,
   suppliersTable,
 } from "@workspace/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
@@ -192,10 +193,18 @@ async function assertSuppliers(tx: Tx, invoices: InvoiceInput[]): Promise<void> 
   if (suppliers.length !== ids.length) throw new ImportDraftError("مورد واحد على الأقل غير موجود", 409);
 }
 
-async function insertChildren(tx: Tx, caseId: number, draft: DraftInput) {
+async function insertChildren(tx: Tx, caseId: number, draft: DraftInput, protectedInvoices = new Map<string, number>()) {
   const invoiceIds = new Map<string, number>();
   const shipmentIds = new Map<string, number>();
   for (const invoice of draft.invoices) {
+    const existingId = protectedInvoices.get(invoice.lineRef);
+    if (existingId) {
+      await tx.update(importCostInvoicesTable).set({
+        goodsBookedIlsMinor: invoice.goodsBookedIlsMinor,
+      }).where(eq(importCostInvoicesTable.id, existingId));
+      invoiceIds.set(invoice.lineRef, existingId);
+      continue;
+    }
     const [inserted] = await tx.insert(importCostInvoicesTable).values({
       caseId,
       lineRef: invoice.lineRef,
@@ -386,11 +395,34 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
         if (locked.status !== "draft") throw new ImportDraftError("ملف معتمد لا يمكن تعديله", 409);
         if (locked.revision !== expectedRevision) throw new ImportDraftError("تغير الملف في جلسة أخرى، أعد التحميل", 409);
         await assertSuppliers(tx, draft.invoices);
-        // Delete children in FK order; all within one rollback-safe transaction.
+        // Keep invoices having real posted advances: payments are immutable
+        // and incoming/editing of other invoices/shipments must remain possible.
+        const oldInvoices = await tx.select().from(importCostInvoicesTable)
+          .where(eq(importCostInvoicesTable.caseId, caseId));
+        const postedAdvances = await tx.select({
+          invoiceId: importCostAdvancePaymentsTable.invoiceId,
+        }).from(importCostAdvancePaymentsTable)
+          .where(eq(importCostAdvancePaymentsTable.caseId, caseId));
+        const lockedInvoiceIds = new Set(postedAdvances.map((payment) => payment.invoiceId));
+        const protectedInvoices = new Map<string, number>();
+        for (const invoice of oldInvoices) {
+          if (!lockedInvoiceIds.has(invoice.id)) continue;
+          const requested = draft.invoices.find((item) => item.lineRef === invoice.lineRef);
+          if (!requested ||
+              requested.supplierId !== invoice.supplierId ||
+              requested.invoiceNumber !== invoice.invoiceNumber ||
+              requested.goodsUsdMinor !== invoice.goodsUsdMinor) {
+            throw new ImportDraftError("لا يمكن تغيير أو حذف فاتورة تم دفع مبلغ مقدم عليها؛ يلزم إجراء تصحيح موثق", 409);
+          }
+          protectedInvoices.set(invoice.lineRef, invoice.id);
+        }
         await tx.delete(importCostAllocationsTable).where(eq(importCostAllocationsTable.caseId, caseId));
-        await tx.delete(importCostInvoicesTable).where(eq(importCostInvoicesTable.caseId, caseId));
+        for (const invoice of oldInvoices) {
+          if (protectedInvoices.has(invoice.lineRef)) continue;
+          await tx.delete(importCostInvoicesTable).where(eq(importCostInvoicesTable.id, invoice.id));
+        }
         await tx.delete(importCostShipmentsTable).where(eq(importCostShipmentsTable.caseId, caseId));
-        await insertChildren(tx, caseId, draft);
+        await insertChildren(tx, caseId, draft, protectedInvoices);
         await tx.update(importCostCasesTable).set({
           title: draft.title, businessDate: draft.businessDate, withTravel: draft.withTravel,
           travelRecordedIlsMinor: draft.travelRecordedIlsMinor, notes: draft.notes,
