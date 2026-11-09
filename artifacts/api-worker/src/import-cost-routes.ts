@@ -5,6 +5,7 @@ import {
   importCostAllocationsTable,
   importCostAdvancePaymentsTable,
   importCostDirectPaymentsTable,
+  importCostPurchaseLinksTable,
   financeTransactionsTable,
   suppliersTable,
 } from "@workspace/db/schema";
@@ -16,6 +17,7 @@ import { previewImportCostSettlement, type ImportCostDraft } from "./import-cost
 import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierAdvance } from "./import-payment-posting";
 import { parseImportDirectCostRequest, postImportDirectCost } from "./import-direct-payment-posting";
 import { previewImportClosing } from "./import-close-readiness";
+import { attachApprovedPurchase,detachApprovedPurchase,getPurchaseLinks,ImportPurchaseLinkError } from "./import-purchase-link-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -355,6 +357,21 @@ async function detail(db: Db, id: number, env: Env) {
     })),
   };
   const comparison = previewImportCostSettlement(previewDraft);
+  const purchaseLinks = await getPurchaseLinks(db,id);
+  const linkedByGroup = new Map<string, {cost:number;valid:boolean;count:number}>();
+  for (const link of purchaseLinks) {
+    const existing = linkedByGroup.get(link.allocationRef) ?? {cost:0,valid:true,count:0};
+    existing.cost += link.inventoryCostIlsMinor;
+    existing.valid = existing.valid && link.valid;
+    existing.count++;
+    linkedByGroup.set(link.allocationRef,existing);
+  }
+  const groupReady = (group: DraftInput["allocations"][number]) => {
+    const links = linkedByGroup.get(group.lineRef);
+    const cost = group.goodsIlsMinor + group.freightIlsMinor + group.travelCapitalizableIlsMinor;
+    return !!links && links.valid && links.count > 0 && links.cost === cost;
+  };
+  const allGroupsMatched = draft.allocations.length > 0 && draft.allocations.every(groupReady);
   const closePreview = previewImportClosing({
     excelBalanced: comparison.balanced,
     excelErrors: comparison.errors,
@@ -386,8 +403,10 @@ async function detail(db: Db, id: number, env: Env) {
         paidFreightIlsMinor: paid("freight"),
         paidCustomsIlsMinor: paid("customs"),
         paidLocalTransportIlsMinor: paid("local_transport"),
-        hasInventoryReceipt: false,
-        purchasePostingMatched: false,
+        hasInventoryReceipt: draft.allocations.some(a=>a.shipmentRef===shipment.lineRef)
+          && draft.allocations.filter(a=>a.shipmentRef===shipment.lineRef).every(groupReady),
+        purchasePostingMatched: draft.allocations.some(a=>a.shipmentRef===shipment.lineRef)
+          && draft.allocations.filter(a=>a.shipmentRef===shipment.lineRef).every(groupReady),
       };
     }),
     travelRecordedIlsMinor: found.travelRecordedIlsMinor,
@@ -395,12 +414,19 @@ async function detail(db: Db, id: number, env: Env) {
       .filter((payment) => payment.costType === "travel" && payment.financeStatus === "posted")
       .reduce((sum,payment) => sum + payment.amountIlsMinor, 0),
     travelClassificationApproved: found.travelRecordedIlsMinor === 0,
-    inventoryCostEngineReconciled: false,
+    inventoryCostEngineReconciled: allGroupsMatched,
   });
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
     advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
     draft,
+    purchaseLinks,
+    costGroupMatching: draft.allocations.map(a=>({
+      allocationRef:a.lineRef,
+      expectedAccountingIlsMinor:a.goodsIlsMinor+a.freightIlsMinor+a.travelCapitalizableIlsMinor,
+      linkedAccountingIlsMinor:linkedByGroup.get(a.lineRef)?.cost ?? 0,
+      valid:groupReady(a),
+    })),
     closePreview,
     directPayments: directRecords.map((payment) => ({
       ...payment,
@@ -449,15 +475,41 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   const single = /^\/api\/pos\/import-costs\/([1-9]\d*)$/.exec(path);
   const advancePath = /^\/api\/pos\/import-costs\/([1-9]\d*)\/advance-payment$/.exec(path);
   const directPaymentPath = /^\/api\/pos\/import-costs\/([1-9]\d*)\/direct-payment$/.exec(path);
+  const linkCollection = /^\/api\/pos\/import-costs\/([1-9]\d*)\/purchase-links$/.exec(path);
+  const linkSingle = /^\/api\/pos\/import-costs\/([1-9]\d*)\/purchase-links\/([1-9]\d*)$/.exec(path);
   const collection = path === "/api/pos/import-costs";
-  if (!collection && !single && !advancePath && !directPaymentPath) return null;
-  if (!["GET", "POST", "PUT"].includes(request.method)) {
+  if (!collection && !single && !advancePath && !directPaymentPath && !linkCollection && !linkSingle) return null;
+  if (!["GET", "POST", "PUT", "DELETE"].includes(request.method)) {
     return json({ error: "عملية غير متاحة في مسودات الاستيراد" }, 405);
   }
   const user: User | null = await getCurrentUser(db, request, env);
   if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
   if (!user.isOwner) return json({ error: "ملفات الاستيراد متاحة للمالك فقط" }, 403);
   try {
+    if (linkCollection && request.method === "POST") {
+      const linkCaseId=normalizeId(linkCollection[1]!);
+      if (!linkCaseId) throw new ImportDraftError("ملف الاستيراد غير صالح");
+      const body=record(await request.json(),"ربط فاتورة المشتريات");
+      await attachApprovedPurchase(db,{
+        caseId:linkCaseId,
+        allocationRef:stringField(body.allocationRef,"مجموعة التكلفة",100),
+        purchaseId:positive(body.purchaseId,"معرف فاتورة المشتريات"),
+        revision:positive(body.expectedRevision,"إصدار ملف الاستيراد"),
+        actorId:user.id,
+      });
+      return json(await detail(db,linkCaseId,env),201);
+    }
+    if (linkSingle && request.method === "DELETE") {
+      const linkCaseId=normalizeId(linkSingle[1]!);
+      const linkId=normalizeId(linkSingle[2]!);
+      if (!linkCaseId || !linkId) throw new ImportDraftError("معرف الرابط غير صالح");
+      const body=record(await request.json(),"فصل فاتورة المشتريات");
+      await detachApprovedPurchase(db,{
+        caseId:linkCaseId,linkId,
+        expectedRevision:positive(body.expectedRevision,"إصدار ملف الاستيراد"),
+      });
+      return json(await detail(db,linkCaseId,env));
+    }
     if (directPaymentPath && request.method === "POST") {
       const paymentCaseId = normalizeId(directPaymentPath[1]!);
       if (!paymentCaseId) throw new ImportDraftError("رقم الاستيراد غير صالح");
@@ -520,6 +572,11 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
         if (!locked) throw new ImportDraftError("ملف الاستيراد غير موجود", 404);
         if (locked.status !== "draft") throw new ImportDraftError("ملف معتمد لا يمكن تعديله", 409);
         if (locked.revision !== expectedRevision) throw new ImportDraftError("تغير الملف في جلسة أخرى، أعد التحميل", 409);
+        const links = await tx.select({id:importCostPurchaseLinksTable.id})
+          .from(importCostPurchaseLinksTable)
+          .where(eq(importCostPurchaseLinksTable.caseId,caseId)).limit(1);
+        if (links.length) throw new ImportDraftError(
+          "هناك فواتير مشتريات مرتبطة بهذا الملف؛ افصل الروابط أولًا قبل تعديل توزيع الإكسل",409);
         await assertSuppliers(tx, draft.invoices);
         // Keep invoices having real posted advances: payments are immutable
         // and incoming/editing of other invoices/shipments must remain possible.
@@ -592,6 +649,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   } catch (error) {
     if (error instanceof ImportDraftError) return json({ error: error.message }, error.status);
     if (error instanceof ImportAdvanceError) return json({ error: error.message }, error.status);
+    if (error instanceof ImportPurchaseLinkError) return json({ error: error.message }, error.status);
     if (error instanceof SyntaxError) return json({ error: "صيغة البيانات غير صالحة" }, 400);
     console.error("IMPORT_COST_DRAFT_FAILED", error);
     return json({ error: "تعذر حفظ مسودة الاستيراد" }, 500);
