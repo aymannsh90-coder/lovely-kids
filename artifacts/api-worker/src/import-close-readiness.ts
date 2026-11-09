@@ -11,6 +11,8 @@ export type ImportCloseInvoice = {
   goodsBookedIlsMinor: number;
   paidUsdMinor: number;
   advanceIlsMinor: number;
+  /** Supplier voucher payments already posted to this supplier liability. */
+  existingSupplierVoucherIlsMinor?: number;
   remainingPayableIlsMinor: number;
   payableJournalVerified: boolean;
 };
@@ -71,16 +73,18 @@ export function previewImportClosing(state: ImportCloseState): ImportClosePrevie
     const paidUsd = check(inv.paidUsdMinor, inv.ref + " مدفوع الدولار");
     const bookedIls = check(inv.goodsBookedIlsMinor, inv.ref + " قيمة البضاعة بالشيكل");
     const paidIls = check(inv.advanceIlsMinor, inv.ref + " قيمة المقدمات");
+    const voucherPaid=check(inv.existingSupplierVoucherIlsMinor??0,inv.ref+" سندات المورد");
     const liability = check(inv.remainingPayableIlsMinor, inv.ref + " الذمة المتبقية");
     if (paidUsd > goodsUsd) reasons.push("فاتورة " + inv.ref + ": دفعات الدولار تتجاوز إجمالي الشراء");
-    if (paidIls > bookedIls) reasons.push("فاتورة " + inv.ref + ": المدفوع الدفتري يتجاوز قيمة الفاتورة");
-    if (paidIls + liability !== bookedIls) {
+    if (paidIls + voucherPaid > bookedIls)
+      reasons.push("فاتورة " + inv.ref + ": دفعات المورد بالمقدمات والسندات تتجاوز البضاعة");
+    if (paidIls + voucherPaid + liability !== bookedIls) {
       reasons.push("فاتورة " + inv.ref + ": المقدمات والذمة لا يساويان قيمة البضاعة بالشيكل");
     }
-    if (paidUsd < goodsUsd && !inv.payableJournalVerified) {
+    if (paidUsd < goodsUsd && liability>0 && !inv.payableJournalVerified) {
       reasons.push("فاتورة " + inv.ref + ": قيمة المورد المتبقية لم تُرحّل على الذمم");
     }
-    if (paidUsd === goodsUsd && liability !== 0) {
+    if (paidUsd === goodsUsd && voucherPaid === 0 && liability !== 0) {
       reasons.push("فاتورة " + inv.ref + ": دفعت بالكامل وما زال لها رصيد مورد مسجل");
     }
     usdTotal+=goodsUsd; usdPaid+=paidUsd; goodsIls+=bookedIls; advancesIls+=paidIls;
