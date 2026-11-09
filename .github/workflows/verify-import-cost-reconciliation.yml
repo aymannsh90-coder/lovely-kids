@@ -8,6 +8,8 @@ on:
       - 'artifacts/api-worker/src/import-payment-*'
       - 'artifacts/api-worker/src/import-direct-payment-*'
       - 'artifacts/api-worker/src/import-close-*'
+      - 'artifacts/api-worker/src/import-purchase-currency-guard*'
+      - 'artifacts/api-worker/src/pos-purchase-routes.ts'
       - 'artifacts/api-worker/src/db.ts'
       - 'artifacts/api-worker/src/index.ts'
       - 'artifacts/lovely-kids-pos/src/pages/purchases/ImportCostPage.tsx'
@@ -45,7 +47,7 @@ jobs:
       - name: POS build
         run: pnpm --filter @workspace/lovely-kids-pos build
       - name: Import cost and USD advance FX unit tests
-        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs artifacts/api-worker/src/import-close-readiness.test.mjs
+        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs artifacts/api-worker/src/import-close-readiness.test.mjs artifacts/api-worker/src/import-purchase-currency-guard.test.mjs
 
   validate-import-migration:
     runs-on: ubuntu-latest
