@@ -84,3 +84,30 @@ test("travelling not required for remote shipment",()=>{
   data.invoices[1].purchaseLiabilityIlsMinor=185000;
   assert.equal(previewImportClearingSettlement(data).ready,true);
 });
+
+test("existing supplier voucher reduces open goods liability but is NOT posted a second time",()=>{
+  const data=sample();
+  data.invoices[0].supplierAdvanceIlsMinor=200000;
+  data.invoices[0].supplierVoucherAlreadyPaidIlsMinor=150000;
+  const out=previewImportClearingSettlement(data);
+  assert.equal(out.ready,true);
+  assert.equal(out.reclassifiedAdvanceIlsMinor,375000);
+  assert.equal(out.supplierVouchersAlreadyAppliedIlsMinor,150000);
+  assert.equal(out.remainingSupplierLiabilityIlsMinor,0);
+  assert.equal(out.journalLines.filter(line=>line.accountCode==="IMPORT_SUPPLIER_ADVANCES")
+    .reduce((sum,line)=>sum+line.creditMinor,0),375000);
+  assert.equal(out.journalLines.some(line=>line.memo.includes("سند صرف")),false);
+});
+test("supplier voucher and USD advance together cannot overpay the goods amount",()=>{
+  const data=sample();
+  data.invoices[0].supplierVoucherAlreadyPaidIlsMinor=100;
+  assert.equal(previewImportClearingSettlement(data).ready,false);
+});
+test("partially settled supplier invoice preserves only genuinely unpaid goods balance",()=>{
+  const data=sample();
+  data.invoices[0].supplierAdvanceIlsMinor=100000;
+  data.invoices[0].supplierVoucherAlreadyPaidIlsMinor=75000;
+  const out=previewImportClearingSettlement(data);
+  assert.equal(out.ready,true);
+  assert.equal(out.remainingSupplierLiabilityIlsMinor,175000);
+});
