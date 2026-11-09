@@ -7,6 +7,7 @@ import {
   posPurchaseItemCostsTable,
   posPurchaseItemsTable,
   posPurchasesTable,
+  importCostPurchaseLinksTable,
   productCostStateTable,
   productBarcodesTable,
   productsTable,
@@ -1088,6 +1089,14 @@ async function handleVoidPurchase(
       if (purchase.status !== "completed") {
         throw new PurchaseError("لا يمكن حذف هذه الفاتورة", 409);
       }
+      // Import case accounting may have settled the supplier liability against
+      // this exact purchase. Never void while the invoice is referenced; first
+      // reverse import close and detach the evidence link.
+      const [importLink] = await tx.select({ id: importCostPurchaseLinksTable.id })
+        .from(importCostPurchaseLinksTable)
+        .where(eq(importCostPurchaseLinksTable.purchaseId,purchase.id)).limit(1);
+      if(importLink)throw new PurchaseError(
+        "فاتورة المشتريات مرتبطة بملف استيراد؛ اعكس إقفال الاستيراد وافصل مرجع الفاتورة قبل الإلغاء",409);
 
       const hasLegacyStockAffectingItems =
         purchaseItems.some(
