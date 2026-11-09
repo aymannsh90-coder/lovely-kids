@@ -179,7 +179,8 @@ export async function getImportSupplierVoucherClaims(db:Db,caseId:number){
     const {voucher,evidence}=await inspectVoucher(db,row.voucherId,row.supplierId);
     const over=byVoucher.get(voucher.id)!>voucher.amountMinor;
     results.push({
-      ...row,voucherAmountIlsMinor:voucher.amountMinor,
+      ...row,voucherPublicId:voucher.publicId,
+      voucherAmountIlsMinor:voucher.amountMinor,
       verified:evidence.verified&&!over,
       errors:[
         ...evidence.reasons,
