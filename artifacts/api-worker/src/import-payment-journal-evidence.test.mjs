@@ -70,3 +70,14 @@ test("reversed shipping payment is ignored",()=>{
   const x=directJournal();x.status="reversed";
   assert.equal(verifyIlsDirectCostJournal(directPayment(),x).verified,false);
 });
+
+test("ILS bank shipping payment must carry the same ILS currency and minor amount",()=>{
+  const p=directPayment();
+  p.paymentMethod="bank";p.cashSessionId=null;p.settlementFinanceAccountId=99;
+  const journal=directJournal();
+  journal.cashSessionId=null;
+  journal.lines[1]=line("BANK_ILS_MAIN",99,null,0,5000,"ILS",5000,1000000);
+  assert.equal(verifyIlsDirectCostJournal(p,journal).verified,true);
+  journal.lines[1].currencyAmountMinor=2500;
+  assert.equal(verifyIlsDirectCostJournal(p,journal).verified,false);
+});
