@@ -529,7 +529,9 @@ export default function ImportCostPage() {
               <td>{money(a.usdAmountMinor)} $</td>
               <td>{money(a.advanceIlsMinor)} ₪</td>
               <td>{money(a.fxGainIlsMinor - a.fxLossIlsMinor)} ₪</td>
-              <td>{a.financeTransactionId} — {a.financeStatus}</td>
+              <td>{a.financeTransactionId ?? "بدون قيد"} — {a.journalVerified ? "قيد مطابق" : "قيد غير مطابق"}
+                {!a.journalVerified && <span style={{ color:"#b91c1c",display:"block",fontSize:12 }}>
+                  {a.journalErrors.join("؛ ")}</span>}</td>
             </tr>)}</tbody>
           </table>
         </div> : <p style={{ color: "#64748b" }}>ما في دفعات مقدمة مرحلة ومربوطة بهذا الملف حتى الآن.</p>}
@@ -573,7 +575,9 @@ export default function ImportCostPage() {
               <td>{p.shipmentRef ?? "جميع الموردين"}</td>
               <td>{money(p.amountIlsMinor)} ₪</td>
               <td>{p.paymentMethod === "bank" ? "البنك" : "الصندوق"}</td>
-              <td>{p.financeTransactionId} — {p.financeStatus}</td>
+              <td>{p.financeTransactionId ?? "بدون قيد"} — {p.journalVerified ? "قيد مطابق" : "قيد غير مطابق"}
+                {!p.journalVerified && <span style={{ color:"#b91c1c",display:"block",fontSize:12 }}>
+                  {p.journalErrors.join("؛ ")}</span>}</td>
             </tr>)}</tbody>
           </table>
         </div> : <p style={{ color: "#64748b" }}>ما في مصاريف مرحلة على هذه الشحنة بعد.</p>}
