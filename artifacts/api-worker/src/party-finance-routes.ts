@@ -11,6 +11,7 @@ import {
   financeTransactionLinesTable,
   financeTransactionsTable,
   financeVouchersTable,
+  importCostSupplierVoucherClaimsTable,
   posSaleItemsTable,
   posSaleReturnsTable,
   posSaleReturnItemsTable,
@@ -4110,6 +4111,14 @@ async function handleVoidVoucher(
               409,
             );
           }
+          // A single supplier voucher may already clear one or more import
+          // invoices. Never void it until the import close is reversed and
+          // all evidence-only allocations have been detached.
+          const [linkedImportVoucher]=await tx.select({id:importCostSupplierVoucherClaimsTable.id})
+            .from(importCostSupplierVoucherClaimsTable)
+            .where(eq(importCostSupplierVoucherClaimsTable.voucherId,voucher.id)).limit(1);
+          if(linkedImportVoucher)throw new PartyFinanceError(
+            "سند المورد مرتبط بفاتورة استيراد؛ اعكس التسوية وافصل ربط السند قبل الإلغاء",409);
 
           if (voucher.partyType === "employee" &&
               (voucher.voucherType === "salary_accrual" ||
