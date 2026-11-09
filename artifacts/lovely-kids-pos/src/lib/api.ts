@@ -6119,6 +6119,7 @@ export interface ImportCostCaseResult {
     invoiceRef:string;
     supplierId:number;
     voucherId:number;
+    voucherPublicId:string;
     amountIlsMinor:number;
     voucherAmountIlsMinor:number;
     verified:boolean;
@@ -6312,7 +6313,7 @@ export function unlinkImportPurchase(
 
 /** Existing ILS supplier voucher attribution only. NO bank/cash/GL write. */
 export function claimImportSupplierVoucher(token:string,caseId:number,input:{
-  invoiceRef:string;voucherId:number;amountIlsMinor:number;expectedRevision:number;
+  invoiceRef:string;voucherPublicId:string;amountIlsMinor:number;expectedRevision:number;
 }) {
   return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/voucher-claims`,{
     method:"POST",body:JSON.stringify(input),
