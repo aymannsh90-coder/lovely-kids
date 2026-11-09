@@ -22,6 +22,7 @@ import { parseImportDirectCostRequest, postImportDirectCost } from "./import-dir
 import { previewImportClosing } from "./import-close-readiness";
 import { previewImportClearingSettlement } from "./import-clearing-settlement";
 import { importClosePlanHash } from "./import-closing-rules";
+import { postImportAccountingClose, reverseImportAccountingClose, parseImportClose, parseImportReversal, ImportCloseError } from "./import-accounting-close";
 import { supplierPayableBalances } from "./finance-supplier-ledger";
 import { inspectRecordedImportPayments } from "./import-payment-evidence-service";
 import { attachApprovedPurchase,detachApprovedPurchase,getPurchaseLinks,ImportPurchaseLinkError } from "./import-purchase-link-service";
@@ -645,8 +646,10 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   const linkSingle = /^\/api\/pos\/import-costs\/([1-9]\d*)\/purchase-links\/([1-9]\d*)$/.exec(path);
   const voucherCollection = /^\/api\/pos\/import-costs\/([1-9]\d*)\/voucher-claims$/.exec(path);
   const voucherSingle = /^\/api\/pos\/import-costs\/([1-9]\d*)\/voucher-claims\/([1-9]\d*)$/.exec(path);
+  const closePath=/^\/api\/pos\/import-costs\/([1-9]\d*)\/close$/.exec(path);
+  const reverseClosePath=/^\/api\/pos\/import-costs\/([1-9]\d*)\/reverse-close$/.exec(path);
   const collection = path === "/api/pos/import-costs";
-  if (!collection && !single && !advancePath && !directPaymentPath && !linkCollection && !linkSingle && !voucherCollection && !voucherSingle) return null;
+  if (!collection && !single && !advancePath && !directPaymentPath && !linkCollection && !linkSingle && !voucherCollection && !voucherSingle && !closePath && !reverseClosePath) return null;
   if (!["GET", "POST", "PUT", "DELETE"].includes(request.method)) {
     return json({ error: "عملية غير متاحة في مسودات الاستيراد" }, 405);
   }
@@ -654,6 +657,20 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
   if (!user.isOwner) return json({ error: "ملفات الاستيراد متاحة للمالك فقط" }, 403);
   try {
+    if(closePath && request.method==="POST"){
+      const caseId=normalizeId(closePath[1]!);
+      if(!caseId)throw new ImportDraftError("رقم ملف الاستيراد غير صالح");
+      const input=parseImportClose(await request.json(),caseId);
+      const posted=await postImportAccountingClose(db,env,user.id,input,detail);
+      return json({posting:posted,case:await detail(db,caseId,env)});
+    }
+    if(reverseClosePath && request.method==="POST"){
+      const caseId=normalizeId(reverseClosePath[1]!);
+      if(!caseId)throw new ImportDraftError("رقم ملف الاستيراد غير صالح");
+      const input=parseImportReversal(await request.json(),caseId);
+      const reversed=await reverseImportAccountingClose(db,env,user.id,input);
+      return json({reversal:reversed,case:await detail(db,caseId,env)});
+    }
     if (voucherCollection && request.method === "POST") {
       const claimCaseId=normalizeId(voucherCollection[1]!);
       if (!claimCaseId) throw new ImportDraftError("ملف الاستيراد غير صالح");
@@ -869,6 +886,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
     if (error instanceof ImportAdvanceError) return json({ error: error.message }, error.status);
     if (error instanceof ImportPurchaseLinkError) return json({ error: error.message }, error.status);
     if (error instanceof ImportSupplierVoucherError) return json({ error: error.message }, error.status);
+    if (error instanceof ImportCloseError) return json({error:error.message},error.status);
     if (error instanceof SyntaxError) return json({ error: "صيغة البيانات غير صالحة" }, 400);
     console.error("IMPORT_COST_DRAFT_FAILED", error);
     return json({ error: "تعذر حفظ مسودة الاستيراد" }, 500);
