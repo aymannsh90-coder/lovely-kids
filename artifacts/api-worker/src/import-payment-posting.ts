@@ -5,6 +5,7 @@ import {
   importCostCasesTable,
   importCostInvoicesTable,
   importCostAdvancePaymentsTable,
+  importCostSupplierVoucherClaimsTable,
   suppliersTable,
 } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -195,6 +196,7 @@ export async function postImportUsdSupplierAdvance(
 
     const history = await tx.select({
       usdAmountMinor: importCostAdvancePaymentsTable.usdAmountMinor,
+      advanceIlsMinor: importCostAdvancePaymentsTable.advanceIlsMinor,
     }).from(importCostAdvancePaymentsTable)
       .where(eq(importCostAdvancePaymentsTable.invoiceId, invoice.id));
     const totalPaid = history.reduce((sum, row) => sum + row.usdAmountMinor, 0);
@@ -216,6 +218,17 @@ export async function postImportUsdSupplierAdvance(
       );
     }
     ensureExactPlan(request.usdAmountMinor, plan.bankBookCreditIlsMinor, plan);
+    const priorAdvancesIlsMinor=history.reduce((sum,p)=>sum+p.advanceIlsMinor,0);
+    const voucherClaims=await tx.select({amount:importCostSupplierVoucherClaimsTable.amountIlsMinor})
+      .from(importCostSupplierVoucherClaimsTable)
+      .where(eq(importCostSupplierVoucherClaimsTable.invoiceId,invoice.id));
+    const alreadyPaidVoucherIlsMinor=voucherClaims.reduce((sum,p)=>sum+p.amount,0);
+    const combinedPaid=priorAdvancesIlsMinor+alreadyPaidVoucherIlsMinor+
+      plan.supplierAdvanceDebitIlsMinor;
+    if(!Number.isSafeInteger(combinedPaid)||combinedPaid>invoice.goodsBookedIlsMinor){
+      throw new ImportAdvanceError(
+        "الدفعات المقدمة وسندات المورد المخصصة تجاوزت قيمة بضاعة الفاتورة بالشيكل؛ لا يمكن الدفع مرتين",409);
+    }
 
     const advanceAccount = await ensureIlsAccount(tx, "IMPORT_SUPPLIER_ADVANCES", "دفعات مقدمة لموردي الاستيراد", "asset");
     const gainAccount = plan.realizedFxGainCreditIlsMinor > 0
