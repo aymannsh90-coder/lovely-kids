@@ -660,6 +660,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
           .where(eq(importCostInvoicesTable.caseId, caseId));
         const postedAdvances = await tx.select({
           invoiceId: importCostAdvancePaymentsTable.invoiceId,
+          advanceIlsMinor: importCostAdvancePaymentsTable.advanceIlsMinor,
         }).from(importCostAdvancePaymentsTable)
           .where(eq(importCostAdvancePaymentsTable.caseId, caseId));
         const lockedInvoiceIds = new Set(postedAdvances.map((payment) => payment.invoiceId));
@@ -667,10 +668,14 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
         for (const invoice of oldInvoices) {
           if (!lockedInvoiceIds.has(invoice.id)) continue;
           const requested = draft.invoices.find((item) => item.lineRef === invoice.lineRef);
+          const alreadyPaidIls = postedAdvances
+            .filter(payment=>payment.invoiceId===invoice.id)
+            .reduce((sum,payment)=>sum+payment.advanceIlsMinor,0);
           if (!requested ||
               requested.supplierId !== invoice.supplierId ||
               requested.invoiceNumber !== invoice.invoiceNumber ||
-              requested.goodsUsdMinor !== invoice.goodsUsdMinor) {
+              requested.goodsUsdMinor !== invoice.goodsUsdMinor ||
+              requested.goodsBookedIlsMinor < alreadyPaidIls) {
             throw new ImportDraftError("لا يمكن تغيير أو حذف فاتورة تم دفع مبلغ مقدم عليها؛ يلزم إجراء تصحيح موثق", 409);
           }
           protectedInvoices.set(invoice.lineRef, invoice.id);
