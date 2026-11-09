@@ -245,7 +245,7 @@ async function insertChildren(tx: Tx, caseId: number, draft: DraftInput, protect
   }
 }
 
-async function detail(db: Db, id: number) {
+async function detail(db: Db, id: number, env: Env) {
   const [found] = await db.select().from(importCostCasesTable)
     .where(eq(importCostCasesTable.id, id)).limit(1);
   if (!found) throw new ImportDraftError("ملف الاستيراد غير موجود", 404);
@@ -326,6 +326,7 @@ async function detail(db: Db, id: number) {
   const comparison = previewImportCostSettlement(previewDraft);
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
+    advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
     draft,
     advances: paymentRecords.map((payment) => ({
       ...payment,
@@ -386,11 +387,12 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
         revision: importCostCasesTable.revision,
         updatedAt: importCostCasesTable.updatedAt,
       }).from(importCostCasesTable).orderBy(desc(importCostCasesTable.id)).limit(100);
-      return json({ cases: rows, accountingEnabled: false });
+      return json({ cases: rows, accountingEnabled: false,
+        advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true" });
     }
     const caseId = single ? normalizeId(single[1]!) : null;
     if (single && !caseId) throw new ImportDraftError("رقم الملف غير صالح");
-    if (request.method === "GET" && caseId) return json(await detail(db, caseId));
+    if (request.method === "GET" && caseId) return json(await detail(db, caseId, env));
     if (request.method === "POST" && collection) {
       const payload = record(await request.json(), "مسودة الاستيراد");
       const idempotencyKey = stringField(payload.idempotencyKey, "مفتاح منع التكرار", 120);
@@ -411,7 +413,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
         await insertChildren(tx, row.id, draft);
         return row.id;
       });
-      return json(await detail(db, created), 201);
+      return json(await detail(db, created, env), 201);
     }
     if (request.method === "PUT" && caseId) {
       const payload = record(await request.json(), "مسودة الاستيراد");
@@ -458,7 +460,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
           revision: locked.revision + 1, updatedAt: new Date(),
         }).where(eq(importCostCasesTable.id, caseId));
       });
-      return json(await detail(db, caseId));
+      return json(await detail(db, caseId, env));
     }
     return json({ error: "العملية غير مدعومة" }, 405);
   } catch (error) {
