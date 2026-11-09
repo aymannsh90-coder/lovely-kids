@@ -6113,6 +6113,17 @@ export interface ImportCostPreview {
 }
 export interface ImportCostCaseResult {
   advancePostingEnabled: boolean;
+  supplierVoucherClaims: Array<{
+    id:number;
+    invoiceId:number;
+    invoiceRef:string;
+    supplierId:number;
+    voucherId:number;
+    amountIlsMinor:number;
+    voucherAmountIlsMinor:number;
+    verified:boolean;
+    errors:string[];
+  }>;
   purchaseLinks: Array<{
     id:number;
     purchaseId:number;
@@ -6140,6 +6151,7 @@ export interface ImportCostCaseResult {
     remainingSupplierLiabilityIlsMinor:number;
     recognizedTravelExpenseIlsMinor:number;
     reclassifiedAdvanceIlsMinor:number;
+    supplierVouchersAlreadyAppliedIlsMinor:number;
     reclassifiedShipmentFreightIlsMinor:number;
     reclassifiedCapitalizableTravelIlsMinor:number;
     journalLines:Array<{
@@ -6288,6 +6300,23 @@ export function unlinkImportPurchase(
   token:string,caseId:number,linkId:number,expectedRevision:number,
 ) {
   return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/purchase-links/${linkId}`,{
+    method:"DELETE",body:JSON.stringify({expectedRevision}),
+  },token);
+}
+
+/** Existing ILS supplier voucher attribution only. NO bank/cash/GL write. */
+export function claimImportSupplierVoucher(token:string,caseId:number,input:{
+  invoiceRef:string;voucherId:number;amountIlsMinor:number;expectedRevision:number;
+}) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/voucher-claims`,{
+    method:"POST",body:JSON.stringify(input),
+  },token);
+}
+/** Detach reference only; supplier voucher and its payment remain untouched. */
+export function detachImportSupplierVoucherClaim(
+  token:string,caseId:number,claimId:number,expectedRevision:number,
+){
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/voucher-claims/${claimId}`,{
     method:"DELETE",body:JSON.stringify({expectedRevision}),
   },token);
 }
