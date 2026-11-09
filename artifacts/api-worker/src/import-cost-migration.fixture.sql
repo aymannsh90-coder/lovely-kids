@@ -13,3 +13,6 @@ CREATE TABLE public.cash_sessions (id integer PRIMARY KEY);
 CREATE TABLE public.finance_accounts (id integer PRIMARY KEY);
 INSERT INTO public.cash_sessions(id) VALUES (55);
 INSERT INTO public.finance_accounts(id) VALUES (77);
+
+CREATE TABLE public.pos_purchases (id integer PRIMARY KEY);
+INSERT INTO public.pos_purchases(id) VALUES (1001),(1002);
