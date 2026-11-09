@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import type { openDb, Env } from "./db";
 import { previewImportCostSettlement, type ImportCostDraft } from "./import-cost-reconciliation";
+import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierAdvance } from "./import-payment-posting";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -321,7 +322,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   const path = new URL(request.url).pathname;
   const single = /^\/api\/pos\/import-costs\/([1-9]\d*)$/.exec(path);
   const collection = path === "/api/pos/import-costs";
-  if (!collection && !single) return null;
+  if (!collection && !single && !advancePath) return null;
   if (!["GET", "POST", "PUT"].includes(request.method)) {
     return json({ error: "عملية غير متاحة في مسودات الاستيراد" }, 405);
   }
@@ -329,6 +330,13 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
   if (!user.isOwner) return json({ error: "ملفات الاستيراد متاحة للمالك فقط" }, 403);
   try {
+    if (advancePath && request.method === "POST") {
+      const paymentCaseId = normalizeId(advancePath[1]!);
+      if (!paymentCaseId) throw new ImportDraftError("رقم الاستيراد غير صالح");
+      const paymentRequest = parseSupplierAdvanceRequest(await request.json(), paymentCaseId);
+      const payment = await postImportUsdSupplierAdvance(db, env, user.id, paymentRequest);
+      return json({ payment, accountingPosted: true });
+    }
     if (request.method === "GET" && collection) {
       const rows = await db.select({
         id: importCostCasesTable.id,
@@ -393,6 +401,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
     return json({ error: "العملية غير مدعومة" }, 405);
   } catch (error) {
     if (error instanceof ImportDraftError) return json({ error: error.message }, error.status);
+    if (error instanceof ImportAdvanceError) return json({ error: error.message }, error.status);
     if (error instanceof SyntaxError) return json({ error: "صيغة البيانات غير صالحة" }, 400);
     console.error("IMPORT_COST_DRAFT_FAILED", error);
     return json({ error: "تعذر حفظ مسودة الاستيراد" }, 500);
