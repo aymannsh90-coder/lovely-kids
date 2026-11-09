@@ -6,6 +6,7 @@ on:
     paths:
       - 'artifacts/api-worker/src/import-cost-*'
       - 'artifacts/api-worker/src/import-payment-*'
+      - 'artifacts/api-worker/src/import-direct-payment-*'
       - 'artifacts/api-worker/src/db.ts'
       - 'artifacts/api-worker/src/index.ts'
       - 'artifacts/lovely-kids-pos/src/pages/purchases/ImportCostPage.tsx'
@@ -16,6 +17,7 @@ on:
       - 'lib/db/src/schema/index.ts'
       - 'lib/db/migrations/20261109_create_import_cost_drafts.sql'
       - 'lib/db/migrations/20261109_import_usd_supplier_advances.sql'
+      - 'lib/db/migrations/20261109_import_direct_cost_payments.sql'
       - '.github/workflows/verify-import-cost-reconciliation.yml'
   workflow_dispatch:
 
@@ -80,3 +82,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_usd_supplier_advances.sql
       - name: Verify supplier advance journal metadata constraints
         run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-advance-migration.verify.sql
+
+      - name: Apply ILS direct-cost payment schema in ephemeral DB
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_direct_cost_payments.sql
+      - name: Verify direct expense payment FK and immutable settled shipments
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-direct-payment-migration.verify.sql
