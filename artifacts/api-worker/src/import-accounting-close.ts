@@ -184,7 +184,10 @@ export async function postImportAccountingClose(
     const [sameKey]=await tx.select().from(importCostClosuresTable)
       .where(eq(importCostClosuresTable.idempotencyKey,input.idempotencyKey)).limit(1);
     if(sameKey){
-      if(sameKey.caseId!==input.caseId||sameKey.status!=="posted")
+      if(sameKey.caseId!==input.caseId||sameKey.status!=="posted" ||
+         sameKey.planHash!==input.expectedPlanHash ||
+         sameKey.businessDate!==input.businessDate ||
+         sameKey.travelClassificationApproved!==(input.travelClassificationConfirmed || !file.withTravel))
         throw new ImportCloseError("مفتاح الإقفال مستخدم لعملية مختلفة");
       return{closureId:sameKey.id,financeTransactionId:sameKey.financeTransactionId,alreadyPosted:true};
     }
@@ -207,7 +210,7 @@ export async function postImportAccountingClose(
     const accounts=await resolveCloseAccounts(tx,plan);
     const [closure]=await tx.insert(importCostClosuresTable).values({
       caseId:input.caseId,idempotencyKey:input.idempotencyKey,
-      status:"posted",businessDate:input.businessDate,
+      planHash:input.expectedPlanHash,status:"posted",businessDate:input.businessDate,
       debitIlsMinor:plan.debitMinor,closedByUserId:actorId,
       travelClassificationApproved:input.travelClassificationConfirmed || !review.draft.withTravel,
     }).returning();
@@ -256,7 +259,9 @@ export async function reverseImportAccountingClose(
     const [oldReverse]=await tx.select().from(importCostClosuresTable)
       .where(eq(importCostClosuresTable.reversalKey,input.idempotencyKey)).limit(1);
     if(oldReverse){
-      if(oldReverse.caseId!==input.caseId||oldReverse.status!=="reversed")
+      if(oldReverse.caseId!==input.caseId||oldReverse.status!=="reversed" ||
+         oldReverse.reversalReason!==input.reason ||
+         oldReverse.reversalBusinessDate!==input.businessDate)
         throw new ImportCloseError("مفتاح العكس مستخدم لملف أو عملية أخرى");
       return{closureId:oldReverse.id,financeTransactionId:oldReverse.reversalFinanceTransactionId,alreadyReversed:true};
     }
@@ -318,7 +323,8 @@ export async function reverseImportAccountingClose(
     }
     await tx.update(importCostClosuresTable).set({
       status:"reversed",reversalKey:input.idempotencyKey,
-      reversalReason:input.reason,reversalFinanceTransactionId,
+      reversalReason:input.reason,reversalBusinessDate:input.businessDate,
+      reversalFinanceTransactionId,
       reversedByUserId:actorId,reversedAt:new Date(),
     }).where(eq(importCostClosuresTable.id,closure.id));
     const [updated]=await tx.update(importCostCasesTable)
