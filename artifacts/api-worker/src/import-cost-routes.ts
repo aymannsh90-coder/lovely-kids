@@ -18,6 +18,7 @@ import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierA
 import { parseImportDirectCostRequest, postImportDirectCost } from "./import-direct-payment-posting";
 import { previewImportClosing } from "./import-close-readiness";
 import { previewImportClearingSettlement } from "./import-clearing-settlement";
+import { inspectRecordedImportPayments } from "./import-payment-evidence-service";
 import { attachApprovedPurchase,detachApprovedPurchase,getPurchaseLinks,ImportPurchaseLinkError } from "./import-purchase-link-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -280,6 +281,8 @@ async function detail(db: Db, id: number, env: Env) {
   const paymentRecords = await db.select({
     paymentId: importCostAdvancePaymentsTable.id,
     invoiceId: importCostAdvancePaymentsTable.invoiceId,
+    bankAccountId: importCostAdvancePaymentsTable.bankAccountId,
+    spotRateMicros: importCostAdvancePaymentsTable.spotRateMicros,
     usdAmountMinor: importCostAdvancePaymentsTable.usdAmountMinor,
     advanceIlsMinor: importCostAdvancePaymentsTable.advanceIlsMinor,
     bankBookIlsMinor: importCostAdvancePaymentsTable.bankBookIlsMinor,
@@ -288,7 +291,7 @@ async function detail(db: Db, id: number, env: Env) {
     financeTransactionId: importCostAdvancePaymentsTable.financeTransactionId,
     financeStatus: financeTransactionsTable.status,
   }).from(importCostAdvancePaymentsTable)
-    .innerJoin(financeTransactionsTable, eq(
+    .leftJoin(financeTransactionsTable, eq(
       importCostAdvancePaymentsTable.financeTransactionId, financeTransactionsTable.id,
     )).where(eq(importCostAdvancePaymentsTable.caseId, id));
   const directRecords = await db.select({
@@ -296,16 +299,32 @@ async function detail(db: Db, id: number, env: Env) {
     shipmentId: importCostDirectPaymentsTable.shipmentId,
     costType: importCostDirectPaymentsTable.costType,
     paymentMethod: importCostDirectPaymentsTable.paymentMethod,
+    settlementFinanceAccountId: importCostDirectPaymentsTable.settlementFinanceAccountId,
+    cashSessionId: importCostDirectPaymentsTable.cashSessionId,
     amountIlsMinor: importCostDirectPaymentsTable.amountIlsMinor,
     financeTransactionId: importCostDirectPaymentsTable.financeTransactionId,
     financeStatus: financeTransactionsTable.status,
   }).from(importCostDirectPaymentsTable)
-    .innerJoin(financeTransactionsTable, eq(
+    .leftJoin(financeTransactionsTable, eq(
       importCostDirectPaymentsTable.financeTransactionId, financeTransactionsTable.id,
     )).where(eq(importCostDirectPaymentsTable.caseId, id));
+  const inspectedPayments = await inspectRecordedImportPayments(
+    db,paymentRecords,directRecords,
+    new Map(invoices.map(invoice=>[invoice.id,invoice.supplierId])),
+  );
+  const verifiedAdvances = new Set(inspectedPayments.advances
+    .filter(check=>check.verified).map(check=>check.paymentId));
+  const verifiedDirectCosts = new Set(inspectedPayments.directCosts
+    .filter(check=>check.verified).map(check=>check.paymentId));
+  const journalWarnings=[
+    ...inspectedPayments.advances.filter(check=>!check.verified)
+      .map(check=>"دفعة المورد #"+check.paymentId+": "+check.errors.join("؛ ")),
+    ...inspectedPayments.directCosts.filter(check=>!check.verified)
+      .map(check=>"مصروف الاستيراد #"+check.paymentId+": "+check.errors.join("؛ ")),
+  ];
   const paidByInvoiceId = new Map<number, number>();
   for (const payment of paymentRecords) {
-    if (payment.financeStatus !== "posted") continue;
+    if (!verifiedAdvances.has(payment.paymentId)) continue;
     paidByInvoiceId.set(payment.invoiceId,
       (paidByInvoiceId.get(payment.invoiceId) ?? 0) + payment.advanceIlsMinor);
   }
@@ -392,7 +411,7 @@ async function detail(db: Db, id: number, env: Env) {
       const stored=shipments.find(row=>row.lineRef===sh.lineRef);
       const paid=stored ? directRecords.filter(row=>
         row.shipmentId===stored.id && row.costType!=="travel" &&
-        row.financeStatus==="posted").reduce((sum,row)=>sum+row.amountIlsMinor,0) :0;
+        verifiedDirectCosts.has(row.paymentId)).reduce((sum,row)=>sum+row.amountIlsMinor,0) :0;
       return {
         shipmentRef:sh.lineRef,
         freightPaidIlsMinor:paid,
@@ -400,7 +419,7 @@ async function detail(db: Db, id: number, env: Env) {
       };
     }),
     totalTravelPaidIlsMinor:directRecords.filter(row=>
-      row.costType==="travel" && row.financeStatus==="posted")
+      row.costType==="travel" && verifiedDirectCosts.has(row.paymentId))
         .reduce((sum,row)=>sum+row.amountIlsMinor,0),
     totalTravelDistributedIlsMinor:draft.travelRecordedIlsMinor,
     travelCapitalizableIlsMinor:draft.allocations.reduce((sum,a)=>
@@ -408,9 +427,10 @@ async function detail(db: Db, id: number, env: Env) {
   });
   const clearingPreview={
     ...clearingCandidate,
-    ready:clearingCandidate.ready && allGroupsMatched && comparison.balanced,
+    ready:clearingCandidate.ready && allGroupsMatched && comparison.balanced && inspectedPayments.allVerified,
     blockers:[
       ...clearingCandidate.blockers,
+      ...journalWarnings,
       ...(!allGroupsMatched ? ["سجلات تكلفة المشتريات المعتمدة لا تطابق جميع مجموعات الإكسل"] : []),
       ...(!comparison.balanced ? ["توزيع الإكسل لم يطابق فواتير الموردين والشحنات"] : []),
     ],
@@ -423,7 +443,7 @@ async function detail(db: Db, id: number, env: Env) {
     excelErrors: comparison.errors,
     invoices: invoices.map((invoice) => {
       const paid = paymentRecords.filter((payment) =>
-        payment.invoiceId === invoice.id && payment.financeStatus === "posted");
+        payment.invoiceId === invoice.id && verifiedAdvances.has(payment.paymentId));
       const advanceIlsMinor = paid.reduce((sum,payment) => sum + payment.advanceIlsMinor, 0);
       return {
         ref: invoice.lineRef,
@@ -457,12 +477,16 @@ async function detail(db: Db, id: number, env: Env) {
     }),
     travelRecordedIlsMinor: found.travelRecordedIlsMinor,
     travelPaidIlsMinor: directRecords
-      .filter((payment) => payment.costType === "travel" && payment.financeStatus === "posted")
+      .filter((payment) => payment.costType === "travel" && verifiedDirectCosts.has(payment.paymentId))
       .reduce((sum,payment) => sum + payment.amountIlsMinor, 0),
     travelClassificationApproved: found.travelRecordedIlsMinor === 0,
     inventoryCostEngineReconciled: allGroupsMatched,
     settlementJournalVerified: false, // financial clearing journal is NOT wired yet
   });
+  if(journalWarnings.length){
+    closePreview.canCloseAccounting=false;
+    closePreview.reasons.push(...journalWarnings);
+  }
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
     advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
@@ -478,10 +502,14 @@ async function detail(db: Db, id: number, env: Env) {
     closePreview,
     directPayments: directRecords.map((payment) => ({
       ...payment,
+      journalVerified: verifiedDirectCosts.has(payment.paymentId),
+      journalErrors: inspectedPayments.directCosts.find(p=>p.paymentId===payment.paymentId)?.errors??[],
       shipmentRef: shipments.find((shipment) => shipment.id === payment.shipmentId)?.lineRef ?? null,
     })),
     advances: paymentRecords.map((payment) => ({
       ...payment,
+      journalVerified: verifiedAdvances.has(payment.paymentId),
+      journalErrors: inspectedPayments.advances.find(p=>p.paymentId===payment.paymentId)?.errors??[],
       invoiceRef: invById.get(payment.invoiceId) ?? "",
     })),
     preview: {
@@ -491,11 +519,11 @@ async function detail(db: Db, id: number, env: Env) {
       ledgerVerified: false,
       canPost: false,
       paymentStatus:
-        paymentRecords.length && directRecords.length ? "mixed_payments_posted" :
-        directRecords.length ? "costs_posted" :
-        paymentRecords.length ? "advances_posted" : "not_connected",
+        verifiedAdvances.size && verifiedDirectCosts.size ? "mixed_payments_posted" :
+        verifiedDirectCosts.size ? "costs_posted" :
+        verifiedAdvances.size ? "advances_posted" : "not_connected",
       paidShipmentCostsIlsMinor: directRecords.filter((payment) =>
-        payment.costType !== "travel" && payment.financeStatus === "posted"
+        payment.costType !== "travel" && verifiedDirectCosts.has(payment.paymentId)
       ).reduce((sum, payment) => sum + payment.amountIlsMinor, 0),
       paidTravelIlsMinor: directRecords.filter((payment) =>
         payment.costType === "travel" && payment.financeStatus === "posted"
