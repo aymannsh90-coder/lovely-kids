@@ -9,6 +9,8 @@ on:
       - 'artifacts/api-worker/src/import-supplier-voucher-*'
       - 'artifacts/api-worker/src/import-direct-payment-*'
       - 'artifacts/api-worker/src/import-close-*'
+      - 'artifacts/api-worker/src/import-closing-*'
+      - 'artifacts/api-worker/src/import-accounting-close*'
       - 'artifacts/api-worker/src/import-clearing-*'
       - 'artifacts/api-worker/src/import-purchase-*'
       - 'artifacts/api-worker/src/import-purchase-currency-guard*'
@@ -26,6 +28,7 @@ on:
       - 'lib/db/migrations/20261109_import_direct_cost_payments.sql'
       - 'lib/db/migrations/20261109_import_purchase_evidence_links.sql'
       - 'lib/db/migrations/20261109_import_supplier_voucher_claims.sql'
+      - 'lib/db/migrations/20261109_import_accounting_closures.sql'
       - '.github/workflows/verify-import-cost-reconciliation.yml'
   workflow_dispatch:
 
@@ -52,7 +55,7 @@ jobs:
       - name: POS build
         run: pnpm --filter @workspace/lovely-kids-pos build
       - name: Import cost and USD advance FX unit tests
-        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs artifacts/api-worker/src/import-close-readiness.test.mjs artifacts/api-worker/src/import-purchase-currency-guard.test.mjs artifacts/api-worker/src/import-purchase-evidence.test.mjs artifacts/api-worker/src/import-clearing-settlement.test.mjs artifacts/api-worker/src/import-payment-journal-evidence.test.mjs artifacts/api-worker/src/import-supplier-voucher-claims.test.mjs
+        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs artifacts/api-worker/src/import-close-readiness.test.mjs artifacts/api-worker/src/import-purchase-currency-guard.test.mjs artifacts/api-worker/src/import-purchase-evidence.test.mjs artifacts/api-worker/src/import-clearing-settlement.test.mjs artifacts/api-worker/src/import-payment-journal-evidence.test.mjs artifacts/api-worker/src/import-supplier-voucher-claims.test.mjs artifacts/api-worker/src/import-closing-rules.test.mjs
 
   validate-import-migration:
     runs-on: ubuntu-latest
@@ -105,3 +108,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_supplier_voucher_claims.sql
       - name: Verify voucher splits, foreign keys, RLS and unique attribution
         run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-supplier-voucher-claims-migration.verify.sql
+
+      - name: Apply reversible accounting closure schema only to ephemeral PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_accounting_closures.sql
+      - name: Verify closure audit trail, duplicate guard, reversals, and RLS
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-accounting-closures-migration.verify.sql
