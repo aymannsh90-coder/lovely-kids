@@ -9,6 +9,7 @@ import { financeAccountsTable, financeTransactionsTable } from "./finance";
 import { cashSessionsTable } from "./cash-sessions";
 import { suppliersTable } from "./suppliers";
 import { posPurchasesTable } from "./pos-purchases";
+import { financeVouchersTable } from "./finance-vouchers";
 
 /**
  * Import case is a DOCUMENTATION DRAFT, not an accounting journal.
@@ -194,4 +195,32 @@ export const importCostPurchaseLinksTable = pgTable("import_cost_purchase_links"
     columns: [t.caseId, t.allocationId],
     foreignColumns: [importCostAllocationsTable.caseId, importCostAllocationsTable.id],
   }).onDelete("restrict"),
+]).enableRLS();
+
+
+/**
+ * Evidence-only assignment of existing posted ILS supplier vouchers to one
+ * import invoice. Multiple invoice claims may share a voucher, bounded by
+ * its original payment (checked transactionally).
+ *
+ * ATTENTION: Nothing here re-posts bank, cash, supplier payable or inventory.
+ */
+export const importCostSupplierVoucherClaimsTable = pgTable("import_cost_supplier_voucher_claims", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => importCostCasesTable.id, { onDelete: "restrict" }),
+  invoiceId: integer("invoice_id").notNull().references(() => importCostInvoicesTable.id, { onDelete: "restrict" }),
+  voucherId: integer("voucher_id").notNull().references(() => financeVouchersTable.id, { onDelete: "restrict" }),
+  amountIlsMinor: integer("amount_ils_minor").notNull(),
+  createdByUserId: integer("created_by_user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("import_cost_supplier_voucher_claim_unique").on(t.invoiceId,t.voucherId),
+  index("import_cost_supplier_voucher_claim_voucher_idx").on(t.voucherId),
+  index("import_cost_supplier_voucher_claim_case_idx").on(t.caseId),
+  foreignKey({
+    name: "import_cost_supplier_voucher_claim_case_invoice_fk",
+    columns: [t.caseId,t.invoiceId],
+    foreignColumns: [importCostInvoicesTable.caseId,importCostInvoicesTable.id],
+  }).onDelete("restrict"),
+  check("import_cost_supplier_voucher_claim_amount_positive", sql`${t.amountIlsMinor} > 0`),
 ]).enableRLS();
