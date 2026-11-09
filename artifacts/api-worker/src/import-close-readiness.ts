@@ -57,7 +57,6 @@ export function previewImportClosing(state: ImportCloseState): ImportClosePrevie
     if (!isMoney(value)) reasons.push(label + " غير صالح");
     return isMoney(value) ? value : 0;
   };
-  const total = (numbers: number[]) => numbers.reduce((a,b) => a+b, 0);
   if (!state.excelBalanced || state.excelErrors.length) {
     reasons.push("توزيع الإكسل لم يُطابق جميع الفواتير والشحنات بعد");
   }
