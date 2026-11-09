@@ -16,3 +16,6 @@ INSERT INTO public.finance_accounts(id) VALUES (77);
 
 CREATE TABLE public.pos_purchases (id integer PRIMARY KEY);
 INSERT INTO public.pos_purchases(id) VALUES (1001),(1002);
+
+CREATE TABLE public.finance_vouchers(id integer PRIMARY KEY);
+INSERT INTO public.finance_vouchers(id) VALUES (201),(202);
