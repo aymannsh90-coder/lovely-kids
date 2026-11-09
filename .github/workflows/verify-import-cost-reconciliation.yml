@@ -1,0 +1,26 @@
+name: Verify import landed-cost preflight
+
+on:
+  pull_request:
+    paths:
+      - "artifacts/api-worker/src/import-cost-reconciliation.ts"
+      - "artifacts/api-worker/src/import-cost-reconciliation.test.mjs"
+      - ".github/workflows/verify-import-cost-reconciliation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "artifacts/api-worker/src/import-cost-reconciliation.ts"
+      - "artifacts/api-worker/src/import-cost-reconciliation.test.mjs"
+
+jobs:
+  validate-import-costs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Unit test of import cost preflight
+        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs
