@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'artifacts/api-worker/src/import-cost-*'
+      - 'artifacts/api-worker/src/import-payment-*'
+      - 'artifacts/api-worker/src/db.ts'
       - 'artifacts/api-worker/src/index.ts'
       - 'artifacts/lovely-kids-pos/src/pages/purchases/ImportCostPage.tsx'
       - 'artifacts/lovely-kids-pos/src/app/router.tsx'
@@ -13,6 +15,7 @@ on:
       - 'lib/db/src/schema/import-costs.ts'
       - 'lib/db/src/schema/index.ts'
       - 'lib/db/migrations/20261109_create_import_cost_drafts.sql'
+      - 'lib/db/migrations/20261109_import_usd_supplier_advances.sql'
       - '.github/workflows/verify-import-cost-reconciliation.yml'
   workflow_dispatch:
 
@@ -38,8 +41,8 @@ jobs:
         run: pnpm --filter @workspace/lovely-kids-pos typecheck
       - name: POS build
         run: pnpm --filter @workspace/lovely-kids-pos build
-      - name: Import cost unit tests
-        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs
+      - name: Import cost and USD advance FX unit tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs
 
   validate-import-migration:
     runs-on: ubuntu-latest
