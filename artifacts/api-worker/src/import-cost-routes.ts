@@ -7,6 +7,7 @@ import {
   importCostDirectPaymentsTable,
   importCostPurchaseLinksTable,
   importCostSupplierVoucherClaimsTable,
+  importCostClosuresTable,
   financeTransactionsTable,
   financeVouchersTable,
   suppliersTable,
@@ -20,6 +21,7 @@ import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierA
 import { parseImportDirectCostRequest, postImportDirectCost } from "./import-direct-payment-posting";
 import { previewImportClosing } from "./import-close-readiness";
 import { previewImportClearingSettlement } from "./import-clearing-settlement";
+import { importClosePlanHash } from "./import-closing-rules";
 import { supplierPayableBalances } from "./finance-supplier-ledger";
 import { inspectRecordedImportPayments } from "./import-payment-evidence-service";
 import { attachApprovedPurchase,detachApprovedPurchase,getPurchaseLinks,ImportPurchaseLinkError } from "./import-purchase-link-service";
@@ -480,6 +482,34 @@ async function detail(db: Db | Tx, id: number, env: Env) {
       sufficient:(supplierBalances.get(supplierId)??0)>=plannedDebitIlsMinor,
     })),
   };
+  const closePlanHash=importClosePlanHash({
+    caseId:id,revision:found.revision,
+    journalLines:clearingPreview.journalLines,
+    costGroups:draft.allocations.map(a=>({
+      allocationRef:a.lineRef,
+      expectedAccountingIlsMinor:a.goodsIlsMinor+a.freightIlsMinor+a.travelCapitalizableIlsMinor,
+      linkedAccountingIlsMinor:linkedByGroup.get(a.lineRef)?.cost??0,
+      valid:groupReady(a),
+    })),
+    purchaseLinks:purchaseLinks.map(p=>({
+      id:p.id,purchaseId:p.purchaseId,valid:p.valid,inventoryCostIlsMinor:p.inventoryCostIlsMinor,
+    })),
+    supplierVouchers:supplierVoucherClaims.map(v=>({
+      id:v.id,voucherId:v.voucherId,verified:v.verified,amountIlsMinor:v.amountIlsMinor,
+    })),
+    advances:paymentRecords.map(p=>({
+      paymentId:p.paymentId,financeTransactionId:p.financeTransactionId,
+      journalVerified:verifiedAdvances.has(p.paymentId),advanceIlsMinor:p.advanceIlsMinor,
+    })),
+    costs:directRecords.map(p=>({
+      paymentId:p.paymentId,financeTransactionId:p.financeTransactionId,
+      journalVerified:verifiedDirectCosts.has(p.paymentId),amountIlsMinor:p.amountIlsMinor,
+    })),
+    supplierBalances:clearingPreview.supplierBalanceChecks,
+  });
+  const [activeClosure]=await db.select().from(importCostClosuresTable)
+    .where(eq(importCostClosuresTable.caseId,id))
+    .orderBy(desc(importCostClosuresTable.id)).limit(1);
   const closePreview = previewImportClosing({
     excelBalanced: comparison.balanced,
     excelErrors: comparison.errors,
@@ -523,9 +553,12 @@ async function detail(db: Db | Tx, id: number, env: Env) {
     travelPaidIlsMinor: directRecords
       .filter((payment) => payment.costType === "travel" && verifiedDirectCosts.has(payment.paymentId))
       .reduce((sum,payment) => sum + payment.amountIlsMinor, 0),
-    travelClassificationApproved: found.travelRecordedIlsMinor === 0,
+    travelClassificationApproved: found.travelRecordedIlsMinor === 0 ||
+      (found.status==="closed" && !!activeClosure?.travelClassificationApproved),
     inventoryCostEngineReconciled: allGroupsMatched,
-    settlementJournalVerified: false, // financial clearing journal is NOT wired yet
+    settlementJournalVerified: found.status==="closed" &&
+      activeClosure?.status==="posted" &&
+      (activeClosure.debitIlsMinor===0 || !!activeClosure.financeTransactionId),
   });
   if(journalWarnings.length||invalidVoucherClaims.length||supplierBalanceWarnings.length){
     closePreview.canCloseAccounting=false;
@@ -533,6 +566,16 @@ async function detail(db: Db | Tx, id: number, env: Env) {
   }
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
+    closure:activeClosure ? {
+      id:activeClosure.id,status:activeClosure.status,
+      debitIlsMinor:activeClosure.debitIlsMinor,
+      financeTransactionId:activeClosure.financeTransactionId,
+      reversalFinanceTransactionId:activeClosure.reversalFinanceTransactionId,
+      businessDate:activeClosure.businessDate,
+      travelClassificationApproved:activeClosure.travelClassificationApproved,
+    }:null,
+    closePlanHash,
+    closingEnabled:env.POS_IMPORT_CLOSING_ENABLED==="true",
     advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
     draft,
     supplierVoucherClaims,
