@@ -18,7 +18,7 @@ export type PurchaseInventoryEvidence = {
     itemId: number;
     productId: number | null;
     entryMode: string;
-    receivedQuantity: number;
+    receivedQuantity: number | null;
     stockQuantityApplied: number | null;
     costTotalMinor: number | null;
     stockCostTotalMinor: number | null;
@@ -78,7 +78,7 @@ export function verifyApprovedPurchaseEvidence(
     seenItems.add(item.itemId);
     if (item.entryMode !== "stock_receipt" || item.historicalAllocationPending ||
         item.costQuality !== "confirmed" || item.productId == null ||
-        item.receivedQuantity <= 0 ||
+        item.receivedQuantity === null || item.receivedQuantity <= 0 ||
         item.stockQuantityApplied !== item.receivedQuantity ||
         item.historicalSoldQuantity !== 0 ||
         item.stockCostTotalMinor !== item.costTotalMinor ||
