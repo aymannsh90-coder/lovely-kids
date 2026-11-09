@@ -415,6 +415,7 @@ async function detail(db: Db, id: number, env: Env) {
       .reduce((sum,payment) => sum + payment.amountIlsMinor, 0),
     travelClassificationApproved: found.travelRecordedIlsMinor === 0,
     inventoryCostEngineReconciled: allGroupsMatched,
+    settlementJournalVerified: false, // financial clearing journal is NOT wired yet
   });
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
