@@ -6,6 +6,7 @@ import {
   getPosBankAccounts, postImportUsdAdvance, postImportDirectCostPayment,
   linkImportPurchase, unlinkImportPurchase,
   claimImportSupplierVoucher, detachImportSupplierVoucherClaim,
+  postImportAccountingClose, reverseImportAccountingClose,
   listImportCostCases, updateImportCostCase,
   type ImportCostDraft, type ImportCostCaseResult,
   type ImportCostInvoiceDraft, type ImportCostShipmentDraft,
@@ -97,6 +98,13 @@ export default function ImportCostPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const requestKey = useRef(crypto.randomUUID());
+  const closingKey = useRef(crypto.randomUUID());
+  const reversalKey = useRef(crypto.randomUUID());
+  const [closeDate,setCloseDate] = useState(dateNow);
+  const [approveClose,setApproveClose] = useState(false);
+  const [approveTravel,setApproveTravel] = useState(false);
+  const [reversalReason,setReversalReason] = useState("");
+  const [confirmReverse,setConfirmReverse] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +171,8 @@ export default function ImportCostPage() {
       setSelected(result);
       setDraft(result.draft);
       setPreview(result.preview);
+      setApproveClose(false);setApproveTravel(false);setConfirmReverse(false);setReversalReason("");
+      closingKey.current=crypto.randomUUID();reversalKey.current=crypto.randomUUID();
       setPaymentInvoiceRef(result.draft.invoices[0]?.lineRef ?? "");
       setVoucherInvoiceRef(result.draft.invoices[0]?.lineRef ?? "");
       setDirectShipmentRef(result.draft.shipments[0]?.lineRef ?? "");
@@ -333,6 +343,45 @@ export default function ImportCostPage() {
     } catch(e) {
       setError(e instanceof Error ? e.message : "تعذر فصل الربط");
     } finally {setBusy(false);}
+  }
+
+  async function closeImport() {
+    if(!selected||!selected.closingEnabled||selected.case.status!=="draft"||
+       !selected.clearingPreview.ready||!approveClose||busy)return;
+    if(draft.withTravel&&!approveTravel){
+      setError("لازم توافق صراحة على تصنيف مصاريف السفر قبل الإقفال");
+      return;
+    }
+    setBusy(true);setError("");setNotice("");
+    try{
+      const result=await postImportAccountingClose(token,selected.case.id,{
+        expectedRevision:selected.case.revision,expectedPlanHash:selected.closePlanHash,
+        travelClassificationConfirmed:approveTravel,businessDate:closeDate,
+        idempotencyKey:closingKey.current,
+      });
+      setSelected(result.case);setDraft(result.case.draft);setPreview(result.case.preview);
+      closingKey.current=crypto.randomUUID();setApproveClose(false);
+      setNotice("تم تسجيل إقفال الاستيراد بقيد مالي موثق دون إعادة خصم بنك أو صندوق أو مخزون. رقم القيد: "+
+        (result.posting.financeTransactionId??"لا يوجد قيد إضافي لأن التسوية صفرية"));
+    }catch(e){
+      setError(e instanceof Error?e.message:"تعذر إقفال الاستيراد");
+    }finally{setBusy(false);}
+  }
+  async function reverseImportClose() {
+    if(!selected||!selected.closingEnabled||selected.case.status!=="closed"||
+       !confirmReverse||reversalReason.trim().length<5||busy)return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const result=await reverseImportAccountingClose(token,selected.case.id,{
+        expectedRevision:selected.case.revision,businessDate:closeDate,
+        reason:reversalReason.trim(),idempotencyKey:reversalKey.current,
+      });
+      setSelected(result.case);setDraft(result.case.draft);setPreview(result.case.preview);
+      reversalKey.current=crypto.randomUUID();setConfirmReverse(false);setReversalReason("");
+      setNotice("تم عكس قيد التسوية المحاسبي وإعادة الملف لمسودة. لا يوجد عكس لحركات المخزون أو الدفعات الأصلية.");
+    }catch(e){
+      setError(e instanceof Error?e.message:"تعذر عكس التسوية");
+    }finally{setBusy(false);}
   }
 
   return <main dir="rtl" style={{ padding: "12px clamp(10px, 2vw, 24px)", maxWidth: 1350, margin: "auto" }}>
@@ -810,9 +859,59 @@ export default function ImportCostPage() {
             {selected.closePreview.reasons.map((reason, i) => <li key={i}>{reason}</li>)}
           </ul>}
         </div>}
+        {selected?.closure?.status==="posted" && <p style={{fontWeight:800,color:"#166534"}}>
+          إقفال مالي مثبت — رقم قيد التسوية: {selected.closure.financeTransactionId??"لا يحتاج قيدًا إضافيًا"}
+          {" "} | قيمة التسوية {money(selected.closure.debitIlsMinor)} ₪
+        </p>}
+        {selected?.closingEnabled && selected.case.status==="draft" && <div style={{
+          marginTop:16,borderTop:"1px solid #cbd5e1",paddingTop:14,
+        }}>
+          <h3 style={{fontSize:17,marginTop:0}}>اعتماد إقفال ملف الاستيراد (مالك فقط)</h3>
+          <p style={{fontSize:13,color:"#92400e",lineHeight:1.8}}>
+            هذه عملية مالية حقيقية إلى ذمم الموردين وحسابات تجميع الشحن والسفر فقط.
+            لا تغيّر تكلفة بطاقة الصنف أو كميات المخزون أو أرصدة البنوك والصندوق.
+            لا تعتمدها إلا بعد مراجعة تقرير الفواتير والدفعات وأرصدة الموردين.
+          </p>
+          <label style={{display:"block",marginBottom:10}}><input type="date" value={closeDate}
+            style={{...field,width:200}} onChange={e=>setCloseDate(e.target.value)}/></label>
+          {draft.withTravel && <label style={{display:"block",marginBottom:8}}>
+            <input type="checkbox" checked={approveTravel} onChange={e=>setApproveTravel(e.target.checked)}/>
+            {" "} راجعت وصنفت حصص السفر المؤهلة للمخزون وغير المؤهلة كمصروف
+          </label>}
+          <label style={{display:"block",marginBottom:9}}>
+            <input type="checkbox" checked={approveClose} onChange={e=>setApproveClose(e.target.checked)}/>
+            {" "} أوافق على تثبيت تسوية الحسابات المعروضة بعد التحقق من الفواتير والموردين
+          </label>
+          <button type="button" style={{...btn,background:"#14532d",color:"white"}}
+            disabled={busy||!approveClose||(draft.withTravel&&!approveTravel)||
+              !selected.clearingPreview.ready}
+            onClick={()=>void closeImport()}>إقفال الشحنة بالقيد المالي المطابق</button>
+        </div>}
+        {selected?.closingEnabled && selected.case.status==="closed" && <div style={{
+          marginTop:16,paddingTop:12,borderTop:"1px solid #cbd5e1",
+        }}>
+          <h3 style={{fontSize:17}}>عكس إقفال الاستيراد</h3>
+          <p style={{fontSize:13,color:"#92400e"}}>
+            العكس يثبت قيدًا معاكسًا للتسوية فقط ويعيد الملف لمسودة؛ لا يلغي دفعات المورد أو المخزون.
+          </p>
+          <label><span style={label}>سبب العكس</span><textarea value={reversalReason}
+            onChange={e=>setReversalReason(e.target.value)} rows={2}
+            style={{...field,maxWidth:550}} placeholder="سبب مالي واضح ومراجع"/></label>
+          <label style={{display:"block",marginTop:9,marginBottom:9}}>
+            <input type="checkbox" checked={confirmReverse}
+              onChange={e=>setConfirmReverse(e.target.checked)}/>
+            {" "} أوافق على إنشاء قيد عكسي لنفس الحسابات والمبالغ
+          </label>
+          <button type="button" style={{...btn,color:"#991b1b"}}
+            disabled={busy||!confirmReverse||reversalReason.trim().length<5}
+            onClick={()=>void reverseImportClose()}>عكس إقفال الاستيراد</button>
+        </div>}
+        {!selected?.closingEnabled && selected && <p style={{color:"#92400e",fontSize:13}}>
+          إقفال الاستيراد والعكس المالي غير مفعلين بهذا النظام حتى إكمال الاختبارات التجريبية.
+        </p>}
         {error && <p role="alert" style={{ color: "#b91c1c", fontWeight: 800 }}>{error}</p>}
         {notice && <p role="status" style={{ color: "#166534", fontWeight: 800 }}>{notice}</p>}
-        <button type="submit" disabled={busy} style={{ ...btn, background: "#1d4ed8", color: "white", marginTop: 12, padding: "11px 24px" }}>
+        <button type="submit" disabled={busy||selected?.case.status==="closed"} style={{ ...btn, background: "#1d4ed8", color: "white", marginTop: 12, padding: "11px 24px" }}>
           {busy ? "جاري الحفظ…" : selected ? "حفظ تعديلات المسودة ومطابقتها" : "فتح ملف الاستيراد وحفظه"}
         </button>
       </section>
