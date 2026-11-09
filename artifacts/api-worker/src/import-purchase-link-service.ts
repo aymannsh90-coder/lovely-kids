@@ -4,7 +4,7 @@ import {
   importCostPurchaseLinksTable, posPurchaseItemCostsTable, posPurchaseItemsTable,
   posPurchasesTable, productCostLedgerTable,
 } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { openDb } from "./db";
 import { verifyApprovedPurchaseEvidence } from "./import-purchase-evidence";
 
@@ -118,7 +118,11 @@ export async function attachApprovedPurchase(
       purchaseId:importCostPurchaseLinksTable.purchaseId,
     }).from(importCostPurchaseLinksTable)
       .where(eq(importCostPurchaseLinksTable.allocationId,allocation.id));
-    const linked = await tx.select().from(posPurchasesTable);
+    const linked = otherLinks.length
+      ? await tx.select({id:posPurchasesTable.id,totalMinor:posPurchasesTable.totalMinor})
+          .from(posPurchasesTable)
+          .where(inArray(posPurchasesTable.id,otherLinks.map(l=>l.purchaseId)))
+      : [];
     const amounts = new Map(linked.map(p => [p.id,p.totalMinor]));
     const alreadyAssigned = otherLinks.reduce((sum,l) => sum+(amounts.get(l.purchaseId) ?? 0),0);
     if (!Number.isSafeInteger(expected) || evidence.inventoryCostIlsMinor + alreadyAssigned > expected) {
