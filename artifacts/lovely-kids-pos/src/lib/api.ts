@@ -6113,6 +6113,22 @@ export interface ImportCostPreview {
 }
 export interface ImportCostCaseResult {
   advancePostingEnabled: boolean;
+  purchaseLinks: Array<{
+    id:number;
+    purchaseId:number;
+    allocationRef:string;
+    supplierId:number;
+    inventoryCostIlsMinor:number;
+    receiptQuantity:number;
+    valid:boolean;
+    reasons:string[];
+  }>;
+  costGroupMatching: Array<{
+    allocationRef:string;
+    expectedAccountingIlsMinor:number;
+    linkedAccountingIlsMinor:number;
+    valid:boolean;
+  }>;
   closePreview: {
     canCloseAccounting: boolean;
     reasons: string[];
@@ -6228,4 +6244,25 @@ export function postImportDirectCostPayment(token: string, caseId: number, payme
     method: "POST",
     body: JSON.stringify(payment),
   }, token);
+}
+
+/**
+ * Evidence-only operation. Links an already posted purchase but never
+ * posts inventory, supplier, cash or FX amounts.
+ */
+export function linkImportPurchase(
+  token:string,caseId:number,input:{
+    allocationRef:string;purchaseId:number;expectedRevision:number;
+  },
+) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/purchase-links`,{
+    method:"POST",body:JSON.stringify(input),
+  },token);
+}
+export function unlinkImportPurchase(
+  token:string,caseId:number,linkId:number,expectedRevision:number,
+) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/purchase-links/${linkId}`,{
+    method:"DELETE",body:JSON.stringify({expectedRevision}),
+  },token);
 }
