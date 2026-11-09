@@ -6110,6 +6110,7 @@ export interface ImportCostPreview {
   paymentStatus: "not_connected" | "advances_posted";
 }
 export interface ImportCostCaseResult {
+  advancePostingEnabled: boolean;
   case: {
     id: number;
     publicId: string;
@@ -6141,7 +6142,7 @@ export function listImportCostCases(token: string) {
     withTravel: boolean;
     revision: number;
     updatedAt: string;
-  }>; accountingEnabled: false }>("/api/pos/import-costs", {}, token);
+  }>; accountingEnabled: false; advancePostingEnabled: boolean }>("/api/pos/import-costs", {}, token);
 }
 export function getImportCostCase(token: string, id: number) {
   return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${id}`, {}, token);
@@ -6161,5 +6162,27 @@ export function updateImportCostCase(
   return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${id}`, {
     method: "PUT",
     body: JSON.stringify({ ...draft, expectedRevision }),
+  }, token);
+}
+
+/**
+ * Protected actual bank-USD advance payment. The server refuses posting
+ * unless POS_IMPORT_FINANCIAL_POSTING_ENABLED=true.
+ */
+export interface ImportUsdAdvancePaymentInput {
+  invoiceRef: string;
+  bankAccountId: number;
+  usdAmountMinor: number;
+  spotRateMicros: number;
+  businessDate: string;
+  idempotencyKey: string;
+}
+export function postImportUsdAdvance(token: string, caseId: number, payment: ImportUsdAdvancePaymentInput) {
+  return apiRequest<{
+    accountingPosted: true;
+    payment: { id: number; financeTransactionId: number; alreadyPosted: boolean };
+  }>(`/api/pos/import-costs/${caseId}/advance-payment`, {
+    method: "POST",
+    body: JSON.stringify(payment),
   }, token);
 }
