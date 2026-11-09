@@ -549,6 +549,26 @@ export default function ImportCostPage() {
             حتى لو تطابقت الأرقام، لا يجوز اعتماد قيود مالية قبل ربط دفعات الدولار والشحن الحقيقية ومراجعة أهلية مصاريف السفر.
           </p>
         </div>}
+        {selected?.closePreview && <div style={{
+          marginTop: 14, borderTop: "1px solid #e2e8f0", paddingTop: 14,
+        }}>
+          <h3 style={{ fontSize: 17, marginTop: 0 }}>فحص جاهزية إقفال ملف الاستيراد</h3>
+          <div style={wrap}>
+            <div><span style={label}>مدفوع المورد بالدولار</span><b>{money(selected.closePreview.paidUsdMinor)} / {money(selected.closePreview.totalUsdMinor)} $</b></div>
+            <div><span style={label}>مدفوع الشحن والتخليص والنقل</span><b>{money(selected.closePreview.directCostPaidIlsMinor)} / {money(selected.closePreview.directCostPlannedIlsMinor)} ₪</b></div>
+            <div><span style={label}>مدفوع السفر</span><b>{money(selected.closePreview.travelPaidIlsMinor)} / {money(selected.closePreview.travelPlannedIlsMinor)} ₪</b></div>
+          </div>
+          <p style={{ color: "#92400e", fontWeight: 800 }}>
+            {selected.closePreview.canCloseAccounting
+              ? "الفحص الحسابي مكتمل، لكن الإقفال غير مفعل حتى ربط قيد شراء المخزون."
+              : "الإقفال محجوب لحماية الأرصدة والمخزون. لا توجد حركة مالية عند عرض هذا الفحص."}
+          </p>
+          {selected.closePreview.reasons.length > 0 && <ul style={{
+            margin: "0", paddingRight: 22, lineHeight: 1.8, fontSize: 13,
+          }}>
+            {selected.closePreview.reasons.map((reason, i) => <li key={i}>{reason}</li>)}
+          </ul>}
+        </div>}
         {error && <p role="alert" style={{ color: "#b91c1c", fontWeight: 800 }}>{error}</p>}
         {notice && <p role="status" style={{ color: "#166534", fontWeight: 800 }}>{notice}</p>}
         <button type="submit" disabled={busy} style={{ ...btn, background: "#1d4ed8", color: "white", marginTop: 12, padding: "11px 24px" }}>
