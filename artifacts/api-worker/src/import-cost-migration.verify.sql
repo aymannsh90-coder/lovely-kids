@@ -4,6 +4,8 @@ DECLARE
   v_case_id integer;
   invoice_id integer;
   shipment_id integer;
+  v_second_case_id integer;
+  v_second_invoice_id integer;
   has_rls boolean;
   n integer;
 BEGIN
@@ -68,6 +70,23 @@ BEGIN
     RAISE EXCEPTION 'INVALID_TRAVEL_WAS_ACCEPTED';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+
+  INSERT INTO public.import_cost_cases
+    (public_id,idempotency_key,business_date,title,with_travel,travel_recorded_ils_minor,created_by_user_id)
+  VALUES ('IMP-CI-3','import-ci-case-000003','2026-11-09','Separate import',false,0,1)
+  RETURNING id INTO v_second_case_id;
+  INSERT INTO public.import_cost_invoices
+    (case_id,line_ref,supplier_id,invoice_number,goods_usd_minor,goods_booked_ils_minor)
+  VALUES (v_second_case_id,'FOREIGN-INVOICE',22,'OTHER',1000,3500)
+  RETURNING id INTO v_second_invoice_id;
+  BEGIN
+    INSERT INTO public.import_cost_allocations
+      (case_id,line_ref,invoice_id,shipment_id,goods_ils_minor,freight_ils_minor,travel_managerial_ils_minor,travel_capitalizable_ils_minor,excel_landed_ils_minor)
+    VALUES (v_case_id,'CROSS-CASE',v_second_invoice_id,shipment_id,1000,0,0,0,1000);
+    RAISE EXCEPTION 'CROSS_CASE_COST_WAS_ACCEPTED';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+  DELETE FROM public.import_cost_cases WHERE id = v_second_case_id;
 
   DELETE FROM public.import_cost_cases WHERE id = v_case_id;
   IF EXISTS (SELECT 1 FROM public.import_cost_invoices WHERE id = invoice_id)
