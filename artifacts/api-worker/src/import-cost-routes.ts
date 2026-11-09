@@ -465,6 +465,7 @@ async function detail(db: Db, id: number, env: Env) {
         goodsBookedIlsMinor: invoice.goodsBookedIlsMinor,
         paidUsdMinor: paid.reduce((sum,payment) => sum + payment.usdAmountMinor, 0),
         advanceIlsMinor,
+        existingSupplierVoucherIlsMinor:voucherPaidByInvoiceId.get(invoice.id)??0,
         remainingPayableIlsMinor: Math.max(0, invoice.goodsBookedIlsMinor - advanceIlsMinor -
           (voucherPaidByInvoiceId.get(invoice.id)??0)),
         // No supplier payable integration on import invoices yet.
