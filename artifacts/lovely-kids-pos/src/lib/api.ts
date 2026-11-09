@@ -6107,7 +6107,9 @@ export interface ImportCostPreview {
   canPost: false;
   supplierAdvancesIlsMinor: number;
   unpaidSupplierIlsMinor: number;
-  paymentStatus: "not_connected" | "advances_posted";
+  paymentStatus: "not_connected" | "advances_posted" | "costs_posted" | "mixed_payments_posted";
+  paidShipmentCostsIlsMinor: number;
+  paidTravelIlsMinor: number;
 }
 export interface ImportCostCaseResult {
   advancePostingEnabled: boolean;
@@ -6119,6 +6121,16 @@ export interface ImportCostCaseResult {
     createdAt: string;
   };
   draft: ImportCostDraft;
+  directPayments: Array<{
+    paymentId: number;
+    shipmentId: number | null;
+    shipmentRef: string | null;
+    costType: string;
+    paymentMethod: "bank" | "cash";
+    amountIlsMinor: number;
+    financeTransactionId: number;
+    financeStatus: string;
+  }>;
   advances: Array<{
     paymentId: number;
     invoiceId: number;
@@ -6182,6 +6194,26 @@ export function postImportUsdAdvance(token: string, caseId: number, payment: Imp
     accountingPosted: true;
     payment: { id: number; financeTransactionId: number; alreadyPosted: boolean };
   }>(`/api/pos/import-costs/${caseId}/advance-payment`, {
+    method: "POST",
+    body: JSON.stringify(payment),
+  }, token);
+}
+
+export interface ImportDirectCostPaymentInput {
+  shipmentRef: string | null;
+  costType: "freight" | "customs" | "local_transport" | "travel";
+  paymentMethod: "bank" | "cash";
+  bankAccountId: number | null;
+  registerKey: "main" | null;
+  amountIlsMinor: number;
+  businessDate: string;
+  idempotencyKey: string;
+}
+export function postImportDirectCostPayment(token: string, caseId: number, payment: ImportDirectCostPaymentInput) {
+  return apiRequest<{
+    accountingPosted: true;
+    payment: { id: number; financeTransactionId: number; alreadyPosted: boolean };
+  }>(`/api/pos/import-costs/${caseId}/direct-payment`, {
     method: "POST",
     body: JSON.stringify(payment),
   }, token);
