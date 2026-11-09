@@ -4,6 +4,7 @@ import {
   ApiError,
   createImportCostCase, getImportCostCase, getPosSuppliers,
   getPosBankAccounts, postImportUsdAdvance, postImportDirectCostPayment,
+  linkImportPurchase, unlinkImportPurchase,
   listImportCostCases, updateImportCostCase,
   type ImportCostDraft, type ImportCostCaseResult,
   type ImportCostInvoiceDraft, type ImportCostShipmentDraft,
@@ -85,6 +86,8 @@ export default function ImportCostPage() {
   const paymentKey = useRef(crypto.randomUUID());
   const [draft, setDraft] = useState<ImportCostDraft>(blank);
   const [selected, setSelected] = useState<ImportCostCaseResult | null>(null);
+  const [linkGroupRef,setLinkGroupRef] = useState("");
+  const [linkPurchaseId,setLinkPurchaseId] = useState("");
   const [preview, setPreview] = useState<ImportCostCaseResult["preview"] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -158,6 +161,8 @@ export default function ImportCostPage() {
       setPreview(result.preview);
       setPaymentInvoiceRef(result.draft.invoices[0]?.lineRef ?? "");
       setDirectShipmentRef(result.draft.shipments[0]?.lineRef ?? "");
+      setLinkGroupRef(result.draft.allocations[0]?.lineRef ?? "");
+      setLinkPurchaseId("");
       requestKey.current = crypto.randomUUID();
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر فتح ملف الاستيراد");
@@ -170,6 +175,8 @@ export default function ImportCostPage() {
     setPaymentSpotRate("");
     setDirectAmount("");
     setDirectShipmentRef("");
+    setLinkGroupRef("");
+    setLinkPurchaseId("");
     requestKey.current = crypto.randomUUID();
   }
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -251,6 +258,41 @@ export default function ImportCostPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر تسجيل مصروف الشحنة");
     } finally { setBusy(false); }
+  }
+
+  async function attachPurchase() {
+    if (!selected || busy) return;
+    const purchaseId = Number(linkPurchaseId);
+    if (!linkGroupRef || !Number.isSafeInteger(purchaseId) || purchaseId <= 0) {
+      setError("اختر مجموعة تكلفة الإكسل وأدخل الرقم الداخلي لفاتورة المشتريات المعتمدة");
+      return;
+    }
+    setBusy(true);setError("");setNotice("");
+    try {
+      const refreshed = await linkImportPurchase(token,selected.case.id,{
+        allocationRef:linkGroupRef,purchaseId,expectedRevision:selected.case.revision,
+      });
+      setSelected(refreshed);
+      setDraft(refreshed.draft);
+      setPreview(refreshed.preview);
+      setLinkPurchaseId("");
+      setNotice("تم ربط فاتورة الشراء بسجلات تكلفتها الأصلية فقط؛ لم يُسجّل شراء أو صرف أو إدخال مخزون جديد.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر مطابقة فاتورة المشتريات");
+    } finally {setBusy(false);}
+  }
+  async function detachPurchase(linkId:number) {
+    if (!selected || busy) return;
+    setBusy(true);setError("");setNotice("");
+    try {
+      const refreshed = await unlinkImportPurchase(token,selected.case.id,linkId,selected.case.revision);
+      setSelected(refreshed);
+      setDraft(refreshed.draft);
+      setPreview(refreshed.preview);
+      setNotice("تم فصل مرجع الفاتورة عن ملف الاستيراد فقط؛ لم يتغيّر القيد الأصلي ولا المخزون.");
+    } catch(e) {
+      setError(e instanceof Error ? e.message : "تعذر فصل الربط");
+    } finally {setBusy(false);}
   }
 
   return <main dir="rtl" style={{ padding: "12px clamp(10px, 2vw, 24px)", maxWidth: 1350, margin: "auto" }}>
@@ -419,6 +461,60 @@ export default function ImportCostPage() {
             })}>حذف</button>
           </div>
         </div>)}
+      </section>
+
+      <section style={card}>
+        <h2 style={{ fontSize: 18, marginTop: 0 }}>ربط تكلفة الأصناف بفواتير المشتريات المعتمدة</h2>
+        <p style={{ lineHeight: 1.7, color: "#475569", fontSize: 13 }}>
+          بعد إدخال تكلفة القطعة من بطاقة الصنف واعتماد فاتورة مشتريات بالشيكل <b>على الحساب</b>،
+          اربط رقم الفاتورة الداخلي بمجموعة الإكسل الخاصة بها.
+          النظام يفحص قيد المخزون، وذمة المورد، وسجل التكلفة الحقيقي؛ الربط لا يُدخل كميات أو تكلفة إضافية.
+        </p>
+        {selected?.costGroupMatching?.length ? <div style={{ display: "grid",gap: 7 }}>
+          {selected.costGroupMatching.map(group => <div key={group.allocationRef} style={{
+            padding: 10, background: group.valid ? "#f0fdf4" : "#fff7ed",
+            border: "1px solid #e2e8f0", borderRadius: 9,
+          }}>
+            <b>{group.allocationRef}</b> — تكلفة محاسبية مطلوبة
+            {" "}<b>{money(group.expectedAccountingIlsMinor)} ₪</b>
+            {" "} / مربوطة من قيد المخزون <b>{money(group.linkedAccountingIlsMinor)} ₪</b>
+            {" "} <strong>{group.valid ? "✓ مطابقة" : "— لم تكتمل المطابقة"}</strong>
+          </div>)}
+        </div> : <p style={{ color: "#64748b" }}>لا يوجد توزيع إكسل محفوظ لربط فواتير الشراء به.</p>}
+        {selected?.purchaseLinks?.length ? <div style={{ overflowX: "auto",marginTop: 12 }}>
+          <table style={{ width:"100%",borderCollapse:"collapse",textAlign:"right" }}>
+            <thead><tr>{["مجموعة الإكسل","فاتورة المشتريات","قيمة المخزون","فحص القيد","إجراء"].map(h =>
+              <th key={h} style={{ padding:8,borderBottom:"1px solid #cbd5e1" }}>{h}</th>)}</tr></thead>
+            <tbody>{selected.purchaseLinks.map(l => <tr key={l.id}>
+              <td>{l.allocationRef}</td><td>{l.purchaseId}</td>
+              <td>{money(l.inventoryCostIlsMinor)} ₪</td>
+              <td style={{ color:l.valid?"#166534":"#b91c1c" }}>
+                {l.valid?"مطابق":l.reasons.join("؛ ")}
+              </td>
+              <td><button type="button" disabled={busy} style={btn}
+                onClick={()=>void detachPurchase(l.id)}>فصل المرجع فقط</button></td>
+            </tr>)}</tbody>
+          </table>
+        </div> : null}
+        {selected && <div style={{ ...wrap,marginTop:12 }}>
+          <label><span style={label}>مجموعة تكلفة الإكسل</span>
+            <select style={field} value={linkGroupRef} onChange={e=>setLinkGroupRef(e.target.value)}>
+              <option value="">اختر المجموعة</option>
+              {draft.allocations.map(a=><option key={a.lineRef} value={a.lineRef}>{a.lineRef}</option>)}
+            </select>
+          </label>
+          <label><span style={label}>الرقم الداخلي لفاتورة المشتريات المعتمدة</span>
+            <input style={field} type="number" step="1" min="1" value={linkPurchaseId}
+              onChange={e=>setLinkPurchaseId(e.target.value)} placeholder="مثال: 421"/>
+          </label>
+          <div style={{ display:"flex",alignItems:"end" }}>
+            <button type="button" disabled={busy||!draft.allocations.length} style={btn}
+              onClick={()=>void attachPurchase()}>فحص وربط الفاتورة بدون ترحيل</button>
+          </div>
+        </div>}
+        {!!selected?.purchaseLinks?.length && <p style={{ color:"#92400e",fontSize:12,fontWeight:700 }}>
+          بعد ربط فاتورة مشتريات يجب فصل مراجعها قبل تعديل تفاصيل توزيع الإكسل؛ ذلك لحماية سلامة التكلفة المسجلة.
+        </p>}
       </section>
 
       <section style={card}>
