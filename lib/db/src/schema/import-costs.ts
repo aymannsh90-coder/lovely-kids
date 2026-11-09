@@ -5,7 +5,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 import { bankAccountsTable } from "./finance-banking";
-import { financeTransactionsTable } from "./finance";
+import { financeAccountsTable, financeTransactionsTable } from "./finance";
+import { cashSessionsTable } from "./cash-sessions";
 import { suppliersTable } from "./suppliers";
 
 /**
@@ -131,4 +132,41 @@ export const importCostAdvancePaymentsTable = pgTable("import_cost_advance_payme
   check("import_cost_advance_payment_fx_nonnegative", sql`LEAST(${t.fxGainIlsMinor},${t.fxLossIlsMinor}) >= 0`),
   check("import_cost_advance_payment_one_fx_side", sql`${t.fxGainIlsMinor} = 0 OR ${t.fxLossIlsMinor} = 0`),
   check("import_cost_advance_payment_balanced", sql`${t.advanceIlsMinor} + ${t.fxLossIlsMinor} = ${t.bankBookIlsMinor} + ${t.fxGainIlsMinor}`),
+]).enableRLS();
+
+/** Immutable payments of shipment direct costs / optional shared trip costs. */
+export const importCostDirectPaymentsTable = pgTable("import_cost_direct_payments", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => importCostCasesTable.id, { onDelete: "restrict" }),
+  shipmentId: integer("shipment_id").references(() => importCostShipmentsTable.id, { onDelete: "restrict" }),
+  idempotencyKey: text("idempotency_key").notNull(),
+  costType: text("cost_type").notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  bankAccountId: integer("bank_account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
+  cashSessionId: integer("cash_session_id").references(() => cashSessionsTable.id, { onDelete: "restrict" }),
+  settlementFinanceAccountId: integer("settlement_finance_account_id").notNull().references(() => financeAccountsTable.id, { onDelete: "restrict" }),
+  businessDate: date("business_date").notNull(),
+  amountIlsMinor: integer("amount_ils_minor").notNull(),
+  financeTransactionId: integer("finance_transaction_id").references(() => financeTransactionsTable.id, { onDelete: "restrict" }),
+  createdByUserId: integer("created_by_user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("import_cost_direct_payment_key_idx").on(t.idempotencyKey),
+  uniqueIndex("import_cost_direct_payment_finance_txn_idx").on(t.financeTransactionId),
+  index("import_cost_direct_payment_case_idx").on(t.caseId),
+  index("import_cost_direct_payment_shipment_idx").on(t.shipmentId),
+  foreignKey({
+    name: "import_cost_direct_payment_case_shipment_fk",
+    columns: [t.caseId, t.shipmentId],
+    foreignColumns: [importCostShipmentsTable.caseId, importCostShipmentsTable.id],
+  }).onDelete("restrict"),
+  check("import_cost_direct_payment_kind_valid", sql`${t.costType} in ('freight','customs','local_transport','travel')`),
+  check("import_cost_direct_payment_method_valid", sql`${t.paymentMethod} in ('bank','cash')`),
+  check("import_cost_direct_payment_amount_positive", sql`${t.amountIlsMinor} > 0`),
+  check("import_cost_direct_payment_target_valid", sql`(${t.costType} = 'travel' and ${t.shipmentId} is null) OR (${t.costType} <> 'travel' and ${t.shipmentId} is not null)`),
+  check("import_cost_direct_payment_settlement_valid", sql`
+    (${t.paymentMethod} = 'bank' and ${t.bankAccountId} is not null and ${t.cashSessionId} is null)
+    or
+    (${t.paymentMethod} = 'cash' and ${t.cashSessionId} is not null and ${t.bankAccountId} is null)
+  `),
 ]).enableRLS();
