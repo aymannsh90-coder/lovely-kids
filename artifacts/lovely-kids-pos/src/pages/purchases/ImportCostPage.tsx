@@ -849,9 +849,11 @@ export default function ImportCostPage() {
             <div><span style={label}>مدفوع السفر</span><b>{money(selected.closePreview.travelPaidIlsMinor)} / {money(selected.closePreview.travelPlannedIlsMinor)} ₪</b></div>
           </div>
           <p style={{ color: "#92400e", fontWeight: 800 }}>
-            {selected.closePreview.canCloseAccounting
-              ? "الفحص الحسابي مكتمل، لكن الإقفال غير مفعل حتى ربط قيد شراء المخزون."
-              : "الإقفال محجوب لحماية الأرصدة والمخزون. لا توجد حركة مالية عند عرض هذا الفحص."}
+            {selected.case.status==="closed"
+              ? "تم إقفال ملف الاستيراد وتوثيق قيد التسوية. أي فروقات لاحقة تظهر للمراجعة فقط؛ يلزم عكس الإقفال قبل التعديل."
+              : selected.clearingPreview.ready
+                ? "قواعد الإقفال جاهزة للمراجعة المحاسبية؛ الاعتماد المالي يتطلب تفعيلًا مستقلًا من النظام."
+                : "الإقفال محجوب لحماية الأرصدة والمخزون. لا توجد حركة مالية عند عرض هذا الفحص."}
           </p>
           {selected.closePreview.reasons.length > 0 && <ul style={{
             margin: "0", paddingRight: 22, lineHeight: 1.8, fontSize: 13,
