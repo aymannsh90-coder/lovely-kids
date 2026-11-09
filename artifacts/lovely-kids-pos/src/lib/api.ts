@@ -6113,6 +6113,17 @@ export interface ImportCostPreview {
 }
 export interface ImportCostCaseResult {
   advancePostingEnabled: boolean;
+  closePreview: {
+    canCloseAccounting: boolean;
+    reasons: string[];
+    totalUsdMinor: number;
+    paidUsdMinor: number;
+    unPaidUsdMinor: number;
+    directCostPlannedIlsMinor: number;
+    directCostPaidIlsMinor: number;
+    travelPlannedIlsMinor: number;
+    travelPaidIlsMinor: number;
+  };
   case: {
     id: number;
     publicId: string;
