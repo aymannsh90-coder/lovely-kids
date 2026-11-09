@@ -164,6 +164,14 @@ export async function postImportDirectCost(
     const [sameKey] = await tx.select().from(importCostDirectPaymentsTable)
       .where(eq(importCostDirectPaymentsTable.idempotencyKey, request.idempotencyKey)).limit(1);
     if (sameKey) {
+      const [sameShipment] = request.shipmentRef
+        ? await tx.select({ id: importCostShipmentsTable.id }).from(importCostShipmentsTable)
+            .where(and(eq(importCostShipmentsTable.caseId, request.caseId),
+              eq(importCostShipmentsTable.lineRef, request.shipmentRef))).limit(1)
+        : [null];
+      if (sameKey.shipmentId !== (sameShipment?.id ?? null)) {
+        throw new ImportAdvanceError("مفتاح الدفع مرتبط بشحنة أخرى", 409);
+      }
       if (sameKey.caseId !== request.caseId ||
         sameKey.costType !== request.costType ||
         sameKey.paymentMethod !== request.paymentMethod ||
