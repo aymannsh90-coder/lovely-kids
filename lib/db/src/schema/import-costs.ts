@@ -33,7 +33,7 @@ export const importCostCasesTable = pgTable("import_cost_cases", {
   uniqueIndex("import_cost_cases_public_unique").on(t.publicId),
   uniqueIndex("import_cost_cases_idempotency_unique").on(t.idempotencyKey),
   index("import_cost_cases_date_idx").on(t.businessDate),
-  check("import_cost_cases_status_draft_only", sql`${t.status} = 'draft'`),
+  check("import_cost_cases_status_valid", sql`${t.status} in ('draft','closed')`),
   check("import_cost_cases_revision_positive", sql`${t.revision} > 0`),
   check("import_cost_cases_travel_nonnegative", sql`${t.travelRecordedIlsMinor} >= 0 AND (${t.withTravel} OR ${t.travelRecordedIlsMinor} = 0)`),
 ]).enableRLS();
@@ -223,4 +223,36 @@ export const importCostSupplierVoucherClaimsTable = pgTable("import_cost_supplie
     foreignColumns: [importCostInvoicesTable.caseId,importCostInvoicesTable.id],
   }).onDelete("restrict"),
   check("import_cost_supplier_voucher_claim_amount_positive", sql`${t.amountIlsMinor} > 0`),
+]).enableRLS();
+
+
+/** Immutable audit of each closed import settlement and its separate reversal. */
+export const importCostClosuresTable = pgTable("import_cost_closures", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => importCostCasesTable.id, { onDelete: "restrict" }),
+  idempotencyKey: text("idempotency_key").notNull(),
+  status: text("status").notNull().default("posted"),
+  businessDate: date("business_date").notNull(),
+  debitIlsMinor: integer("debit_ils_minor").notNull(),
+  financeTransactionId: integer("finance_transaction_id").references(() => financeTransactionsTable.id, { onDelete: "restrict" }),
+  reversalFinanceTransactionId: integer("reversal_finance_transaction_id").references(() => financeTransactionsTable.id, { onDelete: "restrict" }),
+  reversalKey: text("reversal_key"),
+  reversalReason: text("reversal_reason"),
+  closedByUserId: integer("closed_by_user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  reversedByUserId: integer("reversed_by_user_id").references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  reversedAt: timestamp("reversed_at", { withTimezone: true }),
+}, t => [
+  uniqueIndex("import_cost_closure_key_unique").on(t.idempotencyKey),
+  uniqueIndex("import_cost_closure_reverse_key_unique").on(t.reversalKey),
+  uniqueIndex("import_cost_closure_active_case_unique").on(t.caseId).where(sql`${t.status} = 'posted'`),
+  uniqueIndex("import_cost_closure_finance_unique").on(t.financeTransactionId),
+  uniqueIndex("import_cost_closure_reverse_finance_unique").on(t.reversalFinanceTransactionId),
+  index("import_cost_closure_case_idx").on(t.caseId),
+  check("import_cost_closure_status_valid", sql`${t.status} in ('posted','reversed')`),
+  check("import_cost_closure_amount_valid", sql`${t.debitIlsMinor} >= 0`),
+  check("import_cost_closure_reversal_valid", sql`
+    (${t.status} = 'posted' and ${t.reversalFinanceTransactionId} is null and ${t.reversalKey} is null and ${t.reversedAt} is null)
+    or (${t.status} = 'reversed' and ${t.reversalKey} is not null and ${t.reversalReason} is not null and ${t.reversedAt} is not null)
+  `),
 ]).enableRLS();
