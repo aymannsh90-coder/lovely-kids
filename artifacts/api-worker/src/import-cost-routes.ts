@@ -4,6 +4,7 @@ import {
   importCostShipmentsTable,
   importCostAllocationsTable,
   importCostAdvancePaymentsTable,
+  financeTransactionsTable,
   suppliersTable,
 } from "@workspace/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
@@ -254,6 +255,26 @@ async function detail(db: Db, id: number) {
     .where(eq(importCostShipmentsTable.caseId, id));
   const lines = await db.select().from(importCostAllocationsTable)
     .where(eq(importCostAllocationsTable.caseId, id));
+  const paymentRecords = await db.select({
+    paymentId: importCostAdvancePaymentsTable.id,
+    invoiceId: importCostAdvancePaymentsTable.invoiceId,
+    usdAmountMinor: importCostAdvancePaymentsTable.usdAmountMinor,
+    advanceIlsMinor: importCostAdvancePaymentsTable.advanceIlsMinor,
+    bankBookIlsMinor: importCostAdvancePaymentsTable.bankBookIlsMinor,
+    fxGainIlsMinor: importCostAdvancePaymentsTable.fxGainIlsMinor,
+    fxLossIlsMinor: importCostAdvancePaymentsTable.fxLossIlsMinor,
+    financeTransactionId: importCostAdvancePaymentsTable.financeTransactionId,
+    financeStatus: financeTransactionsTable.status,
+  }).from(importCostAdvancePaymentsTable)
+    .innerJoin(financeTransactionsTable, eq(
+      importCostAdvancePaymentsTable.financeTransactionId, financeTransactionsTable.id,
+    )).where(eq(importCostAdvancePaymentsTable.caseId, id));
+  const paidByInvoiceId = new Map<number, number>();
+  for (const payment of paymentRecords) {
+    if (payment.financeStatus !== "posted") continue;
+    paidByInvoiceId.set(payment.invoiceId,
+      (paidByInvoiceId.get(payment.invoiceId) ?? 0) + payment.advanceIlsMinor);
+  }
   const invById = new Map(invoices.map((i) => [i.id, i.lineRef]));
   const shipById = new Map(shipments.map((i) => [i.id, i.lineRef]));
   const draft: DraftInput = {
@@ -282,11 +303,14 @@ async function detail(db: Db, id: number) {
     })),
   };
   const previewDraft: ImportCostDraft = {
-    invoices: draft.invoices.map((i) => ({
-      id: i.lineRef, supplierId: i.supplierId,
-      goodsBookedIlsMinor: i.goodsBookedIlsMinor,
-      prepaidIlsMinor: 0, // NOT a ledger claim; advance posting integration is pending.
-    })),
+    invoices: draft.invoices.map((i) => {
+      const stored = invoices.find((record) => record.lineRef === i.lineRef);
+      return {
+        id: i.lineRef, supplierId: i.supplierId,
+        goodsBookedIlsMinor: i.goodsBookedIlsMinor,
+        prepaidIlsMinor: stored ? (paidByInvoiceId.get(stored.id) ?? 0) : 0,
+      };
+    }),
     shipments: draft.shipments.map((s) => ({
       id: s.lineRef, freightClearingIlsMinor: s.freightClearingIlsMinor,
     })),
@@ -303,12 +327,17 @@ async function detail(db: Db, id: number) {
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
     draft,
+    advances: paymentRecords.map((payment) => ({
+      ...payment,
+      invoiceRef: invById.get(payment.invoiceId) ?? "",
+    })),
     preview: {
       ...comparison,
-      // These amounts are user-entered draft figures, not posted financial balances.
+      // Supplier advances shown above are linked to actual posted journal IDs;
+      // freight and travel costs still have no payment links, hence no close.
       ledgerVerified: false,
       canPost: false,
-      paymentStatus: "not_connected",
+      paymentStatus: paymentRecords.length ? "advances_posted" : "not_connected",
     },
   };
 }
