@@ -15,6 +15,7 @@ import type { openDb, Env } from "./db";
 import { previewImportCostSettlement, type ImportCostDraft } from "./import-cost-reconciliation";
 import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierAdvance } from "./import-payment-posting";
 import { parseImportDirectCostRequest, postImportDirectCost } from "./import-direct-payment-posting";
+import { previewImportClosing } from "./import-close-readiness";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -354,10 +355,53 @@ async function detail(db: Db, id: number, env: Env) {
     })),
   };
   const comparison = previewImportCostSettlement(previewDraft);
+  const closePreview = previewImportClosing({
+    excelBalanced: comparison.balanced,
+    excelErrors: comparison.errors,
+    invoices: invoices.map((invoice) => {
+      const paid = paymentRecords.filter((payment) =>
+        payment.invoiceId === invoice.id && payment.financeStatus === "posted");
+      const advanceIlsMinor = paid.reduce((sum,payment) => sum + payment.advanceIlsMinor, 0);
+      return {
+        ref: invoice.lineRef,
+        goodsUsdMinor: invoice.goodsUsdMinor,
+        goodsBookedIlsMinor: invoice.goodsBookedIlsMinor,
+        paidUsdMinor: paid.reduce((sum,payment) => sum + payment.usdAmountMinor, 0),
+        advanceIlsMinor,
+        remainingPayableIlsMinor: Math.max(0, invoice.goodsBookedIlsMinor - advanceIlsMinor),
+        // No supplier payable integration on import invoices yet.
+        payableJournalVerified: false,
+      };
+    }),
+    shipments: shipments.map((shipment) => {
+      const paid = (kind: string) => directRecords
+        .filter((payment) => payment.shipmentId === shipment.id &&
+          payment.costType === kind && payment.financeStatus === "posted")
+        .reduce((sum,payment) => sum + payment.amountIlsMinor, 0);
+      return {
+        ref: shipment.lineRef,
+        freightIlsMinor: shipment.freightIlsMinor,
+        customsIlsMinor: shipment.customsIlsMinor,
+        localTransportIlsMinor: shipment.localTransportIlsMinor,
+        paidFreightIlsMinor: paid("freight"),
+        paidCustomsIlsMinor: paid("customs"),
+        paidLocalTransportIlsMinor: paid("local_transport"),
+        hasInventoryReceipt: false,
+        purchasePostingMatched: false,
+      };
+    }),
+    travelRecordedIlsMinor: found.travelRecordedIlsMinor,
+    travelPaidIlsMinor: directRecords
+      .filter((payment) => payment.costType === "travel" && payment.financeStatus === "posted")
+      .reduce((sum,payment) => sum + payment.amountIlsMinor, 0),
+    travelClassificationApproved: found.travelRecordedIlsMinor === 0,
+    inventoryCostEngineReconciled: false,
+  });
   return {
     case: { id: found.id, publicId: found.publicId, revision: found.revision, status: found.status, createdAt: found.createdAt },
     advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
     draft,
+    closePreview,
     directPayments: directRecords.map((payment) => ({
       ...payment,
       shipmentRef: shipments.find((shipment) => shipment.id === payment.shipmentId)?.lineRef ?? null,
