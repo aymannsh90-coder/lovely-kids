@@ -5,6 +5,7 @@ import {
   createImportCostCase, getImportCostCase, getPosSuppliers,
   getPosBankAccounts, postImportUsdAdvance, postImportDirectCostPayment,
   linkImportPurchase, unlinkImportPurchase,
+  claimImportSupplierVoucher, detachImportSupplierVoucherClaim,
   listImportCostCases, updateImportCostCase,
   type ImportCostDraft, type ImportCostCaseResult,
   type ImportCostInvoiceDraft, type ImportCostShipmentDraft,
@@ -78,6 +79,9 @@ export default function ImportCostPage() {
   const [directBankId, setDirectBankId] = useState(0);
   const [directAmount, setDirectAmount] = useState("");
   const directKey = useRef(crypto.randomUUID());
+  const [voucherInvoiceRef,setVoucherInvoiceRef]=useState("");
+  const [voucherIdText,setVoucherIdText]=useState("");
+  const [voucherClaimAmount,setVoucherClaimAmount]=useState("");
   const [paymentInvoiceRef, setPaymentInvoiceRef] = useState("");
   const [paymentBankId, setPaymentBankId] = useState(0);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -160,6 +164,7 @@ export default function ImportCostPage() {
       setDraft(result.draft);
       setPreview(result.preview);
       setPaymentInvoiceRef(result.draft.invoices[0]?.lineRef ?? "");
+      setVoucherInvoiceRef(result.draft.invoices[0]?.lineRef ?? "");
       setDirectShipmentRef(result.draft.shipments[0]?.lineRef ?? "");
       setLinkGroupRef(result.draft.allocations[0]?.lineRef ?? "");
       setLinkPurchaseId("");
@@ -258,6 +263,41 @@ export default function ImportCostPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر تسجيل مصروف الشحنة");
     } finally { setBusy(false); }
+  }
+
+  async function assignExistingVoucher() {
+    if(!selected || busy)return;
+    const voucherId=Number(voucherIdText);
+    const amountIlsMinor=minor(voucherClaimAmount);
+    if(!voucherInvoiceRef || !Number.isSafeInteger(voucherId) || voucherId<=0 ||
+      amountIlsMinor<=0) {
+      setError("اختر فاتورة المورد وأدخل رقم سند الصرف الداخلي والمبلغ المخصص بالشيكل");
+      return;
+    }
+    setBusy(true);setError("");setNotice("");
+    try{
+      const result=await claimImportSupplierVoucher(token,selected.case.id,{
+        invoiceRef:voucherInvoiceRef,voucherId,amountIlsMinor,
+        expectedRevision:selected.case.revision,
+      });
+      setSelected(result);setDraft(result.draft);setPreview(result.preview);
+      setVoucherIdText("");setVoucherClaimAmount("");
+      setNotice("تم تخصيص سند المورد الموجود لفاتورة الاستيراد دون إنشاء دفع أو قيد جديد.");
+    }catch(e){
+      setError(e instanceof Error?e.message:"تعذر تخصيص سند المورد");
+    }finally{setBusy(false);}
+  }
+  async function unlinkExistingVoucher(claimId:number){
+    if(!selected||busy)return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const result=await detachImportSupplierVoucherClaim(token,selected.case.id,
+        claimId,selected.case.revision);
+      setSelected(result);setDraft(result.draft);setPreview(result.preview);
+      setNotice("انفصل مرجع السند عن فاتورة الاستيراد فقط؛ السند والدفعة الأصلية ما تغيروا.");
+    }catch(e){
+      setError(e instanceof Error?e.message:"تعذر فصل سند المورد");
+    }finally{setBusy(false);}
   }
 
   async function attachPurchase() {
@@ -518,6 +558,54 @@ export default function ImportCostPage() {
       </section>
 
       <section style={card}>
+        <h2 style={{ fontSize:18,marginTop:0 }}>تخصيص سندات صرف المورد الموجودة — بدون دفع جديد</h2>
+        <p style={{ fontSize:13,color:"#475569",lineHeight:1.8 }}>
+          لو سبق وسددت للمورد بسند صرف من النظام، ممكن تربط قيمة هذا السند
+          بفاتورة استيراد معينة. وإذا السند بغطّي أكثر من فاتورة، بتحدد
+          الجزء اللي يخص كل واحدة. النظام بيراجع القيد الأصلي، وبمنع استعمال
+          نفس السند بأكثر من قيمته أو ربطه بمورد مختلف.
+        </p>
+        {selected?.supplierVoucherClaims?.length ? <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%",borderCollapse:"collapse",textAlign:"right",fontSize:13 }}>
+            <thead><tr>{["فاتورة المورد","السند","المخصص","قيمة السند","صحة القيد","المرجع"].map(h=>
+              <th key={h} style={{ padding:8,borderBottom:"1px solid #cbd5e1" }}>{h}</th>)}</tr></thead>
+            <tbody>{selected.supplierVoucherClaims.map(claim=><tr key={claim.id}>
+              <td>{claim.invoiceRef}</td><td>{claim.voucherId}</td>
+              <td>{money(claim.amountIlsMinor)} ₪</td>
+              <td>{money(claim.voucherAmountIlsMinor)} ₪</td>
+              <td style={{ color:claim.verified?"#166534":"#b91c1c" }}>
+                {claim.verified?"مطابق":"غير مطابق: "+claim.errors.join("؛ ")}
+              </td>
+              <td><button type="button" disabled={busy} style={btn}
+                onClick={()=>void unlinkExistingVoucher(claim.id)}>فصل المرجع</button></td>
+            </tr>)}</tbody>
+          </table>
+        </div>:<p style={{fontSize:13,color:"#64748b"}}>لا يوجد سند صرف سابق مخصص لهذه الشحنة بعد.</p>}
+        {selected && <div style={{...wrap,marginTop:12}}>
+          <label><span style={label}>فاتورة المورد</span>
+            <select style={field} value={voucherInvoiceRef}
+              onChange={e=>setVoucherInvoiceRef(e.target.value)}>
+              <option value="">اختر الفاتورة</option>
+              {draft.invoices.map(i=><option key={i.lineRef} value={i.lineRef}>
+                {i.invoiceNumber}
+              </option>)}
+            </select></label>
+          <label><span style={label}>الرقم الداخلي لسند الصرف الموجود</span>
+            <input style={field} type="number" min="1" step="1" value={voucherIdText}
+              onChange={e=>setVoucherIdText(e.target.value)} placeholder="رقم السند الداخلي"/></label>
+          <label><span style={label}>المبلغ المخصص لهذه الفاتورة ₪</span>
+            <input style={field} type="number" min="0.01" step="0.01"
+              value={voucherClaimAmount} onChange={e=>setVoucherClaimAmount(e.target.value)}/>
+          </label>
+          <div style={{display:"flex",alignItems:"end"}}>
+            <button type="button" style={btn} disabled={busy} onClick={()=>void assignExistingVoucher()}>
+              ربط سند موجود — دون صرف جديد
+            </button>
+          </div>
+        </div>}
+      </section>
+
+      <section style={card}>
         <h2 style={{ fontSize: 18, marginTop: 0 }}>دفعات الموردين بالدولار</h2>
         {!selected && <p style={{ color: "#64748b" }}>احفظ ملف الاستيراد أولًا لتتمكن من ربط الدفعات به.</p>}
         {selected?.advances?.length ? <div style={{ overflowX: "auto" }}>
@@ -658,6 +746,8 @@ export default function ImportCostPage() {
             ولا تنشئ أي قيد شراء أو مخزون ثاني. لا يجوز اعتمادها قبل التأكد من الربط والمطابقة.
           </p>
           <div style={wrap}>
+            <div><span style={label}>سندات المورد المسددة مسبقًا (لا يعاد خصمها)</span>
+              <b>{money(selected.clearingPreview.supplierVouchersAlreadyAppliedIlsMinor)} ₪</b></div>
             <div><span style={label}>مقدمات الموردين التي ستُسوّى</span>
               <b>{money(selected.clearingPreview.reclassifiedAdvanceIlsMinor)} ₪</b></div>
             <div><span style={label}>الشحن والنقل والتخليص</span>
