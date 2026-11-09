@@ -6,6 +6,7 @@ import {
   importCostAdvancePaymentsTable,
   importCostDirectPaymentsTable,
   importCostPurchaseLinksTable,
+  importCostSupplierVoucherClaimsTable,
   financeTransactionsTable,
   suppliersTable,
 } from "@workspace/db/schema";
@@ -20,6 +21,7 @@ import { previewImportClosing } from "./import-close-readiness";
 import { previewImportClearingSettlement } from "./import-clearing-settlement";
 import { inspectRecordedImportPayments } from "./import-payment-evidence-service";
 import { attachApprovedPurchase,detachApprovedPurchase,getPurchaseLinks,ImportPurchaseLinkError } from "./import-purchase-link-service";
+import { assignImportSupplierVoucher, detachImportSupplierVoucher, getImportSupplierVoucherClaims, ImportSupplierVoucherError } from "./import-supplier-voucher-claim-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -553,8 +555,10 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   const directPaymentPath = /^\/api\/pos\/import-costs\/([1-9]\d*)\/direct-payment$/.exec(path);
   const linkCollection = /^\/api\/pos\/import-costs\/([1-9]\d*)\/purchase-links$/.exec(path);
   const linkSingle = /^\/api\/pos\/import-costs\/([1-9]\d*)\/purchase-links\/([1-9]\d*)$/.exec(path);
+  const voucherCollection = /^\/api\/pos\/import-costs\/([1-9]\d*)\/voucher-claims$/.exec(path);
+  const voucherSingle = /^\/api\/pos\/import-costs\/([1-9]\d*)\/voucher-claims\/([1-9]\d*)$/.exec(path);
   const collection = path === "/api/pos/import-costs";
-  if (!collection && !single && !advancePath && !directPaymentPath && !linkCollection && !linkSingle) return null;
+  if (!collection && !single && !advancePath && !directPaymentPath && !linkCollection && !linkSingle && !voucherCollection && !voucherSingle) return null;
   if (!["GET", "POST", "PUT", "DELETE"].includes(request.method)) {
     return json({ error: "عملية غير متاحة في مسودات الاستيراد" }, 405);
   }
@@ -562,6 +566,32 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
   if (!user) return json({ error: "يجب تسجيل الدخول" }, 401);
   if (!user.isOwner) return json({ error: "ملفات الاستيراد متاحة للمالك فقط" }, 403);
   try {
+    if (voucherCollection && request.method === "POST") {
+      const claimCaseId=normalizeId(voucherCollection[1]!);
+      if (!claimCaseId) throw new ImportDraftError("ملف الاستيراد غير صالح");
+      const body=record(await request.json(),"ربط سند المورد");
+      await assignImportSupplierVoucher(db,{
+        caseId:claimCaseId,
+        invoiceRef:stringField(body.invoiceRef,"مرجع فاتورة المورد",100),
+        voucherId:positive(body.voucherId,"رقم سند الصرف"),
+        amountIlsMinor:positive(body.amountIlsMinor,"المبلغ المخصص"),
+        expectedRevision:positive(body.expectedRevision,"إصدار الملف"),
+        actorId:user.id,
+      });
+      return json(await detail(db,claimCaseId,env),201);
+    }
+    if (voucherSingle && request.method === "DELETE") {
+      const claimCaseId=normalizeId(voucherSingle[1]!);
+      const claimId=normalizeId(voucherSingle[2]!);
+      if(!claimCaseId||!claimId) throw new ImportDraftError("رقم ربط السند غير صالح");
+      const body=record(await request.json(),"فصل سند المورد");
+      await detachImportSupplierVoucher(db,{
+        caseId:claimCaseId,
+        claimId,
+        expectedRevision:positive(body.expectedRevision,"إصدار الملف"),
+      });
+      return json(await detail(db,claimCaseId,env));
+    }
     if (linkCollection && request.method === "POST") {
       const linkCaseId=normalizeId(linkCollection[1]!);
       if (!linkCaseId) throw new ImportDraftError("ملف الاستيراد غير صالح");
@@ -653,6 +683,11 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
           .where(eq(importCostPurchaseLinksTable.caseId,caseId)).limit(1);
         if (links.length) throw new ImportDraftError(
           "هناك فواتير مشتريات مرتبطة بهذا الملف؛ افصل الروابط أولًا قبل تعديل توزيع الإكسل",409);
+        const claims=await tx.select({id:importCostSupplierVoucherClaimsTable.id})
+          .from(importCostSupplierVoucherClaimsTable)
+          .where(eq(importCostSupplierVoucherClaimsTable.caseId,caseId)).limit(1);
+        if(claims.length) throw new ImportDraftError(
+          "هناك سندات مورد مخصصة لفواتير هذا الملف؛ افصل مراجع السندات أولًا قبل تغيير فواتير أو توزيع الإكسل",409);
         await assertSuppliers(tx, draft.invoices);
         // Keep invoices having real posted advances: payments are immutable
         // and incoming/editing of other invoices/shipments must remain possible.
@@ -731,6 +766,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
     if (error instanceof ImportDraftError) return json({ error: error.message }, error.status);
     if (error instanceof ImportAdvanceError) return json({ error: error.message }, error.status);
     if (error instanceof ImportPurchaseLinkError) return json({ error: error.message }, error.status);
+    if (error instanceof ImportSupplierVoucherError) return json({ error: error.message }, error.status);
     if (error instanceof SyntaxError) return json({ error: "صيغة البيانات غير صالحة" }, 400);
     console.error("IMPORT_COST_DRAFT_FAILED", error);
     return json({ error: "تعذر حفظ مسودة الاستيراد" }, 500);
