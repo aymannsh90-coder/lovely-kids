@@ -195,6 +195,10 @@ export async function postImportAccountingClose(
       throw new ImportCloseError("الملف تغيّر أو أُقفل؛ افتح معاينة جديدة قبل الاعتماد");
     await lockRelevantRows(tx,input.caseId);
     const review=await read(tx,input.caseId,env);
+    if(review.case.id!==file.id||review.case.revision!==file.revision||
+       review.case.status!==file.status){
+      throw new ImportCloseError("مصادر مراجعة الاستيراد غير متطابقة مع النسخة المقفلة");
+    }
     const issues=requireCloseReady({
       status:review.case.status,
       planHash:review.closePlanHash,expectedPlanHash:input.expectedPlanHash,
