@@ -459,7 +459,7 @@ async function detail(db: Db, id: number, env: Env) {
     shipments: shipments.map((shipment) => {
       const paid = (kind: string) => directRecords
         .filter((payment) => payment.shipmentId === shipment.id &&
-          payment.costType === kind && payment.financeStatus === "posted")
+          payment.costType === kind && verifiedDirectCosts.has(payment.paymentId))
         .reduce((sum,payment) => sum + payment.amountIlsMinor, 0);
       return {
         ref: shipment.lineRef,
