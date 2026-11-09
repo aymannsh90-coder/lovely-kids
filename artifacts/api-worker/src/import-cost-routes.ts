@@ -8,6 +8,7 @@ import {
   importCostPurchaseLinksTable,
   importCostSupplierVoucherClaimsTable,
   financeTransactionsTable,
+  financeVouchersTable,
   suppliersTable,
 } from "@workspace/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
@@ -612,10 +613,24 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
       const claimCaseId=normalizeId(voucherCollection[1]!);
       if (!claimCaseId) throw new ImportDraftError("ملف الاستيراد غير صالح");
       const body=record(await request.json(),"ربط سند المورد");
+      const voucherInput=body.voucherPublicId??body.voucherId;
+      let voucherId:number;
+      if(typeof voucherInput==="string" && voucherInput.trim() && !/^\\d+$/.test(voucherInput.trim())){
+        const publicId=voucherInput.trim();
+        if(publicId.length>100)throw new ImportDraftError("رقم السند طويل وغير صالح");
+        const [matched]=await db.select({id:financeVouchersTable.id})
+          .from(financeVouchersTable)
+          .where(eq(financeVouchersTable.publicId,publicId)).limit(1);
+        if(!matched)throw new ImportDraftError("لم يتم العثور على سند الصرف بهذا الرقم");
+        voucherId=matched.id;
+      }else{
+        const raw=typeof voucherInput==="string"?Number(voucherInput.trim()):voucherInput;
+        voucherId=positive(raw,"رقم سند الصرف");
+      }
       await assignImportSupplierVoucher(db,{
         caseId:claimCaseId,
         invoiceRef:stringField(body.invoiceRef,"مرجع فاتورة المورد",100),
-        voucherId:positive(body.voucherId,"رقم سند الصرف"),
+        voucherId,
         amountIlsMinor:positive(body.amountIlsMinor,"المبلغ المخصص"),
         expectedRevision:positive(body.expectedRevision,"إصدار الملف"),
         actorId:user.id,
