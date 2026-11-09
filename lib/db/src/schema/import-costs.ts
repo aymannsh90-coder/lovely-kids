@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  boolean, check, date, index, integer, pgTable,
+  boolean, check, date, foreignKey, index, integer, pgTable,
   serial, text, timestamp, uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
@@ -44,6 +44,7 @@ export const importCostInvoicesTable = pgTable("import_cost_invoices", {
   // No advance balance stored here: it must eventually be derived from posted journals.
 }, (t) => [
   uniqueIndex("import_cost_invoices_case_ref_unique").on(t.caseId, t.lineRef),
+  uniqueIndex("import_cost_invoices_case_id_unique").on(t.caseId, t.id),
   index("import_cost_invoices_supplier_idx").on(t.supplierId),
   check("import_cost_invoices_amounts_nonnegative", sql`${t.goodsUsdMinor} >= 0 AND ${t.goodsBookedIlsMinor} >= 0`),
   check("import_cost_invoices_ref_valid", sql`length(btrim(${t.lineRef})) between 1 and 100`),
@@ -60,6 +61,7 @@ export const importCostShipmentsTable = pgTable("import_cost_shipments", {
   freightClearingIlsMinor: integer("freight_clearing_ils_minor").notNull(),
 }, (t) => [
   uniqueIndex("import_cost_shipments_case_ref_unique").on(t.caseId, t.lineRef),
+  uniqueIndex("import_cost_shipments_case_id_unique").on(t.caseId, t.id),
   check("import_cost_shipments_freight_nonnegative", sql`LEAST(${t.freightIlsMinor},${t.customsIlsMinor},${t.localTransportIlsMinor}) >= 0 AND ${t.freightClearingIlsMinor} = ${t.freightIlsMinor} + ${t.customsIlsMinor} + ${t.localTransportIlsMinor}`),
   check("import_cost_shipments_ref_valid", sql`length(btrim(${t.lineRef})) between 1 and 100`),
 ]).enableRLS();
@@ -77,6 +79,16 @@ export const importCostAllocationsTable = pgTable("import_cost_allocations", {
   excelLandedIlsMinor: integer("excel_landed_ils_minor").notNull(),
 }, (t) => [
   uniqueIndex("import_cost_allocations_case_ref_unique").on(t.caseId, t.lineRef),
+  foreignKey({
+    name: "import_cost_allocations_same_case_invoice_fk",
+    columns: [t.caseId, t.invoiceId],
+    foreignColumns: [importCostInvoicesTable.caseId, importCostInvoicesTable.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "import_cost_allocations_same_case_shipment_fk",
+    columns: [t.caseId, t.shipmentId],
+    foreignColumns: [importCostShipmentsTable.caseId, importCostShipmentsTable.id],
+  }).onDelete("cascade"),
   index("import_cost_allocations_invoice_idx").on(t.invoiceId),
   index("import_cost_allocations_shipment_idx").on(t.shipmentId),
   check("import_cost_allocations_nonnegative", sql`LEAST(${t.goodsIlsMinor},${t.freightIlsMinor},${t.travelManagerialIlsMinor},${t.travelCapitalizableIlsMinor},${t.excelLandedIlsMinor}) >= 0`),
