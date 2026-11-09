@@ -6105,7 +6105,9 @@ export interface ImportCostPreview {
   inventoryAccountingCostIlsMinor: number;
   ledgerVerified: false;
   canPost: false;
-  paymentStatus: "not_connected";
+  supplierAdvancesIlsMinor: number;
+  unpaidSupplierIlsMinor: number;
+  paymentStatus: "not_connected" | "advances_posted";
 }
 export interface ImportCostCaseResult {
   case: {
@@ -6116,6 +6118,18 @@ export interface ImportCostCaseResult {
     createdAt: string;
   };
   draft: ImportCostDraft;
+  advances: Array<{
+    paymentId: number;
+    invoiceId: number;
+    invoiceRef: string;
+    usdAmountMinor: number;
+    advanceIlsMinor: number;
+    bankBookIlsMinor: number;
+    fxGainIlsMinor: number;
+    fxLossIlsMinor: number;
+    financeTransactionId: number;
+    financeStatus: string;
+  }>;
   preview: ImportCostPreview;
 }
 export function listImportCostCases(token: string) {
