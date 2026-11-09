@@ -165,7 +165,7 @@ export async function detachApprovedPurchase(db: Db, input: {
   });
 }
 
-export async function getPurchaseLinks(db:Db,caseId:number) {
+export async function getPurchaseLinks(db:Db|Tx,caseId:number) {
   const rows = await db.select({
     id:importCostPurchaseLinksTable.id,
     purchaseId:importCostPurchaseLinksTable.purchaseId,
