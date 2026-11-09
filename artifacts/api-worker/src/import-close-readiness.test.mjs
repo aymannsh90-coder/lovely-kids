@@ -100,3 +100,18 @@ test("cost ledger match alone is NOT permission to close before clearing account
   assert.equal(out.canCloseAccounting,false);
   assert.ok(out.reasons.some(x=>x.includes("قيد تسوية")));
 });
+
+test("posted ILS supplier voucher may settle the original invoice without a new payable debit",()=>{
+  const input=ready();
+  input.invoices[1].paidUsdMinor=0;
+  input.invoices[1].advanceIlsMinor=0;
+  input.invoices[1].existingSupplierVoucherIlsMinor=180000;
+  input.invoices[1].remainingPayableIlsMinor=0;
+  input.invoices[1].payableJournalVerified=false;
+  assert.equal(previewImportClosing(input).canCloseAccounting,true);
+});
+test("previous voucher and USD advance must not exceed one original supplier invoice",()=>{
+  const input=ready();
+  input.invoices[0].existingSupplierVoucherIlsMinor=500;
+  assert.equal(previewImportClosing(input).canCloseAccounting,false);
+});
