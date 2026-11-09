@@ -3,10 +3,11 @@ import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
   createImportCostCase, getImportCostCase, getPosSuppliers,
+  getPosBankAccounts, postImportUsdAdvance,
   listImportCostCases, updateImportCostCase,
   type ImportCostDraft, type ImportCostCaseResult,
   type ImportCostInvoiceDraft, type ImportCostShipmentDraft,
-  type ImportCostAllocationDraft, type PosSupplier,
+  type ImportCostAllocationDraft, type PosSupplier, type PosBankAccount,
 } from "../../lib/api";
 
 const card: CSSProperties = {
@@ -68,6 +69,13 @@ export default function ImportCostPage() {
   const { token, clearAuthentication } = usePosRuntime();
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [suppliers, setSuppliers] = useState<PosSupplier[]>([]);
+  const [usdBanks, setUsdBanks] = useState<PosBankAccount[]>([]);
+  const [paymentInvoiceRef, setPaymentInvoiceRef] = useState("");
+  const [paymentBankId, setPaymentBankId] = useState(0);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentSpotRate, setPaymentSpotRate] = useState("");
+  const [paymentBusinessDate, setPaymentBusinessDate] = useState(dateNow);
+  const paymentKey = useRef(crypto.randomUUID());
   const [draft, setDraft] = useState<ImportCostDraft>(blank);
   const [selected, setSelected] = useState<ImportCostCaseResult | null>(null);
   const [preview, setPreview] = useState<ImportCostCaseResult["preview"] | null>(null);
@@ -78,11 +86,14 @@ export default function ImportCostPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([listImportCostCases(token), getPosSuppliers(token)])
-      .then(([loaded, people]) => {
+    void Promise.all([listImportCostCases(token), getPosSuppliers(token), getPosBankAccounts(token)])
+      .then(([loaded, people, banks]) => {
         if (cancelled) return;
         setCases(loaded.cases);
         setSuppliers(people.results);
+        const usd = banks.results.filter((bank) => bank.currencyCode === "USD" && bank.status === "active");
+        setUsdBanks(usd);
+        if (usd[0]) setPaymentBankId(usd[0].id);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -135,6 +146,7 @@ export default function ImportCostPage() {
       setSelected(result);
       setDraft(result.draft);
       setPreview(result.preview);
+      setPaymentInvoiceRef(result.draft.invoices[0]?.lineRef ?? "");
       requestKey.current = crypto.randomUUID();
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر فتح ملف الاستيراد");
@@ -142,6 +154,9 @@ export default function ImportCostPage() {
   }
   function newCase() {
     setSelected(null); setDraft(blank()); setError(""); setNotice(""); setPreview(null);
+    setPaymentInvoiceRef("");
+    setPaymentAmount("");
+    setPaymentSpotRate("");
     requestKey.current = crypto.randomUUID();
   }
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -158,6 +173,39 @@ export default function ImportCostPage() {
       await reloadCases();
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر حفظ المسودة");
+    } finally { setBusy(false); }
+  }
+
+  async function sendAdvancePayment() {
+    if (!selected || !selected.advancePostingEnabled || busy) return;
+    const usdAmountMinor = minor(paymentAmount);
+    const spotRateMicros = Math.round(Number(paymentSpotRate) * 1_000_000);
+    if (!paymentInvoiceRef || !paymentBankId || usdAmountMinor <= 0 ||
+      !Number.isSafeInteger(spotRateMicros) || spotRateMicros <= 0) {
+      setError("اختر المورد وبنك الدولار وأدخل المبلغ وسعر الصرف الصحيحين");
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await postImportUsdAdvance(token, selected.case.id, {
+        invoiceRef: paymentInvoiceRef,
+        bankAccountId: paymentBankId,
+        usdAmountMinor,
+        spotRateMicros,
+        businessDate: paymentBusinessDate,
+        idempotencyKey: paymentKey.current,
+      });
+      const refreshed = await getImportCostCase(token, selected.case.id);
+      setSelected(refreshed);
+      setDraft(refreshed.draft);
+      setPreview(refreshed.preview);
+      paymentKey.current = crypto.randomUUID();
+      setPaymentAmount("");
+      setPaymentSpotRate("");
+      setNotice("تم تسجيل دفعة المورد في دفتر الأستاذ وربطها بالاستيراد. رقم القيد: " +
+        result.payment.financeTransactionId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر تنفيذ دفعة المورد");
     } finally { setBusy(false); }
   }
 
@@ -327,6 +375,51 @@ export default function ImportCostPage() {
             })}>حذف</button>
           </div>
         </div>)}
+      </section>
+
+      <section style={card}>
+        <h2 style={{ fontSize: 18, marginTop: 0 }}>دفعات الموردين بالدولار</h2>
+        {!selected && <p style={{ color: "#64748b" }}>احفظ ملف الاستيراد أولًا لتتمكن من ربط الدفعات به.</p>}
+        {selected?.advances?.length ? <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", textAlign: "right", borderCollapse: "collapse" }}>
+            <thead><tr>{["الفاتورة", "المدفوع بالدولار", "المقدم بقيمة الشيكل", "فرق الصرف", "قيد المالية"].map(h =>
+              <th key={h} style={{ padding: 8, borderBottom: "1px solid #cbd5e1" }}>{h}</th>)}</tr></thead>
+            <tbody>{selected.advances.map((a) => <tr key={a.paymentId}>
+              <td style={{ padding: 8 }}>{a.invoiceRef}</td>
+              <td>{money(a.usdAmountMinor)} $</td>
+              <td>{money(a.advanceIlsMinor)} ₪</td>
+              <td>{money(a.fxGainIlsMinor - a.fxLossIlsMinor)} ₪</td>
+              <td>{a.financeTransactionId} — {a.financeStatus}</td>
+            </tr>)}</tbody>
+          </table>
+        </div> : <p style={{ color: "#64748b" }}>ما في دفعات مقدمة مرحلة ومربوطة بهذا الملف حتى الآن.</p>}
+        {!selected?.advancePostingEnabled ? <p style={{ color: "#92400e", fontWeight: 700 }}>
+          تسجيل دفعات الدولار من هذه الصفحة غير مفعل حاليًا لحماية الأرصدة.
+          قيم فواتير الموردين أعلاه للتوثيق فقط، وليست سندات صرف.
+        </p> : <div style={{ ...wrap, marginTop: 12 }}>
+          <label><span style={label}>الفاتورة</span><select style={field} value={paymentInvoiceRef}
+            onChange={e => setPaymentInvoiceRef(e.target.value)}>
+            <option value="">اختر الفاتورة</option>
+            {draft.invoices.map(i => <option key={i.lineRef} value={i.lineRef}>{i.invoiceNumber}</option>)}
+          </select></label>
+          <label><span style={label}>بنك الدولار</span><select style={field} value={paymentBankId}
+            onChange={e => setPaymentBankId(Number(e.target.value))}>
+            <option value={0}>اختر البنك</option>
+            {usdBanks.map(b => <option key={b.id} value={b.id}>{b.bank.nameAr} — {b.name}</option>)}
+          </select></label>
+          <label><span style={label}>المبلغ بالدولار</span><input type="number" min="0.01"
+            step="0.01" style={field} value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)}/></label>
+          <label><span style={label}>سعر الدولار يوم الدفع (₪ لكل $)</span><input type="number" min="0.1"
+            step="0.000001" style={field} value={paymentSpotRate} onChange={e => setPaymentSpotRate(e.target.value)}/></label>
+          <label><span style={label}>تاريخ الدفع الفعلي</span><input type="date" style={field}
+            value={paymentBusinessDate} onChange={e => setPaymentBusinessDate(e.target.value)}/></label>
+          <div style={{ display: "flex", alignItems: "end" }}>
+            <button type="button" style={{ ...btn, color: "#fff", background: "#14532d" }}
+              disabled={busy || !selected || usdBanks.length === 0} onClick={() => void sendAdvancePayment()}>
+              تسجيل دفعة مقدمة للمورد
+            </button>
+          </div>
+        </div>}
       </section>
 
       <section style={card}>
