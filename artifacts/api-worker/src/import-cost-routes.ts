@@ -321,6 +321,7 @@ function normalizeId(value: string): number | null {
 export async function handleImportCostRequest(request: Request, db: Db, env: Env): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   const single = /^\/api\/pos\/import-costs\/([1-9]\d*)$/.exec(path);
+  const advancePath = /^\\/api\\/pos\\/import-costs\\/([1-9]\\d*)\\/advance-payment$/.exec(path);
   const collection = path === "/api/pos/import-costs";
   if (!collection && !single && !advancePath) return null;
   if (!["GET", "POST", "PUT"].includes(request.method)) {
