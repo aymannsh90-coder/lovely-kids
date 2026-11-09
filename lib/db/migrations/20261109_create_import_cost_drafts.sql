@@ -40,9 +40,15 @@ CREATE TABLE IF NOT EXISTS public.import_cost_shipments (
   case_id integer NOT NULL REFERENCES public.import_cost_cases(id) ON DELETE CASCADE,
   line_ref text NOT NULL,
   tracking_number text,
+  freight_ils_minor integer NOT NULL DEFAULT 0,
+  customs_ils_minor integer NOT NULL DEFAULT 0,
+  local_transport_ils_minor integer NOT NULL DEFAULT 0,
   freight_clearing_ils_minor integer NOT NULL,
   CONSTRAINT import_cost_shipments_case_ref_unique UNIQUE(case_id, line_ref),
-  CONSTRAINT import_cost_shipments_freight_nonnegative CHECK (freight_clearing_ils_minor >= 0),
+  CONSTRAINT import_cost_shipments_freight_nonnegative CHECK (
+    LEAST(freight_ils_minor, customs_ils_minor, local_transport_ils_minor) >= 0
+    AND freight_clearing_ils_minor = freight_ils_minor + customs_ils_minor + local_transport_ils_minor
+  ),
   CONSTRAINT import_cost_shipments_ref_valid CHECK (length(btrim(line_ref)) BETWEEN 1 AND 100)
 );
 
