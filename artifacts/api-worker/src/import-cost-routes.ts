@@ -526,8 +526,10 @@ async function detail(db: Db | Tx, id: number, env: Env) {
         existingSupplierVoucherIlsMinor:voucherPaidByInvoiceId.get(invoice.id)??0,
         remainingPayableIlsMinor: Math.max(0, invoice.goodsBookedIlsMinor - advanceIlsMinor -
           (voucherPaidByInvoiceId.get(invoice.id)??0)),
-        // No supplier payable integration on import invoices yet.
-        payableJournalVerified: false,
+        // The linked, already-posted ILS POS credit purchases prove the
+        // liability once; the import close must not create a second purchase.
+        payableJournalVerified: draft.allocations.some(a=>a.invoiceRef===invoice.lineRef)
+          && draft.allocations.filter(a=>a.invoiceRef===invoice.lineRef).every(groupReady),
       };
     }),
     shipments: shipments.map((shipment) => {
