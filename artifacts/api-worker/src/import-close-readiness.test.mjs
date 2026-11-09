@@ -19,6 +19,7 @@ const ready = () => ({
   ],
   travelRecordedIlsMinor:10000,travelPaidIlsMinor:10000,
   travelClassificationApproved:true,inventoryCostEngineReconciled:true,
+  settlementJournalVerified:true,
 });
 
 test("only a complete reconciled case is eligible for accounting close", () => {
@@ -90,4 +91,12 @@ test("reversed or missing inventory receipt must block close", () => {
   const sample=ready();
   sample.shipments[0].hasInventoryReceipt=false;
   assert.equal(previewImportClosing(sample).canCloseAccounting,false);
+});
+
+test("cost ledger match alone is NOT permission to close before clearing accounts are settled", () => {
+  const sample=ready();
+  sample.settlementJournalVerified=false;
+  const out=previewImportClosing(sample);
+  assert.equal(out.canCloseAccounting,false);
+  assert.ok(out.reasons.some(x=>x.includes("قيد تسوية")));
 });
