@@ -759,6 +759,15 @@ export default function ImportCostPage() {
             <div><span style={label}>ذمة المورد المتبقية بعد التسوية</span>
               <b>{money(selected.clearingPreview.remainingSupplierLiabilityIlsMinor)} ₪</b></div>
           </div>
+          {!!selected.clearingPreview.supplierBalanceChecks.length && <div style={{ marginTop:10 }}>
+            <b style={{ fontSize:13 }}>فحص رصيد ذمم الموردين قبل التسوية</b>
+            {selected.clearingPreview.supplierBalanceChecks.map(item=><p key={item.supplierId}
+              style={{ fontSize:13,margin:"5px 0",color:item.sufficient?"#166534":"#b91c1c" }}>
+              المورد #{item.supplierId}: رصيد الذمة الحالي {money(item.currentPayableIlsMinor)} ₪،
+              التسوية المطلوبة {money(item.plannedDebitIlsMinor)} ₪
+              — {item.sufficient?"الرصيد كافٍ":"المبلغ يتجاوز الرصيد — ممنوع الإقفال"}
+            </p>)}
+          </div>}
           <p style={{ fontWeight:800,color:selected.clearingPreview.ready?"#166534":"#92400e" }}>
             {selected.clearingPreview.ready
               ? "خطة التسوية متوازنة حسابيًا فقط، ولم تُرحّل للأستاذ."
