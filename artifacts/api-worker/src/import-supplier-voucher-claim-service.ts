@@ -156,7 +156,7 @@ export async function detachImportSupplierVoucher(db:Db,input:{
 }
 
 /** Always re-read live voucher + GL. A voided/edited voucher counts as zero. */
-export async function getImportSupplierVoucherClaims(db:Db,caseId:number){
+export async function getImportSupplierVoucherClaims(db:Db|Tx,caseId:number){
   const raw=await db.select({
     id:importCostSupplierVoucherClaimsTable.id,
     invoiceId:importCostSupplierVoucherClaimsTable.invoiceId,
