@@ -16,6 +16,7 @@ import {
 import { and, asc, desc, eq, gt, lt, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import { requireIlsLegacyPurchasePosting } from "./import-purchase-currency-guard";
 import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
@@ -1667,6 +1668,17 @@ async function handleCreatePurchase(
     const currencyCode = normalizeCurrencyCode(
       payload.currencyCode,
     );
+    // Posting below uses ILS minor amounts directly for inventory, cash and
+    // payables. Refuse USD here until an explicit import FX-aware path exists.
+    try {
+      requireIlsLegacyPurchasePosting(currencyCode);
+    } catch {
+      throw new PurchaseError(
+        "لا يمكن اعتماد فاتورة مشتريات بعملة غير الشيكل من المسار القديم؛ سجل فاتورة المورد بالدولار في ملف الاستيراد حتى يُجهز الترحيل الصحيح",
+        409,
+      );
+    }
+
 
     const registerKey = normalizeRegisterKey(
       payload.registerKey ?? "main",
