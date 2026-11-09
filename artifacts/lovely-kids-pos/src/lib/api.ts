@@ -6068,6 +6068,9 @@ export interface ImportCostInvoiceDraft {
 export interface ImportCostShipmentDraft {
   lineRef: string;
   trackingNumber: string | null;
+  freightIlsMinor: number;
+  customsIlsMinor: number;
+  localTransportIlsMinor: number;
   freightClearingIlsMinor: number;
 }
 export interface ImportCostAllocationDraft {
