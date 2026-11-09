@@ -1,16 +1,20 @@
-name: Verify import landed-cost preflight
+name: Verify import draft and cost preflight
 
 on:
   pull_request:
-    paths:
-      - "artifacts/api-worker/src/import-cost-reconciliation.ts"
-      - "artifacts/api-worker/src/import-cost-reconciliation.test.mjs"
-      - ".github/workflows/verify-import-cost-reconciliation.yml"
-  push:
     branches: [main]
     paths:
-      - "artifacts/api-worker/src/import-cost-reconciliation.ts"
-      - "artifacts/api-worker/src/import-cost-reconciliation.test.mjs"
+      - 'artifacts/api-worker/src/import-cost-*'
+      - 'artifacts/api-worker/src/index.ts'
+      - 'artifacts/lovely-kids-pos/src/pages/purchases/ImportCostPage.tsx'
+      - 'artifacts/lovely-kids-pos/src/app/router.tsx'
+      - 'artifacts/lovely-kids-pos/src/app/navigation.ts'
+      - 'artifacts/lovely-kids-pos/src/lib/api.ts'
+      - 'lib/db/src/schema/import-costs.ts'
+      - 'lib/db/src/schema/index.ts'
+      - 'lib/db/migrations/20261109_create_import_cost_drafts.sql'
+      - '.github/workflows/verify-import-cost-reconciliation.yml'
+  workflow_dispatch:
 
 jobs:
   validate-import-costs:
@@ -19,8 +23,20 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - name: Unit test of import cost preflight
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: API Worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: POS typecheck
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: POS build
+        run: pnpm --filter @workspace/lovely-kids-pos build
+      - name: Import cost unit tests
         run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs
