@@ -6,6 +6,7 @@ import RequireStaffGrant from "../guards/RequireStaffGrant";
 import { usePosRuntime } from "../app/pos-context";
 import StaffOrdersPage from "../pages/sales/StaffOrdersPage";
 import PurchaseHistoryPage from "../pages/purchases/PurchaseHistoryPage";
+import ImportCostPage from "../pages/purchases/ImportCostPage";
 import RequireFinancialReports from "../guards/RequireFinancialReports";
 import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -180,6 +181,7 @@ export default function AppRouter() {
         />
 
         <Route path="purchases/history" element={<RequireStaffGrant permissions={["purchases.view", "purchases.create"]}><PurchaseHistoryPage /></RequireStaffGrant>} />
+        <Route path="purchases/import-costs" element={<RequireOwner><ImportCostPage /></RequireOwner>} />
         <Route
           path="purchases/returns"
           element={<RequireStaffGrant permissions={["purchases.view", "purchases.returns", "purchases.returns.void"]}><PurchaseReturnsPage /></RequireStaffGrant>}
