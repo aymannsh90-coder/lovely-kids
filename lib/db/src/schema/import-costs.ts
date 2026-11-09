@@ -231,6 +231,7 @@ export const importCostClosuresTable = pgTable("import_cost_closures", {
   id: serial("id").primaryKey(),
   caseId: integer("case_id").notNull().references(() => importCostCasesTable.id, { onDelete: "restrict" }),
   idempotencyKey: text("idempotency_key").notNull(),
+  planHash: text("plan_hash").notNull(),
   status: text("status").notNull().default("posted"),
   businessDate: date("business_date").notNull(),
   debitIlsMinor: integer("debit_ils_minor").notNull(),
@@ -238,6 +239,7 @@ export const importCostClosuresTable = pgTable("import_cost_closures", {
   reversalFinanceTransactionId: integer("reversal_finance_transaction_id").references(() => financeTransactionsTable.id, { onDelete: "restrict" }),
   reversalKey: text("reversal_key"),
   reversalReason: text("reversal_reason"),
+  reversalBusinessDate: date("reversal_business_date"),
   travelClassificationApproved: boolean("travel_classification_approved").notNull().default(false),
   closedByUserId: integer("closed_by_user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   reversedByUserId: integer("reversed_by_user_id").references(() => usersTable.id, { onDelete: "restrict" }),
@@ -251,9 +253,10 @@ export const importCostClosuresTable = pgTable("import_cost_closures", {
   uniqueIndex("import_cost_closure_reverse_finance_unique").on(t.reversalFinanceTransactionId),
   index("import_cost_closure_case_idx").on(t.caseId),
   check("import_cost_closure_status_valid", sql`${t.status} in ('posted','reversed')`),
+  check("import_cost_closure_plan_hash_valid", sql`length(${t.planHash}) = 64`),
   check("import_cost_closure_amount_valid", sql`${t.debitIlsMinor} >= 0`),
   check("import_cost_closure_reversal_valid", sql`
-    (${t.status} = 'posted' and ${t.reversalFinanceTransactionId} is null and ${t.reversalKey} is null and ${t.reversedAt} is null)
-    or (${t.status} = 'reversed' and ${t.reversalKey} is not null and ${t.reversalReason} is not null and ${t.reversedAt} is not null)
+    (${t.status} = 'posted' and ${t.reversalFinanceTransactionId} is null and ${t.reversalKey} is null and ${t.reversedAt} is null and ${t.reversalBusinessDate} is null)
+    or (${t.status} = 'reversed' and ${t.reversalKey} is not null and ${t.reversalReason} is not null and ${t.reversedAt} is not null and ${t.reversalBusinessDate} is not null)
   `),
 ]).enableRLS();
