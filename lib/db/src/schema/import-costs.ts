@@ -4,6 +4,8 @@ import {
   serial, text, timestamp, uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
+import { bankAccountsTable } from "./finance-banking";
+import { financeTransactionsTable } from "./finance";
 import { suppliersTable } from "./suppliers";
 
 /**
@@ -94,4 +96,39 @@ export const importCostAllocationsTable = pgTable("import_cost_allocations", {
   check("import_cost_allocations_nonnegative", sql`LEAST(${t.goodsIlsMinor},${t.freightIlsMinor},${t.travelManagerialIlsMinor},${t.travelCapitalizableIlsMinor},${t.excelLandedIlsMinor}) >= 0`),
   check("import_cost_allocations_travel_eligible_limit", sql`${t.travelCapitalizableIlsMinor} <= ${t.travelManagerialIlsMinor}`),
   check("import_cost_allocations_excel_matches", sql`${t.excelLandedIlsMinor} = ${t.goodsIlsMinor} + ${t.freightIlsMinor} + ${t.travelManagerialIlsMinor}`),
+]).enableRLS();
+
+/**
+ * Immutable actual USD advance payments. This table is inactive until
+ * POS_IMPORT_FINANCIAL_POSTING_ENABLED=true AND its migration is deployed.
+ */
+export const importCostAdvancePaymentsTable = pgTable("import_cost_advance_payments", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => importCostCasesTable.id, { onDelete: "restrict" }),
+  invoiceId: integer("invoice_id").notNull().references(() => importCostInvoicesTable.id, { onDelete: "restrict" }),
+  idempotencyKey: text("idempotency_key").notNull(),
+  bankAccountId: integer("bank_account_id").notNull().references(() => bankAccountsTable.id, { onDelete: "restrict" }),
+  businessDate: date("business_date").notNull(),
+  usdAmountMinor: integer("usd_amount_minor").notNull(),
+  spotRateMicros: integer("spot_rate_micros").notNull(),
+  bankBookIlsMinor: integer("bank_book_ils_minor").notNull(),
+  advanceIlsMinor: integer("advance_ils_minor").notNull(),
+  fxGainIlsMinor: integer("fx_gain_ils_minor").notNull().default(0),
+  fxLossIlsMinor: integer("fx_loss_ils_minor").notNull().default(0),
+  financeTransactionId: integer("finance_transaction_id").references(() => financeTransactionsTable.id, { onDelete: "restrict" }),
+  createdByUserId: integer("created_by_user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("import_cost_advance_payment_key_idx").on(t.idempotencyKey),
+  uniqueIndex("import_cost_advance_payment_finance_transaction_idx").on(t.financeTransactionId),
+  index("import_cost_advance_payment_invoice_idx").on(t.invoiceId),
+  foreignKey({
+    name: "import_cost_advance_payment_case_invoice_fk",
+    columns: [t.caseId, t.invoiceId],
+    foreignColumns: [importCostInvoicesTable.caseId, importCostInvoicesTable.id],
+  }).onDelete("restrict"),
+  check("import_cost_advance_payment_positive", sql`LEAST(${t.usdAmountMinor},${t.spotRateMicros},${t.bankBookIlsMinor},${t.advanceIlsMinor}) > 0`),
+  check("import_cost_advance_payment_fx_nonnegative", sql`LEAST(${t.fxGainIlsMinor},${t.fxLossIlsMinor}) >= 0`),
+  check("import_cost_advance_payment_one_fx_side", sql`${t.fxGainIlsMinor} = 0 OR ${t.fxLossIlsMinor} = 0`),
+  check("import_cost_advance_payment_balanced", sql`${t.advanceIlsMinor} + ${t.fxLossIlsMinor} = ${t.bankBookIlsMinor} + ${t.fxGainIlsMinor}`),
 ]).enableRLS();
