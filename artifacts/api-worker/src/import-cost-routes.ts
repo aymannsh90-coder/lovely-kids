@@ -615,7 +615,7 @@ export async function handleImportCostRequest(request: Request, db: Db, env: Env
       const body=record(await request.json(),"ربط سند المورد");
       const voucherInput=body.voucherPublicId??body.voucherId;
       let voucherId:number;
-      if(typeof voucherInput==="string" && voucherInput.trim() && !/^\\d+$/.test(voucherInput.trim())){
+      if(typeof voucherInput==="string" && voucherInput.trim() && !/^\d+$/.test(voucherInput.trim())){
         const publicId=voucherInput.trim();
         if(publicId.length>100)throw new ImportDraftError("رقم السند طويل وغير صالح");
         const [matched]=await db.select({id:financeVouchersTable.id})
