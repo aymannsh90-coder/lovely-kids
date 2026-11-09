@@ -3,7 +3,7 @@ import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
   createImportCostCase, getImportCostCase, getPosSuppliers,
-  getPosBankAccounts, postImportUsdAdvance,
+  getPosBankAccounts, postImportUsdAdvance, postImportDirectCostPayment,
   listImportCostCases, updateImportCostCase,
   type ImportCostDraft, type ImportCostCaseResult,
   type ImportCostInvoiceDraft, type ImportCostShipmentDraft,
@@ -70,6 +70,13 @@ export default function ImportCostPage() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [suppliers, setSuppliers] = useState<PosSupplier[]>([]);
   const [usdBanks, setUsdBanks] = useState<PosBankAccount[]>([]);
+  const [ilsBanks, setIlsBanks] = useState<PosBankAccount[]>([]);
+  const [directKind, setDirectKind] = useState<"freight"|"customs"|"local_transport"|"travel">("freight");
+  const [directShipmentRef, setDirectShipmentRef] = useState("");
+  const [directMethod, setDirectMethod] = useState<"bank"|"cash">("cash");
+  const [directBankId, setDirectBankId] = useState(0);
+  const [directAmount, setDirectAmount] = useState("");
+  const directKey = useRef(crypto.randomUUID());
   const [paymentInvoiceRef, setPaymentInvoiceRef] = useState("");
   const [paymentBankId, setPaymentBankId] = useState(0);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -94,6 +101,9 @@ export default function ImportCostPage() {
         const usd = banks.results.filter((bank) => bank.currencyCode === "USD" && bank.status === "active");
         setUsdBanks(usd);
         if (usd[0]) setPaymentBankId(usd[0].id);
+        const ils = banks.results.filter((bank) => bank.currencyCode === "ILS" && bank.status === "active");
+        setIlsBanks(ils);
+        if (ils[0]) setDirectBankId(ils[0].id);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -147,6 +157,7 @@ export default function ImportCostPage() {
       setDraft(result.draft);
       setPreview(result.preview);
       setPaymentInvoiceRef(result.draft.invoices[0]?.lineRef ?? "");
+      setDirectShipmentRef(result.draft.shipments[0]?.lineRef ?? "");
       requestKey.current = crypto.randomUUID();
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر فتح ملف الاستيراد");
@@ -157,6 +168,8 @@ export default function ImportCostPage() {
     setPaymentInvoiceRef("");
     setPaymentAmount("");
     setPaymentSpotRate("");
+    setDirectAmount("");
+    setDirectShipmentRef("");
     requestKey.current = crypto.randomUUID();
   }
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -206,6 +219,37 @@ export default function ImportCostPage() {
         result.payment.financeTransactionId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر تنفيذ دفعة المورد");
+    } finally { setBusy(false); }
+  }
+
+  async function sendDirectPayment() {
+    if (!selected || !selected.advancePostingEnabled || busy) return;
+    const amountIlsMinor = minor(directAmount);
+    const shipmentRef = directKind === "travel" ? null : directShipmentRef;
+    if (amountIlsMinor <= 0 || (directKind !== "travel" && !shipmentRef) ||
+      (directMethod === "bank" && !directBankId)) {
+      setError("حدد نوع المصروف والشحنة وطريقة الدفع والمبلغ الفعلي");
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await postImportDirectCostPayment(token, selected.case.id, {
+        shipmentRef, costType: directKind, paymentMethod: directMethod,
+        bankAccountId: directMethod === "bank" ? directBankId : null,
+        registerKey: directMethod === "cash" ? "main" : null,
+        amountIlsMinor, businessDate: paymentBusinessDate,
+        idempotencyKey: directKey.current,
+      });
+      const refreshed = await getImportCostCase(token, selected.case.id);
+      setSelected(refreshed);
+      setDraft(refreshed.draft);
+      setPreview(refreshed.preview);
+      setDirectAmount("");
+      directKey.current = crypto.randomUUID();
+      setNotice("تم ترحيل المصروف لحساب تجميع الاستيراد مرة واحدة، ورقم القيد: " +
+        result.payment.financeTransactionId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر تسجيل مصروف الشحنة");
     } finally { setBusy(false); }
   }
 
@@ -420,6 +464,66 @@ export default function ImportCostPage() {
             </button>
           </div>
         </div>}
+      </section>
+
+      <section style={card}>
+        <h2 style={{ fontSize: 18, marginTop: 0 }}>دفعات الشحن والتخليص والنقل والسفر</h2>
+        {selected?.directPayments?.length ? <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "right" }}>
+            <thead><tr>{["النوع", "الشحنة", "المبلغ", "الطريقة", "رقم القيد"].map(h =>
+              <th key={h} style={{ borderBottom: "1px solid #cbd5e1", padding: 8 }}>{h}</th>)}</tr></thead>
+            <tbody>{selected.directPayments.map(p => <tr key={p.paymentId}>
+              <td style={{ padding: 8 }}>{({ freight:"شحن",customs:"تخليص",local_transport:"نقل",travel:"سفر" } as Record<string,string>)[p.costType] ?? p.costType}</td>
+              <td>{p.shipmentRef ?? "جميع الموردين"}</td>
+              <td>{money(p.amountIlsMinor)} ₪</td>
+              <td>{p.paymentMethod === "bank" ? "البنك" : "الصندوق"}</td>
+              <td>{p.financeTransactionId} — {p.financeStatus}</td>
+            </tr>)}</tbody>
+          </table>
+        </div> : <p style={{ color: "#64748b" }}>ما في مصاريف مرحلة على هذه الشحنة بعد.</p>}
+        {selected?.advancePostingEnabled && <div style={{ ...wrap, marginTop: 12 }}>
+          <label><span style={label}>نوع التكلفة</span>
+            <select style={field} value={directKind} onChange={e => setDirectKind(e.target.value as typeof directKind)}>
+              <option value="freight">الشحن</option>
+              <option value="customs">التخليص</option>
+              <option value="local_transport">النقل المحلي</option>
+              {draft.withTravel && <option value="travel">مصاريف السفر المشتركة</option>}
+            </select>
+          </label>
+          {directKind !== "travel" && <label><span style={label}>الشحنة</span>
+            <select style={field} value={directShipmentRef} onChange={e => setDirectShipmentRef(e.target.value)}>
+              <option value="">اختر الشحنة</option>
+              {draft.shipments.map(sh => <option key={sh.lineRef} value={sh.lineRef}>{sh.trackingNumber || sh.lineRef}</option>)}
+            </select>
+          </label>}
+          <label><span style={label}>طريقة الدفع</span>
+            <select style={field} value={directMethod} onChange={e => setDirectMethod(e.target.value as "bank"|"cash")}>
+              <option value="cash">الصندوق الرئيسي — شيكل</option>
+              <option value="bank">بنك الشيكل</option>
+            </select>
+          </label>
+          {directMethod === "bank" && <label><span style={label}>بنك الشيكل</span>
+            <select style={field} value={directBankId} onChange={e => setDirectBankId(Number(e.target.value))}>
+              <option value={0}>اختر حساب البنك</option>
+              {ilsBanks.map(b => <option key={b.id} value={b.id}>{b.bank.nameAr} — {b.name}</option>)}
+            </select>
+          </label>}
+          <label><span style={label}>المبلغ المدفوع — ₪</span>
+            <input type="number" min="0.01" step="0.01" value={directAmount}
+              style={field} onChange={e => setDirectAmount(e.target.value)}/>
+          </label>
+          <label><span style={label}>تاريخ الدفع</span>
+            <input type="date" style={field} value={paymentBusinessDate}
+              onChange={e => setPaymentBusinessDate(e.target.value)}/>
+          </label>
+          <div style={{ display: "flex", alignItems: "end" }}>
+            <button type="button" style={{ ...btn, background: "#14532d", color: "#fff" }}
+              disabled={busy} onClick={() => void sendDirectPayment()}>تسجيل مصروف استيراد</button>
+          </div>
+        </div>}
+        {!selected?.advancePostingEnabled && <p style={{ color: "#92400e" }}>
+          تسجيل هذه المصاريف فعليًا من الصندوق أو البنك مقفول حاليًا؛ الأرقام أعلاه للتوثيق والمطابقة فقط.
+        </p>}
       </section>
 
       <section style={card}>
