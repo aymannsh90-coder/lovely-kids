@@ -8,6 +8,7 @@ import {
 } from "./import-payment-journal-evidence";
 
 type Db=Awaited<ReturnType<typeof openDb>>["db"];
+type Tx=Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type RecordedImportAdvance={
   paymentId:number;invoiceId:number;bankAccountId:number;
   usdAmountMinor:number;spotRateMicros:number;bankBookIlsMinor:number;
@@ -21,7 +22,7 @@ export type RecordedImportDirectCost={
 };
 
 export async function inspectRecordedImportPayments(
-  db:Db,
+  db:Db|Tx,
   advances:RecordedImportAdvance[],
   direct:RecordedImportDirectCost[],
   invoiceSupplierIds:Map<number,number>,
