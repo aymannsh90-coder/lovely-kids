@@ -113,3 +113,43 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_accounting_closures.sql
       - name: Verify closure audit trail, duplicate guard, reversals, and RLS
         run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-accounting-closures-migration.verify.sql
+
+
+  validate-import-financial-lifecycle:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: import_close_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d import_close_integration"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: import_close_integration
+      IMPORT_CLOSE_DISPOSABLE_DB: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test real financial journals with close, replay, reversal and re-close (disposable database only)
+        run: node --test artifacts/api-worker/src/import-accounting-close.integration.test.cjs
