@@ -145,6 +145,17 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "import-cost-files",
+    group: "purchases",
+    path: "/purchases/import-costs",
+    title: "استيراد البضاعة",
+    description: "ملفات الاستيراد وفواتير الموردين ومطابقة توزيع تكاليف الإكسل (مسودات فقط).",
+    icon: "🚢",
+    requiresOpenSession: false,
+    ownerOnly: true,
+    status: "ready",
+  },
+  {
     key: "new-purchase",
     group: "purchases",
     path: "/purchases/new",
