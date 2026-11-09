@@ -8,6 +8,7 @@ import { bankAccountsTable } from "./finance-banking";
 import { financeAccountsTable, financeTransactionsTable } from "./finance";
 import { cashSessionsTable } from "./cash-sessions";
 import { suppliersTable } from "./suppliers";
+import { posPurchasesTable } from "./pos-purchases";
 
 /**
  * Import case is a DOCUMENTATION DRAFT, not an accounting journal.
@@ -82,6 +83,7 @@ export const importCostAllocationsTable = pgTable("import_cost_allocations", {
   excelLandedIlsMinor: integer("excel_landed_ils_minor").notNull(),
 }, (t) => [
   uniqueIndex("import_cost_allocations_case_ref_unique").on(t.caseId, t.lineRef),
+  uniqueIndex("import_cost_allocations_case_id_unique").on(t.caseId, t.id),
   foreignKey({
     name: "import_cost_allocations_same_case_invoice_fk",
     columns: [t.caseId, t.invoiceId],
@@ -169,4 +171,27 @@ export const importCostDirectPaymentsTable = pgTable("import_cost_direct_payment
     or
     (${t.paymentMethod} = 'cash' and ${t.cashSessionId} is not null and ${t.bankAccountId} is null)
   `),
+]).enableRLS();
+
+
+/**
+ * Evidence-only link: an already-approved ILS POS purchase can be allocated
+ * to exactly one Excel cost group. Never creates an inventory journal.
+ */
+export const importCostPurchaseLinksTable = pgTable("import_cost_purchase_links", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => importCostCasesTable.id, { onDelete: "restrict" }),
+  allocationId: integer("allocation_id").notNull().references(() => importCostAllocationsTable.id, { onDelete: "restrict" }),
+  purchaseId: integer("purchase_id").notNull().references(() => posPurchasesTable.id, { onDelete: "restrict" }),
+  createdByUserId: integer("created_by_user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex("import_cost_purchase_links_purchase_unique").on(t.purchaseId),
+  index("import_cost_purchase_links_allocation_idx").on(t.allocationId),
+  index("import_cost_purchase_links_case_idx").on(t.caseId),
+  foreignKey({
+    name: "import_cost_purchase_links_same_case_fk",
+    columns: [t.caseId, t.allocationId],
+    foreignColumns: [importCostAllocationsTable.caseId, importCostAllocationsTable.id],
+  }).onDelete("restrict"),
 ]).enableRLS();
