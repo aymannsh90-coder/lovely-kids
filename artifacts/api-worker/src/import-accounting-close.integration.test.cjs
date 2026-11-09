@@ -94,8 +94,9 @@ const eligiblePlan={
   ],
 };
 const closeHash="a".repeat(64);
+let readRevision=1;
 const read=async(tx,caseId,env)=>({
-  case:{id:caseId,status:"draft",revision:1},
+  case:{id:caseId,status:"draft",revision:readRevision},
   draft:{withTravel:false},
   closePlanHash:closeHash,
   closePreview:{reasons:["قيد تسوية مقدمات المورد والشحن والسفر غير مربوط أو غير مرحل"]},
@@ -164,6 +165,7 @@ test("actual posted import closing, idempotency, exact reversal and safe re-clos
    await assert.rejects(h.reverseImportAccountingClose(db,
      {POS_IMPORT_CLOSING_ENABLED:"true"},1,
      {...reverseInput,reason:"Different reason for same key"}),/مفتاح العكس/);
+   readRevision=3;
    const reclosed=await h.postImportAccountingClose(db,
      {POS_IMPORT_CLOSING_ENABLED:"true"},1,{
        ...closeInput,expectedRevision:3,idempotencyKey:"test-close-idempotency-2",
