@@ -238,6 +238,7 @@ export const importCostClosuresTable = pgTable("import_cost_closures", {
   reversalFinanceTransactionId: integer("reversal_finance_transaction_id").references(() => financeTransactionsTable.id, { onDelete: "restrict" }),
   reversalKey: text("reversal_key"),
   reversalReason: text("reversal_reason"),
+  travelClassificationApproved: boolean("travel_classification_approved").notNull().default(false),
   closedByUserId: integer("closed_by_user_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   reversedByUserId: integer("reversed_by_user_id").references(() => usersTable.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
