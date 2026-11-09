@@ -132,7 +132,10 @@ export function verifyIlsDirectCostJournal(
   if(credits.length===1 &&
     (payment.paymentMethod==="cash"
       ? credits[0]!.accountCode!=="CASH_MAIN"
-      : !credits[0]!.accountCode.startsWith("BANK_"))){
+      : !credits[0]!.accountCode.startsWith("BANK_") ||
+        credits[0]!.currencyCode!=="ILS" ||
+        credits[0]!.currencyAmountMinor!==payment.amountIlsMinor ||
+        credits[0]!.exchangeRateMicros!==1_000_000)){
     errors.push("مصدر الدفع ليس صندوق/بنك الشيكل المتفق عليه");
   }
   if(journal.lines.length!==2)errors.push("قيد مصاريف الاستيراد يحتوي أطرافًا إضافية");
