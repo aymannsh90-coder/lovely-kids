@@ -35,6 +35,8 @@ export type ImportCloseState = {
   travelClassificationApproved: boolean;
   /** Used only after source POS purchase posting ownership is proven. */
   inventoryCostEngineReconciled: boolean;
+  /** All advance/direct clearing balances must be reclassified exactly once. */
+  settlementJournalVerified: boolean;
 };
 export type ImportClosePreview = {
   canCloseAccounting: boolean;
@@ -105,6 +107,9 @@ export function previewImportClosing(state: ImportCloseState): ImportClosePrevie
   if (travelPaid !== travelPlanned) reasons.push("مدفوعات السفر لا تطابق مصاريف الرحلة الموزعة");
   if (travelPlanned > 0 && !state.travelClassificationApproved) {
     reasons.push("تصنيف تكاليف السفر بين المخزون والمصاريف يحتاج اعتمادًا");
+  }
+  if (!state.settlementJournalVerified) {
+    reasons.push("قيد تسوية مقدمات المورد والشحن والسفر غير مربوط أو غير مرحل");
   }
   if (!state.inventoryCostEngineReconciled) {
     reasons.push("قيمة المخزون في محرك التكلفة لم تُطابق قيد الأستاذ بعد");
