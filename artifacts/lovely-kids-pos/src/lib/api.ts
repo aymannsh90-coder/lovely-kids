@@ -6154,6 +6154,12 @@ export interface ImportCostCaseResult {
     supplierVouchersAlreadyAppliedIlsMinor:number;
     reclassifiedShipmentFreightIlsMinor:number;
     reclassifiedCapitalizableTravelIlsMinor:number;
+    supplierBalanceChecks:Array<{
+      supplierId:number;
+      currentPayableIlsMinor:number;
+      plannedDebitIlsMinor:number;
+      sufficient:boolean;
+    }>;
     journalLines:Array<{
       accountCode:string;
       supplierId:number|null;
