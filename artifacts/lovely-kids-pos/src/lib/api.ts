@@ -6176,8 +6176,10 @@ export interface ImportCostCaseResult {
     costType: string;
     paymentMethod: "bank" | "cash";
     amountIlsMinor: number;
-    financeTransactionId: number;
-    financeStatus: string;
+    financeTransactionId: number | null;
+    financeStatus: string | null;
+    journalVerified: boolean;
+    journalErrors: string[];
   }>;
   advances: Array<{
     paymentId: number;
@@ -6188,8 +6190,10 @@ export interface ImportCostCaseResult {
     bankBookIlsMinor: number;
     fxGainIlsMinor: number;
     fxLossIlsMinor: number;
-    financeTransactionId: number;
-    financeStatus: string;
+    financeTransactionId: number | null;
+    financeStatus: string | null;
+    journalVerified: boolean;
+    journalErrors: string[];
   }>;
   preview: ImportCostPreview;
 }
