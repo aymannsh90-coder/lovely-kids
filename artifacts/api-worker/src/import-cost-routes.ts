@@ -17,6 +17,7 @@ import { previewImportCostSettlement, type ImportCostDraft } from "./import-cost
 import { ImportAdvanceError, parseSupplierAdvanceRequest, postImportUsdSupplierAdvance } from "./import-payment-posting";
 import { parseImportDirectCostRequest, postImportDirectCost } from "./import-direct-payment-posting";
 import { previewImportClosing } from "./import-close-readiness";
+import { previewImportClearingSettlement } from "./import-clearing-settlement";
 import { attachApprovedPurchase,detachApprovedPurchase,getPurchaseLinks,ImportPurchaseLinkError } from "./import-purchase-link-service";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -372,6 +373,51 @@ async function detail(db: Db, id: number, env: Env) {
     return !!links && links.valid && links.count > 0 && links.cost === cost;
   };
   const allGroupsMatched = draft.allocations.length > 0 && draft.allocations.every(groupReady);
+  const clearingCandidate = previewImportClearingSettlement({
+    caseRef:found.publicId,
+    invoices:draft.invoices.map(inv=>{
+      const rows=draft.allocations.filter(a=>a.invoiceRef===inv.lineRef);
+      const stored=invoices.find(i=>i.lineRef===inv.lineRef);
+      return {
+        invoiceRef:inv.lineRef,supplierId:inv.supplierId,
+        goodsIlsMinor:inv.goodsBookedIlsMinor,
+        supplierAdvanceIlsMinor:stored?(paidByInvoiceId.get(stored.id)??0):0,
+        freightAllocatedIlsMinor:rows.reduce((sum,a)=>sum+a.freightIlsMinor,0),
+        capitalizableTravelIlsMinor:rows.reduce((sum,a)=>sum+a.travelCapitalizableIlsMinor,0),
+        purchaseLiabilityIlsMinor:rows.reduce((sum,a)=>
+          sum+(linkedByGroup.get(a.lineRef)?.cost??0),0),
+      };
+    }),
+    shipments:draft.shipments.map(sh=>{
+      const stored=shipments.find(row=>row.lineRef===sh.lineRef);
+      const paid=stored ? directRecords.filter(row=>
+        row.shipmentId===stored.id && row.costType!=="travel" &&
+        row.financeStatus==="posted").reduce((sum,row)=>sum+row.amountIlsMinor,0) :0;
+      return {
+        shipmentRef:sh.lineRef,
+        freightPaidIlsMinor:paid,
+        freightAllocatedIlsMinor:sh.freightClearingIlsMinor,
+      };
+    }),
+    totalTravelPaidIlsMinor:directRecords.filter(row=>
+      row.costType==="travel" && row.financeStatus==="posted")
+        .reduce((sum,row)=>sum+row.amountIlsMinor,0),
+    totalTravelDistributedIlsMinor:draft.travelRecordedIlsMinor,
+    travelCapitalizableIlsMinor:draft.allocations.reduce((sum,a)=>
+      sum+a.travelCapitalizableIlsMinor,0),
+  });
+  const clearingPreview={
+    ...clearingCandidate,
+    ready:clearingCandidate.ready && allGroupsMatched && comparison.balanced,
+    blockers:[
+      ...clearingCandidate.blockers,
+      ...(!allGroupsMatched ? ["سجلات تكلفة المشتريات المعتمدة لا تطابق جميع مجموعات الإكسل"] : []),
+      ...(!comparison.balanced ? ["توزيع الإكسل لم يطابق فواتير الموردين والشحنات"] : []),
+    ],
+    /** NOT an accounting posting or permission to close. */
+    journalPosted:false,
+    canExecute:false,
+  };
   const closePreview = previewImportClosing({
     excelBalanced: comparison.balanced,
     excelErrors: comparison.errors,
@@ -422,6 +468,7 @@ async function detail(db: Db, id: number, env: Env) {
     advancePostingEnabled: env.POS_IMPORT_FINANCIAL_POSTING_ENABLED === "true",
     draft,
     purchaseLinks,
+    clearingPreview,
     costGroupMatching: draft.allocations.map(a=>({
       allocationRef:a.lineRef,
       expectedAccountingIlsMinor:a.goodsIlsMinor+a.freightIlsMinor+a.travelCapitalizableIlsMinor,
