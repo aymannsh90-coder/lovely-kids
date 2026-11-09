@@ -11,6 +11,8 @@ export type ImportClearInvoice = {
   supplierId: number;
   goodsIlsMinor: number;
   supplierAdvanceIlsMinor: number;
+  /** Existing ILS supplier payment vouchers already debited supplier payable. */
+  supplierVoucherAlreadyPaidIlsMinor?: number;
   freightAllocatedIlsMinor: number;
   capitalizableTravelIlsMinor: number;
   /**
@@ -49,6 +51,7 @@ export type ImportSettlementPlan = {
   remainingSupplierLiabilityIlsMinor: number;
   recognizedTravelExpenseIlsMinor: number;
   reclassifiedAdvanceIlsMinor: number;
+  supplierVouchersAlreadyAppliedIlsMinor: number;
   reclassifiedShipmentFreightIlsMinor: number;
   reclassifiedCapitalizableTravelIlsMinor: number;
 };
@@ -61,7 +64,7 @@ export function previewImportClearingSettlement(draft:ImportClearDraft):ImportSe
   const blockers:string[] = [];
   const lines:ImportJournalLinePlan[] = [];
   const seen=new Set<string>();
-  let advances=0,freight=0,travelCapitalized=0,unpaidSuppliers=0;
+  let advances=0,freight=0,travelCapitalized=0,unpaidSuppliers=0,vouchers=0;
   if (!draft.caseRef || !draft.invoices.length || !draft.shipments.length) {
     blockers.push("ملف الاستيراد غير مكتمل");
   }
@@ -85,14 +88,18 @@ export function previewImportClearingSettlement(draft:ImportClearDraft):ImportSe
       blockers.push("معرف المورد غير صالح "+invoice.invoiceRef);
     const goods=safe(invoice.goodsIlsMinor,invoice.invoiceRef+" البضاعة");
     const prepaid=safe(invoice.supplierAdvanceIlsMinor,invoice.invoiceRef+" المقدمات");
+    const vouchersAlreadyPaid=safe(invoice.supplierVoucherAlreadyPaidIlsMinor??0,
+      invoice.invoiceRef+" سندات المورد المدفوعة سابقًا");
     const shipping=safe(invoice.freightAllocatedIlsMinor,invoice.invoiceRef+" الشحن");
     const travel=safe(invoice.capitalizableTravelIlsMinor,invoice.invoiceRef+" السفر المؤهل");
     const existing=safe(invoice.purchaseLiabilityIlsMinor,invoice.invoiceRef+" قيد المخزون");
-    if(prepaid>goods) blockers.push("الدفعة المقدمة أكبر من البضاعة لفاتورة "+invoice.invoiceRef);
+    if(prepaid>goods || vouchersAlreadyPaid>goods ||
+       prepaid+vouchersAlreadyPaid>goods)
+      blockers.push("دفعات المورد المسبقة وسنداته ستتجاوز قيمة البضاعة لفاتورة "+invoice.invoiceRef);
     if(existing!==goods+shipping+travel)
       blockers.push("قيد شراء المخزون الحالي لا يطابق تكلفته المؤهلة لفاتورة "+invoice.invoiceRef);
-    advances+=prepaid;freight+=shipping;travelCapitalized+=travel;
-    unpaidSuppliers+=Math.max(0,goods-prepaid);
+    advances+=prepaid;vouchers+=vouchersAlreadyPaid;freight+=shipping;travelCapitalized+=travel;
+    unpaidSuppliers+=Math.max(0,goods-prepaid-vouchersAlreadyPaid);
     const pair = (amount:number,clearingCode:string,description:string) => {
       if(amount<=0)return;
       record("SUPPLIER_PAYABLE_CONTROL",invoice.supplierId,amount,0,
@@ -148,6 +155,7 @@ export function previewImportClearingSettlement(draft:ImportClearDraft):ImportSe
     remainingSupplierLiabilityIlsMinor:unpaidSuppliers,
     recognizedTravelExpenseIlsMinor:Math.max(0,expensed),
     reclassifiedAdvanceIlsMinor:advances,
+    supplierVouchersAlreadyAppliedIlsMinor:vouchers,
     reclassifiedShipmentFreightIlsMinor:freight,
     reclassifiedCapitalizableTravelIlsMinor:travelCapitalized,
   };
