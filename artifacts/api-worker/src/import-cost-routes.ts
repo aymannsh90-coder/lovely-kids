@@ -5,13 +5,14 @@ import {
   importCostAllocationsTable,
   suppliersTable,
 } from "@workspace/db/schema";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
 import type { openDb, Env } from "./db";
 import { previewImportCostSettlement, type ImportCostDraft } from "./import-cost-reconciliation";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type User = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
 const LIMIT_MINOR = 2_147_483_647;
 const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };
@@ -31,6 +32,9 @@ interface InvoiceInput {
 interface ShipmentInput {
   lineRef: string;
   trackingNumber: string | null;
+  freightIlsMinor: number;
+  customsIlsMinor: number;
+  localTransportIlsMinor: number;
   freightClearingIlsMinor: number;
 }
 interface AllocationInput {
@@ -118,10 +122,16 @@ function parseDraft(raw: unknown): DraftInput {
   });
   const shipments = array(input.shipments, "الشحنات", 100).map((r): ShipmentInput => {
     const a = record(r, "شحنة");
+    const freightIlsMinor = money(a.freightIlsMinor, "أجور الشحن");
+    const customsIlsMinor = money(a.customsIlsMinor, "أجور التخليص");
+    const localTransportIlsMinor = money(a.localTransportIlsMinor, "تكلفة النقل المحلي");
+    const total = freightIlsMinor + customsIlsMinor + localTransportIlsMinor;
+    if (!Number.isSafeInteger(total) || total > LIMIT_MINOR) throw new ImportDraftError("إجمالي مصاريف الشحنة كبير جدًا");
     return {
       lineRef: stringField(a.lineRef, "مرجع الشحنة", 100),
       trackingNumber: optionalString(a.trackingNumber, "رقم الشحن", 100),
-      freightClearingIlsMinor: money(a.freightClearingIlsMinor, "تكلفة شحن وتخليص"),
+      freightIlsMinor, customsIlsMinor, localTransportIlsMinor,
+      freightClearingIlsMinor: total,
     };
   });
   const allocations = array(input.allocations, "توزيع تكاليف الإكسل", 5000).map((r): AllocationInput => {
@@ -173,7 +183,7 @@ function parseDraft(raw: unknown): DraftInput {
   };
 }
 
-async function assertSuppliers(tx: Db, invoices: InvoiceInput[]): Promise<void> {
+async function assertSuppliers(tx: Tx, invoices: InvoiceInput[]): Promise<void> {
   const ids = [...new Set(invoices.map((line) => line.supplierId))];
   if (ids.length === 0) return;
   const suppliers = await tx.select({ id: suppliersTable.id })
@@ -181,7 +191,7 @@ async function assertSuppliers(tx: Db, invoices: InvoiceInput[]): Promise<void> 
   if (suppliers.length !== ids.length) throw new ImportDraftError("مورد واحد على الأقل غير موجود", 409);
 }
 
-async function insertChildren(tx: Db, caseId: number, draft: DraftInput) {
+async function insertChildren(tx: Tx, caseId: number, draft: DraftInput) {
   const invoiceIds = new Map<string, number>();
   const shipmentIds = new Map<string, number>();
   for (const invoice of draft.invoices) {
@@ -200,6 +210,9 @@ async function insertChildren(tx: Db, caseId: number, draft: DraftInput) {
     const [inserted] = await tx.insert(importCostShipmentsTable).values({
       caseId, lineRef: shipment.lineRef,
       trackingNumber: shipment.trackingNumber,
+      freightIlsMinor: shipment.freightIlsMinor,
+      customsIlsMinor: shipment.customsIlsMinor,
+      localTransportIlsMinor: shipment.localTransportIlsMinor,
       freightClearingIlsMinor: shipment.freightClearingIlsMinor,
     }).returning({ id: importCostShipmentsTable.id });
     if (!inserted) throw new ImportDraftError("تعذر حفظ الشحنة", 500);
@@ -242,6 +255,9 @@ async function detail(db: Db, id: number) {
     })),
     shipments: shipments.map((s) => ({
       lineRef: s.lineRef, trackingNumber: s.trackingNumber,
+      freightIlsMinor: s.freightIlsMinor,
+      customsIlsMinor: s.customsIlsMinor,
+      localTransportIlsMinor: s.localTransportIlsMinor,
       freightClearingIlsMinor: s.freightClearingIlsMinor,
     })),
     allocations: lines.map((l) => ({
