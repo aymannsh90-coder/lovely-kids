@@ -6052,3 +6052,97 @@ export function voidPosPurchaseReturn(token: string, input: { publicId: string; 
     "/api/pos/purchase-returns/void", { method: "POST", body: JSON.stringify(input) }, token,
   );
 }
+
+
+/**
+ * Import case documentation draft. Amounts are ILS agorot or USD cents.
+ * This API never pays suppliers or posts an accounting journal.
+ */
+export interface ImportCostInvoiceDraft {
+  lineRef: string;
+  supplierId: number;
+  invoiceNumber: string;
+  goodsUsdMinor: number;
+  goodsBookedIlsMinor: number;
+}
+export interface ImportCostShipmentDraft {
+  lineRef: string;
+  trackingNumber: string | null;
+  freightClearingIlsMinor: number;
+}
+export interface ImportCostAllocationDraft {
+  lineRef: string;
+  invoiceRef: string;
+  shipmentRef: string;
+  goodsIlsMinor: number;
+  freightIlsMinor: number;
+  travelManagerialIlsMinor: number;
+  travelCapitalizableIlsMinor: number;
+  excelLandedIlsMinor: number;
+}
+export interface ImportCostDraft {
+  title: string;
+  businessDate: string;
+  withTravel: boolean;
+  travelRecordedIlsMinor: number;
+  notes: string | null;
+  invoices: ImportCostInvoiceDraft[];
+  shipments: ImportCostShipmentDraft[];
+  allocations: ImportCostAllocationDraft[];
+}
+export interface ImportCostPreview {
+  balanced: boolean;
+  errors: string[];
+  goodsBookedIlsMinor: number;
+  freightClearingIlsMinor: number;
+  travelRecordedIlsMinor: number;
+  travelCapitalizableIlsMinor: number;
+  travelExpenseIlsMinor: number;
+  excelManagerialCostIlsMinor: number;
+  inventoryAccountingCostIlsMinor: number;
+  ledgerVerified: false;
+  canPost: false;
+  paymentStatus: "not_connected";
+}
+export interface ImportCostCaseResult {
+  case: {
+    id: number;
+    publicId: string;
+    revision: number;
+    status: "draft";
+    createdAt: string;
+  };
+  draft: ImportCostDraft;
+  preview: ImportCostPreview;
+}
+export function listImportCostCases(token: string) {
+  return apiRequest<{ cases: Array<{
+    id: number;
+    publicId: string;
+    title: string;
+    businessDate: string;
+    withTravel: boolean;
+    revision: number;
+    updatedAt: string;
+  }>; accountingEnabled: false }>("/api/pos/import-costs", {}, token);
+}
+export function getImportCostCase(token: string, id: number) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${id}`, {}, token);
+}
+export function createImportCostCase(token: string, draft: ImportCostDraft, idempotencyKey: string) {
+  return apiRequest<ImportCostCaseResult>("/api/pos/import-costs", {
+    method: "POST",
+    body: JSON.stringify({ ...draft, idempotencyKey }),
+  }, token);
+}
+export function updateImportCostCase(
+  token: string,
+  id: number,
+  expectedRevision: number,
+  draft: ImportCostDraft,
+) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ ...draft, expectedRevision }),
+  }, token);
+}
