@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  boolean, check, date, foreignKey, index, integer, pgTable,
+  boolean, check, date, index, integer, pgTable,
   serial, text, timestamp, uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
@@ -54,10 +54,13 @@ export const importCostShipmentsTable = pgTable("import_cost_shipments", {
   caseId: integer("case_id").notNull().references(() => importCostCasesTable.id, { onDelete: "cascade" }),
   lineRef: text("line_ref").notNull(),
   trackingNumber: text("tracking_number"),
+  freightIlsMinor: integer("freight_ils_minor").notNull().default(0),
+  customsIlsMinor: integer("customs_ils_minor").notNull().default(0),
+  localTransportIlsMinor: integer("local_transport_ils_minor").notNull().default(0),
   freightClearingIlsMinor: integer("freight_clearing_ils_minor").notNull(),
 }, (t) => [
   uniqueIndex("import_cost_shipments_case_ref_unique").on(t.caseId, t.lineRef),
-  check("import_cost_shipments_freight_nonnegative", sql`${t.freightClearingIlsMinor} >= 0`),
+  check("import_cost_shipments_freight_nonnegative", sql`LEAST(${t.freightIlsMinor},${t.customsIlsMinor},${t.localTransportIlsMinor}) >= 0 AND ${t.freightClearingIlsMinor} = ${t.freightIlsMinor} + ${t.customsIlsMinor} + ${t.localTransportIlsMinor}`),
   check("import_cost_shipments_ref_valid", sql`length(btrim(${t.lineRef})) between 1 and 100`),
 ]).enableRLS();
 
