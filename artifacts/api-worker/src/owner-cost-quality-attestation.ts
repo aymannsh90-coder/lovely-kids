@@ -18,6 +18,7 @@ import {
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import { getProductQuantity } from "./product-quantity";
+import { hasAuditableWeightedCostHistory } from "./weighted-cost-attestation";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 const json = (data: unknown, status = 200) => Response.json(data, {
@@ -93,8 +94,11 @@ export async function handleOwnerCostQualityAttestation(
       tx.select({
         eventType: productCostLedgerTable.eventType,
         sourceType: productCostLedgerTable.sourceType,
+        quantityDelta: productCostLedgerTable.quantityDelta,
+        valueDeltaMinor: productCostLedgerTable.inventoryValueDeltaMinor,
         quantityAfter: productCostLedgerTable.quantityAfter,
         valueAfterMinor: productCostLedgerTable.inventoryValueAfterMinor,
+        costQuality: productCostLedgerTable.costQuality,
       }).from(productCostLedgerTable).where(eq(productCostLedgerTable.productId, productId))
         .orderBy(asc(productCostLedgerTable.id)),
       tx.select({
@@ -129,9 +133,14 @@ export async function handleOwnerCostQualityAttestation(
       }).from(orderItemCostsTable).where(eq(orderItemCostsTable.productId, productId)),
     ]);
 
-    if (!ledger.some((row) => row.eventType === "opening") ||
-        ledger.some((row) => BigInt(row.quantityAfter) * BigInt(unitCostMinor) !== BigInt(row.valueAfterMinor))) {
-      return { ok: false as const, status: 409, error: "وجدت حركة بتكلفة مختلفة؛ يلزم مراجعة تاريخ الصنف قبل التأكيد" };
+    // An older batch may have a different, confirmed unit cost. Validate the
+    // complete running ledger and the frozen average after the latest batch
+    // instead of falsely requiring every historical balance to have today's
+    // average unit cost. No historic values or snapshots are modified.
+    if (!hasAuditableWeightedCostHistory(
+      ledger, unitCostMinor, state.quantityOnHand, state.inventoryValueMinor,
+    )) {
+      return { ok: false as const, status: 409, error: "تاريخ تكلفة الصنف لا يطابق المتوسط المرجح أو يحتوي حركة غير موثقة؛ يلزم التدقيق قبل التأكيد" };
     }
     const sources: Source[] = [...exchangeReturns, ...posReturns];
     const ids = sources.map((source) => source.publicId).sort();
