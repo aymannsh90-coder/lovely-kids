@@ -117,3 +117,32 @@ export function hasAuditableWeightedCostHistory(
   }
   return true;
 }
+
+
+/** Snapshot values are immutable: earlier *confirmed* sales legitimately
+ * have the unit cost in effect when they were sold, not today's average.
+ * Only unresolved estimated/mixed snapshots must match the unit cost the
+ * owner is attesting now. A malformed snapshot is never accepted.
+ */
+export type FrozenCostSnapshot = {
+  quantity: number;
+  unitCostMinor: number;
+  totalMinor: number;
+  costQuality: string;
+};
+
+export function saleSnapshotsPermitCostAttestation(
+  snapshots: FrozenCostSnapshot[],
+  proposedUnitCostMinor: number,
+): boolean {
+  if (!safeMinor(proposedUnitCostMinor) || proposedUnitCostMinor < 0) return false;
+  return snapshots.every((snapshot) => (
+    safeMinor(snapshot.quantity) && snapshot.quantity > 0 &&
+    safeMinor(snapshot.unitCostMinor) && snapshot.unitCostMinor >= 0 &&
+    safeMinor(snapshot.totalMinor) && snapshot.totalMinor >= 0 &&
+    BigInt(snapshot.quantity) * BigInt(snapshot.unitCostMinor) === BigInt(snapshot.totalMinor) &&
+    (snapshot.costQuality === "confirmed" ||
+      ((snapshot.costQuality === "mixed" || snapshot.costQuality === "estimated") &&
+        snapshot.unitCostMinor === proposedUnitCostMinor))
+  ));
+}
