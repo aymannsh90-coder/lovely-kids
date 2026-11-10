@@ -1,0 +1,32 @@
+name: Verify weighted-cost attestation safeguards
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/weighted-cost-attestation.ts'
+      - 'artifacts/api-worker/src/weighted-cost-attestation.test.mjs'
+      - 'artifacts/api-worker/src/owner-cost-quality-attestation.ts'
+      - 'artifacts/lovely-kids-pos/src/pages/reports/GrossProfitReportPage.tsx'
+      - '.github/workflows/verify-weighted-cost-attestation.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: API Worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: POS typecheck
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Weighted-cost regression tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/weighted-cost-attestation.test.mjs artifacts/api-worker/src/cost-return-confidence.test.mjs
