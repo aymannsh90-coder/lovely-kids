@@ -18,7 +18,7 @@ import {
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import { getProductQuantity } from "./product-quantity";
-import { hasAuditableWeightedCostHistory } from "./weighted-cost-attestation";
+import { hasAuditableWeightedCostHistory, saleSnapshotsPermitCostAttestation } from "./weighted-cost-attestation";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 const json = (data: unknown, status = 200) => Response.json(data, {
@@ -125,11 +125,13 @@ export async function handleOwnerCostQualityAttestation(
         quantity: posSaleItemCostsTable.quantity,
         unitCostMinor: posSaleItemCostsTable.unitCostMinor,
         totalMinor: posSaleItemCostsTable.costTotalMinor,
+        costQuality: posSaleItemCostsTable.costQuality,
       }).from(posSaleItemCostsTable).where(eq(posSaleItemCostsTable.productId, productId)),
       tx.select({
         quantity: orderItemCostsTable.quantity,
         unitCostMinor: orderItemCostsTable.unitCostMinor,
         totalMinor: orderItemCostsTable.costTotalMinor,
+        costQuality: orderItemCostsTable.costQuality,
       }).from(orderItemCostsTable).where(eq(orderItemCostsTable.productId, productId)),
     ]);
 
@@ -153,10 +155,11 @@ export async function handleOwnerCostQualityAttestation(
       BigInt(source.quantity) * BigInt(unitCostMinor) !== BigInt(source.costMinor))) {
       return { ok: false as const, status: 409, error: "أحد المرتجعات يحمل تكلفة مختلفة عن المبلغ الذي أكّدته" };
     }
-    if ([...posSales, ...onlineSales].some((snapshot) =>
-      snapshot.unitCostMinor !== unitCostMinor ||
-      BigInt(snapshot.quantity) * BigInt(unitCostMinor) !== BigInt(snapshot.totalMinor))) {
-      return { ok: false as const, status: 409, error: "توجد لقطة بيع بتكلفة مختلفة؛ لا يمكن تأكيد المجموعة تلقائيًا" };
+    // Historic confirmed sales retain the actual cost of their purchase
+    // batch. Only unresolved mixed/estimated sale snapshots are attested at
+    // today's weighted cost. Never rewrite their original monetary values.
+    if (!saleSnapshotsPermitCostAttestation([...posSales, ...onlineSales], unitCostMinor)) {
+      return { ok: false as const, status: 409, error: "توجد لقطة بيع غير موثقة أو بتكلفة مختلطة مختلفة؛ يلزم مراجعتها قبل التأكيد" };
     }
 
     await tx.update(productCostStateTable).set({
