@@ -652,7 +652,7 @@ export default function GrossProfitReportPage() {
       return;
     }
     const reason = window.prompt(
-      `لتأكيد تكلفة الصنف ${product.productCode ?? product.productId} بمبلغ ${formatReportMoney(costs[0])} للقطعة، اكتب سبب اعتماد التكلفة من سجلات الشراء. لا يتم إثبات ارتباط المرتجعات بفواتير البيع القديمة. ويسري اعتماد تكلفة الصنف على المردودات المستقبلية ما دام السعر ثابتًا ولم تدخل دفعة شراء أو تصحيح تكلفة جديد.`,
+      `لتأكيد متوسط تكلفة الصنف ${product.productCode ?? product.productId} بمبلغ ${formatReportMoney(costs[0])} للقطعة، راجع دفعات الشراء وسجّل سبب اعتماد المتوسط. اختلاف تكلفة الدفعات السابقة طبيعي، ولا يُعتبر التبديل بدون فاتورة مرتبطًا بفاتورة بيع أصلية.`,
     );
     if (reason === null) return;
     if (reason.trim().length < 12) {
@@ -660,7 +660,7 @@ export default function GrossProfitReportPage() {
       return;
     }
     if (!window.confirm(
-      `سيتم اعتماد تكلفة ${formatReportMoney(costs[0])} للمبيعات القادمة للصنف ${product.productCode ?? product.productId}، مع تسجيل سند مراجعة وعدم تعديل الفواتير القديمة أو المخزون. ويُستخدم السعر المعتمد للمردودات المستقبلية حتى تتغير تكلفة الدفعة. هل تؤكد؟`,
+      `سيتم توثيق متوسط التكلفة المرجح ${formatReportMoney(costs[0])} للصنف ${product.productCode ?? product.productId} بعد التحقق من سجل حركاته. لا تتغير المبالغ أو الفواتير القديمة أو المخزون؛ ويُعاد التحقق إذا تغيّرت التكلفة لاحقًا. هل تؤكد؟`,
     )) return;
     setAttestingProductId(product.productId);
     setAttestationError("");

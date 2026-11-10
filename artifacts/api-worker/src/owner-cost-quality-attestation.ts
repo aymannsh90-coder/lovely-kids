@@ -18,6 +18,7 @@ import {
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import { getProductQuantity } from "./product-quantity";
+import { hasAuditableWeightedCostHistory, saleSnapshotsPermitCostAttestation } from "./weighted-cost-attestation";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 const json = (data: unknown, status = 200) => Response.json(data, {
@@ -93,8 +94,11 @@ export async function handleOwnerCostQualityAttestation(
       tx.select({
         eventType: productCostLedgerTable.eventType,
         sourceType: productCostLedgerTable.sourceType,
+        quantityDelta: productCostLedgerTable.quantityDelta,
+        valueDeltaMinor: productCostLedgerTable.inventoryValueDeltaMinor,
         quantityAfter: productCostLedgerTable.quantityAfter,
         valueAfterMinor: productCostLedgerTable.inventoryValueAfterMinor,
+        costQuality: productCostLedgerTable.costQuality,
       }).from(productCostLedgerTable).where(eq(productCostLedgerTable.productId, productId))
         .orderBy(asc(productCostLedgerTable.id)),
       tx.select({
@@ -121,17 +125,24 @@ export async function handleOwnerCostQualityAttestation(
         quantity: posSaleItemCostsTable.quantity,
         unitCostMinor: posSaleItemCostsTable.unitCostMinor,
         totalMinor: posSaleItemCostsTable.costTotalMinor,
+        costQuality: posSaleItemCostsTable.costQuality,
       }).from(posSaleItemCostsTable).where(eq(posSaleItemCostsTable.productId, productId)),
       tx.select({
         quantity: orderItemCostsTable.quantity,
         unitCostMinor: orderItemCostsTable.unitCostMinor,
         totalMinor: orderItemCostsTable.costTotalMinor,
+        costQuality: orderItemCostsTable.costQuality,
       }).from(orderItemCostsTable).where(eq(orderItemCostsTable.productId, productId)),
     ]);
 
-    if (!ledger.some((row) => row.eventType === "opening") ||
-        ledger.some((row) => BigInt(row.quantityAfter) * BigInt(unitCostMinor) !== BigInt(row.valueAfterMinor))) {
-      return { ok: false as const, status: 409, error: "وجدت حركة بتكلفة مختلفة؛ يلزم مراجعة تاريخ الصنف قبل التأكيد" };
+    // An older batch may have a different, confirmed unit cost. Validate the
+    // complete running ledger and the frozen average after the latest batch
+    // instead of falsely requiring every historical balance to have today's
+    // average unit cost. No historic values or snapshots are modified.
+    if (!hasAuditableWeightedCostHistory(
+      ledger, unitCostMinor, state.quantityOnHand, state.inventoryValueMinor,
+    )) {
+      return { ok: false as const, status: 409, error: "تاريخ تكلفة الصنف لا يطابق المتوسط المرجح أو يحتوي حركة غير موثقة؛ يلزم التدقيق قبل التأكيد" };
     }
     const sources: Source[] = [...exchangeReturns, ...posReturns];
     const ids = sources.map((source) => source.publicId).sort();
@@ -144,10 +155,11 @@ export async function handleOwnerCostQualityAttestation(
       BigInt(source.quantity) * BigInt(unitCostMinor) !== BigInt(source.costMinor))) {
       return { ok: false as const, status: 409, error: "أحد المرتجعات يحمل تكلفة مختلفة عن المبلغ الذي أكّدته" };
     }
-    if ([...posSales, ...onlineSales].some((snapshot) =>
-      snapshot.unitCostMinor !== unitCostMinor ||
-      BigInt(snapshot.quantity) * BigInt(unitCostMinor) !== BigInt(snapshot.totalMinor))) {
-      return { ok: false as const, status: 409, error: "توجد لقطة بيع بتكلفة مختلفة؛ لا يمكن تأكيد المجموعة تلقائيًا" };
+    // Historic confirmed sales retain the actual cost of their purchase
+    // batch. Only unresolved mixed/estimated sale snapshots are attested at
+    // today's weighted cost. Never rewrite their original monetary values.
+    if (!saleSnapshotsPermitCostAttestation([...posSales, ...onlineSales], unitCostMinor)) {
+      return { ok: false as const, status: 409, error: "توجد لقطة بيع غير موثقة أو بتكلفة مختلطة مختلفة؛ يلزم مراجعتها قبل التأكيد" };
     }
 
     await tx.update(productCostStateTable).set({
