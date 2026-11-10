@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hasAuditableWeightedCostHistory } from "./weighted-cost-attestation.ts";
+import { hasAuditableWeightedCostHistory, saleSnapshotsPermitCostAttestation } from "./weighted-cost-attestation.ts";
 
 const ledger = [
   { eventType: "opening", sourceType: "manual_opening", quantityDelta: 1,
@@ -72,4 +72,27 @@ test("does not allow late purchase at a new price to pass with the old average",
     valueDeltaMinor: 2302, quantityAfter: 9, valueAfterMinor: 19694,
     costQuality: "confirmed",
   }], 9, 19694), false);
+});
+
+test("old confirmed 23.02 sales and later mixed 21.74 sales can coexist", () => {
+  assert.equal(saleSnapshotsPermitCostAttestation([
+    { quantity: 1, unitCostMinor: 2302, totalMinor: 2302, costQuality: "confirmed" },
+    { quantity: 3, unitCostMinor: 2174, totalMinor: 6522, costQuality: "confirmed" },
+    { quantity: 1, unitCostMinor: 2174, totalMinor: 2174, costQuality: "mixed" },
+  ], 2174), true);
+});
+
+test("an unresolved snapshot at a different cost is never approved", () => {
+  assert.equal(saleSnapshotsPermitCostAttestation([
+    { quantity: 1, unitCostMinor: 2302, totalMinor: 2302, costQuality: "estimated" },
+  ], 2174), false);
+});
+
+test("confirmed does not excuse malformed or incomplete sale cost snapshots", () => {
+  assert.equal(saleSnapshotsPermitCostAttestation([
+    { quantity: 2, unitCostMinor: 2302, totalMinor: 2302, costQuality: "confirmed" },
+  ], 2174), false);
+  assert.equal(saleSnapshotsPermitCostAttestation([
+    { quantity: 1, unitCostMinor: 2174, totalMinor: 2174, costQuality: "unknown" },
+  ], 2174), false);
 });
