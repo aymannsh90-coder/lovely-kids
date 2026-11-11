@@ -6052,3 +6052,308 @@ export function voidPosPurchaseReturn(token: string, input: { publicId: string; 
     "/api/pos/purchase-returns/void", { method: "POST", body: JSON.stringify(input) }, token,
   );
 }
+
+
+/**
+ * Import case documentation draft. Amounts are ILS agorot or USD cents.
+ * This API never pays suppliers or posts an accounting journal.
+ */
+export interface ImportCostInvoiceDraft {
+  lineRef: string;
+  supplierId: number;
+  invoiceNumber: string;
+  goodsUsdMinor: number;
+  goodsBookedIlsMinor: number;
+}
+export interface ImportCostShipmentDraft {
+  lineRef: string;
+  trackingNumber: string | null;
+  freightIlsMinor: number;
+  customsIlsMinor: number;
+  localTransportIlsMinor: number;
+  freightClearingIlsMinor: number;
+}
+export interface ImportCostAllocationDraft {
+  lineRef: string;
+  invoiceRef: string;
+  shipmentRef: string;
+  goodsIlsMinor: number;
+  freightIlsMinor: number;
+  travelManagerialIlsMinor: number;
+  travelCapitalizableIlsMinor: number;
+  excelLandedIlsMinor: number;
+}
+export interface ImportCostDraft {
+  title: string;
+  businessDate: string;
+  withTravel: boolean;
+  travelRecordedIlsMinor: number;
+  notes: string | null;
+  invoices: ImportCostInvoiceDraft[];
+  shipments: ImportCostShipmentDraft[];
+  allocations: ImportCostAllocationDraft[];
+}
+export interface ImportCostPreview {
+  balanced: boolean;
+  errors: string[];
+  goodsBookedIlsMinor: number;
+  freightClearingIlsMinor: number;
+  travelRecordedIlsMinor: number;
+  travelCapitalizableIlsMinor: number;
+  travelExpenseIlsMinor: number;
+  excelManagerialCostIlsMinor: number;
+  inventoryAccountingCostIlsMinor: number;
+  ledgerVerified: false;
+  canPost: false;
+  supplierAdvancesIlsMinor: number;
+  unpaidSupplierIlsMinor: number;
+  paymentStatus: "not_connected" | "advances_posted" | "costs_posted" | "mixed_payments_posted";
+  paidShipmentCostsIlsMinor: number;
+  paidTravelIlsMinor: number;
+}
+export interface ImportCostCaseResult {
+  advancePostingEnabled: boolean;
+  closingEnabled:boolean;
+  closePlanHash:string;
+  closure:null|{
+    id:number;status:"posted"|"reversed";debitIlsMinor:number;
+    financeTransactionId:number|null;reversalFinanceTransactionId:number|null;
+    businessDate:string;travelClassificationApproved:boolean;
+  };
+  supplierVoucherClaims: Array<{
+    id:number;
+    invoiceId:number;
+    invoiceRef:string;
+    supplierId:number;
+    voucherId:number;
+    voucherPublicId:string;
+    amountIlsMinor:number;
+    voucherAmountIlsMinor:number;
+    verified:boolean;
+    errors:string[];
+  }>;
+  purchaseLinks: Array<{
+    id:number;
+    purchaseId:number;
+    allocationRef:string;
+    supplierId:number;
+    inventoryCostIlsMinor:number;
+    receiptQuantity:number;
+    valid:boolean;
+    reasons:string[];
+  }>;
+  costGroupMatching: Array<{
+    allocationRef:string;
+    expectedAccountingIlsMinor:number;
+    linkedAccountingIlsMinor:number;
+    valid:boolean;
+  }>;
+  clearingPreview:{
+    ready:boolean;
+    balanced:boolean;
+    journalPosted:false;
+    canExecute:false;
+    blockers:string[];
+    debitMinor:number;
+    creditMinor:number;
+    remainingSupplierLiabilityIlsMinor:number;
+    recognizedTravelExpenseIlsMinor:number;
+    reclassifiedAdvanceIlsMinor:number;
+    supplierVouchersAlreadyAppliedIlsMinor:number;
+    reclassifiedShipmentFreightIlsMinor:number;
+    reclassifiedCapitalizableTravelIlsMinor:number;
+    supplierBalanceChecks:Array<{
+      supplierId:number;
+      currentPayableIlsMinor:number;
+      plannedDebitIlsMinor:number;
+      sufficient:boolean;
+    }>;
+    journalLines:Array<{
+      accountCode:string;
+      supplierId:number|null;
+      debitMinor:number;
+      creditMinor:number;
+      memo:string;
+    }>;
+  };
+  closePreview: {
+    canCloseAccounting: boolean;
+    reasons: string[];
+    totalUsdMinor: number;
+    paidUsdMinor: number;
+    unPaidUsdMinor: number;
+    directCostPlannedIlsMinor: number;
+    directCostPaidIlsMinor: number;
+    travelPlannedIlsMinor: number;
+    travelPaidIlsMinor: number;
+  };
+  case: {
+    id: number;
+    publicId: string;
+    revision: number;
+    status: "draft"|"closed";
+    createdAt: string;
+  };
+  draft: ImportCostDraft;
+  directPayments: Array<{
+    paymentId: number;
+    shipmentId: number | null;
+    shipmentRef: string | null;
+    costType: string;
+    paymentMethod: "bank" | "cash";
+    amountIlsMinor: number;
+    financeTransactionId: number | null;
+    financeStatus: string | null;
+    journalVerified: boolean;
+    journalErrors: string[];
+  }>;
+  advances: Array<{
+    paymentId: number;
+    invoiceId: number;
+    invoiceRef: string;
+    usdAmountMinor: number;
+    advanceIlsMinor: number;
+    bankBookIlsMinor: number;
+    fxGainIlsMinor: number;
+    fxLossIlsMinor: number;
+    financeTransactionId: number | null;
+    financeStatus: string | null;
+    journalVerified: boolean;
+    journalErrors: string[];
+  }>;
+  preview: ImportCostPreview;
+}
+export function listImportCostCases(token: string) {
+  return apiRequest<{ cases: Array<{
+    id: number;
+    publicId: string;
+    title: string;
+    businessDate: string;
+    withTravel: boolean;
+    revision: number;
+    updatedAt: string;
+  }>; accountingEnabled: false; advancePostingEnabled: boolean }>("/api/pos/import-costs", {}, token);
+}
+export function getImportCostCase(token: string, id: number) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${id}`, {}, token);
+}
+export function createImportCostCase(token: string, draft: ImportCostDraft, idempotencyKey: string) {
+  return apiRequest<ImportCostCaseResult>("/api/pos/import-costs", {
+    method: "POST",
+    body: JSON.stringify({ ...draft, idempotencyKey }),
+  }, token);
+}
+export function updateImportCostCase(
+  token: string,
+  id: number,
+  expectedRevision: number,
+  draft: ImportCostDraft,
+) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ ...draft, expectedRevision }),
+  }, token);
+}
+
+/**
+ * Protected actual bank-USD advance payment. The server refuses posting
+ * unless POS_IMPORT_FINANCIAL_POSTING_ENABLED=true.
+ */
+export interface ImportUsdAdvancePaymentInput {
+  invoiceRef: string;
+  bankAccountId: number;
+  usdAmountMinor: number;
+  spotRateMicros: number;
+  businessDate: string;
+  idempotencyKey: string;
+}
+export function postImportUsdAdvance(token: string, caseId: number, payment: ImportUsdAdvancePaymentInput) {
+  return apiRequest<{
+    accountingPosted: true;
+    payment: { id: number; financeTransactionId: number; alreadyPosted: boolean };
+  }>(`/api/pos/import-costs/${caseId}/advance-payment`, {
+    method: "POST",
+    body: JSON.stringify(payment),
+  }, token);
+}
+
+export interface ImportDirectCostPaymentInput {
+  shipmentRef: string | null;
+  costType: "freight" | "customs" | "local_transport" | "travel";
+  paymentMethod: "bank" | "cash";
+  bankAccountId: number | null;
+  registerKey: "main" | null;
+  amountIlsMinor: number;
+  businessDate: string;
+  idempotencyKey: string;
+}
+export function postImportDirectCostPayment(token: string, caseId: number, payment: ImportDirectCostPaymentInput) {
+  return apiRequest<{
+    accountingPosted: true;
+    payment: { id: number; financeTransactionId: number; alreadyPosted: boolean };
+  }>(`/api/pos/import-costs/${caseId}/direct-payment`, {
+    method: "POST",
+    body: JSON.stringify(payment),
+  }, token);
+}
+
+/**
+ * Evidence-only operation. Links an already posted purchase but never
+ * posts inventory, supplier, cash or FX amounts.
+ */
+export function linkImportPurchase(
+  token:string,caseId:number,input:{
+    allocationRef:string;purchaseId:number;expectedRevision:number;
+  },
+) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/purchase-links`,{
+    method:"POST",body:JSON.stringify(input),
+  },token);
+}
+export function unlinkImportPurchase(
+  token:string,caseId:number,linkId:number,expectedRevision:number,
+) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/purchase-links/${linkId}`,{
+    method:"DELETE",body:JSON.stringify({expectedRevision}),
+  },token);
+}
+
+/** Existing ILS supplier voucher attribution only. NO bank/cash/GL write. */
+export function claimImportSupplierVoucher(token:string,caseId:number,input:{
+  invoiceRef:string;voucherPublicId:string;amountIlsMinor:number;expectedRevision:number;
+}) {
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/voucher-claims`,{
+    method:"POST",body:JSON.stringify(input),
+  },token);
+}
+/** Detach reference only; supplier voucher and its payment remain untouched. */
+export function detachImportSupplierVoucherClaim(
+  token:string,caseId:number,claimId:number,expectedRevision:number,
+){
+  return apiRequest<ImportCostCaseResult>(`/api/pos/import-costs/${caseId}/voucher-claims/${claimId}`,{
+    method:"DELETE",body:JSON.stringify({expectedRevision}),
+  },token);
+}
+
+/** Guarded financial close. No duplicate inventory cost, bank or cash payment. */
+export function postImportAccountingClose(token:string,caseId:number,input:{
+  expectedRevision:number;expectedPlanHash:string;travelClassificationConfirmed:boolean;
+  businessDate:string;idempotencyKey:string;
+}) {
+  return apiRequest<{
+    posting:{closureId:number;financeTransactionId:number|null;alreadyPosted:boolean};
+    case:ImportCostCaseResult;
+  }>(`/api/pos/import-costs/${caseId}/close`,{
+    method:"POST",body:JSON.stringify(input),
+  },token);
+}
+export function reverseImportAccountingClose(token:string,caseId:number,input:{
+  expectedRevision:number;businessDate:string;reason:string;idempotencyKey:string;
+}) {
+  return apiRequest<{
+    reversal:{closureId:number;financeTransactionId:number|null;alreadyReversed:boolean};
+    case:ImportCostCaseResult;
+  }>(`/api/pos/import-costs/${caseId}/reverse-close`,{
+    method:"POST",body:JSON.stringify(input),
+  },token);
+}

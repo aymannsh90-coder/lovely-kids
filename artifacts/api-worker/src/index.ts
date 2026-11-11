@@ -53,6 +53,7 @@ import { handleDeliverySettlementRequest } from "./delivery-settlement-routes";
 import { handlePosPurchaseRequest } from "./pos-purchase-routes";
 import { handlePosPurchaseReturnRequest } from "./pos-purchase-return-routes";
 import { handlePurchaseDraftRequest } from "./purchase-draft-routes";
+import { handleImportCostRequest } from "./import-cost-routes";
 import {
   isPurchaseApiEnabled,
   isPurchaseWriteEnabled,
@@ -586,6 +587,10 @@ export default {
       if (deliverySettlementResponse) {
         return deliverySettlementResponse;
       }
+
+      // Standalone documentation drafts. Never posts finance or inventory.
+      const importDraftResponse = await handleImportCostRequest(request, db, env);
+      if (importDraftResponse) return importDraftResponse;
 
       const purchaseDraftResponse =
         await handlePurchaseDraftRequest(

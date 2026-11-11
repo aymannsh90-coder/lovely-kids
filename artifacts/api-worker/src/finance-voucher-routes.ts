@@ -9,6 +9,7 @@ import {
   financeTransactionLinesTable,
   financeTransactionsTable,
   financeVouchersTable,
+  importCostSupplierVoucherClaimsTable,
   suppliersTable,
 } from "@workspace/db/schema";
 import {
@@ -3351,6 +3352,14 @@ async function handleReplaceUnifiedVoucher(
               404,
             );
           }
+
+          // An imported supplier invoice may already allocate this voucher.
+          // Prevent replacing/voiding the source while the import reference exists.
+          const linkedImportVoucher=await tx.select({id:importCostSupplierVoucherClaimsTable.id})
+            .from(importCostSupplierVoucherClaimsTable)
+            .where(eq(importCostSupplierVoucherClaimsTable.voucherId,voucher.id)).limit(1);
+          if(linkedImportVoucher.length)throw new VoucherError(
+            "سند المورد مرتبط بفواتير استيراد؛ اعكس إقفال الاستيراد ثم افصل روابط السند قبل تعديله",409);
 
           if (
             voucher.status !==
