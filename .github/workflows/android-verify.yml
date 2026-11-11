@@ -1,0 +1,55 @@
+name: Android verification
+
+on:
+  push:
+    branches:
+      - feature/android-sync-latest
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  android-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_API_BASE: "https://api.lovelykids.net"
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_android_ci_placeholder"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.26.1 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Expo dependency compatibility
+        continue-on-error: true
+        working-directory: artifacts/lovely-kids
+        run: pnpm exec expo install --check
+
+      - name: Typecheck storefront
+        run: pnpm --filter @workspace/lovely-kids typecheck
+
+      - name: Build web storefront
+        run: pnpm --filter @workspace/lovely-kids build
+
+      - name: Export Android bundle
+        working-directory: artifacts/lovely-kids
+        env:
+          EXPO_ROUTER_APP_ROOT: "../../app"
+          EXPO_ROUTER_IMPORT_MODE: "sync"
+        run: pnpm exec expo export --platform android --output-dir dist-android-check
