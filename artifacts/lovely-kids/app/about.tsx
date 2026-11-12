@@ -31,13 +31,6 @@ const PALETTE = {
 
 const OPENING_DATE = { year: 2018, month: 4, day: 1 } as const;
 const STATS_REFRESH_MS = 10 * 60 * 1000;
-// Dated fallback for the isolated Cloudflare preview branch only.
-// Counts switch to live values after the aggregated public API is activated.
-const PREVIEW_SNAPSHOT = {
-  visitorCount: 9175,
-  productCount: 486,
-} as const;
-
 type StorefrontStats = {
   visitorCount: number;
   productCount: number;
@@ -87,9 +80,6 @@ export default function AboutScreen() {
   const isDesktopWeb = Platform.OS === "web" && width >= 1200;
   const topPadding = isDesktopWeb ? 24 : getResponsiveTopPadding(insets.top) + 8;
   const bottomPadding = Platform.OS === "web" ? 56 : insets.bottom + 28;
-  const isPreviewHost = Platform.OS === "web" && typeof window !== "undefined" &&
-    window.location.hostname === "preview-storefront-pastel-re.lovely-kids.pages.dev";
-
   useEffect(() => {
     const interval = setInterval(() => setYears(yearsSinceOpening()), 60 * 60 * 1000);
     return () => clearInterval(interval);
@@ -147,16 +137,15 @@ export default function AboutScreen() {
     return () => { active = false; clearInterval(interval); };
   }, [getAuthToken, user?.isOwner]);
 
-  const usingPreviewSnapshot = isPreviewHost && storeStats === null;
+  // Never display dated preview counts as if they were live figures.
+  // Until the public aggregate endpoint is deployed, unavailable counts show a dash.
   const stats = [
     {
-      num: formatStat(storeStats?.visitorCount ?? ownerVisitorCount ??
-        (usingPreviewSnapshot ? PREVIEW_SNAPSHOT.visitorCount : null)),
+      num: formatStat(storeStats?.visitorCount ?? ownerVisitorCount),
       label: "زائر للمتجر",
     },
     {
-      num: formatStat(storeStats?.productCount ??
-        (usingPreviewSnapshot ? PREVIEW_SNAPSHOT.productCount : null)),
+      num: formatStat(storeStats?.productCount ?? null),
       label: "منتج مضاف",
     },
     { num: `${years}+`, label: "سنوات خبرة" },
@@ -200,10 +189,10 @@ export default function AboutScreen() {
               <Text style={styles.eyebrowText}>من قلب نابلس، بكل حب</Text>
             </View>
             <Text style={[styles.heroTitle, wideLayout && styles.heroTitleWide]}>
-              عالم متكامل من ملابس الاطفال وتجهيز المواليد
+              عالم متكامل من ملابس الأطفال وتجهيز المواليد
             </Text>
             <Text style={[styles.heroDescription, wideLayout && styles.heroDescriptionWide]}>
-              في Lovely Kids، نهتم بأدق التفاصيل وبنوفر افضل الخامات عشان تختاري لطفلك ملابس ومستلزمات جميلة ومريحة بكل ثقة.
+              في Lovely Kids، نهتم بأدق التفاصيل وبنوفر أفضل الخامات عشان تختاري لطفلك ملابس ومستلزمات جميلة ومريحة بكل ثقة.
             </Text>
             <View style={styles.locationPill}>
               <Ionicons name="location-outline" color={PALETTE.blue} size={17} />
