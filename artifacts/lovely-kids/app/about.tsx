@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Image,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -246,7 +247,25 @@ export default function AboutScreen() {
             </View>
             <View style={styles.detailLine}>
               <Ionicons name="call-outline" size={19} color={PALETTE.blue} />
-              <Text style={styles.detailText}>092376808   ·   جوال 0595266731</Text>
+              <View style={styles.phoneLinks}>
+                <Pressable
+                  onPress={() => { void Linking.openURL("tel:092376808"); }}
+                  accessibilityRole="link"
+                  accessibilityLabel="الاتصال على الهاتف الأرضي 092376808"
+                  style={styles.phoneLink}
+                >
+                  <Text style={styles.phoneLinkText}>092376808</Text>
+                </Pressable>
+                <Text style={styles.phoneSeparator}>·</Text>
+                <Pressable
+                  onPress={() => { void Linking.openURL("tel:0595266731"); }}
+                  accessibilityRole="link"
+                  accessibilityLabel="الاتصال على الجوال 0595266731"
+                  style={styles.phoneLink}
+                >
+                  <Text style={styles.phoneLinkText}>جوال 0595266731</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -540,6 +559,29 @@ const styles = StyleSheet.create({
     textAlign: "right",
     flexShrink: 1,
   },
+  phoneLinks: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 8,
+  },
+  phoneLink: {
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    borderRadius: 8,
+    backgroundColor: "#EAF5FF",
+  },
+  phoneLinkText: {
+    color: PALETTE.blue,
+    fontSize: 15,
+    lineHeight: 24,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+  phoneSeparator: { color: PALETTE.text, fontSize: 16 },
   whySection: { marginBottom: 32, gap: 12 },
   sectionSubtitle: {
     color: PALETTE.text,
