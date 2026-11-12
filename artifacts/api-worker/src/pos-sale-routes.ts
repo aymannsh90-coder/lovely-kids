@@ -27,7 +27,7 @@ import {
 import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
-import { userHasAnyPermission, type StaffPermission } from "./staff-permissions";
+import { userHasAnyPermission, userHasPermission, type StaffPermission } from "./staff-permissions";
 import {
   getCurrentProductImageMap,
   resolveCurrentProductImage,
@@ -38,6 +38,11 @@ import {
   ensureCustomerReceivableControlAccount,
 } from "./finance-customer-ledger";
 import { postFinanceTransaction } from "./finance-posting";
+import { inspectPostedSaleCashLedger } from "./pos-sale-cash-ledger";
+import {
+  cashEditRevisionFromEvent,
+  cashEditVoidEvent,
+} from "./pos-sale-cash-adjustment-rules";
 import { handleUpdatePosSale } from "./pos-sale-edit";
 import { rewriteMediaUrlsForPublic } from "./media-url";
 import {
@@ -111,11 +116,13 @@ async function requirePosUser(
     const method = request.method;
     let required: StaffPermission[] = [];
     if (method === "GET" && (path === "/api/pos/products/search" || path === "/api/pos/products/by-barcode" || path === "/api/pos/sales/cash-currencies")) {
-      required = ["sales.create", "sales.exchange"];
+      required = ["sales.create", "sales.exchange", "purchases.create", "inventory.view", "inventory.edit", "sales.returns"];
     } else if (method === "GET" && path === "/api/pos/inventory/product-card") {
       required = ["inventory.view"];
-    } else if (method === "GET" && (path === "/api/pos/sales/today" || path === "/api/pos/sales/by-public-id")) {
+    } else if (method === "GET" && path === "/api/pos/sales/today") {
       required = ["sales.view"];
+    } else if (method === "GET" && path === "/api/pos/sales/by-public-id") {
+      required = ["sales.view", "sales.exchange", "sales.exchange.online", "sales.returns", "sales.edit", "sales.void"];
     } else if (method === "POST" && path === "/api/pos/sales") {
       required = ["sales.create"];
     } else if (method === "POST" && path === "/api/pos/sales/void") {
@@ -1585,7 +1592,9 @@ async function handleInventoryProductCard(
       }
     | null = null;
 
-  if (auth.user.isOwner) {
+  const canReadInventoryCost = auth.user.isOwner ||
+    (!auth.user.isAdmin && await userHasPermission(db, auth.user, "inventory.cost"));
+  if (canReadInventoryCost) {
     const costRows = await db
       .select({
         quantityOnHand: productCostStateTable.quantityOnHand,
@@ -1633,7 +1642,7 @@ async function handleInventoryProductCard(
     ),
     movements,
     suppliers,
-    ...(auth.user.isOwner ? { cost: ownerCost } : {}),
+    ...(canReadInventoryCost ? { cost: ownerCost } : {}),
   });
 }
 
@@ -4375,6 +4384,15 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         cashFinanceRows[0] ??
         null;
 
+      // Never silently cancel a completed cash sale with missing accounting.
+      // Such a legacy/manual sale requires a separate reviewed reconciliation.
+      if (sale.paymentMethod === "cash" && !cashFinance) {
+        throw new PosSaleError(
+          "قيد البيع النقدي غير موجود. يجب تسويته محاسبيًا قبل إلغاء الفاتورة.",
+          409,
+        );
+      }
+
       if (cashFinance) {
         const originalCashLines =
           await tx
@@ -4401,6 +4419,31 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
           throw new Error(
             "POS_SALE_CASH_FINANCE_LINES_MISSING",
           );
+        }
+
+        // Cash sales in ILS can have one or more posted cash_edit journals.
+        // Validate that all of them, together with the original journal,
+        // match the invoice before reversing anything (atomic on rollback).
+        // Foreign-currency cash sales were never editable; their currency
+        // settlement retains the separate historical reversal logic.
+        let postedCashEditJournals: Awaited<
+          ReturnType<typeof inspectPostedSaleCashLedger>
+        >["adjustments"] = [];
+        if (
+          sale.paymentMethod === "cash" &&
+          originalCashLines.every(
+            line => line.currencyCode === null || line.currencyCode === "ILS",
+          )
+        ) {
+          try {
+            const verified = await inspectPostedSaleCashLedger(tx, sale);
+            postedCashEditJournals = verified.adjustments;
+          } catch {
+            throw new PosSaleError(
+              "قيود البيع النقدي لا تطابق قيمة الفاتورة. راجع المحاسبة قبل إلغائها.",
+              409,
+            );
+          }
         }
 
         await postFinanceTransaction(
@@ -4471,6 +4514,40 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
               cashFinance.id,
             ),
           );
+
+        // Reverse each saved price/quantity revision exactly once, preserving
+        // the original two-sided journal and marking it reversed for audit.
+        for (const { transaction, lines } of postedCashEditJournals) {
+          const revisionId = cashEditRevisionFromEvent(transaction.sourceEvent);
+          if (revisionId === null || lines.length < 2) {
+            throw new PosSaleError("سجل تعديل الفاتورة غير مكتمل", 409);
+          }
+          await postFinanceTransaction(tx, {
+            publicId: `FIN-CASH-EDIT-VOID-${sale.publicId}-${revisionId}`,
+            idempotencyKey: `pos-sale:${sale.id}:cash-edit:${revisionId}:void`,
+            businessDate: session.businessDate,
+            transactionType: "reversal",
+            sourceType: "pos_sale",
+            sourceId: String(sale.id),
+            sourceEvent: cashEditVoidEvent(revisionId),
+            cashSessionId: transaction.cashSessionId ?? session.id,
+            notes: `عكس فرق تعديل الفاتورة ${sale.publicId} رقم ${revisionId}`,
+            createdByUserId: auth.user.id,
+            lines: lines.map(line => ({
+              accountId: line.accountId,
+              customerId: line.customerId,
+              employeeId: line.employeeId,
+              supplierId: line.supplierId,
+              debitMinor: line.creditMinor,
+              creditMinor: line.debitMinor,
+              memo: `عكس تعديل ${sale.publicId}`,
+            })),
+          });
+
+          await tx.update(financeTransactionsTable)
+            .set({ status: "reversed", updatedAt: new Date() })
+            .where(eq(financeTransactionsTable.id, transaction.id));
+        }
       }
 
       if (

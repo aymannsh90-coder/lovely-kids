@@ -1,0 +1,88 @@
+/* Invoice lookup: screen-only, scoped to the search/results container. */
+@media screen {
+  .route-content .invoice-lookup-page.lk-lookup-refresh {
+    display: grid;
+    gap: 14px;
+    direction: rtl;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid #dce8f0;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 6px 20px rgba(47,84,104,.055);
+  }
+  .lk-lookup-refresh > .panel-heading {
+    position: relative;
+    padding: 16px 19px;
+    border: 1px solid #f0d3e4;
+    border-radius: 15px;
+    background: linear-gradient(110deg,#fff 10%,#fff5fa 74%,#fcebf5);
+  }
+  .lk-lookup-refresh > .panel-heading :is(h1,h2) {
+    color: #244155;
+    font-size: 22px;
+    font-weight: 900;
+  }
+  .lk-lookup-refresh > .panel-heading p { color: #73879a; font-size: 12px; }
+  .lk-lookup-refresh > .panel-heading .panel-icon {
+    border: 1px solid #f1c9db;
+    border-radius: 12px;
+    background: #ffedf6;
+  }
+  .lk-lookup-refresh .standalone-invoice-form {
+    padding: 14px;
+    gap: 10px;
+    border: 1px solid #d5e7ef;
+    border-radius: 13px;
+    background: #f4f9fc;
+  }
+  .lk-lookup-refresh .standalone-invoice-form input {
+    min-height: 42px;
+    border: 1px solid #d3e2ea;
+    border-radius: 11px;
+    background: #fff;
+  }
+  .lk-lookup-refresh :is(button.primary-button,button.secondary-button) {
+    min-height: 40px;
+    padding: 9px 15px;
+    border: 1px solid #efc0d9;
+    border-radius: 11px;
+    background: linear-gradient(120deg,#fffafd,#fff0f8);
+    color: #a81c67;
+    font-weight: 850;
+  }
+  .lk-lookup-refresh button.primary-button {
+    background: linear-gradient(120deg,#f249a4,#d71980);
+    border-color: #d51c7c;
+    color: #fff;
+  }
+  .lk-lookup-refresh :is(.invoice-print-actions,.standalone-invoice-result,.invoice-sequence-navigation) {
+    border: 1px solid #dce8ef;
+    border-radius: 13px;
+    background: #fff;
+  }
+  .lk-lookup-refresh .standalone-invoice-summary > div:nth-child(odd) {
+    background: #ebf6fc;
+    border-color: #cfe7f3;
+  }
+  .lk-lookup-refresh .standalone-invoice-summary > div:nth-child(even) {
+    background: #fff0f7;
+    border-color: #f2cee0;
+  }
+  .lk-lookup-refresh .standalone-invoice-item {
+    border-color: #e4edf3;
+    border-radius: 10px;
+  }
+  .lk-lookup-refresh .standalone-invoice-totals {
+    border: 1px solid #f2cee0;
+    border-radius: 12px;
+    background: #fff3f9;
+  }
+  .lk-lookup-refresh :is(button,input):focus-visible {
+    outline: 3px solid rgba(233,30,140,.23);
+    outline-offset: 2px;
+  }
+  @media (max-width: 640px) {
+    .route-content .invoice-lookup-page.lk-lookup-refresh { padding: 11px; }
+  }
+}

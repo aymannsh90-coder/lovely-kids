@@ -16,6 +16,7 @@ import {
 import { and, asc, desc, eq, gt, lt, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "./auth";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   ensureSupplierPayableControlAccount,
@@ -359,7 +360,17 @@ async function requirePurchaseOwner(
     };
   }
 
-  if (!user.isOwner) {
+  const path = new URL(request.url).pathname;
+  const isPurchaseRead = request.method === "GET" &&
+    (path === "/api/pos/purchases/latest" || path === "/api/pos/purchases/by-public-id");
+  const staffAuthorized = !user.isAdmin &&
+    path !== "/api/pos/purchases/void" &&
+    (
+      (isPurchaseRead && await userHasAnyPermission(db, user, ["purchases.view", "purchases.create"])) ||
+      (request.method === "POST" && path === "/api/pos/purchases" &&
+        await userHasPermission(db, user, "purchases.create"))
+    );
+  if (!user.isOwner && !staffAuthorized) {
     return {
       ok: false,
       response: json(

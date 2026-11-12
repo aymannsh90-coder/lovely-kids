@@ -1,0 +1,33 @@
+name: Verify bank ledger currency safeguards
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/finance-bank-currency-rules.ts'
+      - 'artifacts/api-worker/src/finance-bank-currency-rules.test.mjs'
+      - 'artifacts/api-worker/src/finance-posting.ts'
+      - 'artifacts/api-worker/src/finance-banking-routes.ts'
+      - 'artifacts/api-worker/src/finance-liquidity-report-routes.ts'
+      - 'artifacts/api-worker/src/finance-card-settlement-routes.ts'
+      - 'lib/db/migrations/20261108_guard_bank_ledger_currency.sql'
+      - '.github/workflows/verify-bank-ledger-currency.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: API Worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: Bank ledger currency regression tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/finance-bank-currency-rules.test.mjs

@@ -237,19 +237,17 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="dashboard-card-footer">
-                      <span
-                        className={
-                          item.status === "ready"
-                            ? "dashboard-badge badge-ready"
-                            : "dashboard-badge badge-planned"
-                        }
-                      >
-                        {locked
-                          ? "يتطلب فتح اليوم"
-                          : item.status === "ready"
-                            ? "جاهز"
-                            : "قيد التجهيز"}
-                      </span>
+                      {(locked || item.status === "planned") && (
+                        <span
+                          className={
+                            item.status === "ready"
+                              ? "dashboard-badge badge-ready"
+                              : "dashboard-badge badge-planned"
+                          }
+                        >
+                          {locked ? "يتطلب فتح اليوم" : "قيد التجهيز"}
+                        </span>
+                      )}
 
                       {!locked && <span className="dashboard-arrow">←</span>}
                     </div>

@@ -186,3 +186,47 @@ export type DbDeliveryCompanySettlement =
 
 export type DbDeliveryCompanySettlementItem =
   typeof deliveryCompanySettlementItemsTable.$inferSelect;
+
+/**
+ * Non-cash reconciliation of negative online-exchange parcels.
+ * "historical" marks a courier deduction already reflected in a prior
+ * external statement; "posted" belongs to a new settlement's payable offset.
+ */
+export const deliveryCompanyExchangeOffsetsTable = pgTable(
+  "delivery_company_exchange_offsets",
+  {
+    id: serial("id").primaryKey(),
+    deliveryCompanyId: integer("delivery_company_id")
+      .notNull()
+      .references(() => deliveryCompaniesTable.id, { onDelete: "restrict" }),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => ordersTable.id, { onDelete: "restrict" }),
+    settlementId: integer("settlement_id")
+      .references(() => deliveryCompanySettlementsTable.id, { onDelete: "restrict" }),
+    amountMinor: integer("amount_minor").notNull(),
+    status: text("status").notNull().default("posted"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("delivery_company_exchange_offsets_amount_positive", sql`${table.amountMinor} > 0`),
+    check("delivery_company_exchange_offsets_status_valid", sql`${table.status} in ('historical', 'posted', 'reversed')`),
+    check(
+      "delivery_company_exchange_offsets_settlement_valid",
+      sql`(${table.status} = 'historical' and ${table.settlementId} is null) or (${table.status} in ('posted', 'reversed') and ${table.settlementId} is not null)`,
+    ),
+    uniqueIndex("delivery_company_exchange_offsets_settlement_order_idx")
+      .on(table.settlementId, table.orderId)
+      .where(sql`${table.settlementId} is not null`),
+    uniqueIndex("delivery_company_exchange_offsets_historical_order_idx")
+      .on(table.deliveryCompanyId, table.orderId)
+      .where(sql`${table.status} = 'historical'`),
+    index("delivery_company_exchange_offsets_company_idx").on(table.deliveryCompanyId),
+    index("delivery_company_exchange_offsets_order_idx").on(table.orderId),
+  ],
+).enableRLS();
+
+export type DbDeliveryCompanyExchangeOffset =
+  typeof deliveryCompanyExchangeOffsetsTable.$inferSelect;

@@ -652,7 +652,7 @@ export default function GrossProfitReportPage() {
       return;
     }
     const reason = window.prompt(
-      `لتأكيد تكلفة الصنف ${product.productCode ?? product.productId} بمبلغ ${formatReportMoney(costs[0])} للقطعة، اكتب سبب اعتماد التكلفة من سجلات الشراء. لا يتم إثبات ارتباط المرتجعات بفواتير البيع القديمة. ويسري اعتماد تكلفة الصنف على المردودات المستقبلية ما دام السعر ثابتًا ولم تدخل دفعة شراء أو تصحيح تكلفة جديد.`,
+      `لتأكيد متوسط تكلفة الصنف ${product.productCode ?? product.productId} بمبلغ ${formatReportMoney(costs[0])} للقطعة، راجع دفعات الشراء وسجّل سبب اعتماد المتوسط. اختلاف تكلفة الدفعات السابقة طبيعي، ولا يُعتبر التبديل بدون فاتورة مرتبطًا بفاتورة بيع أصلية.`,
     );
     if (reason === null) return;
     if (reason.trim().length < 12) {
@@ -660,7 +660,7 @@ export default function GrossProfitReportPage() {
       return;
     }
     if (!window.confirm(
-      `سيتم اعتماد تكلفة ${formatReportMoney(costs[0])} للمبيعات القادمة للصنف ${product.productCode ?? product.productId}، مع تسجيل سند مراجعة وعدم تعديل الفواتير القديمة أو المخزون. ويُستخدم السعر المعتمد للمردودات المستقبلية حتى تتغير تكلفة الدفعة. هل تؤكد؟`,
+      `سيتم توثيق متوسط التكلفة المرجح ${formatReportMoney(costs[0])} للصنف ${product.productCode ?? product.productId} بعد التحقق من سجل حركاته. لا تتغير المبالغ أو الفواتير القديمة أو المخزون؛ ويُعاد التحقق إذا تغيّرت التكلفة لاحقًا. هل تؤكد؟`,
     )) return;
     setAttestingProductId(product.productId);
     setAttestationError("");
@@ -801,6 +801,7 @@ export default function GrossProfitReportPage() {
         },
         { label: "مصاريف التشغيل (بدون الرواتب والتوصيل)", value: formatReportMoney(report.netProfit.otherOperatingExpensesMinor) },
         { label: "الرواتب المحمّلة على الفترة", value: formatReportMoney(report.netProfit.salaryExpenseMinor) },
+        { label: "خصومات مكتسبة وتسويات مدينة", value: formatReportMoney(report.netProfit.settlementAdjustmentIncomeMinor) },
         {
           label: "صافي الربح حسب القيود" + (report.netProfit.provisional ? " — مبدئي" : ""),
           value: report.netProfit.netProfitRecordedMinor === null
@@ -1187,6 +1188,121 @@ export default function GrossProfitReportPage() {
           )}
 
 
+
+          {report.historicalExchangeReconciliation &&
+            (report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 ||
+             report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0) && (
+            <details className="gross-profit-review gross-profit-history" >
+              <summary className="gross-profit-history-toggle">
+                <span className="gross-profit-history-toggle-title">
+                  <span className="gross-profit-history-toggle-icon" aria-hidden="true">▾</span>
+                  مطابقة التبديلات التاريخية
+                  <small>للمراجعة فقط</small>
+                </span>
+                <span className="gross-profit-history-toggle-hint">عرض التفاصيل</span>
+              </summary>
+
+              <div className="gross-profit-history-content">
+                <p className="gross-profit-history-notice">
+                  هذا كشف مراجعة مستقل؛ لا يغيّر أرباح التقرير الرسمية أو قيود اليومية أو الفترات المقفلة.
+                  وعدم وجود قيد قبض مرتبط بالتبديل لا يعني أن المبلغ مفقود من الصندوق.
+                </p>
+
+                {report.historicalExchangeReconciliation.legacyOnlineReturns.length > 0 && (
+                  <section className="gross-profit-history-section" aria-label="فروقات توقيت تكلفة المرتجعات الإلكترونية">
+                    <div className="gross-profit-history-section-heading">
+                      <h3>فروقات توقيت المرتجعات الإلكترونية</h3>
+                      <span className="gross-profit-history-section-count">
+                        {report.historicalExchangeReconciliation.legacyOnlineReturns.length} تبديل
+                      </span>
+                    </div>
+                    <div className="gross-profit-history-list">
+                      {report.historicalExchangeReconciliation.legacyOnlineReturns.map((item) => (
+                        <article className="gross-profit-history-card" key={item.exchangeId}>
+                          <div className="gross-profit-history-card-title">
+                            <span className="gross-profit-history-card-tag">
+                              التبديل <b dir="ltr">#{item.exchangeId}</b>
+                            </span>
+                            <span className="gross-profit-history-card-context">توزيع تكلفة المرتجع</span>
+                          </div>
+                          <div className="gross-profit-history-fields">
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">تاريخ القيد المالي</span>
+                              <strong className="gross-profit-history-value gross-profit-history-date" dir="ltr">{item.financialBusinessDate}</strong>
+                            </div>
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">تاريخ استلام الطرد</span>
+                              <strong className="gross-profit-history-value gross-profit-history-date" dir="ltr">{item.receivedBusinessDate}</strong>
+                            </div>
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">التكلفة التاريخية للمرتجع</span>
+                              <strong className="gross-profit-history-value gross-profit-history-cost" dir="ltr">{formatReportMoney(item.costMinor)}</strong>
+                            </div>
+                            <div className="gross-profit-history-field gross-profit-history-field-impact">
+                              <span className="gross-profit-history-label">أثر إعادة التوزيع المقترح</span>
+                              <strong className="gross-profit-history-value gross-profit-history-impact" dir="ltr">
+                                {formatReportMoney(item.suggestedProfitShiftMinor)}
+                              </strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                    <div className="gross-profit-history-total">
+                      <span>فرق إعادة توزيع أرباح الفترة (غير مرحّل)</span>
+                      <strong dir="ltr">{formatReportMoney(report.historicalExchangeReconciliation.historicalProfitShiftMinor)}</strong>
+                    </div>
+                  </section>
+                )}
+
+                {report.historicalExchangeReconciliation.unlinkedCashExchanges.length > 0 && (
+                  <section className="gross-profit-history-section" aria-label="فروقات نقدية قديمة قيد المطابقة">
+                    <div className="gross-profit-history-section-heading">
+                      <h3>تبديلات نقدية قديمة قيد المطابقة</h3>
+                      <span className="gross-profit-history-section-count">
+                        {report.historicalExchangeReconciliation.unlinkedCashExchanges.length} تبديل
+                      </span>
+                    </div>
+                    <div className="gross-profit-history-list">
+                      {report.historicalExchangeReconciliation.unlinkedCashExchanges.map((item) => (
+                        <article className="gross-profit-history-card" key={item.exchangeId}>
+                          <div className="gross-profit-history-card-title">
+                            <span className="gross-profit-history-card-tag">
+                              التبديل <b dir="ltr">#{item.exchangeId}</b>
+                            </span>
+                            <span className="gross-profit-history-card-context">سجل قديم للمراجعة</span>
+                          </div>
+                          <div className="gross-profit-history-fields gross-profit-history-fields-cash">
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">تاريخ التبديل</span>
+                              <strong className="gross-profit-history-value gross-profit-history-date" dir="ltr">{item.businessDate}</strong>
+                            </div>
+                            <div className="gross-profit-history-field">
+                              <span className="gross-profit-history-label">رقم جلسة الصندوق</span>
+                              <strong className="gross-profit-history-value" dir="ltr">{item.cashSessionId ?? "—"}</strong>
+                            </div>
+                            <div className="gross-profit-history-field gross-profit-history-field-impact">
+                              <span className="gross-profit-history-label">فرق التبديل المسجل</span>
+                              <strong className="gross-profit-history-value gross-profit-history-impact" dir="ltr">
+                                {formatReportMoney(item.differenceMinor)}
+                              </strong>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                    <div className="gross-profit-history-total">
+                      <span>مجموع الفروقات قيد المطابقة — لا يُرحّل ثانية</span>
+                      <strong dir="ltr">
+                        {formatReportMoney(report.historicalExchangeReconciliation.unlinkedCashDifferenceMinor)}
+                      </strong>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </details>
+          )}
+
           {report.mixedCostReview.length > 0 && (
             <details className="gross-profit-review gross-profit-no-print">
               <summary className="gross-profit-review-summary">
@@ -1367,7 +1483,7 @@ export default function GrossProfitReportPage() {
             <div className="gross-profit-net-head">
               <div>
                 <h2>صافي الربح حسب القيود</h2>
-                <p>بعد خصم المصاريف والرواتب المسجلة — من دون تكرار تكلفة التوصيل</p>
+                <p>بعد خصم المصاريف والرواتب وإضافة تسويات الخصومات المكتسبة — من دون تكرار تكلفة التوصيل</p>
               </div>
               <span className="gross-profit-net-tag">
                 {report.netProfit.provisional ? "نتيجة مبدئية" : "بحسب القيود المسجلة"}
@@ -1386,6 +1502,10 @@ export default function GrossProfitReportPage() {
               <div className="gross-profit-net-cell">
                 <span>الرواتب المحمّلة على الفترة</span>
                 <strong>{formatReportMoney(report.netProfit.salaryExpenseMinor)}</strong>
+              </div>
+              <div className="gross-profit-net-cell">
+                <span>خصومات مكتسبة وتسويات مدينة</span>
+                <strong>{formatReportMoney(report.netProfit.settlementAdjustmentIncomeMinor)}</strong>
               </div>
               <div className="gross-profit-net-cell gross-profit-net-result">
                 <span>صافي الربح بعد المصاريف المسجلة</span>
@@ -1452,14 +1572,15 @@ export default function GrossProfitReportPage() {
 
             <p>
               صافي الربح محسوب من مجمل الربح بعد التوصيل، بعد خصم
-              المصروفات والرواتب المرحلة على حسابات المصروفات في الفترة.
+              المصروفات والرواتب المرحلة على حسابات المصروفات في الفترة،
+              مع إضافة إيرادات تسوية الخصومات المكتسبة والإشعارات المدينة المثبتة.
               لا يشمل التقرير الرواتب غير المثبتة أو المصاريف التي لم تسجل بعد.
               السلف والمسحوبات والتحويلات ليست مصروفات، ولا يُخصم التوصيل مرتين.
             </p>
           </section>
 
           <footer className="gross-profit-print-only gross-profit-print-footer">
-            تقرير صادر من نظام Lovely Kids — صافي الربح حسب المصروفات والرواتب المسجلة فقط.
+            تقرير صادر من نظام Lovely Kids — صافي الربح حسب المصروفات والرواتب وتسويات الخصومات المسجلة.
           </footer>
         </div>
       )}

@@ -22,6 +22,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 
 type Db =
@@ -142,7 +143,13 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  const referenceOnly = request.method === "GET" &&
+    new URL(request.url).pathname === "/api/pos/finance/statements/reference";
+  const staffRead = !user.isAdmin && (
+    (referenceOnly && await userHasAnyPermission(db, user, ["reports.financial", "vouchers.create"])) ||
+    (!referenceOnly && await userHasPermission(db, user, "reports.financial"))
+  );
+  if (!user.isOwner && !staffRead) {
     return {
       ok: false as const,
       response: json(

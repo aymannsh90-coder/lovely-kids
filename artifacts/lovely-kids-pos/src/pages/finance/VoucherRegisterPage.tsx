@@ -81,6 +81,9 @@ function errorText(error: unknown) {
 }
 
 function voucherLabel(voucher: PosFinanceVoucher) {
+  if (voucher.publicId.startsWith("CRN-")) return "إشعار دائن / خصم مسموح";
+  if (voucher.publicId.startsWith("DBN-")) return "إشعار مدين للزبون";
+  if (voucher.publicId.startsWith("SDS-")) return "خصم مكتسب من مورد";
   if (voucher.voucherPurpose === "customer_receipt") {
     return "سند قبض / دفعة زبون";
   }
@@ -98,7 +101,7 @@ function voucherLabel(voucher: PosFinanceVoucher) {
   }
 
   if (voucher.voucherPurpose === "customer_cash_loan") {
-    return "سند صرف / زبون على الحساب";
+    return "سند صرف / تسوية حساب الزبون";
   }
 
   if (voucher.voucherPurpose === "employee_advance") {
@@ -213,8 +216,10 @@ export default function VoucherRegisterPage() {
       ] =
         await Promise.all([
           getPosFinanceVouchers(token),
-          getPosCustomers(token),
-          getPosEmployees(token),
+          getPosCustomers(token).catch(() => ({ results: [] as PosCustomer[] })),
+          user?.isOwner
+            ? getPosEmployees(token)
+            : Promise.resolve({ results: [] as PosEmployee[] }),
         ]);
 
       const [
@@ -978,9 +983,9 @@ export default function VoucherRegisterPage() {
   async function handleVoid(
     voucher: PosFinanceVoucher,
   ) {
-    if (!user?.isOwner) {
+    if (!user?.isOwner && !(user?.staffEnabled && user?.permissions?.includes("vouchers.void"))) {
       setError(
-        "إلغاء السندات متاح للمالك فقط.",
+        "لا توجد صلاحية لإلغاء السندات.",
       );
       return;
     }
@@ -1427,9 +1432,9 @@ export default function VoucherRegisterPage() {
 
                         {voucher.status ===
                           "posted" &&
-                        user?.isOwner && (
+                        (user?.isOwner || (user?.staffEnabled && user?.permissions?.includes("vouchers.void"))) && (
                           <>
-                            {voucher.currencyCode ===
+                            {user?.isOwner && voucher.currencyCode ===
                               "ILS" &&
                             (
                               voucher.voucherType === "receipt" ||

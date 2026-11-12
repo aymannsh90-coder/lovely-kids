@@ -555,3 +555,89 @@
   .delivery-ledger-metric.is-highlight { grid-column: auto; }
   .delivery-ledger .delivery-ledger-action { min-width: 0; padding: 9px 11px; font-size: 11px; }
 }
+
+
+/* Lovely Kids POS | Final desktop delivery-company polish.
+   CSS only; settlement selection, company costs, financial posting,
+   reports and print behavior are unchanged. */
+@media screen and (min-width: 1001px) {
+  .delivery-ledger {
+    min-width: 0;
+    color: #263e51;
+  }
+  .delivery-ledger .delivery-ledger-hero {
+    border-color: #efd3e2;
+    box-shadow: 0 7px 23px rgba(44, 73, 94, .055);
+  }
+  .delivery-ledger .delivery-ledger-hero h1 {
+    color: #223e51;
+    line-height: 1.35;
+  }
+  .delivery-ledger .delivery-ledger-actions {
+    gap: 10px;
+    align-items: end;
+  }
+  .delivery-ledger .delivery-ledger-company-field {
+    min-width: 0;
+  }
+  .delivery-ledger .delivery-ledger-company-field > select {
+    border-color: #dbe6ee;
+    background: #fff;
+  }
+  .delivery-ledger .delivery-ledger-metric {
+    border-color: #e0e8ee;
+    box-shadow: 0 5px 15px rgba(30, 74, 103, .037);
+    min-width: 0;
+  }
+  .delivery-ledger .delivery-ledger-panel {
+    min-width: 0;
+    border-color: #dfe9ef;
+    box-shadow: 0 5px 18px rgba(36, 81, 100, .05);
+  }
+  .delivery-ledger .delivery-ledger-panel-head {
+    gap: 13px;
+    align-items: center;
+    border-bottom-color: #e3ebf0;
+  }
+  .delivery-ledger .delivery-ledger-panel-head h2 {
+    color: #2a465a;
+    font-weight: 900;
+  }
+  .delivery-ledger .delivery-ledger-head-tools {
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+  .delivery-ledger .delivery-ledger-table-wrap {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-color: #bfd2e1 #f8fafc;
+  }
+  .delivery-ledger .delivery-ledger-table thead th {
+    background: #eff6fa;
+    color: #33576a;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .delivery-ledger .delivery-ledger-table tbody td {
+    line-height: 1.6;
+  }
+  .delivery-ledger .delivery-ledger-table tbody tr:hover td {
+    background: #fff4f9;
+  }
+  .delivery-ledger .delivery-ledger-selection {
+    border-color: #f1d4e5;
+    border-radius: 13px;
+  }
+  .delivery-ledger .delivery-ledger-settlement-body {
+    gap: 12px;
+  }
+  .delivery-ledger .delivery-ledger-form-field input {
+    border-radius: 10px;
+    border-color: #d8e6ed;
+  }
+  .delivery-ledger .delivery-ledger-settlement-table {
+    min-width: 940px;
+  }
+}

@@ -10,6 +10,13 @@ import { randomUUID } from "node:crypto";
 
 import type { openDb } from "./db";
 import { postFinanceTransaction } from "./finance-posting";
+import {
+  accrueOnlineExchangeReturnCosts,
+  ensureOnlineReturnAccount,
+  ONLINE_RETURN_IN_TRANSIT,
+  ONLINE_RETURN_CLEARING,
+  OnlineReturnCostError,
+} from "./online-exchange-return-accrual";
 import { STORE_PICKUP_LABEL, LOCAL_NABLUS_DELIVERY_LABEL } from "./order-service";
 import { getLocalCourierCashReceipt, LOCAL_COURIER_ADVANCE_ACCOUNT } from "./order-local-courier";
 import {
@@ -1113,6 +1120,43 @@ export async function completeOrderWithFinance(
           "تعذر تثبيت محاسبة عملية التبديل",
           409,
         );
+      }
+
+
+      // Recognize the historical return cost in the same business period as
+      // the replacement's return-revenue journal. Do NOT add physical stock.
+      let returnCostMinor = 0;
+      try {
+        returnCostMinor = await accrueOnlineExchangeReturnCosts(tx, linkedOnlineExchange);
+      } catch (error) {
+        if (error instanceof OnlineReturnCostError) {
+          throw new OrderFinanceError(error.message, 409);
+        }
+        throw error;
+      }
+      if (returnCostMinor > 0) {
+        const inTransitAccountId = await ensureOnlineReturnAccount(
+          tx, ONLINE_RETURN_IN_TRANSIT, "بضاعة مرتجعة قيد الاستلام",
+        );
+        const controlAccountId = await ensureOnlineReturnAccount(
+          tx, ONLINE_RETURN_CLEARING, "حساب رقابي مقابل للبضاعة المرتجعة",
+        );
+        await postFinanceTransaction(tx, {
+          publicId: "FIN-XRETURN-" + linkedOnlineExchange.id + "-" +
+            randomUUID().slice(0, 8).toUpperCase(),
+          idempotencyKey: "exchange:" + linkedOnlineExchange.id + ":return-in-transit",
+          businessDate,
+          transactionType: "adjustment",
+          sourceType: "online_exchange",
+          sourceId: String(linkedOnlineExchange.id),
+          sourceEvent: "return_in_transit_recorded",
+          createdByUserId: userId,
+          notes: "تثبيت تكلفة بضاعة التبديل قيد الاستلام " + linkedOnlineExchange.publicId,
+          lines: [
+            { accountId: inTransitAccountId, debitMinor: returnCostMinor, creditMinor: 0 },
+            { accountId: controlAccountId, debitMinor: 0, creditMinor: returnCostMinor },
+          ],
+        });
       }
 
       const completedAt =

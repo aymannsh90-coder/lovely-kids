@@ -22,6 +22,7 @@ import {
   sanitizePublicSettingsData,
 } from "./settings-routes";
 import { handleOrderRequest } from "./order-routes";
+import { handleOrderPickingRequest } from "./order-picking-routes";
 import { handleMetaWebEventRequest } from "./meta-capi";
 import { handleDiscountCodeRequest } from "./discount-code-routes";
 import { handlePromotionRequest } from "./promotion-routes";
@@ -50,6 +51,7 @@ import { handleSupplierRequest } from "./supplier-routes";
 import { handleDeliveryCompanyRequest } from "./delivery-company-routes";
 import { handleDeliverySettlementRequest } from "./delivery-settlement-routes";
 import { handlePosPurchaseRequest } from "./pos-purchase-routes";
+import { handlePosPurchaseReturnRequest } from "./pos-purchase-return-routes";
 import { handlePurchaseDraftRequest } from "./purchase-draft-routes";
 import {
   isPurchaseApiEnabled,
@@ -310,12 +312,32 @@ export class PublicAPI extends WorkerEntrypoint<Env> {
   }
 }
 
+function isTransientDatabaseError(error: unknown): boolean {
+  if (error === null || typeof error !== "object") return false;
+
+  const code = "code" in error ? error.code : undefined;
+  if (
+    typeof code === "string" &&
+    /^(?:08[A-Z0-9]{3}|57P0[123]|53300|53400|58000|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN)$/i.test(code)
+  ) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : "";
+  return /failed to acquire a connection from the pool|server connection attempt failed|connection (?:timed out|timeout|terminated|reset by peer|refused)/i.test(message);
+}
+
 export default {
   async fetch(
     request: Request,
     env: Env,
     ctx: GatewayContext,
   ): Promise<Response> {
+    const requestId = crypto.randomUUID();
+    const startedAt = Date.now();
+    let connectingToDatabase = false;
+
+    try {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -370,7 +392,9 @@ export default {
       return purchaseWritesDisabledResponse();
     }
 
+    connectingToDatabase = true;
     const { client, db } = await openDb(env);
+    connectingToDatabase = false;
 
     try {
       const metaCatalogResponse =
@@ -593,6 +617,14 @@ export default {
         return purchaseDraftResponse;
       }
 
+      const purchaseReturnResponse = await handlePosPurchaseReturnRequest(request, db, env);
+      if (purchaseReturnResponse) {
+        if (purchaseReturnResponse.ok && isMutation(request)) {
+          await purgePublicTags(ctx, [PUBLIC_CACHE_TAGS.products]);
+        }
+        return purchaseReturnResponse;
+      }
+
       const posPurchaseResponse =
         await handlePosPurchaseRequest(
           request,
@@ -684,7 +716,8 @@ export default {
       // can report a real server error instead of the opaque "Failed to fetch".
       let orderResponse: Response | null;
       try {
-        orderResponse = await handleOrderRequest(request, db, env);
+        orderResponse = await handleOrderPickingRequest(request, db, env);
+        if (!orderResponse) orderResponse = await handleOrderRequest(request, db, env);
       } catch (error) {
         console.error("ORDER_REQUEST_UNHANDLED_FAILURE", {
           method: request.method,
@@ -848,7 +881,43 @@ export default {
     } finally {
       await client.end().catch(() => {});
     }
+    } catch (error) {
+      const temporaryConnectionFailure =
+        connectingToDatabase || isTransientDatabaseError(error);
 
+      console.error("API_UNHANDLED_FAILURE", {
+        requestId,
+        method: request.method,
+        path: new URL(request.url).pathname,
+        durationMs: Date.now() - startedAt,
+        phase: connectingToDatabase ? "db-connect" : "request",
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorCode:
+          error !== null && typeof error === "object" && "code" in error
+            ? String(error.code)
+            : undefined,
+        errorMessage:
+          error instanceof Error ? error.message.slice(0, 500) : undefined,
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: temporaryConnectionFailure
+            ? "تعذر الاتصال بقاعدة البيانات مؤقتًا. أعد تحميل البيانات، وتحقق من حالة أي عملية مالية قبل تكرارها."
+            : "حدث خطأ مؤقت بالخادم. تحقق من حالة أي عملية مالية قبل إعادة تنفيذها.",
+          requestId,
+        }),
+        {
+          status: temporaryConnectionFailure ? 503 : 500,
+          headers: {
+            ...headers,
+            "Cache-Control": "no-store",
+            "X-Request-ID": requestId,
+            "Access-Control-Expose-Headers": "X-Request-ID",
+          },
+        },
+      );
+    }
   },
 
   async scheduled(

@@ -4,7 +4,7 @@ import {
 } from "@workspace/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
-import { userHasAnyPermission, type StaffPermission } from "./staff-permissions";
+import { userHasAnyPermission, userHasPermission, type StaffPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -241,7 +241,7 @@ async function requirePosUser(
     const method = request.method;
     const required: StaffPermission[] =
       method === "GET" && path === "/api/pos/cash-sessions/current"
-        ? ["cash.view", "sales.create", "sales.exchange", "sales.exchange.online"]
+        ? ["cash.view", "cash.open", "cash.close", "sales.create", "sales.view", "sales.edit", "sales.void", "sales.returns", "sales.exchange", "sales.exchange.online", "vouchers.create"]
         : method === "POST" && path === "/api/pos/cash-sessions/open"
           ? ["cash.open"]
           : method === "POST" && path === "/api/pos/cash-sessions/close"
@@ -375,11 +375,29 @@ async function handleCurrentSession(
     registerKey,
   );
 
-  return json({
-    session: session
-      ? toCashSession(session)
-      : null,
-  });
+  if (!session) return json({ session: null });
+  const fullSession = toCashSession(session);
+  // A sale permission permits checking that a day is open, but must not expose
+  // the till amount unless the employee has the independent cash.view grant.
+  const balancesVisible = auth.user.isOwner || auth.user.isAdmin ||
+    await userHasPermission(db, auth.user, "cash.view");
+  if (!balancesVisible) {
+    return json({
+      session: {
+        ...fullSession,
+        balancesVisible: false,
+        openingBalanceMinor: 0,
+        openingBalance: 0,
+        closingBalanceMinor: null,
+        closingBalance: null,
+        expectedBalanceMinor: null,
+        expectedBalance: null,
+        openingNote: null,
+        closingNote: null,
+      },
+    });
+  }
+  return json({ session: { ...fullSession, balancesVisible: true } });
 }
 
 async function handleOpenSession(

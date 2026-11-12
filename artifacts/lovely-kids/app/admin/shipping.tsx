@@ -26,6 +26,7 @@ export default function AdminShippingScreen() {
     useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const topPadding = getResponsiveTopPadding(insets.top);
 
@@ -42,16 +43,21 @@ export default function AdminShippingScreen() {
     setCompanyDrafts(
       zones.map(
         (zone) =>
-          String(
-            zone.companyCost ??
-              zone.cost,
-          ),
+          zone.companyCost == null ? "" : String(zone.companyCost),
       ),
     );
   }, [settings.shippingZones]);
 
   const save = async () => {
-    const zones = (settings.shippingZones ?? []).map((zone, index) => ({
+    const currentZones = settings.shippingZones ?? [];
+    // Public settings omit companyCost. Never silently replace it with the
+    // customer price when the admin session has not finished loading.
+    if (currentZones.some((_, index) => !/^\d+$/.test(companyDrafts[index] ?? ""))) {
+      setSaveError("تكلفة الشركة غير محمّلة أو غير مكتملة. تأكد من ظهور التكلفة الفعلية لكل منطقة قبل الحفظ.");
+      return;
+    }
+    setSaveError("");
+    const zones = currentZones.map((zone, index) => ({
       ...zone,
 
       // السعر الذي يظهر للزبون ويبقى مرجع عرض التوصيل.
@@ -68,9 +74,7 @@ export default function AdminShippingScreen() {
       companyCost: Math.max(
         0,
         parseInt(
-          companyDrafts[index] ??
-            customerDrafts[index] ??
-            "0",
+          companyDrafts[index],
           10,
         ) || 0,
       ),
@@ -79,6 +83,7 @@ export default function AdminShippingScreen() {
     setSaving(true);
     const ok = await updateSettings({ shippingZones: zones });
     setSaving(false);
+    if (!ok) setSaveError("تعذر حفظ إعدادات التوصيل. تأكد من تسجيل الدخول ثم حاول مرة أخرى.");
 
     if (ok) {
       setSaved(true);
@@ -287,6 +292,8 @@ export default function AdminShippingScreen() {
             </View>
           </View>
         ))}
+
+        {saveError ? <Text style={{ color: "#b91c1c", textAlign: "center", fontSize: 12 }}>{saveError}</Text> : null}
 
         <Pressable
           onPress={() => void save()}

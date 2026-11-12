@@ -1,3 +1,9 @@
+import {
+  API_READ_MAX_ATTEMPTS,
+  apiReadRetryDelayMs,
+  canRetryApiRead,
+} from "./apiRetryPolicy";
+
 const fallbackApiBaseUrl = "https://api.lovelykids.net";
 
 export const API_BASE_URL = (
@@ -26,6 +32,8 @@ export interface PosUser {
 
 export interface CashSession {
   id: string;
+  /** False means financial amounts were redacted by the API for this user. */
+  balancesVisible?: boolean;
   registerKey: string;
   businessDate: string;
   openedByUserId: string;
@@ -73,44 +81,80 @@ async function apiRequest<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const method = (options.method ?? "GET").toUpperCase();
+  const attempts = method === "GET" ? API_READ_MAX_ATTEMPTS : 1;
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const text = await response.text();
-  let payload: unknown = null;
-
-  if (text) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = { error: text };
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers,
+      });
+
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      const text = await response.text();
+      let payload: unknown = null;
+
+      if (text) {
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          payload = { error: text };
+        }
+      }
+
+      if (!response.ok) {
+        let message = `فشل الطلب برمز ${response.status}`;
+
+        if (
+          payload &&
+          typeof payload === "object" &&
+          "error" in payload &&
+          typeof payload.error === "string"
+        ) {
+          message = payload.error;
+        }
+
+        const requestId = response.headers.get("X-Request-ID");
+        if (response.status >= 500 && requestId) {
+          message += ` (رقم المتابعة: ${requestId})`;
+        }
+
+        throw new ApiError(message, response.status);
+      }
+
+      return payload as T;
+    } catch (error) {
+      const serverStatus = error instanceof ApiError ? error.status : undefined;
+      const transportFailure = error instanceof TypeError;
+      const shouldRetry = (transportFailure || serverStatus !== undefined) &&
+        canRetryApiRead(method, attempt, serverStatus);
+
+      if (shouldRetry && !options.signal?.aborted) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, apiReadRetryDelayMs(attempt));
+        });
+        continue;
+      }
+
+      if (transportFailure && !options.signal?.aborted) {
+        throw new ApiError(
+          method === "GET"
+            ? "تعذر الاتصال بالخادم بعد إعادة المحاولة. تحقق من الإنترنت ثم حاول تحميل البيانات من جديد."
+            : "انقطع الاتصال بالخادم. تأكد من حالة العملية قبل إعادة تنفيذها حتى لا تتكرر.",
+          0,
+        );
+      }
+
+      throw error;
     }
   }
 
-  if (!response.ok) {
-    let message = `فشل الطلب برمز ${response.status}`;
-
-    if (
-      payload &&
-      typeof payload === "object" &&
-      "error" in payload &&
-      typeof payload.error === "string"
-    ) {
-      message = payload.error;
-    }
-
-    throw new ApiError(message, response.status);
-  }
-
-  return payload as T;
+  throw new ApiError("تعذر تحميل البيانات مؤقتًا.", 0);
 }
-
 export function loginPos(phone: string, password: string) {
   return apiRequest<{
     token: string;
@@ -596,6 +640,15 @@ export function getManualOrderSettings() {
   );
 }
 
+/** Read-only labels from the storefront settings; never changes product categories. */
+export function getPosCategoryDisplaySettings(token: string) {
+  return apiRequest<{ categoryLabels?: Record<string, string> }>(
+    "/api/settings",
+    {},
+    token,
+  );
+}
+
 export function createManualOnlineOrder(
   token: string,
   input: {
@@ -641,6 +694,8 @@ export function createManualOnlineOrder(
 export type InventoryMovementType =
   | "purchase"
   | "purchase_void"
+  | "purchase_return"
+  | "purchase_return_void"
   | "pos_sale"
   | "pos_sale_void"
   | "pos_sale_edit"
@@ -674,6 +729,7 @@ export interface PosInventoryMovement {
 
   sourceType:
     | "pos_purchase"
+    | "pos_purchase_return"
     | "pos_sale"
     | "pos_sale_return"
     | "online_order"
@@ -777,6 +833,35 @@ export function getPosCustomers(
 }
 
 
+export interface PosCustomerLedgerDocumentItem {
+  productNameAr: string;
+  productCode: string | null;
+  barcode: string | null;
+  productImage: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  unitPriceMinor: number;
+  discountMinor: number;
+  lineTotalMinor: number;
+}
+
+export interface PosCustomerLedgerDocument {
+  kind: "sale" | "exchange";
+  publicId: string;
+  saleItems: PosCustomerLedgerDocumentItem[];
+  returnItems: PosCustomerLedgerDocumentItem[];
+  netSaleItems?: PosCustomerLedgerDocumentItem[];
+  subtotalMinor?: number;
+  discountMinor?: number;
+  totalMinor?: number;
+  returnNetMinor?: number;
+  newNetMinor?: number;
+  differenceMinor?: number;
+  settlementAmountMinor?: number;
+  deliveryChargeMinor?: number;
+}
+
 export interface PosCustomerLedgerEntry {
   transactionId:
     | number
@@ -796,6 +881,7 @@ export interface PosCustomerLedgerEntry {
   creditMinor: number;
 
   memo: string | null;
+  document?: PosCustomerLedgerDocument | null;
 }
 
 export interface PosCustomerLedgerResult {
@@ -843,9 +929,17 @@ export function createPosCustomer(
 export function getPosCustomerLedger(
   token: string,
   customerId: number,
+  includeDetails = false,
+  netAsOf?: string,
 ) {
+  const search = new URLSearchParams();
+  if (includeDetails) {
+    search.set("includeDetails", "1");
+    if (netAsOf) search.set("netAsOf", netAsOf);
+  }
+  const query = search.toString();
   return apiRequest<PosCustomerLedgerResult>(
-    `/api/pos/customers/${customerId}/ledger`,
+    `/api/pos/customers/${customerId}/ledger${query ? `?${query}` : ""}`,
     {},
     token,
   );
@@ -1623,6 +1717,26 @@ export function voidPosFinanceVoucher(
 }
 
 
+export function createPosFinanceDiscountNote(
+  token: string,
+  input: {
+    kind: "customer_credit" | "customer_debit" | "supplier_earned";
+    partyId: number;
+    amount: string;
+    reason: string;
+    reference?: string;
+    idempotencyKey: string;
+  },
+) {
+  return apiRequest<{
+    alreadyCreated: boolean;
+    voucher: PosFinanceVoucher;
+  }>("/api/pos/finance/discount-notes", {
+    method: "POST",
+    body: JSON.stringify(input),
+  }, token);
+}
+
 export type PosUnifiedVoucherPartyType =
   | "customer"
   | "employee"
@@ -1685,6 +1799,7 @@ export function createPosUnifiedReceiptVoucher(
     registerKey: string;
     bankAccountId?: number;
     notes?: string;
+    discountAmount?: string;
     idempotencyKey: string;
   },
 ) {
@@ -4131,6 +4246,15 @@ export interface PosDeliveryUnsettledOrder {
   createdAt: string;
   amountMinor: number;
   amount: number;
+  settledMinor: number;
+
+  // Each parcel is represented separately, even in an online exchange.
+  parcelType: "regular" | "original" | "exchange";
+  relatedOrderId: number | null;
+  parcelGrossMinor: number;
+  payableMinor: number;
+  accountedPayableMinor: number;
+  remainingPayableMinor: number;
 
   // التوصيل على الزبون، تكلفة الشركة، وصافي الربح/الخسارة.
   shippingChargedMinor: number;
@@ -4147,12 +4271,18 @@ export interface PosDeliverySettlementSummary {
   };
   outstandingMinor: number;
   outstanding: number;
+  grossOutstandingMinor: number;
+  exchangeOffsetsMinor: number;
 
   shippingChargedMinor: number;
   deliveryCompanyCostMinor: number;
   deliveryMarginMinor: number;
 
   unsettledOrders: PosDeliveryUnsettledOrder[];
+  // Read-only: negative exchange parcels are not cash/bank receipts.
+  payableExchangeOrders: PosDeliveryUnsettledOrder[];
+  // Historical reference rows: already paid originals linked to active exchanges.
+  settledOriginalParcels: PosDeliveryUnsettledOrder[];
   settlements: Array<{
     id: number;
     publicId: string;
@@ -4168,6 +4298,11 @@ export interface PosDeliverySettlementSummary {
       amountMinor: number;
       amount: number;
       status: "posted" | "reversed";
+    }>;
+    exchangeOffsets: Array<{
+      orderId: number;
+      amountMinor: number;
+      status: "posted" | "reversed" | "historical";
     }>;
   }>;
 }
@@ -4196,6 +4331,7 @@ export function createDeliveryCompanySettlement(
   companyId: number,
   input: {
     orderIds: number[];
+    exchangeOffsetOrderIds?: number[];
     receiptMethod: "cash" | "bank";
     notes?: string;
   },
@@ -4938,6 +5074,7 @@ export interface GrossProfitNetResult {
   otherOperatingExpensesMinor: number;
   salaryExpenseMinor: number;
   totalOperatingExpensesMinor: number;
+  settlementAdjustmentIncomeMinor: number;
   netProfitRecordedMinor: number | null;
   salaryPosted: boolean;
   provisional: boolean;
@@ -4969,6 +5106,26 @@ export interface GrossProfitReport {
   };
 
   warnings: string[];
+  historicalExchangeReconciliation?: {
+    mode: "read_only";
+    historicalProfitShiftMinor: number;
+    legacyOnlineReturns: Array<{
+      exchangeId: number;
+      financialBusinessDate: string;
+      receivedBusinessDate: string;
+      costMinor: number;
+      suggestedProfitShiftMinor: number;
+    }>;
+    unlinkedCashExchanges: Array<{
+      exchangeId: number;
+      publicId: string;
+      businessDate: string;
+      cashSessionId: number | null;
+      differenceMinor: number;
+    }>;
+    unlinkedCashDifferenceMinor: number;
+    note: string;
+  };
   netProfit: GrossProfitNetResult;
 
   missingCostProducts:
@@ -5779,5 +5936,119 @@ export function createPosExchange(
       ),
     },
     token,
+  );
+}
+
+
+// Purchase returns are separate from purchase invoices: physical stock is
+// removed only through the returns workflow; invoice writes remain unchanged.
+export interface PosPurchaseReturnPreview {
+  purchase: {
+    id: number;
+    publicId: string;
+    businessDate: string;
+    supplierId: number;
+    supplierName: string;
+    totalMinor: number;
+  };
+  lines: Array<{
+    id: number;
+    productId: number | null;
+    productName: string;
+    productImage: string | null;
+    productCode: string | null;
+    barcode: string | null;
+    barcodes: string[];
+    color: string | null;
+    size: string | null;
+    entryMode: "historical" | "stock_receipt";
+    originalQuantity: number;
+    returnedQuantity: number;
+    availableToReturn: number;
+    originalAmountMinor: number;
+    remainingAmountMinor: number;
+    stock: number | null;
+    options: Array<{ color: string | null; size: string | null; stock: number | null; barcode: string | null }>;
+  }>;
+}
+
+export interface PosPurchaseReturnDetail {
+  alreadyCreated?: boolean;
+  alreadyVoided?: boolean;
+  purchase: {
+    publicId: string;
+    supplierName: string;
+    supplierInvoiceNumber: string | null;
+  };
+  purchaseReturn: {
+    id: number;
+    publicId: string;
+    idempotencyKey: string;
+    purchaseId: number;
+    supplierId: number;
+    businessDate: string;
+    status: "completed" | "voided";
+    refundAmountMinor: number;
+    inventoryCostMinor: number;
+    reason: string;
+    notes: string | null;
+    createdAt: string;
+    voidedAt: string | null;
+    voidReason: string | null;
+  };
+  items: Array<{
+    id: number;
+    returnId: number;
+    purchaseItemId: number;
+    productId: number;
+    productName: string;
+    productCode: string | null;
+    productImage: string | null;
+    color: string | null;
+    size: string | null;
+    quantity: number;
+    refundAmountMinor: number;
+    inventoryCostMinor: number;
+    costQuality: "confirmed" | "estimated" | "mixed";
+  }>;
+}
+
+export function getPosPurchaseReturnPreview(token: string, purchasePublicId: string) {
+  return apiRequest<PosPurchaseReturnPreview>(
+    "/api/pos/purchase-returns/preview?purchasePublicId=" + encodeURIComponent(purchasePublicId),
+    {}, token,
+  );
+}
+
+export function getPosPurchaseReturnHistory(token: string, purchasePublicId?: string) {
+  return apiRequest<{ returns: PosPurchaseReturnDetail["purchaseReturn"][] }>(
+    "/api/pos/purchase-returns/history" +
+      (purchasePublicId ? "?purchasePublicId=" + encodeURIComponent(purchasePublicId) : ""),
+    {}, token,
+  );
+}
+
+export function getPosPurchaseReturnDetail(token: string, publicId: string) {
+  return apiRequest<PosPurchaseReturnDetail>(
+    "/api/pos/purchase-returns/detail?publicId=" + encodeURIComponent(publicId),
+    {}, token,
+  );
+}
+
+export function createPosPurchaseReturn(token: string, input: {
+  purchasePublicId: string;
+  idempotencyKey: string;
+  reason: string;
+  notes?: string;
+  lines: Array<{ purchaseItemId: number; color: string | null; size: string | null; quantity: number }>;
+}) {
+  return apiRequest<PosPurchaseReturnDetail>(
+    "/api/pos/purchase-returns", { method: "POST", body: JSON.stringify(input) }, token,
+  );
+}
+
+export function voidPosPurchaseReturn(token: string, input: { publicId: string; reason: string }) {
+  return apiRequest<PosPurchaseReturnDetail>(
+    "/api/pos/purchase-returns/void", { method: "POST", body: JSON.stringify(input) }, token,
   );
 }

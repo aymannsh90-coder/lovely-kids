@@ -1,3 +1,4 @@
+import { bankDisplayBalanceMinor } from "./finance-bank-currency-rules";
 import {
   bankAccountsTable,
   banksTable,
@@ -16,6 +17,7 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission, userHasAnyPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 
 type Db =
@@ -273,7 +275,13 @@ async function requirePosUser(
 
   if (
     !user.isAdmin &&
-    !user.isOwner
+    !user.isOwner &&
+    !(request.method === "GET" &&
+      ["/api/pos/finance/banking/reference", "/api/pos/finance/bank-accounts"].includes(new URL(request.url).pathname) &&
+      await userHasAnyPermission(db, user, ["banking.view", "banking.create", "vouchers.create"])) &&
+    !(request.method === "POST" &&
+      ["/api/pos/finance/bank-accounts", "/api/pos/finance/exchange-rates"].includes(new URL(request.url).pathname) &&
+      await userHasPermission(db, user, "banking.create"))
   ) {
     return {
       ok: false,
@@ -309,7 +317,11 @@ async function requireOwner(
     return auth;
   }
 
-  if (!auth.user.isOwner) {
+  const path = new URL(request.url).pathname;
+  const allowed = !auth.user.isAdmin && request.method === "POST" &&
+    ["/api/pos/finance/bank-accounts", "/api/pos/finance/exchange-rates"].includes(path) &&
+    await userHasPermission(db, auth.user, "banking.create");
+  if (!auth.user.isOwner && !allowed) {
     return {
       ok: false as const,
       response: json(
@@ -601,10 +613,14 @@ async function handleListBankAccounts(
               balance
                 ?.baseBalanceMinor ??
               0,
+            // ILS bank balances come from the actual accounting ledger.
+            // Some older journals lack optional currency metadata.
             currencyBalanceMinor:
-              balance
-                ?.currencyBalanceMinor ??
-              0,
+              bankDisplayBalanceMinor(
+                account.currencyCode,
+                balance?.baseBalanceMinor ?? 0,
+                balance?.currencyBalanceMinor ?? 0,
+              ),
           };
         },
       ),

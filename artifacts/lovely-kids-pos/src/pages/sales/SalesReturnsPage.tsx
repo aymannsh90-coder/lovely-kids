@@ -10,6 +10,7 @@ import {
 
 import { useSearchParams } from "react-router-dom";
 
+import "./SalesDocumentVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
@@ -144,7 +145,10 @@ function createIdempotencyKey() {
 }
 
 export default function SalesReturnsPage() {
-  const { token, session, setSession, clearAuthentication } = usePosRuntime();
+  const { token, session, setSession, clearAuthentication, user } = usePosRuntime();
+  const canVoidReturn = Boolean(user?.isOwner || user?.isAdmin ||
+    (user?.staffEnabled && user.permissions?.includes("sales.returns") && user.permissions?.includes("sales.void")));
+  const canCorrectReturn = Boolean(user?.isOwner || user?.isAdmin);
 
   const [searchParams] = useSearchParams();
 
@@ -457,6 +461,7 @@ export default function SalesReturnsPage() {
   }, [token, session?.registerKey, requestedReturnPublicId]);
 
   async function handleCorrectHistoryReturn() {
+    if (!canCorrectReturn) return;
     const selected = historySelected;
     if (!selected || selected.status !== "completed" || selected.refundMethod !== "cash") {
       setHistoryError("هذا المردود غير قابل لتصحيح الاسترداد النقدي.");
@@ -1039,6 +1044,7 @@ export default function SalesReturnsPage() {
     originalSalePublicId: string | null,
     originalRefundMethod: string,
   ) {
+    if (!canVoidReturn) return;
     const enteredReason = window.prompt(
       "أدخل سبب إلغاء المرتجع:",
     );
@@ -1152,7 +1158,7 @@ export default function SalesReturnsPage() {
 
 
   return (
-    <section className="sales-return-page" id="pos-sales-returns">
+    <section className="sales-return-page lk-sales-document-refresh" id="pos-sales-returns">
       <header className="sales-return-heading">
         <div className="panel-heading">
           <div className="panel-icon">↩️</div>
@@ -1297,16 +1303,16 @@ export default function SalesReturnsPage() {
                     </span></td>
                     <td>
                       <button type="button"
-                        className={item.status === "completed" && item.refundMethod === "cash"
+                        className={canCorrectReturn && item.status === "completed" && item.refundMethod === "cash"
                           ? "return-history-edit-btn" : "return-history-view-btn"}
                         disabled={historyBusy || submitBusy}
                         onClick={() => {
                           void loadReturnHistory(item.publicId, historyDate).then(() => {
-                            setHistoryCorrectionOpen(item.status === "completed"
+                            setHistoryCorrectionOpen(canCorrectReturn && item.status === "completed"
                               && item.refundMethod === "cash");
                           });
                         }}>
-                        {item.status === "completed" && item.refundMethod === "cash"
+                        {canCorrectReturn && item.status === "completed" && item.refundMethod === "cash"
                           ? "✏️ عرض وتعديل" : "عرض التفاصيل"}
                       </button>
                     </td>
@@ -1363,7 +1369,7 @@ export default function SalesReturnsPage() {
               </div>
               {historySelected.status === "completed" && (
                 <div className="return-history-actions">
-                  {historySelected.refundMethod === "cash" && (
+                  {canCorrectReturn && historySelected.refundMethod === "cash" && (
                     <button type="button" className="primary-button"
                       disabled={historyBusy || submitBusy}
                       onClick={() => {
@@ -1374,14 +1380,14 @@ export default function SalesReturnsPage() {
                       {historyCorrectionOpen ? "إغلاق التصحيح" : "✏️ تصحيح طريقة الاسترداد"}
                     </button>
                   )}
-                  <button type="button" className="secondary-button return-history-void-button"
+                  {canVoidReturn && <button type="button" className="secondary-button return-history-void-button"
                     disabled={historyBusy || submitBusy}
                     onClick={() => void handleVoidReturn(
                       historySelected.publicId,
                       historySelected.refundAmountMinor,
                       null,
                       historySelected.refundMethod,
-                    )}>إلغاء المردود</button>
+                    )}>إلغاء المردود</button>}
                   <button type="button" className="secondary-button"
                     disabled={!historySelected.previousPublicId || historyBusy || submitBusy}
                     onClick={() => void loadReturnHistory(historySelected.previousPublicId || undefined, historyDate)}>
@@ -1394,7 +1400,7 @@ export default function SalesReturnsPage() {
                   </button>
                 </div>
               )}
-              {historyCorrectionOpen &&
+              {canCorrectReturn && historyCorrectionOpen &&
                 historySelected.status === "completed" &&
                 historySelected.refundMethod === "cash" && (
                 <section className="return-history-editor">
@@ -1587,7 +1593,7 @@ export default function SalesReturnsPage() {
                 🖨️ طباعة إيصال المردود
               </button>
 
-              <button
+              {canVoidReturn && <button
                 className="secondary-button"
                 type="button"
                 disabled={submitBusy}
@@ -1601,7 +1607,7 @@ export default function SalesReturnsPage() {
                 }
               >
                 {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
-              </button>
+              </button>}
             </div>
           </div>
         </article>
@@ -1652,7 +1658,7 @@ export default function SalesReturnsPage() {
                 🖨️ طباعة إيصال المردود
               </button>
 
-              <button
+              {canVoidReturn && <button
                 className="secondary-button"
                 type="button"
                 disabled={submitBusy}
@@ -1666,7 +1672,7 @@ export default function SalesReturnsPage() {
                 }
               >
                 {submitBusy ? "جاري إلغاء المرتجع…" : "إلغاء هذا المرتجع"}
-              </button>
+              </button>}
             </div>
           </div>
         </article>

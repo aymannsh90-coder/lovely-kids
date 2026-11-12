@@ -54,6 +54,7 @@ function errorMessage(error: unknown) {
 
 export default function SuppliersPage() {
   const { token, user, clearAuthentication } = usePosRuntime();
+  const canEditSuppliers = Boolean(user?.isOwner || user?.isAdmin || (user?.staffEnabled && user?.permissions?.includes("parties.edit")));
 
   const [suppliers, setSuppliers] = useState<PosSupplier[]>([]);
   const [query, setQuery] = useState("");
@@ -174,7 +175,7 @@ export default function SuppliersPage() {
   ) {
     event.preventDefault();
 
-    if (!SUPPLIER_WRITES_ENABLED) {
+    if (!SUPPLIER_WRITES_ENABLED || !canEditSuppliers) {
       setError(
         "إضافة الموردين محمية حتى نشر API المشتريات وتفعيل الكتابة.",
       );
@@ -319,7 +320,7 @@ export default function SuppliersPage() {
         )}
       </section>
 
-      <form
+      {canEditSuppliers && <form
         className="accounting-invoice-card supplier-create-form"
         onSubmit={handleCreateSupplier}
       >
@@ -451,7 +452,7 @@ export default function SuppliersPage() {
             تفريغ الحقول
           </button>
         </div>
-      </form>
+      </form>}
 
       <section className="accounting-invoice-card supplier-list-card">
         <div className="supplier-list-heading">

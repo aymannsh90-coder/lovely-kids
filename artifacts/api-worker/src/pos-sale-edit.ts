@@ -19,6 +19,12 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
+import { postFinanceTransaction } from "./finance-posting";
+import { inspectPostedSaleCashLedger } from "./pos-sale-cash-ledger";
+import {
+  buildPosCashEditLines,
+  cashEditEvent,
+} from "./pos-sale-cash-adjustment-rules";
 import {
   addProductCostAtCurrentAverage,
   allocateProportionalCostMinor,
@@ -1174,6 +1180,21 @@ export async function handleUpdatePosSale(
         );
       }
 
+      // The original cash journal plus all earlier revision journals must
+      // already equal the persisted invoice. Never layer a new edit on top
+      // of an unreconciled legacy invoice or an absent cash posting.
+      let cashLedger: Awaited<ReturnType<typeof inspectPostedSaleCashLedger>> | null = null;
+      if (sale.paymentMethod === "cash") {
+        try {
+          cashLedger = await inspectPostedSaleCashLedger(tx, sale);
+        } catch {
+          throw new PosSaleEditError(
+            "قيد الفاتورة النقدية غير مطابق لقيمتها. راجع المحاسبة قبل تعديل الفاتورة.",
+            409,
+          );
+        }
+      }
+
       const oldItems = await tx
         .select()
         .from(posSaleItemsTable)
@@ -1878,6 +1899,34 @@ export async function handleUpdatePosSale(
         throw new Error(
           "POS_SALE_EDIT_REVISION_INSERT_FAILED",
         );
+      }
+
+      // Book only the NEW NET cash/income delta for this revision.
+      // This does not touch expectedBalanceMinor again: it was already
+      // changed above by balanceDifference in the same DB transaction.
+      // The revision ID makes each event/idempotency key globally unique.
+      if (sale.paymentMethod === "cash" && balanceDifference !== 0) {
+        if (!cashLedger) {
+          throw new PosSaleEditError("تعذر تحديد قيد البيع النقدي", 409);
+        }
+        await postFinanceTransaction(tx, {
+          publicId: `FIN-CASH-EDIT-${sale.publicId}-${revision.id}`,
+          idempotencyKey: `pos-sale:${sale.id}:cash-edit:${revision.id}`,
+          businessDate: sale.businessDate,
+          transactionType: "adjustment",
+          sourceType: "pos_sale",
+          sourceId: String(sale.id),
+          sourceEvent: cashEditEvent(revision.id),
+          cashSessionId: session.id,
+          notes: `فرق تعديل فاتورة ${sale.publicId}: ${reason}`,
+          createdByUserId: auth.id,
+          lines: buildPosCashEditLines(
+            cashLedger.cashAccountId,
+            cashLedger.salesAccountId,
+            totalMinor,
+            sale.totalMinor,
+          ),
+        });
       }
 
       // ---------------------------------------------------

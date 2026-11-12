@@ -32,7 +32,9 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
+import { historicalReturnProfitShiftMinor } from "./historical-exchange-reconciliation";
 
 type Db =
   Awaited<ReturnType<typeof openDb>>["db"];
@@ -300,7 +302,7 @@ async function handleGrossProfit(
       env,
     );
 
-  if (!owner?.isOwner) {
+  if (!owner?.isOwner && (!owner || owner.isAdmin || !(await userHasPermission(db, owner, "reports.cost")))) {
     return json(
       {
         error:
@@ -1374,15 +1376,37 @@ async function handleGrossProfit(
   // completion, but returned stock/COGS is recognized only when the
   // merchandise is physically received. Restrict the cost reversal to
   // the actual receipt date; never restore COGS for an unreceived return.
-  const onlineReceivedExchanges = await db
-    .select({ id: exchangeDocumentsTable.id })
-    .from(exchangeDocumentsTable)
-    .where(and(
-      eq(exchangeDocumentsTable.status, "completed"),
-      eq(exchangeDocumentsTable.sourceType, "online_order"),
-      sql`(${exchangeDocumentsTable.returnReceivedAt} AT TIME ZONE 'Asia/Hebron')::date >= ${from}::date`,
-      sql`(${exchangeDocumentsTable.returnReceivedAt} AT TIME ZONE 'Asia/Hebron')::date <= ${to}::date`,
-    ));
+  // Return cost is recognized with the exchange's financial completion.
+  // Older exchanges have no accrual event: keep their historic receipt-date
+  // treatment to avoid silently restating previously closed periods.
+  const bookedReturnEvents = await db.select({
+    sourceId: financeTransactionsTable.sourceId,
+    businessDate: financeTransactionsTable.businessDate,
+  }).from(financeTransactionsTable).where(and(
+    eq(financeTransactionsTable.sourceType, "online_exchange"),
+    eq(financeTransactionsTable.sourceEvent, "return_in_transit_recorded"),
+    eq(financeTransactionsTable.status, "posted"),
+  ));
+  const bookedReturnDateById = new Map(
+    bookedReturnEvents.map((row) => [Number(row.sourceId), row.businessDate]),
+  );
+  const candidateReturnExchanges = await db.select({
+    id: exchangeDocumentsTable.id,
+    returnReceivedAt: exchangeDocumentsTable.returnReceivedAt,
+    financialBusinessDate: exchangeDocumentsTable.financialBusinessDate,
+  }).from(exchangeDocumentsTable).where(and(
+    eq(exchangeDocumentsTable.status, "completed"),
+    eq(exchangeDocumentsTable.sourceType, "online_order"),
+  ));
+  const onlineReceivedExchanges = candidateReturnExchanges.filter((exchange) => {
+    const financialDate = bookedReturnDateById.get(exchange.id);
+    if (financialDate) return financialDate >= from && financialDate <= to;
+    if (!exchange.returnReceivedAt) return false;
+    const receiptDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Hebron", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(exchange.returnReceivedAt);
+    return receiptDate >= from && receiptDate <= to;
+  });
 
   const onlineReceivedExchangeIds = onlineReceivedExchanges.map((row) => row.id);
   const onlineReturnItems = onlineReceivedExchangeIds.length > 0
@@ -1985,10 +2009,133 @@ async function handleGrossProfit(
     .map((account) => account.amountMinor));
   const totalOperatingExpensesMinor = salaryExpenseMinor + otherOperatingExpensesMinor;
   const salaryPosted = expenseAccounts.some((account) => account.code === "EXPENSE_SALARY");
+  // Income adjustments created by owner credit/debit notes are outside the
+  // item-level sales gross margin above. Add ONLY those documented adjustment
+  // accounts here, not all income accounts (which would double-count sales).
+  // A posted reversal and its reversed original net to zero in the period.
+  const adjustmentIncomeRows = await db.select({
+    netMinor: sql<string>`COALESCE(SUM(${financeTransactionLinesTable.creditMinor} - ${financeTransactionLinesTable.debitMinor}), 0)::text`,
+  }).from(financeTransactionLinesTable)
+    .innerJoin(financeTransactionsTable,
+      eq(financeTransactionLinesTable.transactionId, financeTransactionsTable.id))
+    .innerJoin(financeAccountsTable,
+      eq(financeTransactionLinesTable.accountId, financeAccountsTable.id))
+    .where(and(
+      inArray(financeTransactionsTable.status, ["posted", "reversed"]),
+      gte(financeTransactionsTable.businessDate, from),
+      lte(financeTransactionsTable.businessDate, to),
+      inArray(financeAccountsTable.code, [
+        "INCOME_SUPPLIER_SETTLEMENT_DISCOUNT",
+        "INCOME_CUSTOMER_DEBIT_ADJUSTMENT",
+      ]),
+    ));
+  const settlementAdjustmentIncomeMinor = Number(adjustmentIncomeRows[0]?.netMinor ?? "0");
+  if (!Number.isSafeInteger(settlementAdjustmentIncomeMinor)) {
+    throw new Error("GROSS_PROFIT_SETTLEMENT_INCOME_OUT_OF_RANGE");
+  }
   const netProfitRecordedMinor = total.profitAfterDeliveryMinor === null
     ? null
-    : total.profitAfterDeliveryMinor - totalOperatingExpensesMinor;
+    : total.profitAfterDeliveryMinor - totalOperatingExpensesMinor +
+        settlementAdjustmentIncomeMinor;
 
+
+  // Legacy reconciliation is READ ONLY. It compares the period of the
+  // historic return-revenue journal with the day inventory was received.
+  // No backdating, no cash posting, and no modification to displayed
+  // official profit or closed periods.
+  const legacyOnlineDocs = candidateReturnExchanges.filter((entry) =>
+    !bookedReturnDateById.has(entry.id) &&
+    entry.financialBusinessDate !== null &&
+    entry.returnReceivedAt !== null,
+  );
+  const legacyIds = legacyOnlineDocs.map((entry) => entry.id);
+  const legacyReturnRows = legacyIds.length > 0
+    ? await db.select({
+      exchangeId: exchangeReturnItemsTable.exchangeId,
+      itemId: exchangeReturnItemsTable.id,
+      quantity: exchangeReturnItemsTable.quantity,
+      costQuantity: exchangeReturnItemCostsTable.quantity,
+      costTotalMinor: exchangeReturnItemCostsTable.costTotalMinor,
+      costQuality: exchangeReturnItemCostsTable.costQuality,
+    }).from(exchangeReturnItemsTable)
+      .leftJoin(exchangeReturnItemCostsTable,
+        eq(exchangeReturnItemsTable.id, exchangeReturnItemCostsTable.returnItemId))
+      .where(inArray(exchangeReturnItemsTable.exchangeId, legacyIds))
+    : [];
+  const legacyById = new Map<number, {
+    costMinor: number; fullyCosted: boolean; rows: number;
+  }>();
+  for (const row of legacyReturnRows) {
+    const current = legacyById.get(row.exchangeId) ?? {
+      costMinor: 0, fullyCosted: true, rows: 0,
+    };
+    current.rows += 1;
+    if (row.costTotalMinor === null || row.costQuantity !== row.quantity ||
+        row.costQuality !== "confirmed" || row.costTotalMinor < 0) {
+      current.fullyCosted = false;
+    } else {
+      current.costMinor += row.costTotalMinor;
+    }
+    legacyById.set(row.exchangeId, current);
+  }
+  const legacyOnlineReturns = legacyOnlineDocs.flatMap((entry) => {
+    const original = legacyById.get(entry.id);
+    if (!original || !original.fullyCosted || original.rows === 0 ||
+        !entry.returnReceivedAt || !entry.financialBusinessDate) return [];
+    const receiptDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Hebron", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(entry.returnReceivedAt);
+    if (entry.financialBusinessDate > to && receiptDate > to) return [];
+    if (entry.financialBusinessDate < from && receiptDate < from) return [];
+    return [{
+      exchangeId: entry.id,
+      financialBusinessDate: entry.financialBusinessDate,
+      receivedBusinessDate: receiptDate,
+      costMinor: original.costMinor,
+      suggestedProfitShiftMinor: historicalReturnProfitShiftMinor(
+        from, to, entry.financialBusinessDate, receiptDate, original.costMinor,
+      ),
+    }];
+  });
+
+  // A missing historical exchange journal is NOT proof cash was unpaid.
+  const legacyCashDocs = await db.select({
+    id: exchangeDocumentsTable.id,
+    publicId: exchangeDocumentsTable.publicId,
+    businessDate: exchangeDocumentsTable.businessDate,
+    cashSessionId: exchangeDocumentsTable.cashSessionId,
+    settlementAmountMinor: exchangeDocumentsTable.settlementAmountMinor,
+  }).from(exchangeDocumentsTable).where(and(
+    eq(exchangeDocumentsTable.status, "completed"),
+    eq(exchangeDocumentsTable.settlementType, "cash"),
+    inArray(exchangeDocumentsTable.sourceType, ["pos_sale", "pos_no_receipt"]),
+    ne(exchangeDocumentsTable.settlementAmountMinor, 0),
+    gte(exchangeDocumentsTable.businessDate, from),
+    lte(exchangeDocumentsTable.businessDate, to),
+  ));
+  const historicalCashJournalRows = legacyCashDocs.length > 0
+    ? await db.select({
+      sourceId: financeTransactionsTable.sourceId,
+    }).from(financeTransactionsTable).where(and(
+      eq(financeTransactionsTable.sourceType, "exchange"),
+      eq(financeTransactionsTable.sourceEvent, "cash_settlement"),
+      eq(financeTransactionsTable.status, "posted"),
+      inArray(financeTransactionsTable.sourceId, legacyCashDocs.map((row) => String(row.id))),
+    ))
+    : [];
+  const journalCashIds = new Set(historicalCashJournalRows.map((row) => row.sourceId));
+  const unlinkedCashExchanges = legacyCashDocs
+    .filter((row) => !journalCashIds.has(String(row.id)))
+    .map((row) => ({
+      exchangeId: row.id,
+      publicId: row.publicId,
+      businessDate: row.businessDate,
+      cashSessionId: row.cashSessionId,
+      differenceMinor: row.settlementAmountMinor,
+    }));
+  const historicalProfitShiftMinor = sum(
+    legacyOnlineReturns.map((entry) => entry.suggestedProfitShiftMinor),
+  );
   const warnings: string[] =
     [];
 
@@ -2056,11 +2203,23 @@ async function handleGrossProfit(
 
     warnings,
 
+    historicalExchangeReconciliation: {
+      mode: "read_only",
+      historicalProfitShiftMinor,
+      legacyOnlineReturns,
+      unlinkedCashExchanges,
+      unlinkedCashDifferenceMinor: sum(
+        unlinkedCashExchanges.map((row) => row.differenceMinor),
+      ),
+      note: "هذه فروقات مراجعة تاريخية فقط. لا تغيّر القيود ولا تعيد فتح الفترات المقفلة. غياب قيد نقدي مرتبط بالتبديل لا يعني أن الزبون لم يدفع.",
+    },
+
     netProfit: {
       profitAfterDeliveryMinor: total.profitAfterDeliveryMinor,
       otherOperatingExpensesMinor,
       salaryExpenseMinor,
       totalOperatingExpensesMinor,
+      settlementAdjustmentIncomeMinor,
       netProfitRecordedMinor,
       salaryPosted,
       expenseAccounts,
@@ -2082,7 +2241,7 @@ async function handleGrossProfit(
         "Finance business date when web order becomes done",
 
       profitDefinition:
-        "Gross profit before operating expenses. POS exchanges recognize both returned merchandise and replacement sales at their dated historic COGS; online exchanges deduct the posted SALES_RETURNS journal on replacement completion and reverse COGS only when returned merchandise is physically received.",
+        "Gross profit before operating expenses. New online exchanges recognize return cost on financial completion and transfer it to physical inventory on receipt. Pre-migration historical exchanges retain receipt-date profit recognition in official figures, with any proposed earlier-period reallocation shown separately for owner review.",
 
       deliveryDefinition:
         "Customer shipping charge recognized on completed orders minus net posted delivery expense on journal business dates (including prior-period adjustments and reversals)",
@@ -2091,7 +2250,7 @@ async function handleGrossProfit(
         true,
 
       netProfitDefinition:
-        "Recorded operating result: profit after delivery minus posted general-ledger expense account debits net of reversals, excluding delivery already included, with salaries separated. Owner withdrawals, employee advances, supplier payments, transfers, and purchases are not expenses here. Unrecorded accruals are not estimated.",
+        "Recorded operating result: profit after delivery minus posted general-ledger expense account debits net of reversals, excluding delivery already included, with salaries separated, plus designated supplier settlement discounts and customer debit adjustments. Other sales income is not added twice. Owner withdrawals, employee advances, supplier payments, transfers, and purchases are not expenses here. Unrecorded accruals are not estimated.",
 
       verifiedOwnerAttestations:
         attestedStates.length,

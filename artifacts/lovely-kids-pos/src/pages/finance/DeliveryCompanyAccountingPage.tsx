@@ -21,6 +21,24 @@ function formatMoney(minor: number) {
   })} ₪`;
 }
 
+function parcelTypeLabel(type: "regular" | "original" | "exchange") {
+  return type === "exchange"
+    ? "طرد تبديل"
+    : type === "original"
+      ? "الطرد الأصلي"
+      : "طلب عادي";
+}
+
+function parcelRelatedLabel(
+  type: "regular" | "original" | "exchange",
+  relatedOrderId: number | null,
+) {
+  if (relatedOrderId === null) return "—";
+  return type === "exchange"
+    ? `أصل #${relatedOrderId}`
+    : `تبديل #${relatedOrderId}`;
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -76,7 +94,7 @@ function buildDeliveryCompanyStatementDocument(
       (current, order) => ({
         orderTotalMinor:
           current.orderTotalMinor +
-          Math.round(order.totalPrice * 100),
+          order.parcelGrossMinor,
         shippingChargedMinor:
           current.shippingChargedMinor +
           order.shippingChargedMinor,
@@ -106,7 +124,7 @@ function buildDeliveryCompanyStatementDocument(
     summary.unsettledOrders.length === 0
       ? `
           <tr>
-            <td colspan="9">لا توجد طلبات غير مسوّاة.</td>
+            <td colspan="11">لا توجد طلبات غير مسوّاة.</td>
           </tr>
         `
       : summary.unsettledOrders
@@ -114,11 +132,13 @@ function buildDeliveryCompanyStatementDocument(
             (order) => `
               <tr>
                 <td>${order.id}</td>
+                <td>${escapeHtml(parcelTypeLabel(order.parcelType))}</td>
+                <td>${escapeHtml(parcelRelatedLabel(order.parcelType, order.relatedOrderId))}</td>
                 <td>${escapeHtml(statementDate(order.createdAt))}</td>
                 <td>${escapeHtml(order.customerName || "—")}</td>
                 <td>${escapeHtml(order.shippingZone || "—")}</td>
                 <td class="money">${money(
-                  Math.round(order.totalPrice * 100),
+                  order.parcelGrossMinor,
                 )}</td>
                 <td class="money">${money(
                   order.shippingChargedMinor,
@@ -136,6 +156,40 @@ function buildDeliveryCompanyStatementDocument(
             `,
           )
           .join("");
+
+  const settledOriginalRows = summary.settledOriginalParcels
+    .map(
+      (order) => `
+        <tr>
+          <td>${order.id}</td>
+          <td>${order.relatedOrderId ?? "—"}</td>
+          <td>${escapeHtml(order.customerName || "—")}</td>
+          <td class="money">${money(order.parcelGrossMinor)}</td>
+          <td class="money">${money(order.deliveryCompanyCostMinor)}</td>
+          <td class="money">${money(order.settledMinor)}</td>
+          <td>مسوّى سابقًا — مرجع فقط</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  const payableExchangeRows = summary.payableExchangeOrders
+    .map(
+      (order) => `
+        <tr>
+          <td>${order.id}</td>
+          <td>${order.relatedOrderId ?? "—"}</td>
+          <td>${escapeHtml(order.customerName || "—")}</td>
+          <td class="money">${money(order.parcelGrossMinor)}</td>
+          <td class="money">${money(order.deliveryCompanyCostMinor)}</td>
+          <td class="money strong">${money(-order.remainingPayableMinor)}</td>
+          <td>${order.remainingPayableMinor > 0 ? "خصم على الكشف الحالي" : "محسوم في كشف سابق"}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  const payableExchangeMinor = summary.exchangeOffsetsMinor;
 
   const settlementRows =
     summary.settlements.length === 0
@@ -163,7 +217,10 @@ function buildDeliveryCompanyStatementDocument(
                   settlement.orders
                     .map((item) => `#${item.orderId}`)
                     .join("، "),
-                )}</td>
+                )}
+                ${settlement.exchangeOffsets.length
+                  ? `<div>خصم تبديل ${escapeHtml(settlement.exchangeOffsets.map((offset) => `#${offset.orderId}`).join("، "))}: ${money(-settlement.exchangeOffsets.reduce((sum, offset) => sum + offset.amountMinor, 0))}</div>`
+                  : ""}</td>
                 <td>${
                   settlement.status === "posted"
                     ? "فعّالة"
@@ -381,12 +438,18 @@ function buildDeliveryCompanyStatementDocument(
     </colgroup>
     <tbody>
       <tr>
-        <td class="label">المبلغ غير المسوّى</td>
+        <td class="label">صافي المستحق بعد خصم التبديلات</td>
         <td class="money strong">${money(
           summary.outstandingMinor,
         )}</td>
         <td class="label">طلبات غير مسوّاة</td>
-        <td>${summary.unsettledOrders.length}</td>
+        <td>${summary.unsettledOrders.length} (دون قيود التبديل السالبة)</td>
+      </tr>
+      <tr>
+        <td class="label">الإجمالي الموجب قبل خصم التبديلات</td>
+        <td class="money">${money(summary.grossOutstandingMinor)}</td>
+        <td class="label">خصومات التبديل الحالية</td>
+        <td class="money">${money(-summary.exchangeOffsetsMinor)}</td>
       </tr>
       <tr>
         <td class="label">إيراد التوصيل من الزبائن</td>
@@ -413,23 +476,27 @@ function buildDeliveryCompanyStatementDocument(
 
   <table class="data order-data">
     <colgroup>
-      <col style="width: 6.5%" />
+      <col style="width: 6%" />
+      <col style="width: 8%" />
+      <col style="width: 8%" />
       <col style="width: 9%" />
-      <col style="width: 17%" />
-      <col style="width: 11%" />
-      <col style="width: 11%" />
-      <col style="width: 11%" />
-      <col style="width: 11%" />
-      <col style="width: 12%" />
-      <col style="width: 11.5%" />
+      <col style="width: 13%" />
+      <col style="width: 9%" />
+      <col style="width: 10%" />
+      <col style="width: 9%" />
+      <col style="width: 9%" />
+      <col style="width: 9%" />
+      <col style="width: 10%" />
     </colgroup>
     <thead>
       <tr>
-        <th>رقم الطلب</th>
+        <th>رقم الطرد</th>
+        <th>نوع الطرد</th>
+        <th>الطرد المرتبط</th>
         <th>تاريخ الطلب</th>
         <th>الزبون</th>
         <th>المنطقة</th>
-        <th>إجمالي الطلب${forExcel ? " (₪)" : ""}</th>
+        <th>قيمة الطرد للتحصيل${forExcel ? " (₪)" : ""}</th>
         <th>التوصيل على الزبون${forExcel ? " (₪)" : ""}</th>
         <th>تكلفة الشركة${forExcel ? " (₪)" : ""}</th>
         <th>ربح/خسارة التوصيل${forExcel ? " (₪)" : ""}</th>
@@ -442,7 +509,7 @@ function buildDeliveryCompanyStatementDocument(
         summary.unsettledOrders.length > 0
           ? `
             <tr class="total-row">
-              <td colspan="4">الإجمالي</td>
+              <td colspan="6">الإجمالي</td>
               <td class="money">${money(
                 totals.orderTotalMinor,
               )}</td>
@@ -459,9 +526,70 @@ function buildDeliveryCompanyStatementDocument(
                 totals.amountMinor,
               )}</td>
             </tr>
+            <tr>
+              <td colspan="10">خصومات التبديلات الحالية (دون المحسومة سابقًا)</td>
+              <td class="money">${money(-summary.exchangeOffsetsMinor)}</td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="10">الصافي المستحق فعليًا</td>
+              <td class="money">${money(summary.outstandingMinor)}</td>
+            </tr>
           `
           : ""
       }
+    </tbody>
+  </table>
+
+  <p class="meta">
+    الطرد الأصلي وطرد التبديل مستقلان. قيمة طرد التبديل هنا هي
+    فرق التبديل ورسومه، وليس القيمة الكاملة لفاتورة الأصناف البديلة.
+  </p>
+
+  <h2>الطرود الأصلية المسوّاة سابقًا — مرجع منفصل</h2>
+  <p class="meta">
+    تظهر الطرود الأصلية المرتبطة بتبديلات لم تُحسم بعد، حتى لو كان
+    تحصيل الطرد الأصلي تم في كشف سابق. هذا القسم معلوماتي فقط، ولا
+    يُضاف إلى إجمالي المستحق الحالي.
+  </p>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>الطرد الأصلي</th>
+        <th>طرد التبديل</th>
+        <th>الزبون</th>
+        <th>القيمة الأصلية</th>
+        <th>تكلفة الشركة</th>
+        <th>المسوى سابقًا</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${settledOriginalRows || '<tr><td colspan="7">لا توجد طرود أصلية مسوّاة مرتبطة بالتبديلات الحالية.</td></tr>'}
+    </tbody>
+  </table>
+
+  <h2>طرود التبديل التي عليها مبلغ لصالح الشركة — للمطابقة فقط</h2>
+  <p class="meta">
+    هذه قيود سالبة منفصلة عن التحصيل أعلاه، وقد تخص كشفًا قديمًا.
+    لا تدخل تلقائيًا في إجمالي التحصيل ولا تنشئ حركة نقدية أو بنكية.
+  </p>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>طرد التبديل</th>
+        <th>الطرد الأصلي</th>
+        <th>الزبون</th>
+        <th>قيمة طرد التبديل</th>
+        <th>تكلفة الشركة</th>
+        <th>صافي الخصم الحالي</th>
+        <th>حالة الخصم</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${payableExchangeRows || '<tr><td colspan="7">لا توجد قيود تبديل سالبة.</td></tr>'}
+      ${payableExchangeRows
+        ? `<tr class="total-row"><td colspan="5">خصومات التبديل الحالية فقط</td><td class="money">${money(-payableExchangeMinor)}</td><td>لا يشمل المحسومة سابقًا</td></tr>`
+        : ""}
     </tbody>
   </table>
 
@@ -518,6 +646,8 @@ export default function DeliveryCompanyAccountingPage() {
     useState<PosDeliverySettlementSummary | null>(null);
 
   const [selectedIds, setSelectedIds] =
+    useState<number[]>([]);
+  const [selectedExchangeOffsetIds, setSelectedExchangeOffsetIds] =
     useState<number[]>([]);
 
   const [receiptMethod, setReceiptMethod] =
@@ -587,8 +717,13 @@ export default function DeliveryCompanyAccountingPage() {
 
       setSelectedIds((current) =>
         current.filter((orderId) =>
-          result.unsettledOrders.some(
-            (order) => order.id === orderId,
+          result.unsettledOrders.some((order) => order.id === orderId),
+        ),
+      );
+      setSelectedExchangeOffsetIds((current) =>
+        current.filter((orderId) =>
+          result.payableExchangeOrders.some(
+            (order) => order.id === orderId && order.remainingPayableMinor > 0,
           ),
         ),
       );
@@ -617,19 +752,33 @@ export default function DeliveryCompanyAccountingPage() {
     );
   }, [summary, selectedIds]);
 
+  const selectedExchangeOffsetOrders = useMemo(() => {
+    if (!summary) return [];
+    const selected = new Set(selectedExchangeOffsetIds);
+    return summary.payableExchangeOrders.filter(
+      (order) => selected.has(order.id) && order.remainingPayableMinor > 0,
+    );
+  }, [summary, selectedExchangeOffsetIds]);
+
+  const selectedExchangeOffsetsMinor = useMemo(
+    () => selectedExchangeOffsetOrders.reduce(
+      (sum, order) => sum + order.remainingPayableMinor, 0,
+    ),
+    [selectedExchangeOffsetOrders],
+  );
+
   const selectedTotalMinor = useMemo(
-    () =>
-      selectedOrders.reduce(
-        (sum, order) => sum + order.amountMinor,
-        0,
-      ),
-    [selectedOrders],
+    () => selectedOrders.reduce((sum, order) => sum + order.amountMinor, 0)
+      - selectedExchangeOffsetsMinor,
+    [selectedOrders, selectedExchangeOffsetsMinor],
   );
 
   const allSelected =
     !!summary?.unsettledOrders.length &&
-    selectedIds.length ===
-      summary.unsettledOrders.length;
+    selectedIds.length === summary.unsettledOrders.length &&
+    summary.payableExchangeOrders
+      .filter((order) => order.remainingPayableMinor > 0)
+      .every((order) => selectedExchangeOffsetIds.includes(order.id));
 
   function toggleOrder(orderId: number) {
     setSelectedIds((current) =>
@@ -641,13 +790,21 @@ export default function DeliveryCompanyAccountingPage() {
 
   function toggleAll() {
     if (!summary) return;
-
     setSelectedIds(
-      allSelected
-        ? []
-        : summary.unsettledOrders.map(
-            (order) => order.id,
-          ),
+      allSelected ? [] : summary.unsettledOrders.map((order) => order.id),
+    );
+    setSelectedExchangeOffsetIds(
+      allSelected ? [] : summary.payableExchangeOrders
+        .filter((order) => order.remainingPayableMinor > 0)
+        .map((order) => order.id),
+    );
+  }
+
+  function toggleExchangeOffset(orderId: number) {
+    setSelectedExchangeOffsetIds((current) =>
+      current.includes(orderId)
+        ? current.filter((id) => id !== orderId)
+        : [...current, orderId],
     );
   }
 
@@ -656,6 +813,11 @@ export default function DeliveryCompanyAccountingPage() {
 
     if (selectedIds.length === 0) {
       setError("اختر طلبًا واحدًا على الأقل.");
+      return;
+    }
+
+    if (selectedTotalMinor <= 0) {
+      setError("الصافي المحدد بعد خصم طرود التبديل يجب أن يكون أكبر من صفر.");
       return;
     }
 
@@ -671,7 +833,9 @@ export default function DeliveryCompanyAccountingPage() {
         "تسجيل تسوية شركة التوصيل؟",
         "",
         `عدد الطلبات: ${selectedIds.length}`,
-        `المبلغ: ${formatMoney(selectedTotalMinor)}`,
+        `طرود التبديل المخصومة: ${selectedExchangeOffsetIds.length}`,
+        `إجمالي خصم التبديل: ${formatMoney(selectedExchangeOffsetsMinor)}`,
+        `صافي التحصيل الفعلي: ${formatMoney(selectedTotalMinor)}`,
         `طريقة التحصيل: ${
           receiptMethod === "cash" ? "نقدي" : "بنك"
         }`,
@@ -693,6 +857,7 @@ export default function DeliveryCompanyAccountingPage() {
           companyId,
           {
             orderIds: selectedIds,
+            exchangeOffsetOrderIds: selectedExchangeOffsetIds,
             receiptMethod,
             notes: notes.trim() || undefined,
           },
@@ -705,6 +870,7 @@ export default function DeliveryCompanyAccountingPage() {
       );
 
       setSelectedIds([]);
+      setSelectedExchangeOffsetIds([]);
       setNotes("");
 
       await loadSummary(companyId);
@@ -926,6 +1092,7 @@ export default function DeliveryCompanyAccountingPage() {
                   Number.isSafeInteger(id) && id > 0 ? id : null,
                 );
                 setSelectedIds([]);
+                setSelectedExchangeOffsetIds([]);
                 setSummary(null);
               }}
             >
@@ -986,12 +1153,14 @@ export default function DeliveryCompanyAccountingPage() {
           <section className="delivery-ledger-metrics" aria-label="ملخص حساب شركة التوصيل">
             <article className="delivery-ledger-metric is-highlight">
               <div className="delivery-ledger-metric-label">
-                <span>المبلغ غير المسوّى</span>
+                <span>صافي المبلغ المستحق فعليًا</span>
                 <span className="dl-symbol" aria-hidden="true">₪</span>
               </div>
               <strong dir="ltr">{formatMoney(summary.outstandingMinor)}</strong>
               <span className="delivery-ledger-metric-hint">
-                المستحق من شركة التوصيل عن الطلبات غير المسوّاة
+                المستحق قبل الخصم {formatMoney(summary.grossOutstandingMinor)}
+                {" − خصومات التبديل الحالية "}
+                {formatMoney(summary.exchangeOffsetsMinor)}
               </span>
             </article>
             <article className="delivery-ledger-metric is-sky">
@@ -1055,7 +1224,7 @@ export default function DeliveryCompanyAccountingPage() {
                 <span className="delivery-ledger-panel-glyph" aria-hidden="true">📋</span>
                 <div>
                   <h2 id="delivery-ledger-orders-title">الطلبات غير المسوّاة</h2>
-                  <p>حدد الطلبات المطلوب تحصيلها من شركة التوصيل.</p>
+                  <p>كل طرد يظهر بسطر مستقل؛ طرد التبديل يعرض فقط المبلغ المحصّل عليه فعليًا، دون دمجه بالأصل.</p>
                 </div>
               </div>
               <div className="delivery-ledger-head-tools">
@@ -1086,10 +1255,12 @@ export default function DeliveryCompanyAccountingPage() {
                   <thead>
                     <tr>
                       <th>تحديد</th>
-                      <th>رقم الطلب</th>
+                      <th>رقم الطرد</th>
+                      <th>نوع الطرد</th>
+                      <th>الطرد المرتبط</th>
                       <th>الزبون</th>
                       <th>المنطقة</th>
-                      <th>إجمالي الطلب</th>
+                      <th>قيمة الطرد للتحصيل</th>
                       <th>توصيل الزبون</th>
                       <th>تكلفة الشركة</th>
                       <th>ربح / خسارة</th>
@@ -1111,11 +1282,13 @@ export default function DeliveryCompanyAccountingPage() {
                           />
                         </td>
                         <td><span className="delivery-ledger-order-id">#{order.id}</span></td>
+                        <td>{parcelTypeLabel(order.parcelType)}</td>
+                        <td>{parcelRelatedLabel(order.parcelType, order.relatedOrderId)}</td>
                         <td className="delivery-ledger-customer">{order.customerName || "—"}</td>
                         <td>{order.shippingZone || "—"}</td>
                         <td>
                           <span className="delivery-ledger-money">
-                            {formatMoney(Math.round(order.totalPrice * 100))}
+                            {formatMoney(order.parcelGrossMinor)}
                           </span>
                         </td>
                         <td><span className="delivery-ledger-money">{formatMoney(order.shippingChargedMinor)}</span></td>
@@ -1146,16 +1319,142 @@ export default function DeliveryCompanyAccountingPage() {
               </div>
             )}
 
+            <p className="delivery-ledger-metric-hint">
+              خصومات التبديل غير المحسومة تظهر منفصلة، ويتم خصم المحدد منها من سند التحصيل الحالي فقط.
+              التبديلات المحسومة بكشف سابق لا تدخل مجددًا في الصافي.
+            </p>
+
             <div className="delivery-ledger-selection">
               <div className="delivery-ledger-selection-title">
-                <span>إجمالي المستحق عن الطلبات المحددة</span>
+                <span>صافي التحصيل بعد خصم طرود التبديل المحددة</span>
                 <strong dir="ltr">{formatMoney(selectedTotalMinor)}</strong>
-                <small>المبلغ الذي سيتم تسجيله عند إتمام التسوية</small>
+                <small>
+                  طلبات: {selectedOrders.length}،
+                  خصومات التبديل: {formatMoney(selectedExchangeOffsetsMinor)}.
+                  هذا هو المبلغ الذي سيدخل الصندوق أو البنك.
+                </small>
               </div>
               <span className="delivery-ledger-selected-count">
                 {selectedIds.length} طلب محدد
               </span>
             </div>
+          </section>
+
+          {summary.settledOriginalParcels.length > 0 && (
+            <section className="delivery-ledger-panel" aria-labelledby="delivery-ledger-original-parcels-title">
+              <div className="delivery-ledger-panel-head">
+                <div className="delivery-ledger-panel-heading">
+                  <span className="delivery-ledger-panel-glyph" aria-hidden="true">📦</span>
+                  <div>
+                    <h2 id="delivery-ledger-original-parcels-title">الطرود الأصلية المسوّاة سابقًا</h2>
+                    <p>
+                      مرجع مستقل للطرود الأصلية المرتبطة بالتبديلات الظاهرة.
+                      لا تدخل هذه القيم مجددًا في المستحق أو سند التحصيل.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="delivery-ledger-table-wrap" role="region" aria-label="الطرود الأصلية المسواة سابقا" tabIndex={0}>
+                <table className="delivery-ledger-table">
+                  <thead>
+                    <tr>
+                      <th>الطرد الأصلي</th>
+                      <th>طرد التبديل</th>
+                      <th>الزبون</th>
+                      <th>قيمة الطرد الأصلي</th>
+                      <th>تكلفة الشركة</th>
+                      <th>المسوى سابقًا</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.settledOriginalParcels.map((order) => (
+                      <tr key={order.id}>
+                        <td><span className="delivery-ledger-order-id">#{order.id}</span></td>
+                        <td>{order.relatedOrderId === null ? "—" : `#${order.relatedOrderId}`}</td>
+                        <td className="delivery-ledger-customer">{order.customerName || "—"}</td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.parcelGrossMinor)}</span></td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.deliveryCompanyCostMinor)}</span></td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.settledMinor)}</span></td>
+                        <td>مسوّى سابقًا — مرجع فقط</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          <section className="delivery-ledger-panel" aria-labelledby="delivery-ledger-exchange-payables-title">
+            <div className="delivery-ledger-panel-head">
+              <div className="delivery-ledger-panel-heading">
+                <span className="delivery-ledger-panel-glyph" aria-hidden="true">🔄</span>
+                <div>
+                  <h2 id="delivery-ledger-exchange-payables-title">
+                    طرود تبديل لها مبلغ لصالح الشركة
+                  </h2>
+                  <p>كل طرد تبديل مستقل عن طلبه الأصلي. هذه مبالغ مراجعة وليست طلبات تحصيل.</p>
+                </div>
+              </div>
+              <span className="delivery-ledger-count">
+                {summary.payableExchangeOrders.length} طرد
+              </span>
+            </div>
+            {summary.payableExchangeOrders.length === 0 ? (
+              <div className="delivery-ledger-empty">لا توجد تبديلات سالبة غير محسومة محاسبيًا.</div>
+            ) : (
+              <div className="delivery-ledger-table-wrap" role="region" aria-label="طرود التبديل المستحقة للشركة" tabIndex={0}>
+                <table className="delivery-ledger-table">
+                  <thead>
+                    <tr>
+                      <th>خصم من التحصيل</th>
+                      <th>طرد التبديل</th>
+                      <th>الطرد الأصلي</th>
+                      <th>الزبون</th>
+                      <th>قيمة الطرد للتحصيل</th>
+                      <th>تكلفة الشركة</th>
+                      <th>صافي لصالح الشركة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.payableExchangeOrders.map((order) => (
+                      <tr key={order.id}>
+                        <td>
+                          {order.remainingPayableMinor > 0 ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedExchangeOffsetIds.includes(order.id)}
+                              onChange={() => toggleExchangeOffset(order.id)}
+                              aria-label={`خصم طرد التبديل رقم ${order.id} من التسوية`}
+                            />
+                          ) : (
+                            <span title="محسوم في كشف سابق">مسوّى سابقًا</span>
+                          )}
+                        </td>
+                        <td><span className="delivery-ledger-order-id">#{order.id}</span></td>
+                        <td>{order.relatedOrderId === null ? "—" : `#${order.relatedOrderId}`}</td>
+                        <td className="delivery-ledger-customer">{order.customerName || "—"}</td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.parcelGrossMinor)}</span></td>
+                        <td><span className="delivery-ledger-money">{formatMoney(order.deliveryCompanyCostMinor)}</span></td>
+                        <td>
+                          <span className="delivery-ledger-money is-negative">
+                            {formatMoney(-order.remainingPayableMinor)}
+                          </span>
+                          {order.accountedPayableMinor > 0 && (
+                            <small>محسوم سابقًا: {formatMoney(order.accountedPayableMinor)}</small>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="delivery-ledger-metric-hint">
+              المبلغ المتبقي من التبديلات يُخصم من صافي الرصيد الرئيسي.
+              حدّد التبديلات التي سيخصمها المندوب مع التحصيل الحالي ليُنشأ قيد التسوية الصحيح.
+              المسوّى سابقًا لا يُخصم مرة ثانية.
+            </p>
           </section>
 
           {summary.unsettledOrders.length > 0 && (
@@ -1197,6 +1496,7 @@ export default function DeliveryCompanyAccountingPage() {
                   disabled={
                     saving ||
                     selectedIds.length === 0 ||
+                    selectedTotalMinor <= 0 ||
                     (receiptMethod === "cash" && !session)
                   }
                   onClick={() => void saveSettlement()}
@@ -1271,6 +1571,13 @@ export default function DeliveryCompanyAccountingPage() {
                           <span className="delivery-ledger-order-references">
                             {settlement.orders.map((item) => "#" + item.orderId).join("، ")}
                           </span>
+                          {settlement.exchangeOffsets.length > 0 && (
+                            <div className="delivery-ledger-metric-hint">
+                              خصم تبديل: {settlement.exchangeOffsets.map((o) => "#" + o.orderId).join("، ")}
+                              {" • "}
+                              {formatMoney(-settlement.exchangeOffsets.reduce((sum, o) => sum + o.amountMinor, 0))}
+                            </div>
+                          )}
                         </td>
                         <td>
                           <span className={

@@ -1,0 +1,55 @@
+name: Verify POS Purchase Returns
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/purchase-return-*'
+      - 'artifacts/api-worker/src/pos-purchase-return-*'
+      - 'artifacts/lovely-kids-pos/src/pages/purchases/PurchaseReturnsPage.tsx'
+      - 'artifacts/lovely-kids-pos/src/lib/scannerKeyboard.test.mjs'
+      - 'artifacts/lovely-kids-pos/src/pages/purchases/PurchaseReturnsPage.css'
+      - 'artifacts/lovely-kids-pos/src/purchase-return-print.test.mjs'
+      - 'lib/db/migrations/20261103_create_purchase_returns.sql'
+      - '.github/workflows/verify-purchase-returns.yml'
+jobs:
+  rules-and-migration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: purchase_returns_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d purchase_returns_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: purchase_returns_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests for refund rounding and stock distributions
+        run: node --experimental-strip-types --test artifacts/api-worker/src/purchase-return-rules.test.mjs
+      - name: Arabic keyboard barcode scanner regression test
+        run: node --experimental-strip-types --test artifacts/lovely-kids-pos/src/lib/scannerKeyboard.test.mjs
+      - name: Purchase-return A4 print visibility regression
+        run: node --test artifacts/lovely-kids-pos/src/purchase-return-print.test.mjs
+      - name: Apply purchase return SQL on disposable PostgreSQL
+        run: |
+          psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/purchase-return-migration.fixture.sql
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261103_create_purchase_returns.sql
+      - name: Verify foreign keys, refund constraints, ledger types and void state
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/purchase-return-migration.verify.sql

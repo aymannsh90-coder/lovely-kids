@@ -2,6 +2,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import RequireOpenSession from "../guards/RequireOpenSession";
 import RequireOwner from "../guards/RequireOwner";
+import RequireStaffGrant from "../guards/RequireStaffGrant";
+import { usePosRuntime } from "../app/pos-context";
+import StaffOrdersPage from "../pages/sales/StaffOrdersPage";
+import PurchaseHistoryPage from "../pages/purchases/PurchaseHistoryPage";
+import RequireFinancialReports from "../guards/RequireFinancialReports";
 import RequireStaffPage from "../guards/RequireStaffPage";
 import DashboardLayout from "../layouts/DashboardLayout";
 import ComingSoonPage from "../pages/ComingSoonPage";
@@ -15,9 +20,12 @@ import ChecksPage from "../pages/finance/ChecksPage";
 import CustomerReceiptsPage from "../pages/finance/CustomerReceiptsPage";
 import DeliveryCompanyAccountingPage from "../pages/finance/DeliveryCompanyAccountingPage";
 import ExpensesPage from "../pages/finance/ExpensesPage";
+import StaffExpensesPage from "../pages/finance/StaffExpensesPage";
+import StaffDeliveryOverviewPage from "../pages/finance/StaffDeliveryOverviewPage";
 import AssistantInboxPage from "../pages/finance/AssistantInboxPage";
 import VoucherRegisterPage from "../pages/finance/VoucherRegisterPage";
 import UnifiedPartyVoucherPage from "../pages/finance/UnifiedPartyVoucherPage";
+import DiscountNotesPage from "../pages/finance/DiscountNotesPage";
 import JournalVoucherPage from "../pages/finance/JournalVoucherPage";
 import ProductCardPage from "../pages/inventory/ProductCardPage";
 import InventoryStockPage from "../pages/inventory/InventoryStockPage";
@@ -28,6 +36,7 @@ import CustomersPage from "../pages/parties/CustomersPage";
 import EmployeesPage from "../pages/parties/EmployeesPage";
 import SuppliersPage from "../pages/parties/SuppliersPage";
 import PurchaseInvoicePage from "../pages/purchases/PurchaseInvoicePage";
+import PurchaseReturnsPage from "../pages/purchases/PurchaseReturnsPage";
 import InvoiceLookupPage from "../pages/sales/InvoiceLookupPage";
 import MobileSalePage from "../pages/sales/MobileSalePage";
 import ManualOnlineOrderPage from "../pages/sales/ManualOnlineOrderPage";
@@ -52,6 +61,18 @@ import StatementsPage from "../pages/reports/StatementsPage";
 import TrialBalanceReportPage from "../pages/reports/TrialBalanceReportPage";
 import ReceivablesLiquidityReportPage from "../pages/reports/ReceivablesLiquidityReportPage";
 import FinancialStatementsReportPage from "../pages/reports/FinancialStatementsReportPage";
+
+function StaffAwareExpenses() {
+  const { user } = usePosRuntime();
+  if (user?.isOwner || user?.isAdmin) return <ExpensesPage />;
+  return <RequireStaffGrant permissions={["vouchers.create"]}><StaffExpensesPage /></RequireStaffGrant>;
+}
+
+function StaffAwareDelivery() {
+  const { user } = usePosRuntime();
+  if (user?.isOwner || user?.isAdmin) return <DeliveryCompanyAccountingPage />;
+  return <RequireStaffGrant permissions={["delivery.view"]}><StaffDeliveryOverviewPage /></RequireStaffGrant>;
+}
 
 export default function AppRouter() {
   return (
@@ -95,6 +116,7 @@ export default function AppRouter() {
 
       <Route element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="orders" element={<StaffOrdersPage />} />
         <Route path="admin" element={<AdminPanelPage />} />
         <Route path="access" element={<RequireOwner><StaffAccessPage /></RequireOwner>} />
 
@@ -151,29 +173,16 @@ export default function AppRouter() {
         <Route
           path="purchases/new"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["purchases.create"]}>
               <PurchaseInvoicePage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
+        <Route path="purchases/history" element={<RequireStaffGrant permissions={["purchases.view", "purchases.create"]}><PurchaseHistoryPage /></RequireStaffGrant>} />
         <Route
           path="purchases/returns"
-          element={
-            <RequireOwner>
-              <ComingSoonPage
-              icon="📦"
-              title="مردودات المشتريات"
-              description="إرجاع أصناف إلى المورد وربطها بفاتورة الشراء."
-              points={[
-                "البحث بفاتورة الشراء أو باركود الصنف.",
-                "اختيار الكمية المراد إرجاعها.",
-                "خصم الكمية من المخزون.",
-                "تحديث حساب المورد.",
-              ]}
-              />
-            </RequireOwner>
-          }
+          element={<RequireStaffGrant permissions={["purchases.view", "purchases.returns", "purchases.returns.void"]}><PurchaseReturnsPage /></RequireStaffGrant>}
         />
 
         <Route
@@ -237,17 +246,26 @@ export default function AppRouter() {
         <Route
           path="vouchers/receipt"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.create"]}>
               <UnifiedPartyVoucherPage mode="receipt" />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="vouchers/payment"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.create"]}>
               <UnifiedPartyVoucherPage mode="payment" />
+            </RequireStaffGrant>
+          }
+        />
+
+        <Route
+          path="finance/discount-notes"
+          element={
+            <RequireOwner>
+              <DiscountNotesPage />
             </RequireOwner>
           }
         />
@@ -255,18 +273,18 @@ export default function AppRouter() {
         <Route
           path="vouchers/journal"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.create"]}>
               <JournalVoucherPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="vouchers/register"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["vouchers.view","vouchers.void"]}>
               <VoucherRegisterPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
@@ -274,7 +292,7 @@ export default function AppRouter() {
           path="finance/expenses"
           element={
             <RequireOpenSession>
-              <ExpensesPage />
+              <StaffAwareExpenses />
             </RequireOpenSession>
           }
         />
@@ -291,27 +309,27 @@ export default function AppRouter() {
         <Route
           path="finance/banking"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["banking.view","banking.create"]}>
               <BankingPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="finance/card-settlements"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["banking.view","banking.create"]}>
               <CardSettlementsPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="finance/checks"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["banking.view","banking.create"]}>
               <ChecksPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
@@ -319,42 +337,42 @@ export default function AppRouter() {
 
         <Route
           path="finance/delivery-company"
-          element={<DeliveryCompanyAccountingPage />}
+          element={<StaffAwareDelivery />}
         />
 
         <Route
           path="statements"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <StatementsPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
         <Route
           path="reports/trial-balance"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <TrialBalanceReportPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
         <Route
           path="reports/receivables-liquidity"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <ReceivablesLiquidityReportPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
         <Route
           path="reports/financial-statements"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.financial","reports.cost"]} requireAll>
               <FinancialStatementsReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
@@ -371,27 +389,27 @@ export default function AppRouter() {
         <Route
           path="reports/supplier-statement"
           element={
-            <RequireOwner>
+            <RequireFinancialReports>
               <SupplierStatementReportPage />
-            </RequireOwner>
+            </RequireFinancialReports>
           }
         />
 
         <Route
           path="reports/sales"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost"]}>
               <SalesAnalyticsPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="reports/inventory-valuation"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost","inventory.cost"]}>
               <InventoryValuationReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
@@ -407,27 +425,27 @@ export default function AppRouter() {
         <Route
           path="reports/inventory-intelligence"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost"]}>
               <InventoryIntelligenceReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="reports/product-analytics"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.sales"]}>
               <ProductAnalyticsReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
 
         <Route
           path="reports"
           element={
-            <RequireOwner>
+            <RequireStaffGrant permissions={["reports.cost"]}>
               <GrossProfitReportPage />
-            </RequireOwner>
+            </RequireStaffGrant>
           }
         />
       </Route>

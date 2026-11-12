@@ -1,0 +1,233 @@
+/* POS sales returns and exchange: scoped visual refresh.
+   No mutation of totals, data flow, receipt printing, or action handlers. */
+@media screen {
+  .route-content .sales-return-page.lk-sales-document-refresh {
+    --doc-pink: #e91e8c;
+    --doc-blue: #42ade0;
+    --doc-ink: #234254;
+    --doc-muted: #6b8294;
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    direction: rtl;
+  }
+  .lk-sales-document-refresh .sales-return-heading {
+    position: relative;
+    min-height: 104px;
+    padding: 18px 23px;
+    border: 1px solid #eed6e4;
+    border-radius: 18px;
+    background: linear-gradient(110deg,#fff 15%,#fff6fb 75%,#fcebf5);
+    box-shadow: 0 6px 22px rgba(42,79,104,.055);
+  }
+  .lk-sales-document-refresh .sales-return-heading::before {
+    content: "";
+    position: absolute;
+    top: 16px;
+    bottom: 16px;
+    right: 0;
+    width: 4px;
+    border-radius: 4px;
+    background: var(--doc-pink);
+  }
+  .lk-sales-document-refresh .sales-return-heading :is(h1,h2) {
+    margin: 0 0 4px;
+    color: var(--doc-ink);
+    font-size: 22px;
+    font-weight: 900;
+  }
+  .lk-sales-document-refresh .sales-return-heading p {
+    margin: 0;
+    color: var(--doc-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .lk-sales-document-refresh .sales-return-heading .panel-icon {
+    display: grid;
+    place-items: center;
+    width: 45px;
+    height: 45px;
+    border: 1px solid #f2c9df;
+    border-radius: 13px;
+    background: #fcecf5;
+    color: #b72373;
+  }
+  .lk-sales-document-refresh :is(
+    .sales-return-search-panel,
+    .sales-return-invoice,
+    .sales-return-items-panel,
+    .sales-return-completion-panel,
+    .return-history-panel
+  ) {
+    min-width: 0;
+    padding: 18px 21px;
+    border: 1px solid #d9e7ef;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 4px 18px rgba(36,78,101,.055);
+  }
+  .lk-sales-document-refresh .sales-return-section-title {
+    gap: 12px;
+    padding: 0 0 13px;
+    margin: 0 0 14px;
+    border-bottom: 1px solid #e4ecf2;
+  }
+  .lk-sales-document-refresh .sales-return-section-title h3 {
+    margin: 0 0 4px;
+    color: var(--doc-ink);
+    font-size: 17px;
+    font-weight: 900;
+  }
+  .lk-sales-document-refresh .sales-return-section-title p {
+    margin: 0;
+    color: var(--doc-muted);
+    font-size: 12px;
+    line-height: 1.65;
+  }
+  .lk-sales-document-refresh .return-mode-tabs {
+    padding: 6px;
+    border: 1px solid #d8e7ef;
+    border-radius: 14px;
+    background: #edf6fb;
+    gap: 7px;
+  }
+  .lk-sales-document-refresh .return-mode-tab {
+    min-height: 41px;
+    padding: 8px 16px;
+    border: 1px solid #edc6db;
+    border-radius: 11px;
+    background: #fff8fc;
+    color: #a8246c;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .lk-sales-document-refresh .return-mode-tab.is-active {
+    border-color: #dd267f;
+    background: #e91e8c;
+    color: white;
+    box-shadow: 0 3px 11px rgba(233,30,140,.15);
+  }
+  .lk-sales-document-refresh :is(
+    button.primary-button,
+    button.secondary-button,
+    button.sales-return-search-button,
+    .return-history-actions button,
+    .return-history-editor-footer button,
+    .sales-return-selection-actions button,
+    .exchange-mode-picker button
+  ) {
+    min-height: 39px;
+    padding: 8px 15px;
+    border: 1px solid #eebed8;
+    border-radius: 11px;
+    background: linear-gradient(120deg,#fffafd,#fff0f8);
+    color: #a92067;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 850;
+    box-shadow: 0 2px 9px rgba(171,50,111,.055);
+  }
+  .lk-sales-document-refresh :is(
+    button.primary-button,
+    button.sales-return-search-button,
+    button.sales-return-submit
+  ) {
+    border-color: #da2182;
+    background: linear-gradient(120deg,#f044a1,#d7197e);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(206,34,129,.13);
+  }
+  .lk-sales-document-refresh :is(
+    button.primary-button,
+    button.secondary-button,
+    button.sales-return-search-button,
+    .return-history-actions button,
+    .return-history-editor-footer button,
+    .sales-return-selection-actions button,
+    .exchange-mode-picker button
+  ):hover:not(:disabled) {
+    border-color: #e888b8;
+    box-shadow: 0 5px 14px rgba(171,50,111,.105);
+  }
+  .lk-sales-document-refresh :is(button,input,select,textarea):focus-visible {
+    outline: 3px solid rgba(233,30,140,.23);
+    outline-offset: 2px;
+  }
+  .lk-sales-document-refresh button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .lk-sales-document-refresh :is(
+    .sales-return-field input,
+    .sales-return-field select,
+    .sales-return-field textarea,
+    .sales-return-search-form input,
+    .return-history-findbar input,
+    .return-history-datebar input
+  ) {
+    min-height: 39px;
+    border: 1px solid #d5e5ee;
+    border-radius: 10px;
+    background: #fcfeff;
+    color: #244357;
+    font-size: 13px;
+  }
+  .lk-sales-document-refresh :is(input,select,textarea):focus {
+    border-color: #eb58a4;
+  }
+  .lk-sales-document-refresh :is(
+    .return-history-summary,
+    .sales-return-summary-grid > div,
+    .sales-return-final-row
+  ) {
+    border: 1px solid #d7e6ee;
+    border-radius: 12px;
+    background: #edf6fc;
+  }
+  .lk-sales-document-refresh .sales-return-summary-grid > div:nth-child(2n) {
+    border-color: #f0cddd;
+    background: #fff0f7;
+  }
+  .lk-sales-document-refresh .sales-return-table-wrap {
+    border: 1px solid #cbdfea;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .lk-sales-document-refresh .sales-return-table th,
+  .lk-sales-document-refresh .return-history-table th {
+    background: #e6f2f9;
+    color: #3c6078;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .lk-sales-document-refresh .sales-return-table tbody tr:nth-child(even),
+  .lk-sales-document-refresh .return-history-table tbody tr:nth-child(even) {
+    background: #f7fbfd;
+  }
+  .lk-sales-document-refresh .sales-return-table tbody tr:hover,
+  .lk-sales-document-refresh .return-history-table tbody tr:hover {
+    background: #fff7fb;
+  }
+  .lk-sales-document-refresh :is(
+    .return-history-editor,
+    .return-history-detail,
+    .sales-return-success,
+    .sales-return-completion-panel
+  ) {
+    border-radius: 13px;
+  }
+  @media (max-width: 760px) {
+    .lk-sales-document-refresh .sales-return-heading {
+      padding: 16px 18px;
+    }
+    .lk-sales-document-refresh :is(
+      .sales-return-search-panel,
+      .sales-return-invoice,
+      .sales-return-items-panel,
+      .sales-return-completion-panel,
+      .return-history-panel
+    ) { padding: 14px; }
+  }
+}
+/* Print and receipt-specific styles intentionally unchanged. */

@@ -1,3 +1,4 @@
+import { bankDisplayBalanceMinor } from "./finance-bank-currency-rules";
 import {
   bankAccountsTable,
   banksTable,
@@ -22,6 +23,7 @@ import {
 } from "drizzle-orm";
 
 import { getCurrentUser } from "./auth";
+import { userHasPermission } from "./staff-permissions";
 import { openDb, type Env } from "./db";
 import {
   CUSTOMER_RECEIVABLE_CONTROL_CODE,
@@ -72,7 +74,7 @@ async function requireOwner(
     };
   }
 
-  if (!user.isOwner) {
+  if (!user.isOwner && (user.isAdmin || !(await userHasPermission(db, user, "reports.financial")))) {
     return {
       ok: false as const,
       response: json(
@@ -1303,12 +1305,11 @@ async function handleLiquidityReport(
           0;
 
         const currencyBalanceMinor =
-          account.currencyCode ===
-            "ILS"
-            ? baseBalanceMinor
-            : balance
-                ?.currencyBalanceMinor ??
-              0;
+          bankDisplayBalanceMinor(
+            account.currencyCode,
+            baseBalanceMinor,
+            balance?.currencyBalanceMinor ?? 0,
+          );
 
         bankBaseMinor +=
           baseBalanceMinor;

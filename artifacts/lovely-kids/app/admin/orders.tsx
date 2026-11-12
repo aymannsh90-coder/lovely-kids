@@ -33,6 +33,15 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 import { API_BASE } from "@/constants/api";
+import ExchangeReturnPickingPanel from "@/components/ExchangeReturnPickingPanel";
+import {
+  countFailedDeliveryReturns,
+  getFailedDeliveryReturnState,
+} from "@/utils/failedDeliveryReturnStatus";
+import {
+  countExchangeReturnParcels,
+  getExchangeReturnParcelState,
+} from "@/utils/exchangeReturnParcelStatus";
 import { createOrderPrintHtml } from "@/utils/orderPrint";
 import { printOrderThermalReceipt } from "@/utils/orderThermalReceipt";
 import { buildCustomerWhatsappUrl } from "@/utils/whatsappPhone";
@@ -123,6 +132,11 @@ interface Order {
   deliveryCompanyCost?: number | null;
   courierCashReceivedAt?: string | null;
   courierCashReversedAt?: string | null;
+  failedDeliveryReturnStatus?: "pending" | "received" | null;
+  failedDeliveryReturnReason?: string | null;
+  failedDeliveryReturnReportedAt?: string | null;
+  failedDeliveryReturnReceivedAt?: string | null;
+  failedDeliveryReturnCostMinor?: number | null;
   shippingOriginalCost?: number | null;
   shippingPromotionDiscount?: number | null;
   promotionDiscountAmount?: number;
@@ -274,6 +288,7 @@ const STATUS_OPTIONS = [
   { key: "delivering", label: "قيد التوصيل", color: "#FF9800", icon: "bicycle-outline" as const },
   { key: "done", label: "تم التسليم", color: "#22c55e", icon: "bag-check-outline" as const },
   { key: "cancelled", label: "ملغي", color: "#ef4444", icon: "close-circle-outline" as const },
+  { key: "returning", label: "راجع", color: "#D97706", icon: "return-down-back-outline" as const },
 ];
 
 const ORDER_FILTER_OPTIONS = [
@@ -552,7 +567,32 @@ export default function AdminOrdersScreen() {
   const params = useLocalSearchParams<{ orderId?: string | string[] }>();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [verifiedPickingIds, setVerifiedPickingIds] = useState<Set<number>>(new Set());
   const [now, setNow] = useState(Date.now());
+
+  // Optional verification is loaded separately: missing migration/API must never
+  // prevent the existing orders list and status workflows from working.
+  useEffect(() => {
+    if (!orders.length) { setVerifiedPickingIds(new Set()); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const response = await fetch(`${API_BASE}/api/orders/picking/summaries`, {
+          headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+        });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (!cancelled && Array.isArray(result?.verifiedIds)) {
+          setVerifiedPickingIds(new Set(
+            result.verifiedIds.filter((id: unknown) => Number.isSafeInteger(id) && Number(id) > 0),
+          ));
+        }
+      } catch { /* Verification display never blocks normal order management. */ }
+    })();
+    return () => { cancelled = true; };
+  }, [orders, getAuthToken]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOrders, setHasLoadedOrders] = useState(false);
@@ -591,12 +631,20 @@ export default function AdminOrdersScreen() {
   ] = useState<
     "arab" | "bop" | null
   >(null);
+  const [failedReturnTarget, setFailedReturnTarget] = useState<Order | null>(null);
+  const [failedReturnReason, setFailedReturnReason] = useState("");
+  const [failedReturnError, setFailedReturnError] = useState("");
+  const [failedReturnBusy, setFailedReturnBusy] = useState(false);
+  const [failedReceiptTarget, setFailedReceiptTarget] = useState<Order | null>(null);
+  const [failedReceiptBusy, setFailedReceiptBusy] = useState(false);
   const [exchangeVoidTarget, setExchangeVoidTarget] = useState<Order | null>(null);
   const [exchangeVoidReason, setExchangeVoidReason] = useState("");
   const [exchangeVoidBusy, setExchangeVoidBusy] = useState(false);
   const [exchangeVoidError, setExchangeVoidError] = useState("");
   const [exchangeReturnConfirm, setExchangeReturnConfirm] =
     useState<ExchangeReturnConfirmation | null>(null);
+  const [exchangeReturnVerified, setExchangeReturnVerified] = useState(false);
+  const updateExchangeReturnVerified = useCallback((value: boolean) => setExchangeReturnVerified(value), []);
   const [exchangeReturnBusyId, setExchangeReturnBusyId] =
     useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<number>>(new Set());
@@ -633,6 +681,8 @@ export default function AdminOrdersScreen() {
   const [editCustomerPhone, setEditCustomerPhone] = useState("");
   const [editCustomerAddress, setEditCustomerAddress] = useState("");
   const [editShippingZone, setEditShippingZone] = useState("");
+  const [editManualShippingEnabled, setEditManualShippingEnabled] = useState(false);
+  const [editManualShippingCost, setEditManualShippingCost] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editInvoiceDiscount, setEditInvoiceDiscount] = useState("0");
   const [editLocalDiscount, setEditLocalDiscount] = useState("0");
@@ -905,6 +955,7 @@ export default function AdminOrdersScreen() {
         throw new Error("لا توجد أصناف مرتجعة مرتبطة بعملية التبديل");
       }
 
+      setExchangeReturnVerified(false);
       setExchangeReturnConfirm({
         orderId: order.id,
         publicId,
@@ -930,6 +981,10 @@ export default function AdminOrdersScreen() {
     const confirmation = exchangeReturnConfirm;
 
     if (!confirmation || exchangeReturnBusyId !== null) {
+      return;
+    }
+    if (!exchangeReturnVerified) {
+      showError("يجب فحص جميع القطع المرتجعة بالباركود أولاً (100%).");
       return;
     }
 
@@ -1769,6 +1824,23 @@ export default function AdminOrdersScreen() {
     setEditShippingZone(
       order.shippingZone ?? "",
     );
+    const configuredZone = (
+      settings.shippingZones?.length
+        ? settings.shippingZones
+        : ADMIN_DEFAULT_SHIPPING_ZONES
+    ).find((zone) => zone.label === order.shippingZone);
+    // A manual quote is stored as the original charge, without a shipping
+    // promotion discount. Restore it when the same order is edited again.
+    const manualQuote =
+      order.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+      order.shippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+      !order.exchangePublicId &&
+      order.shippingOriginalCost != null &&
+      order.shippingOriginalCost !== (configuredZone?.cost ?? 0) &&
+      (order.shippingPromotionDiscount ?? 0) === 0 &&
+      order.shippingCost === order.shippingOriginalCost;
+    setEditManualShippingEnabled(manualQuote);
+    setEditManualShippingCost(String(order.shippingCost ?? configuredZone?.cost ?? 0));
     // Preserve previously quoted prices when reopening existing local orders.
     const storedLocalCharge =
       order.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
@@ -2041,6 +2113,16 @@ export default function AdminOrdersScreen() {
       }
     }
 
+    if (editManualShippingEnabled &&
+        editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+        editShippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+        !editingOrder.exchangePublicId &&
+        (!/^\d+$/.test(editManualShippingCost) ||
+          Number(editManualShippingCost) > 10000)) {
+      setEditOrderError("أجرة التوصيل اليدوية يجب أن تكون مبلغ شيكل صحيحاً من 0 إلى 10000");
+      return;
+    }
+
     if (editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL && editPaymentMethod === "local_store_cash") {
       setEditOrderError("اختر طريقة دفع عادية عند الخروج من الديلفري المحلي");
       return;
@@ -2084,6 +2166,12 @@ export default function AdminOrdersScreen() {
                   localDeliveryCharge: editLocalCharge,
                   localDeliveryCourierCost: Number(editLocalCourierCost),
                 }
+              : {}),
+            ...(editManualShippingEnabled &&
+                editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                editShippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+                !editingOrder.exchangePublicId
+              ? { manualShippingCost: Number(editManualShippingCost) }
               : {}),
             ...(editingOrder.exchangePublicId
               ? {
@@ -2297,6 +2385,8 @@ export default function AdminOrdersScreen() {
   const editShippingCost = editSelectedShippingZone
     ? editShippingZone === ADMIN_LOCAL_DELIVERY_LABEL
       ? Number(editLocalCharge) || 0
+    : editManualShippingEnabled && !editingOrder?.exchangePublicId
+      ? Number(editManualShippingCost) || 0
     : editingOrder?.exchangePublicId
       ? Math.max(
           0,
@@ -2819,6 +2909,64 @@ export default function AdminOrdersScreen() {
     return counts;
   }, [orders]);
 
+  // Physical receipt of the old parcel; not delivery of the replacement to the customer.
+  const exchangeReturnParcelCounts = useMemo(
+    () => countExchangeReturnParcels(orders),
+    [orders],
+  );
+
+  const failedReturnCounts = useMemo(() => countFailedDeliveryReturns(orders), [orders]);
+
+  const reportRefusedParcel = async () => {
+    if (!failedReturnTarget || failedReturnBusy) return;
+    const reason = failedReturnReason.trim();
+    if (reason.length < 3 || reason.length > 500) {
+      setFailedReturnError("اكتب سبب رجوع الطرد (3–500 حرف)");
+      return;
+    }
+    setFailedReturnBusy(true);
+    setFailedReturnError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة الدخول");
+      const res = await fetch(`${API_BASE}/api/orders/${failedReturnTarget.id}/failed-delivery-return`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "تعذر تسجيل الطرد الراجع");
+      setFailedReturnTarget(null);
+      setFailedReturnReason("");
+      await fetchOrders();
+    } catch (error) {
+      setFailedReturnError(error instanceof Error ? error.message : "تعذر تسجيل الطرد الراجع");
+    } finally { setFailedReturnBusy(false); }
+  };
+
+  const receiveRefusedParcel = async () => {
+    if (!failedReceiptTarget || failedReceiptBusy) return;
+    setFailedReceiptBusy(true);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("انتهت جلسة الدخول");
+      const res = await fetch(`${API_BASE}/api/orders/${failedReceiptTarget.id}/failed-delivery-return/receive`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmPhysicalReceipt: true }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "تعذر استلام الراجع");
+      setFailedReceiptTarget(null);
+      await fetchOrders();
+      if (Platform.OS !== "web") Alert.alert("تم الاستلام", "تم إلغاء البيع وإرجاع مخزون القطع وتكاليفها مرة واحدة.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر تأكيد الاستلام";
+      showError(message);
+      if (Platform.OS !== "web") Alert.alert("تعذر الاستلام", message);
+    } finally { setFailedReceiptBusy(false); }
+  };
+
   const filteredOrders = useMemo(() => {
     const search = normalizeOrderLookup(orderSearch);
     const needle = search.replace(/^#/, "");
@@ -2826,23 +2974,30 @@ export default function AdminOrdersScreen() {
 
     return orders.filter((order) => {
       if (
-        order.mergedIntoOrderId !== null &&
-        !needle
+        order.mergedIntoOrderId != null &&
+        (!needle || orderStatusFilter.startsWith("exchange_return_"))
       ) {
         return false;
       }
 
-      if (
-        orderStatusFilter === "exchange" &&
-        !order.exchangePublicId
-      ) {
+      const parcelState = getExchangeReturnParcelState(order);
+      if (orderStatusFilter === "exchange" && !order.exchangePublicId) {
+        return false;
+      }
+      if (orderStatusFilter === "exchange_return_pending" && parcelState !== "pending") {
+        return false;
+      }
+      if (orderStatusFilter === "exchange_return_received" && parcelState !== "received") {
         return false;
       }
 
       if (
-        orderStatusFilter !== "all" &&
-        orderStatusFilter !== "exchange" &&
-        order.status !== orderStatusFilter
+        ["returning", "failed_return_pending", "failed_return_received"].includes(orderStatusFilter)
+          ? (orderStatusFilter === "returning"
+              ? getFailedDeliveryReturnState(order) === null
+              : getFailedDeliveryReturnState(order) !== (orderStatusFilter === "failed_return_pending" ? "pending" : "received"))
+          : !["all", "exchange", "exchange_return_pending", "exchange_return_received"].includes(orderStatusFilter) &&
+            order.status !== orderStatusFilter
       ) {
         return false;
       }
@@ -3223,7 +3378,122 @@ export default function AdminOrdersScreen() {
     setPrintingId(order.id);
 
     try {
-      const html = await createOrderPrintHtml(order);
+      // Use the same verified historic exchange snapshot as thermal printing.
+      // A replacement order's current items alone cannot identify returned goods.
+      const exchangePrintData = order.exchangePublicId
+        ? await fetchOnlineExchangeStatus(order.exchangePublicId)
+        : null;
+
+      if (order.exchangeOriginalOrderId && !exchangePrintData) {
+        throw new Error("تعذر تحميل تفاصيل التبديل المرتجعة لطباعة A4.");
+      }
+
+      if (
+        exchangePrintData &&
+        (exchangePrintData.exchange.status !== "completed" ||
+          exchangePrintData.exchange.replacementOrderId !== String(order.id) ||
+          exchangePrintData.exchange.publicId !== order.exchangePublicId)
+      ) {
+        throw new Error("بيانات التبديل تغيرت، حدّث قائمة الطلبات قبل الطباعة.");
+      }
+
+      // Match each returned variant against the original order's stored
+      // image first. This preserves the color/image at the time of purchase.
+      const originalOrder = orders.find(
+        (item) => item.id === order.exchangeOriginalOrderId,
+      );
+      const normalizeVariant = (value: string | null | undefined) =>
+        (value ?? "").trim().toLocaleLowerCase();
+
+      const returnItemsWithImages = exchangePrintData
+        ? exchangePrintData.returnItems.map((returnedItem) => {
+            const originalItem = originalOrder?.items.find(
+              (item) =>
+                (returnedItem.productId
+                  ? String(item.id) === String(returnedItem.productId)
+                  : normalizeVariant(item.name) ===
+                    normalizeVariant(returnedItem.productNameAr)) &&
+                (!returnedItem.color ||
+                  normalizeVariant(item.color) ===
+                    normalizeVariant(returnedItem.color)) &&
+                (!returnedItem.size ||
+                  normalizeVariant(item.size) ===
+                    normalizeVariant(returnedItem.size)),
+            );
+
+            return {
+              ...returnedItem,
+              image: originalItem?.image?.trim() || undefined,
+            };
+          })
+        : [];
+
+      // For older orders with no saved image, use the authenticated admin
+      // catalog (including hidden products) and the matching color variant.
+      // Missing catalog images must not prevent the order from printing.
+      if (returnItemsWithImages.some((item) => !item.image)) {
+        try {
+          const token = await getAuthToken();
+          if (token) {
+            const response = await fetch(`${API_BASE}/api/products/admin`, {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: "no-store",
+            });
+
+            if (response.ok) {
+              const payload: unknown = await response.json();
+              const products: AdminOrderEditProduct[] = Array.isArray(payload)
+                ? payload
+                : [];
+              const productsById = new Map(
+                products.map((product) => [String(product.id), product]),
+              );
+
+              for (const item of returnItemsWithImages) {
+                if (item.image) continue;
+
+                const product = item.productId
+                  ? productsById.get(String(item.productId))
+                  : products.find(
+                      (candidate) =>
+                        normalizeVariant(candidate.nameAr) ===
+                        normalizeVariant(item.productNameAr),
+                    );
+                if (!product) continue;
+
+                const variant = product.colorVariants?.find(
+                  (candidate) =>
+                    normalizeVariant(candidate.color) ===
+                    normalizeVariant(item.color),
+                );
+                item.image =
+                  variant?.image?.trim() || product.image?.trim() || undefined;
+              }
+            }
+          }
+        } catch (imageError) {
+          console.warn(
+            "تعذر تحميل صور بعض أصناف المرتجع لطباعة A4",
+            imageError,
+          );
+        }
+      }
+
+      const html = await createOrderPrintHtml({
+        ...order,
+        ...(exchangePrintData
+          ? {
+              exchangeReturnNetMinor: exchangePrintData.exchange.returnNetMinor,
+              exchangeNewNetMinor: exchangePrintData.exchange.newNetMinor,
+              exchangeDifferenceMinor: exchangePrintData.exchange.differenceMinor,
+              exchangeDeliveryChargeMinor: exchangePrintData.exchange.deliveryChargeMinor,
+              exchangeDeliveryBaseChargeMinor: exchangePrintData.exchange.deliveryBaseChargeMinor,
+              exchangeDeliveryDiscountMinor: exchangePrintData.exchange.deliveryDiscountMinor,
+              exchangeSettlementAmountMinor: exchangePrintData.exchange.settlementAmountMinor,
+              exchangeReturnItems: returnItemsWithImages,
+            }
+          : {}),
+      });
 
       if (Platform.OS === "web") {
         if (!printWindow) {
@@ -3553,7 +3823,11 @@ export default function AdminOrdersScreen() {
       >
         {ORDER_FILTER_OPTIONS.map((option) => {
           const selected = orderStatusFilter === option.key;
-          const count = hasLoadedOrders ? (orderStatusCounts[option.key] ?? 0) : "—";
+          const count = hasLoadedOrders
+            ? option.key === "returning"
+              ? failedReturnCounts.pending + failedReturnCounts.received
+              : (orderStatusCounts[option.key] ?? 0)
+            : "—";
 
           return (
             <Pressable
@@ -3614,6 +3888,131 @@ export default function AdminOrdersScreen() {
           );
         })}
       </ScrollView>
+
+      {["returning", "failed_return_pending", "failed_return_received"].includes(orderStatusFilter) && (
+        <View style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 7, gap: 7 }}>
+          <Text style={{ textAlign: "right", fontSize: 14, fontWeight: "900", color: colors.foreground }}>
+            📦 طرود رفضت الزبونة استلامها — متابعة شركة التوصيل
+          </Text>
+          <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+            <Pressable
+              onPress={() => { setOrderStatusFilter(orderStatusFilter === "failed_return_pending" ? "returning" : "failed_return_pending"); setExpanded(null); }}
+              accessibilityRole="button"
+              accessibilityLabel="عرض الطرود الراجعة غير المستلمة"
+              style={{ flex: 1, padding: 12, backgroundColor: "#FFFBEB",
+                borderRadius: 11, borderColor: orderStatusFilter === "failed_return_pending" ? "#D97706" : "#FCD34D",
+                borderWidth: orderStatusFilter === "failed_return_pending" ? 2 : 1 }}>
+              <Text style={{ textAlign: "right", color: "#92400E", fontSize: 12, fontWeight: "800" }}>
+                لسه عند شركة التوصيل
+              </Text>
+              <Text style={{ textAlign: "right", color: "#92400E", fontSize: 24, fontWeight: "900" }}>
+                {failedReturnCounts.pending}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setOrderStatusFilter(orderStatusFilter === "failed_return_received" ? "returning" : "failed_return_received"); setExpanded(null); }}
+              accessibilityRole="button"
+              accessibilityLabel="عرض الطرود الراجعة التي تم استلامها"
+              style={{ flex: 1, padding: 12, backgroundColor: "#F0FDF4",
+                borderRadius: 11, borderColor: orderStatusFilter === "failed_return_received" ? "#16A34A" : "#86EFAC",
+                borderWidth: orderStatusFilter === "failed_return_received" ? 2 : 1 }}>
+              <Text style={{ textAlign: "right", color: "#166534", fontSize: 12, fontWeight: "800" }}>
+                تم استلام الراجع
+              </Text>
+              <Text style={{ textAlign: "right", color: "#166534", fontSize: 24, fontWeight: "900" }}>
+                {failedReturnCounts.received}
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 11 }}>
+            اضغط على عدّاد المستلم أو غير المستلم لعرض طروده فقط.
+          </Text>
+          <Text style={{ textAlign: "right", color: colors.mutedForeground, fontSize: 11 }}>
+            تكلفة إرجاع الطرد من الشركة 0 ₪. البضاعة غير متاحة للبيع حتى تأكيد وصولها للمحل.
+          </Text>
+        </View>
+      )}
+
+      {/* Keep receipt counters inside the Exchange Orders tab and its own
+          sub-filters only; don't occupy space in All or regular status tabs.
+          Physical return receipt is independent of replacement delivery. */}
+      {["exchange", "exchange_return_pending", "exchange_return_received"].includes(orderStatusFilter) && (
+      <View style={{ marginHorizontal: 12, marginTop: 5, marginBottom: 7, gap: 7 }}>
+        <Text style={{ textAlign: "right", fontSize: 13, fontWeight: "900", color: colors.foreground }}>
+          📦 متابعة استلام طرود التبديل المرتجعة
+        </Text>
+        <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 9 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="فلترة طرود التبديل المرتجعة التي لم تُستلم"
+            onPress={() => {
+              setOrderStatusFilter(
+                orderStatusFilter === "exchange_return_pending" ? "exchange" : "exchange_return_pending",
+              );
+              setExpanded(null);
+            }}
+            style={{
+              flexGrow: 1, flexBasis: 190,
+              flexDirection: "row-reverse", alignItems: "center", gap: 9,
+              paddingHorizontal: 12, paddingVertical: 10,
+              borderRadius: 12, borderWidth: orderStatusFilter === "exchange_return_pending" ? 2 : 1,
+              borderColor: "#D97706", backgroundColor: "#FFFBEB",
+            }}
+          >
+            <Ionicons name="cube-outline" size={22} color="#B45309" />
+            <View style={{ flex: 1, alignItems: "flex-end", gap: 2 }}>
+              <Text style={{ color: "#92400E", fontWeight: "900", fontSize: 13 }}>
+                لم يتم استلام المرتجع
+              </Text>
+              <Text style={{ color: "#92400E", fontSize: 11, textAlign: "right" }}>
+                بعد تسليم البديل · للمتابعة مع شركة التوصيل
+              </Text>
+            </View>
+            <Text style={{ color: "#92400E", fontWeight: "900", fontSize: 21 }}>
+              {hasLoadedOrders ? exchangeReturnParcelCounts.pending : "—"}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="فلترة طرود التبديل المرتجعة المستلمة"
+            onPress={() => {
+              setOrderStatusFilter(
+                orderStatusFilter === "exchange_return_received" ? "exchange" : "exchange_return_received",
+              );
+              setExpanded(null);
+            }}
+            style={{
+              flexGrow: 1, flexBasis: 190,
+              flexDirection: "row-reverse", alignItems: "center", gap: 9,
+              paddingHorizontal: 12, paddingVertical: 10,
+              borderRadius: 12, borderWidth: orderStatusFilter === "exchange_return_received" ? 2 : 1,
+              borderColor: "#16A34A", backgroundColor: "#F0FDF4",
+            }}
+          >
+            <Ionicons name="checkmark-circle-outline" size={22} color="#15803D" />
+            <View style={{ flex: 1, alignItems: "flex-end", gap: 2 }}>
+              <Text style={{ color: "#166534", fontWeight: "900", fontSize: 13 }}>
+                تم استلام المرتجع
+              </Text>
+              <Text style={{ color: "#166534", fontSize: 11, textAlign: "right" }}>
+                وصلت القطع للمحل وتم إرجاعها للمخزون
+              </Text>
+            </View>
+            <Text style={{ color: "#166534", fontWeight: "900", fontSize: 21 }}>
+              {hasLoadedOrders ? exchangeReturnParcelCounts.received : "—"}
+            </Text>
+          </Pressable>
+        </View>
+        {hasLoadedOrders && exchangeReturnParcelCounts.awaiting_delivery > 0 && (
+          <Text style={{ color: colors.mutedForeground, textAlign: "right", fontSize: 11 }}>
+            {exchangeReturnParcelCounts.awaiting_delivery} تبديل بانتظار تسليم الطلب البديل؛ لا يُحتسب ضمن المرتجعات المطلوب استلامها بعد.
+          </Text>
+        )}
+        <Text style={{ color: colors.mutedForeground, textAlign: "right", fontSize: 11 }}>
+          اضغط على أي عدّاد لعرض طروده فقط. «لم يتم الاستلام» يعني لم يُسجّل وصول المرتجع للمحل، وليس تأكيدًا بوجوده لدى شركة التوصيل.
+        </Text>
+      </View>
+      )}
 
       <View
         style={[
@@ -3933,6 +4332,8 @@ export default function AdminOrdersScreen() {
               );
             const pst = paymentStatusInfo(item.paymentStatus);
             const isOpen = expanded === item.id;
+            const returnParcelState = getExchangeReturnParcelState(item);
+            const failedReturnState = getFailedDeliveryReturnState(item);
             const statusOptions =
               isPickup
                 ? STATUS_OPTIONS
@@ -4079,6 +4480,55 @@ export default function AdminOrdersScreen() {
                         </View>
                       )}
 
+                      {failedReturnState && (
+                        <View style={[
+                          styles.newDot,
+                          {
+                            backgroundColor: failedReturnState === "received" ? "#DCFCE7" : "#FEF3C7",
+                            borderColor: failedReturnState === "received" ? "#86EFAC" : "#FCD34D",
+                            borderWidth: 1, paddingVertical: 4, paddingHorizontal: 8,
+                          },
+                        ]}>
+                          <Text style={[styles.newDotText, {
+                            color: failedReturnState === "received" ? "#166534" : "#92400E",
+                            fontWeight: "900", fontSize: 12,
+                          }]}>
+                            {failedReturnState === "received"
+                              ? "✓ تم استلام الطرد الراجع وإرجاع المخزون"
+                              : "📦 راجع — لم يتم استلامه من شركة التوصيل"}
+                          </Text>
+                        </View>
+                      )}
+
+                      {returnParcelState && (
+                        <View style={[
+                          styles.newDot,
+                          {
+                            backgroundColor: returnParcelState === "received"
+                              ? "#DCFCE7" : returnParcelState === "pending" ? "#FEF3C7" : "#E2E8F0",
+                            borderWidth: 1,
+                            borderColor: returnParcelState === "received"
+                              ? "#86EFAC" : returnParcelState === "pending" ? "#FCD34D" : "#CBD5E1",
+                            paddingVertical: 4, paddingHorizontal: 8,
+                          },
+                        ]}>
+                          <Text style={[
+                            styles.newDotText,
+                            {
+                              fontSize: 11, fontWeight: "900",
+                              color: returnParcelState === "received"
+                                ? "#166534" : returnParcelState === "pending" ? "#92400E" : "#475569",
+                            },
+                          ]}>
+                            {returnParcelState === "received"
+                              ? "✓ تم استلام طرد التبديل المرتجع"
+                              : returnParcelState === "pending"
+                                ? "📦 لم يتم استلام طرد التبديل المرتجع"
+                                : "بانتظار تسليم الطلب البديل"}
+                          </Text>
+                        </View>
+                      )}
+
                       {(item.mergedOrderCount ?? 0) > 0 ? (
                         <View
                           style={[
@@ -4126,6 +4576,11 @@ export default function AdminOrdersScreen() {
                         </View>
                       ) : null}
 
+                      {verifiedPickingIds.has(item.id) && (
+                        <View style={[styles.newDot, { backgroundColor: "#15803D" }]}>
+                          <Text style={styles.newDotText}>✓ تم التحقق بالباركود</Text>
+                        </View>
+                      )}
                       {item.status === "new" && (
                         <View style={[styles.newDot, { backgroundColor: colors.primary }]}>
                           <Text style={styles.newDotText}>جديد</Text>
@@ -4862,6 +5317,31 @@ export default function AdminOrdersScreen() {
                       </Pressable>
                     </View>
 
+                    {["new", "confirmed"].includes(item.status) &&
+                      item.mergedIntoOrderId == null && (
+                        <Pressable
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            router.push(`/admin/order-picking?orderId=${item.id}` as any);
+                          }}
+                          style={[styles.editOrderBtn, {
+                            backgroundColor: verifiedPickingIds.has(item.id) ? "#DCFCE7" : "#EFF6FF",
+                            borderColor: verifiedPickingIds.has(item.id) ? "#15803D" : "#2563EB",
+                            marginBottom: 10,
+                          }]}
+                        >
+                          <Ionicons name="scan-outline" size={19}
+                            color={verifiedPickingIds.has(item.id) ? "#15803D" : "#2563EB"} />
+                          <Text style={[styles.editOrderBtnText, {
+                            color: verifiedPickingIds.has(item.id) ? "#15803D" : "#1D4ED8",
+                          }]}>
+                            {verifiedPickingIds.has(item.id)
+                              ? "✓ تم الفحص بالباركود — عرض التفاصيل"
+                              : "تحضير الطلب — فحص QR / الباركود (اختياري)"}
+                          </Text>
+                        </Pressable>
+                      )}
+
                     {/* Contact Buttons */}
                     <View style={styles.contactBtns}>
                       <Pressable
@@ -5019,8 +5499,60 @@ export default function AdminOrdersScreen() {
                           </Pressable>
                         )}
 
+                        {item.status === "delivering" &&
+                          !isPickup &&
+                          item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                          item.paymentMethod === "cod" &&
+                          item.paymentStatus === "pending" &&
+                          !item.exchangePublicId && (
+                            <Pressable
+                              disabled={pendingOrderIds.has(item.id) || failedReturnBusy}
+                              onPress={event => {
+                                event.stopPropagation();
+                                setFailedReturnTarget(item);
+                                setFailedReturnReason("");
+                                setFailedReturnError("");
+                              }}
+                              style={[styles.editOrderBtn, {
+                                backgroundColor: "#FFFBEB", borderColor: "#D97706",
+                              }]}
+                            >
+                              <Ionicons name="return-down-back-outline" size={19} color="#92400E" />
+                              <Text style={[styles.editOrderBtnText, { color: "#92400E" }]}>
+                                📦 الزبونة رفضت الطرد — تحويل إلى راجع
+                              </Text>
+                            </Pressable>
+                          )}
+
+                        {failedReturnState === "pending" && (
+                          <Pressable
+                            disabled={failedReceiptBusy || pendingOrderIds.has(item.id)}
+                            onPress={event => {
+                              event.stopPropagation();
+                              setFailedReceiptTarget(item);
+                            }}
+                            style={[styles.editOrderBtn, {
+                              backgroundColor: "#F0FDF4", borderColor: "#16A34A",
+                            }]}
+                          >
+                            <Ionicons name="checkmark-done-outline" size={19} color="#166534" />
+                            <Text style={[styles.editOrderBtnText, { color: "#166534" }]}>
+                              ✓ استلام الطرد الراجع وإلغاء البيع وإرجاع المخزون
+                            </Text>
+                          </Pressable>
+                        )}
+
+                        {failedReturnState === "received" && (
+                          <View style={{ padding: 10, borderRadius: 10, backgroundColor: "#DCFCE7",
+                            borderWidth: 1, borderColor: "#86EFAC" }}>
+                            <Text style={{ color: "#166534", fontWeight: "900", textAlign: "right" }}>
+                              ✓ تم استلام الراجع وإرجاع مخزونه — تكلفة الرجوع 0 ₪
+                            </Text>
+                          </View>
+                        )}
+
                         {item.status === "done" &&
-                          !item.exchangeReturnReceivedAt && (
+                          returnParcelState === "pending" && (
                             <Pressable
                               disabled={exchangeReturnBusyId === item.id}
                               onPress={(event) => {
@@ -5057,7 +5589,7 @@ export default function AdminOrdersScreen() {
                                   { color: "#B45309" },
                                 ]}
                               >
-                                📦 تم استلام الطرد المرتجع
+                                📦 فحص واستلام الطرد المرتجع
                               </Text>
                             </Pressable>
                           )}
@@ -5187,6 +5719,12 @@ export default function AdminOrdersScreen() {
                     >
                       {statusOptions.map(
                         (s) => {
+                          const mustReceiveReturnedParcelFirst =
+                            item.status === "delivering" &&
+                            s.key === "cancelled" &&
+                            !isPickup &&
+                            item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                            item.paymentMethod === "cod";
                           const canMove =
                             (
                               orderTransitions[
@@ -5194,7 +5732,7 @@ export default function AdminOrdersScreen() {
                               ] ?? []
                             ).includes(
                               s.key,
-                            );
+                            ) && !mustReceiveReturnedParcelFirst;
 
                           return (
                             <Pressable
@@ -5982,9 +6520,9 @@ export default function AdminOrdersScreen() {
             style={[
               styles.deleteConfirmCard,
               {
-                width: 440,
+                width: 510,
                 maxWidth: "92%",
-                maxHeight: "82%",
+                maxHeight: "90%",
                 backgroundColor: colors.card,
                 borderColor: colors.border,
                 alignItems: "stretch",
@@ -6025,49 +6563,26 @@ export default function AdminOrdersScreen() {
               </Text>
             </View>
 
+            {/* One scroll surface for progress, camera, items, and scan history.
+                The receipt/return buttons stay outside and always visible. */}
             <ScrollView
-              style={{ maxHeight: 300, width: "100%" }}
-              contentContainerStyle={{ gap: 8 }}
+              key={exchangeReturnConfirm?.publicId ?? "closed"}
+              style={{ maxHeight: 460, width: "100%", flexShrink: 1 }}
+              contentContainerStyle={{ gap: 10, paddingBottom: 10 }}
+              keyboardShouldPersistTaps="handled"
             >
-              {exchangeReturnConfirm?.items.map((returnItem, index) => (
-                <View
-                  key={
-                    returnItem.id ??
-                    `${returnItem.productId ?? "item"}-${index}`
-                  }
-                  style={{
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    borderRadius: 10,
-                    padding: 10,
-                    gap: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: colors.foreground,
-                      fontWeight: "900",
-                      textAlign: "right",
-                    }}
-                  >
-                    {returnItem.productNameAr}
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.mutedForeground,
-                      textAlign: "right",
-                    }}
-                  >
-                    اللون: {returnItem.color || "—"} · المقاس:{" "}
-                    {returnItem.size || "—"} · الكمية:{" "}
-                    {returnItem.quantity}
-                  </Text>
-                </View>
-              ))}
+              {exchangeReturnConfirm ? (
+                <ExchangeReturnPickingPanel
+                  key={exchangeReturnConfirm.publicId}
+                  publicId={exchangeReturnConfirm.publicId}
+                  onVerifiedChange={updateExchangeReturnVerified}
+                  disabled={exchangeReturnBusyId !== null}
+                />
+              ) : null}
             </ScrollView>
 
             <Pressable
-              disabled={exchangeReturnBusyId !== null}
+              disabled={exchangeReturnBusyId !== null || !exchangeReturnVerified}
               onPress={() => {
                 void confirmReceiveOnlineExchangeReturn();
               }}
@@ -6075,7 +6590,7 @@ export default function AdminOrdersScreen() {
                 styles.deleteConfirmBtn,
                 {
                   backgroundColor: "#F59E0B",
-                  opacity: exchangeReturnBusyId !== null ? 0.55 : 1,
+                  opacity: exchangeReturnBusyId !== null || !exchangeReturnVerified ? 0.55 : 1,
                 },
               ]}
             >
@@ -6083,7 +6598,7 @@ export default function AdminOrdersScreen() {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={styles.deleteConfirmBtnText}>
-                  تأكيد الاستلام وإرجاع المخزون
+                  {exchangeReturnVerified ? "تأكيد الاستلام وإرجاع المخزون" : "أكمل فحص الباركود 100% أولاً"}
                 </Text>
               )}
             </Pressable>
@@ -6107,6 +6622,77 @@ export default function AdminOrdersScreen() {
             </Pressable>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Recording a refused parcel does not cancel the sale or restore stock. */}
+      <Modal visible={failedReturnTarget !== null} transparent animationType="fade"
+        onRequestClose={() => { if (!failedReturnBusy) setFailedReturnTarget(null); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.printConfirmCard, {
+            backgroundColor: colors.card, borderColor: colors.border, gap: 12,
+          }]}>
+            <Text style={{ fontSize: 19, fontWeight: "900", textAlign: "right", color: "#92400E" }}>
+              📦 تسجيل طرد راجع — الطلب #{failedReturnTarget?.id}
+            </Text>
+            <Text style={{ textAlign: "right", color: colors.foreground }}>
+              الزبونة رفضت استلام الطرد. رح يظل الطلب «راجع» وبضاعته خارج المخزون المتاح حتى تستلمه فعليًا من شركة التوصيل. تكلفة إرجاع الطرد 0 ₪.
+            </Text>
+            <TextInput
+              multiline numberOfLines={3} value={failedReturnReason}
+              onChangeText={setFailedReturnReason}
+              editable={!failedReturnBusy}
+              placeholder="سبب الرجوع (رفض الاستلام، الزبونة غير متاحة...)"
+              style={{ textAlign: "right", textAlignVertical: "top", minHeight: 86,
+                borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background,
+                borderRadius: 10, padding: 12, color: colors.foreground }}
+            />
+            {!!failedReturnError && <Text style={{ textAlign: "right", color: "#B91C1C" }}>
+              {failedReturnError}
+            </Text>}
+            <Pressable disabled={failedReturnBusy || failedReturnReason.trim().length < 3}
+              onPress={() => void reportRefusedParcel()}
+              style={{ backgroundColor: "#D97706", borderRadius: 11, padding: 13,
+                opacity: failedReturnBusy || failedReturnReason.trim().length < 3 ? 0.5 : 1 }}>
+              <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>
+                {failedReturnBusy ? "جاري التسجيل..." : "تأكيد: طرد راجع وبانتظار استلامه"}
+              </Text>
+            </Pressable>
+            <Pressable disabled={failedReturnBusy} onPress={() => setFailedReturnTarget(null)}
+              style={{ padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ textAlign: "center", color: colors.foreground, fontWeight: "800" }}>رجوع</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Physical receipt is the ONLY time the existing cancellation restores stock/cost. */}
+      <Modal visible={failedReceiptTarget !== null} transparent animationType="fade"
+        onRequestClose={() => { if (!failedReceiptBusy) setFailedReceiptTarget(null); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.printConfirmCard, {
+            backgroundColor: colors.card, borderColor: colors.border, gap: 13,
+          }]}>
+            <Text style={{ fontSize: 19, fontWeight: "900", textAlign: "right", color: "#166534" }}>
+              تأكيد وصول الطرد الراجع #{failedReceiptTarget?.id}
+            </Text>
+            <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "600" }}>
+              اضغط تأكيد فقط إذا استلمت الطرد فعلًا من شركة التوصيل وتأكدت من وجود جميع قطعه وسلامتها. سيُلغى البيع وتُعاد قطع الطلب للمخزون وتكلفتها التاريخية مرة واحدة. لا يوجد أي رسم لإرجاع الطرد (0 ₪).
+            </Text>
+            <Pressable disabled={failedReceiptBusy} onPress={() => void receiveRefusedParcel()}
+              style={{ backgroundColor: "#16A34A", borderRadius: 11, padding: 14,
+                opacity: failedReceiptBusy ? 0.5 : 1 }}>
+              <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>
+                {failedReceiptBusy ? "جاري ترحيل الاستلام..." : "نعم، استلمت كامل الطرد — إلغاء وإرجاع المخزون"}
+              </Text>
+            </Pressable>
+            <Pressable disabled={failedReceiptBusy} onPress={() => setFailedReceiptTarget(null)}
+              style={{ padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10 }}>
+              <Text style={{ color: colors.foreground, fontWeight: "800", textAlign: "center" }}>
+                رجوع بدون استلام
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Print Confirmation Modal */}
@@ -6511,6 +7097,10 @@ export default function AdminOrdersScreen() {
                       <Pressable
                         key={zone.label}
                         onPress={() => {
+                          if (zone.label !== editShippingZone) {
+                            setEditManualShippingEnabled(false);
+                            setEditManualShippingCost(String(cost));
+                          }
                           setEditShippingZone(zone.label);
                           setEditOrderError(null);
                           if (zone.label === ADMIN_LOCAL_DELIVERY_LABEL) {
@@ -6570,6 +7160,51 @@ export default function AdminOrdersScreen() {
                     );
                   })}
                 </View>
+
+                {editShippingZone !== ADMIN_STORE_PICKUP_LABEL &&
+                  editShippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
+                  !editingOrder?.exchangePublicId && (
+                  <View style={{ gap: 8, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.card }}>
+                    <Text style={[styles.editOrderFieldLabel, { color: colors.foreground }]}>
+                      أجرة التوصيل على الزبون — لهذا الطلب فقط
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        if (!editManualShippingEnabled) {
+                          setEditManualShippingCost(String(editShippingCost));
+                        }
+                        setEditManualShippingEnabled(!editManualShippingEnabled);
+                        setEditOrderError(null);
+                      }}
+                      style={[styles.editOrderShippingZoneBtn, { borderColor: colors.primary, alignSelf: "flex-end" }]}
+                    >
+                      <Text style={{ color: colors.primary, fontWeight: "700" }}>
+                        {editManualShippingEnabled ? "الرجوع لسعر المنطقة التلقائي" : "تعديل السعر يدوياً"}
+                      </Text>
+                    </Pressable>
+                    {editManualShippingEnabled ? (
+                      <TextInput
+                        value={editManualShippingCost}
+                        onChangeText={(value) => {
+                          setEditManualShippingCost(value.replace(/[^0-9]/g, ""));
+                          setEditOrderError(null);
+                        }}
+                        keyboardType="number-pad"
+                        placeholder="أجرة التوصيل بالشيكل"
+                        placeholderTextColor={colors.mutedForeground}
+                        style={[styles.editOrderFieldInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+                        textAlign="right"
+                      />
+                    ) : (
+                      <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>
+                        السعر المحسوب تلقائياً: {editShippingCost}₪
+                      </Text>
+                    )}
+                    <Text style={{ color: colors.mutedForeground, textAlign: "right" }}>
+                      لا يتغير سعر المنطقة العام أو تكلفة شركة التوصيل. الإجمالي يتحدث مباشرة.
+                    </Text>
+                  </View>
+                )}
 
                 {editShippingZone !== ADMIN_STORE_PICKUP_LABEL ? (
                   <>

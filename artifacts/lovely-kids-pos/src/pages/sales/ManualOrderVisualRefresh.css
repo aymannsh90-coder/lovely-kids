@@ -1,0 +1,279 @@
+/* Manual web orders: desktop shell only. The phone PWA stays unchanged. */
+@media screen and (min-width: 900px) {
+  .route-content .manual-order-page.manual-order-page-desktop {
+    --manual-outline: #d9e6ef;
+    --manual-pink: #e91e8c;
+    --manual-ink: #234456;
+    direction: rtl;
+  }
+  .manual-order-page-desktop :is(
+    .manual-order-customer-card,
+    .manual-order-scan-card,
+    .mobile-pos-cart,
+    .manual-order-checkout
+  ) {
+    border: 1px solid var(--manual-outline);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 5px 19px rgba(40,82,105,.055);
+  }
+  .manual-order-page-desktop .manual-order-section-title {
+    padding-bottom: 11px;
+    border-bottom: 1px solid #e4edf2;
+  }
+  .manual-order-page-desktop .manual-order-section-title :is(h1,h2,h3) {
+    color: var(--manual-ink);
+    font-weight: 900;
+  }
+  .manual-order-page-desktop .manual-order-section-title p { color: #6b8293; }
+  .manual-order-page-desktop .manual-order-fields :is(input,select),
+  .manual-order-page-desktop .manual-order-barcode-form input,
+  .manual-order-page-desktop .mobile-pos-variants select {
+    min-height: 40px;
+    border: 1px solid #d6e6ef;
+    border-radius: 10px;
+    background: #fcfeff;
+  }
+  .manual-order-page-desktop :is(
+    .manual-order-barcode-form button,
+    .manual-order-checkout > button
+  ) {
+    min-height: 43px;
+    padding: 9px 16px;
+    border: 1px solid #d91d81;
+    border-radius: 11px;
+    background: linear-gradient(120deg,#f146a1,#da1a82);
+    color: #fff;
+    font-weight: 850;
+    box-shadow: 0 4px 12px rgba(211,39,127,.12);
+  }
+  .manual-order-page-desktop .mobile-pos-cart-title {
+    padding-bottom: 11px;
+    border-bottom: 1px solid #e8edf3;
+    color: var(--manual-ink);
+  }
+  .manual-order-page-desktop .mobile-pos-line {
+    border: 1px solid #dbe8f0;
+    border-radius: 12px;
+    background: #f7fbfe;
+  }
+  .manual-order-page-desktop .mobile-pos-final-total {
+    border: 1px solid #f0cadf;
+    border-radius: 11px;
+    background: #fff0f7;
+    color: #b31e6d;
+  }
+  .manual-order-page-desktop :is(button,input,select):focus-visible {
+    outline: 3px solid rgba(233,30,140,.23);
+    outline-offset: 2px;
+  }
+}
+
+/* Lovely Kids POS — WhatsApp/manual order PHONE visual polish.
+   Opt-in to the existing mobile route, and never the desktop variant.
+   All order submission, payment, address, barcode and inventory logic
+   stays in the original TSX. The fixed checkout layout is preserved. */
+@media screen {
+  .manual-order-page:not(.manual-order-page-desktop) {
+    --lkmo-ink: #29475b;
+    --lkmo-muted: #6a8394;
+    --lkmo-line: #dae7ef;
+    --lkmo-shadow: 0 7px 22px rgba(35, 77, 104, .055);
+    background: #eaf3f8;
+    color: var(--lkmo-ink);
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-shell {
+    background: #f5f9fc;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-mobile-header {
+    background: linear-gradient(115deg, #fff, #fff5fa 80%, #fdeaf4);
+    border-bottom: 1px solid #f0d5e4;
+    box-shadow: 0 4px 14px rgba(30, 69, 98, .045);
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-mobile-header > div:first-child strong {
+    color: #c81875;
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-mobile-header > div:first-child span {
+    color: #557589;
+    font-weight: 700;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-header-actions a[href="/sales/mobile"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #c8dae7;
+    border-radius: 12px;
+    background: #f0f6fa;
+    color: #315c78;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.3;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-header-actions a[href="/sales/mobile"]::before {
+    content: "↩";
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  /* Customer info and barcode scanner are two clearly separated cards. */
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-customer-card,
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-scan-card,
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-cart {
+    margin: 12px;
+    padding: 14px;
+    border: 1px solid var(--lkmo-line);
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: var(--lkmo-shadow);
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-section-title {
+    margin-bottom: 13px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #edf1f4;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-section-title strong,
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-cart-title strong {
+    color: #2a4b61;
+    font-size: 17px;
+    font-weight: 900;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-section-title small,
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-barcode-hint {
+    color: #718698;
+    font-size: 12px;
+    line-height: 1.65;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-fields {
+    gap: 12px 10px;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-fields label > span {
+    color: #4c687c;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-fields :is(input,select,textarea) {
+    min-height: 43px;
+    border: 1px solid #d4e2eb;
+    border-radius: 10px;
+    background: #fbfdff;
+    color: #274357;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-fields textarea {
+    min-height: 68px;
+    line-height: 1.65;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-camera-button {
+    border-color: #e8a5c9;
+    border-radius: 14px;
+    background: linear-gradient(140deg, #fff8fc, #fff1f8);
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-camera-button strong {
+    color: #334e60;
+    font-weight: 900;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-search input {
+    border-color: #d5e3ec;
+    border-radius: 10px;
+    background: #fbfdff;
+    color: #29485e;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-search button {
+    border-radius: 10px;
+    background: #285f83;
+    color: #fff;
+    font-weight: 850;
+  }
+
+  /* Cart item cards match the already reviewed mobile sales layout. */
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-cart-title span {
+    color: #a71f6a;
+    border: 1px solid #f0d0df;
+    border-radius: 999px;
+    background: #fff2f8;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-empty-cart {
+    border: 1px dashed #cfdeea;
+    border-radius: 14px;
+    background: #f7fbfd;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-line {
+    border: 1px solid #e0e9ef;
+    border-right-width: 4px;
+    border-radius: 13px;
+    padding: 13px;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-line:nth-child(odd) {
+    border-right-color: #e3afcd;
+    background: #fffcfe;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-line:nth-child(even) {
+    border-right-color: #9bcbe1;
+    background: #f9fcff;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-variants select {
+    min-height: 42px;
+    border-color: #d8e5ec;
+    background: #fff;
+    border-radius: 9px;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-quantity {
+    border-color: #d7e3eb;
+    border-radius: 10px;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-quantity button {
+    background: #edf5fa;
+    color: #285b7c;
+    font-weight: 850;
+  }
+
+  /* Preview totals: do not move, resize or change the existing fixed footer. */
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-checkout {
+    border-top: 2px solid #efc2da;
+    background: rgba(255,255,255,.97);
+    box-shadow: 0 -8px 24px rgba(35, 74, 96, .10);
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .mobile-pos-final-total strong {
+    color: #b71769;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-checkout > button {
+    border-radius: 12px;
+    background: linear-gradient(125deg, #e91e8c, #c81975);
+    color: #fff;
+    font-weight: 900;
+    box-shadow: 0 4px 12px rgba(208, 28, 122, .13);
+  }
+  .manual-order-page:not(.manual-order-page-desktop) .manual-order-checkout > button:disabled {
+    opacity: .45;
+    box-shadow: none;
+  }
+  .manual-order-page:not(.manual-order-page-desktop) :is(button,input,select,textarea,a):focus-visible {
+    outline: 3px solid rgba(233, 30, 140, .25);
+    outline-offset: 2px;
+  }
+  @media (max-width: 360px) {
+    .manual-order-page:not(.manual-order-page-desktop) .manual-order-mobile-header {
+      padding-inline: 10px;
+    }
+    .manual-order-page:not(.manual-order-page-desktop) :is(
+      .manual-order-customer-card,
+      .manual-order-scan-card,
+      .mobile-pos-cart
+    ) {
+      margin-inline: 8px;
+      padding-inline: 11px;
+    }
+  }
+}

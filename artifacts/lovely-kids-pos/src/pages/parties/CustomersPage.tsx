@@ -2,6 +2,7 @@ import {
   type FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,10 +11,15 @@ import "./PartiesVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import {
   ApiError,
+  POS_REGISTER_KEY,
   createPosCustomer,
   createPosCustomerReceipt,
+  createPosUnifiedPaymentVoucher,
+  getCurrentCashSession,
+  getPosBankAccounts,
   getPosCustomerLedger,
   getPosCustomers,
+  type PosBankAccount,
   type PosCustomer,
   type PosCustomerLedgerResult,
 } from "../../lib/api";
@@ -72,9 +78,16 @@ export default function CustomersPage() {
 
   const {
     token,
+    user,
     session,
+    setSession,
     clearAuthentication,
   } = usePosRuntime();
+  const canEditCustomers = Boolean(user?.isOwner || user?.isAdmin ||
+    (user?.staffEnabled && user?.permissions?.includes("parties.edit")));
+  const canSell = Boolean(user?.isOwner || user?.isAdmin ||
+    (user?.staffEnabled && user?.permissions?.includes("sales.create")));
+
 
   const [
     customers,
@@ -152,6 +165,39 @@ export default function CustomersPage() {
     setReceiptBusy,
   ] = useState(false);
 
+  const [voucherMode, setVoucherMode] =
+    useState<"receipt" | "payment">("receipt");
+  const [paymentMethod, setPaymentMethod] =
+    useState<"cash" | "bank">("cash");
+  const [paymentBankAccountId, setPaymentBankAccountId] =
+    useState("");
+  const [bankAccounts, setBankAccounts] =
+    useState<PosBankAccount[]>([]);
+  // Reuse the key after a network error: retrying must not create a second voucher.
+  const pendingVoucherKeyRef = useRef<string | null>(null);
+
+  function resetVoucherForm(mode?: "receipt" | "payment") {
+    if (mode) setVoucherMode(mode);
+    setReceiptAmount("");
+    setReceiptNotes("");
+    setReceiptMethod("cash");
+    setReceiptCardProcessor(null);
+    setPaymentMethod("cash");
+    setPaymentBankAccountId("");
+    pendingVoucherKeyRef.current = null;
+  }
+
+  useEffect(() => {
+    if (!user?.isOwner) return;
+    void getPosBankAccounts(token)
+      .then((response) => setBankAccounts(
+        response.results.filter((account) =>
+          account.status === "active" && account.currencyCode === "ILS",
+        ),
+      ))
+      .catch(() => setBankAccounts([]));
+  }, [token, user?.isOwner]);
+
   const selected =
     useMemo(
       () =>
@@ -164,6 +210,12 @@ export default function CustomersPage() {
         selectedId,
       ],
     );
+
+  useEffect(() => {
+    // The selection or its actual balance determines the initial voucher type.
+    // After a full refund the customer returns to receipt mode.
+    resetVoucherForm(selected && selected.balanceMinor < 0 ? "payment" : "receipt");
+  }, [selected?.id, selected?.balanceMinor]);
 
   async function loadCustomers(
     keepSelected = true,
@@ -299,6 +351,7 @@ export default function CustomersPage() {
       FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+    if (!canEditCustomers) return;
 
     if (!newName.trim()) {
       setError(
@@ -365,52 +418,48 @@ export default function CustomersPage() {
     }
   }
 
-  async function handleReceipt(
-    event:
-      FormEvent<HTMLFormElement>,
+  async function handleVoucher(
+    event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+    if (!selected || !user?.isOwner || receiptBusy) return;
 
-    if (!selected) {
+    const amount = Number(receiptAmount.replace(",", "."));
+    const amountMinor = Math.round(amount * 100);
+    if (!Number.isFinite(amount) || amount <= 0 ||
+        !Number.isSafeInteger(amountMinor) || amountMinor <= 0 ||
+        Math.abs(amount - amountMinor / 100) > 0.000001) {
+      setError("أدخل مبلغ سند صحيح بدقتين عشريتين");
       return;
     }
 
-    const amount =
-      Number(
-        receiptAmount.replace(
-          ",",
-          ".",
-        ),
-      );
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      setError(
-        "أدخل مبلغ سند قبض صحيح",
-      );
-      return;
-    }
-
-    if (
-      receiptMethod === "cash" &&
-      !session
-    ) {
-      setError(
-        "يجب فتح الصندوق لتسجيل سند قبض نقدي",
-      );
-      return;
-    }
-
-    if (
-      receiptMethod === "card" &&
-      !receiptCardProcessor
-    ) {
-      setError(
-        "اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين",
-      );
-      return;
+    if (voucherMode === "payment") {
+      if (selected.balanceMinor >= 0) {
+        setError("لا يوجد رصيد دائن للزبون يسمح بإنشاء سند صرف");
+        return;
+      }
+      if (amountMinor > -selected.balanceMinor) {
+        setError("مبلغ الصرف أكبر من الرصيد المستحق للزبون");
+        return;
+      }
+      if (paymentMethod === "cash" && !session) {
+        setError("يجب فتح الصندوق لتسجيل سند صرف نقدي");
+        return;
+      }
+      if (paymentMethod === "bank" &&
+          !bankAccounts.some((bank) => bank.id === Number(paymentBankAccountId))) {
+        setError("اختر حسابًا بنكيًا نشطًا بالشيكل");
+        return;
+      }
+    } else {
+      if (receiptMethod === "cash" && !session) {
+        setError("يجب فتح الصندوق لتسجيل سند قبض نقدي");
+        return;
+      }
+      if (receiptMethod === "card" && !receiptCardProcessor) {
+        setError("اختر ماكينة الفيزا: البنك العربي أو بنك فلسطين");
+        return;
+      }
     }
 
     setReceiptBusy(true);
@@ -418,64 +467,51 @@ export default function CustomersPage() {
     setMessage("");
 
     try {
-      const result =
-        await createPosCustomerReceipt(
-          token,
-          selected.id,
-          {
-            amount:
-              amount.toFixed(2),
+      const idempotencyKey = pendingVoucherKeyRef.current ??
+        key(voucherMode === "payment" ? "customer_refund" : "customer_receipt");
+      pendingVoucherKeyRef.current = idempotencyKey;
 
-            paymentMethod:
-              receiptMethod,
+      const result = voucherMode === "payment"
+        ? await createPosUnifiedPaymentVoucher(token, {
+            partyType: "customer",
+            partyId: selected.id,
+            amount: (amountMinor / 100).toFixed(2),
+            paymentMethod,
+            registerKey: session?.registerKey ?? POS_REGISTER_KEY,
+            bankAccountId: paymentMethod === "bank" ? Number(paymentBankAccountId) : undefined,
+            notes: receiptNotes.trim() || undefined,
+            idempotencyKey,
+          })
+        : await createPosCustomerReceipt(token, selected.id, {
+            amount: (amountMinor / 100).toFixed(2),
+            paymentMethod: receiptMethod,
+            cardProcessor: receiptMethod === "card"
+              ? receiptCardProcessor ?? undefined : undefined,
+            registerKey: session?.registerKey ?? POS_REGISTER_KEY,
+            notes: receiptNotes.trim() || undefined,
+            idempotencyKey,
+          });
 
-            cardProcessor:
-              receiptMethod === "card"
-                ? receiptCardProcessor ??
-                  undefined
-                : undefined,
-
-            registerKey:
-              session?.registerKey ??
-              "main",
-
-            notes:
-              receiptNotes.trim() ||
-              undefined,
-
-            idempotencyKey:
-              key(
-                "customer_receipt",
-              ),
-          },
-        );
-
-      setReceiptAmount("");
-      setReceiptNotes("");
-      setReceiptCardProcessor(
-        null,
-      );
-
+      const savedMode = voucherMode;
+      resetVoucherForm();
       await Promise.all([
         loadCustomers(true),
         loadLedger(selected.id),
       ]);
-
       setMessage(
-        `تم حفظ سند القبض ${result.voucher.publicId}`,
+        `تم حفظ سند ${savedMode === "payment" ? "الصرف" : "القبض"} ${result.voucher.publicId} بنجاح`,
       );
+      // Do not turn a successfully posted voucher into an error if refreshing
+      // the banner fails; the ledger and register are authoritative.
+      void getCurrentCashSession(token, POS_REGISTER_KEY)
+        .then((current) => setSession(current.session))
+        .catch(() => {});
     } catch (caught) {
-      if (
-        caught instanceof ApiError &&
-        caught.status === 401
-      ) {
+      if (caught instanceof ApiError && caught.status === 401) {
         clearAuthentication();
         return;
       }
-
-      setError(
-        errorText(caught),
-      );
+      setError(errorText(caught));
     } finally {
       setReceiptBusy(false);
     }
@@ -495,12 +531,12 @@ export default function CustomersPage() {
           </h2>
 
           <p>
-            الفواتير، سندات القبض،
+            الفواتير، سندات القبض والصرف،
             والرصيد المستحق أو الدائن.
           </p>
         </div>
 
-        <button
+        {canEditCustomers && <button
           type="button"
           className="primary-button"
           onClick={() =>
@@ -511,7 +547,7 @@ export default function CustomersPage() {
           }
         >
           + زبون جديد
-        </button>
+        </button>}
       </div>
 
       {error && (
@@ -539,7 +575,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {showNew && (
+      {showNew && canEditCustomers && (
         <form
           className="lk-parties-create-form"
           onSubmit={
@@ -834,7 +870,7 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div
+                {canSell && <div
                   style={{
                     display: "flex",
                     gap: 10,
@@ -867,10 +903,10 @@ export default function CustomersPage() {
                       لإنشاء فاتورة بيع.
                     </span>
                   )}
-                </div>
+                </div>}
               </article>
 
-              <article
+              {user?.isOwner && <article
                 className="lk-parties-receipt-card"
                 style={{
                   padding: 18,
@@ -880,23 +916,37 @@ export default function CustomersPage() {
                   borderRadius: 12,
                 }}
               >
-                <h3
-                  style={{
-                    marginTop: 0,
-                  }}
-                >
-                  💰 سند قبض
+                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                  <button type="button" disabled={receiptBusy}
+                    className={voucherMode === "receipt" ? "primary-button" : "secondary-button"}
+                    onClick={() => resetVoucherForm("receipt")}>💰 سند قبض</button>
+                  <button type="button" disabled={receiptBusy}
+                    className={voucherMode === "payment" ? "primary-button" : "secondary-button"}
+                    onClick={() => resetVoucherForm("payment")}>💸 سند صرف</button>
+                </div>
+                <h3 style={{ marginTop: 0 }}>
+                  {voucherMode === "receipt" ? "💰 سند قبض" : "💸 سند صرف للزبون"}
                 </h3>
-
                 <p>
-                  يمكن قبض أي مبلغ، حتى لو
-                  أصبح للزبون رصيد عند المحل.
+                  {voucherMode === "receipt"
+                    ? "تسجيل مبلغ مستلم من الزبون، ويُضاف إلى الصندوق أو حساب الفيزا."
+                    : selected.balanceMinor < 0
+                      ? `للزبون رصيد دائن ${formatMinor(selected.balanceMinor)}. الصرف يُخفض المبلغ المستحق له ولا يُسجّل مصروفًا جديدًا.`
+                      : "لا يوجد رصيد دائن لهذا الزبون. يمكن مراجعة كشف حسابه أولًا."}
                 </p>
+                {voucherMode === "payment" && selected.balanceMinor < 0 && (
+                  <button type="button" className="secondary-button"
+                    disabled={receiptBusy}
+                    onClick={() => {
+                      setReceiptAmount((Math.abs(selected.balanceMinor) / 100).toFixed(2));
+                      pendingVoucherKeyRef.current = null;
+                    }} style={{ marginBottom: 10 }}>
+                    تعبئة كامل الرصيد المستحق للزبون ({formatMinor(selected.balanceMinor)})
+                  </button>
+                )}
 
                 <form
-                  onSubmit={
-                    handleReceipt
-                  }
+                  onSubmit={handleVoucher}
                   style={{
                     display: "grid",
                     gridTemplateColumns:
@@ -919,91 +969,74 @@ export default function CustomersPage() {
                       onChange={(
                         event,
                       ) =>
-                        setReceiptAmount(
-                          event.target
-                            .value,
-                        )
+                        (setReceiptAmount(event.target.value),
+                         pendingVoucherKeyRef.current = null)
                       }
                       placeholder="0.00"
                     />
                   </label>
 
                   <div>
-                    <span>
-                      طريقة القبض
-                    </span>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        marginTop: 7,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className={
-                          receiptMethod ===
-                          "cash"
-                            ? "primary-button"
-                            : "secondary-button"
-                        }
-                        onClick={() => {
-                          setReceiptMethod(
-                            "cash",
-                          );
-                          setReceiptCardProcessor(
-                            null,
-                          );
-                        }}
-                      >
-                        💵 كاش
-                      </button>
-
-                      <button
-                        type="button"
-                        className={
-                          receiptMethod ===
-                            "card" &&
-                          receiptCardProcessor ===
-                            "arab"
-                            ? "primary-button"
-                            : "secondary-button"
-                        }
-                        onClick={() => {
-                          setReceiptMethod(
-                            "card",
-                          );
-                          setReceiptCardProcessor(
-                            "arab",
-                          );
-                        }}
-                      >
-                        💳 فيزا البنك العربي
-                      </button>
-
-                      <button
-                        type="button"
-                        className={
-                          receiptMethod ===
-                            "card" &&
-                          receiptCardProcessor ===
-                            "bop"
-                            ? "primary-button"
-                            : "secondary-button"
-                        }
-                        onClick={() => {
-                          setReceiptMethod(
-                            "card",
-                          );
-                          setReceiptCardProcessor(
-                            "bop",
-                          );
-                        }}
-                      >
-                        💳 فيزا بنك فلسطين
-                      </button>
-                    </div>
+                    <span>{voucherMode === "receipt" ? "طريقة القبض" : "طريقة الصرف"}</span>
+                    {voucherMode === "receipt" ? (
+                      <div style={{ display: "flex", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
+                        <button type="button"
+                          className={receiptMethod === "cash" ? "primary-button" : "secondary-button"}
+                          onClick={() => {
+                            setReceiptMethod("cash");
+                            setReceiptCardProcessor(null);
+                            pendingVoucherKeyRef.current = null;
+                          }}>💵 كاش</button>
+                        <button type="button"
+                          className={receiptMethod === "card" && receiptCardProcessor === "arab"
+                            ? "primary-button" : "secondary-button"}
+                          onClick={() => {
+                            setReceiptMethod("card");
+                            setReceiptCardProcessor("arab");
+                            pendingVoucherKeyRef.current = null;
+                          }}>💳 فيزا البنك العربي</button>
+                        <button type="button"
+                          className={receiptMethod === "card" && receiptCardProcessor === "bop"
+                            ? "primary-button" : "secondary-button"}
+                          onClick={() => {
+                            setReceiptMethod("card");
+                            setReceiptCardProcessor("bop");
+                            pendingVoucherKeyRef.current = null;
+                          }}>💳 فيزا بنك فلسطين</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 8, marginTop: 7 }}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button type="button"
+                            className={paymentMethod === "cash" ? "primary-button" : "secondary-button"}
+                            onClick={() => {
+                              setPaymentMethod("cash");
+                              setPaymentBankAccountId("");
+                              pendingVoucherKeyRef.current = null;
+                            }}>💵 من الصندوق</button>
+                          <button type="button"
+                            className={paymentMethod === "bank" ? "primary-button" : "secondary-button"}
+                            onClick={() => {
+                              setPaymentMethod("bank");
+                              pendingVoucherKeyRef.current = null;
+                            }}>🏦 من حساب بنكي</button>
+                        </div>
+                        {paymentMethod === "bank" && (
+                          <select value={paymentBankAccountId} disabled={receiptBusy}
+                            onChange={(event) => {
+                              setPaymentBankAccountId(event.target.value);
+                              pendingVoucherKeyRef.current = null;
+                            }}>
+                            <option value="">اختر الحساب البنكي بالشيكل</option>
+                            {bankAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.bank.nameAr} — {account.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <label>
@@ -1016,10 +1049,8 @@ export default function CustomersPage() {
                       onChange={(
                         event,
                       ) =>
-                        setReceiptNotes(
-                          event.target
-                            .value,
-                        )
+                        (setReceiptNotes(event.target.value),
+                         pendingVoucherKeyRef.current = null)
                       }
                       placeholder="اختياري"
                     />
@@ -1028,26 +1059,20 @@ export default function CustomersPage() {
                   <button
                     type="submit"
                     className="primary-button"
-                    disabled={
-                      receiptBusy ||
-                      (
-                        receiptMethod ===
-                          "cash" &&
-                        !session
-                      ) ||
-                      (
-                        receiptMethod ===
-                          "card" &&
-                        !receiptCardProcessor
-                      )
-                    }
+                    disabled={receiptBusy ||
+                      (voucherMode === "payment"
+                        ? (selected.balanceMinor >= 0 ||
+                            (paymentMethod === "cash" && !session) ||
+                            (paymentMethod === "bank" && !paymentBankAccountId))
+                        : ((receiptMethod === "cash" && !session) ||
+                            (receiptMethod === "card" && !receiptCardProcessor)))}
                   >
                     {receiptBusy
                       ? "جاري الحفظ..."
-                      : "حفظ سند القبض"}
+                      : voucherMode === "payment" ? "حفظ سند الصرف" : "حفظ سند القبض"}
                   </button>
                 </form>
-              </article>
+              </article>}
 
               <article
                 className="lk-parties-ledger-card"

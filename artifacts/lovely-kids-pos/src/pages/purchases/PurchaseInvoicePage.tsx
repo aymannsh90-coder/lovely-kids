@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import "../InvoiceVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import PurchaseA4Invoice from "../../components/PurchaseA4Invoice";
 import {
@@ -263,6 +264,7 @@ function printPurchaseA4() {
 export default function PurchaseInvoicePage() {
   const {
     token,
+    user,
     session,
     setSession,
     clearAuthentication,
@@ -2318,6 +2320,7 @@ export default function PurchaseInvoicePage() {
   }
 
   async function handleVoidInvoice() {
+    if (!user?.isOwner) return;
     const current = savedPurchase;
 
     if (!current || current.purchase.status === "voided") {
@@ -2435,7 +2438,7 @@ export default function PurchaseInvoicePage() {
   }
 
   return (
-    <section className="accounting-invoice-page purchase-invoice-page">
+    <section className="accounting-invoice-page purchase-invoice-page lk-invoice-refresh">
       <header className="accounting-invoice-titlebar">
         <div>
           <span>المشتريات والموردون</span>
@@ -2588,7 +2591,7 @@ export default function PurchaseInvoicePage() {
           رجوع
         </button>
 
-        {savedPurchase && (
+        {savedPurchase && user?.isOwner && (
           <button
             className="is-danger-action"
             type="button"

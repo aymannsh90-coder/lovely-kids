@@ -1,0 +1,242 @@
+/* Lovely Kids POS accounting invoices | shared visual treatment only.
+   Scoped to the sales and purchase invoice roots. Does not alter
+   business rules, click events, inputs, print templates or table widths. */
+@media screen {
+  .route-content .accounting-invoice-page.lk-invoice-refresh {
+    --invoice-blue: #3fafe0;
+    --invoice-pink: #e91e8c;
+    --invoice-ink: #1e4055;
+    --invoice-muted: #688195;
+    --invoice-outline: #d9e8f0;
+    direction: rtl;
+    min-width: 0;
+    border: 1px solid #d5e5ee;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 6px 23px rgba(29,70,94,.065);
+    overflow: hidden;
+  }
+  .lk-invoice-refresh .accounting-invoice-titlebar {
+    position: relative;
+    min-height: 84px;
+    padding: 17px 22px;
+    border-bottom: 1px solid #f0d4e4;
+    background: linear-gradient(110deg, #fff 15%, #fff7fb 70%, #fcecf5 100%);
+    color: var(--invoice-ink);
+  }
+  .lk-invoice-refresh .accounting-invoice-titlebar::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    right: 0;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--invoice-pink);
+  }
+  .lk-invoice-refresh .accounting-invoice-titlebar > div { min-width: 0; }
+  .lk-invoice-refresh .accounting-invoice-titlebar > div > span {
+    color: #bc1b70;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .lk-invoice-refresh .accounting-invoice-titlebar h1 {
+    margin: 4px 0;
+    color: var(--invoice-ink);
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1.35;
+  }
+  .lk-invoice-refresh .accounting-invoice-titlebar p {
+    color: var(--invoice-muted);
+    font-size: 12px;
+    line-height: 1.65;
+  }
+  .lk-invoice-refresh .accounting-invoice-draft-badge {
+    padding: 8px 12px;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 850;
+  }
+  .lk-invoice-refresh .accounting-invoice-toolbar {
+    gap: 8px;
+    padding: 10px 13px;
+    border-bottom: 1px solid #dae8f0;
+    background: #f4f9fd;
+  }
+  .lk-invoice-refresh .accounting-invoice-action-group {
+    gap: 7px;
+    border-radius: 11px;
+  }
+  .lk-invoice-refresh .accounting-invoice-toolbar button,
+  .lk-invoice-refresh .accounting-item-form button,
+  .lk-invoice-refresh .accounting-search-panel header button,
+  .lk-invoice-refresh button.accounting-remove-line {
+    min-height: 36px;
+    padding: 7px 13px;
+    border: 1px solid #ebc1d8;
+    border-radius: 10px;
+    background: linear-gradient(120deg,#fffafd,#fff0f8);
+    color: #a51c65;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 850;
+    box-shadow: 0 2px 8px rgba(167,38,109,.055);
+    cursor: pointer;
+    transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+  .lk-invoice-refresh .accounting-invoice-toolbar button.is-primary-action,
+  .lk-invoice-refresh .accounting-invoice-toolbar button.accounting-save-settle-action,
+  .lk-invoice-refresh .accounting-item-form button {
+    border-color: #d81f80;
+    background: linear-gradient(120deg,#f246a4,#da1a83);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(218,26,131,.14);
+  }
+  .lk-invoice-refresh .accounting-invoice-toolbar button.is-danger-action {
+    border-color: #f0c6c8;
+    background: #fff3f3;
+    color: #af3045;
+  }
+  .lk-invoice-refresh .accounting-invoice-toolbar button:not(:disabled):hover,
+  .lk-invoice-refresh .accounting-search-panel header button:not(:disabled):hover {
+    border-color: #e68bbb;
+    background: #ffe4f1;
+  }
+  .lk-invoice-refresh .accounting-invoice-toolbar button.is-primary-action:not(:disabled):hover,
+  .lk-invoice-refresh .accounting-invoice-toolbar button.accounting-save-settle-action:not(:disabled):hover,
+  .lk-invoice-refresh .accounting-item-form button:not(:disabled):hover {
+    background: #ca1976;
+    color: #fff;
+  }
+  .lk-invoice-refresh .accounting-invoice-toolbar button:disabled,
+  .lk-invoice-refresh .accounting-item-form button:disabled {
+    opacity: .52;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .lk-invoice-refresh :is(button,input,select,textarea):focus-visible {
+    outline: 3px solid rgba(233,30,140,.22);
+    outline-offset: 2px;
+  }
+  .lk-invoice-refresh .accounting-invoice-information {
+    gap: 12px;
+    padding: 12px;
+    background: #f3f8fb;
+  }
+  .lk-invoice-refresh .accounting-invoice-card {
+    min-width: 0;
+    padding: 13px 15px;
+    border: 1px solid var(--invoice-outline);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgba(43,88,112,.04);
+  }
+  .lk-invoice-refresh .accounting-invoice-card h2,
+  .lk-invoice-refresh .accounting-payment-section h2 {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e6edf3;
+    color: var(--invoice-ink);
+    font-size: 15px;
+    font-weight: 900;
+  }
+  .lk-invoice-refresh .accounting-section-icon {
+    border-radius: 10px;
+    background: #fce9f3;
+    color: #bf2075;
+  }
+  .lk-invoice-refresh .accounting-fields-grid { gap: 10px; }
+  .lk-invoice-refresh .accounting-invoice-information label > span,
+  .lk-invoice-refresh .accounting-payment-section label > span {
+    color: #46667d;
+    font-size: 12px;
+    font-weight: 850;
+  }
+  .lk-invoice-refresh .accounting-invoice-information :is(input,select,textarea),
+  .lk-invoice-refresh .accounting-payment-section :is(input,select,textarea),
+  .lk-invoice-refresh .accounting-invoice-totals input {
+    min-height: 37px;
+    border: 1px solid #d6e5ed;
+    border-radius: 9px;
+    background: #fcfeff;
+    color: #214355;
+    font-size: 13px;
+  }
+  .lk-invoice-refresh .accounting-invoice-information :is(input,select,textarea):focus,
+  .lk-invoice-refresh .accounting-payment-section :is(input,select,textarea):focus {
+    border-color: #e91e8c;
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(233,30,140,.10);
+  }
+  .lk-invoice-refresh .accounting-item-entry {
+    gap: 9px;
+    padding: 12px 14px;
+    border-top: 1px solid #e1eaf0;
+    border-bottom: 1px solid #e1eaf0;
+    background: #f9fbfd;
+  }
+  .lk-invoice-refresh .accounting-item-form { gap: 9px; }
+  .lk-invoice-refresh .accounting-item-form input {
+    min-height: 37px;
+    border: 1px solid #d8e6ee;
+    border-radius: 10px;
+    background: #fff;
+    font-size: 13px;
+  }
+  .lk-invoice-refresh .accounting-search-panel {
+    border: 1px solid #cbdfea;
+    border-radius: 13px;
+    background: #fff;
+    box-shadow: 0 7px 23px rgba(42,77,102,.10);
+  }
+  .lk-invoice-refresh .accounting-invoice-table-wrap {
+    border: 1px solid #d5e4ed;
+    border-radius: 12px;
+  }
+  .lk-invoice-refresh .accounting-invoice-table th {
+    border-color: #c9dce8;
+    background: #e8f3fa;
+    color: #385c75;
+    font-weight: 900;
+  }
+  .lk-invoice-refresh .accounting-invoice-table tbody tr:nth-child(even) { background: #f8fbfd; }
+  .lk-invoice-refresh .accounting-invoice-table tbody tr:not(.accounting-empty-row):hover { background: #fff6fb; }
+  .lk-invoice-refresh .accounting-invoice-table tbody :is(input,select) {
+    border-color: #d5e4eb;
+    border-radius: 7px;
+  }
+  .lk-invoice-refresh .accounting-invoice-bottom {
+    gap: 10px;
+    padding: 12px;
+    border-top: 1px solid #d5e4ed;
+    background: #f3f8fc;
+  }
+  .lk-invoice-refresh .accounting-payment-section,
+  .lk-invoice-refresh .accounting-invoice-totals {
+    border: 1px solid #d5e5ed;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 3px 11px rgba(47,89,114,.04);
+  }
+  .lk-invoice-refresh .accounting-final-total {
+    border: 1px solid #f1cee0;
+    border-radius: 11px;
+    background: #fcebf5;
+    color: #ac1b68;
+  }
+  .lk-invoice-refresh .accounting-final-total strong { color: #b8196c; }
+  .lk-invoice-refresh .supplier-protection-alert {
+    border: 1px solid #d3e4ee;
+    border-radius: 11px;
+    background: #edf7fc;
+    color: #45677b;
+  }
+  @media (max-width: 760px) {
+    .lk-invoice-refresh .accounting-invoice-titlebar { padding: 15px 17px; }
+    .lk-invoice-refresh .accounting-invoice-toolbar { padding: 9px; }
+    .lk-invoice-refresh .accounting-invoice-information,
+    .lk-invoice-refresh .accounting-invoice-bottom { padding: 9px; }
+  }
+}
+/* Screen-only by intent: all A4 and receipt-print layouts remain unchanged. */

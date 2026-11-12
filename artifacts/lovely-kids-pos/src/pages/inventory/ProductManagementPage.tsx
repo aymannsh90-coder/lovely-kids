@@ -85,7 +85,9 @@ export default function ProductManagementPage() {
 
   const scannerKeyboard = useRef(createScannerKeyboardBuffer());
 
-  const canManage = user?.isAdmin === true || user?.isOwner === true;
+  const canManage = user?.isAdmin === true || user?.isOwner === true || Boolean(user?.staffEnabled && user?.permissions?.includes("inventory.edit"));
+  const canView = canManage || Boolean(user?.staffEnabled && user?.permissions?.includes("inventory.view"));
+  const canSeeCost = user?.isOwner === true || Boolean(user?.staffEnabled && user?.permissions?.includes("inventory.cost"));
 
   useEffect(() => {
     document.title = "الأصناف | Lovely Kids POS";
@@ -106,7 +108,7 @@ export default function ProductManagementPage() {
       setValuation([]);
       setValuationReady(false);
 
-      if (user?.isOwner) {
+      if (canSeeCost) {
         try {
           const valuationResult =
             await getOwnerInventoryValuationProducts(
@@ -216,7 +218,7 @@ export default function ProductManagementPage() {
       noQr: activeProducts.filter(
         (product) => !hasQr(product),
       ).length,
-      noCost: user?.isOwner && valuationReady
+      noCost: canSeeCost && valuationReady
         ? activeProducts.filter(
             (product) => !hasKnownCost(product),
           ).length
@@ -227,7 +229,7 @@ export default function ProductManagementPage() {
   }, [
     activeProducts,
     products,
-    user?.isOwner,
+    canSeeCost,
     valuationByProduct,
     valuationReady,
   ]);
@@ -268,7 +270,7 @@ export default function ProductManagementPage() {
 
         if (
           filter === "noCost" &&
-          (!user?.isOwner || hasKnownCost(product))
+          (!canSeeCost || hasKnownCost(product))
         ) {
           return false;
         }
@@ -312,7 +314,7 @@ export default function ProductManagementPage() {
     products,
     query,
     filter,
-    user?.isOwner,
+    canSeeCost,
     valuationByProduct,
   ]);
 
@@ -430,12 +432,12 @@ export default function ProductManagementPage() {
     }
   }
 
-  if (!canManage) {
+  if (!canView) {
     return (
       <section className="pos-products-page lk-inventory-refresh lk-inventory-products">
         <div className="pos-products-denied">
           <strong>غير مصرح</strong>
-          <p>إدارة الأصناف متاحة للمالك والمديرين فقط.</p>
+          <p>عرض الأصناف يحتاج صلاحية المخزون من المالك.</p>
         </div>
       </section>
     );
@@ -462,13 +464,13 @@ export default function ProductManagementPage() {
             ↻ تحديث
           </button>
 
-          <button
+          {canManage && <button
             className="primary-button pos-products-add-button"
             type="button"
             onClick={() => navigate("/inventory/products/new")}
           >
             + إضافة صنف
-          </button>
+          </button>}
         </div>
       </header>
 
@@ -491,7 +493,7 @@ export default function ProductManagementPage() {
             ["new", "الجديد", counts.new],
             ["out", "بدون كمية", counts.out],
             ["noQr", "بدون QR", counts.noQr],
-            ...(user?.isOwner && valuationReady
+            ...(canSeeCost && valuationReady
               ? [["noCost", "بدون تكلفة", counts.noCost] as const]
               : []),
             ["hidden", "مخفي", counts.hidden],
@@ -584,7 +586,7 @@ export default function ProductManagementPage() {
                   </div>
                 </div>
 
-                <div className="pos-product-actions">
+                {canManage && <div className="pos-product-actions">
                   {!product.deletedAt ? (
                     <>
                       <button
@@ -639,7 +641,7 @@ export default function ProductManagementPage() {
                       ↩ استرجاع
                     </button>
                   )}
-                </div>
+                </div>}
               </article>
             );
           })}

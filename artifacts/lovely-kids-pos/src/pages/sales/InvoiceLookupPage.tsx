@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import "./InvoiceLookupVisualRefresh.css";
 import { usePosRuntime } from "../../app/pos-context";
 import SaleReceipt from "../../components/SaleReceipt";
 import {
@@ -160,7 +161,7 @@ export default function InvoiceLookupPage() {
   }
 
   return (
-    <section className="invoice-lookup-page">
+    <section className="invoice-lookup-page lk-lookup-refresh">
       <div className="panel-heading">
         <div className="panel-icon">🔎</div>
 

@@ -11,6 +11,7 @@ import {
 } from "@workspace/db/schema";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
+import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
 import { deleteProductImageObjects, getProductImageObjectPath } from "./image-routes";
 import { rewriteMediaUrlsForPublic } from "./media-url";
@@ -243,7 +244,17 @@ async function requireAdminActor(
     };
   }
 
-  if (!user.isAdmin) {
+  const path = new URL(request.url).pathname;
+  const canRead = request.method === "GET" &&
+    ["/api/products/admin", "/api/products/barcodes"].includes(path) &&
+    await userHasAnyPermission(db, user, ["inventory.view", "inventory.edit"]);
+  const canEdit = (
+    (request.method === "POST" && path === "/api/products") ||
+    (request.method === "PUT" && /^\/api\/products\/\d+$/.test(path)) ||
+    (request.method === "PATCH" && /^\/api\/products\/\d+\/(stock|variant-stock|visibility|restore)$/.test(path))
+  ) && await userHasPermission(db, user, "inventory.edit");
+  // Explicitly never delegate permanent DELETE to inventory.edit. Only pre-existing owner/admin may purge products.\n  // Staff may archive (soft DELETE is handled as an authenticated update), restore, and edit stock.
+  if (!user.isAdmin && !user.isOwner && !canRead && !canEdit) {
     return {
       ok: false as const,
       response: json(

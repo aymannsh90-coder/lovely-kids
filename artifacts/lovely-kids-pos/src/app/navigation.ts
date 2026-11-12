@@ -4,6 +4,7 @@ export type NavigationGroup =
   | "inventory"
   | "parties"
   | "vouchers"
+  | "discounts"
   | "finance"
   | "statements"
   | "reports";
@@ -51,6 +52,11 @@ export const navigationGroups: Array<{
     description: "سندات القبض والصرف والقيد وسجل السندات.",
   },
   {
+    key: "discounts",
+    title: "الإشعارات والخصومات",
+    description: "الخصومات المسموحة والمكتسبة والإشعارات الدائنة والمدينة.",
+  },
+  {
     key: "finance",
     title: "الصندوق والمالية",
     description: "المصروفات والشيكات وإدارة يوم العمل.",
@@ -76,6 +82,16 @@ export const posNavigation: PosNavigationItem[] = [
     description: "شاشة البيع السريع بالباركود والسلة والدفع.",
     icon: "🛍️",
     requiresOpenSession: true,
+    status: "ready",
+  },
+  {
+    key: "staff-online-orders",
+    group: "sales",
+    path: "/orders",
+    title: "الطلبات الإلكترونية",
+    description: "قائمة الطلبات وحالاتها وفق صلاحيات الموظف.",
+    icon: "📦",
+    requiresOpenSession: false,
     status: "ready",
   },
   {
@@ -119,6 +135,16 @@ export const posNavigation: PosNavigationItem[] = [
     status: "ready",
   },
   {
+    key: "purchase-history",
+    group: "purchases",
+    path: "/purchases/history",
+    title: "سجل فواتير المشتريات",
+    description: "عرض الفواتير ومراجعة تكاليف الشراء دون تعديل.",
+    icon: "📒",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
     key: "new-purchase",
     group: "purchases",
     path: "/purchases/new",
@@ -133,10 +159,11 @@ export const posNavigation: PosNavigationItem[] = [
     group: "purchases",
     path: "/purchases/returns",
     title: "مردودات المشتريات",
-    description: "إرجاع أصناف إلى المورد وربطها بفاتورة الشراء.",
+    description: "إرجاع أصناف المورد من المخزون الفعلي حسب اللون والنمرة.",
     icon: "📦",
     requiresOpenSession: false,
-    status: "planned",
+    ownerOnly: true,
+    status: "ready",
   },
   {
     key: "invoice-check",
@@ -256,6 +283,17 @@ export const posNavigation: PosNavigationItem[] = [
     title: "سند صرف",
     description: "صرف لموظف أو مورد أو زبون أو مصروف من الصندوق أو البنك.",
     icon: "💸",
+    requiresOpenSession: false,
+    status: "ready",
+  },
+  {
+    key: "discount-notes",
+    group: "discounts",
+    path: "/finance/discount-notes",
+    title: "الإشعارات والخصومات",
+    description: "إشعار دائن أو مدين للزبون، وخصومات تسوية الموردين دون تعديل الفاتورة.",
+    icon: "🏷️",
+    ownerOnly: true,
     requiresOpenSession: false,
     status: "ready",
   },
@@ -459,7 +497,6 @@ export const posNavigation: PosNavigationItem[] = [
     description: "كشف كامل لحركات المورد والدفعات والرصيد مع طباعة A4.",
     icon: "🚚",
     requiresOpenSession: false,
-    ownerOnly: true,
     status: "ready",
   },
   {

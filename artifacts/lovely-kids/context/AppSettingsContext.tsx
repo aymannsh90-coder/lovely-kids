@@ -263,13 +263,14 @@ const STORAGE_KEY = "lovely_kids_app_settings";
 const STORAGE_TS_KEY = "lovely_kids_app_settings_ts";
 
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { getAuthToken } = useAuth();
+  const { getAuthToken, user } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsReady, setSettingsReady] = useState(false);
   const getAuthTokenRef = useRef(getAuthToken);
   getAuthTokenRef.current = getAuthToken;
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const lastSuccessfulFetchAtRef = useRef(0);
+  const fetchSequenceRef = useRef(0);
 
   const applyRemote = useCallback((data: Partial<AppSettings>) => {
     const merged = { ...DEFAULT_SETTINGS, ...data };
@@ -287,6 +288,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const fetchSettings = useCallback(async () => {
+    const fetchSequence = ++fetchSequenceRef.current;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(
@@ -315,6 +317,8 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
       if (!res.ok) return;
 
       const data = await res.json();
+      // An older unauthenticated request must never overwrite a newer admin fetch.
+      if (fetchSequence !== fetchSequenceRef.current) return;
       applyRemote(data);
     } catch {
       // Network failure or timeout — keep cached/default settings.
@@ -369,6 +373,15 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
       cancelled = true;
     };
   }, [fetchSettings]);
+
+  // The initial settings request may run before the admin session has been restored.
+  // Fetch again with admin credentials so private company costs do not fall back
+  // to the public customer shipping price.
+  useEffect(() => {
+    if (user?.isAdmin) {
+      void fetchSettings();
+    }
+  }, [user?.id, user?.isAdmin, fetchSettings]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
