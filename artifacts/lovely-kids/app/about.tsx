@@ -206,11 +206,7 @@ export default function AboutScreen() {
             <View style={styles.heroArtDot} />
             <View style={styles.logoCard}>
               <Image
-                source={
-                  settings.logoUrl
-                    ? { uri: settings.logoUrl }
-                    : require("@/assets/images/logo.jpg")
-                }
+                source={require("@/assets/images/about-logo.jpg")}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
