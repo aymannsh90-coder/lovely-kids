@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Easing,
   Image,
   Platform,
   Pressable,
@@ -118,8 +119,8 @@ const AGE_COLORS = [
 ];
 
 const TRUST_BADGES = [
-  { icon: "shirt-outline" as const, color: "#E91E8C", title: "خامات ناعمة", subtitle: "ومريحة" },
-  { icon: "sparkles-outline" as const, color: "#96DFEC", title: "تصاميم عصرية", subtitle: "وعملية" },
+  { icon: "shirt-outline" as const, color: "#D74789", title: "خامات ناعمة", subtitle: "ومريحة" },
+  { icon: "sparkles-outline" as const, color: "#48AEF5", title: "تصاميم عصرية", subtitle: "وعملية" },
   { icon: "ribbon-outline" as const, color: "#FFB84D", title: "جودة تدوم", subtitle: "طويلاً" },
 ];
 
@@ -236,6 +237,91 @@ function getHomeCategoryImage(label: string): any {
   return null;
 }
 
+type CategoryTileProps = {
+  id: string;
+  label: string;
+  image: any;
+  width: number;
+  borderColor: string;
+  backgroundColor: string;
+  revealed: boolean;
+  delay: number;
+};
+
+// One-time entrance + tiny interaction feedback; the route and category filter
+// remain exactly the same as the original cards.
+function AnimatedCategoryTile({
+  id, label, image, width, borderColor, backgroundColor, revealed, delay,
+}: CategoryTileProps) {
+  const entrance = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!revealed) return;
+    if (
+      Platform.OS !== "web" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    ) {
+      entrance.setValue(1);
+      return;
+    }
+    const animation = Animated.timing(entrance, {
+      toValue: 1,
+      duration: 430,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [delay, entrance, revealed]);
+
+  const animateScale = (toValue: number) => {
+    if (Platform.OS !== "web") return;
+    Animated.spring(scale, {
+      toValue,
+      friction: 7,
+      tension: 145,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={{
+        width,
+        opacity: entrance,
+        transform: [
+          { translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+          { scale },
+        ],
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onHoverIn={() => animateScale(1.025)}
+        onHoverOut={() => animateScale(1)}
+        onPressIn={() => animateScale(0.975)}
+        onPressOut={() => animateScale(1)}
+        onPress={() =>
+          router.push({
+            pathname: "/products",
+            params: { category: id },
+          })
+        }
+        style={[
+          styles.homeCategoryCard,
+          { width: "100%", borderColor, backgroundColor },
+        ]}
+      >
+        <Image source={image} style={styles.homeCategoryImage} resizeMode="cover" />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function HomeScreen() {
   const offersCtaPulse = useRef(new Animated.Value(0)).current;
 
@@ -295,17 +381,24 @@ export default function HomeScreen() {
 
   const homeProductCardWidth = isWideWeb
     ? (responsiveShellWidth - 32 - 24) / 3
-    : (width - 48) / 2;
+    : (viewportWidth - 48) / 2;
 
-  const homeProductImageHeight =
-    isDesktopWeb ? 280 : undefined;
+  const categoryColumnCount = isDesktopWeb ? 6 : isTabletWeb ? 4 : 3;
+  const homeCategoryCardWidth = isWideWeb
+    ? (responsiveShellWidth - 32 - (categoryColumnCount - 1) * 12) / categoryColumnCount
+    : (viewportWidth - 32 - (categoryColumnCount - 1) * 12) / categoryColumnCount;
 
-  const newArrivalCardWidth = isDesktopWeb
+  const homeProductImageHeight = isDesktopWeb
+    ? 280
+    : Math.min(230, Math.max(168, homeProductCardWidth * 1.1));
+
+  const newArrivalCardWidth = isWideWeb
     ? (responsiveShellWidth - 24) / 3
-    : 170;
+    : Math.max(136, (viewportWidth - 56) / 2);
 
-  const newArrivalImageHeight =
-    isDesktopWeb ? 250 : undefined;
+  const newArrivalImageHeight = isDesktopWeb
+    ? 250
+    : Math.min(222, Math.max(168, newArrivalCardWidth * 1.08));
 
   const responsiveShellStyle = isWideWeb
     ? {
@@ -365,6 +458,89 @@ export default function HomeScreen() {
   } = useNotificationOptIn();
 
   const ageArrowAnim = useRef(new Animated.Value(0)).current;
+  const sectionPillShimmer = useRef(new Animated.Value(0)).current;
+  const sectionPillAccentPulse = useRef(new Animated.Value(1)).current;
+  const sectionPillGlow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Decorative motion on storefront titles only. Honor reduced-motion settings.
+    if (
+      Platform.OS !== "web" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+    ) return;
+
+    const shimmer = Animated.loop(Animated.sequence([
+      Animated.delay(350),
+      Animated.timing(sectionPillShimmer, {
+        toValue: 1,
+        duration: 1600,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sectionPillShimmer, {
+        toValue: 0,
+        duration: 0,
+        useNativeDriver: true,
+      }),
+      Animated.delay(2100),
+    ]));
+
+    const accentPulse = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillAccentPulse, {
+        toValue: 1.4,
+        duration: 950,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sectionPillAccentPulse, {
+        toValue: 1,
+        duration: 950,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.delay(2100),
+    ]));
+
+    // Whole-pill tint ensures the animation is actually noticeable on phones,
+    // even when a narrow shimmer passes too quickly to catch.
+    const glow = Animated.loop(Animated.sequence([
+      Animated.timing(sectionPillGlow, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sectionPillGlow, {
+        toValue: 0,
+        duration: 1200,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.delay(1900),
+    ]));
+
+    shimmer.start();
+    accentPulse.start();
+    glow.start();
+    return () => {
+      shimmer.stop();
+      accentPulse.stop();
+      glow.stop();
+    };
+  }, [sectionPillShimmer, sectionPillAccentPulse, sectionPillGlow]);
+  const [categoriesRevealed, setCategoriesRevealed] = useState(false);
+  const categoryGridY = useRef<number | null>(null);
+  const homeViewportHeight = useRef(0);
+  const homeScrollY = useRef(0);
+
+  const revealCategoriesWhenVisible = () => {
+    if (categoriesRevealed || categoryGridY.current === null || !homeViewportHeight.current) return;
+    if (homeScrollY.current + homeViewportHeight.current * 0.9 >= categoryGridY.current) {
+      setCategoriesRevealed(true);
+    }
+  };
+
   const newArrivalsScrollRef = useRef<ScrollView>(null);
   const newArrivalsScrollX = useRef(0);
   const newArrivalsMaxScrollX = useRef(0);
@@ -572,6 +748,7 @@ export default function HomeScreen() {
   const topPadding = getResponsiveTopPadding(insets.top);
 
   const renderHomeSectionHeader = (title: string, onPress: () => void) => {
+    const animatePill = title === "وصل حديثاً" || title === "تسوّق حسب القسم";
     if (Platform.OS !== "web") {
       return (
         <View style={styles.sectionHeader}>
@@ -597,18 +774,68 @@ export default function HomeScreen() {
         <View
           style={[
             styles.homeBannerTitleBox,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            {
+              backgroundColor: colors.card,
+              borderColor: animatePill ? "#D8E9F7" : colors.border,
+            },
           ]}
         >
-          <View
+          {animatePill ? (
+            <>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.homeBannerTitleGlow,
+                  {
+                    opacity: sectionPillGlow.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.13, 0.8],
+                    }),
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.homeBannerTitleShimmer,
+                  {
+                    transform: [
+                      {
+                        translateX: sectionPillShimmer.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-110, 360],
+                        }),
+                      },
+                      { skewX: "-18deg" },
+                    ],
+                  },
+                ]}
+              />
+            </>
+          ) : null}
+          <Animated.View
             style={[
               styles.homeBannerAccent,
-              { backgroundColor: colors.primary },
+              { backgroundColor: "#D74789" },
+              animatePill ? { transform: [{ scaleY: sectionPillAccentPulse }] } : null,
             ]}
           />
           <Text style={[styles.homeBannerTitle, { color: colors.foreground }]}>
             {title}
           </Text>
+          {animatePill ? (
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                opacity: sectionPillGlow.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.45, 1],
+                }),
+              }}
+            >
+              <Ionicons name="sparkles" color="#3299DC" size={16} />
+            </Animated.View>
+          ) : null}
         </View>
 
         <View
@@ -618,10 +845,13 @@ export default function HomeScreen() {
           ]}
         />
 
-        <Pressable onPress={onPress}>
-          <Text style={[styles.seeAll, { color: colors.primary }]}>
-            عرض الكل
-          </Text>
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          style={[styles.seeAllButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <Text style={[styles.seeAll, { color: colors.primary }]}>عرض الكل</Text>
+          <Ionicons name="arrow-back" size={14} color={colors.primary} />
         </Pressable>
       </View>
     );
@@ -632,7 +862,7 @@ export default function HomeScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: "#F0FAFE",
+          backgroundColor: "#FAFCFF",
         }}
       />
     );
@@ -657,6 +887,16 @@ export default function HomeScreen() {
           : null,
       ]}
       showsVerticalScrollIndicator={false}
+      scrollEventThrottle={96}
+      onLayout={(event) => {
+        homeViewportHeight.current = event.nativeEvent.layout.height;
+        revealCategoriesWhenVisible();
+      }}
+      onScroll={(event) => {
+        if (categoriesRevealed) return;
+        homeScrollY.current = event.nativeEvent.contentOffset.y;
+        revealCategoriesWhenVisible();
+      }}
       contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 }}
     >
       {/* Header — keep existing header on phone/tablet only */}
@@ -664,11 +904,22 @@ export default function HomeScreen() {
       <View
         style={[
           styles.header,
-          { paddingTop: topPadding + 12, backgroundColor: colors.background },
+          {
+            paddingTop: topPadding + 4,
+            backgroundColor: colors.card,
+            borderBottomColor: colors.border,
+          },
         ]}
       >
         <View style={styles.headerLeft}>
-          <CategoryMenu />
+          <View
+            style={[
+              styles.headerMenuFrame,
+              { backgroundColor: colors.muted, borderColor: colors.border },
+            ]}
+          >
+            <CategoryMenu />
+          </View>
 
           {Platform.OS !== "web" && (
             <Image
@@ -682,13 +933,13 @@ export default function HomeScreen() {
             />
           )}
 
-          {user && (
+          {user && Platform.OS !== "web" && (
             <View style={styles.greetingBlock}>
               <Text style={[styles.greetingHi, { color: colors.primary }]}>
                 أهلاً وسهلاً
               </Text>
               <Text style={[styles.greetingName, { color: colors.foreground }]}>
-                {Platform.OS === "web" ? firstName : user.name}
+                {user.name}
               </Text>
             </View>
           )}
@@ -697,7 +948,11 @@ export default function HomeScreen() {
         {Platform.OS === "web" && (
           <Image
             source={require("@/assets/images/lovely-kids-logo-horizontal.png")}
-            style={[styles.logoImage, styles.webCenteredLogo]}
+            style={[
+              styles.logoImage,
+              styles.webCenteredLogo,
+              viewportWidth < 360 && styles.webCompactLogo,
+            ]}
             resizeMode="contain"
           />
         )}
@@ -705,9 +960,15 @@ export default function HomeScreen() {
         <View style={styles.headerRight}>
           <Pressable
             onPress={() => router.push("/wishlist")}
-            style={styles.iconBtn}
+            accessibilityRole="button"
+            accessibilityLabel="المفضلة"
+            style={[
+              styles.iconBtn,
+              styles.headerActionFrame,
+              { backgroundColor: colors.muted, borderColor: colors.border },
+            ]}
           >
-            <Ionicons name="heart-outline" size={24} color={colors.foreground} />
+            <Ionicons name="heart-outline" size={23} color={colors.foreground} />
             {wishlistCount > 0 && (
               <View style={[styles.wishlistBadge, { backgroundColor: colors.primary }]}>
                 <Text style={styles.wishlistBadgeText}>
@@ -716,9 +977,27 @@ export default function HomeScreen() {
               </View>
             )}
           </Pressable>
-          <CartBadge />
+          <View
+            style={[
+              styles.headerCartFrame,
+              { backgroundColor: colors.muted, borderColor: colors.border },
+            ]}
+          >
+            <CartBadge />
+          </View>
         </View>
       </View>
+      ) : null}
+
+      {Platform.OS === "web" && !isDesktopWeb && user ? (
+        <View style={styles.webWelcomeRow}>
+          <Text
+            style={[styles.webWelcomeText, { color: colors.mutedForeground }]}
+            numberOfLines={1}
+          >
+            أهلاً وسهلاً، {firstName}
+          </Text>
+        </View>
       ) : null}
 
       {Platform.OS !== "web" ? (
@@ -776,11 +1055,9 @@ export default function HomeScreen() {
           desktopBannerStyle,
         ]}
       >
-        <Ionicons
-          name="search-outline"
-          size={20}
-          color={colors.mutedForeground}
-        />
+        <View style={[styles.searchIconCircle, { backgroundColor: colors.muted }]}>
+          <Ionicons name="search-outline" size={21} color={colors.primary} />
+        </View>
         <Text
           style={[
             styles.searchPlaceholder,
@@ -1055,6 +1332,120 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
 
+      {/* New Arrivals */}
+      {newArrivals.length > 0 ? (
+        <>
+          {renderHomeSectionHeader(
+            "وصل حديثاً",
+            () => router.push("/new-arrivals"),
+          )}
+
+          <View
+            style={[
+              styles.newArrivalsScrollWrapper,
+              isDesktopWeb ? responsiveShellStyle : null,
+            ]}
+          >
+            {newArrivals.length > 2 ? (
+              <>
+                <Pressable
+                  onPress={() => scrollNewArrivals("right")}
+                  style={({ pressed }) => [
+                    styles.newArrivalsArrow,
+                    styles.newArrivalsArrowRight,
+                    !isWideWeb ? { top: "26%" } : null,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 0.95,
+                    },
+                  ]}
+                  accessibilityLabel="تحريك وصل حديثاً إلى اليمين"
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => scrollNewArrivals("left")}
+                  style={({ pressed }) => [
+                    styles.newArrivalsArrow,
+                    styles.newArrivalsArrowLeft,
+                    !isWideWeb ? { top: "26%" } : null,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.7 : 0.95,
+                    },
+                  ]}
+                  accessibilityLabel="تحريك وصل حديثاً إلى اليسار"
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              </>
+            ) : null}
+
+            <ScrollView
+              ref={newArrivalsScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.newArrivalsHorizontalScroll,
+                isDesktopWeb ? { paddingHorizontal: 0 } : null,
+              ]}
+              onLayout={(event) => {
+                newArrivalsViewportWidth.current =
+                  event.nativeEvent.layout.width;
+                updateNewArrivalsBounds();
+              }}
+              onContentSizeChange={(contentWidth) => {
+                newArrivalsContentWidth.current = contentWidth;
+                updateNewArrivalsBounds();
+              }}
+              onScrollBeginDrag={() => {
+                newArrivalsAutoPaused.current = true;
+              }}
+              onScrollEndDrag={() => {
+                newArrivalsAutoPaused.current = false;
+              }}
+              onMomentumScrollEnd={() => {
+                newArrivalsAutoPaused.current = false;
+              }}
+              onScroll={(event) => {
+                const currentX = event.nativeEvent.contentOffset.x;
+                newArrivalsScrollX.current = currentX;
+
+                if (currentX <= 1) {
+                  newArrivalsDirection.current = 1;
+                } else if (
+                  currentX >= newArrivalsMaxScrollX.current - 1
+                ) {
+                  newArrivalsDirection.current = -1;
+                }
+              }}
+              scrollEventThrottle={16}
+            >
+              {newArrivals.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  homeCard
+                  style={{ width: newArrivalCardWidth }}
+                  imageHeight={newArrivalImageHeight}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        </>
+      ) : null}
+
       {Platform.OS === "web" && !isInstalled && (installPrompt || isIos) ? (
         <Pressable
           onPress={() => void handleInstall()}
@@ -1271,117 +1662,6 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      {/* New Arrivals */}
-      {newArrivals.length > 0 ? (
-        <>
-          {renderHomeSectionHeader(
-            "وصل حديثاً",
-            () => router.push("/new-arrivals"),
-          )}
-
-          <View
-            style={[
-              styles.newArrivalsScrollWrapper,
-              isDesktopWeb ? responsiveShellStyle : null,
-            ]}
-          >
-            {newArrivals.length > 2 ? (
-              <>
-                <Pressable
-                  onPress={() => scrollNewArrivals("right")}
-                  style={({ pressed }) => [
-                    styles.newArrivalsArrow,
-                    styles.newArrivalsArrowRight,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.7 : 0.95,
-                    },
-                  ]}
-                  accessibilityLabel="تحريك وصل حديثاً إلى اليمين"
-                >
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.primary}
-                  />
-                </Pressable>
-
-                <Pressable
-                  onPress={() => scrollNewArrivals("left")}
-                  style={({ pressed }) => [
-                    styles.newArrivalsArrow,
-                    styles.newArrivalsArrowLeft,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.7 : 0.95,
-                    },
-                  ]}
-                  accessibilityLabel="تحريك وصل حديثاً إلى اليسار"
-                >
-                  <Ionicons
-                    name="chevron-back"
-                    size={20}
-                    color={colors.primary}
-                  />
-                </Pressable>
-              </>
-            ) : null}
-
-            <ScrollView
-              ref={newArrivalsScrollRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.newArrivalsHorizontalScroll,
-                isDesktopWeb ? { paddingHorizontal: 0 } : null,
-              ]}
-              onLayout={(event) => {
-                newArrivalsViewportWidth.current =
-                  event.nativeEvent.layout.width;
-                updateNewArrivalsBounds();
-              }}
-              onContentSizeChange={(contentWidth) => {
-                newArrivalsContentWidth.current = contentWidth;
-                updateNewArrivalsBounds();
-              }}
-              onScrollBeginDrag={() => {
-                newArrivalsAutoPaused.current = true;
-              }}
-              onScrollEndDrag={() => {
-                newArrivalsAutoPaused.current = false;
-              }}
-              onMomentumScrollEnd={() => {
-                newArrivalsAutoPaused.current = false;
-              }}
-              onScroll={(event) => {
-                const currentX = event.nativeEvent.contentOffset.x;
-                newArrivalsScrollX.current = currentX;
-
-                if (currentX <= 1) {
-                  newArrivalsDirection.current = 1;
-                } else if (
-                  currentX >= newArrivalsMaxScrollX.current - 1
-                ) {
-                  newArrivalsDirection.current = -1;
-                }
-              }}
-              scrollEventThrottle={16}
-            >
-              {newArrivals.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  style={{ width: newArrivalCardWidth }}
-                  imageHeight={newArrivalImageHeight}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        </>
-      ) : null}
-
       {/* Shop by Category */}
       {homeCategoryCards.length > 0 ? (
         <>
@@ -1390,38 +1670,27 @@ export default function HomeScreen() {
           )}
 
           <View
+            onLayout={(event) => {
+              categoryGridY.current = event.nativeEvent.layout.y;
+              revealCategoriesWhenVisible();
+            }}
             style={[
               styles.productsGrid,
               responsiveShellStyle,
             ]}
           >
-            {homeCategoryCards.map((category) => (
-              <Pressable
+            {homeCategoryCards.map((category, index) => (
+              <AnimatedCategoryTile
                 key={category.id}
-                accessibilityRole="button"
-                accessibilityLabel={category.label}
-                onPress={() =>
-                  router.push({
-                    pathname: "/products",
-                    params: { category: category.id },
-                  })
-                }
-                style={({ pressed }) => [
-                  styles.homeCategoryCard,
-                  {
-                    width: homeProductCardWidth,
-                    borderColor: colors.border,
-                    backgroundColor: colors.card,
-                    opacity: pressed ? 0.86 : 1,
-                  },
-                ]}
-              >
-                <Image
-                  source={category.image}
-                  style={styles.homeCategoryImage}
-                  resizeMode="cover"
-                />
-              </Pressable>
+                id={category.id}
+                label={category.label}
+                image={category.image}
+                width={homeCategoryCardWidth}
+                borderColor={colors.border}
+                backgroundColor={colors.card}
+                revealed={categoriesRevealed}
+                delay={Math.min(index, 9) * 65}
+              />
             ))}
           </View>
         </>
@@ -1498,6 +1767,7 @@ export default function HomeScreen() {
             <ProductCard
               key={product.id}
               product={product}
+              homeCard
               style={{ width: homeProductCardWidth }}
               imageHeight={homeProductImageHeight}
             />
@@ -1584,8 +1854,10 @@ const styles = StyleSheet.create({
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingBottom: 12,
+    minHeight: 68,
+    borderBottomWidth: Platform.OS === "web" ? 1 : 0,
     position: "relative",
   },
   headerLeft: {
@@ -1593,21 +1865,61 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Platform.OS === "web" ? 4 : 8,
     flex: 1,
+    minWidth: 0,
+  },
+  headerMenuFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "flex-start",
+    gap: 7,
+    flex: Platform.OS === "web" ? 1 : undefined,
+    minWidth: 0,
+  },
+  headerActionFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  headerCartFrame: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoImage: {
-    width: Platform.OS === "web" ? 110 : 110,
-    height: Platform.OS === "web" ? 48 : 52,
+    width: 110,
+    height: Platform.OS === "web" ? 46 : 50,
   },
   webCenteredLogo: {
     position: "absolute",
     left: "50%",
     transform: [{ translateX: -55 }],
     zIndex: 1,
+  },
+  webCompactLogo: {
+    width: 100,
+    transform: [{ translateX: -50 }],
+  },
+  webWelcomeRow: {
+    paddingHorizontal: 18,
+    paddingTop: 7,
+    alignItems: "flex-end",
+  },
+  webWelcomeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "right",
   },
   greetingBlock: {
     alignItems: "flex-end",
@@ -1626,8 +1938,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1648,24 +1960,45 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   searchBar: {
-    flex: 1,
-    minHeight: 48,
+    minHeight: 54,
+    marginHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 15,
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
+    gap: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 18,
     borderWidth: 1,
+    shadowColor: "#24496B",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 1,
   },
-  searchPlaceholder: { fontSize: 14, flex: 1, textAlign: "right" },
+  searchIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchPlaceholder: { fontSize: 15, fontWeight: "500", flex: 1, textAlign: "right" },
   heroBanner: {
-    marginHorizontal: 16,
-    borderRadius: 20,
+    marginHorizontal: 14,
+    borderRadius: 23,
+    borderWidth: 5,
+    borderColor: "#FFFFFF",
     overflow: "hidden",
-    marginBottom: 20,
+    marginBottom: 23,
     padding: 20,
     minHeight: 180,
+    shadowColor: "#1A3963",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   heroContent: { alignItems: "flex-end", gap: 8 },
   heroBadge: {
@@ -1713,9 +2046,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  seeAll: { fontSize: 13, fontWeight: "600" },
+  seeAll: { fontSize: 13, fontWeight: "700" },
+  seeAllButton: {
+    minHeight: 37,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 13,
+  },
   offersScroll: { paddingHorizontal: 16, gap: 12, paddingBottom: 4 },
   offerCard: {
     width: 180,
@@ -1815,35 +2158,51 @@ const styles = StyleSheet.create({
     flexDirection: Platform.OS === "web" ? "row-reverse" : "row",
     justifyContent: "space-around",
     paddingHorizontal: 16,
-    marginTop: 18,
-    marginBottom: 8,
+    marginTop: 14,
+    marginBottom: 20,
+    gap: 8,
   },
-  trustItem: { alignItems: "center", flex: 1, gap: 2 },
+  trustItem: { alignItems: "center", flex: 1, gap: 4 },
   trustIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 42,
+    height: 42,
+    borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 3,
   },
-  trustTitle: { fontSize: 12, fontWeight: "700", textAlign: "center" },
-  trustSubtitle: { fontSize: 10, textAlign: "center" },
+  trustTitle: { fontSize: 12, fontWeight: "800", textAlign: "center" },
+  trustSubtitle: { fontSize: 11, textAlign: "center" },
   homeBannerHeader: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginTop: 4,
+    marginBottom: 14,
   },
   homeBannerTitleBox: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    borderRadius: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    overflow: "hidden",
+    position: "relative",
+  },
+  homeBannerTitleGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#D7EEFF",
+  },
+  homeBannerTitleShimmer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 95,
+    backgroundColor: "rgba(72,174,245,0.34)",
   },
   homeBannerAccent: {
     width: 4,
@@ -1851,7 +2210,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   homeBannerTitle: {
-    fontSize: 18,
+    fontSize: 19,
+    lineHeight: 28,
     fontWeight: "800",
     textAlign: "right",
   },
@@ -1909,7 +2269,7 @@ const styles = StyleSheet.create({
   },
   newArrivalsScrollWrapper: {
     position: "relative",
-    marginBottom: 20,
+    marginBottom: 26,
   },
   newArrivalsArrow: {
     position: "absolute",
@@ -1930,9 +2290,9 @@ const styles = StyleSheet.create({
     left: 6,
   },
   newArrivalsHorizontalScroll: {
-    paddingHorizontal: 48,
+    paddingHorizontal: 16,
     gap: 12,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   horizontalScroll: {
     paddingHorizontal: 16,
@@ -1943,9 +2303,9 @@ const styles = StyleSheet.create({
   bottomViewAllButton: {
     marginHorizontal: 16,
     marginTop: 4,
-    marginBottom: 14,
-    minHeight: 48,
-    borderRadius: 16,
+    marginBottom: 16,
+    minHeight: 50,
+    borderRadius: 18,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
