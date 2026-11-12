@@ -280,8 +280,34 @@ export default function ProductsScreen({
   const categoryStripContentWidth = useRef(0);
   const categoryStripViewportWidth = useRef(0);
   const scrollCategoryStrip = (direction: "left" | "right") => {
-    const maximum = Math.max(0, categoryStripContentWidth.current - categoryStripViewportWidth.current);
     const step = 210;
+
+    if (Platform.OS === "web") {
+      // Browsers use negative horizontal scroll offsets for RTL containers.
+      // onContentSizeChange is not reliable on web; let the DOM clamp at each end.
+      const scrollNode = categoryStripRef.current?.getScrollableNode?.() as
+        | HTMLElement
+        | null;
+      if (scrollNode && typeof scrollNode.scrollBy === "function") {
+        scrollNode.scrollBy({
+          left: direction === "left" ? -step : step,
+          behavior: "smooth",
+        });
+        return;
+      }
+
+      // Fallback for web renderers without Element.scrollBy.
+      const nextOffset = Math.min(
+        0,
+        categoryStripOffset.current + (direction === "left" ? -step : step),
+      );
+      categoryStripOffset.current = nextOffset;
+      categoryStripRef.current?.scrollTo({ x: nextOffset, animated: true });
+      return;
+    }
+
+    // Preserve the existing horizontal navigation on native platforms.
+    const maximum = Math.max(0, categoryStripContentWidth.current - categoryStripViewportWidth.current);
     const nextOffset = Math.max(0, Math.min(maximum, categoryStripOffset.current + (direction === "left" ? step : -step)));
     categoryStripOffset.current = nextOffset;
     categoryStripRef.current?.scrollTo({ x: nextOffset, animated: true });
