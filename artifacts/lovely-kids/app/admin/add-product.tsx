@@ -87,6 +87,8 @@ function localBusinessDate() {
     .slice(0, 10);
 }
 
+const NEW_ARRIVAL_DURATION_DAYS = 50;
+
 export default function AddProductScreen() {
   const colors = useColors();
   const barcodeBeep = useAudioPlayer(require("../../assets/sounds/barcode-beep.wav"));
@@ -180,10 +182,7 @@ export default function AddProductScreen() {
   const [facebookUrl, setFacebookUrl] = useState(editProduct?.facebookUrl ?? "");
   const [instagramUrl, setInstagramUrl] = useState(editProduct?.instagramUrl ?? "");
   const [tiktokUrl, setTiktokUrl] = useState(editProduct?.tiktokUrl ?? "");
-  const initialNewDays = editProduct?.isNew && editProduct?.newUntil ? Math.max(1, Math.ceil((new Date(editProduct.newUntil).getTime() - Date.now()) / 86400000)) : 7;
   const [isNew, setIsNew] = useState(editProduct?.isNew ?? false);
-  const [newDays, setNewDays] = useState(String(initialNewDays));
-  const [newDaysMode, setNewDaysMode] = useState<"7" | "14" | "custom">(initialNewDays === 7 ? "7" : initialNewDays === 14 ? "14" : "custom");
   const [newDurationChanged, setNewDurationChanged] = useState(false);
   const [stock, setStock] = useState(
     editProduct?.stock !== undefined && editProduct?.stock !== null
@@ -389,30 +388,6 @@ export default function AddProductScreen() {
 
     setIsNew(editProduct.isNew ?? false);
 
-    const remainingDays =
-      editProduct.isNew &&
-      editProduct.newUntil
-        ? Math.max(
-            1,
-            Math.ceil(
-              (
-                new Date(
-                  editProduct.newUntil,
-                ).getTime() -
-                Date.now()
-              ) / 86400000,
-            ),
-          )
-        : 7;
-
-    setNewDays(String(remainingDays));
-    setNewDaysMode(
-      remainingDays === 7
-        ? "7"
-        : remainingDays === 14
-          ? "14"
-          : "custom",
-    );
     setNewDurationChanged(false);
 
     setEditStockCostMode(null);
@@ -476,25 +451,6 @@ export default function AddProductScreen() {
 
     setIsNew(copyProduct.isNew ?? false);
 
-    const remainingDays =
-      copyProduct.isNew && copyProduct.newUntil
-        ? Math.max(
-            1,
-            Math.ceil(
-              (new Date(copyProduct.newUntil).getTime() - Date.now()) /
-                86400000,
-            ),
-          )
-        : 7;
-
-    setNewDays(String(remainingDays));
-    setNewDaysMode(
-      remainingDays === 7
-        ? "7"
-        : remainingDays === 14
-          ? "14"
-          : "custom",
-    );
     setNewDurationChanged(false);
     setErrors([]);
   }, [copyFrom, copyProduct, productId]);
@@ -2242,7 +2198,6 @@ export default function AddProductScreen() {
     if (!price.trim() || isNaN(Number(price))) errs.push("السعر يجب أن يكون رقماً صحيحاً");
     if (!image.trim()) errs.push("صورة المنتج مطلوبة");
     if (stock.trim() && isNaN(Number(stock))) errs.push("الكمية يجب أن تكون رقماً صحيحاً");
-    if (isNew && (!newDays.trim() || !Number.isInteger(Number(newDays)) || Number(newDays) <= 0)) errs.push("مدة وصل حديثًا يجب أن تكون عدد أيام صحيحًا أكبر من صفر");
 
     const extraBarcodeValues = additionalBarcodes.map((item) =>
       item.barcode.trim()
@@ -2372,7 +2327,11 @@ export default function AddProductScreen() {
     setSaving(true);
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const newUntil = !isNew ? null : (isEdit && !newDurationChanged ? editProduct?.newUntil ?? null : new Date(Date.now() + Number(newDays) * 86400000).toISOString());
+      const newUntil = !isNew
+        ? null
+        : isEdit && !newDurationChanged
+          ? editProduct?.newUntil ?? null
+          : new Date(Date.now() + NEW_ARRIVAL_DURATION_DAYS * 86400000).toISOString();
       const productData: Omit<Product, "id"> = {
         nameAr: nameAr.trim(),
         name: name.trim() || nameAr.trim(),
@@ -3951,10 +3910,11 @@ export default function AddProductScreen() {
           <Text style={[styles.toggleLabel, { color: colors.foreground }]}>منتج جديد (يظهر في "وصل حديثًا")</Text>
         </Pressable>
 
-        {isNew && <Pressable onPress={() => { setNewDaysMode("7"); setNewDays("7"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="7"?colors.primary:colors.card,borderColor:newDaysMode==="7"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="7"?"#fff":colors.foreground}}>7 أيام</Text></Pressable>}
-        {isNew && <Pressable onPress={() => { setNewDaysMode("14"); setNewDays("14"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="14"?colors.primary:colors.card,borderColor:newDaysMode==="14"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="14"?"#fff":colors.foreground}}>14 يوم</Text></Pressable>}
-        {isNew && <Pressable onPress={() => { setNewDaysMode("custom"); setNewDays(""); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="custom"?colors.primary:colors.card,borderColor:newDaysMode==="custom"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="custom"?"#fff":colors.foreground}}>مخصص</Text></Pressable>}
-        {isNew && newDaysMode === "custom" && <TextInput value={newDays} onChangeText={(value) => { setNewDays(value); setNewDurationChanged(true); }} placeholder="عدد الأيام" keyboardType="number-pad" style={[styles.input, { borderColor: colors.border, color: colors.foreground }]} />}
+        {isNew && (
+          <Text style={{ color: colors.muted, textAlign: "right" }}>
+            يظهر المنتج في «وصل حديثًا» لمدة {NEW_ARRIVAL_DURATION_DAYS} يوم من تفعيل العلامة.
+          </Text>
+        )}
         {isEdit && (
           <View style={{ gap: 8 }}>
             <Pressable
