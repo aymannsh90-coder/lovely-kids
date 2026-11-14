@@ -59,6 +59,7 @@ export async function handleFacebookPagePostRequest(
   const pathname = new URL(request.url).pathname;
   if (
     pathname !== "/api/owner/facebook/status" &&
+    pathname !== "/api/owner/facebook/preview" &&
     pathname !== "/api/owner/facebook/publish"
   ) {
     return null;
@@ -73,11 +74,11 @@ export async function handleFacebookPagePostRequest(
   if (pathname === "/api/owner/facebook/status" && request.method === "GET") {
     return json({ configured: isConfigured(env) });
   }
-  if (pathname !== "/api/owner/facebook/publish" || request.method !== "POST") {
+  if (request.method !== "POST") {
     return json({ error: "طريقة الطلب غير مدعومة" }, 405);
   }
 
-  if (!isConfigured(env)) {
+  if (pathname === "/api/owner/facebook/publish" && !isConfigured(env)) {
     return json({ error: "ربط صفحة فيسبوك للنشر غير مفعّل بعد" }, 503);
   }
 
@@ -136,6 +137,19 @@ export async function handleFacebookPagePostRequest(
     caption = composeFacebookProductCaption(validProducts, (body.intro as string | undefined));
   } catch {
     return json({ error: "تعذر تجهيز وصف المنشور" }, 400);
+  }
+
+  if (pathname === "/api/owner/facebook/preview") {
+    return json({
+      configured: isConfigured(env),
+      caption,
+      products: validProducts.map((product) => ({
+        id: product.id,
+        name: product.nameAr?.trim() || product.name?.trim(),
+        image: product.image,
+        photoCaption: composeFacebookPhotoCaption(product),
+      })),
+    });
   }
 
   try {
