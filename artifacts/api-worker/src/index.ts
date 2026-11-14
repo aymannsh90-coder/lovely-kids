@@ -17,6 +17,7 @@ import {
   purgeExpiredTrashedProducts,
 } from "./product-routes";
 import { handleMetaCatalogRequest } from "./meta-catalog-routes";
+import { handleFacebookPagePostRequest } from "./facebook-page-post-routes";
 import {
   handleSettingsRequest,
   sanitizePublicSettingsData,
@@ -384,6 +385,9 @@ export default {
       if (metaCatalogResponse) {
         return metaCatalogResponse;
       }
+
+      const facebookPagePostResponse = await handleFacebookPagePostRequest(request, db, env);
+      if (facebookPagePostResponse) return facebookPagePostResponse;
 
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
