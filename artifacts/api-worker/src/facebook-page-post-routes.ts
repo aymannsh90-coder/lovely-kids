@@ -5,6 +5,7 @@ import type { Env, openDb } from "./db";
 import {
   MAX_FACEBOOK_POST_PRODUCTS,
   composeFacebookProductCaption,
+  composeFacebookPhotoCaption,
 } from "./facebook-post-composer";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -145,6 +146,7 @@ export async function handleFacebookPagePostRequest(
       const params = new URLSearchParams({
         url: product.image,
         published: "false",
+        caption: composeFacebookPhotoCaption(product),
       });
       const photo = await postToFacebook(env, env.META_FACEBOOK_PAGE_ID!.trim() + "/photos", params);
       photoIds.push(photo.id!);
