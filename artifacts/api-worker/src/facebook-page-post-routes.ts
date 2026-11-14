@@ -94,7 +94,7 @@ export async function handleFacebookPagePostRequest(
   if (
     ids.length < 1 ||
     ids.length > MAX_FACEBOOK_POST_PRODUCTS ||
-    ids.some((id) => !Number.isSafeInteger(id) || id <= 0) ||
+    ids.some((id) => typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) ||
     new Set(ids).size !== ids.length
   ) {
     return json({ error: "اختَر من 1 إلى 10 موديلات مختلفة" }, 400);
