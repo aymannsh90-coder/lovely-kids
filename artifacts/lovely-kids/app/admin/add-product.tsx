@@ -180,10 +180,10 @@ export default function AddProductScreen() {
   const [facebookUrl, setFacebookUrl] = useState(editProduct?.facebookUrl ?? "");
   const [instagramUrl, setInstagramUrl] = useState(editProduct?.instagramUrl ?? "");
   const [tiktokUrl, setTiktokUrl] = useState(editProduct?.tiktokUrl ?? "");
-  const initialNewDays = editProduct?.isNew && editProduct?.newUntil ? Math.max(1, Math.ceil((new Date(editProduct.newUntil).getTime() - Date.now()) / 86400000)) : 50;
+  const initialNewDays = editProduct?.isNew && editProduct?.newUntil ? Math.max(1, Math.ceil((new Date(editProduct.newUntil).getTime() - Date.now()) / 86400000)) : 7;
   const [isNew, setIsNew] = useState(editProduct?.isNew ?? false);
   const [newDays, setNewDays] = useState(String(initialNewDays));
-  const [newDaysMode, setNewDaysMode] = useState<"7" | "14" | "50" | "custom">(initialNewDays === 7 ? "7" : initialNewDays === 14 ? "14" : initialNewDays === 50 ? "50" : "custom");
+  const [newDaysMode, setNewDaysMode] = useState<"7" | "14" | "custom">(initialNewDays === 7 ? "7" : initialNewDays === 14 ? "14" : "custom");
   const [newDurationChanged, setNewDurationChanged] = useState(false);
   const [stock, setStock] = useState(
     editProduct?.stock !== undefined && editProduct?.stock !== null
@@ -403,7 +403,7 @@ export default function AddProductScreen() {
               ) / 86400000,
             ),
           )
-        : 50;
+        : 7;
 
     setNewDays(String(remainingDays));
     setNewDaysMode(
@@ -411,9 +411,7 @@ export default function AddProductScreen() {
         ? "7"
         : remainingDays === 14
           ? "14"
-          : remainingDays === 50
-            ? "50"
-            : "custom",
+          : "custom",
     );
     setNewDurationChanged(false);
 
@@ -487,7 +485,7 @@ export default function AddProductScreen() {
                 86400000,
             ),
           )
-        : 50;
+        : 7;
 
     setNewDays(String(remainingDays));
     setNewDaysMode(
@@ -495,9 +493,7 @@ export default function AddProductScreen() {
         ? "7"
         : remainingDays === 14
           ? "14"
-          : remainingDays === 50
-            ? "50"
-            : "custom",
+          : "custom",
     );
     setNewDurationChanged(false);
     setErrors([]);
@@ -3957,7 +3953,6 @@ export default function AddProductScreen() {
 
         {isNew && <Pressable onPress={() => { setNewDaysMode("7"); setNewDays("7"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="7"?colors.primary:colors.card,borderColor:newDaysMode==="7"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="7"?"#fff":colors.foreground}}>7 أيام</Text></Pressable>}
         {isNew && <Pressable onPress={() => { setNewDaysMode("14"); setNewDays("14"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="14"?colors.primary:colors.card,borderColor:newDaysMode==="14"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="14"?"#fff":colors.foreground}}>14 يوم</Text></Pressable>}
-        {isNew && <Pressable onPress={() => { setNewDaysMode("50"); setNewDays("50"); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="50"?colors.primary:colors.card,borderColor:newDaysMode==="50"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="50"?"#fff":colors.foreground}}>50 يوم</Text></Pressable>}
         {isNew && <Pressable onPress={() => { setNewDaysMode("custom"); setNewDays(""); setNewDurationChanged(true); }} style={[styles.chip,{backgroundColor:newDaysMode==="custom"?colors.primary:colors.card,borderColor:newDaysMode==="custom"?colors.primary:colors.border}]}><Text style={{color:newDaysMode==="custom"?"#fff":colors.foreground}}>مخصص</Text></Pressable>}
         {isNew && newDaysMode === "custom" && <TextInput value={newDays} onChangeText={(value) => { setNewDays(value); setNewDurationChanged(true); }} placeholder="عدد الأيام" keyboardType="number-pad" style={[styles.input, { borderColor: colors.border, color: colors.foreground }]} />}
         {isEdit && (
