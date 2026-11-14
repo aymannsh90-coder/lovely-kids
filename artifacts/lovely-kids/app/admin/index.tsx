@@ -29,6 +29,13 @@ const ADMIN_CARDS = [
     accent: "#2F80ED",
   },
   {
+    label: "النشر على فيسبوك",
+    subtitle: "اختيار عدة موديلات ومعاينة المنشور",
+    icon: "logo-facebook" as const,
+    route: "/admin/facebook-posts" as never,
+    accent: "#1877F2",
+  },
+  {
     label: "الطلبات",
     subtitle: "متابعة طلبات الزبائن",
     icon: "bag-handle-outline" as const,
