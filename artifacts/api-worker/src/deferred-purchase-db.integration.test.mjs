@@ -24,6 +24,8 @@ import {
 } from "./deferred-purchase-sale-cost.ts";
 import {
   addExactProductCostOrInitialize,
+  initializeEmptyProductCostState,
+  confirmEmptyProductCostReference,
   consumeProductCost,
 } from "./inventory-cost-engine.ts";
 import { allocateDeferredPurchaseCost } from "./deferred-purchase-cost-math.ts";
@@ -236,6 +238,59 @@ test("old cost closes, new 60 stock sold, returned, return voided, and invoice a
     assert.equal(await hasPendingDeferredCostForSaleItem(db, saleItemId), false);
     assert.equal((await db.select().from(posPurchasesTable)
       .where(eq(posPurchasesTable.id, draft.id))).length, 0);
+  } finally {
+    await client.end();
+  }
+});
+
+test("a fully sold receipt confirms the new reference cost with zero stock", async () => {
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  const db = drizzle(client);
+  try {
+    const [product] = await db.insert(productsTable).values({
+      name: "Fully sold test", nameAr: "اختبار بضاعة مباعة بالكامل",
+      productCode: "CI-FULLY-SOLD", price: 12, image: "ci-fixture",
+      category: "baby", ageGroup: "0-3", stock: 0,
+    }).returning();
+    await db.transaction(async tx => {
+      await initializeEmptyProductCostState(tx, {
+        productId: product.id, referenceUnitCostMinor: 614,
+        costQuality: "confirmed", eventType: "opening",
+        sourceType: "ci", sourceRef: "fully-sold",
+        sourceItemRef: "old-zero",
+      });
+      await confirmEmptyProductCostReference(tx, {
+        productId: product.id, referenceUnitCostMinor: 593,
+        eventType: "correction", sourceType: "ci",
+        sourceRef: "fully-sold", sourceItemRef: "new-receipt",
+      });
+    });
+    const [state] = await db.select().from(productCostStateTable)
+      .where(eq(productCostStateTable.productId, product.id));
+    assert.equal(state.quantityOnHand, 0);
+    assert.equal(state.inventoryValueMinor, 0);
+    assert.equal(state.referenceUnitCostMinor, 593);
+    assert.equal(state.costQuality, "confirmed");
+    await assert.rejects(async () => {
+      await db.transaction(async tx => {
+        await addExactProductCostOrInitialize(tx, {
+          productId: product.id, quantity: 1, costTotalMinor: 593,
+          costQuality: "confirmed", eventType: "purchase",
+          sourceType: "ci", sourceRef: "another-receipt",
+          sourceItemRef: "one",
+        });
+        await confirmEmptyProductCostReference(tx, {
+          productId: product.id, referenceUnitCostMinor: 700,
+          eventType: "correction", sourceType: "ci",
+          sourceRef: "another-receipt", sourceItemRef: "illegal",
+        });
+      });
+    }, /Cannot update an empty reference while accounting stock remains/);
+    const [afterFailure] = await db.select().from(productCostStateTable)
+      .where(eq(productCostStateTable.productId, product.id));
+    assert.equal(afterFailure.quantityOnHand, 0, "Failed transaction must roll back");
+    assert.equal(afterFailure.referenceUnitCostMinor, 593);
   } finally {
     await client.end();
   }
