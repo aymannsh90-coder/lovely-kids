@@ -121,7 +121,7 @@ export async function handleFacebookPagePostRequest(
     } catch (error) {
       const reason = error instanceof Error ? error.message : "";
       const isSystemPageMissing = reason === "FACEBOOK_SYSTEM_PAGE_NOT_FOUND";
-      const systemError = reason.match(/^FACEBOOK_SYSTEM_TOKEN_FAILED_(\\d+)(?:_(\\d+))?$/);
+      const systemError = reason.match(/^FACEBOOK_SYSTEM_TOKEN_FAILED_(\d+)(?:_(\d+))?$/);
       const diagnostic = systemError ? " (Meta " + systemError[1] + (systemError[2] ? "/" + systemError[2] : "") + ")" : "";
       return json({
         connected: false,
