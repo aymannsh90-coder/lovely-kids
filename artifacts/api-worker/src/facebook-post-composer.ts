@@ -41,6 +41,7 @@ export function composeFacebookProductCaption(
   if (new Set(products.map((product) => product.id)).size !== products.length) {
     throw new Error("Duplicate products are not allowed");
   }
-  const entries = products.map(composeFacebookPhotoCaption);
-  return [trimmedIntro, ...entries].filter(Boolean).join("\n\n");
+  // Photo titles and product-specific links already live in each photo caption.
+  // Keep the feed caption brief instead of duplicating every product block.
+  return trimmedIntro || DEFAULT_FACEBOOK_POST_INTRO;
 }
