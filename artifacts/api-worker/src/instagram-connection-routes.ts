@@ -28,7 +28,7 @@ export async function handleInstagramConnectionRequest(
 
   const id = env.META_INSTAGRAM_ACCOUNT_ID?.trim() ?? "";
   const token = env.META_INSTAGRAM_ACCESS_TOKEN?.trim() ?? "";
-  if (!/^\\d+$/.test(id) || !token) {
+  if (!/^[0-9]+$/.test(id) || !token) {
     return responseJson({ connected: false, error: "بيانات إنستغرام غير مكتملة في Cloudflare" });
   }
 
@@ -63,7 +63,7 @@ export async function handleInstagramConnectionRequest(
     }
     return responseJson({
       connected: true,
-      username: data.username || "lovely.kids.nablus",
+      username: data.username || "حساب إنستغرام",
       accountType: data.account_type || null,
       note: "هذا فحص قراءة فقط، ولا يؤكد نجاح النشر قبل تجربته.",
     });
