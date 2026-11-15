@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { productsTable } from "./products";
-import { posSaleItemsTable } from "./pos-sales";
 
 /**
  * A sale of real, physically entered inventory whose supplier receipt is still
@@ -14,7 +13,8 @@ export const deferredPurchaseSaleCostsTable = pgTable(
     id: serial("id").primaryKey(),
     draftPublicId: text("draft_public_id").notNull(),
     productId: integer("product_id").notNull().references(() => productsTable.id, { onDelete: "restrict" }),
-    saleItemId: integer("sale_item_id").notNull().references(() => posSaleItemsTable.id, { onDelete: "restrict" }),
+    // Historical sale ID remains valid even after an approved invoice is edited.
+    saleItemId: integer("sale_item_id").notNull(),
     quantity: integer("quantity").notNull(),
     status: text("status").notNull().default("pending"),
     approvedPurchaseId: integer("approved_purchase_id"),
