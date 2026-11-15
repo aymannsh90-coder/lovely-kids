@@ -59,6 +59,7 @@ export async function handleFacebookPagePostRequest(
   const pathname = new URL(request.url).pathname;
   if (
     pathname !== "/api/owner/facebook/status" &&
+    pathname !== "/api/owner/facebook/verify" &&
     pathname !== "/api/owner/facebook/preview" &&
     pathname !== "/api/owner/facebook/publish"
   ) {
@@ -73,6 +74,48 @@ export async function handleFacebookPagePostRequest(
 
   if (pathname === "/api/owner/facebook/status" && request.method === "GET") {
     return json({ configured: isConfigured(env) });
+  }
+  if (pathname === "/api/owner/facebook/verify" && request.method === "GET") {
+    // Read-only Graph API check: never create photos/posts or expose Page token.
+    if (!isConfigured(env)) {
+      return json({ connected: false, error: "صفحة فيسبوك غير مجهزة بعد" });
+    }
+    const pageId = env.META_FACEBOOK_PAGE_ID!.trim();
+    const token = env.META_FACEBOOK_PAGE_ACCESS_TOKEN!.trim();
+    try {
+      const response = await fetch(
+        "https://graph.facebook.com/" + GRAPH_VERSION + "/" + pageId + "?fields=id,name",
+        {
+          method: "GET",
+          headers: {
+            Authorization: "Bearer " + token,
+            Accept: "application/json",
+          },
+          signal: AbortSignal.timeout(8000),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as {
+        id?: string;
+        name?: string;
+        error?: { code?: number };
+      } | null;
+      if (!response.ok || data?.error || !data?.id) {
+        return json({
+          connected: false,
+          error: "تعذّر التحقق من رمز الصفحة لدى Meta. قد يكون الرمز منتهي الصلاحية أو لا يملك صلاحية الوصول.",
+        });
+      }
+      if (data.id !== pageId) {
+        return json({ connected: false, error: "رمز الوصول لا يتطابق مع صفحة Lovely Kids المحددة." });
+      }
+      return json({
+        connected: true,
+        pageName: data.name || "Lovely Kids",
+        note: "تم التحقق من الوصول للصفحة فقط؛ صلاحية إنشاء منشور تُتحقق عند النشر الفعلي.",
+      });
+    } catch {
+      return json({ connected: false, error: "تعذّر الاتصال بـ Meta للتحقق من الصفحة. أعد الفحص لاحقًا." });
+    }
   }
   if (request.method !== "POST") {
     return json({ error: "طريقة الطلب غير مدعومة" }, 405);
