@@ -5,6 +5,8 @@ import {
   financeTransactionLinesTable,
   financeTransactionsTable,
   posPurchaseItemCostsTable,
+  posSaleItemCostsTable,
+  posSaleReturnItemCostsTable,
   posPurchaseItemsTable,
   posPurchasesTable,
   productCostStateTable,
@@ -39,6 +41,8 @@ import {
 import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
+import { loadDeferredPurchaseCostSales, settleDeferredPurchasePosSale } from "./deferred-purchase-sale-cost";
+import { allocateDeferredPurchaseCost } from "./deferred-purchase-cost-math";
 import {
   backfillHistoricalPurchaseCosts,
   HistoricalPurchaseCostBackfillError,
@@ -2667,6 +2671,8 @@ async function handleCreatePurchase(
           Map<number, HistoricalSplit>;
       };
 
+      const deferredPlansByProduct = new Map<number, Awaited<ReturnType<typeof loadDeferredPurchaseCostSales>>>();
+
       const historicalPlansByProduct =
         new Map<
           number,
@@ -2738,9 +2744,30 @@ async function handleCreatePurchase(
             ?.quantityOnHand ??
           0;
 
+        const deferredPlan = draftPublicId
+          ? await loadDeferredPurchaseCostSales(tx, {
+              draftPublicId, productId,
+            })
+          : { sales: [], netSoldQuantity: 0 };
+        if (deferredPlan.sales.length > 0) {
+          const matchingReceiptLines = costAllocations.filter(entry =>
+            entry.item.productId === productId &&
+            entry.item.entryMode === "stock_receipt",
+          );
+          if (matchingReceiptLines.length !== 1 ||
+              deferredPlan.netSoldQuantity > pendingStockReceiptQuantity) {
+            throw new PurchaseError(
+              "كمية المبيعات المعلقة لا تطابق سطر استلام واحد من فاتورة المورد. راجع الأصناف قبل الاعتماد.",
+              409,
+            );
+          }
+        }
+        deferredPlansByProduct.set(productId, deferredPlan);
+
         const explainedPhysicalQuantity =
           currentCostQuantity +
-          pendingStockReceiptQuantity;
+          pendingStockReceiptQuantity -
+          deferredPlan.netSoldQuantity;
 
         if (
           explainedPhysicalQuantity >
@@ -3388,11 +3415,20 @@ async function handleCreatePurchase(
           continue;
         }
 
+        const deferredPlan = deferredPlansByProduct.get(productId);
+        const deferredSplit = deferredPlan?.sales.length
+          ? allocateDeferredPurchaseCost({
+              receivedQuantity: allocation.receivedQuantity,
+              receiptCostTotalMinor: allocation.costTotalMinor,
+              sales: deferredPlan.sales,
+            })
+          : null;
         const stockQuantityApplied =
-          allocation.receivedQuantity;
-
+          deferredSplit?.stockQuantityApplied ?? allocation.receivedQuantity;
         const stockCostTotalMinor =
-          allocation.costTotalMinor;
+          deferredSplit?.stockCostTotalMinor ?? allocation.costTotalMinor;
+        const deferredSoldQuantity = deferredSplit?.netSoldQuantity ?? 0;
+        const deferredSoldCostMinor = deferredSplit?.netSoldCostTotalMinor ?? 0;
 
         let costQuality:
           | "confirmed"
@@ -3462,8 +3498,59 @@ async function handleCreatePurchase(
           }
         }
 
+        if (deferredSplit) {
+          // Sale/return snapshots were deliberately absent before invoice
+          // approval. Approving the real supplier cost fills them atomically.
+          for (const saleCost of deferredSplit.allocations) {
+            await tx.insert(posSaleItemCostsTable).values({
+              saleItemId: saleCost.saleItemId,
+              productId,
+              quantity: saleCost.quantity,
+              unitCostMinor: deriveUnitCostMinor(saleCost.costTotalMinor, saleCost.quantity),
+              costTotalMinor: saleCost.costTotalMinor,
+              costQuality: "confirmed",
+            });
+            for (const returnCost of saleCost.returns) {
+              await tx.insert(posSaleReturnItemCostsTable).values({
+                returnItemId: returnCost.returnItemId,
+                originalSaleItemId: saleCost.saleItemId,
+                productId,
+                quantity: returnCost.quantity,
+                costTotalMinor: returnCost.costTotalMinor,
+                costQuality: "confirmed",
+              });
+            }
+          }
+          await settleDeferredPurchasePosSale(tx, {
+            draftPublicId: draftPublicId!,
+            productId, purchaseId: purchase.id,
+            saleItemIds: deferredSplit.allocations.map(item => item.saleItemId),
+          });
+          if (stockQuantityApplied === 0) {
+            await initializeEmptyProductCostState(tx, {
+              productId,
+              referenceUnitCostMinor: deriveUnitCostMinor(
+                allocation.costTotalMinor, allocation.receivedQuantity,
+              ),
+              costQuality: "confirmed",
+              eventType: "opening",
+              sourceType: "pos_purchase",
+              sourceRef: String(purchase.id),
+              sourceItemRef: `deferred-fully-sold:${productId}`,
+              businessDate,
+              note: `Approved fully-sold draft ${purchase.publicId}`,
+              createdByUserId: auth.user.id,
+            });
+          }
+        }
+
         inventoryPurchaseValueMinor +=
           stockCostTotalMinor;
+        historicalSoldValueMinor += deferredSoldCostMinor;
+        if (!Number.isSafeInteger(historicalSoldValueMinor) ||
+            historicalSoldValueMinor > MAX_MINOR) {
+          throw new PurchaseError("قيمة تكلفة المبيعات المعلقة تتجاوز الحد المسموح", 409);
+        }
 
         if (
           !Number.isSafeInteger(
@@ -3503,12 +3590,12 @@ async function handleCreatePurchase(
             stockQuantityApplied,
 
             historicalSoldQuantity:
-              0,
+              deferredSoldQuantity,
 
             stockCostTotalMinor,
 
             historicalSoldCostTotalMinor:
-              0,
+              deferredSoldCostMinor,
 
             historicalAllocationPending:
               false,
