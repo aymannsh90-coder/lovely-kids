@@ -18,6 +18,7 @@ import {
 } from "./product-routes";
 import { handleMetaCatalogRequest } from "./meta-catalog-routes";
 import { handleFacebookPagePostRequest } from "./facebook-page-post-routes";
+import { handleInstagramConnectionRequest } from "./instagram-connection-routes";
 import {
   handleSettingsRequest,
   sanitizePublicSettingsData,
@@ -388,6 +389,9 @@ export default {
 
       const facebookPagePostResponse = await handleFacebookPagePostRequest(request, db, env);
       if (facebookPagePostResponse) return facebookPagePostResponse;
+
+      const instagramConnectionResponse = await handleInstagramConnectionRequest(request, db, env);
+      if (instagramConnectionResponse) return instagramConnectionResponse;
 
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
