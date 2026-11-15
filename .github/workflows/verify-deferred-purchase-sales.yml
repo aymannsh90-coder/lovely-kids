@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'artifacts/api-worker/src/deferred-purchase-*'
+      - 'artifacts/api-worker/src/purchase-draft-routes.ts'
       - 'artifacts/api-worker/src/pos-sale-*'
       - 'artifacts/api-worker/src/pos-purchase-routes.ts'
       - 'lib/db/src/schema/deferred-purchase-sale-costs.ts'
@@ -32,3 +33,29 @@ jobs:
         run: pnpm --filter @workspace/lovely-kids-pos typecheck
       - name: Deferred purchase accounting regression tests
         run: node --experimental-strip-types --test artifacts/api-worker/src/deferred-purchase-cost-math.test.mjs
+
+  postgres-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: testing
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: testing
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create isolated integration fixture
+        run: psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres -f artifacts/api-worker/src/deferred-purchase-schema-smoke.setup.sql
+      - name: Apply proposed migration in isolated Postgres
+        run: psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres -f lib/db/migrations/20261115_add_deferred_purchase_sale_costs.sql
+      - name: Verify draft deletion, access controls, and settled audit
+        run: psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres -f artifacts/api-worker/src/deferred-purchase-schema-smoke.verify.sql
