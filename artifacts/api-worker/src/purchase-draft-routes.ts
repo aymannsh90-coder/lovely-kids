@@ -1,5 +1,6 @@
 import {
   posPurchaseItemsTable,
+  deferredPurchaseSaleCostsTable,
   posPurchasesTable,
   productBarcodesTable,
   productsTable,
@@ -2112,25 +2113,38 @@ async function handleDiscardDraft(
       "main",
   );
 
-  await db
-    .delete(posPurchasesTable)
-    .where(
-      and(
-        eq(posPurchasesTable.status, "draft"),
-        eq(
-          posPurchasesTable.enteredByUserId,
-          auth.user.id,
-        ),
-        eq(
-          posPurchasesTable.supplierId,
-          supplierId,
-        ),
-        eq(
-          posPurchasesTable.warehouseKey,
-          warehouseKey,
-        ),
-      ),
-    );
+  const discardRows = await db.select({
+    publicId: posPurchasesTable.publicId,
+  }).from(posPurchasesTable)
+    .where(and(
+      eq(posPurchasesTable.status, "draft"),
+      eq(posPurchasesTable.enteredByUserId, auth.user.id),
+      eq(posPurchasesTable.supplierId, supplierId),
+      eq(posPurchasesTable.warehouseKey, warehouseKey),
+    )).limit(1);
+
+  if (discardRows[0]) {
+    const deferred = await db.select({ id: deferredPurchaseSaleCostsTable.id })
+      .from(deferredPurchaseSaleCostsTable)
+      .where(and(
+        eq(deferredPurchaseSaleCostsTable.draftPublicId, discardRows[0].publicId),
+        eq(deferredPurchaseSaleCostsTable.status, "pending"),
+      )).limit(1);
+    if (deferred.length > 0) {
+      return json({
+        error: "لا يمكن حذف مسودة المورد: يوجد بيع من كميتها لم تُعتمد تكلفته. اعتمد الفاتورة أو ألغِ البيع أولًا.",
+      }, 409);
+    }
+  }
+
+  // The database DELETE trigger is the final guard against concurrent
+  // deletion of an invoice with still-unpriced POS sales.
+  await db.delete(posPurchasesTable).where(and(
+    eq(posPurchasesTable.status, "draft"),
+    eq(posPurchasesTable.enteredByUserId, auth.user.id),
+    eq(posPurchasesTable.supplierId, supplierId),
+    eq(posPurchasesTable.warehouseKey, warehouseKey),
+  ));
 
   return json({ ok: true });
 }
