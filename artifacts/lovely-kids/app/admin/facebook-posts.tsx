@@ -53,6 +53,8 @@ export default function FacebookPostsScreen() {
   const [intro, setIntro] = useState(DEFAULT_INTRO);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<{ connected: boolean; pageName?: string; error?: string } | null>(null);
   const [busy, setBusy] = useState<"preview" | "publish" | null>(null);
   const [error, setError] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -88,6 +90,37 @@ export default function FacebookPostsScreen() {
     })();
     return () => { cancelled = true; };
   }, [getAuthToken, user?.isOwner]);
+
+  const verifyConnection = async () => {
+    if (verifying) return;
+    setVerifying(true);
+    setVerification(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
+      const response = await fetch(`${API_BASE}/api/owner/facebook/verify`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json() as {
+        connected?: boolean;
+        pageName?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error || "تعذر فحص الاتصال بصفحة فيسبوك");
+      setVerification({
+        connected: data.connected === true,
+        pageName: data.pageName,
+        error: data.error,
+      });
+    } catch (e) {
+      setVerification({
+        connected: false,
+        error: e instanceof Error ? e.message : "تعذر فحص الاتصال بصفحة فيسبوك",
+      });
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const toggleProduct = (id: string) => {
     setError("");
@@ -210,9 +243,34 @@ export default function FacebookPostsScreen() {
         اختَر عدة موديلات لنشر صورها في منشور واحد. اسم كل صنف ورابطه والمقاسات والألوان في وصف الصورة والبوست.
       </Text>
       <Text style={{ ...muted, textAlign: "right" }}>
-        {configured === true ? "✓ صفحة فيسبوك مربوطة للنشر" :
-          configured === false ? "ربط صفحة فيسبوك للنشر لم يُفعّل بعد؛ المعاينة متاحة." : "جاري التحقق من ربط صفحة فيسبوك."}
+        {configured === true ? "✓ بيانات صفحة فيسبوك محفوظة في النظام" :
+          configured === false ? "ربط صفحة فيسبوك للنشر لم يُفعّل بعد؛ المعاينة متاحة." : "جاري التحقق من إعدادات صفحة فيسبوك."}
       </Text>
+      <View style={{ ...surface, gap: 8 }}>
+        <Text style={{ ...titleStyle, textAlign: "right" }}>فحص اتصال فيسبوك بدون نشر</Text>
+        <Text style={{ ...muted, textAlign: "right" }}>
+          يفحص رمز الوصول واسم الصفحة مباشرة من Meta. لا يرفع أي صور ولا ينشئ أي منشور.
+        </Text>
+        <Pressable
+          onPress={() => void verifyConnection()}
+          disabled={verifying || configured !== true}
+          style={{ ...action, opacity: verifying || configured !== true ? 0.5 : 1 }}
+        >
+          {verifying ? <ActivityIndicator color="#fff" /> :
+            <Text style={{ color: "#fff", fontWeight: "800" }}>افحص اتصال صفحة Lovely Kids</Text>}
+        </Pressable>
+        {verification && (
+          <Text selectable style={{
+            color: verification.connected ? "#16A34A" : "#DC2626",
+            textAlign: "right",
+            fontWeight: "700",
+          }}>
+            {verification.connected
+              ? `✓ رمز الوصول صالح لصفحة ${verification.pageName || "Lovely Kids"}؛ هذا لا يضمن صلاحية نشر المنشورات حتى نجربها.`
+              : `✗ ${verification.error || "تعذر التحقق من الاتصال"}`}
+          </Text>
+        )}
+      </View>
 
       <View style={{ ...surface, gap: 10 }}>
         <Text style={titleStyle}>الموديلات المختارة: {selectedIds.length}/{MAX_MODELS}</Text>
