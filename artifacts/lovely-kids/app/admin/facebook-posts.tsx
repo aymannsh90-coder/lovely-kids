@@ -240,7 +240,7 @@ export default function FacebookPostsScreen() {
       </Pressable>
       <Text style={{ ...titleStyle, fontSize: 24, textAlign: "right" }}>نشر موديلات على فيسبوك</Text>
       <Text style={{ ...muted, textAlign: "right" }}>
-        اختَر عدة موديلات لنشر صورها في منشور واحد. اسم كل صنف ورابطه والمقاسات والألوان في وصف الصورة والبوست.
+        اختَر موديلات لنشر صورها في منشور واحد. اسم كل صنف ورابطه موجودان في وصف صورته، ووصف المنشور الرئيسي لا يكرر التفاصيل.
       </Text>
       <Text style={{ ...muted, textAlign: "right" }}>
         {configured === true ? "✓ بيانات صفحة فيسبوك محفوظة في النظام" :
@@ -315,7 +315,7 @@ export default function FacebookPostsScreen() {
       </View>
 
       <View style={{ ...surface, gap: 10 }}>
-        <Text style={titleStyle}>مقدمة المنشور (اختيارية وقابلة للتعديل)</Text>
+        <Text style={titleStyle}>وصف المنشور الرئيسي (قابل للتعديل)</Text>
         <TextInput
           value={intro}
           onChangeText={(value) => { setIntro(value); setPreview(null); setPublishedUrl(null); }}
@@ -348,10 +348,10 @@ export default function FacebookPostsScreen() {
               </Text>
             </View>
           ))}
-          <Text style={titleStyle}>النص الكامل المرافق للمنشور</Text>
+          <Text style={titleStyle}>الوصف الرئيسي الذي سيظهر مع المنشور</Text>
           <Text selectable style={{ color: colors.foreground, lineHeight: 24, textAlign: "right" }}>{preview.caption}</Text>
           <Text style={{ ...muted, textAlign: "right" }}>
-            فيسبوك يحدد طريقة عرض وصف كل صورة داخل المنشور متعدد الصور. النص الكامل يظهر في وصف المنشور، والتفاصيل مرتبطة بكل صورة أيضًا.
+            كل صورة مرتبطة باسم الموديل ورابطه في وصفها. قد لا يُظهر فيسبوك وصف الصورة مباشرة ضمن المنشور متعدد الصور؛ أحيانًا تحتاج الزبونة لفتح الصورة لقراءة التفاصيل.
           </Text>
           <Pressable
             onPress={publish}
