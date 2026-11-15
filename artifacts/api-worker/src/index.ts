@@ -19,6 +19,7 @@ import {
 import { handleMetaCatalogRequest } from "./meta-catalog-routes";
 import { handleFacebookPagePostRequest } from "./facebook-page-post-routes";
 import { handleInstagramConnectionRequest } from "./instagram-connection-routes";
+import { handleOwnerStoryRequest } from "./owner-story-routes";
 import {
   handleSettingsRequest,
   sanitizePublicSettingsData,
@@ -392,6 +393,9 @@ export default {
 
       const instagramConnectionResponse = await handleInstagramConnectionRequest(request, db, env);
       if (instagramConnectionResponse) return instagramConnectionResponse;
+
+      const ownerStoryResponse = await handleOwnerStoryRequest(request, db, env);
+      if (ownerStoryResponse) return ownerStoryResponse;
 
       const authResponse = await handleAuthRequest(request, db, env);
       if (authResponse) return authResponse;
