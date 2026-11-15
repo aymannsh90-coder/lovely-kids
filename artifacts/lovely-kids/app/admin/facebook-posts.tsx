@@ -53,6 +53,13 @@ export default function FacebookPostsScreen() {
   const [intro, setIntro] = useState(DEFAULT_INTRO);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [instagramVerifying, setInstagramVerifying] = useState(false);
+  const [instagramVerification, setInstagramVerification] = useState<{
+    connected: boolean;
+    username?: string;
+    accountType?: string | null;
+    error?: string;
+  } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verification, setVerification] = useState<{ connected: boolean; pageName?: string; error?: string } | null>(null);
   const [busy, setBusy] = useState<"preview" | "publish" | null>(null);
@@ -119,6 +126,39 @@ export default function FacebookPostsScreen() {
       });
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const verifyInstagramConnection = async () => {
+    if (instagramVerifying) return;
+    setInstagramVerifying(true);
+    setInstagramVerification(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
+      const response = await fetch(`${API_BASE}/api/owner/instagram/verify`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json() as {
+        connected?: boolean;
+        username?: string;
+        accountType?: string | null;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error || "تعذر فحص حساب إنستغرام");
+      setInstagramVerification({
+        connected: data.connected === true,
+        username: data.username,
+        accountType: data.accountType,
+        error: data.error,
+      });
+    } catch (error) {
+      setInstagramVerification({
+        connected: false,
+        error: error instanceof Error ? error.message : "تعذر فحص حساب إنستغرام",
+      });
+    } finally {
+      setInstagramVerifying(false);
     }
   };
 
@@ -268,6 +308,32 @@ export default function FacebookPostsScreen() {
             {verification.connected
               ? `✓ رمز الوصول صالح لصفحة ${verification.pageName || "Lovely Kids"}؛ هذا لا يضمن صلاحية نشر المنشورات حتى نجربها.`
               : `✗ ${verification.error || "تعذر التحقق من الاتصال"}`}
+          </Text>
+        )}
+      </View>
+
+      <View style={{ ...surface, gap: 8 }}>
+        <Text style={{ ...titleStyle, textAlign: "right" }}>فحص اتصال إنستغرام — بدون نشر</Text>
+        <Text style={{ ...muted, textAlign: "right" }}>
+          يفحص حساب lovely.kids.nablus من خلال Meta دون رفع صور أو إنشاء منشورات أو قصص.
+        </Text>
+        <Pressable
+          onPress={() => void verifyInstagramConnection()}
+          disabled={instagramVerifying}
+          style={{ ...action, opacity: instagramVerifying ? 0.5 : 1 }}
+        >
+          {instagramVerifying ? <ActivityIndicator color="#fff" /> :
+            <Text style={{ color: "#fff", fontWeight: "800" }}>افحص اتصال إنستغرام Lovely Kids</Text>}
+        </Pressable>
+        {instagramVerification && (
+          <Text selectable style={{
+            color: instagramVerification.connected ? "#16A34A" : "#DC2626",
+            textAlign: "right",
+            fontWeight: "700",
+          }}>
+            {instagramVerification.connected
+              ? `✓ حساب ${instagramVerification.username || "Lovely Kids"} متصل بإنستغرام. الفحص لا يؤكد صلاحية نشر المنشورات والقصص بعد.`
+              : `✗ ${instagramVerification.error || "تعذر فحص الاتصال"}`}
           </Text>
         )}
       </View>
