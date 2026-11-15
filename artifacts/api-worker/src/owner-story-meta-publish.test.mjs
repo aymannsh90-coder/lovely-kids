@@ -74,11 +74,82 @@ test("Instagram Story refuses to publish a container while Meta processes it", a
     return Response.json({ status_code: "IN_PROGRESS" });
   };
   try {
-    await assert.rejects(publishInstagramPhotoStory("17841411928735926", "secret", "https://cdn.example.com/item.jpg"), /STORY_NOT_READY/);
-    assert.equal(calls.length, 2);
+    let waits = 0;
+    await assert.rejects(
+      publishInstagramPhotoStory("17841411928735926", "secret", "https://cdn.example.com/item.jpg", async (ms) => {
+        assert.equal(ms, 4_000);
+        waits++;
+      }),
+      /STORY_NOT_READY/,
+    );
+    assert.equal(waits, 5);
+    assert.equal(calls.filter((url) => url.endsWith("/media")).length, 1);
+    assert.equal(calls.filter((url) => url.includes("?fields=status_code")).length, 6);
     assert.ok(!calls.some((url) => url.includes("media_publish")));
   } finally {
     globalThis.fetch = orig;
+  }
+});
+
+test("Instagram waits for processing and publishes exactly once on FINISHED", async () => {
+  const orig = globalThis.fetch;
+  const calls = [];
+  let checks = 0;
+  let waits = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.endsWith("/media")) return Response.json({ id: "556677" });
+    if (url.includes("/556677?fields=status_code")) {
+      checks++;
+      return Response.json({ status_code: checks < 3 ? "IN_PROGRESS" : "FINISHED" });
+    }
+    if (url.endsWith("/media_publish")) {
+      assert.equal(new URLSearchParams(init.body).get("creation_id"), "556677");
+      return Response.json({ id: "889900" });
+    }
+    throw new Error("Unexpected Meta endpoint");
+  };
+  try {
+    const published = await publishInstagramPhotoStory(
+      "17841411928735926", "private-token", "https://cdn.example.com/item.jpg",
+      async (ms) => { assert.equal(ms, 4_000); waits++; },
+    );
+    assert.equal(published, "889900");
+    assert.equal(waits, 2);
+    assert.equal(checks, 3);
+    assert.equal(calls.filter(({ url }) => url.endsWith("/media")).length, 1);
+    assert.equal(calls.filter(({ url }) => url.endsWith("/media_publish")).length, 1);
+    assert.ok(calls.every(({ url }) => !url.includes("private-token")));
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test("Instagram ERROR and EXPIRED statuses stop polling without attempting publish", async () => {
+  const orig = globalThis.fetch;
+  for (const [status, expectedCode] of [
+    ["ERROR", "STORY_MEDIA_PROCESSING_ERROR"],
+    ["EXPIRED", "STORY_MEDIA_EXPIRED"],
+    ["PUBLISHED", "STORY_ALREADY_PUBLISHED"],
+  ]) {
+    let requests = 0;
+    globalThis.fetch = async (input) => {
+      requests++;
+      const url = String(input);
+      if (url.endsWith("/media")) return Response.json({ id: "777888" });
+      if (url.includes("/777888?fields=status_code")) return Response.json({ status_code: status });
+      throw new Error("Unexpected publish attempt");
+    };
+    try {
+      await assert.rejects(
+        publishInstagramPhotoStory("17841411928735926", "token", "https://cdn.example.com/item.jpg", async () => {}),
+        (err) => { assert.equal(safeMetaError(err), expectedCode); return true; },
+      );
+      assert.equal(requests, 2, status);
+    } finally {
+      globalThis.fetch = orig;
+    }
   }
 });
 

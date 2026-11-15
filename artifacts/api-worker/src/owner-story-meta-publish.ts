@@ -23,7 +23,7 @@ export class StoryMetaError extends Error {
 
 export function safeMetaError(error: unknown): string {
   if (error instanceof StoryMetaError) {
-    const code = error.message.match(/^(?:STORY_META_ERROR_\d+(?:_\d+)?|STORY_NOT_READY|STORY_PUBLISH_FAILED|STORY_UPLOAD_FAILED|STORY_UNEXPECTED_RESPONSE)$/);
+    const code = error.message.match(/^(?:STORY_META_ERROR_\d+(?:_\d+)?|STORY_NOT_READY|STORY_MEDIA_PROCESSING_ERROR|STORY_MEDIA_EXPIRED|STORY_ALREADY_PUBLISHED|STORY_PUBLISH_FAILED|STORY_UPLOAD_FAILED|STORY_UNEXPECTED_RESPONSE)$/);
     return code ? code[0] : "STORY_PUBLISH_FAILED";
   }
   return "STORY_PUBLISH_FAILED";
@@ -90,6 +90,10 @@ export async function publishInstagramPhotoStory(
   instagramId: string,
   instagramToken: string,
   imageUrl: string,
+  // Injectable delay only for deterministic unit tests; production waits
+  // between read-only status requests on the *same* container.
+  waitBetweenChecks: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<string> {
   const staged = await graphRequest(instagramToken, instagramId + "/media", "POST", {
     media_type: "STORIES",
@@ -98,11 +102,37 @@ export async function publishInstagramPhotoStory(
   if (!staged.id || !/^\d+$/.test(staged.id)) {
     throw new StoryMetaError("STORY_UPLOAD_FAILED");
   }
-  const state = await graphRequest(instagramToken, staged.id + "?fields=status_code", "GET");
-  if (state.status_code !== "FINISHED") {
-    // Explicitly do not retry the write; Meta may still be processing.
+  // Meta processes image containers asynchronously, including image Stories.
+  // Never issue media_publish while IN_PROGRESS or blindly recreate a container.
+  // Check immediately, then up to five more times, four seconds apart (<=20s wait).
+  const maxChecks = 6;
+  let isReady = false;
+  for (let check = 0; check < maxChecks; check++) {
+    if (check > 0) await waitBetweenChecks(4_000);
+    const state = await graphRequest(instagramToken, staged.id + "?fields=status_code", "GET");
+    if (state.status_code === "FINISHED") {
+      isReady = true;
+      break;
+    }
+    if (state.status_code === "ERROR") {
+      throw new StoryMetaError("STORY_MEDIA_PROCESSING_ERROR");
+    }
+    if (state.status_code === "EXPIRED") {
+      throw new StoryMetaError("STORY_MEDIA_EXPIRED");
+    }
+    if (state.status_code === "PUBLISHED") {
+      // Unknown prior publication: never send media_publish a second time.
+      throw new StoryMetaError("STORY_ALREADY_PUBLISHED");
+    }
+    if (state.status_code !== "IN_PROGRESS") {
+      throw new StoryMetaError("STORY_UNEXPECTED_RESPONSE");
+    }
+  }
+  if (!isReady) {
+    // No publish request was made; the existing container may still finish later.
     throw new StoryMetaError("STORY_NOT_READY");
   }
+  // Exactly one publish request, and only after FINISHED.
   const result = await graphRequest(instagramToken, instagramId + "/media_publish", "POST", {
     creation_id: staged.id,
   });
