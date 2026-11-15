@@ -97,12 +97,17 @@ export async function handleFacebookPagePostRequest(
       const data = (await response.json().catch(() => null)) as {
         id?: string;
         name?: string;
-        error?: { code?: number };
+        error?: { code?: number; error_subcode?: number };
       } | null;
       if (!response.ok || data?.error || !data?.id) {
+        const code = data?.error?.code;
+        const subcode = data?.error?.error_subcode;
+        const diagnostic = typeof code === "number"
+          ? " (Meta " + code + (typeof subcode === "number" ? "/" + subcode : "") + ")"
+          : " (HTTP " + response.status + ")";
         return json({
           connected: false,
-          error: "تعذّر التحقق من رمز الصفحة لدى Meta. قد يكون الرمز منتهي الصلاحية أو لا يملك صلاحية الوصول.",
+          error: "تعذّر التحقق من رمز الصفحة. قد يكون الرمز منتهي الصلاحية أو تنقصه الأذونات." + diagnostic,
         });
       }
       if (data.id !== pageId) {
