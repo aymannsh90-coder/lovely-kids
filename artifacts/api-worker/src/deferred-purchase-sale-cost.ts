@@ -127,7 +127,9 @@ export async function recordDeferredPurchasePosSale(
     .innerJoin(posPurchasesTable, eq(posPurchasesTable.id, posPurchaseItemsTable.purchaseId))
     .where(and(eq(posPurchaseItemsTable.productId, input.productId),
       eq(posPurchasesTable.status, "draft"),
-      eq(posPurchaseItemsTable.entryMode, "stock_receipt")));
+      eq(posPurchaseItemsTable.entryMode, "stock_receipt")))
+    // Prevent a concurrent draft deletion from racing a deferred sale.
+    .for("key share");
   if (drafts.length !== 1) throw new DeferredPurchaseCostError(
     "لا يمكن بيع كمية غير معتمدة مرتبطة بأكثر من فاتورة مورد أو بدون فاتورة استلام واضحة.",
   );
