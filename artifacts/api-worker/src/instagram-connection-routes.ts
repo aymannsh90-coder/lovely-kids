@@ -50,12 +50,17 @@ export async function handleInstagramConnectionRequest(
       id?: string;
       username?: string;
       account_type?: string;
-      error?: { code?: number };
+      error?: { code?: number; error_subcode?: number };
     } | null;
     if (!result.ok || !data?.id || data.error) {
+      const code = data?.error?.code;
+      const subcode = data?.error?.error_subcode;
+      const diagnostic = typeof code === "number"
+        ? " (Meta " + code + (typeof subcode === "number" ? "/" + subcode : "") + ")"
+        : " (HTTP " + result.status + ")";
       return responseJson({
         connected: false,
-        error: "تعذّر تأكيد اتصال إنستغرام. راجع صلاحيات الحساب أو صلاحية الرمز.",
+        error: "تعذّر تأكيد اتصال إنستغرام. راجع صلاحيات الحساب أو صلاحية الرمز." + diagnostic,
       });
     }
     if (data.id !== id) {
