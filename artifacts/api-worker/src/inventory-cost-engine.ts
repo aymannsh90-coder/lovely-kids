@@ -1109,6 +1109,55 @@ export async function addExactProductCostOrInitialize(
 }
 
 /**
+ * Set the verified last purchase reference for a supplier batch that was
+ * fully sold before accounting approval. Quantity/value remain zero.
+ * No estimated inventory or invented inventory asset is added.
+ */
+export async function confirmEmptyProductCostReference(
+  tx: Tx,
+  input: {
+    productId: number;
+    referenceUnitCostMinor: number;
+  } & LedgerMetadata,
+): Promise<void> {
+  assertPositiveInteger(input.productId, "productId");
+  assertNonNegativeDbInteger(input.referenceUnitCostMinor, "referenceUnitCostMinor");
+  const state = await lockCostState(tx, input.productId);
+  if (!state) {
+    await initializeEmptyProductCostState(tx, {
+      ...input,
+      referenceUnitCostMinor: input.referenceUnitCostMinor,
+      costQuality: "confirmed",
+    });
+    return;
+  }
+  if (state.quantityOnHand !== 0 || state.inventoryValueMinor !== 0) {
+    throw new InventoryCostError(
+      "Cannot update an empty reference while accounting stock remains",
+    );
+  }
+  await tx.update(productCostStateTable)
+    .set({
+      referenceUnitCostMinor: input.referenceUnitCostMinor,
+      costQuality: "confirmed",
+      updatedAt: new Date(),
+    })
+    .where(eq(productCostStateTable.productId, input.productId));
+  await writeLedger(
+    tx,
+    {
+      productId: input.productId,
+      quantityDelta: 0,
+      inventoryValueDeltaMinor: 0,
+      quantityAfter: 0,
+      inventoryValueAfterMinor: 0,
+      costQuality: "confirmed",
+    },
+    input,
+  );
+}
+
+/**
  * Add stock with no explicit acquisition cost.
  *
  * Uses the current average/reference product cost as an estimate.

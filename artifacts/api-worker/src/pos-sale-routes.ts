@@ -53,6 +53,7 @@ import {
   getPendingPurchaseQuantityForProduct,
 } from "./purchase-draft-service";
 import { getProductQuantity } from "./product-quantity";
+import { recordDeferredPurchasePosSale, voidDeferredPurchasePosSale } from "./deferred-purchase-sale-cost";
 import {
   calculatePromotions,
 } from "./promotion-engine";
@@ -2302,6 +2303,23 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           left.lineNumber - right.lineNumber,
       );
 
+      // Lock supplier drafts BEFORE cash/product row locks to match purchase
+      // approval order and avoid concurrent sale/approval deadlocks.
+      const draftProductIds = [...new Set(resolvedItems.map(item => item.productId))];
+      if (draftProductIds.length) {
+        await tx.select({ draftId: posPurchasesTable.id })
+          .from(posPurchaseItemsTable)
+          .innerJoin(posPurchasesTable,
+            eq(posPurchasesTable.id, posPurchaseItemsTable.purchaseId))
+          .where(and(
+            inArray(posPurchaseItemsTable.productId, draftProductIds),
+            eq(posPurchasesTable.status, "draft"),
+            eq(posPurchaseItemsTable.entryMode, "stock_receipt"),
+          ))
+          .orderBy(asc(posPurchasesTable.id), asc(posPurchaseItemsTable.id))
+          .for("key share", { of: posPurchasesTable });
+      }
+
       const sessionRows = await tx
         .select()
         .from(cashSessionsTable)
@@ -3401,6 +3419,8 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
             left.lineNumber - right.lineNumber,
         );
 
+      const deferredItemsByProduct = new Map<number, Array<{saleItemId: number; quantity: number}>>();
+
       for (const item of costOrderedItems) {
         if (item.productId === null) {
           throw new Error(
@@ -3457,13 +3477,13 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
                 },
               );
 
-            if (
-              pendingPurchaseQuantity > 0
-            ) {
-              throw new PosSaleError(
-                "يوجد لهذا المنتج كمية مشتريات غير معتمدة محاسبيًا. اعتمد فاتورة المورد أولًا قبل بيع هذه الكمية.",
-                409,
-              );
+            if (pendingPurchaseQuantity > 0) {
+              const previous = deferredItemsByProduct.get(item.productId) ?? [];
+              previous.push({ saleItemId: item.id, quantity: item.quantity });
+              deferredItemsByProduct.set(item.productId, previous);
+              // Physical stock was already decremented atomically; the sale
+              // remains unpriced until the matching supplier draft is posted.
+              continue;
             }
           }
 
@@ -3510,6 +3530,17 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
             costQuality:
               costResult.costQuality,
           });
+      }
+
+      for (const [productId, pendingItems] of deferredItemsByProduct) {
+        try {
+          await recordDeferredPurchasePosSale(tx, { productId, items: pendingItems });
+        } catch (error) {
+          throw new PosSaleError(
+            error instanceof Error ? error.message : "تعذر تسجيل تكلفة البيع المعلقة",
+            409,
+          );
+        }
       }
 
       const updatedSessionRows = await tx
@@ -4265,6 +4296,8 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
         // do not restore physical stock without restoring accounting stock.
         // We also refuse to invent a historical sale cost.
         if (!originalCost) {
+          const deferredVoided = await voidDeferredPurchasePosSale(tx, item.id);
+          if (!deferredVoided) {
           const costStateRows =
             await tx
               .select({
@@ -4288,6 +4321,7 @@ async function handleVoidSale(request: Request, db: Db, env: Env) {
               `لا يمكن إلغاء الفاتورة القديمة للصنف ${item.productNameAr} بعد بدء محاسبة التكلفة لعدم وجود تكلفة تاريخية محفوظة`,
               409,
             );
+          }
           }
         } else {
           const restoredCost =

@@ -34,6 +34,7 @@ export * from "./finance-banking";
 export * from "./delivery-company-settlements";
 export * from "./inventory-movements";
 export * from "./inventory-costs";
+export * from "./deferred-purchase-sale-costs";
 export * from "./exchanges";
 export * from "./exchange-return-items";
 export * from "./exchange-return-picking";

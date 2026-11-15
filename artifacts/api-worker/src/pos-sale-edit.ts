@@ -1,3 +1,4 @@
+import { hasPendingDeferredCostForSale } from "./deferred-purchase-sale-cost";
 import {
   inventoryMovementsTable,
   cashSessionsTable,
@@ -1205,6 +1206,12 @@ export async function handleUpdatePosSale(
 
       const oldSaleItemIds =
         oldItems.map((item) => item.id);
+      if (await hasPendingDeferredCostForSale(tx, oldSaleItemIds)) {
+        throw new PosSaleEditError(
+          "لا يمكن تعديل فاتورة تحتوي قطعًا من مشتريات معلقة. يمكن إلغاؤها ثم إعادة البيع، أو اعتماد فاتورة المورد أولًا.",
+          409,
+        );
+      }
 
       const oldCostRows =
         oldSaleItemIds.length > 0
