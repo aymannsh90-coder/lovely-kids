@@ -50,6 +50,9 @@
   "vars": {
     "IMAGE_STORAGE_PROVIDER": "supabase",
     "POS_PURCHASE_API_ENABLED": "true",
-    "POS_PURCHASE_WRITES_ENABLED": "true"
-  }
+    "POS_PURCHASE_WRITES_ENABLED": "true",
+    "META_FACEBOOK_PAGE_ID": "400159390780629"
+  },
+  "workers_dev": true,
+  "preview_urls": true
 }
