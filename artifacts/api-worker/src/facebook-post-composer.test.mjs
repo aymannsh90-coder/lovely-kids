@@ -17,12 +17,16 @@ test("uses exact Arabic store name and product-specific link beneath photo", () 
   assert.ok(caption.endsWith("https://lovelykids.net/product/603"));
 });
 
-test("combined post includes each product caption and correct URL in selection order", () => {
+test("multi-photo post has one concise intro without repeating each product title and URL", () => {
   const caption = composeFacebookProductCaption([b, a], "وصل حديثًا 💗");
-  assert.ok(caption.startsWith("وصل حديثًا 💗"));
-  assert.ok(caption.indexOf("https://lovelykids.net/product/602") <
-    caption.indexOf("https://lovelykids.net/product/603"));
-  assert.equal((caption.match(/لمشاهدة هذا الموديل/g) ?? []).length, 2);
+  assert.equal(caption, "وصل حديثًا 💗");
+  assert.ok(!caption.includes("https://lovelykids.net/product/"));
+  assert.ok(!caption.includes("لمشاهدة هذا الموديل"));
+
+  // Each product still keeps its own correct and clickable link in photo caption.
+  assert.ok(composeFacebookPhotoCaption(b).endsWith("https://lovelykids.net/product/602"));
+  assert.ok(composeFacebookPhotoCaption(a).endsWith("https://lovelykids.net/product/603"));
+  assert.equal(composeFacebookProductCaption([a], "   "), "🛍️ موديلات مختارة من Lovely Kids");
 });
 
 test("fallback names, duplicate protection and validation", () => {
