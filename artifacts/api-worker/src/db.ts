@@ -19,6 +19,8 @@ export interface Env {
   META_CAPI_ACCESS_TOKEN?: string;
   META_FACEBOOK_PAGE_ID?: string;
   META_FACEBOOK_PAGE_ACCESS_TOKEN?: string;
+  META_INSTAGRAM_ACCOUNT_ID?: string;
+  META_INSTAGRAM_ACCESS_TOKEN?: string;
   HYPERDRIVE: {
     connectionString: string;
   };
