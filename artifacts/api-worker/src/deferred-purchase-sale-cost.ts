@@ -16,7 +16,8 @@ import { getProductQuantity } from "./product-quantity";
 import type { DeferredSale } from "./deferred-purchase-cost-math";
 
 export class DeferredPurchaseCostError extends Error {
-  constructor(message: string, readonly status = 409) { super(message); }
+  readonly status: number;
+  constructor(message: string, status = 409) { super(message); this.status = status; }
 }
 
 export async function hasPendingDeferredCostForSaleItem(tx: any, saleItemId: number) {
