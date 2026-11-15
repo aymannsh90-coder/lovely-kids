@@ -1,3 +1,4 @@
+import { hasPendingDeferredCostForSaleItem } from "./deferred-purchase-sale-cost";
 import {
   customersTable,
   exchangeDocumentsTable,
@@ -1675,6 +1676,12 @@ export async function handleCreatePosSaleReturn(
         // This is explicitly ESTIMATED because it is not the
         // original historical sale cost.
         if (!originalCost) {
+          // A returned item from an unapproved supplier draft must NOT be
+          // seeded with a guessed inventory cost. It will be priced together
+          // with the original sale when the supplier draft is approved.
+          if (await hasPendingDeferredCostForSaleItem(tx, originalItem.id)) {
+            continue;
+          }
           const estimatedCost =
             await addProductCostAtCurrentAverage(
               tx,
