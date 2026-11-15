@@ -19,7 +19,7 @@ CREATE INDEX IF NOT EXISTS deferred_purchase_sale_costs_draft_idx ON public.defe
 -- A pending sale cannot lose its supplier cost source even if the draft
 -- is discarded outside the POS route. Approval settles the rows first.
 CREATE OR REPLACE FUNCTION public.guard_discard_deferred_purchase_draft()
-RETURNS trigger LANGUAGE plpgsql AS $
+RETURNS trigger LANGUAGE plpgsql AS $guard$
 BEGIN
   IF OLD.status = 'draft' AND EXISTS (
     SELECT 1 FROM public.deferred_purchase_sale_costs
@@ -30,7 +30,7 @@ BEGIN
   END IF;
   RETURN OLD;
 END;
-$;
+$guard$;
 DROP TRIGGER IF EXISTS guard_discard_deferred_purchase_draft ON public.pos_purchases;
 CREATE TRIGGER guard_discard_deferred_purchase_draft
   BEFORE DELETE ON public.pos_purchases
