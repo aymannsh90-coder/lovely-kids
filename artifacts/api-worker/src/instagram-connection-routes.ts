@@ -36,7 +36,7 @@ export async function handleInstagramConnectionRequest(
   // Facebook Graph API host; this is a read-only identity request.
   try {
     const result = await fetch(
-      "https://graph.facebook.com/v27.0/" + id + "?fields=id,username,account_type",
+      "https://graph.facebook.com/v27.0/" + id + "?fields=id,username",
       {
         method: "GET",
         headers: {
@@ -49,7 +49,6 @@ export async function handleInstagramConnectionRequest(
     const data = (await result.json().catch(() => null)) as {
       id?: string;
       username?: string;
-      account_type?: string;
       error?: { code?: number; error_subcode?: number };
     } | null;
     if (!result.ok || !data?.id || data.error) {
@@ -69,7 +68,6 @@ export async function handleInstagramConnectionRequest(
     return responseJson({
       connected: true,
       username: data.username || "حساب إنستغرام",
-      accountType: data.account_type || null,
       note: "هذا فحص قراءة فقط، ولا يؤكد نجاح النشر قبل تجربته.",
     });
   } catch {
