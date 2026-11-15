@@ -36,6 +36,7 @@ import {
   allocateProportionalCostMinor,
   deriveUnitCostMinor,
   initializeEmptyProductCostState,
+  confirmEmptyProductCostReference,
   InventoryCostError,
 } from "./inventory-cost-engine";
 import {
@@ -3527,18 +3528,17 @@ async function handleCreatePurchase(
             saleItemIds: deferredSplit.allocations.map(item => item.saleItemId),
           });
           if (stockQuantityApplied === 0) {
-            await initializeEmptyProductCostState(tx, {
+            await confirmEmptyProductCostReference(tx, {
               productId,
               referenceUnitCostMinor: deriveUnitCostMinor(
                 allocation.costTotalMinor, allocation.receivedQuantity,
               ),
-              costQuality: "confirmed",
-              eventType: "opening",
+              eventType: "correction",
               sourceType: "pos_purchase",
               sourceRef: String(purchase.id),
               sourceItemRef: `deferred-fully-sold:${productId}`,
               businessDate,
-              note: `Approved fully-sold draft ${purchase.publicId}`,
+              note: `Confirmed reference cost for fully sold supplier draft ${purchase.publicId}`,
               createdByUserId: auth.user.id,
             });
           }
