@@ -1,0 +1,34 @@
+name: Verify deferred supplier purchase POS sales
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/deferred-purchase-*'
+      - 'artifacts/api-worker/src/pos-sale-*'
+      - 'artifacts/api-worker/src/pos-purchase-routes.ts'
+      - 'lib/db/src/schema/deferred-purchase-sale-costs.ts'
+      - 'lib/db/src/schema/index.ts'
+      - 'lib/db/migrations/20261115_add_deferred_purchase_sale_costs.sql'
+      - '.github/workflows/verify-deferred-purchase-sales.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: API Worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: POS typecheck
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Deferred purchase accounting regression tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/deferred-purchase-cost-math.test.mjs
