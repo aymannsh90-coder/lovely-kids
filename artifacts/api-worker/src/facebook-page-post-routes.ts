@@ -7,6 +7,7 @@ import {
   composeFacebookProductCaption,
   composeFacebookPhotoCaption,
 } from "./facebook-post-composer";
+import { resolveFacebookPageAccessToken } from "./facebook-page-access-token";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type FacebookResponse = {
@@ -25,19 +26,18 @@ function json(data: unknown, status = 200): Response {
 
 function isConfigured(env: Env): boolean {
   return !!(
-    env.META_FACEBOOK_PAGE_ACCESS_TOKEN?.trim() &&
+    (env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN?.trim() || env.META_FACEBOOK_PAGE_ACCESS_TOKEN?.trim()) &&
     /^\d+$/.test(env.META_FACEBOOK_PAGE_ID?.trim() ?? "")
   );
 }
 
 async function postToFacebook(
-  env: Env,
+  pageToken: string,
   endpoint: string,
   fields: URLSearchParams,
 ): Promise<FacebookResponse> {
-  const token = env.META_FACEBOOK_PAGE_ACCESS_TOKEN?.trim();
-  if (!token) throw new Error("FACEBOOK_NOT_CONFIGURED");
-  fields.set("access_token", token);
+  if (!pageToken) throw new Error("FACEBOOK_NOT_CONFIGURED");
+  fields.set("access_token", pageToken);
   const response = await fetch("https://graph.facebook.com/" + GRAPH_VERSION + "/" + endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -81,8 +81,8 @@ export async function handleFacebookPagePostRequest(
       return json({ connected: false, error: "صفحة فيسبوك غير مجهزة بعد" });
     }
     const pageId = env.META_FACEBOOK_PAGE_ID!.trim();
-    const token = env.META_FACEBOOK_PAGE_ACCESS_TOKEN!.trim();
     try {
+      const token = await resolveFacebookPageAccessToken(env);
       const response = await fetch(
         "https://graph.facebook.com/" + GRAPH_VERSION + "/" + pageId + "?fields=id,name",
         {
@@ -118,8 +118,19 @@ export async function handleFacebookPagePostRequest(
         pageName: data.name || "Lovely Kids",
         note: "تم التحقق من الوصول للصفحة فقط؛ صلاحية إنشاء منشور تُتحقق عند النشر الفعلي.",
       });
-    } catch {
-      return json({ connected: false, error: "تعذّر الاتصال بـ Meta للتحقق من الصفحة. أعد الفحص لاحقًا." });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "";
+      const isSystemPageMissing = reason === "FACEBOOK_SYSTEM_PAGE_NOT_FOUND";
+      const systemError = reason.match(/^FACEBOOK_SYSTEM_TOKEN_FAILED_(\d+)(?:_(\d+))?$/);
+      const diagnostic = systemError ? " (Meta " + systemError[1] + (systemError[2] ? "/" + systemError[2] : "") + ")" : "";
+      return json({
+        connected: false,
+        error: isSystemPageMissing
+          ? "لم تظهر صفحة Lovely Kids ضمن صفحات مستخدم النظام. راجع صلاحيات الصفحة والأذونات."
+          : reason.startsWith("FACEBOOK_SYSTEM_TOKEN_FAILED")
+            ? "تعذّر استخراج رمز الصفحة من رمز مستخدم النظام. راجع صلاحية الرمز والأذونات." + diagnostic
+            : "تعذّر الاتصال بـ Meta للتحقق من الصفحة. أعد الفحص لاحقًا.",
+      });
     }
   }
   if (request.method !== "POST") {
@@ -201,6 +212,9 @@ export async function handleFacebookPagePostRequest(
   }
 
   try {
+    // Resolve a fresh Page token once for this operation. Do not fall back to an expired
+    // legacy token when a system-user token is configured but fails validation.
+    const pageToken = await resolveFacebookPageAccessToken(env);
     // One unpublished photo per selected model, in the original selection order.
     // This does not modify the product catalog, ads, inventory or storefront.
     const photoIds: string[] = [];
@@ -210,7 +224,7 @@ export async function handleFacebookPagePostRequest(
         published: "false",
         caption: composeFacebookPhotoCaption(product),
       });
-      const photo = await postToFacebook(env, env.META_FACEBOOK_PAGE_ID!.trim() + "/photos", params);
+      const photo = await postToFacebook(pageToken, env.META_FACEBOOK_PAGE_ID!.trim() + "/photos", params);
       photoIds.push(photo.id!);
     }
 
@@ -219,7 +233,7 @@ export async function handleFacebookPagePostRequest(
       postParams.set("attached_media[" + index + "]", JSON.stringify({ media_fbid: photoId }));
     });
     const published = await postToFacebook(
-      env,
+      pageToken,
       env.META_FACEBOOK_PAGE_ID!.trim() + "/feed",
       postParams,
     );
