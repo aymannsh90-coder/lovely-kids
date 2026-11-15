@@ -1,4 +1,5 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
+import OwnerStoryComposer from "@/components/OwnerStoryComposer";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -429,6 +430,7 @@ export default function FacebookPostsScreen() {
           </Pressable>
         </View>
       )}
+      <OwnerStoryComposer selectedIds={selectedIds} />
       {!!error && <Text selectable style={{ color: "#DC2626", textAlign: "right", fontWeight: "700" }}>{error}</Text>}
       {publishedUrl && (
         <Pressable
