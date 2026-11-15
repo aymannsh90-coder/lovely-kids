@@ -1,3 +1,4 @@
+import { hasPendingDeferredCostForSaleItem } from "./deferred-purchase-sale-cost";
 import {
   financeTransactionLinesTable,
   financeTransactionsTable,
@@ -687,6 +688,11 @@ export async function handleVoidPosSaleReturn(
              * separately before the cost feature is deployed.
              */
             if (!returnCost) {
+              if (item.originalSaleItemId !== null &&
+                  await hasPendingDeferredCostForSaleItem(tx, item.originalSaleItemId)) {
+                // No cost was applied to this return before invoice approval.
+                continue;
+              }
               const costStateRows =
                 await tx
                   .select({
