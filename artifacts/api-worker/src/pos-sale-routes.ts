@@ -2303,6 +2303,23 @@ async function handleCreateSale(request: Request, db: Db, env: Env) {
           left.lineNumber - right.lineNumber,
       );
 
+      // Lock supplier drafts BEFORE cash/product row locks to match purchase
+      // approval order and avoid concurrent sale/approval deadlocks.
+      const draftProductIds = [...new Set(resolvedItems.map(item => item.productId))];
+      if (draftProductIds.length) {
+        await tx.select({ draftId: posPurchasesTable.id })
+          .from(posPurchaseItemsTable)
+          .innerJoin(posPurchasesTable,
+            eq(posPurchasesTable.id, posPurchaseItemsTable.purchaseId))
+          .where(and(
+            inArray(posPurchaseItemsTable.productId, draftProductIds),
+            eq(posPurchasesTable.status, "draft"),
+            eq(posPurchaseItemsTable.entryMode, "stock_receipt"),
+          ))
+          .orderBy(asc(posPurchasesTable.id), asc(posPurchaseItemsTable.id))
+          .for("key share", { of: posPurchasesTable });
+      }
+
       const sessionRows = await tx
         .select()
         .from(cashSessionsTable)
