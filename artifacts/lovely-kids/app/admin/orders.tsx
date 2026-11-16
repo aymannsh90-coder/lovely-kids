@@ -35,6 +35,7 @@ import { useColors } from "@/hooks/useColors";
 import { API_BASE } from "@/constants/api";
 import ExchangeReturnPickingPanel from "@/components/ExchangeReturnPickingPanel";
 import {
+  canMarkFailedDeliveryReturn,
   countFailedDeliveryReturns,
   getFailedDeliveryReturnState,
 } from "@/utils/failedDeliveryReturnStatus";
@@ -129,6 +130,7 @@ interface Order {
   totalPrice: number;
   shippingZone?: string;
   shippingCost?: number;
+  deliveryCompanyId?: number | null;
   deliveryCompanyCost?: number | null;
   courierCashReceivedAt?: string | null;
   courierCashReversedAt?: string | null;
@@ -4334,6 +4336,7 @@ export default function AdminOrdersScreen() {
             const isOpen = expanded === item.id;
             const returnParcelState = getExchangeReturnParcelState(item);
             const failedReturnState = getFailedDeliveryReturnState(item);
+            const canReportRefusedParcel = canMarkFailedDeliveryReturn(item);
             const statusOptions =
               isPickup
                 ? STATUS_OPTIONS
@@ -5499,12 +5502,7 @@ export default function AdminOrdersScreen() {
                           </Pressable>
                         )}
 
-                        {item.status === "delivering" &&
-                          !isPickup &&
-                          item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
-                          item.paymentMethod === "cod" &&
-                          item.paymentStatus === "pending" &&
-                          !item.exchangePublicId && (
+                        {canReportRefusedParcel && (
                             <Pressable
                               disabled={pendingOrderIds.has(item.id) || failedReturnBusy}
                               onPress={event => {
@@ -5725,14 +5723,17 @@ export default function AdminOrdersScreen() {
                             !isPickup &&
                             item.shippingZone !== ADMIN_LOCAL_DELIVERY_LABEL &&
                             item.paymentMethod === "cod";
-                          const canMove =
-                            (
-                              orderTransitions[
-                                item.status
-                              ] ?? []
-                            ).includes(
-                              s.key,
-                            ) && !mustReceiveReturnedParcelFirst;
+                          // "راجع" uses a special POST + reason dialog. The
+                          // generic status PATCH must never touch stock or accounting.
+                          const canMove = s.key === "returning"
+                            ? canReportRefusedParcel
+                            : (
+                                orderTransitions[
+                                  item.status
+                                ] ?? []
+                              ).includes(
+                                s.key,
+                              ) && !mustReceiveReturnedParcelFirst;
 
                           return (
                             <Pressable
@@ -5749,6 +5750,13 @@ export default function AdminOrdersScreen() {
                                 event,
                               ) => {
                                 event.stopPropagation();
+
+                                if (s.key === "returning") {
+                                  setFailedReturnTarget(item);
+                                  setFailedReturnReason("");
+                                  setFailedReturnError("");
+                                  return;
+                                }
 
                                 if (
                                   item.shippingZone === ADMIN_LOCAL_DELIVERY_LABEL &&
