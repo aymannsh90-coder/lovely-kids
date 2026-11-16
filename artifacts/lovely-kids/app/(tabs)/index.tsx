@@ -672,11 +672,7 @@ export default function HomeScreen() {
 
           {Platform.OS !== "web" && (
             <Image
-              source={
-                settings.logoUrl
-                  ? { uri: settings.logoUrl }
-                  : require("@/assets/images/logo.jpg")
-              }
+              source={require("@/assets/images/logo.jpg")}
               style={styles.logoImage}
               resizeMode="contain"
             />

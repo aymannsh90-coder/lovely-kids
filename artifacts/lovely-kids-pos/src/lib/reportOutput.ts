@@ -29,7 +29,7 @@ function escapeHtml(value: ReportCell) {
     .replaceAll("'", "&#039;");
 }
 
-function reportBody(options: A4ReportOptions) {
+function reportBody(options: A4ReportOptions, includePrintLogo = true) {
   const summary = options.summary?.length
     ? `<section class="summary">${options.summary
         .map(
@@ -67,7 +67,7 @@ function reportBody(options: A4ReportOptions) {
 
   return `
     <header class="report-header">
-      <div class="brand">Lovely Kids</div>
+      <div class="brand">${includePrintLogo ? '<img src="' + (typeof window !== "undefined" ? window.location.origin : "https://pos.lovelykids.net") + '/lovely-kids-a4-logo.png" alt="Lovely Kids" />' : 'Lovely Kids'}</div>
       <h1>${escapeHtml(options.title)}</h1>
       ${options.subtitle ? `<p>${escapeHtml(options.subtitle)}</p>` : ""}
       ${options.period ? `<small>${escapeHtml(options.period)}</small>` : ""}
@@ -106,6 +106,7 @@ export function printA4Report(
   body { font-family: Arial, "Noto Sans Arabic", Tahoma, sans-serif; font-size: 10px; direction: rtl; }
   .report-header { text-align: center; margin-bottom: 6mm; }
   .report-header .brand { color: #e91e8c; font-weight: 800; font-size: 14px; }
+  .report-header .brand img { display: block; width: 62mm; max-height: 20mm; object-fit: contain; margin: 0 auto 2mm; }
   .report-header h1 { margin: 1.5mm 0 1mm; font-size: 20px; }
   .report-header p, .report-header small { margin: 0.8mm 0; color: #4b5563; }
   .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 2mm; margin-bottom: 5mm; }
@@ -160,7 +161,7 @@ export function exportReportAsExcel(
 </style>
 </head>
 <body>
-${reportBody(options)}
+${reportBody(options, false)}
 </body>
 </html>`;
 

@@ -1084,7 +1084,7 @@ export default function InventoryValuationReportPage() {
       <div id="inventory-valuation-print">
         <header className="inventory-valuation-print-only inventory-valuation-print-header">
           <div className="inventory-valuation-print-brand">
-            Lovely Kids
+            <img src="/lovely-kids-a4-logo.png" alt="Lovely Kids" style={{ display: "block", width: 178, height: 52, objectFit: "contain", margin: "0 auto 4px" }} />
           </div>
           <h1>تقرير تقييم المخزون</h1>
           <p>

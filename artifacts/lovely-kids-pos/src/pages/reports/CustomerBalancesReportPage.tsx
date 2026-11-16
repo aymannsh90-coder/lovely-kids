@@ -565,6 +565,7 @@ export default function CustomerBalancesReportPage() {
             marginBottom: 14,
           }}
         >
+          <img src="/lovely-kids-a4-logo.png" alt="Lovely Kids" style={{ display: "block", width: 178, height: 52, objectFit: "contain", margin: "0 auto 4px" }} />
           <h2
             style={{
               margin:

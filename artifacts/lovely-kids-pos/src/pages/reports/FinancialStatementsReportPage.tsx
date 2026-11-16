@@ -1099,7 +1099,7 @@ export default function FinancialStatementsReportPage() {
           >
             <header className="financial-print-only financial-print-header">
               <div className="financial-print-brand">
-                Lovely Kids
+                <img src="/lovely-kids-a4-logo.png" alt="Lovely Kids" style={{ display: "block", width: 178, height: 52, objectFit: "contain", margin: "0 auto 4px" }} />
               </div>
               <h1>
                 القوائم المالية

@@ -498,7 +498,7 @@ export default function ProfileScreen() {
       >
         <View style={styles.avatarContainer}>
           <Image
-            source={settings.logoUrl ? { uri: settings.logoUrl } : require("@/assets/images/logo.jpg")}
+            source={require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
             resizeMode="contain"
           />
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   header: { paddingBottom: 24, paddingHorizontal: 16 },
   avatarContainer: { alignItems: "center", paddingTop: 16, gap: 8 },
-  logoImage: { width: 140, height: 70, borderRadius: 12 },
+  logoImage: { width: 112, height: 112, borderRadius: 16 },
   storeTag: { fontSize: 13, color: "rgba(255,255,255,0.85)" },
   statsRow: { flexDirection: Platform.OS === "web" ? "row-reverse" : "row", justifyContent: "center", alignItems: "center", marginTop: 20 },
   statItem: { alignItems: "center", flex: 1 },
