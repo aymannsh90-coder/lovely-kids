@@ -4225,9 +4225,17 @@ async function handleVoidVoucher(
               .where(inArray(financeAccountsTable.code, [IMPORT_AGENT_CODE, IMPORT_FREIGHT_CODE]));
 
             const protectedIds = new Set(protectedAccounts.map(a => a.id));
-            if (originalLines.some(line => protectedIds.has(line.accountId))) {
+            const lineAccountRows = await tx.select({
+              id: financeAccountsTable.id,
+              code: financeAccountsTable.code,
+            }).from(financeAccountsTable)
+              .where(inArray(financeAccountsTable.id, originalLines.map(line => line.accountId)));
+            const subCashIds = lineAccountRows
+              .filter(account => account.code.startsWith("CASH_SUB_"))
+              .map(account => account.id);
+            if (subCashIds.length > 0 || originalLines.some(line => protectedIds.has(line.accountId))) {
               if (!user.isOwner) {
-                throw new PartyFinanceError("إلغاء حركة حساب الاستيراد متاح للمالك فقط", 403);
+                throw new PartyFinanceError("إلغاء حركة الصندوق الفرعي أو الاستيراد متاح للمالك فقط", 403);
               }
 
               const lockedIds = [...new Set(originalLines.map(line => line.accountId))]
@@ -4245,6 +4253,7 @@ async function handleVoidVoucher(
                 .where(inArray(bankAccountsTable.financeAccountId, lockedIds));
               const debitGuardIds = new Set([
                 ...protectedIds,
+                ...subCashIds,
                 ...linkedBankRows.map(row => row.financeAccountId),
               ]);
 
@@ -4257,7 +4266,7 @@ async function handleVoidVoucher(
                   .where(eq(financeTransactionLinesTable.accountId, line.accountId));
                 if (Number(row?.minor ?? 0) < line.debitMinor) {
                   throw new PartyFinanceError(
-                    "لا يمكن إلغاء سند الاستيراد: المبلغ المستلم صُرف لاحقًا أو الرصيد غير كافٍ. اعكس الحركات التابعة أولًا.",
+                    "لا يمكن إلغاء السند: رصيد الصندوق الفرعي أو الاستيراد أو البنك لا يكفي بعد الحركات اللاحقة. اعكس الحركات التابعة أولًا.",
                     409,
                   );
                 }
