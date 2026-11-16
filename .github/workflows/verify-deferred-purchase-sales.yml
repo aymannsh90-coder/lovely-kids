@@ -7,6 +7,7 @@ on:
       - 'artifacts/api-worker/src/purchase-draft-routes.ts'
       - 'artifacts/api-worker/src/pos-sale-*'
       - 'artifacts/api-worker/src/pos-purchase-routes.ts'
+      - 'artifacts/api-worker/src/purchase-existing-receipt-cost*'
       - 'lib/db/src/schema/deferred-purchase-sale-costs.ts'
       - 'lib/db/src/schema/index.ts'
       - 'lib/db/migrations/20261115_add_deferred_purchase_sale_costs.sql'
@@ -32,7 +33,7 @@ jobs:
       - name: POS typecheck
         run: pnpm --filter @workspace/lovely-kids-pos typecheck
       - name: Deferred purchase accounting regression tests
-        run: node --experimental-strip-types --test artifacts/api-worker/src/deferred-purchase-cost-math.test.mjs
+        run: node --experimental-strip-types --test artifacts/api-worker/src/deferred-purchase-cost-math.test.mjs artifacts/api-worker/src/purchase-existing-receipt-cost.test.mjs
 
 
   postgres-transaction:
