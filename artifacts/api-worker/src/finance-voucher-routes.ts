@@ -16,6 +16,7 @@ import {
   asc,
   desc,
   eq,
+  sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
@@ -1352,8 +1353,8 @@ async function resolveAccountRef(
   }
 
   if (
-    account.code !==
-      "OPENING_BALANCE_EQUITY"
+    account.code !== "OPENING_BALANCE_EQUITY" &&
+    account.code !== "IMPORT_AGENT_CLEARING"
   ) {
     throw new VoucherError(
       "هذا الحساب يُدار من مسار محاسبي مخصص ولا يمكن استخدامه كحساب عام في سند القيد",
@@ -3019,6 +3020,51 @@ async function handleJournalVoucher(
             );
           }
 
+          // An import account is an advance held by the shipping agent,
+          // NOT a real bank, cash register, or operating expense.
+          // Only owner journal vouchers may move money in/out of it.
+          const fromImport = from.account.code === "IMPORT_AGENT_CLEARING";
+          const toImport = to.account.code === "IMPORT_AGENT_CLEARING";
+          if (fromImport || toImport) {
+            const validFunding =
+              toImport && (from.settlementKind === "bank" || from.settlementKind === "cash");
+            const validSettlement =
+              fromImport && (to.settlementKind === "bank" ||
+                             to.settlementKind === "cash" ||
+                             toRef.kind === "supplier");
+            if (!validFunding && !validSettlement) {
+              throw new VoucherError(
+                "حساب الاستيراد يقبل التحويل من البنك/الصندوق، والسداد للمورد، أو إعادة المال للبنك/الصندوق فقط. مصاريف الشحن تتطلب تسوية تكلفة مستقلة.",
+                409,
+              );
+            }
+
+            // Serialize all journal operations on this specific clearing account.
+            const importAccount = fromImport ? from.account : to.account;
+            await tx.select({ id: financeAccountsTable.id })
+              .from(financeAccountsTable)
+              .where(eq(financeAccountsTable.id, importAccount.id))
+              .for("update");
+
+            const ledgerBalance = async (accountId: number): Promise<number> => {
+              const rows = await tx.select({
+                balanceMinor: sql<number>`coalesce(sum(${financeTransactionLinesTable.debitMinor} - ${financeTransactionLinesTable.creditMinor}), 0)::integer`,
+              }).from(financeTransactionLinesTable)
+                .where(eq(financeTransactionLinesTable.accountId, accountId));
+              return Number(rows[0]?.balanceMinor ?? 0);
+            };
+
+            if (fromImport && await ledgerBalance(from.account.id) < amountMinor) {
+              throw new VoucherError("رصيد حساب الاستيراد لا يكفي لتنفيذ التسديد", 409);
+            }
+
+            if (toImport && from.settlementKind === "bank") {
+              if (await ledgerBalance(from.account.id) < amountMinor) {
+                throw new VoucherError("رصيد البنك الحقيقي لا يكفي للتحويل إلى حساب الاستيراد", 409);
+              }
+            }
+          }
+
           if (
             from.settlementKind &&
             to.settlementKind
@@ -3441,6 +3487,21 @@ async function handleReplaceUnifiedVoucher(
                   financeTransactionLinesTable.lineNumber,
                 ),
               );
+
+          // Changing a posted import-account journal can cause a negative
+          // agent balance after its funds were already used. Block replacement.
+          if (voucher.voucherType === "journal") {
+            const clearing = await tx.select({ id: financeAccountsTable.id })
+              .from(financeAccountsTable)
+              .where(eq(financeAccountsTable.code, "IMPORT_AGENT_CLEARING"))
+              .limit(1);
+            if (clearing[0] && originalLines.some(line => line.accountId === clearing[0].id)) {
+              throw new VoucherError(
+                "لا يمكن تعديل سند حساب الاستيراد بعد ترحيله؛ سجّل حركة تصحيح منفصلة وراجع الرصيد أولًا",
+                409,
+              );
+            }
+          }
 
           if (
             originalLines.length !==
