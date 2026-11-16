@@ -31,6 +31,7 @@ import {
 
 type RefKind =
   | "cash"
+  | "sub_cash"
   | "bank"
   | "customer"
   | "employee_advance"
@@ -111,6 +112,8 @@ export default function JournalVoucherPage() {
     useState<
       PosExpenseCategory[]
     >([]);
+  const [statementReferenceCashAccounts, setStatementReferenceCashAccounts] =
+    useState<PosFinanceStatementReference["cashAccounts"]>([]);
   const [bankAccounts, setBankAccounts] =
     useState<PosBankAccount[]>([]);
   const [
@@ -224,8 +227,14 @@ export default function JournalVoucherPage() {
         ),
       );
       setJournalAccounts(
-        statementReference
-          .journalAccounts,
+        statementReference.journalAccounts,
+      );
+      setStatementReferenceCashAccounts(
+        statementReference.cashAccounts.filter(
+          (item) =>
+            item.currencyCode === "ILS" &&
+            item.code.startsWith("CASH_SUB_"),
+        ),
       );
     } catch (caught) {
       if (
@@ -252,6 +261,13 @@ export default function JournalVoucherPage() {
   const optionsByKind =
     useMemo(() => {
       return {
+        sub_cash:
+          statementReferenceCashAccounts.map(
+            (item) => ({
+              id: String(item.id),
+              label: item.name,
+            }),
+          ),
         bank:
           bankAccounts.map(
             (item) => ({
@@ -327,6 +343,7 @@ export default function JournalVoucherPage() {
       };
     }, [
       bankAccounts,
+      statementReferenceCashAccounts,
       customers,
       employees,
       suppliers,
@@ -358,6 +375,13 @@ export default function JournalVoucherPage() {
       throw new Error(
         "اختر الحساب / الطرف المطلوب.",
       );
+    }
+
+    if (draft.kind === "sub_cash") {
+      return {
+        kind: "sub_cash",
+        cashAccountId: id,
+      };
     }
 
     if (
@@ -603,6 +627,9 @@ export default function JournalVoucherPage() {
           <option value="cash">
             الصندوق الرئيسي
           </option>
+          {user?.isOwner && statementReferenceCashAccounts.length > 0 && (
+            <option value="sub_cash">الصندوق الفرعي</option>
+          )}
           <option value="bank">
             حساب بنكي
           </option>
