@@ -558,8 +558,8 @@ export default function JournalVoucherPage() {
   function chooseImportMovement(
     kind: "fund" | "supplier" | "freight" | "freight-settlement" | "refund",
   ) {
-    if (!importAgentId || !importFreightId) {
-      setError("حسابات الاستيراد غير متاحة؛ يلزم تفعيلها في النظام.");
+    if (!importAgentId || (["freight", "freight-settlement"].includes(kind) && !importFreightId)) {
+      setError("أحد حسابات الاستيراد غير ظاهر بقائمة الحسابات؛ حدّث الصفحة أو تواصل مع المالك قبل حفظ السند.");
       return;
     }
 
@@ -754,7 +754,7 @@ export default function JournalVoucherPage() {
               key={kind}
               type="button"
               className="secondary-button"
-              disabled={loading || saving || !importAgentId || !importFreightId}
+              disabled={loading || saving}
               onClick={() => chooseImportMovement(kind)}
             >
               {label}
