@@ -25,6 +25,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { IMPORT_AGENT_CODE, IMPORT_FREIGHT_CODE } from "./import-agent-journal-rules";
 
 import { getCurrentUser } from "./auth";
 import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
@@ -4213,6 +4214,56 @@ async function handleVoidVoucher(
                     .lineNumber,
                 ),
               );
+
+          // Journal reversals involving the shipping agent must not
+          // silently recreate money already paid to suppliers or freight.
+          // Protect the actual bank and the two ILS asset balances.
+          if (voucher.voucherType === "journal") {
+            const protectedAccounts = await tx
+              .select({ id: financeAccountsTable.id, code: financeAccountsTable.code })
+              .from(financeAccountsTable)
+              .where(inArray(financeAccountsTable.code, [IMPORT_AGENT_CODE, IMPORT_FREIGHT_CODE]));
+
+            const protectedIds = new Set(protectedAccounts.map(a => a.id));
+            if (originalLines.some(line => protectedIds.has(line.accountId))) {
+              if (!user.isOwner) {
+                throw new PartyFinanceError("إلغاء حركة حساب الاستيراد متاح للمالك فقط", 403);
+              }
+
+              const lockedIds = [...new Set(originalLines.map(line => line.accountId))]
+                .sort((a,b) => a-b);
+              for (const accountId of lockedIds) {
+                await tx.select({ id: financeAccountsTable.id })
+                  .from(financeAccountsTable)
+                  .where(eq(financeAccountsTable.id, accountId))
+                  .for("update");
+              }
+
+              const linkedBankRows = await tx.select({
+                financeAccountId: bankAccountsTable.financeAccountId,
+              }).from(bankAccountsTable)
+                .where(inArray(bankAccountsTable.financeAccountId, lockedIds));
+              const debitGuardIds = new Set([
+                ...protectedIds,
+                ...linkedBankRows.map(row => row.financeAccountId),
+              ]);
+
+              for (const line of originalLines) {
+                // Reversal credits originally debited accounts.
+                if (line.debitMinor <= 0 || !debitGuardIds.has(line.accountId)) continue;
+                const [row] = await tx.select({
+                  minor: sql<number>`coalesce(sum(${financeTransactionLinesTable.debitMinor} - ${financeTransactionLinesTable.creditMinor}),0)::integer`,
+                }).from(financeTransactionLinesTable)
+                  .where(eq(financeTransactionLinesTable.accountId, line.accountId));
+                if (Number(row?.minor ?? 0) < line.debitMinor) {
+                  throw new PartyFinanceError(
+                    "لا يمكن إلغاء سند الاستيراد: المبلغ المستلم صُرف لاحقًا أو الرصيد غير كافٍ. اعكس الحركات التابعة أولًا.",
+                    409,
+                  );
+                }
+              }
+            }
+          }
 
           if (
             originalLines.length <
