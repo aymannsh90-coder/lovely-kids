@@ -38,7 +38,7 @@ export default function TabLayout() {
             style={desktopStyles.logoButton}
           >
             <Image
-              source={require("@/assets/images/lovely-kids-logo-horizontal.png")}
+              source={require("@/assets/images/lovely-kids-header-2026.webp")}
               style={desktopStyles.logo}
               resizeMode="contain"
             />
@@ -143,18 +143,19 @@ export default function TabLayout() {
         header: desktopHeader,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: colors.background,
+          backgroundColor: colors.card,
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          height: 84,
+          height: 80,
+          paddingTop: 5,
           display: isDesktopWeb ? "none" : "flex",
         },
         tabBarBackground: () => (
           <View
             style={[
               StyleSheet.absoluteFill,
-              { backgroundColor: colors.background },
+              { backgroundColor: colors.card },
             ]}
           />
         ),
@@ -241,8 +242,8 @@ const desktopStyles = StyleSheet.create({
     justifyContent: "center",
   },
   logo: {
-    width: 185,
-    height: 70,
+    width: 195,
+    height: 80,
   },
   nav: {
     flex: 1,

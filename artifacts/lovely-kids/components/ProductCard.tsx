@@ -33,6 +33,10 @@ interface Props {
   product: Product;
   style?: object;
   imageHeight?: number;
+  // Visual treatment for the homepage only; product actions are unchanged.
+  homeCard?: boolean;
+  // Visual treatment for product listing pages; no changes to cart or navigation.
+  catalogCard?: boolean;
   orderEdit?: {
     orderId: string;
     token?: string;
@@ -50,6 +54,8 @@ export function ProductCard({
   product,
   style,
   imageHeight,
+  homeCard = false,
+  catalogCard = false,
   orderEdit = null,
   rewardForPromotionId,
 }: Props) {
@@ -324,18 +330,25 @@ export function ProductCard({
       onPress={() => router.push(productRoute)}
       style={({ pressed }) => [
         styles.container,
-        { backgroundColor: colors.card, borderColor: isOutOfStock ? colors.border : colors.border },
-        pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+        homeCard && styles.homeContainer,
+        catalogCard && styles.catalogContainer,
+        { backgroundColor: colors.card, borderColor: colors.border },
+        pressed && { opacity: homeCard ? 0.92 : 0.9, transform: [{ scale: homeCard ? 0.99 : 0.98 }] },
         style,
       ]}
     >
       <View
         style={[
           styles.imageWrapper,
+          homeCard && styles.homeImageWrapper,
+          catalogCard && styles.catalogImageWrapper,
           imageHeight ? { height: imageHeight } : null,
         ]}
       >
-        <Image source={{ uri: product.image }} style={[styles.image, isOutOfStock && styles.imageDimmed]} />
+        <Image
+          source={{ uri: product.image }}
+          style={[styles.image, homeCard && styles.homeImage, isOutOfStock && styles.imageDimmed]}
+        />
 
         {/* Out of Stock Overlay */}
         {isOutOfStock && (
@@ -346,7 +359,7 @@ export function ProductCard({
 
         {/* Badges — only if in stock */}
         {!isOutOfStock && discountPct ? (
-          <View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
+          <View style={[styles.discountBadge, { backgroundColor: "#D74789" }]}>
             <Text style={styles.discountText}>خصم {discountPct}%</Text>
           </View>
         ) : null}
@@ -359,27 +372,31 @@ export function ProductCard({
 
         <Pressable
           onPress={handleToggleWishlist}
-          style={[styles.wishlistBtn, { backgroundColor: colors.card }]}
+          style={[styles.wishlistBtn, homeCard && styles.homeOverlayButton, catalogCard && styles.catalogOverlayButton, { backgroundColor: colors.card }]}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={wishlisted ? "إزالة من المفضلة" : "إضافة للمفضلة"}
         >
           <Ionicons
             name={wishlisted ? "heart" : "heart-outline"}
             size={18}
-            color={wishlisted ? "#ef4444" : "#64748b"}
+            color={wishlisted ? "#D74789" : "#65748C"}
           />
         </Pressable>
 
         <Pressable
           onPress={(e) => { e.stopPropagation(); void handleShare(); }}
-          style={[styles.shareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.shareBtn, homeCard && styles.homeOverlayButton, catalogCard && styles.catalogOverlayButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="مشاركة المنتج"
         >
           <Ionicons name="share-social-outline" size={17} color={colors.primary} />
         </Pressable>
       </View>
 
-      <View style={styles.info}>
-        <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={2}>
+      <View style={[styles.info, homeCard && styles.homeInfo, catalogCard && styles.catalogInfo]}>
+        <Text style={[styles.name, homeCard && styles.homeName, catalogCard && styles.catalogName, { color: colors.foreground }]} numberOfLines={2}>
           {product.nameAr}
         </Text>
 
@@ -412,13 +429,13 @@ export function ProductCard({
           </View>
         ) : null}
 
-        <View style={styles.priceRow}>
-          <View>
-            <Text style={[styles.price, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
+        <View style={[styles.priceRow, homeCard && styles.homePriceRow, catalogCard && styles.catalogPriceRow]}>
+          <View style={homeCard || catalogCard ? styles.priceCopy : undefined}>
+            <Text style={[styles.price, homeCard && styles.homePrice, catalogCard && styles.catalogPrice, { color: isOutOfStock ? colors.mutedForeground : colors.primary }]}>
               {product.price} ₪
             </Text>
             {product.originalPrice && !isOutOfStock && (
-              <Text style={[styles.originalPrice, { color: colors.mutedForeground }]}>
+              <Text style={[styles.originalPrice, homeCard && styles.homeOriginalPrice, catalogCard && styles.catalogOriginalPrice, { color: colors.mutedForeground }]}>
                 {product.originalPrice} ₪
               </Text>
             )}
@@ -426,9 +443,11 @@ export function ProductCard({
           <Pressable
             onPress={handleAddToCart}
             disabled={isOutOfStock}
-            style={[styles.addBtn, { backgroundColor: isOutOfStock ? colors.muted : colors.primary }]}
+            style={[styles.addBtn, homeCard && styles.homeAddBtn, catalogCard && styles.catalogAddBtn, { backgroundColor: isOutOfStock ? colors.muted : colors.primary }]}
+            accessibilityRole="button"
+            accessibilityLabel={isOutOfStock ? "الكمية غير متوفرة" : "إضافة المنتج إلى السلة"}
           >
-            <Ionicons name={isOutOfStock ? "close" : "add"} size={18} color={isOutOfStock ? colors.mutedForeground : "#fff"} />
+            <Ionicons name={isOutOfStock ? "close" : "add"} size={homeCard ? 21 : 18} color={isOutOfStock ? colors.mutedForeground : "#fff"} />
           </Pressable>
         </View>
       </View>
@@ -438,7 +457,7 @@ export function ProductCard({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
     ...Platform.select({
@@ -454,7 +473,51 @@ const styles = StyleSheet.create({
   imageWrapper: {
     position: "relative",
     height: 160,
-    backgroundColor: "#f8f8f8",
+    backgroundColor: "#F7FAFD",
+  },
+  // A stronger image/price hierarchy on the homepage without affecting
+  // product lists, promotions, variants, cart, or checkout.
+  catalogContainer: {
+    borderRadius: 19,
+    borderWidth: 1,
+    shadowColor: "#254369",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.055,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  catalogImageWrapper: {
+    backgroundColor: "#F8FBFE",
+    borderBottomWidth: 1,
+    borderBottomColor: "#ECF2F8",
+  },
+  catalogOverlayButton: {
+    width: 35,
+    height: 35,
+    borderRadius: 18,
+  },
+  homeContainer: {
+    borderRadius: 20,
+    borderWidth: 1,
+    shadowColor: "#243B5F",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  homeImageWrapper: {
+    backgroundColor: "#F5F9FD",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EAF0F7",
+  },
+  homeImage: {
+    width: "100%",
+    height: "100%",
+  },
+  homeOverlayButton: {
+    width: 35,
+    height: 35,
+    borderRadius: 18,
   },
   image: {
     width: "100%",
@@ -491,7 +554,7 @@ const styles = StyleSheet.create({
     end: Platform.OS === "web" ? undefined : 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   discountText: {
     color: "#fff",
@@ -503,9 +566,9 @@ const styles = StyleSheet.create({
     top: 8,
     right: Platform.OS === "web" ? 8 : undefined,
     start: Platform.OS === "web" ? undefined : 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -519,24 +582,51 @@ const styles = StyleSheet.create({
     bottom: 8,
     left: Platform.OS === "web" ? 8 : undefined,
     end: Platform.OS === "web" ? undefined : 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     elevation: 2,
   },
   info: {
-    padding: 12,
-    gap: 6,
+    padding: 14,
+    gap: 8,
     flexShrink: 0,
   },
   name: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     textAlign: "right",
-    lineHeight: 20,
+    lineHeight: 22,
+    minHeight: 44,
+  },
+  catalogInfo: {
+    paddingHorizontal: 12,
+    paddingTop: 11,
+    paddingBottom: 12,
+    gap: 7,
+    flexGrow: 1,
+  },
+  catalogName: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    minHeight: 42,
+  },
+  homeInfo: {
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 13,
+    gap: 9,
+    flexGrow: 1,
+  },
+  homeName: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: "700",
+    minHeight: 44,
   },
   promotionPill: {
     alignSelf: "flex-end",
@@ -558,9 +648,32 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 2,
   },
+  catalogPriceRow: {
+    marginTop: "auto",
+    paddingTop: 8,
+    gap: 5,
+  },
+  catalogPrice: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "800",
+  },
+  catalogOriginalPrice: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  homePriceRow: {
+    marginTop: "auto",
+    paddingTop: 7,
+    gap: 4,
+  },
+  priceCopy: {
+    flexShrink: 1,
+    alignItems: "flex-end",
+  },
   price: {
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: "800",
     textAlign: "right",
   },
   originalPrice: {
@@ -568,11 +681,35 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
     textAlign: "right",
   },
+  homePrice: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "800",
+  },
+  homeOriginalPrice: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
   addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
+  },
+  catalogAddBtn: {
+    width: 41,
+    height: 41,
+    borderRadius: 14,
+  },
+  homeAddBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    shadowColor: "#2379BF",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 2,
   },
 });

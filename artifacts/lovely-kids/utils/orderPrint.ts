@@ -319,6 +319,7 @@ export async function createOrderPrintHtml(
     margin-bottom: 7px;
   }
   .brand { font-size: 21px; font-weight: 800; color: #E91E8C; }
+  .brand-logo { display: block; width: 230px; height: auto; max-height: 112px; object-fit: contain; margin: 0 auto 3px; }
   .order-number { font-size: 16px; font-weight: 800; margin-top: 3px; }
   .date { color: #666; font-size: 10px; margin-top: 2px; }
   .box {
@@ -393,7 +394,7 @@ export async function createOrderPrintHtml(
 <body>
 <div class="page">
   <div class="header">
-    <div class="brand">Lovely Kids</div>
+    <img class="brand-logo" src="${typeof window !== "undefined" ? window.location.origin : "https://www.lovelykids.net"}/lovely-kids-online-a4-logo-2026.png" alt="Lovely Kids" />
     <div class="order-number">طلب رقم #${order.id}</div>
     ${isOnlineExchange
       ? `<div class="box-title">طلب تبديل أونلاين</div>
