@@ -524,6 +524,44 @@ export default function JournalVoucherPage() {
     }
   }
 
+  const importAgentId = journalAccounts.find(
+    (item) => item.code === "IMPORT_AGENT_CLEARING",
+  )?.id;
+  const importFreightId = journalAccounts.find(
+    (item) => item.code === "IMPORT_FREIGHT_IN_TRANSIT",
+  )?.id;
+
+  function chooseImportMovement(
+    kind: "fund" | "supplier" | "freight" | "freight-settlement" | "refund",
+  ) {
+    if (!importAgentId || !importFreightId) {
+      setError("حسابات الاستيراد غير متاحة؛ يلزم تفعيلها في النظام.");
+      return;
+    }
+
+    setError("");
+    setMessage("");
+    setAmount("");
+    setNotes("");
+
+    if (kind === "fund") {
+      setFrom({ kind: "bank", id: "" });
+      setTo({ kind: "finance_account", id: String(importAgentId) });
+    } else if (kind === "supplier") {
+      setFrom({ kind: "finance_account", id: String(importAgentId) });
+      setTo({ kind: "supplier", id: "" });
+    } else if (kind === "freight") {
+      setFrom({ kind: "finance_account", id: String(importAgentId) });
+      setTo({ kind: "finance_account", id: String(importFreightId) });
+    } else if (kind === "freight-settlement") {
+      setFrom({ kind: "finance_account", id: String(importFreightId) });
+      setTo({ kind: "supplier", id: "" });
+    } else {
+      setFrom({ kind: "finance_account", id: String(importAgentId) });
+      setTo({ kind: "bank", id: "" });
+    }
+  }
+
   function accountSelector(
     label: string,
     value: DraftRef,
@@ -666,6 +704,39 @@ export default function JournalVoucherPage() {
         <strong>إلى: ذمة الزبون</strong>.
         نقل دين من أحمد إلى محمد →
         من ذمة أحمد، إلى ذمة محمد.
+      </div>
+
+      <div className="lk-finance-guidance" style={{ padding: 14, marginBottom: 18 }}>
+        <strong>📦 حركات حساب الاستيراد (شيكل فقط)</strong>
+        <p>
+          المبالغ لدى شركة الشحن تُعتبر عهدة خارج البنك الفعلي.
+          لتسديد الشحن والتخليص، انقل المبلغ إلى «شحن وتخليص استيراد قيد التسوية»،
+          ثم سوِّه مع ذمة المورد فقط إذا كانت تكلفة الشحن داخلة أصلًا
+          في فاتورة المشتريات المعتمدة. لا تسجّل رسوم الشحن كمصروف إضافي.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {([
+            ["fund", "تحويل من البنك إلى الاستيراد"],
+            ["supplier", "تسديد المورد من الاستيراد"],
+            ["freight", "دفع الشحن والتخليص"],
+            ["freight-settlement", "تسوية رسوم الشحن مع المورد"],
+            ["refund", "إعادة مبلغ للبنك"],
+          ] as const).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              className="secondary-button"
+              disabled={loading || saving || !importAgentId || !importFreightId}
+              onClick={() => chooseImportMovement(kind)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p style={{ marginTop: 10 }}>
+          لعرض الرصيد والحركات: «الكشوفات المالية» ← «حساب استيراد».
+          سجّل اسم المورد ورقم الشحنة وتفاصيل دفعة الدولار في البيان دون إنشاء عملة دولار بالنظام.
+        </p>
       </div>
 
       <form
