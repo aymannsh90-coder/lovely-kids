@@ -1,34 +1,36 @@
+// Storefront palette: soft blue, pale backgrounds and deep navy for readable text.
+// This preview branch only changes visual tokens; checkout/data behavior is unchanged.
 const colors = {
   light: {
-    text: "#0F155A",
-    tint: "#E91E8C",
+    text: "#17245A",
+    tint: "#2379BF",
 
-    background: "#F0FAFE",
-    foreground: "#0F155A",
+    background: "#FAFCFF",
+    foreground: "#17245A",
 
     card: "#FFFFFF",
-    cardForeground: "#0F155A",
+    cardForeground: "#17245A",
 
-    primary: "#E91E8C",
+    primary: "#2379BF",
     primaryForeground: "#FFFFFF",
 
-    secondary: "#96DFEC",
-    secondaryForeground: "#0F155A",
+    secondary: "#EAF5FF",
+    secondaryForeground: "#17245A",
 
-    muted: "#E0F5F9",
-    mutedForeground: "#5A6A8A",
+    muted: "#F1F8FF",
+    mutedForeground: "#65748C",
 
-    accent: "#96DFEC",
-    accentForeground: "#0F155A",
+    accent: "#FCE7F1",
+    accentForeground: "#17245A",
 
-    destructive: "#ef4444",
-    destructiveForeground: "#ffffff",
+    destructive: "#EF4444",
+    destructiveForeground: "#FFFFFF",
 
-    border: "#C8EEF5",
-    input: "#E0F5F9",
+    border: "#DCEAF5",
+    input: "#F2F8FD",
   },
 
-  radius: 16,
+  radius: 18,
 };
 
 export default colors;

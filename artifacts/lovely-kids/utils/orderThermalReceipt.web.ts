@@ -513,8 +513,8 @@ export async function printOrderThermalReceipt(
 
     .lk-order-thermal-capture .receipt-logo {
       display: block;
-      width: 248px;
-      max-width: 248px;
+      width: 292px;
+      max-width: 292px;
       height: auto;
       margin: 0 auto 6px;
       object-fit: contain;
@@ -766,7 +766,7 @@ export async function printOrderThermalReceipt(
       <header class="receipt-header">
         <img
           class="receipt-logo"
-          src="/lovely-kids-receipt-logo.png"
+          src="/lovely-kids-online-thermal-logo-2026.png"
           alt="Lovely Kids"
         />
         <span>لملابس الأطفال وتجهيز المواليد</span>
