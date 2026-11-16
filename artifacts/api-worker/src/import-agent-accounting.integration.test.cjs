@@ -133,13 +133,38 @@ test("real ILS bank to shipping agent to supplier and freight, with net zero and
 
   const reconcile=await call(freight,vendor,"360.00","تسوية شحن فاتورة مشتريات معتمدة أدخلت تكلفته ضمن المخزون","agent-test-reconcile-"+randomUUID());
   assert.equal(reconcile.status,201,reconcile.body);
+  // A previously deposited agent advance cannot be voided after downstream
+  // remittances and expenses have depleted its balance.
+  const originalFundingId=JSON.parse(fund.body).voucher.id;
+  const unsafeVoid=await h.void(req(
+    "/api/pos/finance/vouchers/"+originalFundingId+"/void", token,
+    {reason:"Disposable test: try cancelling remittance after agent spent the money"}
+  ),db,env);
+  assert.equal(unsafeVoid.status,409,await unsafeVoid.clone().text());
+
+  // A still-unspent advance and its return can be reversed safely in order.
+  const spareFund=await call(bank,agent,"100.00","Temporary agent money for refund simulation","agent-test-spare-"+randomUUID());
+  assert.equal(spareFund.status,201,spareFund.body);
+  const spareRefund=await call(agent,bank,"30.00","Return of unused agent amount to real bank","agent-test-refund-"+randomUUID());
+  assert.equal(spareRefund.status,201,spareRefund.body);
+  const refundVoid=await h.void(req(
+    "/api/pos/finance/vouchers/"+JSON.parse(spareRefund.body).voucher.id+"/void", token,
+    {reason:"Undo unspent return in disposable integration test"}
+  ),db,env);
+  assert.equal(refundVoid.status,200,await refundVoid.clone().text());
+  const spareFundVoid=await h.void(req(
+    "/api/pos/finance/vouchers/"+JSON.parse(spareFund.body).voucher.id+"/void", token,
+    {reason:"Undo remaining unspent advance after reversing the return"}
+  ),db,env);
+  assert.equal(spareFundVoid.status,200,await spareFundVoid.clone().text());
+
   assert.equal(await balance(a.IMPORT_AGENT_CLEARING),0);
   assert.equal(await balance(a.IMPORT_FREIGHT_IN_TRANSIT),0);
   assert.equal(await balance(a.SUPPLIER_PAYABLE_CONTROL),0);
   assert.equal(await balance(a.PURCHASE_INVENTORY),535273);
   assert.equal(await balance(a.BANK_TEST),64727);
   assert.equal(Number(await scalar(pg,"SELECT COALESCE(SUM(debit_minor-credit_minor),0)::int FROM finance_transaction_lines")),0);
-  assert.equal(Number(await scalar(pg,"SELECT count(*)::int FROM finance_vouchers")),4);
+  assert.equal(Number(await scalar(pg,"SELECT count(*)::int FROM finance_vouchers")),6);
   assert.equal(Number(await scalar(pg,"SELECT count(*)::int FROM finance_transaction_lines WHERE account_id=$1 AND transaction_id!=$2",[a.PURCHASE_INVENTORY,seed])),0);
  } finally { await pg.end();fs.rmSync(buildDir,{recursive:true,force:true}); }
 });
