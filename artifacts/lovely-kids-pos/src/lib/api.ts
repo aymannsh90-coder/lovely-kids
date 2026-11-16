@@ -1749,6 +1749,10 @@ export type PosUnifiedVoucherAccountRef =
       registerKey: string;
     }
   | {
+      kind: "sub_cash";
+      cashAccountId: number;
+    }
+  | {
       kind: "bank";
       bankAccountId: number;
     }

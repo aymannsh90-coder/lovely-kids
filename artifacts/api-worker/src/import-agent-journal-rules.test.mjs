@@ -14,6 +14,7 @@ const classify = (fromCode, fromKind, toCode, toKind) =>
 test("deposit of ILS already delivered to shipping agent is not a bank-to-bank transfer", () => {
   assert.equal(classify("BANK_BOP", "bank", IMPORT_AGENT_CODE, "finance_account"), "fund_agent");
   assert.equal(classify("CASH_MAIN", "cash", IMPORT_AGENT_CODE, "finance_account"), "fund_agent");
+  assert.equal(classify("CASH_SUB_ABC12345", "sub_cash", IMPORT_AGENT_CODE, "finance_account"), "fund_agent");
 });
 
 test("agent remittance extinguishes supplier payable; it does not post inventory again", () => {
@@ -29,6 +30,7 @@ test("freight and clearance have a separate settlement asset, not an expense", (
 test("unspent agent money may be returned to real bank or cash", () => {
   assert.equal(classify(IMPORT_AGENT_CODE, "finance_account", "BANK_BOP", "bank"), "refund_to_bank_or_cash");
   assert.equal(classify(IMPORT_AGENT_CODE, "finance_account", "CASH_MAIN", "cash"), "refund_to_bank_or_cash");
+  assert.equal(classify(IMPORT_AGENT_CODE, "finance_account", "CASH_SUB_ABC12345", "sub_cash"), "refund_to_bank_or_cash");
 });
 
 test("cannot misclassify shipping cost as operating expense or make fake deposits", () => {

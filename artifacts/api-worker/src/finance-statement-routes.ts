@@ -317,7 +317,7 @@ async function handleReference(
           ),
           inArray(
             financeAccountsTable.code,
-            ["OPENING_BALANCE_EQUITY", "IMPORT_AGENT_CLEARING"],
+            ["OPENING_BALANCE_EQUITY", "IMPORT_AGENT_CLEARING", "IMPORT_FREIGHT_IN_TRANSIT"],
           ),
         ),
       )

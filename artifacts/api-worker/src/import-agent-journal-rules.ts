@@ -26,7 +26,7 @@ export function classifyImportJournal(
 
   if (
     toCode === IMPORT_AGENT_CODE &&
-    (fromKind === "bank" || fromKind === "cash")
+    (fromKind === "bank" || fromKind === "cash" || fromKind === "sub_cash")
   ) {
     return "fund_agent";
   }
@@ -41,7 +41,7 @@ export function classifyImportJournal(
 
   if (
     fromCode === IMPORT_AGENT_CODE &&
-    (toKind === "bank" || toKind === "cash")
+    (toKind === "bank" || toKind === "cash" || toKind === "sub_cash")
   ) {
     return "refund_to_bank_or_cash";
   }

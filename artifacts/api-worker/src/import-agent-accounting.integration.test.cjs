@@ -166,5 +166,62 @@ test("real ILS bank to shipping agent to supplier and freight, with net zero and
   assert.equal(Number(await scalar(pg,"SELECT COALESCE(SUM(debit_minor-credit_minor),0)::int FROM finance_transaction_lines")),0);
   assert.equal(Number(await scalar(pg,"SELECT count(*)::int FROM finance_vouchers")),6);
   assert.equal(Number(await scalar(pg,"SELECT count(*)::int FROM finance_transaction_lines WHERE account_id=$1 AND transaction_id!=$2",[a.PURCHASE_INVENTORY,seed])),0);
+
+  // A sub-cash ledger without an open session must still be selectable in a journal.
+  const newAccountRows=(await pg.query(
+    "INSERT INTO finance_accounts(code,name,account_type) VALUES"+
+    "('CASH_SUB_ABC12345','Disposable sub-cash','asset'),"+
+    "('SUB_CASH_OPENING','Sub-cash opening equity','equity') RETURNING id,code"
+  )).rows;
+  const cashIds=Object.fromEntries(newAccountRows.map(x=>[x.code,x.id]));
+  const subCash={kind:"sub_cash",cashAccountId:cashIds.CASH_SUB_ABC12345};
+  const subSeed=await scalar(pg,
+    "INSERT INTO finance_transactions(public_id,idempotency_key,business_date,transaction_type,source_type,source_id,source_event,created_by_user_id) "+
+    "VALUES('FIN-SUB-CASH-SEED','sub-cash-opening',CURRENT_DATE,'adjustment','test_seed','2','opening',$1) RETURNING id",[owner]);
+  await pg.query(
+    "INSERT INTO finance_transaction_lines(transaction_id,line_number,account_id,debit_minor,credit_minor) VALUES($1,1,$2,50000,0),($1,2,$3,0,50000)",
+    [subSeed,cashIds.CASH_SUB_ABC12345,cashIds.SUB_CASH_OPENING]
+  );
+  assert.equal(await balance(cashIds.CASH_SUB_ABC12345),50000);
+
+  const toAgent=await call(subCash,agent,"100.00",
+    "Disposable sub-cash to import agent without cash session","agent-sub-cash-fund-"+randomUUID());
+  assert.equal(toAgent.status,201,toAgent.body);
+  assert.equal(await balance(cashIds.CASH_SUB_ABC12345),40000);
+  assert.equal(await balance(a.IMPORT_AGENT_CLEARING),10000);
+
+  const overdraft=await call(subCash,agent,"401.00",
+    "Disallow overdrawing sub-cash","agent-sub-cash-overdraw-"+randomUUID());
+  assert.equal(overdraft.status,409,overdraft.body);
+  const bypass=await call(subCash,bank,"10.00",
+    "Bank transfers belong to the real transfer workflow","agent-sub-cash-transfer-"+randomUUID());
+  assert.equal(bypass.status,409,bypass.body);
+  const refundToSub=await call(agent,subCash,"40.00",
+    "Refund part of unused agent advance to sub-cash","agent-sub-cash-refund-"+randomUUID());
+  assert.equal(refundToSub.status,201,refundToSub.body);
+  assert.equal(await balance(cashIds.CASH_SUB_ABC12345),44000);
+  assert.equal(await balance(a.IMPORT_AGENT_CLEARING),6000);
+
+  const cancelFund=await h.void(req(
+    "/api/pos/finance/vouchers/"+JSON.parse(toAgent.body).voucher.id+"/void",token,
+    {reason:"Cannot cancel original sub-cash deposit after part refunded"}
+  ),db,env);
+  assert.equal(cancelFund.status,409,await cancelFund.clone().text());
+
+  const cancelRefund=await h.void(req(
+    "/api/pos/finance/vouchers/"+JSON.parse(refundToSub.body).voucher.id+"/void",token,
+    {reason:"Undo sub-cash refund in reverse order"}
+  ),db,env);
+  assert.equal(cancelRefund.status,200,await cancelRefund.clone().text());
+  const cancelFunding=await h.void(req(
+    "/api/pos/finance/vouchers/"+JSON.parse(toAgent.body).voucher.id+"/void",token,
+    {reason:"Undo entire import advance after restoring agent balance"}
+  ),db,env);
+  assert.equal(cancelFunding.status,200,await cancelFunding.clone().text());
+  assert.equal(await balance(cashIds.CASH_SUB_ABC12345),50000);
+  assert.equal(await balance(a.IMPORT_AGENT_CLEARING),0);
+  assert.equal(Number(await scalar(pg,
+    "SELECT COALESCE(SUM(debit_minor-credit_minor),0)::int FROM finance_transaction_lines")),0);
+
  } finally { await pg.end();fs.rmSync(buildDir,{recursive:true,force:true}); }
 });

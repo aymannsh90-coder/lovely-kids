@@ -16,6 +16,7 @@ import {
   asc,
   desc,
   eq,
+  inArray,
   sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -103,6 +104,10 @@ type AccountRef =
   | {
       kind: "cash";
       registerKey: string;
+    }
+  | {
+      kind: "sub_cash";
+      cashAccountId: number;
     }
   | {
       kind: "bank";
@@ -1074,6 +1079,49 @@ async function resolveAccountRef(
   tx: any,
   ref: AccountRef,
 ): Promise<ResolvedAccount> {
+  if (ref.kind === "sub_cash") {
+    // Sub-cash accounts exist as ledger assets, and may not have a
+    // cash-session opened. Never create them from a request ID.
+    const rows = await tx.select()
+      .from(financeAccountsTable)
+      .where(and(
+        eq(financeAccountsTable.id, ref.cashAccountId),
+        eq(financeAccountsTable.status, "active"),
+        eq(financeAccountsTable.currencyCode, "ILS"),
+        eq(financeAccountsTable.accountType, "asset"),
+      ))
+      .limit(1);
+    const account = rows[0];
+    if (!account || !account.code.startsWith("CASH_SUB_")) {
+      throw new VoucherError("الصندوق الفرعي غير موجود أو غير فعال بالشيكل", 404);
+    }
+
+    const register = registerKeyFromCashCode(account.code);
+    const sessions = await tx.select()
+      .from(cashSessionsTable)
+      .where(and(
+        eq(cashSessionsTable.registerKey, register),
+        eq(cashSessionsTable.status, "open"),
+      ))
+      .orderBy(desc(cashSessionsTable.openedAt))
+      .limit(1)
+      .for("update");
+    const session = sessions[0] ?? null;
+    if (session && session.currencyCode !== "ILS") {
+      throw new VoucherError("عملة جلسة الصندوق الفرعي لا تطابق الشيكل", 409);
+    }
+
+    return {
+      account,
+      lineDimensions: {},
+      label: account.name,
+      cashSession: session,
+      bankAccountId: null,
+      // An un-sessioned sub-cash account is a ledger-only asset.
+      settlementKind: session ? "cash" : null,
+    };
+  }
+
   if (
     ref.kind === "cash"
   ) {
@@ -1415,6 +1463,13 @@ function parseAccountRef(
         registerKey(
           raw.registerKey,
         ),
+    };
+  }
+
+  if (kind === "sub_cash") {
+    return {
+      kind,
+      cashAccountId: positiveId(raw.cashAccountId, "الصندوق الفرعي"),
     };
   }
 
@@ -3028,6 +3083,31 @@ async function handleJournalVoucher(
             );
           }
 
+          const subCashMovement =
+            fromRef.kind === "sub_cash" || toRef.kind === "sub_cash";
+
+          if (subCashMovement) {
+            if (!auth.user.isOwner) {
+              throw new VoucherError("سندات الصندوق الفرعي متاحة للمالك فقط", 403);
+            }
+            if (!notes) {
+              throw new VoucherError("أدخل بيان حركة الصندوق الفرعي", 400);
+            }
+            // Physical cash/bank transfers must go through the transfer
+            // workflow, even if a sub-cash account has no session.
+            if (
+              (fromRef.kind === "sub_cash" &&
+                ["cash", "bank", "sub_cash"].includes(toRef.kind)) ||
+              (toRef.kind === "sub_cash" &&
+                ["cash", "bank"].includes(fromRef.kind))
+            ) {
+              throw new VoucherError(
+                "التحويل بين الصندوق الفرعي والبنك أو الصندوق الرئيسي يتم من شاشة التحويلات المالية",
+                409,
+              );
+            }
+          }
+
           // Shipping-agent funds and freight prepayments are ILS assets,
           // never physical bank balances or new inventory/expense debits.
           const importDirection = classifyImportJournal(
@@ -3100,6 +3180,33 @@ async function handleJournalVoucher(
                   "لا توجد ذمة مستحقة كافية للمورد. لا تسوِّ الشحن إلا بعد اعتماد فاتورة مشتريات تشمل تكلفته؛ وإلا تبقى رسوم الشحن قيد التسوية.",
                   409,
                 );
+              }
+            }
+          }
+
+          if (subCashMovement) {
+            if (!importDirection) {
+              // All journal postings touching the sub-cash asset serialize
+              // against the same ledger header before checking its funds.
+              const ids = [...new Set([from.account.id, to.account.id])].sort((a,b) => a-b);
+              for (const id of ids) {
+                await tx.select({id: financeAccountsTable.id})
+                  .from(financeAccountsTable)
+                  .where(eq(financeAccountsTable.id, id))
+                  .for("update");
+              }
+            }
+            if (fromRef.kind === "sub_cash") {
+              const rows = await tx.select({
+                minor: sql<number>`coalesce(sum(${financeTransactionLinesTable.debitMinor}-${financeTransactionLinesTable.creditMinor}),0)::integer`,
+              }).from(financeTransactionLinesTable)
+                .where(eq(financeTransactionLinesTable.accountId, from.account.id));
+              const ledgerMinor = Number(rows[0]?.minor ?? 0);
+              const availableMinor = from.cashSession
+                ? (from.cashSession.expectedBalanceMinor ?? from.cashSession.openingBalanceMinor)
+                : ledgerMinor;
+              if (!importDebitBalanceAllows(availableMinor, amountMinor)) {
+                throw new VoucherError("رصيد الصندوق الفرعي غير كافٍ لحفظ السند", 409);
               }
             }
           }
@@ -3538,10 +3645,19 @@ async function handleReplaceUnifiedVoucher(
               .from(financeAccountsTable)
               .where(eq(financeAccountsTable.code, IMPORT_FREIGHT_CODE))
               .limit(1);
+            const cashAccounts = await tx.select({
+              id: financeAccountsTable.id,
+              code: financeAccountsTable.code,
+            }).from(financeAccountsTable).where(
+              inArray(financeAccountsTable.id, originalLines.map(line => line.accountId)),
+            );
             const guardedIds = [clearing[0]?.id, freight[0]?.id];
-            if (originalLines.some(line => guardedIds.includes(line.accountId))) {
+            if (
+              originalLines.some(line => guardedIds.includes(line.accountId)) ||
+              cashAccounts.some(account => account.code.startsWith("CASH_SUB_"))
+            ) {
               throw new VoucherError(
-                "لا يمكن تعديل سند حساب الاستيراد بعد ترحيله؛ سجّل حركة تصحيح منفصلة وراجع الرصيد أولًا",
+                "لا يمكن تعديل سند الصندوق الفرعي أو الاستيراد بعد ترحيله؛ سجّل حركة تصحيح منفصلة وراجع الرصيد أولًا",
                 409,
               );
             }
