@@ -40,6 +40,10 @@ import {
   getFailedDeliveryReturnState,
 } from "@/utils/failedDeliveryReturnStatus";
 import {
+  buildReturnedParcelHistoryIndex,
+  getPriorReturnedParcels,
+} from "@/utils/returnedParcelCustomerHistory";
+import {
   countExchangeReturnParcels,
   getExchangeReturnParcelState,
 } from "@/utils/exchangeReturnParcelStatus";
@@ -2919,6 +2923,14 @@ export default function AdminOrdersScreen() {
 
   const failedReturnCounts = useMemo(() => countFailedDeliveryReturns(orders), [orders]);
 
+  // A private, derived view of deliberately recorded failed courier deliveries.
+  // Based on validated phone numbers, never the customer's display name alone.
+  // A new order is not blocked, charged or modified due to past returns.
+  const returnedParcelHistoryByPhone = useMemo(
+    () => buildReturnedParcelHistoryIndex(orders),
+    [orders],
+  );
+
   const reportRefusedParcel = async () => {
     if (!failedReturnTarget || failedReturnBusy) return;
     const reason = failedReturnReason.trim();
@@ -4336,6 +4348,9 @@ export default function AdminOrdersScreen() {
             const isOpen = expanded === item.id;
             const returnParcelState = getExchangeReturnParcelState(item);
             const failedReturnState = getFailedDeliveryReturnState(item);
+            const customerReturnHistory = getPriorReturnedParcels(item, returnedParcelHistoryByPhone);
+            const priorUnreceivedReturns = customerReturnHistory.filter(history => history.state === "pending").length;
+            const priorReceivedReturns = customerReturnHistory.length - priorUnreceivedReturns;
             const canReportRefusedParcel = canMarkFailedDeliveryReturn(item);
             const statusOptions =
               isPickup
@@ -4603,7 +4618,34 @@ export default function AdminOrdersScreen() {
                         </View>
                       )}
                     </View>
-                    <Text style={[styles.customerName, { color: colors.foreground }]}>{item.customerName}</Text>
+                    <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", alignItems: "center", gap: 7 }}>
+                      <Text style={[styles.customerName, { color: colors.foreground }]}>{item.customerName}</Text>
+                      {customerReturnHistory.length > 0 && (
+                        <View
+                          accessible
+                          accessibilityLabel={priorUnreceivedReturns > 0
+                            ? `تنبيه داخلي: يوجد ${priorUnreceivedReturns} طرد راجع لم يستلم على نفس رقم الجوال`
+                            : `سجل سابق: يوجد ${priorReceivedReturns} طرد راجع مستلم على نفس رقم الجوال`}
+                          style={{
+                            flexDirection: "row-reverse", alignItems: "center", gap: 5,
+                            backgroundColor: priorUnreceivedReturns > 0 ? "#FFFBEB" : "#F1F5F9",
+                            borderWidth: 1, borderColor: priorUnreceivedReturns > 0 ? "#F59E0B" : "#CBD5E1",
+                            borderRadius: 9, paddingHorizontal: 8, paddingVertical: 4,
+                          }}
+                        >
+                          <Ionicons name="alert-circle-outline" size={14}
+                            color={priorUnreceivedReturns > 0 ? "#92400E" : "#475569"} />
+                          <Text style={{
+                            fontSize: 11, fontWeight: "900",
+                            color: priorUnreceivedReturns > 0 ? "#92400E" : "#475569",
+                          }}>
+                            {priorUnreceivedReturns > 0
+                              ? `نفس الجوال: ${priorUnreceivedReturns} طرد راجع بانتظار الاستلام`
+                              : `سجل راجع سابق على نفس الجوال (${priorReceivedReturns})`}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={[styles.timeAgo, { color: colors.mutedForeground }]}>{timeAgo(item.createdAt)}</Text>
                   </View>
                   <View style={styles.statusBadges}>
@@ -4711,6 +4753,50 @@ export default function AdminOrdersScreen() {
                 {/* Expanded Details */}
                 {isOpen && (
                   <View style={styles.expandedContent}>
+                    {customerReturnHistory.length > 0 && (
+                      <View style={{
+                        padding: 12, borderRadius: 12, gap: 8, marginBottom: 12,
+                        borderWidth: 1, borderColor: priorUnreceivedReturns > 0 ? "#F59E0B" : "#CBD5E1",
+                        backgroundColor: priorUnreceivedReturns > 0 ? "#FFFBEB" : "#F8FAFC",
+                      }}>
+                        <Text style={{ color: "#78350F", fontWeight: "900", textAlign: "right", fontSize: 14 }}>
+                          سجل طرود راجعة مرتبط برقم الجوال
+                        </Text>
+                        <Text style={{ color: "#475569", textAlign: "right", fontSize: 12 }}>
+                          تنبيه داخلي للمراجعة فقط. المطابقة حسب رقم الجوال بعد توحيد صيغته،
+                          وقد يختلف اسم الزبونة أو يكون الرقم مشتركًا بين أفراد الأسرة.
+                          لا يمنع إنشاء الطلب الجديد.
+                        </Text>
+                        {customerReturnHistory.slice(0, 5).map(history => (
+                          <Pressable
+                            key={history.orderId}
+                            accessibilityRole="button"
+                            accessibilityLabel={`فتح الطلب الراجع رقم ${history.orderId}`}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              openOrderById(history.orderId);
+                            }}
+                            style={{
+                              borderRadius: 8, padding: 9, gap: 3,
+                              backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E2E8F0",
+                            }}
+                          >
+                            <Text style={{ color: "#334155", fontWeight: "800", textAlign: "right" }}>
+                              الطلب #{history.orderId} · {history.customerName} · {history.state === "pending"
+                                ? "راجع، لم يتم استلامه" : "تم استلام الراجع"}
+                            </Text>
+                            <Text style={{ color: "#64748B", textAlign: "right", fontSize: 11 }}>
+                              {history.reportedAt.slice(0, 10)} · سبب الراجع: {history.reason || "غير مذكور"}
+                            </Text>
+                          </Pressable>
+                        ))}
+                        {customerReturnHistory.length > 5 && (
+                          <Text style={{ color: "#475569", textAlign: "right", fontSize: 11 }}>
+                            يوجد {customerReturnHistory.length - 5} طرود راجعة أقدم إضافية.
+                          </Text>
+                        )}
+                      </View>
+                    )}
                     {/* Contact */}
                     <View style={[styles.infoSection, { backgroundColor: colors.background }]}>
                       <View style={styles.infoRow}>
