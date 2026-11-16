@@ -1,0 +1,61 @@
+name: Verify import agent ILS clearing against disposable PostgreSQL
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/import-agent-journal-rules.ts'
+      - 'artifacts/api-worker/src/import-agent-journal-rules.test.mjs'
+      - 'artifacts/api-worker/src/import-agent-accounting.integration.test.cjs'
+      - 'artifacts/api-worker/src/finance-voucher-routes.ts'
+      - 'artifacts/api-worker/src/finance-statement-routes.ts'
+      - 'artifacts/lovely-kids-pos/src/pages/finance/JournalVoucherPage.tsx'
+      - 'artifacts/lovely-kids-pos/src/pages/reports/StatementsPage.tsx'
+      - 'lib/db/migrations/20261116_import_agent_ils_clearing_accounts.sql'
+      - '.github/workflows/verify-import-agent-ils.yml'
+
+jobs:
+  verify-import-agent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: import_agent_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d import_agent_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: import_agent_test
+      IMPORT_AGENT_DISPOSABLE_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck API and POS
+        run: |
+          pnpm --filter @workspace/api-worker typecheck
+          pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Import agent ledger direction and balance tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/import-agent-journal-rules.test.mjs
+      - name: Test real journal against disposable PostgreSQL only
+        run: node --test artifacts/api-worker/src/import-agent-accounting.integration.test.cjs
