@@ -21,6 +21,13 @@ import {
 import { randomUUID } from "node:crypto";
 
 import { isCustomerCreditPayoutWithinBalance } from "./customer-credit-payout-rules";
+import {
+  IMPORT_AGENT_CODE,
+  IMPORT_FREIGHT_CODE,
+  classifyImportJournal,
+  importDebitBalanceAllows,
+  freightCanSettleAgainstPayable,
+} from "./import-agent-journal-rules";
 
 import { getCurrentUser } from "./auth";
 import { userHasPermission } from "./staff-permissions";
@@ -1354,7 +1361,8 @@ async function resolveAccountRef(
 
   if (
     account.code !== "OPENING_BALANCE_EQUITY" &&
-    account.code !== "IMPORT_AGENT_CLEARING"
+    account.code !== IMPORT_AGENT_CODE &&
+    account.code !== IMPORT_FREIGHT_CODE
   ) {
     throw new VoucherError(
       "هذا الحساب يُدار من مسار محاسبي مخصص ولا يمكن استخدامه كحساب عام في سند القيد",
@@ -3020,31 +3028,40 @@ async function handleJournalVoucher(
             );
           }
 
-          // An import account is an advance held by the shipping agent,
-          // NOT a real bank, cash register, or operating expense.
-          // Only owner journal vouchers may move money in/out of it.
-          const fromImport = from.account.code === "IMPORT_AGENT_CLEARING";
-          const toImport = to.account.code === "IMPORT_AGENT_CLEARING";
-          if (fromImport || toImport) {
-            const validFunding =
-              toImport && (from.settlementKind === "bank" || from.settlementKind === "cash");
-            const validSettlement =
-              fromImport && (to.settlementKind === "bank" ||
-                             to.settlementKind === "cash" ||
-                             toRef.kind === "supplier");
-            if (!validFunding && !validSettlement) {
+          // Shipping-agent funds and freight prepayments are ILS assets,
+          // never physical bank balances or new inventory/expense debits.
+          const importDirection = classifyImportJournal(
+            from.account.code,
+            fromRef.kind,
+            to.account.code,
+            toRef.kind,
+          );
+
+          if (importDirection === "invalid") {
+            throw new VoucherError(
+              "حساب الاستيراد: المسار غير مسموح. استخدم البنك/الصندوق ← الاستيراد ← المورد أو شحن قيد التسوية، ثم سوِّ الشحن بعد اعتماد فاتورة المشتريات.",
+              409,
+            );
+          }
+
+          if (importDirection) {
+            if (!notes) {
               throw new VoucherError(
-                "حساب الاستيراد يقبل التحويل من البنك/الصندوق، والسداد للمورد، أو إعادة المال للبنك/الصندوق فقط. مصاريف الشحن تتطلب تسوية تكلفة مستقلة.",
-                409,
+                "اكتب في البيان رقم الشحنة أو المورد وسبب حركة حساب الاستيراد",
+                400,
               );
             }
 
-            // Serialize all journal operations on this specific clearing account.
-            const importAccount = fromImport ? from.account : to.account;
-            await tx.select({ id: financeAccountsTable.id })
-              .from(financeAccountsTable)
-              .where(eq(financeAccountsTable.id, importAccount.id))
-              .for("update");
+            // Serialize concurrent uses of the same funds.
+            const lockedIds = [...new Set([from.account.id, to.account.id])]
+              .sort((a, b) => a - b);
+
+            for (const accountId of lockedIds) {
+              await tx.select({ id: financeAccountsTable.id })
+                .from(financeAccountsTable)
+                .where(eq(financeAccountsTable.id, accountId))
+                .for("update");
+            }
 
             const ledgerBalance = async (accountId: number): Promise<number> => {
               const rows = await tx.select({
@@ -3054,13 +3071,32 @@ async function handleJournalVoucher(
               return Number(rows[0]?.balanceMinor ?? 0);
             };
 
-            if (fromImport && await ledgerBalance(from.account.id) < amountMinor) {
-              throw new VoucherError("رصيد حساب الاستيراد لا يكفي لتنفيذ التسديد", 409);
+            if (
+              (from.account.code === IMPORT_AGENT_CODE ||
+               from.account.code === IMPORT_FREIGHT_CODE) &&
+              !importDebitBalanceAllows(await ledgerBalance(from.account.id), amountMinor)
+            ) {
+              throw new VoucherError("رصيد حساب الاستيراد أو الشحن قيد التسوية غير كافٍ", 409);
             }
 
-            if (toImport && from.settlementKind === "bank") {
-              if (await ledgerBalance(from.account.id) < amountMinor) {
-                throw new VoucherError("رصيد البنك الحقيقي لا يكفي للتحويل إلى حساب الاستيراد", 409);
+            if (
+              importDirection === "fund_agent" &&
+              from.settlementKind === "bank" &&
+              !importDebitBalanceAllows(await ledgerBalance(from.account.id), amountMinor)
+            ) {
+              throw new VoucherError("الرصيد الدفتري للبنك الحقيقي لا يكفي للتحويل", 409);
+            }
+
+            if (importDirection === "settle_freight_on_purchase") {
+              if (toRef.kind !== "supplier") {
+                throw new VoucherError("اختر المورد لتسوية الشحن", 409);
+              }
+              const outstanding = await supplierPayableBalanceMinor(tx, toRef.supplierId);
+              if (!freightCanSettleAgainstPayable(outstanding, amountMinor)) {
+                throw new VoucherError(
+                  "لا توجد ذمة مستحقة كافية للمورد. لا تسوِّ الشحن إلا بعد اعتماد فاتورة مشتريات تشمل تكلفته؛ وإلا تبقى رسوم الشحن قيد التسوية.",
+                  409,
+                );
               }
             }
           }
@@ -3495,7 +3531,12 @@ async function handleReplaceUnifiedVoucher(
               .from(financeAccountsTable)
               .where(eq(financeAccountsTable.code, "IMPORT_AGENT_CLEARING"))
               .limit(1);
-            if (clearing[0] && originalLines.some(line => line.accountId === clearing[0].id)) {
+            const freight = await tx.select({ id: financeAccountsTable.id })
+              .from(financeAccountsTable)
+              .where(eq(financeAccountsTable.code, IMPORT_FREIGHT_CODE))
+              .limit(1);
+            const guardedIds = [clearing[0]?.id, freight[0]?.id];
+            if (originalLines.some(line => guardedIds.includes(line.accountId))) {
               throw new VoucherError(
                 "لا يمكن تعديل سند حساب الاستيراد بعد ترحيله؛ سجّل حركة تصحيح منفصلة وراجع الرصيد أولًا",
                 409,
