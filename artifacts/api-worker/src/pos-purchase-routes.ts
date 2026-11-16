@@ -3511,7 +3511,7 @@ async function handleCreatePurchase(
           // movement: opening and sale snapshots already hold exact value.
           await tx.insert(productCostLedgerTable).values({
             productId,
-            eventType: "correction",
+            eventType: "purchase",
             sourceType: "pos_purchase_existing_cost_reconciliation",
             sourceRef: String(purchase.id),
             sourceItemRef: String(allocation.item.id),
