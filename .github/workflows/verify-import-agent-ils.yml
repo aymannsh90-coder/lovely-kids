@@ -8,6 +8,7 @@ on:
       - 'artifacts/api-worker/src/import-agent-journal-rules.test.mjs'
       - 'artifacts/api-worker/src/import-agent-accounting.integration.test.cjs'
       - 'artifacts/api-worker/src/finance-voucher-routes.ts'
+      - 'artifacts/api-worker/src/party-finance-routes.ts'
       - 'artifacts/api-worker/src/finance-statement-routes.ts'
       - 'artifacts/lovely-kids-pos/src/pages/finance/JournalVoucherPage.tsx'
       - 'artifacts/lovely-kids-pos/src/pages/reports/StatementsPage.tsx'
