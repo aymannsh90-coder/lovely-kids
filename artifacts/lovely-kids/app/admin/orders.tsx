@@ -5752,8 +5752,7 @@ export default function AdminOrdersScreen() {
                         {failedReceiptBusy ? (
                           <ActivityIndicator size="small" color="#166534" />
                         ) : null}
-                        {failedReturnState === "pending" && (
-                          <Pressable
+                        <Pressable
                             disabled={failedReceiptBusy || pendingOrderIds.has(item.id)}
                             onPress={event => {
                               event.stopPropagation();
@@ -5768,13 +5767,10 @@ export default function AdminOrdersScreen() {
                               ✓ استلام الطرد الراجع وإلغاء البيع وإرجاع المخزون
                             </Text>
                           </Pressable>
-                        )}
-
-
                       </View>
                     )}
 
-                        {failedReturnState === "received" && (
+                    {failedReturnState === "received" && (
                           <View style={{ padding: 10, borderRadius: 10, backgroundColor: "#DCFCE7",
                             borderWidth: 1, borderColor: "#86EFAC" }}>
                             <Text style={{ color: "#166534", fontWeight: "900", textAlign: "right" }}>
@@ -5782,7 +5778,6 @@ export default function AdminOrdersScreen() {
                             </Text>
                           </View>
                         )}
-
 
                     {canReportRefusedParcel && (
                       <Pressable
