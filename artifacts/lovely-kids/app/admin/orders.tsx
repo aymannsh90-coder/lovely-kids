@@ -5588,53 +5588,6 @@ export default function AdminOrdersScreen() {
                           </Pressable>
                         )}
 
-                        {canReportRefusedParcel && (
-                            <Pressable
-                              disabled={pendingOrderIds.has(item.id) || failedReturnBusy}
-                              onPress={event => {
-                                event.stopPropagation();
-                                setFailedReturnTarget(item);
-                                setFailedReturnReason("");
-                                setFailedReturnError("");
-                              }}
-                              style={[styles.editOrderBtn, {
-                                backgroundColor: "#FFFBEB", borderColor: "#D97706",
-                              }]}
-                            >
-                              <Ionicons name="return-down-back-outline" size={19} color="#92400E" />
-                              <Text style={[styles.editOrderBtnText, { color: "#92400E" }]}>
-                                📦 الزبونة رفضت الطرد — تحويل إلى راجع
-                              </Text>
-                            </Pressable>
-                          )}
-
-                        {failedReturnState === "pending" && (
-                          <Pressable
-                            disabled={failedReceiptBusy || pendingOrderIds.has(item.id)}
-                            onPress={event => {
-                              event.stopPropagation();
-                              setFailedReceiptTarget(item);
-                            }}
-                            style={[styles.editOrderBtn, {
-                              backgroundColor: "#F0FDF4", borderColor: "#16A34A",
-                            }]}
-                          >
-                            <Ionicons name="checkmark-done-outline" size={19} color="#166534" />
-                            <Text style={[styles.editOrderBtnText, { color: "#166534" }]}>
-                              ✓ استلام الطرد الراجع وإلغاء البيع وإرجاع المخزون
-                            </Text>
-                          </Pressable>
-                        )}
-
-                        {failedReturnState === "received" && (
-                          <View style={{ padding: 10, borderRadius: 10, backgroundColor: "#DCFCE7",
-                            borderWidth: 1, borderColor: "#86EFAC" }}>
-                            <Text style={{ color: "#166534", fontWeight: "900", textAlign: "right" }}>
-                              ✓ تم استلام الراجع وإرجاع مخزونه — تكلفة الرجوع 0 ₪
-                            </Text>
-                          </View>
-                        )}
-
                         {item.status === "done" &&
                           returnParcelState === "pending" && (
                             <Pressable
@@ -5780,6 +5733,71 @@ export default function AdminOrdersScreen() {
                           </Pressable>
                         </View>
                       )}
+
+                    {/* Normal COD delivery returns are NOT exchange returns.
+                        This action must remain outside the exchange-specific panel. */}
+                    {failedReturnState === "pending" && (
+                      <View style={{
+                        borderWidth: 1, borderColor: "#16A34A",
+                        backgroundColor: "#F0FDF4", borderRadius: 12,
+                        padding: 12, gap: 8, marginVertical: 8,
+                      }}>
+                        <Text style={{ color: "#166534", textAlign: "right", fontWeight: "900", fontSize: 14 }}>
+                          📦 الطرد الراجع وصل للمحل؟
+                        </Text>
+                        <Text style={{ color: "#166534", textAlign: "right", fontSize: 12 }}>
+                          بعد التأكد من القطع والألوان والنمر، اضغط الاستلام لإلغاء الطلب
+                          وإرجاع المخزون وتكاليفه الأصلية مرة واحدة. تكلفة الرجوع 0 ₪.
+                        </Text>
+                        {failedReceiptBusy ? (
+                          <ActivityIndicator size="small" color="#166534" />
+                        ) : null}
+                        <Pressable
+                            disabled={failedReceiptBusy || pendingOrderIds.has(item.id)}
+                            onPress={event => {
+                              event.stopPropagation();
+                              setFailedReceiptTarget(item);
+                            }}
+                            style={[styles.editOrderBtn, {
+                              backgroundColor: "#F0FDF4", borderColor: "#16A34A",
+                            }]}
+                          >
+                            <Ionicons name="checkmark-done-outline" size={19} color="#166534" />
+                            <Text style={[styles.editOrderBtnText, { color: "#166534" }]}>
+                              ✓ استلام الطرد الراجع وإلغاء البيع وإرجاع المخزون
+                            </Text>
+                          </Pressable>
+                      </View>
+                    )}
+
+                    {failedReturnState === "received" && (
+                          <View style={{ padding: 10, borderRadius: 10, backgroundColor: "#DCFCE7",
+                            borderWidth: 1, borderColor: "#86EFAC" }}>
+                            <Text style={{ color: "#166534", fontWeight: "900", textAlign: "right" }}>
+                              ✓ تم استلام الراجع وإرجاع مخزونه — تكلفة الرجوع 0 ₪
+                            </Text>
+                          </View>
+                        )}
+
+                    {canReportRefusedParcel && (
+                      <Pressable
+                        disabled={pendingOrderIds.has(item.id) || failedReturnBusy}
+                        onPress={event => {
+                          event.stopPropagation();
+                          setFailedReturnTarget(item);
+                          setFailedReturnReason("");
+                          setFailedReturnError("");
+                        }}
+                        style={[styles.editOrderBtn, {
+                          backgroundColor: "#FFFBEB", borderColor: "#D97706",
+                        }]}
+                      >
+                        <Ionicons name="return-down-back-outline" size={19} color="#92400E" />
+                        <Text style={[styles.editOrderBtnText, { color: "#92400E" }]}>
+                          📦 الزبونة رفضت الطرد — تحويل إلى راجع
+                        </Text>
+                      </Pressable>
+                    )}
 
                     {/* Status Change */}
                     <Text

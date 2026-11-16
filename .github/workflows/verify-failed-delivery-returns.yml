@@ -9,6 +9,7 @@ on:
       - 'artifacts/lovely-kids/app/admin/orders.tsx'
       - 'artifacts/lovely-kids/utils/failedDeliveryReturnStatus*'
       - 'artifacts/lovely-kids/utils/returnedParcelCustomerHistory*'
+      - 'artifacts/lovely-kids/utils/failedDeliveryReturnReceiptUI.test.mjs'
       - 'lib/db/src/schema/order-failed-delivery-returns.ts'
       - 'lib/db/src/schema/index.ts'
       - 'lib/db/migrations/20261108_order_failed_delivery_returns.sql'
@@ -30,7 +31,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Refused parcel logic and customer history tests
-        run: node --experimental-strip-types --test artifacts/lovely-kids/utils/failedDeliveryReturnStatus.test.mjs artifacts/lovely-kids/utils/returnedParcelCustomerHistory.test.mjs
+        run: node --experimental-strip-types --test artifacts/lovely-kids/utils/failedDeliveryReturnStatus.test.mjs artifacts/lovely-kids/utils/returnedParcelCustomerHistory.test.mjs artifacts/lovely-kids/utils/failedDeliveryReturnReceiptUI.test.mjs
       - name: API typecheck
         run: pnpm --filter @workspace/api-worker typecheck
       - name: Storefront typecheck
