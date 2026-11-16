@@ -10,6 +10,7 @@ import {
   posPurchaseItemsTable,
   posPurchasesTable,
   productCostStateTable,
+  productCostLedgerTable,
   productBarcodesTable,
   productsTable,
   suppliersTable,
@@ -44,6 +45,10 @@ import {
 } from "./purchase-draft-service";
 import { loadDeferredPurchaseCostSales, settleDeferredPurchasePosSale } from "./deferred-purchase-sale-cost";
 import { allocateDeferredPurchaseCost } from "./deferred-purchase-cost-math";
+import {
+  proveExistingReceiptCost,
+  type ExistingReceiptCostPlan,
+} from "./purchase-existing-receipt-cost";
 import {
   backfillHistoricalPurchaseCosts,
   HistoricalPurchaseCostBackfillError,
@@ -2673,6 +2678,7 @@ async function handleCreatePurchase(
       };
 
       const deferredPlansByProduct = new Map<number, Awaited<ReturnType<typeof loadDeferredPurchaseCostSales>>>();
+      const alreadyCostedReceiptPlans = new Map<number, ExistingReceiptCostPlan>();
 
       const historicalPlansByProduct =
         new Map<
@@ -2729,6 +2735,12 @@ async function handleCreatePurchase(
             .select({
               quantityOnHand:
                 productCostStateTable.quantityOnHand,
+              inventoryValueMinor:
+                productCostStateTable.inventoryValueMinor,
+              referenceUnitCostMinor:
+                productCostStateTable.referenceUnitCostMinor,
+              costQuality:
+                productCostStateTable.costQuality,
             })
             .from(productCostStateTable)
             .where(
@@ -2774,15 +2786,65 @@ async function handleCreatePurchase(
           explainedPhysicalQuantity >
           physicalQuantity
         ) {
-          throw new PurchaseError(
-            `مخزون الصنف ${product.nameAr} أقل من الكمية الممثلة في محرك التكلفة ومسودات الاستلام الجديدة. راجع المخزون قبل الاعتماد.`,
-            409,
+          // Some freshly entered products had their EXACT purchase cost
+          // recognized via the product screen's manual opening before the
+          // supplier draft was approved. Re-adding the receipt to Cost Engine
+          // would double-count those same physical units and their value.
+          // Reuse only when the complete frozen ledger independently proves
+          // the same batch, unit cost, remaining stock and past sales.
+          const receiptLines = costAllocations.filter(
+            (entry) => entry.item.productId === productId &&
+              entry.item.entryMode === "stock_receipt",
           );
+          const receipt = receiptLines.length === 1
+            ? receiptLines[0]
+            : null;
+          const existingState = costStateRows[0];
+
+          const ledgerEvents = receipt && existingState && deferredPlan.sales.length === 0
+            ? await tx.select({
+                sourceType: productCostLedgerTable.sourceType,
+                eventType: productCostLedgerTable.eventType,
+                quantityDelta: productCostLedgerTable.quantityDelta,
+                inventoryValueDeltaMinor: productCostLedgerTable.inventoryValueDeltaMinor,
+                costQuality: productCostLedgerTable.costQuality,
+              })
+                .from(productCostLedgerTable)
+                .where(eq(productCostLedgerTable.productId, productId))
+                .orderBy(asc(productCostLedgerTable.id))
+                .limit(5000)
+            : [];
+
+          const proven = receipt && existingState
+            ? proveExistingReceiptCost({
+                receivedQuantity: receipt.receivedQuantity,
+                receiptCostTotalMinor: receipt.costTotalMinor,
+                pendingReceiptQuantity: pendingStockReceiptQuantity,
+                deferredSoldQuantity: deferredPlan.netSoldQuantity,
+                physicalQuantity,
+                costQuantity: existingState.quantityOnHand,
+                costValueMinor: existingState.inventoryValueMinor,
+                referenceUnitCostMinor: existingState.referenceUnitCostMinor,
+                costQuality: existingState.costQuality,
+                ledger: ledgerEvents,
+              })
+            : null;
+
+          if (!proven || ledgerEvents.length >= 5000) {
+            throw new PurchaseError(
+              `مخزون الصنف ${product.nameAr} أقل من الكمية الممثلة في محرك التكلفة ومسودات الاستلام الجديدة. راجع المخزون قبل الاعتماد.`,
+              409,
+            );
+          }
+
+          alreadyCostedReceiptPlans.set(productId, proven);
         }
 
         const historicalGap =
           physicalQuantity -
-          explainedPhysicalQuantity;
+          (alreadyCostedReceiptPlans.has(productId)
+            ? physicalQuantity
+            : explainedPhysicalQuantity);
 
         const documentationOnlyHistoricalAllocations =
           costAllocations.filter(
@@ -3424,12 +3486,19 @@ async function handleCreatePurchase(
               sales: deferredPlan.sales,
             })
           : null;
+        const alreadyCosted = alreadyCostedReceiptPlans.get(productId);
         const stockQuantityApplied =
+          alreadyCosted?.stockQuantityApplied ??
           deferredSplit?.stockQuantityApplied ?? allocation.receivedQuantity;
         const stockCostTotalMinor =
+          alreadyCosted?.stockCostTotalMinor ??
           deferredSplit?.stockCostTotalMinor ?? allocation.costTotalMinor;
-        const deferredSoldQuantity = deferredSplit?.netSoldQuantity ?? 0;
-        const deferredSoldCostMinor = deferredSplit?.netSoldCostTotalMinor ?? 0;
+        const deferredSoldQuantity =
+          alreadyCosted?.historicalSoldQuantity ??
+          deferredSplit?.netSoldQuantity ?? 0;
+        const deferredSoldCostMinor =
+          alreadyCosted?.historicalSoldCostTotalMinor ??
+          deferredSplit?.netSoldCostTotalMinor ?? 0;
 
         let costQuality:
           | "confirmed"
@@ -3437,8 +3506,28 @@ async function handleCreatePurchase(
           | "mixed" =
           "confirmed";
 
+        if (alreadyCosted) {
+          // Document the purchase attribution, with ZERO inventory/cost
+          // movement: opening and sale snapshots already hold exact value.
+          await tx.insert(productCostLedgerTable).values({
+            productId,
+            eventType: "correction",
+            sourceType: "pos_purchase_existing_cost_reconciliation",
+            sourceRef: String(purchase.id),
+            sourceItemRef: String(allocation.item.id),
+            quantityDelta: 0,
+            inventoryValueDeltaMinor: 0,
+            quantityAfter: alreadyCosted.stockQuantityApplied,
+            inventoryValueAfterMinor: alreadyCosted.stockCostTotalMinor,
+            costQuality: "confirmed",
+            businessDate,
+            note: `Supplier purchase ${purchase.publicId}: existing exact manual-opening and frozen sales are reconciled without duplicating inventory cost`,
+            createdByUserId: auth.user.id,
+          });
+        }
+
         if (
-          stockQuantityApplied > 0
+          stockQuantityApplied > 0 && !alreadyCosted
         ) {
           try {
             const costResult =
