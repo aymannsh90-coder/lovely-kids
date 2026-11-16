@@ -16,10 +16,18 @@ import {
   asc,
   desc,
   eq,
+  sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { isCustomerCreditPayoutWithinBalance } from "./customer-credit-payout-rules";
+import {
+  IMPORT_AGENT_CODE,
+  IMPORT_FREIGHT_CODE,
+  classifyImportJournal,
+  importDebitBalanceAllows,
+  freightCanSettleAgainstPayable,
+} from "./import-agent-journal-rules";
 
 import { getCurrentUser } from "./auth";
 import { userHasPermission } from "./staff-permissions";
@@ -1352,8 +1360,9 @@ async function resolveAccountRef(
   }
 
   if (
-    account.code !==
-      "OPENING_BALANCE_EQUITY"
+    account.code !== "OPENING_BALANCE_EQUITY" &&
+    account.code !== IMPORT_AGENT_CODE &&
+    account.code !== IMPORT_FREIGHT_CODE
   ) {
     throw new VoucherError(
       "هذا الحساب يُدار من مسار محاسبي مخصص ولا يمكن استخدامه كحساب عام في سند القيد",
@@ -3019,6 +3028,82 @@ async function handleJournalVoucher(
             );
           }
 
+          // Shipping-agent funds and freight prepayments are ILS assets,
+          // never physical bank balances or new inventory/expense debits.
+          const importDirection = classifyImportJournal(
+            from.account.code,
+            fromRef.kind,
+            to.account.code,
+            toRef.kind,
+          );
+
+          if (importDirection === "invalid") {
+            throw new VoucherError(
+              "حساب الاستيراد: المسار غير مسموح. استخدم البنك/الصندوق ← الاستيراد ← المورد أو شحن قيد التسوية، ثم سوِّ الشحن بعد اعتماد فاتورة المشتريات.",
+              409,
+            );
+          }
+
+          if (importDirection) {
+            if (!auth.user.isOwner) {
+              throw new VoucherError("حركات حساب الاستيراد متاحة للمالك فقط", 403);
+            }
+            if (!notes) {
+              throw new VoucherError(
+                "اكتب في البيان رقم الشحنة أو المورد وسبب حركة حساب الاستيراد",
+                400,
+              );
+            }
+
+            // Serialize concurrent uses of the same funds.
+            const lockedIds = [...new Set([from.account.id, to.account.id])]
+              .sort((a, b) => a - b);
+
+            for (const accountId of lockedIds) {
+              await tx.select({ id: financeAccountsTable.id })
+                .from(financeAccountsTable)
+                .where(eq(financeAccountsTable.id, accountId))
+                .for("update");
+            }
+
+            const ledgerBalance = async (accountId: number): Promise<number> => {
+              const rows = await tx.select({
+                balanceMinor: sql<number>`coalesce(sum(${financeTransactionLinesTable.debitMinor} - ${financeTransactionLinesTable.creditMinor}), 0)::integer`,
+              }).from(financeTransactionLinesTable)
+                .where(eq(financeTransactionLinesTable.accountId, accountId));
+              return Number(rows[0]?.balanceMinor ?? 0);
+            };
+
+            if (
+              (from.account.code === IMPORT_AGENT_CODE ||
+               from.account.code === IMPORT_FREIGHT_CODE) &&
+              !importDebitBalanceAllows(await ledgerBalance(from.account.id), amountMinor)
+            ) {
+              throw new VoucherError("رصيد حساب الاستيراد أو الشحن قيد التسوية غير كافٍ", 409);
+            }
+
+            if (
+              importDirection === "fund_agent" &&
+              from.settlementKind === "bank" &&
+              !importDebitBalanceAllows(await ledgerBalance(from.account.id), amountMinor)
+            ) {
+              throw new VoucherError("الرصيد الدفتري للبنك الحقيقي لا يكفي للتحويل", 409);
+            }
+
+            if (importDirection === "settle_freight_on_purchase") {
+              if (toRef.kind !== "supplier") {
+                throw new VoucherError("اختر المورد لتسوية الشحن", 409);
+              }
+              const outstanding = await supplierPayableBalanceMinor(tx, toRef.supplierId);
+              if (!freightCanSettleAgainstPayable(outstanding, amountMinor)) {
+                throw new VoucherError(
+                  "لا توجد ذمة مستحقة كافية للمورد. لا تسوِّ الشحن إلا بعد اعتماد فاتورة مشتريات تشمل تكلفته؛ وإلا تبقى رسوم الشحن قيد التسوية.",
+                  409,
+                );
+              }
+            }
+          }
+
           if (
             from.settlementKind &&
             to.settlementKind
@@ -3441,6 +3526,26 @@ async function handleReplaceUnifiedVoucher(
                   financeTransactionLinesTable.lineNumber,
                 ),
               );
+
+          // Changing a posted import-account journal can cause a negative
+          // agent balance after its funds were already used. Block replacement.
+          if (voucher.voucherType === "journal") {
+            const clearing = await tx.select({ id: financeAccountsTable.id })
+              .from(financeAccountsTable)
+              .where(eq(financeAccountsTable.code, "IMPORT_AGENT_CLEARING"))
+              .limit(1);
+            const freight = await tx.select({ id: financeAccountsTable.id })
+              .from(financeAccountsTable)
+              .where(eq(financeAccountsTable.code, IMPORT_FREIGHT_CODE))
+              .limit(1);
+            const guardedIds = [clearing[0]?.id, freight[0]?.id];
+            if (originalLines.some(line => guardedIds.includes(line.accountId))) {
+              throw new VoucherError(
+                "لا يمكن تعديل سند حساب الاستيراد بعد ترحيله؛ سجّل حركة تصحيح منفصلة وراجع الرصيد أولًا",
+                409,
+              );
+            }
+          }
 
           if (
             originalLines.length !==

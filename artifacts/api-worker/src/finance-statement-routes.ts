@@ -14,6 +14,7 @@ import {
   and,
   asc,
   eq,
+  inArray,
   gte,
   like,
   lt,
@@ -314,9 +315,9 @@ async function handleReference(
             financeAccountsTable.currencyCode,
             "ILS",
           ),
-          eq(
+          inArray(
             financeAccountsTable.code,
-            "OPENING_BALANCE_EQUITY",
+            ["OPENING_BALANCE_EQUITY", "IMPORT_AGENT_CLEARING"],
           ),
         ),
       )

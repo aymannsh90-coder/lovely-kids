@@ -22,6 +22,7 @@ import {
 type StatementMode =
   | "cash"
   | "bank"
+  | "import"
   | "customers"
   | "suppliers"
   | "expense";
@@ -238,6 +239,8 @@ export default function StatementsPage() {
           ?.financeAccountId ??
         null,
       );
+    } else if (next === "import") {
+      setAccountId(reference.journalAccounts.find((account) => account.code === "IMPORT_AGENT_CLEARING")?.id ?? null);
     } else if (
       next === "expense"
     ) {
@@ -379,6 +382,10 @@ export default function StatementsPage() {
           ) ??
           []
         )
+      : mode === "import"
+        ? (reference?.journalAccounts.filter((account) =>
+            account.code === "IMPORT_AGENT_CLEARING" || account.code === "IMPORT_FREIGHT_IN_TRANSIT"
+          ).map((account) => ({ id: account.id, label: account.name })) ?? [])
       : mode === "bank"
         ? (
             reference?.bankAccounts.map(
@@ -438,6 +445,14 @@ export default function StatementsPage() {
         </button>
 
         <button
+          className={mode === "import" ? "is-active" : ""}
+          type="button"
+          onClick={() => switchMode("import")}
+        >
+          📦 حساب استيراد
+        </button>
+
+        <button
           className={mode === "customers" ? "is-active" : ""}
           type="button"
           onClick={() => switchMode("customers")}
@@ -470,6 +485,7 @@ export default function StatementsPage() {
 
       {(mode === "cash" ||
         mode === "bank" ||
+        mode === "import" ||
         mode === "expense") && (
         <>
           <section className="finance-statement-filters">
@@ -479,7 +495,9 @@ export default function StatementsPage() {
                   ? "الصندوق"
                   : mode === "bank"
                     ? "الحساب البنكي"
-                    : "الحساب / المصروف"}
+                    : mode === "import"
+                      ? "حساب الاستيراد / شحن قيد التسوية"
+                      : "الحساب / المصروف"}
               </span>
 
               <select
