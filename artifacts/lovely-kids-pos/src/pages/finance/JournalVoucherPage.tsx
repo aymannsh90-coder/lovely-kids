@@ -706,6 +706,7 @@ export default function JournalVoucherPage() {
         من ذمة أحمد، إلى ذمة محمد.
       </div>
 
+      {user?.isOwner && (
       <div className="lk-finance-guidance" style={{ padding: 14, marginBottom: 18 }}>
         <strong>📦 حركات حساب الاستيراد (شيكل فقط)</strong>
         <p>
@@ -738,6 +739,7 @@ export default function JournalVoucherPage() {
           سجّل اسم المورد ورقم الشحنة وتفاصيل دفعة الدولار في البيان دون إنشاء عملة دولار بالنظام.
         </p>
       </div>
+      )}
 
       <form
         className="lk-finance-form"
