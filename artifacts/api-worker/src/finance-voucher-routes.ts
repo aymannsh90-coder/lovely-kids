@@ -3045,6 +3045,9 @@ async function handleJournalVoucher(
           }
 
           if (importDirection) {
+            if (!auth.user.isOwner) {
+              throw new VoucherError("حركات حساب الاستيراد متاحة للمالك فقط", 403);
+            }
             if (!notes) {
               throw new VoucherError(
                 "اكتب في البيان رقم الشحنة أو المورد وسبب حركة حساب الاستيراد",
