@@ -5533,9 +5533,9 @@ export default function AdminOrdersScreen() {
                           🔄 متابعة طلب التبديل
                         </Text>
 
-                        {item.exchangeReplacementOrderOrigin === "system_created" &&
-                          item.status === "new" &&
-                          !item.exchangeFinancialCompletedAt && (
+                        {item.status === "new" &&
+                          !item.exchangeFinancialCompletedAt &&
+                          !item.exchangeReturnReceivedAt && (
                             <Pressable
                               disabled={exchangeVoidBusy || pendingOrderIds.has(item.id)}
                               onPress={(event) => {
@@ -6565,7 +6565,7 @@ export default function AdminOrdersScreen() {
               إلغاء تبديل الطلب #{exchangeVoidTarget?.id}
             </Text>
             <Text style={{ color: colors.foreground, textAlign: "right" }}>
-              متاح فقط قبل تأكيد وتجهيز الطلب. سيتم إلغاء عملية التبديل والطلب البديل معاً، دون حذف السجل، ويمكن إنشاء تبديل جديد من الطلب الأصلي.
+              يُلغى التبديل والطلب البديل معاً سواء أنشأه النظام أو الزبونة، فقط قبل تأكيد وتجهيز الطلب أو التسوية أو استلام المرتجع. ستعود الأصناف المحجوزة وتكاليفها للمخزون مرة واحدة، مع إبقاء الطلب الأصلي وسجل التبديل محفوظين. بعدها يمكنك عمل تبديل جديد من الطلب الأصلي.
             </Text>
             <TextInput
               value={exchangeVoidReason}
