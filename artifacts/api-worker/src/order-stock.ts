@@ -10,8 +10,9 @@ import {
   productsTable,
   type ColorVariant,
 } from "@workspace/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import type { openDb } from "./db";
+import { canVoidOnlineExchangeBeforeProcessing } from "./online-exchange-void-policy";
 import {
   addProductCostAtCurrentAverage,
   consumeProductCost,
@@ -60,10 +61,12 @@ export async function cancelOrderAndRestoreStock(
   allowedStatuses: readonly string[] = ["new"],
   actorUserId?: number | null,
   exchangeVoidReason?: string,
+  expectedExchangeId?: number,
 ) {
   return db.transaction((tx) =>
     cancelOrderAndRestoreStockInTransaction(
       tx, orderId, allowedStatuses, actorUserId, exchangeVoidReason,
+      false, false, expectedExchangeId,
     ),
   );
 }
@@ -78,6 +81,7 @@ export async function cancelOrderAndRestoreStockInTransaction(
   exchangeVoidReason: string | undefined,
   allowAuditedLocalCourierReversal = false,
   strictPhysicalReturnReceipt = false,
+  expectedExchangeId?: number,
 ) {
     const rows = await tx
       .select({
@@ -100,7 +104,8 @@ export async function cancelOrderAndRestoreStockInTransaction(
       order.shippingZone === LOCAL_NABLUS_DELIVERY_LABEL;
     // A physically received refused parcel must restore the FULL original
     // product, variant, and historical cost without silent skips.
-    const requireFullStockRestore = auditedLocalReversal || strictPhysicalReturnReceipt;
+    const requireFullStockRestore =
+      auditedLocalReversal || strictPhysicalReturnReceipt || exchangeVoidReason !== undefined;
 
     if (
       order.status === "cancelled" ||
@@ -161,14 +166,46 @@ export async function cancelOrderAndRestoreStockInTransaction(
         );
       }
 
-      if (
-        order.status !== "new" ||
-        activeExchange.replacementOrderOrigin !== "system_created" ||
-        activeExchange.financialCompletedAt !== null ||
-        activeExchange.returnReceivedAt !== null
-      ) {
+      // Prevent a stale void request from cancelling a different exchange
+      // that became linked to the same order between API read and row lock.
+      if (expectedExchangeId !== undefined && activeExchange.id !== expectedExchangeId) {
+        throw new OrderEditError("تغيّرت عملية التبديل المرتبطة بالطلب، حدّث الصفحة", 409);
+      }
+
+      if (!canVoidOnlineExchangeBeforeProcessing({
+        replacementOrderOrigin: activeExchange.replacementOrderOrigin,
+        replacementOrderStatus: order.status,
+        financialCompletedAt: activeExchange.financialCompletedAt,
+        returnReceivedAt: activeExchange.returnReceivedAt,
+      })) {
         throw new OrderEditError(
-          "لا يمكن إلغاء هذا التبديل تلقائياً بعد تجهيز الطلب أو تسليمه أو ربطه بطلب موجود",
+          "يمكن إلغاء التبديل فقط قبل تجهيز الطلب البديل أو تسويته أو استلام المرتجع",
+          409,
+        );
+      }
+
+      // Never reverse a prepaid/settled order or exchange, even if the
+      // workflow flags were left inconsistent by an older operation.
+      const postedFinanceRows = await tx
+        .select({ id: financeTransactionsTable.id })
+        .from(financeTransactionsTable)
+        .where(and(
+          eq(financeTransactionsTable.status, "posted"),
+          or(
+            and(
+              eq(financeTransactionsTable.sourceType, "web_order"),
+              eq(financeTransactionsTable.sourceId, String(orderId)),
+            ),
+            and(
+              eq(financeTransactionsTable.sourceType, "exchange"),
+              eq(financeTransactionsTable.sourceId, String(activeExchange.id)),
+            ),
+          ),
+        ))
+        .limit(1);
+      if (postedFinanceRows.length > 0) {
+        throw new OrderEditError(
+          "توجد حركة مالية مسجلة لهذا التبديل أو طلبه البديل؛ يجب مراجعتها قبل الإلغاء",
           409,
         );
       }

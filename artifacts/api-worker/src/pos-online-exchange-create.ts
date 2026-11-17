@@ -2261,10 +2261,10 @@ export async function handleCreateOnlineOrderExchange(
 }
 
 /**
- * Void an online exchange before its system-created replacement order has
- * been processed. The order cancellation and exchange void are committed
- * in one database transaction by cancelOrderAndRestoreStock, including any
- * inventory-cost reversal. Never void a settled or externally-linked order.
+ * Void an online exchange before its replacement order is processed,
+ * whether the order was created by the system or linked by the customer.
+ * Stock and historical cost are restored in the same transaction as the
+ * replacement order cancellation and exchange void.
  */
 export async function handleVoidOnlineOrderExchange(
   request: Request,
@@ -2309,13 +2309,14 @@ export async function handleVoidOnlineOrderExchange(
     }
 
     if (
-      exchange.replacementOrderOrigin !== "system_created" ||
+      (exchange.replacementOrderOrigin !== "system_created" &&
+        exchange.replacementOrderOrigin !== "existing_order") ||
       exchange.replacementOrderId === null ||
       exchange.financialCompletedAt !== null ||
       exchange.returnReceivedAt !== null
     ) {
       return json(
-        { error: "لا يمكن إلغاء التبديل بعد التسوية أو استلام المرتجع أو عند ربط طلب موجود" },
+        { error: "لا يمكن إلغاء التبديل بعد التسوية أو استلام المرتجع" },
         409,
       );
     }
@@ -2326,6 +2327,7 @@ export async function handleVoidOnlineOrderExchange(
       ["new"],
       user.id,
       reason,
+      exchange.id,
     );
 
     if (result.kind !== "updated") {
