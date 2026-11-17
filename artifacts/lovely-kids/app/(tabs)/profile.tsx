@@ -15,6 +15,7 @@ import {
   Text,
   TextInput,
   Image,
+  Linking,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -712,6 +713,45 @@ export default function ProfileScreen() {
           style={[styles.contactBtn, { backgroundColor: colors.foreground }]}
         >
           <Text style={[styles.contactBtnText, { color: colors.background }]}>للتواصل معنا</Text>
+        </Pressable>
+      </View>
+
+      {/* Small legal links at the bottom of My Account, visible to all visitors. */}
+      <View
+        style={[
+          {
+            alignSelf: "center",
+            flexDirection: "row-reverse",
+            alignItems: "center",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            marginTop: 14,
+            marginBottom: 8,
+            paddingHorizontal: 12,
+          },
+          desktopCardStyle,
+        ]}
+      >
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="سياسة الخصوصية"
+          onPress={() => void Linking.openURL("https://lovelykids.net/privacy-policy.html")}
+          style={{ paddingVertical: 12, paddingHorizontal: 8 }}
+        >
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, textDecorationLine: "underline" }}>
+            سياسة الخصوصية
+          </Text>
+        </Pressable>
+        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>·</Text>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="حذف البيانات"
+          onPress={() => void Linking.openURL("https://lovelykids.net/data-deletion.html")}
+          style={{ paddingVertical: 12, paddingHorizontal: 8 }}
+        >
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, textDecorationLine: "underline" }}>
+            حذف البيانات
+          </Text>
         </Pressable>
       </View>
 
