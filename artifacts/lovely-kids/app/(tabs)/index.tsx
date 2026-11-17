@@ -11,6 +11,7 @@ import {
   Dimensions,
   Easing,
   Image,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -1838,6 +1839,15 @@ export default function HomeScreen() {
           </Text>
         </View>
         <Ionicons name="arrow-back" size={20} color={contactTextColor} />
+      </Pressable>
+      {/* Public privacy notice for store visitors and Meta application review. */}
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel="سياسة الخصوصية"
+        onPress={() => void Linking.openURL("https://lovelykids.net/privacy-policy.html")}
+        style={{ alignSelf: "center", paddingVertical: 12, paddingHorizontal: 18, marginBottom: 28 }}
+      >
+        <Text style={{ color: colors.mutedForeground, fontSize: 13, textDecorationLine: "underline" }}>سياسة الخصوصية</Text>
       </Pressable>
     </ScrollView>
 

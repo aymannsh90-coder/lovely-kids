@@ -319,6 +319,16 @@ export default function AboutScreen() {
             <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="سياسة الخصوصية"
+          onPress={() => void Linking.openURL("https://lovelykids.net/privacy-policy.html")}
+          style={{ alignSelf: "center", paddingVertical: 18, paddingHorizontal: 18 }}
+        >
+          <Text style={{ color: PALETTE.blue, fontSize: 15, fontWeight: "700", textDecorationLine: "underline" }}>
+            سياسة الخصوصية
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
