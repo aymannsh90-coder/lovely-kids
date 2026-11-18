@@ -7,7 +7,11 @@ import {
   composeFacebookProductCaption,
   composeFacebookPhotoCaption,
 } from "./facebook-post-composer";
-import { resolveFacebookPageAccessToken } from "./facebook-page-access-token";
+import {
+  facebookPostsUseNextToken,
+  resolveFacebookPageAccessToken,
+  resolveFacebookPostPageAccessToken,
+} from "./facebook-page-access-token";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 type FacebookResponse = {
@@ -26,7 +30,9 @@ function json(data: unknown, status = 200): Response {
 
 function isConfigured(env: Env): boolean {
   return !!(
-    (env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN?.trim() || env.META_FACEBOOK_PAGE_ACCESS_TOKEN?.trim()) &&
+    (facebookPostsUseNextToken(env)
+      ? env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN_NEXT?.trim()
+      : (env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN?.trim() || env.META_FACEBOOK_PAGE_ACCESS_TOKEN?.trim())) &&
     /^\d+$/.test(env.META_FACEBOOK_PAGE_ID?.trim() ?? "")
   );
 }
@@ -60,6 +66,7 @@ export async function handleFacebookPagePostRequest(
   if (
     pathname !== "/api/owner/facebook/status" &&
     pathname !== "/api/owner/facebook/verify" &&
+    pathname !== "/api/owner/facebook/verify-next" &&
     pathname !== "/api/owner/facebook/preview" &&
     pathname !== "/api/owner/facebook/publish"
   ) {
@@ -75,14 +82,24 @@ export async function handleFacebookPagePostRequest(
   if (pathname === "/api/owner/facebook/status" && request.method === "GET") {
     return json({ configured: isConfigured(env) });
   }
-  if (pathname === "/api/owner/facebook/verify" && request.method === "GET") {
-    // Read-only Graph API check: never create photos/posts or expose Page token.
-    if (!isConfigured(env)) {
+  if (
+    (pathname === "/api/owner/facebook/verify" || pathname === "/api/owner/facebook/verify-next") &&
+    request.method === "GET"
+  ) {
+    // Read-only Graph API check: never create photos/posts or expose a Page token.
+    const verifyNext = pathname === "/api/owner/facebook/verify-next";
+    const pageValid = /^\d+$/.test(env.META_FACEBOOK_PAGE_ID?.trim() ?? "");
+    const configured = verifyNext
+      ? pageValid && !!env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN_NEXT?.trim()
+      : isConfigured(env);
+    if (!configured) {
       return json({ connected: false, error: "صفحة فيسبوك غير مجهزة بعد" });
     }
     const pageId = env.META_FACEBOOK_PAGE_ID!.trim();
     try {
-      const token = await resolveFacebookPageAccessToken(env);
+      const token = verifyNext
+        ? await resolveFacebookPageAccessToken(env, "next")
+        : await resolveFacebookPostPageAccessToken(env);
       const response = await fetch(
         "https://graph.facebook.com/" + GRAPH_VERSION + "/" + pageId + "?fields=id,name",
         {
@@ -214,7 +231,7 @@ export async function handleFacebookPagePostRequest(
   try {
     // Resolve a fresh Page token once for this operation. Do not fall back to an expired
     // legacy token when a system-user token is configured but fails validation.
-    const pageToken = await resolveFacebookPageAccessToken(env);
+    const pageToken = await resolveFacebookPostPageAccessToken(env);
     // One unpublished photo per selected model, in the original selection order.
     // This does not modify the product catalog, ads, inventory or storefront.
     const photoIds: string[] = [];

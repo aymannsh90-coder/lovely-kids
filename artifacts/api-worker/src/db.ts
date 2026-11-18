@@ -20,6 +20,9 @@ export interface Env {
   META_FACEBOOK_PAGE_ID?: string;
   META_FACEBOOK_PAGE_ACCESS_TOKEN?: string;
   META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN?: string;
+  META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN_NEXT?: string;
+  /** Opt in ONLY Facebook feed posts to the new system token; default disabled. */
+  META_FACEBOOK_POSTS_USE_NEXT_TOKEN?: string;
   META_INSTAGRAM_ACCOUNT_ID?: string;
   META_INSTAGRAM_ACCESS_TOKEN?: string;
   HYPERDRIVE: {
