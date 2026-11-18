@@ -16,7 +16,7 @@ type StoryPreview = {
 type StoryResult = { productId: number; storyId: string };
 
 /**
- * Facebook NEXT Page Stories: 1–10 products, one original R2 URL per Story.
+ * Facebook NEXT Page Stories: no fixed selection cap, one original R2 URL per Story.
  * No copies, uploads, image manipulation or new R2 objects are created here.
  * The existing owner-only API publishes ONE product per request; calls are
  * sequential, stop on the first uncertainty and are never auto-retried.
@@ -40,7 +40,7 @@ export default function OwnerFacebookNextStoryPilot({ selectedIds }: { selectedI
 
   const selectedKey = selectedIds.join(",");
   const ids = selectedIds.map(Number);
-  const validSelection = ids.length >= 1 && ids.length <= 10 &&
+  const validSelection = ids.length >= 1 &&
     ids.every(id => Number.isSafeInteger(id) && id > 0) &&
     new Set(ids).size === ids.length;
   const matchesPreview = !!previews && validSelection &&
@@ -188,9 +188,9 @@ export default function OwnerFacebookNextStoryPilot({ selectedIds }: { selectedI
         فيسبوك — نشر القصص
       </Text>
       <Text style={muted}>
-        اختَر من موديل واحد إلى 10 موديلات، وكل موديل سيُنشر كقصة منفصلة على
+        اختَر أي عدد من الموديلات، وكل موديل سيُنشر كقصة منفصلة على
         فيسبوك. نستخدم رابط صورة المنتج الأصلية من R2 دون نسخ أو تعديل أو تخزين
-        صور جديدة. قصص فيسبوك والمنشورات العادية منفصلة تمامًا.
+        صور جديدة. القصص تُرسل بالتتابع؛ إذا تعثّرت قصة يتوقف الباقي. قصص فيسبوك والمنشورات العادية منفصلة تمامًا.
       </Text>
       <Pressable onPress={() => void previewStories()}
         disabled={!validSelection || busy !== null}
