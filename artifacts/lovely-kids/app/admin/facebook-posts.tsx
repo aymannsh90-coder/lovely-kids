@@ -423,7 +423,7 @@ export default function FacebookPostsScreen() {
                   fontWeight: "700",
                 }}>
                   {nextInstagramVerification.connected
-                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. نشر القصص لم يُحوّل بعد.`
+                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. قصص إنستغرام متاحة في الأداة المستقلة أدناه.`
                     : `✗ ${nextInstagramVerification.error || "تعذر فحص اتصال إنستغرام"}`}
                 </Text>
               )}
@@ -581,7 +581,7 @@ export default function FacebookPostsScreen() {
           <Text style={titleStyle}>الوصف الرئيسي الذي سيظهر مع المنشور</Text>
           <Text selectable style={{ color: colors.foreground, lineHeight: 24, textAlign: "right" }}>{preview.caption}</Text>
           <Text style={{ ...muted, textAlign: "right" }}>
-            كل صورة مرتبطة باسم الموديل ورابطه في وصفها. قد لا يُظهر فيسبوك وصف الصورة مباشرة ضمن المنشور متعدد الصور؛ أحيانًا تحتاج الزبونة لفتح الصورة لقراءة التفاصيل.
+            كل صورة مرتبطة باسم الموديل ورابطه في وصفها. قد لا يُظهر فيسبوك وصف الصورة مباشرة ضمن المنشور متعدد الصور؛ أحيانًا تحتاج الزبونة لفتح الصورة لقراءة التفاصيل. عند اختيار عدد كبير من الصور، قد يطول الإرسال أو ترفض Meta بعض الطلبات؛ راجع الصفحة قبل إعادة أي محاولة.
           </Text>
           <Pressable
             onPress={publish}
