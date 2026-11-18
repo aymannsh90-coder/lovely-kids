@@ -37,7 +37,6 @@ type PreviewResult = {
   products: PreviewProduct[];
 };
 
-const MAX_MODELS = 10;
 const DEFAULT_INTRO = "🛍️ موديلات مختارة من Lovely Kids";
 
 function isFailedResponse(value: unknown): value is { error: string } {
@@ -255,10 +254,6 @@ export default function FacebookPostsScreen() {
     setIgCarouselSuccess(false);
     setSelectedIds((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
-      if (current.length >= MAX_MODELS) {
-        setError("يمكن اختيار 10 موديلات كحد أقصى لكل منشور");
-        return current;
-      }
       return [...current, id];
     });
   };
@@ -367,7 +362,7 @@ export default function FacebookPostsScreen() {
       </Pressable>
       <Text style={{ ...titleStyle, fontSize: 24, textAlign: "right" }}>نشر موديلات على فيسبوك وإنستغرام</Text>
       <Text style={{ ...muted, textAlign: "right" }}>
-        اختَر موديلات لنشر صورها في منشور واحد. اسم كل صنف ورابطه موجودان في وصف صورته، ووصف المنشور الرئيسي لا يكرر التفاصيل.
+        اختَر أي عدد من الموديلات لقصص ومنشورات فيسبوك. إنستغرام يبقى بحدوده المستقلة: Carousel من صورتين إلى 10 صور، والقصص من 1 إلى 10 صور. اسم كل صنف ورابطه موجودان بوصف صورته في منشور فيسبوك.
       </Text>
       <Text style={{ ...muted, textAlign: "right" }}>
         {configured === true ? "✓ بيانات صفحة فيسبوك محفوظة في النظام" :
@@ -438,7 +433,7 @@ export default function FacebookPostsScreen() {
       </View>
 
       <View style={{ ...surface, gap: 10 }}>
-        <Text style={titleStyle}>الموديلات المختارة: {selectedIds.length}/{MAX_MODELS}</Text>
+        <Text style={titleStyle}>الموديلات المختارة: {selectedIds.length} (بدون حد لفيسبوك)</Text>
         <TextInput
           value={search}
           onChangeText={setSearch}
