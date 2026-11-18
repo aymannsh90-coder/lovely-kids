@@ -4,7 +4,7 @@ import { getCurrentUser } from "./auth";
 import { productStorefrontUrl } from "./facebook-post-composer";
 import type { Env, openDb } from "./db";
 import { publishInstagramSinglePhoto, safeInstagramFeedError } from "./instagram-feed-publisher";
-import { instagramPublishingToken, instagramPublishUsesNextToken } from "./instagram-publish-token";
+import { instagramFeedPilotReady, instagramPublishingToken } from "./instagram-publish-token";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
 
@@ -67,10 +67,9 @@ export async function handleInstagramFeedRequest(
     productStorefrontUrl(product.id) + "\n\n" +
     "#LovelyKids #ملابس_أطفال";
   const id = env.META_INSTAGRAM_ACCOUNT_ID?.trim() ?? "";
-  const enabled = instagramPublishUsesNextToken(env, "feed");
-  const token = instagramPublishingToken(env, "feed");
-  // This is a NEW publishing flow: by design never publish via the legacy token.
-  const configured = /^\d+$/.test(id) && enabled && !!token;
+  const configured = instagramFeedPilotReady(env);
+  // The route rejects disabled pilots before any Meta write and never uses legacy token.
+  const token = configured ? instagramPublishingToken(env, "feed") : "";
 
   const preview = {
     configured,
