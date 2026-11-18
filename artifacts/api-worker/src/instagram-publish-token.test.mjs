@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { instagramPublishingToken, instagramPublishUsesNextToken } from "./instagram-publish-token.ts";
+import { instagramFeedPilotReady, instagramPublishingToken, instagramPublishUsesNextToken } from "./instagram-publish-token.ts";
 
 const env = {
   META_INSTAGRAM_ACCESS_TOKEN: "old-ig",
@@ -40,4 +40,16 @@ test("Flag is true only for literal true, not truthy strings", () => {
     assert.equal(instagramPublishUsesNextToken({ ...env, META_INSTAGRAM_FEED_USE_NEXT_TOKEN: flag }, "feed"), false);
   }
   assert.equal(instagramPublishUsesNextToken({ ...env, META_INSTAGRAM_FEED_USE_NEXT_TOKEN: " true " }, "feed"), true);
+});
+
+test("feed pilot is disabled without explicit flag even if both tokens exist", () => {
+  assert.equal(instagramFeedPilotReady({
+    ...env, META_INSTAGRAM_ACCOUNT_ID: "17841411928735926",
+  }), false);
+});
+test("feed pilot only enables with exact account ID and candidate", () => {
+  const ready = { ...env, META_INSTAGRAM_ACCOUNT_ID: "17841411928735926", META_INSTAGRAM_FEED_USE_NEXT_TOKEN: "true" };
+  assert.equal(instagramFeedPilotReady(ready), true);
+  assert.equal(instagramFeedPilotReady({ ...ready, META_INSTAGRAM_ACCESS_TOKEN_NEXT: undefined }), false);
+  assert.equal(instagramFeedPilotReady({ ...ready, META_INSTAGRAM_ACCOUNT_ID: "wrong" }), false);
 });
