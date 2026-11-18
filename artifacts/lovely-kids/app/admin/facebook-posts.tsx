@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
 // Instagram Stories reuse existing product image URLs. Never create R2 image copies.
 import OwnerInstagramNextStoryPilot from "@/components/OwnerInstagramNextStoryPilot";
+import OwnerFacebookNextStoryPilot from "@/components/OwnerFacebookNextStoryPilot";
 import { useColors } from "@/hooks/useColors";
 
 type PreviewProduct = {
@@ -546,6 +547,7 @@ export default function FacebookPostsScreen() {
       </View>
 
       <OwnerInstagramNextStoryPilot selectedIds={selectedIds} />
+      <OwnerFacebookNextStoryPilot selectedIds={selectedIds} />
 
       <View style={{ ...surface, gap: 10 }}>
         <Text style={titleStyle}>وصف المنشور الرئيسي (قابل للتعديل)</Text>
