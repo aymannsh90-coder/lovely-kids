@@ -27,6 +27,10 @@ export interface Env {
   META_INSTAGRAM_ACCESS_TOKEN?: string;
   /** Candidate Instagram access token; read-only verification only until an explicit cutover. */
   META_INSTAGRAM_ACCESS_TOKEN_NEXT?: string;
+  /** Independent opt-in for Instagram feed single-photo publishing (default OFF). */
+  META_INSTAGRAM_FEED_USE_NEXT_TOKEN?: string;
+  /** Independent opt-in for Instagram Stories publishing (default OFF). */
+  META_INSTAGRAM_STORIES_USE_NEXT_TOKEN?: string;
   HYPERDRIVE: {
     connectionString: string;
   };
