@@ -1,4 +1,5 @@
 import { getCurrentUser } from "./auth";
+import { instagramVerificationToken } from "./instagram-verification-token";
 import type { Env, openDb } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -16,7 +17,8 @@ export async function handleInstagramConnectionRequest(
   env: Env,
 ): Promise<Response | null> {
   const pathname = new URL(request.url).pathname;
-  if (pathname !== "/api/owner/instagram/verify") return null;
+  const isNext = pathname === "/api/owner/instagram/verify-next";
+  if (pathname !== "/api/owner/instagram/verify" && !isNext) return null;
   if (request.method !== "GET") {
     return responseJson({ error: "طريقة الطلب غير مدعومة" }, 405);
   }
@@ -27,9 +29,12 @@ export async function handleInstagramConnectionRequest(
   }
 
   const id = env.META_INSTAGRAM_ACCOUNT_ID?.trim() ?? "";
-  const token = env.META_INSTAGRAM_ACCESS_TOKEN?.trim() ?? "";
+  // Never fall back to the current token while checking the new app.
+  const token = instagramVerificationToken(env, isNext ? "next" : "current");
   if (!/^[0-9]+$/.test(id) || !token) {
-    return responseJson({ connected: false, error: "بيانات إنستغرام غير مكتملة في Cloudflare" });
+    return responseJson({ connected: false, error: isNext
+      ? "رمز إنستغرام الجديد أو رقم الحساب غير مكتمل في Cloudflare"
+      : "بيانات إنستغرام غير مكتملة في Cloudflare" });
   }
 
   // Unified Login issues a Business Integration System User token for the
@@ -68,7 +73,9 @@ export async function handleInstagramConnectionRequest(
     return responseJson({
       connected: true,
       username: data.username || "حساب إنستغرام",
-      note: "هذا فحص قراءة فقط، ولا يؤكد نجاح النشر قبل تجربته.",
+      note: isNext
+        ? "رمز التطبيق الجديد صالح لقراءة الحساب. لم يتغير رمز النشر الحالي، ولا يؤكد الفحص نجاح نشر الصور أو القصص."
+        : "هذا فحص قراءة فقط، ولا يؤكد نجاح النشر قبل تجربته.",
     });
   } catch {
     return responseJson({ connected: false, error: "تعذّر التواصل مع Meta. أعد المحاولة لاحقًا." });
