@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
 // Instagram Stories reuse existing product image URLs. Never create R2 image copies.
 import OwnerInstagramNextStoryPilot from "@/components/OwnerInstagramNextStoryPilot";
+import OwnerFacebookNextStoryPilot from "@/components/OwnerFacebookNextStoryPilot";
 import { useColors } from "@/hooks/useColors";
 
 type PreviewProduct = {
@@ -36,7 +37,6 @@ type PreviewResult = {
   products: PreviewProduct[];
 };
 
-const MAX_MODELS = 10;
 const DEFAULT_INTRO = "🛍️ موديلات مختارة من Lovely Kids";
 
 function isFailedResponse(value: unknown): value is { error: string } {
@@ -254,10 +254,6 @@ export default function FacebookPostsScreen() {
     setIgCarouselSuccess(false);
     setSelectedIds((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
-      if (current.length >= MAX_MODELS) {
-        setError("يمكن اختيار 10 موديلات كحد أقصى لكل منشور");
-        return current;
-      }
       return [...current, id];
     });
   };
@@ -366,7 +362,7 @@ export default function FacebookPostsScreen() {
       </Pressable>
       <Text style={{ ...titleStyle, fontSize: 24, textAlign: "right" }}>نشر موديلات على فيسبوك وإنستغرام</Text>
       <Text style={{ ...muted, textAlign: "right" }}>
-        اختَر موديلات لنشر صورها في منشور واحد. اسم كل صنف ورابطه موجودان في وصف صورته، ووصف المنشور الرئيسي لا يكرر التفاصيل.
+        اختَر أي عدد من الموديلات لقصص ومنشورات فيسبوك. إنستغرام يبقى بحدوده المستقلة: Carousel من صورتين إلى 10 صور، والقصص من 1 إلى 10 صور. اسم كل صنف ورابطه موجودان بوصف صورته في منشور فيسبوك.
       </Text>
       <Text style={{ ...muted, textAlign: "right" }}>
         {configured === true ? "✓ بيانات صفحة فيسبوك محفوظة في النظام" :
@@ -427,7 +423,7 @@ export default function FacebookPostsScreen() {
                   fontWeight: "700",
                 }}>
                   {nextInstagramVerification.connected
-                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. نشر القصص لم يُحوّل بعد.`
+                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. قصص إنستغرام متاحة في الأداة المستقلة أدناه.`
                     : `✗ ${nextInstagramVerification.error || "تعذر فحص اتصال إنستغرام"}`}
                 </Text>
               )}
@@ -437,7 +433,7 @@ export default function FacebookPostsScreen() {
       </View>
 
       <View style={{ ...surface, gap: 10 }}>
-        <Text style={titleStyle}>الموديلات المختارة: {selectedIds.length}/{MAX_MODELS}</Text>
+        <Text style={titleStyle}>الموديلات المختارة: {selectedIds.length} (بدون حد لفيسبوك)</Text>
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -546,6 +542,7 @@ export default function FacebookPostsScreen() {
       </View>
 
       <OwnerInstagramNextStoryPilot selectedIds={selectedIds} />
+      <OwnerFacebookNextStoryPilot selectedIds={selectedIds} />
 
       <View style={{ ...surface, gap: 10 }}>
         <Text style={titleStyle}>وصف المنشور الرئيسي (قابل للتعديل)</Text>
@@ -584,7 +581,7 @@ export default function FacebookPostsScreen() {
           <Text style={titleStyle}>الوصف الرئيسي الذي سيظهر مع المنشور</Text>
           <Text selectable style={{ color: colors.foreground, lineHeight: 24, textAlign: "right" }}>{preview.caption}</Text>
           <Text style={{ ...muted, textAlign: "right" }}>
-            كل صورة مرتبطة باسم الموديل ورابطه في وصفها. قد لا يُظهر فيسبوك وصف الصورة مباشرة ضمن المنشور متعدد الصور؛ أحيانًا تحتاج الزبونة لفتح الصورة لقراءة التفاصيل.
+            كل صورة مرتبطة باسم الموديل ورابطه في وصفها. قد لا يُظهر فيسبوك وصف الصورة مباشرة ضمن المنشور متعدد الصور؛ أحيانًا تحتاج الزبونة لفتح الصورة لقراءة التفاصيل. عند اختيار عدد كبير من الصور، قد يطول الإرسال أو ترفض Meta بعض الطلبات؛ راجع الصفحة قبل إعادة أي محاولة.
           </Text>
           <Pressable
             onPress={publish}

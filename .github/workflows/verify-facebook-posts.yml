@@ -9,6 +9,7 @@ on:
       - 'artifacts/api-worker/src/index.ts'
       - 'artifacts/lovely-kids/app/admin/facebook-posts.tsx'
       - 'artifacts/lovely-kids/components/OwnerInstagramNextStoryPilot.tsx'
+      - 'artifacts/lovely-kids/components/OwnerFacebookNextStoryPilot.tsx'
       - 'artifacts/lovely-kids/app/admin/index.tsx'
       - '.github/workflows/verify-facebook-posts.yml'
 jobs:
@@ -27,5 +28,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @workspace/api-worker typecheck
-      - run: node --experimental-strip-types --test artifacts/api-worker/src/facebook-post-composer.test.mjs artifacts/api-worker/src/facebook-page-access-token.test.mjs artifacts/api-worker/src/owner-story-meta-publish.test.mjs artifacts/api-worker/src/instagram-next-story-pilot.test.mjs
+      - run: node --experimental-strip-types --test artifacts/api-worker/src/facebook-post-composer.test.mjs artifacts/api-worker/src/facebook-page-access-token.test.mjs artifacts/api-worker/src/owner-story-meta-publish.test.mjs artifacts/api-worker/src/instagram-next-story-pilot.test.mjs artifacts/api-worker/src/facebook-next-story-policy.test.mjs
       - run: pnpm --filter @workspace/lovely-kids typecheck

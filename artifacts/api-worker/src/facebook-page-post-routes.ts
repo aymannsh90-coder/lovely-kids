@@ -3,7 +3,6 @@ import { inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import {
-  MAX_FACEBOOK_POST_PRODUCTS,
   composeFacebookProductCaption,
   composeFacebookPhotoCaption,
 } from "./facebook-post-composer";
@@ -169,11 +168,10 @@ export async function handleFacebookPagePostRequest(
   const ids = body.productIds;
   if (
     ids.length < 1 ||
-    ids.length > MAX_FACEBOOK_POST_PRODUCTS ||
     ids.some((id) => typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) ||
     new Set(ids).size !== ids.length
   ) {
-    return json({ error: "اختَر من 1 إلى 10 موديلات مختلفة" }, 400);
+    return json({ error: "اختَر موديلًا واحدًا أو أكثر بدون تكرار" }, 400);
   }
   if (body.intro !== undefined && (typeof body.intro !== "string" || body.intro.length > 500)) {
     return json({ error: "مقدمة المنشور غير صالحة" }, 400);
