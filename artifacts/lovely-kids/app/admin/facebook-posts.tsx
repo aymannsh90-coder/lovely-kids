@@ -63,6 +63,8 @@ export default function FacebookPostsScreen() {
   } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verification, setVerification] = useState<{ connected: boolean; pageName?: string; error?: string } | null>(null);
+  const [nextVerifying, setNextVerifying] = useState(false);
+  const [nextVerification, setNextVerification] = useState<{ connected: boolean; pageName?: string; error?: string } | null>(null);
   const [busy, setBusy] = useState<"preview" | "publish" | null>(null);
   const [error, setError] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -127,6 +129,38 @@ export default function FacebookPostsScreen() {
       });
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const verifyNextFacebookConnection = async () => {
+    if (nextVerifying) return;
+    setNextVerifying(true);
+    setNextVerification(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
+      const response = await fetch(`${API_BASE}/api/owner/facebook/verify-next`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json() as {
+        connected?: boolean;
+        pageName?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error || "تعذر فحص التطبيق الجديد");
+      setNextVerification({
+        connected: data.connected === true,
+        pageName: data.pageName,
+        error: data.error,
+      });
+    } catch (e) {
+      setNextVerification({
+        connected: false,
+        error: e instanceof Error ? e.message : "تعذر فحص التطبيق الجديد",
+      });
+    } finally {
+      setNextVerifying(false);
     }
   };
 
@@ -311,6 +345,31 @@ export default function FacebookPostsScreen() {
               : `✗ ${verification.error || "تعذر التحقق من الاتصال"}`}
           </Text>
         )}
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, paddingTop: 12, gap: 8 }}>
+          <Text style={{ ...titleStyle, textAlign: "right" }}>فحص التطبيق الجديد — بدون نشر</Text>
+          <Text style={{ ...muted, textAlign: "right" }}>
+            فحص مستقل لرمز Lovely Kids Publisher Test الجديد من Cloudflare. لا ينشر منشورات ولا يفعّل التحويل، ولن يؤثر على اتصال فيسبوك الحالي.
+          </Text>
+          <Pressable
+            onPress={() => void verifyNextFacebookConnection()}
+            disabled={nextVerifying}
+            style={{ ...action, opacity: nextVerifying ? 0.5 : 1 }}
+          >
+            {nextVerifying ? <ActivityIndicator color="#fff" /> :
+              <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال التطبيق الجديد</Text>}
+          </Pressable>
+          {nextVerification && (
+            <Text selectable style={{
+              color: nextVerification.connected ? "#16A34A" : "#DC2626",
+              textAlign: "right",
+              fontWeight: "700",
+            }}>
+              {nextVerification.connected
+                ? `✓ رمز التطبيق الجديد صالح لصفحة ${nextVerification.pageName || "Lovely Kids"}؛ لم يتم تفعيل النشر به بعد.`
+                : `✗ ${nextVerification.error || "تعذر التحقق من التطبيق الجديد"}`}
+            </Text>
+          )}
+        </View>
       </View>
 
       <View style={{ ...surface, gap: 8 }}>
