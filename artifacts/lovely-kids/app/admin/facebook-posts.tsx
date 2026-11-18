@@ -55,6 +55,12 @@ export default function FacebookPostsScreen() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [instagramVerifying, setInstagramVerifying] = useState(false);
+  const [nextInstagramVerifying, setNextInstagramVerifying] = useState(false);
+  const [nextInstagramVerification, setNextInstagramVerification] = useState<{
+    connected: boolean;
+    username?: string;
+    error?: string;
+  } | null>(null);
   const [instagramVerification, setInstagramVerification] = useState<{
     connected: boolean;
     username?: string;
@@ -194,6 +200,38 @@ export default function FacebookPostsScreen() {
       });
     } finally {
       setInstagramVerifying(false);
+    }
+  };
+
+  const verifyNextInstagramConnection = async () => {
+    if (nextInstagramVerifying) return;
+    setNextInstagramVerifying(true);
+    setNextInstagramVerification(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
+      const response = await fetch(`${API_BASE}/api/owner/instagram/verify-next`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json() as {
+        connected?: boolean;
+        username?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error || "تعذر فحص رمز إنستغرام الجديد");
+      setNextInstagramVerification({
+        connected: data.connected === true,
+        username: data.username,
+        error: data.error,
+      });
+    } catch (error) {
+      setNextInstagramVerification({
+        connected: false,
+        error: error instanceof Error ? error.message : "تعذر فحص رمز إنستغرام الجديد",
+      });
+    } finally {
+      setNextInstagramVerifying(false);
     }
   };
 
@@ -396,6 +434,32 @@ export default function FacebookPostsScreen() {
               : `✗ ${instagramVerification.error || "تعذر فحص الاتصال"}`}
           </Text>
         )}
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, paddingTop: 12, gap: 8 }}>
+          <Text style={{ ...titleStyle, textAlign: "right" }}>فحص رمز إنستغرام الجديد — بدون نشر</Text>
+          <Text style={{ ...muted, textAlign: "right" }}>
+            يفحص الرمز الجديد المحفوظ في Cloudflare باسم META_INSTAGRAM_ACCESS_TOKEN_NEXT.
+            لا ينشر صورًا أو قصصًا، ولا يبدّل الرمز المستخدم حاليًا.
+          </Text>
+          <Pressable
+            onPress={() => void verifyNextInstagramConnection()}
+            disabled={nextInstagramVerifying}
+            style={{ ...action, opacity: nextInstagramVerifying ? 0.5 : 1 }}
+          >
+            {nextInstagramVerifying ? <ActivityIndicator color="#fff" /> :
+              <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال إنستغرام الجديد</Text>}
+          </Pressable>
+          {nextInstagramVerification && (
+            <Text selectable style={{
+              color: nextInstagramVerification.connected ? "#16A34A" : "#DC2626",
+              textAlign: "right",
+              fontWeight: "700",
+            }}>
+              {nextInstagramVerification.connected
+                ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}؛ النشر ما زال يستخدم الرمز القديم.`
+                : `✗ ${nextInstagramVerification.error || "تعذر فحص إنستغرام الجديد"}`}
+            </Text>
+          )}
+        </View>
       </View>
 
       <View style={{ ...surface, gap: 10 }}>

@@ -25,6 +25,8 @@ export interface Env {
   META_FACEBOOK_POSTS_USE_NEXT_TOKEN?: string;
   META_INSTAGRAM_ACCOUNT_ID?: string;
   META_INSTAGRAM_ACCESS_TOKEN?: string;
+  /** Candidate Instagram access token; read-only verification only until an explicit cutover. */
+  META_INSTAGRAM_ACCESS_TOKEN_NEXT?: string;
   HYPERDRIVE: {
     connectionString: string;
   };
