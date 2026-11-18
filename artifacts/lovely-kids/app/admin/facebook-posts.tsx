@@ -1,5 +1,4 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
-import OwnerStoryComposer from "@/components/OwnerStoryComposer";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -63,7 +62,6 @@ export default function FacebookPostsScreen() {
   const [nextVerifying, setNextVerifying] = useState(false);
   const [nextVerification, setNextVerification] = useState<{ connected: boolean; pageName?: string; error?: string } | null>(null);
   const [showConnectionChecks, setShowConnectionChecks] = useState(false);
-  const [showLegacyStories, setShowLegacyStories] = useState(false);
   const [busy, setBusy] = useState<"preview" | "publish" | null>(null);
   const [error, setError] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -727,23 +725,6 @@ export default function FacebookPostsScreen() {
           </Pressable>
         </View>
       )}
-      <View style={{ ...surface, gap: 8 }}>
-        <Pressable
-          onPress={() => setShowLegacyStories((value) => !value)}
-          accessibilityRole="button"
-          style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
-        >
-          <Text style={{ ...titleStyle, textAlign: "right", flex: 1 }}>
-            قصص فيسبوك وإنستغرام — أدوات الربط السابق
-          </Text>
-          <Ionicons name={showLegacyStories ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
-        </Pressable>
-        <Text style={{ ...muted, textAlign: "right" }}>
-          لم ننقل نشر قصص إنستغرام إلى الرمز الجديد بعد. الأدوات مخفية افتراضيًا لتجنب استخدامها بالخطأ،
-          مع الاحتفاظ بها كما هي لحين إتمام النقل.
-        </Text>
-        {showLegacyStories && <OwnerStoryComposer selectedIds={selectedIds} />}
-      </View>
       {!!error && <Text selectable style={{ color: "#DC2626", textAlign: "right", fontWeight: "700" }}>{error}</Text>}
       {publishedUrl && (
         <Pressable
