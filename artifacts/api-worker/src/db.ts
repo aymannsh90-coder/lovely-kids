@@ -31,6 +31,8 @@ export interface Env {
   META_INSTAGRAM_FEED_USE_NEXT_TOKEN?: string;
   /** Independent opt-in for Instagram Stories publishing (default OFF). */
   META_INSTAGRAM_STORIES_USE_NEXT_TOKEN?: string;
+  /** Separately gated Instagram Carousel 2–10 photos (default OFF). */
+  META_INSTAGRAM_CAROUSEL_ENABLED?: string;
   HYPERDRIVE: {
     connectionString: string;
   };

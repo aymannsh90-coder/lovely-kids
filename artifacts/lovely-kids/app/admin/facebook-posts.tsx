@@ -84,6 +84,16 @@ export default function FacebookPostsScreen() {
   const [igPilotError, setIgPilotError] = useState("");
   const [igPilotPermalink, setIgPilotPermalink] = useState<string | null>(null);
   const [igPilotSuccess, setIgPilotSuccess] = useState(false);
+  const [igCarouselBusy, setIgCarouselBusy] = useState<"preview" | "publish" | null>(null);
+  const [igCarouselPreview, setIgCarouselPreview] = useState<{
+    configured: boolean;
+    products: { id: number; name: string; image: string }[];
+    caption: string;
+    note: string;
+  } | null>(null);
+  const [igCarouselError, setIgCarouselError] = useState("");
+  const [igCarouselResult, setIgCarouselResult] = useState<string | null>(null);
+  const [igCarouselSuccess, setIgCarouselSuccess] = useState(false);
 
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -312,6 +322,76 @@ export default function FacebookPostsScreen() {
     }
   };
 
+  const requestInstagramCarousel = async (kind: "preview" | "publish") => {
+    if (igCarouselBusy || selectedIds.length < 2 || selectedIds.length > 10) {
+      setIgCarouselError("لازم تختار من صورتين إلى 10 صور مختلفة لمنشور إنستغرام.");
+      return;
+    }
+    setIgCarouselBusy(kind);
+    setIgCarouselError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
+      const response = await fetch(`${API_BASE}/api/owner/instagram/carousel/${kind}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productIds: selectedIds.map(Number),
+          ...(kind === "publish" ? { confirmed: true } : {}),
+        }),
+      });
+      const data = await response.json() as {
+        configured?: boolean;
+        products?: { id: number; name: string; image: string }[];
+        caption?: string;
+        note?: string;
+        ok?: boolean;
+        permalink?: string | null;
+        error?: string;
+      };
+      if (!response.ok || data.error) throw new Error(data.error || "تعذر الاتصال بإنستغرام");
+      if (kind === "preview") {
+        if (!Array.isArray(data.products) || typeof data.caption !== "string") {
+          throw new Error("معاينة إنستغرام غير مكتملة");
+        }
+        setIgCarouselPreview({
+          configured: data.configured === true,
+          products: data.products,
+          caption: data.caption,
+          note: data.note || "",
+        });
+        setIgCarouselResult(null);
+        setIgCarouselSuccess(false);
+      } else {
+        if (data.ok !== true) throw new Error("لم نتأكد من إتمام النشر");
+        setIgCarouselSuccess(true);
+        setIgCarouselResult(data.permalink || null);
+        setIgCarouselPreview(null);
+      }
+    } catch (error) {
+      setIgCarouselError(error instanceof Error ? error.message : "تعذر نشر صور إنستغرام");
+    } finally {
+      setIgCarouselBusy(null);
+    }
+  };
+
+  const confirmInstagramCarousel = () => {
+    if (igCarouselBusy || !igCarouselPreview?.configured ||
+        igCarouselPreview.products.length !== selectedIds.length ||
+        igCarouselPreview.products.some((item, index) => item.id !== Number(selectedIds[index]))) return;
+    const message = `سيتم نشر ${selectedIds.length} صور فعلية في منشور واحد على حساب lovely.kids.nablus. هل تؤكد؟`;
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(message)) {
+        void requestInstagramCarousel("publish");
+      }
+    } else {
+      Alert.alert("تأكيد منشور إنستغرام متعدد الصور", message, [
+        { text: "إلغاء", style: "cancel" },
+        { text: "نشر منشور واحد", onPress: () => void requestInstagramCarousel("publish") },
+      ]);
+    }
+  };
+
   const toggleProduct = (id: string) => {
     setError("");
     setPublishedUrl(null);
@@ -320,6 +400,10 @@ export default function FacebookPostsScreen() {
     setIgPilotPermalink(null);
     setIgPilotSuccess(false);
     setIgPilotError("");
+    setIgCarouselPreview(null);
+    setIgCarouselError("");
+    setIgCarouselResult(null);
+    setIgCarouselSuccess(false);
     setSelectedIds((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
       if (current.length >= MAX_MODELS) {
@@ -588,8 +672,8 @@ export default function FacebookPostsScreen() {
       <View style={{ ...surface, gap: 10 }}>
         <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — تجربة منشور بصورة واحدة</Text>
         <Text style={{ ...muted, textAlign: "right" }}>
-          لا يمكن تجربة منشور إنستغرام إلا بموديل واحد. الصور المتعددة (Carousel) ستكون في مرحلة منفصلة.
-          النشر معطّل من السيرفر حتى نعتمد مفتاح التجربة الجديد. هذا القسم لا يغيّر نشر فيسبوك أو القصص.
+          هذا الخيار لمنشور إنستغرام بصورة واحدة. للصور المتعددة استخدم قسم Carousel أدناه.
+          النشر الفعلي يتطلب تأكيد المالك، ولا يغيّر نشر فيسبوك أو القصص.
         </Text>
         <Pressable
           onPress={() => void requestInstagramPilot("preview")}
@@ -630,6 +714,73 @@ export default function FacebookPostsScreen() {
             {igPilotPermalink && (
               <Pressable onPress={() => void Linking.openURL(igPilotPermalink)}
                 style={{ ...action }}>
+                <Text style={{ color: "#fff", fontWeight: "800" }}>فتح منشور إنستغرام</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+      </View>
+
+      <View style={{ ...surface, gap: 10 }}>
+        <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — منشور متعدد الصور (Carousel)</Text>
+        <Text style={{ ...muted, textAlign: "right" }}>
+          اختَر من موديلين إلى 10 موديلات. بتظهر الصور حسب ترتيب اختيارك،
+          ولإنستغرام وصف واحد يجمع أسماء الموديلات وروابطها، مش وصف منفصل لكل صورة.
+          النشر متعدد الصور ما زال معطّلًا من السيرفر لحين اعتماد اختبار منفصل.
+        </Text>
+        <Pressable
+          onPress={() => void requestInstagramCarousel("preview")}
+          disabled={igCarouselBusy !== null || selectedIds.length < 2 || selectedIds.length > 10}
+          style={{ ...action, opacity: igCarouselBusy || selectedIds.length < 2 || selectedIds.length > 10 ? 0.5 : 1 }}
+        >
+          {igCarouselBusy === "preview" ? <ActivityIndicator color="#fff" /> :
+            <Text style={{ color: "#fff", fontWeight: "800" }}>معاينة منشور إنستغرام متعدد الصور</Text>}
+        </Pressable>
+        {igCarouselPreview && (
+          <View style={{ gap: 10 }}>
+            <Text style={{ ...titleStyle, textAlign: "right" }}>
+              ترتيب الصور في المنشور ({igCarouselPreview.products.length})
+            </Text>
+            {igCarouselPreview.products.map((product, i) => (
+              <View key={product.id} style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                <Image source={{ uri: product.image }} resizeMode="contain"
+                  style={{ height: 95, width: 95, borderRadius: 10, backgroundColor: colors.background }} />
+                <Text style={{ color: colors.foreground, flex: 1, textAlign: "right" }}>
+                  {i + 1}. {product.name} (#{product.id})
+                </Text>
+              </View>
+            ))}
+            <Text selectable style={{ color: colors.foreground, textAlign: "right", lineHeight: 23 }}>
+              {igCarouselPreview.caption}
+            </Text>
+            <Text style={{ ...muted, textAlign: "right" }}>{igCarouselPreview.note}</Text>
+            {!igCarouselPreview.configured && (
+              <Text style={{ color: "#D97706", textAlign: "right" }}>
+                النشر متعدد الصور معطّل من السيرفر. المعاينة فقط متاحة.
+              </Text>
+            )}
+            <Pressable
+              onPress={confirmInstagramCarousel}
+              disabled={!igCarouselPreview.configured || igCarouselBusy !== null}
+              style={{ ...action, opacity: !igCarouselPreview.configured || igCarouselBusy ? 0.5 : 1 }}
+            >
+              {igCarouselBusy === "publish" ? <ActivityIndicator color="#fff" /> :
+                <Text style={{ color: "#fff", fontWeight: "800" }}>تأكيد ونشر Carousel على إنستغرام</Text>}
+            </Pressable>
+          </View>
+        )}
+        {!!igCarouselError && (
+          <Text selectable style={{ color: "#DC2626", fontWeight: "700", textAlign: "right" }}>
+            {igCarouselError}
+          </Text>
+        )}
+        {igCarouselSuccess && (
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: "#16A34A", fontWeight: "800", textAlign: "right" }}>
+              ✓ أُرسل المنشور إلى إنستغرام. تحقق من ظهوره للعامة قبل إعادة المحاولة.
+            </Text>
+            {igCarouselResult && (
+              <Pressable onPress={() => void Linking.openURL(igCarouselResult)} style={action}>
                 <Text style={{ color: "#fff", fontWeight: "800" }}>فتح منشور إنستغرام</Text>
               </Pressable>
             )}

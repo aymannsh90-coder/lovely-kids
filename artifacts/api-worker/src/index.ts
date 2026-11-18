@@ -20,6 +20,7 @@ import { handleMetaCatalogRequest } from "./meta-catalog-routes";
 import { handleFacebookPagePostRequest } from "./facebook-page-post-routes";
 import { handleInstagramConnectionRequest } from "./instagram-connection-routes";
 import { handleInstagramFeedRequest } from "./instagram-feed-routes";
+import { handleInstagramCarouselRequest } from "./instagram-carousel-routes";
 import { handleOwnerStoryRequest } from "./owner-story-routes";
 import {
   handleSettingsRequest,
@@ -414,6 +415,9 @@ export default {
 
       const instagramFeedResponse = await handleInstagramFeedRequest(request, db, env);
       if (instagramFeedResponse) return instagramFeedResponse;
+
+      const instagramCarouselResponse = await handleInstagramCarouselRequest(request, db, env);
+      if (instagramCarouselResponse) return instagramCarouselResponse;
 
       const ownerStoryResponse = await handleOwnerStoryRequest(request, db, env);
       if (ownerStoryResponse) return ownerStoryResponse;
