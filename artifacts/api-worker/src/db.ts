@@ -23,6 +23,8 @@ export interface Env {
   META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN_NEXT?: string;
   /** Opt in ONLY Facebook feed posts to the new system token; default disabled. */
   META_FACEBOOK_POSTS_USE_NEXT_TOKEN?: string;
+  /** Independent opt-in for owner-only Facebook NEXT Stories (default OFF). */
+  META_FACEBOOK_STORIES_NEXT_PILOT_ENABLED?: string;
   META_INSTAGRAM_ACCOUNT_ID?: string;
   META_INSTAGRAM_ACCESS_TOKEN?: string;
   /** Candidate Instagram token: read-only by default, usable for publishing only by explicit opt-in. */
