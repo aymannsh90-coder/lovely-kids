@@ -445,7 +445,7 @@ export default function FacebookPostsScreen() {
         <Ionicons name="arrow-forward" size={20} color={colors.primary} />
         <Text style={{ color: colors.primary, fontWeight: "700" }}>رجوع</Text>
       </Pressable>
-      <Text style={{ ...titleStyle, fontSize: 24, textAlign: "right" }}>نشر موديلات على فيسبوك</Text>
+      <Text style={{ ...titleStyle, fontSize: 24, textAlign: "right" }}>نشر موديلات على فيسبوك وإنستغرام</Text>
       <Text style={{ ...muted, textAlign: "right" }}>
         اختَر موديلات لنشر صورها في منشور واحد. اسم كل صنف ورابطه موجودان في وصف صورته، ووصف المنشور الرئيسي لا يكرر التفاصيل.
       </Text>
@@ -616,7 +616,7 @@ export default function FacebookPostsScreen() {
         <Text style={{ ...muted, textAlign: "right" }}>
           اختَر من موديلين إلى 10 موديلات. بتظهر الصور حسب ترتيب اختيارك،
           ولإنستغرام وصف واحد يجمع أسماء الموديلات وروابطها، مش وصف منفصل لكل صورة.
-          النشر متعدد الصور ما زال معطّلًا من السيرفر لحين اعتماد اختبار منفصل.
+          النشر متعدد الصور يتطلب معاينة الصور والوصف ثم تأكيدًا صريحًا من المالك.
         </Text>
         <Pressable
           onPress={() => void requestInstagramCarousel("preview")}
