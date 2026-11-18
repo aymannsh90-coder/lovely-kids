@@ -8,6 +8,7 @@ on:
       - 'artifacts/api-worker/src/db.ts'
       - 'artifacts/api-worker/src/index.ts'
       - 'artifacts/lovely-kids/app/admin/facebook-posts.tsx'
+      - 'artifacts/lovely-kids/components/OwnerInstagramNextStoryPilot.tsx'
       - 'artifacts/lovely-kids/app/admin/index.tsx'
       - '.github/workflows/verify-facebook-posts.yml'
 jobs:
