@@ -20,6 +20,16 @@ export function instagramPublishUsesNextToken(
   return value?.trim() === "true";
 }
 
+/** A new feed route is NEVER allowed to publish with the legacy token. */
+export function instagramFeedPilotReady(
+  env: InstagramPublishEnv & { META_INSTAGRAM_ACCOUNT_ID?: string },
+): boolean {
+  const id = env.META_INSTAGRAM_ACCOUNT_ID?.trim() ?? "";
+  return /^\d+$/.test(id) &&
+    instagramPublishUsesNextToken(env, "feed") &&
+    !!env.META_INSTAGRAM_ACCESS_TOKEN_NEXT?.trim();
+}
+
 /** No fallback in either direction. Feed route requires explicit NEXT opt-in to publish. */
 export function instagramPublishingToken(
   env: InstagramPublishEnv,
