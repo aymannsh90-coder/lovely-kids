@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  MAX_FACEBOOK_POST_PRODUCTS,
   composeFacebookPhotoCaption,
   composeFacebookProductCaption,
   productStorefrontUrl,
@@ -36,6 +35,8 @@ test("fallback names, duplicate protection and validation", () => {
   assert.throws(() => composeFacebookProductCaption([]));
   assert.throws(() => composeFacebookProductCaption([a, a]));
   assert.throws(() => composeFacebookProductCaption([a], "a".repeat(501)));
-  assert.throws(() => composeFacebookProductCaption(Array.from({ length: MAX_FACEBOOK_POST_PRODUCTS + 1 }, (_, i) =>
-    ({ id: i + 1, nameAr: "x", name: "x" }))));
+  // The storefront no longer imposes a ten-photo cap on Facebook posts.
+  // The actual Meta API can still enforce its own limits at publication time.
+  assert.equal(composeFacebookProductCaption(Array.from({ length: 25 }, (_, i) =>
+    ({ id: i + 1, nameAr: "x", name: "x" }))), "🛍️ موديلات مختارة من Lovely Kids");
 });
