@@ -1,106 +1,174 @@
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Alert, Image, Platform, Pressable, Text, View,
 } from "react-native";
 
-type Preview = {
+type StoryPreview = {
   configured: boolean;
   account: string;
   product: { id: number; name: string; image: string };
   note: string;
 };
 
-/** New-app Instagram Story pilot only. No old Stories composer or Facebook publishing. */
+type StoryResult = { productId: number; storyId: string };
+
+/**
+ * Instagram NEXT Stories: 1–10 products, one original R2 URL per Story.
+ * No copies, uploads, image manipulation or new R2 objects are created here.
+ * The existing owner-only API publishes ONE product per request; calls are
+ * sequential, stop on the first uncertainty and are never auto-retried.
+ */
 export default function OwnerInstagramNextStoryPilot({ selectedIds }: { selectedIds: string[] }) {
   const colors = useColors();
   const { getAuthToken } = useAuth();
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [previews, setPreviews] = useState<StoryPreview[] | null>(null);
   const [busy, setBusy] = useState<"preview" | "publish" | null>(null);
   const [error, setError] = useState("");
-  const [attempted, setAttempted] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [published, setPublished] = useState<StoryResult[]>([]);
+  const [completed, setCompleted] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // Never reuse a preview after the owner's product selection changes.
+  // Synchronous locks protect double taps before React commits a state update.
+  const operationRef = useRef(false);
+  const confirmOpenRef = useRef(false);
+  // Session-level guard. After an uncertain result, do not reuse the same
+  // product in another publish attempt from this mounted component.
+  const attemptedIdsRef = useRef<Set<number>>(new Set());
+
+  const selectedKey = selectedIds.join(",");
+  const ids = selectedIds.map(Number);
+  const validSelection = ids.length >= 1 && ids.length <= 10 &&
+    ids.every(id => Number.isSafeInteger(id) && id > 0) &&
+    new Set(ids).size === ids.length;
+  const matchesPreview = !!previews && validSelection &&
+    previews.length === ids.length &&
+    previews.every((p, i) => p.product.id === ids[i]);
+  const hasAttemptedSelection = ids.some(id => attemptedIdsRef.current.has(id));
+  const readyToPublish = matchesPreview && previews!.every(p => p.configured) &&
+    !hasAttemptedSelection && !operationRef.current && busy === null;
+
   useEffect(() => {
-    setPreview(null);
-    setAttempted(false);
-    setSuccess(false);
+    // Changing the selected models invalidates any previous preview.
+    // Do NOT reset attemptedIdsRef: previously attempted posts must stay locked.
+    setPreviews(null);
     setError("");
-  }, [selectedIds]);
+    setCompleted(false);
+  }, [selectedKey]);
 
-  const validSelection = selectedIds.length === 1 &&
-    Number.isSafeInteger(Number(selectedIds[0])) && Number(selectedIds[0]) > 0;
+  const callApi = async (
+    kind: "preview" | "publish", productId: number, token: string,
+  ): Promise<{ configured?: boolean; account?: string; product?: StoryPreview["product"];
+    note?: string; ok?: boolean; storyId?: string; error?: string }> => {
+    const response = await fetch(API_BASE + "/api/owner/instagram/story-next/" + kind, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productId,
+        ...(kind === "publish" ? { confirmed: true } : {}),
+      }),
+    });
+    const data = await response.json() as {
+      configured?: boolean; account?: string; product?: StoryPreview["product"];
+      note?: string; ok?: boolean; storyId?: string; error?: string;
+    };
+    if (!response.ok || data.error) throw new Error(data.error || "تعذر الاتصال بإنستغرام");
+    return data;
+  };
 
-  const request = async (kind: "preview" | "publish") => {
-    if (busy || !validSelection) return;
-    if (kind === "publish" && (attempted || !preview?.configured ||
-      preview.product.id !== Number(selectedIds[0]))) return;
-    setBusy(kind);
+  const previewStories = async () => {
+    if (operationRef.current || !validSelection) return;
+    operationRef.current = true;
+    setBusy("preview");
+    setPreviews(null);
+    setPublished([]);
+    setCompleted(false);
+    setProgress(null);
     setError("");
-    if (kind === "publish") setAttempted(true);
-    if (kind === "preview") {
-      setPreview(null);
-      setSuccess(false);
-      setAttempted(false);
-    }
+    const capturedIds = [...ids];
     try {
       const token = await getAuthToken();
       if (!token) throw new Error("يجب تسجيل الدخول كمالك");
-      const response = await fetch(API_BASE + "/api/owner/instagram/story-next/" + kind, {
-        method: "POST",
-        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId: Number(selectedIds[0]),
-          ...(kind === "publish" ? { confirmed: true } : {}),
-        }),
-      });
-      const data = await response.json() as {
-        configured?: boolean;
-        account?: string;
-        product?: Preview["product"];
-        note?: string;
-        ok?: boolean;
-        error?: string;
-      };
-      if (!response.ok || data.error) throw new Error(data.error || "تعذر الاتصال بإنستغرام");
-      if (kind === "preview") {
-        if (!data.product || data.product.id !== Number(selectedIds[0])) {
-          throw new Error("المعاينة غير مطابقة للموديل المختار");
+      const items: StoryPreview[] = [];
+      // Read-only previews are deliberately sequential to avoid burst requests.
+      for (const id of capturedIds) {
+        const data = await callApi("preview", id, token);
+        if (!data.product || data.product.id !== id) {
+          throw new Error("المعاينة غير مطابقة للموديلات المختارة");
         }
-        setPreview({
+        items.push({
           configured: data.configured === true,
           account: data.account || "lovely.kids.nablus",
           product: data.product,
           note: data.note || "",
         });
-      } else {
-        if (data.ok !== true) throw new Error("لم نتأكد من إرسال القصة");
-        setSuccess(true);
-        setPreview(null);
       }
+      setPreviews(items);
     } catch (err) {
-      setError((err instanceof Error ? err.message : "تعذر الاتصال بإنستغرام") +
-        (kind === "publish" ? " — راجع القصص قبل إعادة أي محاولة حتى لا تتكرر القصة." : ""));
+      setError(err instanceof Error ? err.message : "تعذر معاينة قصص إنستغرام");
     } finally {
+      operationRef.current = false;
+      setBusy(null);
+    }
+  };
+
+  const publishStories = async () => {
+    if (!readyToPublish || !previews || operationRef.current) return;
+    operationRef.current = true;
+    const planned = [...previews];
+    setBusy("publish");
+    setError("");
+    setPublished([]);
+    setCompleted(false);
+    setProgress({ current: 0, total: planned.length });
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
+      for (let index = 0; index < planned.length; index++) {
+        const productId = planned[index].product.id;
+        if (attemptedIdsRef.current.has(productId)) {
+          throw new Error("هذا الموديل سبق محاولة نشره خلال الجلسة. راجع قصص الحساب.");
+        }
+        // Record BEFORE the network write. Unknown responses must never retry.
+        attemptedIdsRef.current.add(productId);
+        const data = await callApi("publish", productId, token);
+        if (data.ok !== true || !data.storyId) {
+          throw new Error("نتيجة نشر القصة غير مؤكدة");
+        }
+        setPublished(current => [...current, { productId, storyId: data.storyId! }]);
+        setProgress({ current: index + 1, total: planned.length });
+      }
+      setCompleted(true);
+    } catch (err) {
+      setError((err instanceof Error ? err.message : "تعذر تأكيد نشر القصة") +
+        " — توقفنا عند أول مشكلة. راجع قصص إنستغرام قبل أي محاولة جديدة لتجنب التكرار.");
+    } finally {
+      operationRef.current = false;
       setBusy(null);
     }
   };
 
   const confirmPublish = () => {
-    if (busy || attempted || !preview?.configured ||
-      preview.product.id !== Number(selectedIds[0])) return;
-    const message = "سيتم نشر قصة إنستغرام فعلية بصورة واحدة للموديل #" +
-      preview.product.id + " على lovely.kids.nablus. هل تؤكد؟";
+    if (!readyToPublish || confirmOpenRef.current) return;
+    const count = previews!.length;
+    const message = "سيتم نشر " + count + " قصص فعلية متتابعة على lovely.kids.nablus، " +
+      "قصة مستقلة لكل موديل باستخدام الصورة الأصلية. إذا فشلت قصة سيتوقف الباقي، " +
+      "ولا توجد إعادة محاولة تلقائية. هل تؤكد؟";
+    confirmOpenRef.current = true;
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && window.confirm(message)) void request("publish");
+      const accepted = typeof window !== "undefined" && window.confirm(message);
+      confirmOpenRef.current = false;
+      if (accepted) void publishStories();
     } else {
-      Alert.alert("تأكيد نشر قصة إنستغرام", message, [
-        { text: "إلغاء", style: "cancel" },
-        { text: "نشر قصة واحدة", onPress: () => void request("publish") },
-      ]);
+      Alert.alert("تأكيد نشر قصص إنستغرام", message, [
+        { text: "إلغاء", style: "cancel", onPress: () => { confirmOpenRef.current = false; } },
+        { text: "نشر القصص", onPress: () => {
+          confirmOpenRef.current = false;
+          void publishStories();
+        } },
+      ], { cancelable: true, onDismiss: () => { confirmOpenRef.current = false; } });
     }
   };
 
@@ -117,42 +185,77 @@ export default function OwnerInstagramNextStoryPilot({ selectedIds }: { selected
   return (
     <View style={base}>
       <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "800", fontSize: 16 }}>
-        إنستغرام — قصة تجريبية بالتطبيق الجديد
+        إنستغرام — نشر القصص
       </Text>
       <Text style={muted}>
-        هذه أداة جديدة مستقلة عن الربط السابق. اختَر موديلًا واحدًا فقط، وعاين صورته
-        قبل أي تأكيد. لا ننشر قصص فيسبوك من هنا، ولا نعدّل صور R2.
+        اختَر من موديل واحد إلى 10 موديلات، وكل موديل سيُنشر كقصة منفصلة على
+        إنستغرام. نستخدم رابط صورة المنتج الأصلية من R2 دون نسخ أو تعديل أو تخزين
+        صور جديدة. قصص فيسبوك والمنشورات العادية منفصلة تمامًا.
       </Text>
-      <Pressable onPress={() => void request("preview")}
+      <Pressable onPress={() => void previewStories()}
         disabled={!validSelection || busy !== null}
         style={{ ...action, opacity: !validSelection || busy ? 0.5 : 1 }}>
         {busy === "preview" ? <ActivityIndicator color="#fff" /> :
-          <Text style={{ color: "#fff", fontWeight: "800" }}>معاينة قصة إنستغرام الجديدة</Text>}
+          <Text style={{ color: "#fff", fontWeight: "800" }}>
+            معاينة {validSelection ? ids.length : ""} قصص إنستغرام
+          </Text>}
       </Pressable>
-      {preview && (
+      {previews && (
         <View style={{ gap: 10 }}>
           <Text style={{ color: colors.foreground, fontWeight: "800", textAlign: "right" }}>
-            {preview.product.name} (#{preview.product.id})
+            معاينة {previews.length} {previews.length === 1 ? "قصة" : "قصص"} على @{previews[0].account}
           </Text>
-          <Image source={{ uri: preview.product.image }} resizeMode="contain"
-            style={{ width: 170, height: 302, borderRadius: 10, backgroundColor: colors.background, alignSelf: "flex-end" }} />
-          <Text style={muted}>{preview.note}</Text>
-          {!preview.configured && (
+          {previews.map(item => (
+            <View key={item.product.id} style={{
+              flexDirection: "row-reverse", gap: 10, alignItems: "center",
+              borderColor: colors.border, borderWidth: 1, borderRadius: 10, padding: 8,
+            }}>
+              <Image source={{ uri: item.product.image }} resizeMode="contain"
+                style={{ width: 88, height: 155, borderRadius: 8, backgroundColor: colors.background }} />
+              <Text style={{ color: colors.foreground, flex: 1, textAlign: "right" }}>
+                {item.product.name} (#{item.product.id})
+              </Text>
+            </View>
+          ))}
+          <Text style={muted}>
+            صور المعاينة هي الصور الأصلية، وقد يقص إنستغرام أطراف الصور المربعة عند
+            عرضها عموديًا. لن تُنشأ صور 9:16 إضافية على R2. لا نضيف ملصقات أو روابط قابلة للضغط.
+          </Text>
+          {!previews.every(item => item.configured) && (
             <Text style={{ color: "#D97706", textAlign: "right", fontWeight: "700" }}>
-              النشر بالتطبيق الجديد معطّل من السيرفر حاليًا. المعاينة فقط متاحة.
+              نشر قصص إنستغرام معطّل حاليًا من السيرفر، والمعاينة فقط متاحة.
+            </Text>
+          )}
+          {hasAttemptedSelection && (
+            <Text style={{ color: "#D97706", textAlign: "right", fontWeight: "700" }}>
+              أحد هذه الموديلات سبق محاولة نشره خلال هذه الجلسة؛ لن نعيد نشره تلقائيًا.
+              افحص القصص على إنستغرام أولًا.
             </Text>
           )}
           <Pressable onPress={confirmPublish}
-            disabled={!preview.configured || attempted || busy !== null}
-            style={{ ...action, opacity: !preview.configured || attempted || busy ? 0.5 : 1 }}>
+            disabled={!readyToPublish}
+            style={{ ...action, opacity: readyToPublish ? 1 : 0.5 }}>
             {busy === "publish" ? <ActivityIndicator color="#fff" /> :
-              <Text style={{ color: "#fff", fontWeight: "800" }}>تأكيد ونشر قصة واحدة على إنستغرام</Text>}
+              <Text style={{ color: "#fff", fontWeight: "800" }}>
+                تأكيد ونشر {previews.length} {previews.length === 1 ? "قصة" : "قصص"} على إنستغرام
+              </Text>}
           </Pressable>
         </View>
       )}
-      {success && (
+      {!!progress && (
+        <Text style={{ color: colors.foreground, textAlign: "right", fontWeight: "700" }}>
+          تم تأكيد {progress.current} من {progress.total} قصص لدى Meta.
+          {busy === "publish" ? " جارٍ إرسال القصة التالية..." : ""}
+        </Text>
+      )}
+      {published.length > 0 && (
+        <Text style={muted}>
+          الموديلات التي تم قبول نشرها: {published.map(p => "#" + p.productId).join("، ")}
+        </Text>
+      )}
+      {completed && (
         <Text style={{ color: "#16A34A", fontWeight: "800", textAlign: "right" }}>
-          ✓ تم قبول نشر القصة لدى Meta. افحص حساب إنستغرام قبل تجربة قصة أخرى.
+          ✓ تم قبول جميع القصص لدى Meta. افحص ظهورها على حساب إنستغرام.
         </Text>
       )}
       {!!error && (
