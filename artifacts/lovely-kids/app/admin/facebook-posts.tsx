@@ -74,6 +74,16 @@ export default function FacebookPostsScreen() {
   const [busy, setBusy] = useState<"preview" | "publish" | null>(null);
   const [error, setError] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [igPilotBusy, setIgPilotBusy] = useState<"preview" | "publish" | null>(null);
+  const [igPilotPreview, setIgPilotPreview] = useState<{
+    configured: boolean;
+    product: { id: number; name: string; image: string };
+    caption: string;
+    note?: string;
+  } | null>(null);
+  const [igPilotError, setIgPilotError] = useState("");
+  const [igPilotPermalink, setIgPilotPermalink] = useState<string | null>(null);
+  const [igPilotSuccess, setIgPilotSuccess] = useState(false);
 
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -235,10 +245,81 @@ export default function FacebookPostsScreen() {
     }
   };
 
+  const requestInstagramPilot = async (kind: "preview" | "publish") => {
+    if (igPilotBusy || selectedIds.length !== 1) {
+      setIgPilotError("اختر موديلًا واحدًا فقط لتجربة منشور إنستغرام");
+      return;
+    }
+    setIgPilotBusy(kind);
+    setIgPilotError("");
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
+      const response = await fetch(`${API_BASE}/api/owner/instagram/feed/${kind}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: Number(selectedIds[0]),
+          ...(kind === "publish" ? { confirmed: true } : {}),
+        }),
+      });
+      const data = await response.json() as {
+        configured?: boolean;
+        product?: { id: number; name: string; image: string };
+        caption?: string;
+        permalink?: string | null;
+        ok?: boolean;
+        error?: string;
+        note?: string;
+      };
+      if (!response.ok || data.error) throw new Error(data.error || "تعذّر اتصال إنستغرام");
+      if (kind === "preview") {
+        if (!data.product || typeof data.caption !== "string") throw new Error("معاينة إنستغرام غير مكتملة");
+        setIgPilotPreview({
+          configured: data.configured === true,
+          product: data.product,
+          caption: data.caption,
+          note: data.note,
+        });
+        setIgPilotSuccess(false);
+        setIgPilotPermalink(null);
+      } else {
+        if (data.ok !== true) throw new Error("لم نتأكد من إتمام النشر على إنستغرام");
+        setIgPilotSuccess(true);
+        setIgPilotPermalink(data.permalink || null);
+        setIgPilotPreview(null);
+      }
+    } catch (error) {
+      setIgPilotError(error instanceof Error ? error.message : "تعذّر فحص منشور إنستغرام");
+    } finally {
+      setIgPilotBusy(null);
+    }
+  };
+
+  const confirmInstagramPilot = () => {
+    if (igPilotBusy || selectedIds.length !== 1 || !igPilotPreview?.configured ||
+      igPilotPreview.product.id !== Number(selectedIds[0])) return;
+    const message = "سيتم نشر صورة موديل واحد فعليًا على حساب lovely.kids.nablus. هل تؤكد النشر؟";
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(message)) {
+        void requestInstagramPilot("publish");
+      }
+    } else {
+      Alert.alert("تأكيد نشر إنستغرام", message, [
+        { text: "إلغاء", style: "cancel" },
+        { text: "نشر صورة واحدة", onPress: () => void requestInstagramPilot("publish") },
+      ]);
+    }
+  };
+
   const toggleProduct = (id: string) => {
     setError("");
     setPublishedUrl(null);
     setPreview(null);
+    setIgPilotPreview(null);
+    setIgPilotPermalink(null);
+    setIgPilotSuccess(false);
+    setIgPilotError("");
     setSelectedIds((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
       if (current.length >= MAX_MODELS) {
@@ -502,6 +583,58 @@ export default function FacebookPostsScreen() {
           })}
           {visibleProducts.length === 0 && <Text style={{ ...muted, textAlign: "center" }}>ما في موديلات مطابقة</Text>}
         </ScrollView>
+      </View>
+
+      <View style={{ ...surface, gap: 10 }}>
+        <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — تجربة منشور بصورة واحدة</Text>
+        <Text style={{ ...muted, textAlign: "right" }}>
+          لا يمكن تجربة منشور إنستغرام إلا بموديل واحد. الصور المتعددة (Carousel) ستكون في مرحلة منفصلة.
+          النشر معطّل من السيرفر حتى نعتمد مفتاح التجربة الجديد. هذا القسم لا يغيّر نشر فيسبوك أو القصص.
+        </Text>
+        <Pressable
+          onPress={() => void requestInstagramPilot("preview")}
+          disabled={igPilotBusy !== null || selectedIds.length !== 1}
+          style={{ ...action, opacity: igPilotBusy || selectedIds.length !== 1 ? 0.5 : 1 }}
+        >
+          {igPilotBusy === "preview" ? <ActivityIndicator color="#fff" /> :
+            <Text style={{ color: "#fff", fontWeight: "800" }}>معاينة صورة إنستغرام التجريبية</Text>}
+        </Pressable>
+        {igPilotPreview && (
+          <View style={{ alignItems: "flex-end", gap: 8 }}>
+            <Image source={{ uri: igPilotPreview.product.image }}
+              style={{ height: 185, width: 185, borderRadius: 12, backgroundColor: colors.background }}
+              resizeMode="contain" />
+            <Text selectable style={{ color: colors.foreground, textAlign: "right" }}>{igPilotPreview.caption}</Text>
+            <Text style={{ ...muted, textAlign: "right" }}>{igPilotPreview.note}</Text>
+            {!igPilotPreview.configured && (
+              <Text style={{ color: "#D97706", textAlign: "right" }}>
+                النشر التجريبي معطّل من السيرفر لحين تفعيل مفتاح إنستغرام المستقل.
+              </Text>
+            )}
+            <Pressable
+              onPress={confirmInstagramPilot}
+              disabled={!igPilotPreview.configured || igPilotBusy !== null}
+              style={{ ...action, width: "100%", opacity: !igPilotPreview.configured || igPilotBusy ? 0.5 : 1 }}
+            >
+              {igPilotBusy === "publish" ? <ActivityIndicator color="#fff" /> :
+                <Text style={{ color: "#fff", fontWeight: "800" }}>تأكيد ونشر صورة واحدة على إنستغرام</Text>}
+            </Pressable>
+          </View>
+        )}
+        {!!igPilotError && <Text selectable style={{ color: "#DC2626", textAlign: "right", fontWeight: "700" }}>{igPilotError}</Text>}
+        {igPilotSuccess && (
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: "#16A34A", textAlign: "right", fontWeight: "800" }}>
+              ✓ أُرسل المنشور إلى إنستغرام؛ تأكد من ظهوره على الحساب قبل إعادة النشر.
+            </Text>
+            {igPilotPermalink && (
+              <Pressable onPress={() => void Linking.openURL(igPilotPermalink)}
+                style={{ ...action }}>
+                <Text style={{ color: "#fff", fontWeight: "800" }}>فتح منشور إنستغرام</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
       </View>
 
       <View style={{ ...surface, gap: 10 }}>
