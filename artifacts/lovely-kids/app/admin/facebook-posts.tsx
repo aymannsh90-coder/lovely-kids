@@ -672,8 +672,8 @@ export default function FacebookPostsScreen() {
       <View style={{ ...surface, gap: 10 }}>
         <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — تجربة منشور بصورة واحدة</Text>
         <Text style={{ ...muted, textAlign: "right" }}>
-          لا يمكن تجربة منشور إنستغرام إلا بموديل واحد. الصور المتعددة (Carousel) ستكون في مرحلة منفصلة.
-          النشر معطّل من السيرفر حتى نعتمد مفتاح التجربة الجديد. هذا القسم لا يغيّر نشر فيسبوك أو القصص.
+          هذا الخيار لمنشور إنستغرام بصورة واحدة. للصور المتعددة استخدم قسم Carousel أدناه.
+          النشر الفعلي يتطلب تأكيد المالك، ولا يغيّر نشر فيسبوك أو القصص.
         </Text>
         <Pressable
           onPress={() => void requestInstagramPilot("preview")}
@@ -726,7 +726,7 @@ export default function FacebookPostsScreen() {
         <Text style={{ ...muted, textAlign: "right" }}>
           اختَر من موديلين إلى 10 موديلات. بتظهر الصور حسب ترتيب اختيارك،
           ولإنستغرام وصف واحد يجمع أسماء الموديلات وروابطها، مش وصف منفصل لكل صورة.
-          النشر معطّل من السيرفر لحين تجربة أول Carousel بأمان.
+          النشر متعدد الصور ما زال معطّلًا من السيرفر لحين اعتماد اختبار منفصل.
         </Text>
         <Pressable
           onPress={() => void requestInstagramCarousel("preview")}
