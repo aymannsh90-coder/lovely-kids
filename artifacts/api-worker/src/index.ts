@@ -18,6 +18,7 @@ import {
 } from "./product-routes";
 import { handleMetaCatalogRequest } from "./meta-catalog-routes";
 import { handleFacebookPagePostRequest } from "./facebook-page-post-routes";
+import { handleFacebookNextStoryRequest } from "./facebook-next-story-routes";
 import { handleInstagramConnectionRequest } from "./instagram-connection-routes";
 import { handleInstagramFeedRequest } from "./instagram-feed-routes";
 import { handleInstagramCarouselRequest } from "./instagram-carousel-routes";
