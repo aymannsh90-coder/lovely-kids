@@ -4,6 +4,7 @@ import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
 import { resolveFacebookPageAccessToken } from "./facebook-page-access-token";
 import { productStorefrontUrl } from "./facebook-post-composer";
+import { instagramPublishingToken } from "./instagram-publish-token";
 import {
   publishFacebookPhotoStory,
   publishInstagramPhotoStory,
@@ -32,7 +33,7 @@ function configured(env: Env, target: Target): boolean {
     ? /^\d+$/.test(env.META_FACEBOOK_PAGE_ID?.trim() ?? "") &&
         !!(env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN?.trim() || env.META_FACEBOOK_PAGE_ACCESS_TOKEN?.trim())
     : /^\d+$/.test(env.META_INSTAGRAM_ACCOUNT_ID?.trim() ?? "") &&
-        !!env.META_INSTAGRAM_ACCESS_TOKEN?.trim();
+        !!instagramPublishingToken(env, "stories");
 }
 
 export type StorySelection = { productIds: number[]; targets: Target[] };
@@ -154,7 +155,7 @@ export async function handleOwnerStoryRequest(
           )
           : await publishInstagramPhotoStory(
             env.META_INSTAGRAM_ACCOUNT_ID!.trim(),
-            env.META_INSTAGRAM_ACCESS_TOKEN!.trim(),
+            instagramPublishingToken(env, "stories"),
             product.image,
           );
         published.push({ target, productId: product.id, storyId });
