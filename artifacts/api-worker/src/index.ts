@@ -412,6 +412,9 @@ export default {
       const facebookPagePostResponse = await handleFacebookPagePostRequest(request, db, env);
       if (facebookPagePostResponse) return facebookPagePostResponse;
 
+      const facebookNextStoryResponse = await handleFacebookNextStoryRequest(request, db, env);
+      if (facebookNextStoryResponse) return facebookNextStoryResponse;
+
       const instagramConnectionResponse = await handleInstagramConnectionRequest(request, db, env);
       if (instagramConnectionResponse) return instagramConnectionResponse;
 
