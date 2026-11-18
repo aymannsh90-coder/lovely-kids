@@ -31,6 +31,8 @@ export interface Env {
   META_INSTAGRAM_FEED_USE_NEXT_TOKEN?: string;
   /** Independent opt-in for Instagram Stories publishing (default OFF). */
   META_INSTAGRAM_STORIES_USE_NEXT_TOKEN?: string;
+  /** Independently gated owner-only NEXT Instagram Story pilot (default OFF); never uses legacy token. */
+  META_INSTAGRAM_STORIES_NEXT_PILOT_ENABLED?: string;
   /** Separately gated Instagram Carousel 2–10 photos (default OFF). */
   META_INSTAGRAM_CAROUSEL_ENABLED?: string;
   HYPERDRIVE: {

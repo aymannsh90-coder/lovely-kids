@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
+import OwnerInstagramNextStoryPilot from "@/components/OwnerInstagramNextStoryPilot";
 import { useColors } from "@/hooks/useColors";
 
 type PreviewProduct = {
@@ -675,6 +676,8 @@ export default function FacebookPostsScreen() {
           </View>
         )}
       </View>
+
+      <OwnerInstagramNextStoryPilot selectedIds={selectedIds} />
 
       <View style={{ ...surface, gap: 10 }}>
         <Text style={titleStyle}>وصف المنشور الرئيسي (قابل للتعديل)</Text>

@@ -21,6 +21,7 @@ import { handleFacebookPagePostRequest } from "./facebook-page-post-routes";
 import { handleInstagramConnectionRequest } from "./instagram-connection-routes";
 import { handleInstagramFeedRequest } from "./instagram-feed-routes";
 import { handleInstagramCarouselRequest } from "./instagram-carousel-routes";
+import { handleInstagramNextStoryRequest } from "./instagram-next-story-routes";
 import { handleOwnerStoryRequest } from "./owner-story-routes";
 import {
   handleSettingsRequest,
@@ -418,6 +419,9 @@ export default {
 
       const instagramCarouselResponse = await handleInstagramCarouselRequest(request, db, env);
       if (instagramCarouselResponse) return instagramCarouselResponse;
+
+      const instagramNextStoryResponse = await handleInstagramNextStoryRequest(request, db, env);
+      if (instagramNextStoryResponse) return instagramNextStoryResponse;
 
       const ownerStoryResponse = await handleOwnerStoryRequest(request, db, env);
       if (ownerStoryResponse) return ownerStoryResponse;
