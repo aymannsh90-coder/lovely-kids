@@ -3,7 +3,16 @@ export type FacebookPageTokenEnv = {
   META_FACEBOOK_PAGE_ID?: string;
   META_FACEBOOK_PAGE_ACCESS_TOKEN?: string;
   META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN?: string;
+  META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN_NEXT?: string;
+  META_FACEBOOK_POSTS_USE_NEXT_TOKEN?: string;
 };
+
+export type FacebookPageTokenSource = "current" | "next";
+
+/** Default OFF: only Facebook feed posts can opt into the new system token. */
+export function facebookPostsUseNextToken(env: FacebookPageTokenEnv): boolean {
+  return env.META_FACEBOOK_POSTS_USE_NEXT_TOKEN?.trim() === "true";
+}
 
 type SystemPagesResponse = {
   data?: Array<{ id?: string; access_token?: string }>;
@@ -13,17 +22,22 @@ type SystemPagesResponse = {
 /**
  * Prefer the business system user's non-expiring token. Meta documents
  * GET /me/accounts for deriving a Page access token from a system user token.
- * Keep the former Page token as a migration fallback ONLY when no system token
- * is configured. Do not downgrade on a failed system-token request.
+ * The NEXT token is opt-in and never falls back to the old system or legacy Page token.
+ * For current mode, keep the legacy Page-token fallback ONLY if no system token
+ * is configured. Never downgrade after a failed system-token request.
  */
 export async function resolveFacebookPageAccessToken(
   env: FacebookPageTokenEnv,
+  source: FacebookPageTokenSource = "current",
 ): Promise<string> {
   const pageId = env.META_FACEBOOK_PAGE_ID?.trim() ?? "";
   if (!/^\d+$/.test(pageId)) throw new Error("FACEBOOK_NOT_CONFIGURED");
 
-  const systemToken = env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN?.trim();
+  const systemToken = (source === "next"
+    ? env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN_NEXT
+    : env.META_FACEBOOK_SYSTEM_USER_ACCESS_TOKEN)?.trim();
   if (!systemToken) {
+    if (source === "next") throw new Error("FACEBOOK_NOT_CONFIGURED");
     const legacyPageToken = env.META_FACEBOOK_PAGE_ACCESS_TOKEN?.trim();
     if (!legacyPageToken) throw new Error("FACEBOOK_NOT_CONFIGURED");
     return legacyPageToken;
@@ -50,4 +64,9 @@ export async function resolveFacebookPageAccessToken(
   const pageToken = data.data.find((page) => page.id === pageId)?.access_token?.trim();
   if (!pageToken) throw new Error("FACEBOOK_SYSTEM_PAGE_NOT_FOUND");
   return pageToken;
+}
+
+/** Posts can migrate independently; Facebook Stories keep their existing token. */
+export function resolveFacebookPostPageAccessToken(env: FacebookPageTokenEnv): Promise<string> {
+  return resolveFacebookPageAccessToken(env, facebookPostsUseNextToken(env) ? "next" : "current");
 }
