@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/context/ProductsContext";
+// Instagram Stories reuse existing product image URLs. Never create R2 image copies.
 import OwnerInstagramNextStoryPilot from "@/components/OwnerInstagramNextStoryPilot";
 import { useColors } from "@/hooks/useColors";
 
