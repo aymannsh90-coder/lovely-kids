@@ -1,5 +1,3 @@
-import { productStorefrontUrl } from "./facebook-post-composer";
-
 export const MAX_INSTAGRAM_CAROUSEL_ITEMS = 10;
 export type CarouselProduct = { id: number; nameAr: string | null; name: string | null; image: string };
 
@@ -14,7 +12,7 @@ export function composeInstagramCarouselCaption(products: readonly CarouselProdu
   if (!parseCarouselIds(products.map(p => p.id))) throw new Error("INVALID_CAROUSEL_PRODUCTS");
   const lines = products.map((product, index) => {
     const title = product.nameAr?.trim() || product.name?.trim() || ("موديل " + product.id);
-    return (index + 1) + ". " + title + "\n" + productStorefrontUrl(product.id);
+    return (index + 1) + ". " + title + "\n" + "https://lovelykids.net/product/" + product.id;
   });
   const caption = [
     "🛍️ موديلات مختارة من Lovely Kids",
