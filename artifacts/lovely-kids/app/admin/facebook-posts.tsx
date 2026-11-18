@@ -54,23 +54,16 @@ export default function FacebookPostsScreen() {
   const [intro, setIntro] = useState(DEFAULT_INTRO);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [instagramVerifying, setInstagramVerifying] = useState(false);
   const [nextInstagramVerifying, setNextInstagramVerifying] = useState(false);
   const [nextInstagramVerification, setNextInstagramVerification] = useState<{
     connected: boolean;
     username?: string;
     error?: string;
   } | null>(null);
-  const [instagramVerification, setInstagramVerification] = useState<{
-    connected: boolean;
-    username?: string;
-    accountType?: string | null;
-    error?: string;
-  } | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [verification, setVerification] = useState<{ connected: boolean; pageName?: string; error?: string } | null>(null);
   const [nextVerifying, setNextVerifying] = useState(false);
   const [nextVerification, setNextVerification] = useState<{ connected: boolean; pageName?: string; error?: string } | null>(null);
+  const [showConnectionChecks, setShowConnectionChecks] = useState(false);
+  const [showLegacyStories, setShowLegacyStories] = useState(false);
   const [busy, setBusy] = useState<"preview" | "publish" | null>(null);
   const [error, setError] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -127,37 +120,6 @@ export default function FacebookPostsScreen() {
     return () => { cancelled = true; };
   }, [getAuthToken, user?.isOwner]);
 
-  const verifyConnection = async () => {
-    if (verifying) return;
-    setVerifying(true);
-    setVerification(null);
-    try {
-      const token = await getAuthToken();
-      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
-      const response = await fetch(`${API_BASE}/api/owner/facebook/verify`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json() as {
-        connected?: boolean;
-        pageName?: string;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(data.error || "تعذر فحص الاتصال بصفحة فيسبوك");
-      setVerification({
-        connected: data.connected === true,
-        pageName: data.pageName,
-        error: data.error,
-      });
-    } catch (e) {
-      setVerification({
-        connected: false,
-        error: e instanceof Error ? e.message : "تعذر فحص الاتصال بصفحة فيسبوك",
-      });
-    } finally {
-      setVerifying(false);
-    }
-  };
-
   const verifyNextFacebookConnection = async () => {
     if (nextVerifying) return;
     setNextVerifying(true);
@@ -187,39 +149,6 @@ export default function FacebookPostsScreen() {
       });
     } finally {
       setNextVerifying(false);
-    }
-  };
-
-  const verifyInstagramConnection = async () => {
-    if (instagramVerifying) return;
-    setInstagramVerifying(true);
-    setInstagramVerification(null);
-    try {
-      const token = await getAuthToken();
-      if (!token) throw new Error("يجب تسجيل الدخول كمالك");
-      const response = await fetch(`${API_BASE}/api/owner/instagram/verify`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json() as {
-        connected?: boolean;
-        username?: string;
-        accountType?: string | null;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(data.error || "تعذر فحص حساب إنستغرام");
-      setInstagramVerification({
-        connected: data.connected === true,
-        username: data.username,
-        accountType: data.accountType,
-        error: data.error,
-      });
-    } catch (error) {
-      setInstagramVerification({
-        connected: false,
-        error: error instanceof Error ? error.message : "تعذر فحص حساب إنستغرام",
-      });
-    } finally {
-      setInstagramVerifying(false);
     }
   };
 
@@ -525,106 +454,67 @@ export default function FacebookPostsScreen() {
           configured === false ? "ربط صفحة فيسبوك للنشر لم يُفعّل بعد؛ المعاينة متاحة." : "جاري التحقق من إعدادات صفحة فيسبوك."}
       </Text>
       <View style={{ ...surface, gap: 8 }}>
-        <Text style={{ ...titleStyle, textAlign: "right" }}>فحص اتصال فيسبوك بدون نشر</Text>
-        <Text style={{ ...muted, textAlign: "right" }}>
-          يفحص رمز الوصول واسم الصفحة مباشرة من Meta. لا يرفع أي صور ولا ينشئ أي منشور.
-        </Text>
         <Pressable
-          onPress={() => void verifyConnection()}
-          disabled={verifying || configured !== true}
-          style={{ ...action, opacity: verifying || configured !== true ? 0.5 : 1 }}
+          onPress={() => setShowConnectionChecks((value) => !value)}
+          accessibilityRole="button"
+          style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
         >
-          {verifying ? <ActivityIndicator color="#fff" /> :
-            <Text style={{ color: "#fff", fontWeight: "800" }}>افحص اتصال صفحة Lovely Kids</Text>}
+          <Text style={{ ...titleStyle, textAlign: "right", flex: 1 }}>
+            فحوصات اتصال التطبيق المعتمد (اختياري)
+          </Text>
+          <Ionicons name={showConnectionChecks ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
         </Pressable>
-        {verification && (
-          <Text selectable style={{
-            color: verification.connected ? "#16A34A" : "#DC2626",
-            textAlign: "right",
-            fontWeight: "700",
-          }}>
-            {verification.connected
-              ? `✓ رمز الوصول صالح لصفحة ${verification.pageName || "Lovely Kids"}؛ هذا لا يضمن صلاحية نشر المنشورات حتى نجربها.`
-              : `✗ ${verification.error || "تعذر التحقق من الاتصال"}`}
-          </Text>
-        )}
-        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, paddingTop: 12, gap: 8 }}>
-          <Text style={{ ...titleStyle, textAlign: "right" }}>فحص التطبيق الجديد — بدون نشر</Text>
-          <Text style={{ ...muted, textAlign: "right" }}>
-            فحص مستقل لرمز Lovely Kids Publisher Test الجديد من Cloudflare. لا ينشر منشورات ولا يفعّل التحويل، ولن يؤثر على اتصال فيسبوك الحالي.
-          </Text>
-          <Pressable
-            onPress={() => void verifyNextFacebookConnection()}
-            disabled={nextVerifying}
-            style={{ ...action, opacity: nextVerifying ? 0.5 : 1 }}
-          >
-            {nextVerifying ? <ActivityIndicator color="#fff" /> :
-              <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال التطبيق الجديد</Text>}
-          </Pressable>
-          {nextVerification && (
-            <Text selectable style={{
-              color: nextVerification.connected ? "#16A34A" : "#DC2626",
-              textAlign: "right",
-              fontWeight: "700",
-            }}>
-              {nextVerification.connected
-                ? `✓ رمز التطبيق الجديد صالح لصفحة ${nextVerification.pageName || "Lovely Kids"}؛ لم يتم تفعيل النشر به بعد.`
-                : `✗ ${nextVerification.error || "تعذر التحقق من التطبيق الجديد"}`}
-            </Text>
-          )}
-        </View>
-      </View>
-
-      <View style={{ ...surface, gap: 8 }}>
-        <Text style={{ ...titleStyle, textAlign: "right" }}>فحص اتصال إنستغرام — بدون نشر</Text>
         <Text style={{ ...muted, textAlign: "right" }}>
-          يفحص حساب lovely.kids.nablus من خلال Meta دون رفع صور أو إنشاء منشورات أو قصص.
+          الفحوصات للقراءة فقط ولا تنشر أي صور. تم إخفاء أدوات فحص الربط القديم من هذه الصفحة.
         </Text>
-        <Pressable
-          onPress={() => void verifyInstagramConnection()}
-          disabled={instagramVerifying}
-          style={{ ...action, opacity: instagramVerifying ? 0.5 : 1 }}
-        >
-          {instagramVerifying ? <ActivityIndicator color="#fff" /> :
-            <Text style={{ color: "#fff", fontWeight: "800" }}>افحص اتصال إنستغرام Lovely Kids</Text>}
-        </Pressable>
-        {instagramVerification && (
-          <Text selectable style={{
-            color: instagramVerification.connected ? "#16A34A" : "#DC2626",
-            textAlign: "right",
-            fontWeight: "700",
-          }}>
-            {instagramVerification.connected
-              ? `✓ حساب ${instagramVerification.username || "Lovely Kids"} متصل بإنستغرام. الفحص لا يؤكد صلاحية نشر المنشورات والقصص بعد.`
-              : `✗ ${instagramVerification.error || "تعذر فحص الاتصال"}`}
-          </Text>
+        {showConnectionChecks && (
+          <View style={{ gap: 12 }}>
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
+              <Text style={{ ...titleStyle, textAlign: "right" }}>فيسبوك — فحص الرمز الجديد</Text>
+              <Pressable
+                onPress={() => void verifyNextFacebookConnection()}
+                disabled={nextVerifying}
+                style={{ ...action, opacity: nextVerifying ? 0.5 : 1 }}
+              >
+                {nextVerifying ? <ActivityIndicator color="#fff" /> :
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال فيسبوك</Text>}
+              </Pressable>
+              {nextVerification && (
+                <Text selectable style={{
+                  color: nextVerification.connected ? "#16A34A" : "#DC2626",
+                  textAlign: "right",
+                  fontWeight: "700",
+                }}>
+                  {nextVerification.connected
+                    ? `✓ رمز فيسبوك الجديد صالح لصفحة ${nextVerification.pageName || "Lovely Kids"}.`
+                    : `✗ ${nextVerification.error || "تعذر فحص اتصال فيسبوك"}`}
+                </Text>
+              )}
+            </View>
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
+              <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — فحص الرمز الجديد</Text>
+              <Pressable
+                onPress={() => void verifyNextInstagramConnection()}
+                disabled={nextInstagramVerifying}
+                style={{ ...action, opacity: nextInstagramVerifying ? 0.5 : 1 }}
+              >
+                {nextInstagramVerifying ? <ActivityIndicator color="#fff" /> :
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال إنستغرام</Text>}
+              </Pressable>
+              {nextInstagramVerification && (
+                <Text selectable style={{
+                  color: nextInstagramVerification.connected ? "#16A34A" : "#DC2626",
+                  textAlign: "right",
+                  fontWeight: "700",
+                }}>
+                  {nextInstagramVerification.connected
+                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. نشر القصص لم يُحوّل بعد.`
+                    : `✗ ${nextInstagramVerification.error || "تعذر فحص اتصال إنستغرام"}`}
+                </Text>
+              )}
+            </View>
+          </View>
         )}
-        <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, paddingTop: 12, gap: 8 }}>
-          <Text style={{ ...titleStyle, textAlign: "right" }}>فحص رمز إنستغرام الجديد — بدون نشر</Text>
-          <Text style={{ ...muted, textAlign: "right" }}>
-            يفحص الرمز الجديد المحفوظ في Cloudflare باسم META_INSTAGRAM_ACCESS_TOKEN_NEXT.
-            لا ينشر صورًا أو قصصًا، ولا يبدّل الرمز المستخدم حاليًا.
-          </Text>
-          <Pressable
-            onPress={() => void verifyNextInstagramConnection()}
-            disabled={nextInstagramVerifying}
-            style={{ ...action, opacity: nextInstagramVerifying ? 0.5 : 1 }}
-          >
-            {nextInstagramVerifying ? <ActivityIndicator color="#fff" /> :
-              <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال إنستغرام الجديد</Text>}
-          </Pressable>
-          {nextInstagramVerification && (
-            <Text selectable style={{
-              color: nextInstagramVerification.connected ? "#16A34A" : "#DC2626",
-              textAlign: "right",
-              fontWeight: "700",
-            }}>
-              {nextInstagramVerification.connected
-                ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}؛ النشر ما زال يستخدم الرمز القديم.`
-                : `✗ ${nextInstagramVerification.error || "تعذر فحص إنستغرام الجديد"}`}
-            </Text>
-          )}
-        </View>
       </View>
 
       <View style={{ ...surface, gap: 10 }}>
@@ -837,7 +727,23 @@ export default function FacebookPostsScreen() {
           </Pressable>
         </View>
       )}
-      <OwnerStoryComposer selectedIds={selectedIds} />
+      <View style={{ ...surface, gap: 8 }}>
+        <Pressable
+          onPress={() => setShowLegacyStories((value) => !value)}
+          accessibilityRole="button"
+          style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+        >
+          <Text style={{ ...titleStyle, textAlign: "right", flex: 1 }}>
+            قصص فيسبوك وإنستغرام — أدوات الربط السابق
+          </Text>
+          <Ionicons name={showLegacyStories ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
+        </Pressable>
+        <Text style={{ ...muted, textAlign: "right" }}>
+          لم ننقل نشر قصص إنستغرام إلى الرمز الجديد بعد. الأدوات مخفية افتراضيًا لتجنب استخدامها بالخطأ،
+          مع الاحتفاظ بها كما هي لحين إتمام النقل.
+        </Text>
+        {showLegacyStories && <OwnerStoryComposer selectedIds={selectedIds} />}
+      </View>
       {!!error && <Text selectable style={{ color: "#DC2626", textAlign: "right", fontWeight: "700" }}>{error}</Text>}
       {publishedUrl && (
         <Pressable
