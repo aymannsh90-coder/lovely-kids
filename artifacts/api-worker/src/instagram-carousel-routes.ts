@@ -1,4 +1,5 @@
 import { productsTable } from "@workspace/db/schema";
+import { socialPublishingPhoto, socialPublishingQuantity } from "./social-publishing-photo";
 import { inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -29,15 +30,16 @@ export async function handleInstagramCarouselRequest(request:Request,db:Db,env:E
 
   const fetched=await db.select({
     id:productsTable.id,nameAr:productsTable.nameAr,name:productsTable.name,
-    image:productsTable.image,isHidden:productsTable.isHidden,deletedAt:productsTable.deletedAt,
+    image:productsTable.image,stock:productsTable.stock,colorVariants:productsTable.colorVariants,isHidden:productsTable.isHidden,deletedAt:productsTable.deletedAt,
   }).from(productsTable).where(inArray(productsTable.id,productIds));
   const byId=new Map(fetched.map(p=>[p.id,p]));
   const products=productIds.map(id=>byId.get(id));
-  if(products.some(p=>!p||p.isHidden||p.deletedAt||!validCarouselImageUrl(p.image))){
+  if(products.some(p=>!p||p.isHidden||p.deletedAt||socialPublishingQuantity(p)===0||!validCarouselImageUrl(p.image))){
     return json({error:"أحد الموديلات غير موجود أو مخفي أو رابط صورته غير صالح"},400);
   }
   // Products validated above; preserve user's selected order, not DB result order.
-  const selected=products as Array<{id:number;nameAr:string|null;name:string|null;image:string}>;
+  const selected=(products as Array<NonNullable<typeof products[number]>>)
+    .map(p=>({...p,image:socialPublishingPhoto(p,validCarouselImageUrl)}));
   let caption:string;
   try{caption=composeInstagramCarouselCaption(selected);}
   catch{return json({error:"الوصف طويل جدًا؛ اختَر موديلات بأسماء أقصر"},400);}
