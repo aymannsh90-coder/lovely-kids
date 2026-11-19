@@ -1,4 +1,6 @@
 import CustomerPicker from "./components/CustomerPicker";
+import SaleThermalReceipt, { type SaleReceiptData } from "./components/SaleThermalReceipt";
+import "./receiptPreview.css";
 import {
   useEffect,
   useMemo,
@@ -7,7 +9,6 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { QRCodeSVG } from "qrcode.react";
 
 import {
   captureScannerKeyboardEvent,
@@ -211,13 +212,6 @@ function selectionIsComplete(line: CartLine) {
   }
 
   return true;
-}
-
-function bidiSafePromotionLabel(label: string) {
-  return label.replace(
-    /\d+\s*\+\s*\d+/g,
-    (value) => `\u2066${value}\u2069`,
-  );
 }
 
 type VisaBankProcessor = "arab" | "bop";
@@ -479,6 +473,32 @@ export default function SalePanel({
   const [message, setMessage] = useState("");
 
   const [lastSale, setLastSale] = useState<PosSaleResult | null>(null);
+  const [receiptPreviewMode, setReceiptPreviewMode] = useState<"draft" | "saved" | null>(null);
+  const receiptPreviewCloseRef = useRef<HTMLButtonElement>(null);
+  const [promotionPreviewKey, setPromotionPreviewKey] = useState("");
+
+  useEffect(() => {
+    if (!receiptPreviewMode) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    receiptPreviewCloseRef.current?.focus();
+
+    function handlePreviewEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setReceiptPreviewMode(null);
+      }
+    }
+
+    window.addEventListener("keydown", handlePreviewEscape, true);
+    return () => {
+      window.removeEventListener("keydown", handlePreviewEscape, true);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [receiptPreviewMode]);
 
   useEffect(() => {
     if (!lastSale || !printAfterSaleRef.current) {
@@ -508,6 +528,7 @@ export default function SalePanel({
 
   useEffect(() => {
     if (cart.length === 0) {
+      setPromotionPreviewKey("");
       setPromotionPreview(null);
       setPromotionPreviewError("");
       setPromotionPreviewBusy(false);
@@ -515,6 +536,8 @@ export default function SalePanel({
     }
 
     let cancelled = false;
+    setPromotionPreviewKey("");
+    setPromotionPreviewBusy(true);
 
     const timer = window.setTimeout(() => {
       const previewItems = cart.map((line) => ({
@@ -535,6 +558,7 @@ export default function SalePanel({
         .then((result) => {
           if (cancelled) return;
           setPromotionPreview(result);
+          setPromotionPreviewKey(JSON.stringify(previewItems));
         })
         .catch((caught) => {
           if (cancelled) return;
@@ -548,6 +572,7 @@ export default function SalePanel({
           }
 
           setPromotionPreview(null);
+          setPromotionPreviewKey("");
           setPromotionPreviewError(
             errorMessage(caught),
           );
@@ -1633,6 +1658,7 @@ export default function SalePanel({
         event.key === "F4";
 
       if (
+        receiptPreviewMode ||
         (!isSaveShortcut && !isPrintShortcut) ||
         event.repeat ||
         event.altKey ||
@@ -1678,7 +1704,82 @@ export default function SalePanel({
     paymentMethod,
     selectedCustomerId,
     completeSale,
+    receiptPreviewMode,
   ]);
+
+  const promotionCartKey = JSON.stringify(cart.map((line) => ({
+    key: line.id,
+    productId: line.product.productId,
+    quantity: line.quantity,
+    unitPriceMinor: moneyToMinor(line.soldUnitPrice) ?? 0,
+  })));
+  const previewReady =
+    cart.length > 0 &&
+    !promotionPreviewBusy &&
+    !promotionPreviewError &&
+    promotionPreviewKey === promotionCartKey;
+
+  // Purely client-side draft: no createPosSale call, inventory update or posting.
+  const draftReceipt: SaleReceiptData = {
+    sale: {
+      publicId: "مسودة",
+      createdAt: new Date().toISOString(),
+      customerName:
+        customerName.trim() ||
+        customers.find((customer) => String(customer.id) === selectedCustomerId)?.name ||
+        null,
+      paymentMethod,
+      cardProcessor,
+      accountDueMinor,
+      subtotal: subtotalMinor / 100,
+      promotionDiscountMinor,
+      itemDiscountMinor: 0,
+      itemDiscount: 0,
+      invoiceDiscountMinor: discountMinor,
+      invoiceDiscount: discountMinor / 100,
+      promotionDiscount: promotionDiscountMinor / 100,
+      discountMinor: promotionDiscountMinor + discountMinor,
+      discount: (promotionDiscountMinor + discountMinor) / 100,
+      total: totalMinor / 100,
+      paid: paymentMethod === "credit" ? 0 : paidMinor / 100,
+      change: changeMinor / 100,
+      cashTender:
+        paymentMethod === "cash" &&
+        cashCurrencyCode !== "ILS" &&
+        cashRateMicros !== null
+          ? {
+              currencyCode: cashCurrencyCode,
+              currencyAmountMinor: tenderPaidMinor,
+              exchangeRateMicros: cashRateMicros,
+              baseReceivedMinor: paidMinor,
+              changeMinor,
+              cashSessionId: null,
+            }
+          : null,
+    },
+    items: cart.map((line) => {
+      const grossMinor = (moneyToMinor(line.soldUnitPrice) ?? 0) * line.quantity;
+      const itemPromotionMinor = promotionLineByKey.get(line.id)?.promotionDiscountMinor ?? 0;
+      const netMinor = Math.max(0, grossMinor - itemPromotionMinor);
+      return {
+        id: line.id,
+        productNameAr: line.product.nameAr,
+        productCode: line.product.productCode,
+        barcode: line.barcode || line.product.barcode,
+        quantity: line.quantity,
+        lineTotalMinor: netMinor,
+        promotionDiscountMinor: itemPromotionMinor,
+        lineTotal: netMinor / 100,
+      };
+    }),
+    promotions: (promotionPreview?.promotions ?? []).map((promotion) => ({
+      promotionId: promotion.promotionId,
+      promotionName: promotion.promotionName,
+      publicLabel: promotion.publicLabel,
+      discountMinor: promotion.discountMinor,
+    })),
+  };
+  const modalReceipt = receiptPreviewMode === "saved" ? lastSale : draftReceipt;
 
   return (
     <>
@@ -2723,6 +2824,16 @@ export default function SalePanel({
                   )}
               </button>
 
+              <button
+                type="button"
+                className="secondary-button complete-sale-preview-button"
+                disabled={saleBusy || !previewReady}
+                title={!previewReady ? "تتوفر المعاينة بعد تحميل الخصومات والعروض" : "عرض شكل الإيصال دون حفظ أو طباعة"}
+                onClick={() => setReceiptPreviewMode("draft")}
+              >
+                👁️ معاينة الفاتورة الحرارية
+              </button>
+
               {paymentMethod === "credit" && selectedCustomerId && (
                 <button
                   className="primary-button complete-sale-button sale-credit-settle-action"
@@ -2787,269 +2898,61 @@ export default function SalePanel({
             >
               طباعة الإيصال مباشرة
             </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setReceiptPreviewMode("saved")}
+            >
+              معاينة آخر فاتورة حرارية
+            </button>
           </div>
         )}
       </section>
 
-      {lastSale && (
-        <section ref={directReceiptRef} className="receipt-print-area" dir="rtl">
-          <header className="receipt-header">
-            <img className="receipt-logo" src="/lovely-kids-receipt-logo.png" alt="Lovely Kids" />
-            <span>لملابس الأطفال وتجهيز المواليد</span>
-            <span>نابلس - المركز التجاري - شارع عمر المختار</span>
-            <span dir="ltr">09-2376808</span>
-          </header>
+      {lastSale && <SaleThermalReceipt receipt={lastSale} receiptRef={directReceiptRef} />}
 
-          <div className="receipt-divider" />
-
-          <div className="receipt-info">
-            <span>
-              رقم الفاتورة:
-              <b dir="ltr"> {lastSale.sale.publicId}</b>
-            </span>
-
-            <span>
-              التاريخ والوقت:{" "}
-              {new Intl.DateTimeFormat("ar-PS", {
-                dateStyle: "short",
-                timeStyle: "short",
-                timeZone: "Asia/Hebron",
-              }).format(new Date(lastSale.sale.createdAt))}
-            </span>
-
-            <span>الزبون: {lastSale.sale.customerName ||
-                (lastSale.sale.paymentMethod === "card"
-                  ? "زبون فيزا"
-                  : lastSale.sale.paymentMethod === "credit" ||
-                      lastSale.sale.paymentMethod === "mixed"
-                    ? "زبون على الحساب"
-                    : "زبون نقدي")}</span>
-
-            <span>
-              طريقة الدفع: {
-                lastSale.sale.paymentMethod === "card"
-                  ? lastSale.sale.cardProcessor === "arab"
-                    ? "فيزا البنك العربي"
-                    : lastSale.sale.cardProcessor === "bop"
-                      ? "فيزا بنك فلسطين"
-                      : "فيزا"
-                  : lastSale.sale.paymentMethod === "credit"
-                    ? "آجل"
-                    : lastSale.sale.paymentMethod === "mixed"
-                      ? "دفعة نقدية + حساب"
-                      : "نقدي"
-              }
-            </span>
-
-            {lastSale.sale.accountDueMinor > 0 && (
-              <span>
-                المتبقي على الحساب:
-                {" "}
-                {formatMinor(
-                  lastSale.sale.accountDueMinor,
-                )}
-              </span>
-            )}
-          </div>
-
-          <div className="receipt-divider" />
-
-          <table className="receipt-items-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>الصنف</th>
-                <th>الكود</th>
-                <th>الكمية</th>
-                <th>السعر</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {lastSale.items.map((item, index) => (
-                <tr key={item.id}>
-                  <td>{index + 1}</td>
-
-                  <td>{item.productNameAr.trim().split(/\s+/)[0] || "صنف"}</td>
-
-                  <td dir="ltr">{item.productCode?.trim() || item.barcode?.trim() || "—"}</td>
-
-                  <td>{item.quantity}</td>
-
-                  <td dir="ltr">
-                    {(
-                      lastSale.sale.promotionDiscountMinor > 0
-                        ? (
-                            item.lineTotalMinor +
-                            item.promotionDiscountMinor
-                          ) /
-                          100
-                        : item.lineTotal
-                    ).toFixed(2)} ₪
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="receipt-divider" />
-
-          <div className="receipt-totals">
-            <div>
-              <span>مجموع الأصناف</span>
-
-              <strong>{lastSale.sale.subtotal.toFixed(2)} ₪</strong>
-            </div>
-
-            {lastSale.sale.promotionDiscountMinor > 0 ? (
-              <>
-                {lastSale.sale.itemDiscountMinor > 0 && (
-                  <div>
-                    <span>خصم الأصناف</span>
-
-                    <strong>
-                      -{lastSale.sale.itemDiscount.toFixed(2)} ₪
-                    </strong>
-                  </div>
-                )}
-
-                {lastSale.promotions.length > 0 ? (
-                  lastSale.promotions.map((promotion) => (
-                    <div
-                      key={`direct-receipt-promotion-${promotion.promotionId ?? "snapshot"}-${promotion.promotionName}`}
-                    >
-                      <span>
-                        خصم عرض {bidiSafePromotionLabel(promotion.publicLabel)}
-                      </span>
-
-                      <strong>
-                        -{(promotion.discountMinor / 100).toFixed(2)} ₪
-                      </strong>
-                    </div>
-                  ))
-                ) : (
-                  <div>
-                    <span>خصم العرض</span>
-
-                    <strong>
-                      -{lastSale.sale.promotionDiscount.toFixed(2)} ₪
-                    </strong>
-                  </div>
-                )}
-
-                {lastSale.sale.invoiceDiscountMinor > 0 && (
-                  <div>
-                    <span>خصم يدوي</span>
-
-                    <strong>
-                      -{lastSale.sale.invoiceDiscount.toFixed(2)} ₪
-                    </strong>
-                  </div>
-                )}
-              </>
-            ) : (
-              lastSale.sale.discountMinor > 0 && (
-                <div>
-                  <span>قيمة الخصم</span>
-
-                  <strong>{lastSale.sale.discount.toFixed(2)} ₪</strong>
-                </div>
-              )
-            )}
-
-            <div className="receipt-total">
-              <span>الإجمالي النهائي</span>
-
-              <strong>{lastSale.sale.total.toFixed(2)} ₪</strong>
-            </div>
-
-            <div>
-              <span>المدفوع</span>
-
-              <strong>
-                {lastSale.sale.cashTender &&
-                lastSale.sale.cashTender.currencyCode !== "ILS"
-                  ? `${(
-                      lastSale.sale.cashTender.currencyAmountMinor /
-                      100
-                    ).toFixed(2)} ${lastSale.sale.cashTender.currencyCode}`
-                  : `${lastSale.sale.paid.toFixed(2)} ₪`}
-              </strong>
-            </div>
-
-            {lastSale.sale.cashTender &&
-              lastSale.sale.cashTender.currencyCode !== "ILS" && (
+      {receiptPreviewMode && modalReceipt && (
+        <div
+          className="receipt-preview-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setReceiptPreviewMode(null);
+          }}
+        >
+          <div
+            className="receipt-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="receipt-preview-heading"
+            dir="rtl"
+          >
+            <header className="receipt-preview-heading">
               <div>
-                <span>قيمة المستلم بالشيكل</span>
-
-                <strong>
-                  {(
-                    lastSale.sale.cashTender.baseReceivedMinor /
-                    100
-                  ).toFixed(2)} ₪
-                </strong>
+                <h2 id="receipt-preview-heading">معاينة الفاتورة الحرارية</h2>
+                <p>{receiptPreviewMode === "draft"
+                  ? "مسودة قبل إتمام البيع — لا يتم حفظ الفاتورة أو طباعتها"
+                  : "فاتورة محفوظة — نفس تصميم الإيصال الحراري المطبوع"}</p>
               </div>
-            )}
-
-            <div>
-              <span>الباقي</span>
-
-              <strong>{lastSale.sale.change.toFixed(2)} ₪</strong>
+              <button
+                ref={receiptPreviewCloseRef}
+                className="secondary-button"
+                type="button"
+                aria-label="إغلاق معاينة الفاتورة"
+                onClick={() => setReceiptPreviewMode(null)}
+              >✕</button>
+            </header>
+            <div className="receipt-preview-scroll">
+              <div className="receipt-preview-paper" data-direct-receipt-capture="true">
+                <SaleThermalReceipt receipt={modalReceipt} isDraft={receiptPreviewMode === "draft"} />
+              </div>
             </div>
+            <footer className="receipt-preview-footer">
+              <span>عرض فقط — لا يغيّر الحسابات أو المخزون</span>
+              <button className="primary-button" type="button" onClick={() => setReceiptPreviewMode(null)}>
+                إغلاق المعاينة
+              </button>
+            </footer>
           </div>
-
-          <div className="receipt-invoice-barcode">
-            <QRCodeSVG
-              value={lastSale.sale.publicId}
-              size={96}
-              level="M"
-              aria-label={`رمز QR للفاتورة ${lastSale.sale.publicId}`}
-            />
-          </div>
-
-          <footer className="receipt-footer">
-            <strong>شكرًا لتسوقكم من Lovely Kids</strong>
-
-            <b className="receipt-exchange-reminder">
-              يرجى الاحتفاظ بالفاتورة لإتمام عملية التبديل.
-            </b>
-
-            <span>الاستبدال بالبضاعة السليمة حسب سياسة المتجر</span>
-          </footer>
-
-      <div className="receipt-social-qrs" aria-label="روابط Lovely Kids">
-        <div className="receipt-social-qr-item">
-          <QRCodeSVG
-            value="https://www.facebook.com/lovely.kids.nablus1"
-            size={112}
-            level="M"
-            aria-label="فيسبوك Lovely Kids"
-          />
-          <span>فيسبوك</span>
         </div>
-
-        <div className="receipt-social-qr-item">
-          <QRCodeSVG
-            value="https://wa.me/97292376808"
-            size={112}
-            level="M"
-            aria-label="واتساب Lovely Kids"
-          />
-          <span>واتساب</span>
-        </div>
-
-        <div className="receipt-social-qr-item">
-          <QRCodeSVG
-            value="https://lovelykids.net"
-            size={112}
-            level="M"
-            aria-label="متجر Lovely Kids الإلكتروني"
-          />
-          <span>المتجر الإلكتروني</span>
-        </div>
-      </div>
-
-        </section>
       )}
     </>
   );
