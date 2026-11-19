@@ -60,6 +60,7 @@ export default function FacebookPostsScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [intro, setIntro] = useState(DEFAULT_INTRO);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const [showAllFacebookPreview, setShowAllFacebookPreview] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [nextInstagramVerifying, setNextInstagramVerifying] = useState(false);
   const [nextInstagramVerification, setNextInstagramVerification] = useState<{
@@ -257,6 +258,7 @@ export default function FacebookPostsScreen() {
     setError("");
     setPublishedUrl(null);
     setPreview(null);
+    setShowAllFacebookPreview(false);
     setIgCarouselPreview(null);
     setIgCarouselError("");
     setIgCarouselResult(null);
@@ -271,6 +273,7 @@ export default function FacebookPostsScreen() {
     if (busy === "publish" || igCarouselBusy === "publish") return;
     setSelectedIds([]);
     setPreview(null);
+    setShowAllFacebookPreview(false);
     setPublishedUrl(null);
     setError("");
     setIgCarouselPreview(null);
@@ -311,6 +314,7 @@ export default function FacebookPostsScreen() {
           throw new Error("بيانات المعاينة غير مكتملة");
         }
         setPreview(result);
+        setShowAllFacebookPreview(false);
         setConfigured(result.configured);
       } else {
         const result = data as { postUrl?: string };
@@ -605,10 +609,10 @@ export default function FacebookPostsScreen() {
       {platform === "facebook" && contentType === "post" && (
         <>
       <View style={{ ...surface, gap: 10 }}>
-        <Text style={titleStyle}>وصف المنشور الرئيسي (قابل للتعديل)</Text>
+        <Text style={titleStyle}>4. منشور فيسبوك — الوصف الرئيسي (قابل للتعديل)</Text>
         <TextInput
           value={intro}
-          onChangeText={(value) => { setIntro(value); setPreview(null); setPublishedUrl(null); }}
+          onChangeText={(value) => { setIntro(value); setPreview(null); setShowAllFacebookPreview(false); setPublishedUrl(null); }}
           multiline
           maxLength={500}
           style={{ minHeight: 66, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, color: colors.foreground, textAlign: "right", textAlignVertical: "top" }}
@@ -625,19 +629,30 @@ export default function FacebookPostsScreen() {
 
       {preview && (
         <View style={{ ...surface, gap: 14 }}>
-          <Text style={titleStyle}>معاينة المنشور ({preview.products.length} صور)</Text>
-          {preview.products.map((product) => (
-            <View key={product.id} style={{ alignItems: "flex-end", gap: 8, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          <Text style={titleStyle}>4. معاينة منشور فيسبوك ({preview.products.length} صور)</Text>
+          {preview.products.slice(0, showAllFacebookPreview ? undefined : 8).map((product) => (
+            <View key={product.id} style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
               <Image
                 source={{ uri: product.image }}
-                style={{ height: 175, width: 175, borderRadius: 12, backgroundColor: colors.background }}
+                style={{ height: 90, width: 90, borderRadius: 10, backgroundColor: colors.background }}
                 resizeMode="contain"
               />
-              <Text selectable style={{ color: colors.foreground, textAlign: "right", lineHeight: 23 }}>
+              <Text selectable style={{ color: colors.foreground, textAlign: "right", flex: 1, fontSize: 12 }}>
                 {product.photoCaption}
               </Text>
             </View>
           ))}
+          {preview.products.length > 8 && (
+            <Pressable
+              onPress={() => setShowAllFacebookPreview((shown) => !shown)}
+              accessibilityRole="button"
+              style={{ borderWidth: 1, borderColor: colors.border, paddingVertical: 11, alignItems: "center", borderRadius: 10 }}
+            >
+              <Text style={{ color: colors.primary, fontWeight: "700" }}>
+                {showAllFacebookPreview ? "عرض مختصر" : "عرض جميع الصور (" + preview.products.length + ")"}
+              </Text>
+            </Pressable>
+          )}
           <Text style={titleStyle}>الوصف الرئيسي الذي سيظهر مع المنشور</Text>
           <Text selectable style={{ color: colors.foreground, lineHeight: 24, textAlign: "right" }}>{preview.caption}</Text>
           <Text style={{ ...muted, textAlign: "right" }}>
@@ -666,10 +681,6 @@ export default function FacebookPostsScreen() {
         </>
       )}
 
-      <Text style={{ ...muted, textAlign: "right" }}>
-        {configured === true ? "✓ نشر منشورات فيسبوك متصل بالنظام" :
-          configured === false ? "ربط منشورات فيسبوك غير مفعّل؛ المعاينة متاحة." : "حالة اتصال منشورات فيسبوك لم تُتحقق بعد."}
-      </Text>
       <View style={{ ...surface, gap: 8 }}>
         <Pressable
           onPress={() => setShowConnectionChecks((value) => !value)}
@@ -686,6 +697,10 @@ export default function FacebookPostsScreen() {
         </Text>
         {showConnectionChecks && (
           <View style={{ gap: 12 }}>
+            <Text style={{ ...muted, textAlign: "right" }}>
+              {configured === true ? "✓ منشورات فيسبوك متصلة بالنظام" :
+                configured === false ? "ربط منشورات فيسبوك غير مفعّل؛ المعاينة متاحة." : "حالة منشورات فيسبوك لم تُتحقق بعد."}
+            </Text>
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
               <Text style={{ ...titleStyle, textAlign: "right" }}>فيسبوك — فحص الرمز الجديد</Text>
               <Pressable
@@ -725,7 +740,7 @@ export default function FacebookPostsScreen() {
                   fontWeight: "700",
                 }}>
                   {nextInstagramVerification.connected
-                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. قصص إنستغرام متاحة في الأداة المستقلة أدناه.`
+                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. قصص إنستغرام متاحة ضمن قسم القصص على إنستغرام.`
                     : `✗ ${nextInstagramVerification.error || "تعذر فحص اتصال إنستغرام"}`}
                 </Text>
               )}
