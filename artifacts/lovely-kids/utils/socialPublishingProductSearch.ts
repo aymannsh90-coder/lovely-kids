@@ -72,3 +72,30 @@ export function exactSocialPublishingBarcodeMatches(
       ...(product.additionalBarcodes ?? []).map(({ barcode: value }) => value),
     ].some((value) => searchToken(String(value ?? "")) === barcode));
 }
+
+/**
+ * Show the actual available color's existing photo only when a single
+ * color remains, all variant stock is tracked, and that image is valid.
+ * Matches the rule enforced by the Worker preview/publish routes.
+ */
+export function socialPublishingDisplayImage(
+  product: Product,
+  validPhoto: (url: string) => boolean = (url) => {
+    try { return new URL(url).protocol === "https:"; }
+    catch { return false; }
+  },
+): string {
+  const variants = product.colorVariants ?? [];
+  if (variants.length < 2) return product.image;
+  if (!variants.every((variant) =>
+    variant.sizes.length > 0 &&
+    variant.sizes.every((size) =>
+      typeof size.stock === "number" && Number.isFinite(size.stock))
+  )) return product.image;
+  if (socialPublishingEffectiveStock(product) === 0) return product.image;
+  const remaining = variants.filter((variant) =>
+    variant.sizes.some((size) => (size.stock ?? 0) > 0));
+  if (remaining.length !== 1) return product.image;
+  const colorImage = remaining[0]?.image?.trim();
+  return colorImage && validPhoto(colorImage) ? colorImage : product.image;
+}
