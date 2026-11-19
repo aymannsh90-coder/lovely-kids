@@ -789,9 +789,10 @@ export default function FacebookPostsScreen() {
           value={intro}
           onChangeText={(value) => { setIntro(value); setPreview(null); setShowAllFacebookPreview(false); setPublishedUrl(null); }}
           multiline
-          maxLength={500}
+          maxLength={10000}
           style={{ minHeight: 66, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, color: colors.foreground, textAlign: "right", textAlignVertical: "top" }}
         />
+        <Text style={{ ...muted, textAlign: "right" }}>عدد الأحرف: {intro.length.toLocaleString("en-US")} / 10,000</Text>
         <Pressable
           onPress={() => void request("preview")}
           disabled={!!busy || selectedIds.length === 0}
