@@ -29,13 +29,6 @@ const ADMIN_CARDS = [
     accent: "#2F80ED",
   },
   {
-    label: "النشر على فيسبوك",
-    subtitle: "اختيار عدة موديلات ومعاينة المنشور",
-    icon: "logo-facebook" as const,
-    route: "/admin/facebook-posts" as never,
-    accent: "#1877F2",
-  },
-  {
     label: "الطلبات",
     subtitle: "متابعة طلبات الزبائن",
     icon: "bag-handle-outline" as const,
@@ -48,6 +41,13 @@ const ADMIN_CARDS = [
     icon: "swap-vertical-outline" as const,
     route: "/admin/product-ordering" as never,
     accent: "#8B5CF6",
+  },
+  {
+    label: "النشر على فيسبوك وإنستغرام",
+    subtitle: "نشر منشورات وقصص فيسبوك وإنستغرام",
+    icon: "logo-facebook" as const,
+    route: "/admin/facebook-posts" as never,
+    accent: "#1877F2",
   },
   {
     label: "شركات التوصيل",
@@ -1350,21 +1350,32 @@ export default function AdminDashboardScreen() {
                 ) : null}
 
                 <View style={styles.cardTopRow}>
-                  <View
-                    style={[
-                      styles.iconCircle,
-                      {
-                        backgroundColor:
-                          item.accent + "14",
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={item.icon}
-                      size={23}
-                      color={item.accent}
-                    />
-                  </View>
+                  {item.route === "/admin/facebook-posts" ? (
+                    <View style={styles.socialIconPair}>
+                      <View style={[styles.socialIconBadge, { backgroundColor: "#1877F214" }]}>
+                        <Ionicons name="logo-facebook" size={22} color="#1877F2" />
+                      </View>
+                      <View style={[styles.socialIconBadge, { backgroundColor: "#C1358414" }]}>
+                        <Ionicons name="logo-instagram" size={22} color="#C13584" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.iconCircle,
+                        {
+                          backgroundColor:
+                            item.accent + "14",
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={23}
+                        color={item.accent}
+                      />
+                    </View>
+                  )}
 
                   <View
                     style={[
@@ -1713,6 +1724,18 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  socialIconPair: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+  },
+  socialIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
   },
