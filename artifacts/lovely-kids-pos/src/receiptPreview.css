@@ -1,0 +1,85 @@
+/* Thermal receipt preview — scoped to the sales screen only. */
+.complete-sale-preview-button {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cfdce4;
+  color: #28506a;
+  background: #f6fbfd;
+  font-weight: 800;
+}
+.complete-sale-preview-button:hover:not(:disabled) { background: #e7f5fb; }
+@media screen {
+  .receipt-preview-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(18, 34, 50, .64);
+  }
+  .receipt-preview-dialog {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 550px);
+    max-height: min(92vh, 970px);
+    background: #fff;
+    color: #1b2935;
+    border-radius: 17px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .3);
+    overflow: hidden;
+  }
+  .receipt-preview-heading {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid #e6ecf1;
+  }
+  .receipt-preview-heading h2 { margin: 0 0 6px; font-size: 19px; }
+  .receipt-preview-heading p { margin: 0; color: #647481; font-size: 12px; }
+  .receipt-preview-heading > button { flex: 0 0 auto; }
+  .receipt-preview-scroll {
+    min-height: 100px;
+    overflow: auto;
+    padding: 22px 10px;
+    background: #e7eff3;
+    text-align: center;
+  }
+  .receipt-preview-paper[data-direct-receipt-capture="true"] {
+    width: 384px;
+    max-width: none;
+    display: inline-block;
+    margin: 0 auto;
+    background: #fff;
+    box-shadow: 0 4px 20px rgba(11, 35, 50, .16);
+    text-align: right;
+  }
+  .receipt-preview-paper .receipt-print-area { display: block !important; }
+  .receipt-draft-qr-note {
+    display: block;
+    padding: 13px 7px;
+    border: 1px dashed #666;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .receipt-preview-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 18px;
+    border-top: 1px solid #e6ecf1;
+    font-size: 12px;
+    color: #647481;
+  }
+  @media (max-width: 440px) {
+    .receipt-preview-scroll { text-align: right; }
+    .receipt-preview-footer { flex-wrap: wrap; }
+    .receipt-preview-footer button { width: 100%; }
+  }
+}
+@media print { .receipt-preview-backdrop { display: none !important; } }
