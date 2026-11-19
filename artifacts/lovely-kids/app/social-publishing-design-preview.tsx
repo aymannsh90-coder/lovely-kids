@@ -4,7 +4,7 @@
  * It does not read admin tokens, call owner APIs, or perform any publishing.
  * Remove this page before merging the refactor into production.
  */
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Image, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useProducts } from "@/context/ProductsContext";
 import { useColors } from "@/hooks/useColors";
