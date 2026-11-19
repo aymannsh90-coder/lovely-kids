@@ -39,6 +39,9 @@ type PreviewResult = {
 
 const DEFAULT_INTRO = "🛍️ موديلات مختارة من Lovely Kids";
 
+type PublishingPlatform = "facebook" | "instagram";
+type PublishingContent = "post" | "story";
+
 function isFailedResponse(value: unknown): value is { error: string } {
   return !!value && typeof value === "object" &&
     "error" in value && typeof value.error === "string";
@@ -50,6 +53,9 @@ export default function FacebookPostsScreen() {
   const { user, getAuthToken } = useAuth();
   const { products } = useProducts();
 
+  const [platform, setPlatform] = useState<PublishingPlatform>("facebook");
+  const [contentType, setContentType] = useState<PublishingContent>("post");
+  const [visibleCount, setVisibleCount] = useState(100);
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [intro, setIntro] = useState(DEFAULT_INTRO);
@@ -78,7 +84,7 @@ export default function FacebookPostsScreen() {
   const [igCarouselResult, setIgCarouselResult] = useState<string | null>(null);
   const [igCarouselSuccess, setIgCarouselSuccess] = useState(false);
 
-  const visibleProducts = useMemo(() => {
+  const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products
       .filter((product) => !product.isHidden && !product.deletedAt)
@@ -86,9 +92,12 @@ export default function FacebookPostsScreen() {
         product.nameAr.toLowerCase().includes(q) ||
         product.name.toLowerCase().includes(q) ||
         String(product.productCode ?? "").toLowerCase().includes(q) ||
-        product.id === q)
-      .slice(0, 100);
+        product.id === q);
   }, [products, search]);
+  const visibleProducts = useMemo(
+    () => filteredProducts.slice(0, visibleCount),
+    [filteredProducts, visibleCount],
+  );
 
   useEffect(() => {
     if (user?.isOwner !== true) return;
@@ -258,6 +267,18 @@ export default function FacebookPostsScreen() {
     });
   };
 
+  const clearSelection = () => {
+    if (busy === "publish" || igCarouselBusy === "publish") return;
+    setSelectedIds([]);
+    setPreview(null);
+    setPublishedUrl(null);
+    setError("");
+    setIgCarouselPreview(null);
+    setIgCarouselError("");
+    setIgCarouselResult(null);
+    setIgCarouselSuccess(false);
+  };
+
   const request = async (kind: "preview" | "publish") => {
     if (selectedIds.length === 0) {
       setError("اختَر موديلًا واحدًا على الأقل");
@@ -362,81 +383,88 @@ export default function FacebookPostsScreen() {
       </Pressable>
       <Text style={{ ...titleStyle, fontSize: 24, textAlign: "right" }}>نشر موديلات على فيسبوك وإنستغرام</Text>
       <Text style={{ ...muted, textAlign: "right" }}>
-        اختَر أي عدد من الموديلات لقصص ومنشورات فيسبوك. إنستغرام يبقى بحدوده المستقلة: Carousel من صورتين إلى 10 صور، والقصص من 1 إلى 10 صور. اسم كل صنف ورابطه موجودان بوصف صورته في منشور فيسبوك.
+        اختَر المنصة ونوع النشر، وبعدها الموديلات المطلوبة. كل عملية نشر تحتاج معاينة وتأكيد منك. نستخدم الصور الأصلية دون إنشاء نسخ على R2.
       </Text>
-      <Text style={{ ...muted, textAlign: "right" }}>
-        {configured === true ? "✓ بيانات صفحة فيسبوك محفوظة في النظام" :
-          configured === false ? "ربط صفحة فيسبوك للنشر لم يُفعّل بعد؛ المعاينة متاحة." : "جاري التحقق من إعدادات صفحة فيسبوك."}
-      </Text>
-      <View style={{ ...surface, gap: 8 }}>
-        <Pressable
-          onPress={() => setShowConnectionChecks((value) => !value)}
-          accessibilityRole="button"
-          style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
-        >
-          <Text style={{ ...titleStyle, textAlign: "right", flex: 1 }}>
-            فحوصات اتصال التطبيق المعتمد (اختياري)
-          </Text>
-          <Ionicons name={showConnectionChecks ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
-        </Pressable>
-        <Text style={{ ...muted, textAlign: "right" }}>
-          الفحوصات للقراءة فقط ولا تنشر أي صور. تم إخفاء أدوات فحص الربط القديم من هذه الصفحة.
-        </Text>
-        {showConnectionChecks && (
-          <View style={{ gap: 12 }}>
-            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
-              <Text style={{ ...titleStyle, textAlign: "right" }}>فيسبوك — فحص الرمز الجديد</Text>
-              <Pressable
-                onPress={() => void verifyNextFacebookConnection()}
-                disabled={nextVerifying}
-                style={{ ...action, opacity: nextVerifying ? 0.5 : 1 }}
-              >
-                {nextVerifying ? <ActivityIndicator color="#fff" /> :
-                  <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال فيسبوك</Text>}
-              </Pressable>
-              {nextVerification && (
-                <Text selectable style={{
-                  color: nextVerification.connected ? "#16A34A" : "#DC2626",
-                  textAlign: "right",
-                  fontWeight: "700",
-                }}>
-                  {nextVerification.connected
-                    ? `✓ رمز فيسبوك الجديد صالح لصفحة ${nextVerification.pageName || "Lovely Kids"}.`
-                    : `✗ ${nextVerification.error || "تعذر فحص اتصال فيسبوك"}`}
-                </Text>
-              )}
-            </View>
-            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
-              <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — فحص الرمز الجديد</Text>
-              <Pressable
-                onPress={() => void verifyNextInstagramConnection()}
-                disabled={nextInstagramVerifying}
-                style={{ ...action, opacity: nextInstagramVerifying ? 0.5 : 1 }}
-              >
-                {nextInstagramVerifying ? <ActivityIndicator color="#fff" /> :
-                  <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال إنستغرام</Text>}
-              </Pressable>
-              {nextInstagramVerification && (
-                <Text selectable style={{
-                  color: nextInstagramVerification.connected ? "#16A34A" : "#DC2626",
-                  textAlign: "right",
-                  fontWeight: "700",
-                }}>
-                  {nextInstagramVerification.connected
-                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. قصص إنستغرام متاحة في الأداة المستقلة أدناه.`
-                    : `✗ ${nextInstagramVerification.error || "تعذر فحص اتصال إنستغرام"}`}
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
+
+      <View style={{ ...surface, gap: 10 }}>
+        <Text style={{ ...titleStyle, textAlign: "right" }}>1. اختيار المنصة</Text>
+        <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+          {(["facebook", "instagram"] as const).map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => setPlatform(item)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: platform === item }}
+              style={{
+                flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: "center",
+                borderWidth: 1, borderColor: platform === item ? colors.primary : colors.border,
+                backgroundColor: platform === item ? colors.primary : colors.background,
+              }}
+            >
+              <Text style={{ color: platform === item ? "#FFFFFF" : colors.foreground, fontWeight: "800" }}>
+                {item === "facebook" ? "فيسبوك" : "إنستغرام"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={{ ...titleStyle, textAlign: "right" }}>2. نوع النشر</Text>
+        <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+          {(["post", "story"] as const).map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => setContentType(item)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: contentType === item }}
+              style={{
+                flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: "center",
+                borderWidth: 1, borderColor: contentType === item ? colors.primary : colors.border,
+                backgroundColor: contentType === item ? colors.primary : colors.background,
+              }}
+            >
+              <Text style={{ color: contentType === item ? "#FFFFFF" : colors.foreground, fontWeight: "800" }}>
+                {item === "post" ? "منشور صور" : "قصص (Stories)"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       <View style={{ ...surface, gap: 10 }}>
-        <Text style={titleStyle}>الموديلات المختارة: {selectedIds.length} (بدون حد لفيسبوك)</Text>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <Text style={{ ...titleStyle, textAlign: "right", flex: 1 }}>
+            3. اختيار الموديلات ({selectedIds.length} مختار)
+          </Text>
+          <Pressable
+            onPress={clearSelection}
+            disabled={selectedIds.length === 0 || busy === "publish" || igCarouselBusy === "publish"}
+            accessibilityRole="button"
+            style={{ borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, opacity: selectedIds.length === 0 ? 0.5 : 1 }}
+          >
+            <Text style={{ color: colors.foreground, fontWeight: "700" }}>مسح الكل</Text>
+          </Pressable>
+        </View>
+        {selectedIds.length > 0 && (
+          <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 6 }}>
+            {selectedIds.slice(0, 8).map((id) => (
+              <Pressable
+                key={id}
+                onPress={() => toggleProduct(id)}
+                accessibilityRole="button"
+                style={{ borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, backgroundColor: colors.background }}
+              >
+                <Text style={{ color: colors.foreground, fontSize: 12 }}>#{id} ×</Text>
+              </Pressable>
+            ))}
+            {selectedIds.length > 8 && (
+              <Text style={{ ...muted, textAlign: "right", paddingVertical: 6 }}>
+                و{selectedIds.length - 8} موديلات أخرى
+              </Text>
+            )}
+          </View>
+        )}
         <TextInput
           value={search}
-          onChangeText={setSearch}
+          onChangeText={(value) => { setSearch(value); setVisibleCount(100); }}
           placeholder="ابحث باسم الصنف أو الكود أو رقم الموديل"
           placeholderTextColor={colors.mutedForeground}
           style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, color: colors.foreground, textAlign: "right" }}
@@ -472,9 +500,30 @@ export default function FacebookPostsScreen() {
           })}
           {visibleProducts.length === 0 && <Text style={{ ...muted, textAlign: "center" }}>ما في موديلات مطابقة</Text>}
         </ScrollView>
+        {filteredProducts.length > visibleCount && (
+          <Pressable
+            onPress={() => setVisibleCount((count) => count + 100)}
+            accessibilityRole="button"
+            style={{ borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingVertical: 11, alignItems: "center" }}
+          >
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+              عرض المزيد ({filteredProducts.length - visibleCount} موديل متبقٍ)
+            </Text>
+          </Pressable>
+        )}
+        <Text style={{ ...muted, textAlign: "right" }}>
+          {platform === "facebook" ? "فيسبوك: بدون حدّ 10 من نظامنا." : "إنستغرام: من 1 إلى 10 قصص، أو 2 إلى 10 صور للمنشور المتعدد."}
+        </Text>
+        {platform === "instagram" && selectedIds.length > 10 && (
+          <Text style={{ color: "#D97706", textAlign: "right", fontWeight: "700" }}>
+            اختر 10 موديلات أو أقل لاستخدام أدوات إنستغرام. يمكنك الاحتفاظ بالعدد الأكبر لفيسبوك.
+          </Text>
+        )}
       </View>
 
-      <View style={{ ...surface, gap: 10 }}>
+
+      {platform === "instagram" && contentType === "post" && (
+        <View style={{ ...surface, gap: 10 }}>
         <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — منشور متعدد الصور (Carousel)</Text>
         <Text style={{ ...muted, textAlign: "right" }}>
           اختَر من موديلين إلى 10 موديلات. بتظهر الصور حسب ترتيب اختيارك،
@@ -540,10 +589,21 @@ export default function FacebookPostsScreen() {
           </View>
         )}
       </View>
+      )}
 
-      <OwnerInstagramNextStoryPilot selectedIds={selectedIds} />
-      <OwnerFacebookNextStoryPilot selectedIds={selectedIds} />
 
+      {/* Keep both Story components mounted across tab changes, preserving the
+          in-session attempted-product protection against duplicate publication. */}
+      <View style={{ display: platform === "instagram" && contentType === "story" ? "flex" : "none" }}>
+        <OwnerInstagramNextStoryPilot selectedIds={selectedIds} />
+      </View>
+      <View style={{ display: platform === "facebook" && contentType === "story" ? "flex" : "none" }}>
+        <OwnerFacebookNextStoryPilot selectedIds={selectedIds} />
+      </View>
+
+
+      {platform === "facebook" && contentType === "post" && (
+        <>
       <View style={{ ...surface, gap: 10 }}>
         <Text style={titleStyle}>وصف المنشور الرئيسي (قابل للتعديل)</Text>
         <TextInput
@@ -602,6 +662,78 @@ export default function FacebookPostsScreen() {
           <Text style={{ color: "#16A34A", textAlign: "center", fontWeight: "800" }}>✓ نُشر المنشور بنجاح — افتح المنشور على فيسبوك</Text>
         </Pressable>
       )}
+
+        </>
+      )}
+
+      <Text style={{ ...muted, textAlign: "right" }}>
+        {configured === true ? "✓ نشر منشورات فيسبوك متصل بالنظام" :
+          configured === false ? "ربط منشورات فيسبوك غير مفعّل؛ المعاينة متاحة." : "حالة اتصال منشورات فيسبوك لم تُتحقق بعد."}
+      </Text>
+      <View style={{ ...surface, gap: 8 }}>
+        <Pressable
+          onPress={() => setShowConnectionChecks((value) => !value)}
+          accessibilityRole="button"
+          style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+        >
+          <Text style={{ ...titleStyle, textAlign: "right", flex: 1 }}>
+            إعدادات متقدمة — فحص اتصال فيسبوك وإنستغرام
+          </Text>
+          <Ionicons name={showConnectionChecks ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
+        </Pressable>
+        <Text style={{ ...muted, textAlign: "right" }}>
+          الفحوصات للقراءة فقط ولا تنشر أي صور. تم إخفاء أدوات فحص الربط القديم من هذه الصفحة.
+        </Text>
+        {showConnectionChecks && (
+          <View style={{ gap: 12 }}>
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
+              <Text style={{ ...titleStyle, textAlign: "right" }}>فيسبوك — فحص الرمز الجديد</Text>
+              <Pressable
+                onPress={() => void verifyNextFacebookConnection()}
+                disabled={nextVerifying}
+                style={{ ...action, opacity: nextVerifying ? 0.5 : 1 }}
+              >
+                {nextVerifying ? <ActivityIndicator color="#fff" /> :
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال فيسبوك</Text>}
+              </Pressable>
+              {nextVerification && (
+                <Text selectable style={{
+                  color: nextVerification.connected ? "#16A34A" : "#DC2626",
+                  textAlign: "right",
+                  fontWeight: "700",
+                }}>
+                  {nextVerification.connected
+                    ? `✓ رمز فيسبوك الجديد صالح لصفحة ${nextVerification.pageName || "Lovely Kids"}.`
+                    : `✗ ${nextVerification.error || "تعذر فحص اتصال فيسبوك"}`}
+                </Text>
+              )}
+            </View>
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 8 }}>
+              <Text style={{ ...titleStyle, textAlign: "right" }}>إنستغرام — فحص الرمز الجديد</Text>
+              <Pressable
+                onPress={() => void verifyNextInstagramConnection()}
+                disabled={nextInstagramVerifying}
+                style={{ ...action, opacity: nextInstagramVerifying ? 0.5 : 1 }}
+              >
+                {nextInstagramVerifying ? <ActivityIndicator color="#fff" /> :
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال إنستغرام</Text>}
+              </Pressable>
+              {nextInstagramVerification && (
+                <Text selectable style={{
+                  color: nextInstagramVerification.connected ? "#16A34A" : "#DC2626",
+                  textAlign: "right",
+                  fontWeight: "700",
+                }}>
+                  {nextInstagramVerification.connected
+                    ? `✓ رمز إنستغرام الجديد صالح للحساب ${nextInstagramVerification.username || "Lovely Kids"}. قصص إنستغرام متاحة في الأداة المستقلة أدناه.`
+                    : `✗ ${nextInstagramVerification.error || "تعذر فحص اتصال إنستغرام"}`}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+
     </ScrollView>
   );
 }
