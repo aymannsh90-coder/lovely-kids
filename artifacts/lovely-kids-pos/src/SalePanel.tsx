@@ -278,6 +278,8 @@ export default function SalePanel({
   onUnauthorized,
 }: SalePanelProps) {
   const directReceiptRef = useRef<HTMLElement>(null);
+  const previewReceiptRef = useRef<HTMLElement>(null);
+  const previewPrintInProgressRef = useRef(false);
   const printAfterSaleRef = useRef(false);
 
   async function handleDirectReceiptPrint() {
@@ -482,7 +484,32 @@ export default function SalePanel({
   const [lastSale, setLastSale] = useState<PosSaleResult | null>(null);
   const [receiptPreviewMode, setReceiptPreviewMode] = useState<"draft" | "saved" | null>(null);
   const receiptPreviewCloseRef = useRef<HTMLButtonElement>(null);
+  const [previewPrinting, setPreviewPrinting] = useState(false);
   const [promotionPreviewKey, setPromotionPreviewKey] = useState("");
+
+  async function handlePreviewReceiptPrint() {
+    if (previewPrintInProgressRef.current) return;
+
+    const source = previewReceiptRef.current;
+    if (!source) {
+      window.alert("تعذر تجهيز المعاينة للطباعة.");
+      return;
+    }
+
+    // Print the exact preview, including the unsaved-draft label.
+    // No sale creation, stock movement, or accounting write occurs here.
+    previewPrintInProgressRef.current = true;
+    setPreviewPrinting(true);
+
+    try {
+      await printReceiptElementDirect(source);
+    } catch (caught) {
+      window.alert(errorMessage(caught));
+    } finally {
+      previewPrintInProgressRef.current = false;
+      setPreviewPrinting(false);
+    }
+  }
 
   useEffect(() => {
     if (!receiptPreviewMode) return;
@@ -493,6 +520,7 @@ export default function SalePanel({
 
     function handlePreviewEscape(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") {
+        if (previewPrintInProgressRef.current) return;
         event.preventDefault();
         event.stopImmediatePropagation();
         setReceiptPreviewMode(null);
@@ -2922,7 +2950,9 @@ export default function SalePanel({
         <div
           className="receipt-preview-backdrop"
           onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setReceiptPreviewMode(null);
+            if (event.currentTarget === event.target && !previewPrintInProgressRef.current) {
+              setReceiptPreviewMode(null);
+            }
           }}
         >
           <div
@@ -2936,7 +2966,7 @@ export default function SalePanel({
               <div>
                 <h2 id="receipt-preview-heading">معاينة الفاتورة الحرارية</h2>
                 <p>{receiptPreviewMode === "draft"
-                  ? "مسودة قبل إتمام البيع — لا يتم حفظ الفاتورة أو طباعتها"
+                  ? "مسودة غير محفوظة — يمكن طباعتها دون إتمام البيع"
                   : "فاتورة محفوظة — نفس تصميم الإيصال الحراري المطبوع"}</p>
               </div>
               <button
@@ -2945,18 +2975,42 @@ export default function SalePanel({
                 type="button"
                 aria-label="إغلاق معاينة الفاتورة"
                 onClick={() => setReceiptPreviewMode(null)}
+                disabled={previewPrinting}
               >✕</button>
             </header>
             <div className="receipt-preview-scroll">
               <div className="receipt-preview-paper" data-direct-receipt-capture="true">
-                <SaleThermalReceipt receipt={modalReceipt} isDraft={receiptPreviewMode === "draft"} />
+                <SaleThermalReceipt
+                  receipt={modalReceipt}
+                  receiptRef={previewReceiptRef}
+                  isDraft={receiptPreviewMode === "draft"}
+                />
               </div>
             </div>
             <footer className="receipt-preview-footer">
-              <span>عرض فقط — لا يغيّر الحسابات أو المخزون</span>
-              <button className="primary-button" type="button" onClick={() => setReceiptPreviewMode(null)}>
-                إغلاق المعاينة
-              </button>
+              <span>
+                {receiptPreviewMode === "draft"
+                  ? "طباعة المسودة لا تحفظ البيع ولا تغيّر المخزون أو الحسابات"
+                  : "إعادة طباعة الفاتورة المحفوظة دون تسجيل بيع جديد"}
+              </span>
+              <div className="receipt-preview-footer-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => void handlePreviewReceiptPrint()}
+                  disabled={previewPrinting}
+                >
+                  {previewPrinting ? "جاري طباعة المعاينة…" : "🖨️ طباعة المعاينة"}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setReceiptPreviewMode(null)}
+                  disabled={previewPrinting}
+                >
+                  إغلاق المعاينة
+                </button>
+              </div>
             </footer>
           </div>
         </div>
