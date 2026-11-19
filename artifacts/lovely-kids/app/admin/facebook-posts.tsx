@@ -685,7 +685,7 @@ export default function FacebookPostsScreen() {
             accessibilityRole="button"
             style={{ borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingVertical: 11, alignItems: "center" }}
           >
-            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+            <Text style={{ color: brandColor, fontWeight: "700" }}>
               عرض المزيد ({filteredProducts.length - visibleCount} موديل متبقٍ)
             </Text>
           </Pressable>
@@ -881,7 +881,7 @@ export default function FacebookPostsScreen() {
               <Pressable
                 onPress={() => void verifyNextFacebookConnection()}
                 disabled={nextVerifying}
-                style={{ ...action, opacity: nextVerifying ? 0.5 : 1 }}
+                style={{ ...action, backgroundColor: FACEBOOK_COLOR, opacity: nextVerifying ? 0.5 : 1 }}
               >
                 {nextVerifying ? <ActivityIndicator color="#fff" /> :
                   <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال فيسبوك</Text>}
@@ -903,7 +903,7 @@ export default function FacebookPostsScreen() {
               <Pressable
                 onPress={() => void verifyNextInstagramConnection()}
                 disabled={nextInstagramVerifying}
-                style={{ ...action, opacity: nextInstagramVerifying ? 0.5 : 1 }}
+                style={{ ...action, backgroundColor: INSTAGRAM_COLOR, opacity: nextInstagramVerifying ? 0.5 : 1 }}
               >
                 {nextInstagramVerifying ? <ActivityIndicator color="#fff" /> :
                   <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال إنستغرام</Text>}
