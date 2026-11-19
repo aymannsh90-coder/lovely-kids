@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   composeFacebookPhotoCaption,
   composeFacebookProductCaption,
+  MAX_FACEBOOK_POST_INTRO_LENGTH,
   productStorefrontUrl,
 } from "./facebook-post-composer.ts";
 
@@ -34,7 +35,10 @@ test("fallback names, duplicate protection and validation", () => {
   assert.throws(() => productStorefrontUrl(0));
   assert.throws(() => composeFacebookProductCaption([]));
   assert.throws(() => composeFacebookProductCaption([a, a]));
-  assert.throws(() => composeFacebookProductCaption([a], "a".repeat(501)));
+  assert.equal(MAX_FACEBOOK_POST_INTRO_LENGTH, 10_000);
+  assert.equal(composeFacebookProductCaption([a], "a".repeat(501)).length, 501);
+  assert.equal(composeFacebookProductCaption([a], "a".repeat(MAX_FACEBOOK_POST_INTRO_LENGTH)).length, MAX_FACEBOOK_POST_INTRO_LENGTH);
+  assert.throws(() => composeFacebookProductCaption([a], "a".repeat(MAX_FACEBOOK_POST_INTRO_LENGTH + 1)));
   // The storefront no longer imposes a ten-photo cap on Facebook posts.
   // The actual Meta API can still enforce its own limits at publication time.
   assert.equal(composeFacebookProductCaption(Array.from({ length: 25 }, (_, i) =>
