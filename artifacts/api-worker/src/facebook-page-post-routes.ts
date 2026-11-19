@@ -1,4 +1,5 @@
 import { productsTable } from "@workspace/db/schema";
+import { socialPublishingPhoto, socialPublishingQuantity } from "./social-publishing-photo";
 import { inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -183,6 +184,8 @@ export async function handleFacebookPagePostRequest(
       nameAr: productsTable.nameAr,
       name: productsTable.name,
       image: productsTable.image,
+      stock: productsTable.stock,
+      colorVariants: productsTable.colorVariants,
       isHidden: productsTable.isHidden,
       deletedAt: productsTable.deletedAt,
     })
@@ -191,11 +194,12 @@ export async function handleFacebookPagePostRequest(
   const byId = new Map(rows.map((row) => [row.id, row]));
   const products = (ids as number[]).map((id) => byId.get(id));
 
-  if (products.some((product) => !product || product.isHidden || product.deletedAt)) {
-    return json({ error: "أحد الموديلات محذوف أو مخفي أو غير موجود. حدّث القائمة." }, 400);
+  if (products.some((product) => !product || product.isHidden || product.deletedAt || socialPublishingQuantity(product) === 0)) {
+    return json({ error: "أحد الموديلات غير متوفر بالمخزون أو محذوف أو مخفي. حدّث القائمة." }, 400);
   }
 
-  const validProducts = products.filter((product): product is NonNullable<typeof product> => !!product);
+  const validProducts = products.filter((product): product is NonNullable<typeof product> => !!product)
+    .map((product) => ({ ...product, image: socialPublishingPhoto(product) }));
   if (validProducts.some((product) => {
     try {
       return new URL(product.image).protocol !== "https:";
