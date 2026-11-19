@@ -117,7 +117,7 @@ export default function FacebookPostsScreen() {
   const usablePhoto = (value: string) => {
     try {
       const url = new URL(value);
-      if (url.protocol !== "https:") return false;
+      if (url.protocol !== "https:" || !url.hostname || url.username || url.password) return false;
       if (contentType === "story") {
         return platform === "instagram"
           ? /\.jpe?g$/i.test(url.pathname)
