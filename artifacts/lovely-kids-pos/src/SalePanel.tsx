@@ -214,6 +214,13 @@ function selectionIsComplete(line: CartLine) {
   return true;
 }
 
+function bidiSafePromotionLabel(label: string) {
+  return label.replace(
+    /\d+\s*\+\s*\d+/g,
+    (value) => `\u2066${value}\u2069`,
+  );
+}
+
 type VisaBankProcessor = "arab" | "bop";
 
 /** One visual component for regular sales and customer-balance settlement.
