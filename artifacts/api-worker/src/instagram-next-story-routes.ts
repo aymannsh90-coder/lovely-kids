@@ -1,4 +1,5 @@
 import { productsTable } from "@workspace/db/schema";
+import { socialPublishingPhoto, socialPublishingQuantity } from "./social-publishing-photo";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -47,15 +48,18 @@ export async function handleInstagramNextStoryRequest(
     nameAr: productsTable.nameAr,
     name: productsTable.name,
     image: productsTable.image,
+    stock: productsTable.stock,
+    colorVariants: productsTable.colorVariants,
     isHidden: productsTable.isHidden,
     deletedAt: productsTable.deletedAt,
   }).from(productsTable).where(eq(productsTable.id, productId)).limit(1);
 
   const product = rows[0];
-  if (!product || product.isHidden || product.deletedAt) {
-    return json({ error: "الموديل غير موجود أو مخفي أو محذوف" }, 400);
+  if (!product || product.isHidden || product.deletedAt || socialPublishingQuantity(product) === 0) {
+    return json({ error: "الموديل غير متوفر بالمخزون أو مخفي أو محذوف" }, 400);
   }
-  if (!validInstagramStoryPhotoUrl(product.image)) {
+  const storyImage = socialPublishingPhoto(product, validInstagramStoryPhotoUrl);
+  if (!validInstagramStoryPhotoUrl(storyImage)) {
     return json({ error: "تحتاج القصة لصورة JPEG برابط HTTPS عام. لا نعدّل الصور تلقائيًا." }, 400);
   }
 
@@ -67,7 +71,7 @@ export async function handleInstagramNextStoryRequest(
       product: {
         id: product.id,
         name: product.nameAr?.trim() || product.name?.trim() || "موديل " + product.id,
-        image: product.image,
+        image: storyImage,
       },
       note: "هذه صورة معاينة فقط وليست نسخة 9:16 معالجة. قصص إنستغرام لا تتضمن رابط منتج قابلًا للضغط أو ملصقات تلقائية. جرّب قصة واحدة وراجعها على الهاتف.",
     });
@@ -81,7 +85,7 @@ export async function handleInstagramNextStoryRequest(
     const storyId = await publishInstagramPhotoStory(
       env.META_INSTAGRAM_ACCOUNT_ID!.trim(),
       env.META_INSTAGRAM_ACCESS_TOKEN_NEXT!.trim(),
-      product.image,
+      storyImage,
     );
     return json({
       ok: true,
