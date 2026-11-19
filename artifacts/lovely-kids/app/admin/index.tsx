@@ -1350,7 +1350,7 @@ export default function AdminDashboardScreen() {
                 ) : null}
 
                 <View style={styles.cardTopRow}>
-                  {item.route === "/admin/facebook-posts" ? (
+                  {item.icon === "logo-facebook" ? (
                     <View style={styles.socialIconPair}>
                       <View style={[styles.socialIconBadge, { backgroundColor: "#1877F214" }]}>
                         <Ionicons name="logo-facebook" size={22} color="#1877F2" />
