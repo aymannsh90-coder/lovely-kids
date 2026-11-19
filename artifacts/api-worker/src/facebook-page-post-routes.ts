@@ -6,6 +6,7 @@ import type { Env, openDb } from "./db";
 import {
   composeFacebookProductCaption,
   composeFacebookPhotoCaption,
+  MAX_FACEBOOK_POST_INTRO_LENGTH,
 } from "./facebook-post-composer";
 import {
   facebookPostsUseNextToken,
@@ -174,7 +175,7 @@ export async function handleFacebookPagePostRequest(
   ) {
     return json({ error: "اختَر موديلًا واحدًا أو أكثر بدون تكرار" }, 400);
   }
-  if (body.intro !== undefined && (typeof body.intro !== "string" || body.intro.length > 500)) {
+  if (body.intro !== undefined && (typeof body.intro !== "string" || body.intro.length > MAX_FACEBOOK_POST_INTRO_LENGTH)) {
     return json({ error: "مقدمة المنشور غير صالحة" }, 400);
   }
 
