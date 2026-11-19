@@ -1,12 +1,13 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +16,18 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+} from "@/utils/scannerKeyboard";
+import {
+  eligibleForSocialPublishing,
+  exactSocialPublishingBarcodeMatches,
+  matchesSocialPublishingProduct,
+  socialPublishingDisplayImage,
+} from "@/utils/socialPublishingProductSearch";
 
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
@@ -41,6 +54,8 @@ const DEFAULT_INTRO = "🛍️ موديلات مختارة من Lovely Kids";
 
 type PublishingPlatform = "facebook" | "instagram";
 type PublishingContent = "post" | "story";
+const FACEBOOK_COLOR = "#1877F2";
+const INSTAGRAM_COLOR = "#C13584";
 
 function isFailedResponse(value: unknown): value is { error: string } {
   return !!value && typeof value === "object" &&
@@ -52,11 +67,18 @@ export default function FacebookPostsScreen() {
   const insets = useSafeAreaInsets();
   const { user, getAuthToken } = useAuth();
   const { products } = useProducts();
+  const scannerKeyboard = useRef(createScannerKeyboardBuffer());
+  const scannerSearchFocused = useRef(false);
+  const cameraScanAccepted = useRef(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const [platform, setPlatform] = useState<PublishingPlatform>("facebook");
+  const brandColor = platform === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR;
   const [contentType, setContentType] = useState<PublishingContent>("post");
   const [visibleCount, setVisibleCount] = useState(100);
   const [search, setSearch] = useState("");
+  const [scanNotice, setScanNotice] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [intro, setIntro] = useState(DEFAULT_INTRO);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -86,15 +108,25 @@ export default function FacebookPostsScreen() {
   const [igCarouselSuccess, setIgCarouselSuccess] = useState(false);
 
   const filteredProducts = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return products
-      .filter((product) => !product.isHidden && !product.deletedAt)
-      .filter((product) => !q ||
-        product.nameAr.toLowerCase().includes(q) ||
-        product.name.toLowerCase().includes(q) ||
-        String(product.productCode ?? "").toLowerCase().includes(q) ||
-        product.id === q);
+    return products.filter((product) =>
+      eligibleForSocialPublishing(product) &&
+      matchesSocialPublishingProduct(product, search)
+    );
   }, [products, search]);
+  const usablePhoto = (value: string) => {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:") return false;
+      if (contentType === "story") {
+        return platform === "instagram"
+          ? /\.jpe?g$/i.test(url.pathname)
+          : /\.(?:jpe?g|png)$/i.test(url.pathname);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const visibleProducts = useMemo(
     () => filteredProducts.slice(0, visibleCount),
     [filteredProducts, visibleCount],
@@ -357,7 +389,7 @@ export default function FacebookPostsScreen() {
     paddingHorizontal: 16,
     borderRadius: 12,
     alignItems: "center" as const,
-    backgroundColor: colors.primary,
+    backgroundColor: brandColor,
   };
 
   if (user?.isOwner !== true) {
@@ -401,10 +433,13 @@ export default function FacebookPostsScreen() {
               accessibilityState={{ selected: platform === item }}
               style={{
                 flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: "center",
-                borderWidth: 1, borderColor: platform === item ? colors.primary : colors.border,
-                backgroundColor: platform === item ? colors.primary : colors.background,
+                borderWidth: 1, borderColor: platform === item ? (item === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR) : colors.border,
+                backgroundColor: platform === item ? (item === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR) : colors.background,
+                flexDirection: "row-reverse", justifyContent: "center", gap: 8,
               }}
             >
+              <Ionicons name={item === "facebook" ? "logo-facebook" : "logo-instagram"}
+                size={21} color={platform === item ? "#FFFFFF" : item === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR} />
               <Text style={{ color: platform === item ? "#FFFFFF" : colors.foreground, fontWeight: "800" }}>
                 {item === "facebook" ? "فيسبوك" : "إنستغرام"}
               </Text>
@@ -421,8 +456,8 @@ export default function FacebookPostsScreen() {
               accessibilityState={{ selected: contentType === item }}
               style={{
                 flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: "center",
-                borderWidth: 1, borderColor: contentType === item ? colors.primary : colors.border,
-                backgroundColor: contentType === item ? colors.primary : colors.background,
+                borderWidth: 1, borderColor: contentType === item ? brandColor : colors.border,
+                backgroundColor: contentType === item ? brandColor : colors.background,
               }}
             >
               <Text style={{ color: contentType === item ? "#FFFFFF" : colors.foreground, fontWeight: "800" }}>
@@ -489,7 +524,8 @@ export default function FacebookPostsScreen() {
                   paddingVertical: 9,
                 }}
               >
-                <Image source={{ uri: product.image }} style={{ height: 68, width: 68, borderRadius: 9, backgroundColor: colors.background }} />
+                <Image source={{ uri: socialPublishingDisplayImage(product, usablePhoto) }}
+                  style={{ height: 68, width: 68, borderRadius: 9, backgroundColor: colors.background }} />
                 <View style={{ flex: 1, gap: 4, alignItems: "flex-end" }}>
                   <Text style={{ color: colors.foreground, fontWeight: "700", textAlign: "right" }}>{product.nameAr}</Text>
                   <Text style={muted}>#{product.id} · {product.price} ₪</Text>
@@ -497,7 +533,7 @@ export default function FacebookPostsScreen() {
                 <Ionicons
                   name={chosen ? "checkbox" : "square-outline"}
                   size={26}
-                  color={chosen ? colors.primary : colors.mutedForeground}
+                  color={chosen ? brandColor : colors.mutedForeground}
                 />
               </Pressable>
             );
