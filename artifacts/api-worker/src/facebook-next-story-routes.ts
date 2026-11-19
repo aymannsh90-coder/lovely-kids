@@ -1,4 +1,5 @@
 import { productsTable } from "@workspace/db/schema";
+import { socialPublishingPhoto, socialPublishingQuantity } from "./social-publishing-photo";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -54,15 +55,18 @@ export async function handleFacebookNextStoryRequest(
     nameAr: productsTable.nameAr,
     name: productsTable.name,
     image: productsTable.image,
+    stock: productsTable.stock,
+    colorVariants: productsTable.colorVariants,
     isHidden: productsTable.isHidden,
     deletedAt: productsTable.deletedAt,
   }).from(productsTable).where(eq(productsTable.id, productId)).limit(1);
 
   const product = records[0];
-  if (!product || product.isHidden || product.deletedAt) {
-    return json({ error: "الموديل غير موجود أو مخفي أو محذوف" }, 400);
+  if (!product || product.isHidden || product.deletedAt || socialPublishingQuantity(product) === 0) {
+    return json({ error: "الموديل غير متوفر بالمخزون أو مخفي أو محذوف" }, 400);
   }
-  if (!validFacebookNextStoryImage(product.image)) {
+  const storyImage = socialPublishingPhoto(product, validFacebookNextStoryImage);
+  if (!validFacebookNextStoryImage(storyImage)) {
     return json({
       error: "قصة فيسبوك تحتاج صورة JPEG أو PNG برابط HTTPS أصلي. لن ننسخ صور R2.",
     }, 400);
@@ -77,7 +81,7 @@ export async function handleFacebookNextStoryRequest(
       product: {
         id: product.id,
         name: product.nameAr?.trim() || product.name?.trim() || "موديل " + product.id,
-        image: product.image,
+        image: storyImage,
       },
       note: "هذه معاينة للصورة الأصلية فقط. قد يقص فيسبوك الأطراف عند عرض القصة عموديًا. لا توجد صور إضافية على R2 أو ملصقات أو رابط تفاعلي تلقائي.",
     });
@@ -92,7 +96,7 @@ export async function handleFacebookNextStoryRequest(
     const storyId = await publishFacebookPhotoStory(
       env.META_FACEBOOK_PAGE_ID!.trim(),
       pageToken,
-      product.image,
+      storyImage,
     );
     return json({
       ok: true,

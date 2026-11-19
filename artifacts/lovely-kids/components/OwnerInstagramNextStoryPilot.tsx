@@ -177,7 +177,7 @@ export default function OwnerInstagramNextStoryPilot({ selectedIds }: { selected
     borderRadius: 14, padding: 12, gap: 11,
   } as const;
   const action = {
-    backgroundColor: colors.primary, borderRadius: 12,
+    backgroundColor: "#C13584", borderRadius: 12,
     paddingVertical: 13, paddingHorizontal: 16, alignItems: "center" as const,
   };
   const muted = { color: colors.mutedForeground, fontSize: 12, textAlign: "right" as const };

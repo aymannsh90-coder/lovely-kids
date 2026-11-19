@@ -1,12 +1,13 @@
 import { getResponsiveTopPadding } from "@/utils/webLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +16,19 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
+import {
+  captureScannerKeyboardEvent,
+  createScannerKeyboardBuffer,
+  resetScannerKeyboardBuffer,
+} from "@/utils/scannerKeyboard";
+import {
+  eligibleForSocialPublishing,
+  exactSocialPublishingBarcodeMatches,
+  matchesSocialPublishingProduct,
+  socialPublishingDisplayImage,
+} from "@/utils/socialPublishingProductSearch";
 
 import { API_BASE } from "@/constants/api";
 import { useAuth } from "@/context/AuthContext";
@@ -41,6 +55,8 @@ const DEFAULT_INTRO = "🛍️ موديلات مختارة من Lovely Kids";
 
 type PublishingPlatform = "facebook" | "instagram";
 type PublishingContent = "post" | "story";
+const FACEBOOK_COLOR = "#1877F2";
+const INSTAGRAM_COLOR = "#C13584";
 
 function isFailedResponse(value: unknown): value is { error: string } {
   return !!value && typeof value === "object" &&
@@ -52,11 +68,18 @@ export default function FacebookPostsScreen() {
   const insets = useSafeAreaInsets();
   const { user, getAuthToken } = useAuth();
   const { products } = useProducts();
+  const scannerKeyboard = useRef(createScannerKeyboardBuffer());
+  const scannerSearchFocused = useRef(false);
+  const cameraScanAccepted = useRef(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const [platform, setPlatform] = useState<PublishingPlatform>("facebook");
+  const brandColor = platform === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR;
   const [contentType, setContentType] = useState<PublishingContent>("post");
   const [visibleCount, setVisibleCount] = useState(100);
   const [search, setSearch] = useState("");
+  const [scanNotice, setScanNotice] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [intro, setIntro] = useState(DEFAULT_INTRO);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -86,15 +109,25 @@ export default function FacebookPostsScreen() {
   const [igCarouselSuccess, setIgCarouselSuccess] = useState(false);
 
   const filteredProducts = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return products
-      .filter((product) => !product.isHidden && !product.deletedAt)
-      .filter((product) => !q ||
-        product.nameAr.toLowerCase().includes(q) ||
-        product.name.toLowerCase().includes(q) ||
-        String(product.productCode ?? "").toLowerCase().includes(q) ||
-        product.id === q);
+    return products.filter((product) =>
+      eligibleForSocialPublishing(product) &&
+      matchesSocialPublishingProduct(product, search)
+    );
   }, [products, search]);
+  const usablePhoto = (value: string) => {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" || !url.hostname || url.username || url.password) return false;
+      if (contentType === "story") {
+        return platform === "instagram"
+          ? /\.jpe?g$/i.test(url.pathname)
+          : /\.(?:jpe?g|png)$/i.test(url.pathname);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const visibleProducts = useMemo(
     () => filteredProducts.slice(0, visibleCount),
     [filteredProducts, visibleCount],
@@ -119,6 +152,119 @@ export default function FacebookPostsScreen() {
     })();
     return () => { cancelled = true; };
   }, [getAuthToken, user?.isOwner]);
+
+
+  const acceptBarcode = (rawValue: string) => {
+    const barcode = rawValue.trim();
+    if (!barcode) return;
+    const exact = exactSocialPublishingBarcodeMatches(products, barcode);
+    setSearch(barcode);
+    setVisibleCount(100);
+    setPreview(null);
+    setShowAllFacebookPreview(false);
+    setPublishedUrl(null);
+    setIgCarouselPreview(null);
+    setIgCarouselError("");
+    setIgCarouselResult(null);
+    setIgCarouselSuccess(false);
+    if (exact.length === 1) {
+      const product = exact[0];
+      setSelectedIds((current) => (
+        current.includes(product.id) ? current : [...current, product.id]
+      ));
+      setScanNotice("✓ تم اختيار الموديل #" + product.id + " — " + product.nameAr);
+    } else if (exact.length > 1) {
+      setScanNotice("الباركود مرتبط بأكثر من موديل. اختَر الموديل الصحيح من نتائج البحث.");
+    } else {
+      setScanNotice("لم نجد موديلًا متوفرًا بهذا الباركود. تأكد من الكود والمخزون.");
+    }
+  };
+
+  // Exactly the same physical-keycode scanner decoder used by POS
+  // and the Lovely Kids product management page: unaffected by Arabic keyboard layout.
+  useEffect(() => {
+    if (Platform.OS !== "web" || user?.isOwner !== true) return;
+    const onScannerKeyDown = (event: KeyboardEvent) => {
+      if (!scannerSearchFocused.current) return;
+      const scan = captureScannerKeyboardEvent(scannerKeyboard.current, event);
+      if (scan && event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        acceptBarcode(scan);
+      }
+    };
+    window.addEventListener("keydown", onScannerKeyDown, true);
+    return () => window.removeEventListener("keydown", onScannerKeyDown, true);
+  }, [products, user?.isOwner]);
+
+  // Do not keep already selected sold-out products in the owner publishing list.
+  useEffect(() => {
+    if (products.length === 0 || selectedIds.length === 0) return;
+    const eligible = new Set(
+      products.filter(eligibleForSocialPublishing).map((product) => product.id),
+    );
+    if (!selectedIds.some((id) => !eligible.has(id))) return;
+    setSelectedIds((current) => current.filter((id) => eligible.has(id)));
+    setPreview(null);
+    setIgCarouselPreview(null);
+    setScanNotice("تم إزالة الموديلات التي نفدت أو أصبحت مخفية من التحديد.");
+  }, [products, selectedIds]);
+
+  const stopCamera = () => setScannerOpen(false);
+
+  const onCameraBarcode = (data: string) => {
+    if (!data?.trim() || cameraScanAccepted.current) return;
+    cameraScanAccepted.current = true;
+    stopCamera();
+    acceptBarcode(data);
+  };
+
+  const openCamera = async () => {
+    cameraScanAccepted.current = false;
+    setScanNotice("");
+    if (Platform.OS !== "web") {
+      try {
+        const permission = cameraPermission?.granted
+          ? cameraPermission
+          : await requestCameraPermission();
+        if (!permission.granted) {
+          Alert.alert("الكاميرا", "يلزم السماح باستخدام الكاميرا لمسح الباركود.");
+          return;
+        }
+      } catch {
+        Alert.alert("الكاميرا", "تعذر الحصول على إذن الكاميرا.");
+        return;
+      }
+    }
+    setScannerOpen(true);
+  };
+
+  // Share the existing product-admin web camera scanner (native detector + ZXing).
+  useEffect(() => {
+    if (Platform.OS !== "web" || !scannerOpen) return;
+    let disposed = false;
+    let controls: { stop: () => void } | undefined;
+    const timer = setTimeout(() => {
+      void startWebBarcodeScanner("social-publishing-barcode-video", (raw) => {
+        if (disposed) return;
+        disposed = true;
+        onCameraBarcode(raw);
+      }).then((result) => {
+        if (disposed) result.stop();
+        else controls = result;
+      }).catch(() => {
+        if (!disposed) {
+          setScannerOpen(false);
+          setScanNotice("تعذر تشغيل الكاميرا. يمكنك استخدام البحث اليدوي أو قارئ الباركود.");
+        }
+      });
+    }, 100);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      controls?.stop();
+    };
+  }, [scannerOpen, products]);
 
   const verifyNextFacebookConnection = async () => {
     if (nextVerifying) return;
@@ -357,7 +503,7 @@ export default function FacebookPostsScreen() {
     paddingHorizontal: 16,
     borderRadius: 12,
     alignItems: "center" as const,
-    backgroundColor: colors.primary,
+    backgroundColor: brandColor,
   };
 
   if (user?.isOwner !== true) {
@@ -401,10 +547,13 @@ export default function FacebookPostsScreen() {
               accessibilityState={{ selected: platform === item }}
               style={{
                 flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: "center",
-                borderWidth: 1, borderColor: platform === item ? colors.primary : colors.border,
-                backgroundColor: platform === item ? colors.primary : colors.background,
+                borderWidth: 1, borderColor: platform === item ? (item === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR) : colors.border,
+                backgroundColor: platform === item ? (item === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR) : colors.background,
+                flexDirection: "row-reverse", justifyContent: "center", gap: 8,
               }}
             >
+              <Ionicons name={item === "facebook" ? "logo-facebook" : "logo-instagram"}
+                size={21} color={platform === item ? "#FFFFFF" : item === "facebook" ? FACEBOOK_COLOR : INSTAGRAM_COLOR} />
               <Text style={{ color: platform === item ? "#FFFFFF" : colors.foreground, fontWeight: "800" }}>
                 {item === "facebook" ? "فيسبوك" : "إنستغرام"}
               </Text>
@@ -421,8 +570,8 @@ export default function FacebookPostsScreen() {
               accessibilityState={{ selected: contentType === item }}
               style={{
                 flex: 1, paddingVertical: 13, borderRadius: 11, alignItems: "center",
-                borderWidth: 1, borderColor: contentType === item ? colors.primary : colors.border,
-                backgroundColor: contentType === item ? colors.primary : colors.background,
+                borderWidth: 1, borderColor: contentType === item ? brandColor : colors.border,
+                backgroundColor: contentType === item ? brandColor : colors.background,
               }}
             >
               <Text style={{ color: contentType === item ? "#FFFFFF" : colors.foreground, fontWeight: "800" }}>
@@ -466,13 +615,38 @@ export default function FacebookPostsScreen() {
             )}
           </View>
         )}
-        <TextInput
-          value={search}
-          onChangeText={(value) => { setSearch(value); setVisibleCount(100); }}
-          placeholder="ابحث باسم الصنف أو الكود أو رقم الموديل"
-          placeholderTextColor={colors.mutedForeground}
-          style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, color: colors.foreground, textAlign: "right" }}
-        />
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+          <TextInput
+            value={search}
+            onChangeText={(value) => { setSearch(value); setScanNotice(""); setVisibleCount(100); }}
+            onFocus={() => {
+              scannerSearchFocused.current = true;
+              resetScannerKeyboardBuffer(scannerKeyboard.current);
+            }}
+            onBlur={() => {
+              scannerSearchFocused.current = false;
+              resetScannerKeyboardBuffer(scannerKeyboard.current);
+            }}
+            placeholder="ابحث بالاسم أو الكود أو الباركود / LKQR"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, color: colors.foreground, textAlign: "right" }}
+          />
+          <Pressable
+            onPress={() => void openCamera()}
+            accessibilityRole="button"
+            accessibilityLabel="مسح باركود أو رمز QR بالكاميرا"
+            style={{ borderWidth: 1, borderColor: brandColor, padding: 10, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+          >
+            <Ionicons name="camera-outline" size={24} color={brandColor} />
+          </Pressable>
+        </View>
+        {!!scanNotice && (
+          <Text style={{ color: scanNotice.startsWith("✓") ? "#15803D" : "#D97706", textAlign: "right", fontWeight: "700" }}>
+            {scanNotice}
+          </Text>
+        )}
         <ScrollView nestedScrollEnabled style={{ maxHeight: 380 }}>
           {visibleProducts.map((product) => {
             const chosen = selectedIds.includes(product.id);
@@ -489,7 +663,8 @@ export default function FacebookPostsScreen() {
                   paddingVertical: 9,
                 }}
               >
-                <Image source={{ uri: product.image }} style={{ height: 68, width: 68, borderRadius: 9, backgroundColor: colors.background }} />
+                <Image source={{ uri: socialPublishingDisplayImage(product, usablePhoto) }}
+                  style={{ height: 68, width: 68, borderRadius: 9, backgroundColor: colors.background }} />
                 <View style={{ flex: 1, gap: 4, alignItems: "flex-end" }}>
                   <Text style={{ color: colors.foreground, fontWeight: "700", textAlign: "right" }}>{product.nameAr}</Text>
                   <Text style={muted}>#{product.id} · {product.price} ₪</Text>
@@ -497,7 +672,7 @@ export default function FacebookPostsScreen() {
                 <Ionicons
                   name={chosen ? "checkbox" : "square-outline"}
                   size={26}
-                  color={chosen ? colors.primary : colors.mutedForeground}
+                  color={chosen ? brandColor : colors.mutedForeground}
                 />
               </Pressable>
             );
@@ -510,7 +685,7 @@ export default function FacebookPostsScreen() {
             accessibilityRole="button"
             style={{ borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingVertical: 11, alignItems: "center" }}
           >
-            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+            <Text style={{ color: brandColor, fontWeight: "700" }}>
               عرض المزيد ({filteredProducts.length - visibleCount} موديل متبقٍ)
             </Text>
           </Pressable>
@@ -706,7 +881,7 @@ export default function FacebookPostsScreen() {
               <Pressable
                 onPress={() => void verifyNextFacebookConnection()}
                 disabled={nextVerifying}
-                style={{ ...action, opacity: nextVerifying ? 0.5 : 1 }}
+                style={{ ...action, backgroundColor: FACEBOOK_COLOR, opacity: nextVerifying ? 0.5 : 1 }}
               >
                 {nextVerifying ? <ActivityIndicator color="#fff" /> :
                   <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال فيسبوك</Text>}
@@ -728,7 +903,7 @@ export default function FacebookPostsScreen() {
               <Pressable
                 onPress={() => void verifyNextInstagramConnection()}
                 disabled={nextInstagramVerifying}
-                style={{ ...action, opacity: nextInstagramVerifying ? 0.5 : 1 }}
+                style={{ ...action, backgroundColor: INSTAGRAM_COLOR, opacity: nextInstagramVerifying ? 0.5 : 1 }}
               >
                 {nextInstagramVerifying ? <ActivityIndicator color="#fff" /> :
                   <Text style={{ color: "#fff", fontWeight: "800" }}>فحص اتصال إنستغرام</Text>}
@@ -749,6 +924,49 @@ export default function FacebookPostsScreen() {
         )}
       </View>
 
+      <Modal visible={scannerOpen} animationType="fade" transparent
+        onRequestClose={stopCamera}>
+        <View style={{
+          flex: 1, backgroundColor: "rgba(0,0,0,0.83)",
+          justifyContent: "center", alignItems: "center", padding: 20,
+        }}>
+          <View style={{ width: "100%", maxWidth: 420, backgroundColor: "#111", borderRadius: 18, overflow: "hidden" }}>
+            {Platform.OS === "web" ? (
+              React.createElement("video", {
+                id: "social-publishing-barcode-video",
+                autoPlay: true,
+                muted: true,
+                playsInline: true,
+                style: { width: "100%", height: 280, objectFit: "cover", backgroundColor: "#000" },
+              } as any)
+            ) : (
+              <CameraView
+                facing="back"
+                style={{ width: "100%", height: 280 }}
+                barcodeScannerSettings={{
+                  barcodeTypes: [
+                    "ean13", "ean8", "upc_a", "upc_e",
+                    "code128", "code39", "code93",
+                    "itf14", "codabar", "qr",
+                  ],
+                }}
+                onBarcodeScanned={cameraScanAccepted.current
+                  ? undefined
+                  : ({ data }) => onCameraBarcode(data)}
+              />
+            )}
+            <View style={{ gap: 12, padding: 16, alignItems: "center" }}>
+              <Text style={{ color: "#fff", fontWeight: "800", textAlign: "center" }}>
+                وجّه الكاميرا نحو الباركود أو QR — سيتم تحديد الموديل تلقائيًا
+              </Text>
+              <Pressable onPress={stopCamera} accessibilityRole="button"
+                style={{ borderRadius: 20, backgroundColor: "#333", paddingVertical: 11, paddingHorizontal: 26 }}>
+                <Text style={{ color: "#fff", fontWeight: "800" }}>إغلاق الكاميرا</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
