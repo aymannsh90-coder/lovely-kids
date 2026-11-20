@@ -1770,6 +1770,19 @@ export default function AdminProductsScreen() {
                     ? item.productCode
                     : "غير متوفر"}
                 </Text>
+
+                <Text
+                  selectable
+                  style={{
+                    alignSelf: "flex-end",
+                    color: colors.foreground,
+                    fontSize: 13,
+                    fontWeight: "900",
+                    textAlign: "right",
+                  }}
+                >
+                  رقم المنتج: {item.id}
+                </Text>
               </View>
 
               <View style={styles.actions}>
