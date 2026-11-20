@@ -35,6 +35,8 @@ export interface Product {
   price: number;
   originalPrice?: number;
   image: string;
+  /** Optional standalone portrait image for Facebook and Instagram Stories. */
+  storyImage?: string | null;
   images?: string[];
   category: string;
   ageGroup: string;
