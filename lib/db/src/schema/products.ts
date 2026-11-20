@@ -24,6 +24,8 @@ export const productsTable = pgTable("products", {
   price: integer("price").notNull(),
   originalPrice: integer("original_price"),
   image: text("image").notNull(),
+  // Optional 9:16 JPEG used only for Facebook/Instagram Stories.
+  storyImage: text("story_image"),
   images: jsonb("images").$type<string[]>().default([]),
   category: text("category").notNull(),
   ageGroup: text("age_group").notNull(),
