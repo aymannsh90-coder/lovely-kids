@@ -10,6 +10,7 @@ import {
   productsTable,
 } from "@workspace/db/schema";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
+import { z } from "zod/v4";
 import { getCurrentUser } from "./auth";
 import { userHasAnyPermission, userHasPermission } from "./staff-permissions";
 import type { Env, openDb } from "./db";
@@ -18,6 +19,7 @@ import { rewriteMediaUrlsForPublic } from "./media-url";
 import { rewriteMediaUrlsForStorage } from "./media-url";
 import { syncManualProductCostQuantity } from "./inventory-cost-engine";
 import { getProductQuantity } from "./product-quantity";
+import { validInstagramStoryPhotoUrl } from "./instagram-next-story-pilot";
 import {
   appendProductToSupplierDraft,
   PurchaseDraftServiceError,
@@ -48,6 +50,9 @@ const json = (data: unknown, status = 200) =>
 
 const createProductRequestSchema = insertProductSchema.extend({
   additionalBarcodes: productBarcodeInputSchema.array().optional(),
+  storyImage: z.string().refine(validInstagramStoryPhotoUrl, {
+    message: "صورة القصص يجب أن تكون JPEG برابط HTTPS صالح",
+  }).nullable().optional(),
 });
 
 const updateProductRequestSchema = createProductRequestSchema.partial();
@@ -303,6 +308,7 @@ function toProduct(
     originalPrice:
       row.originalPrice ?? undefined,
     image: row.image,
+    storyImage: row.storyImage ?? null,
     images: (row.images as string[]) ?? [],
     category: row.category,
     ageGroup: row.ageGroup,
@@ -335,13 +341,16 @@ function toProduct(
 function collectProductImageUrls(
   product: Pick<
     typeof productsTable.$inferSelect,
-    "image" | "images" | "colorVariants"
+    "image" | "images" | "colorVariants" | "storyImage"
   >,
 ): Set<string> {
   const urls = new Set<string>();
 
   if (product.image) {
     urls.add(product.image);
+  }
+  if (product.storyImage) {
+    urls.add(product.storyImage);
   }
 
   for (const url of (product.images as string[]) ?? []) {
@@ -363,11 +372,11 @@ async function cleanupRemovedProductImages(
   env: Env,
   previousProduct: Pick<
     typeof productsTable.$inferSelect,
-    "image" | "images" | "colorVariants"
+    "image" | "images" | "colorVariants" | "storyImage"
   >,
   updatedProduct: Pick<
     typeof productsTable.$inferSelect,
-    "image" | "images" | "colorVariants"
+    "image" | "images" | "colorVariants" | "storyImage"
   >,
 ): Promise<void> {
   const previousUrls =
@@ -388,6 +397,7 @@ async function cleanupRemovedProductImages(
   const products = await db
     .select({
       image: productsTable.image,
+      storyImage: productsTable.storyImage,
       images: productsTable.images,
       colorVariants: productsTable.colorVariants,
     })
@@ -3332,26 +3342,12 @@ async function deleteProductPermanently(
   try {
     const deletedProduct = rows[0];
 
-    const deletedImageUrls = new Set<string>();
-
-    if (deletedProduct.image) {
-      deletedImageUrls.add(deletedProduct.image);
-    }
-
-    for (const url of (deletedProduct.images as string[]) ?? []) {
-      if (url) deletedImageUrls.add(url);
-    }
-
-    for (
-      const variant of
-        (deletedProduct.colorVariants as ColorVariant[]) ?? []
-    ) {
-      if (variant.image) deletedImageUrls.add(variant.image);
-    }
+    const deletedImageUrls = collectProductImageUrls(deletedProduct);
 
     const remainingProducts = await db
       .select({
         image: productsTable.image,
+        storyImage: productsTable.storyImage,
         images: productsTable.images,
         colorVariants: productsTable.colorVariants,
       })
@@ -3360,17 +3356,8 @@ async function deleteProductPermanently(
     const usedImageUrls = new Set<string>();
 
     for (const product of remainingProducts) {
-      if (product.image) usedImageUrls.add(product.image);
-
-      for (const url of (product.images as string[]) ?? []) {
-        if (url) usedImageUrls.add(url);
-      }
-
-      for (
-        const variant of
-          (product.colorVariants as ColorVariant[]) ?? []
-      ) {
-        if (variant.image) usedImageUrls.add(variant.image);
+      for (const url of collectProductImageUrls(product)) {
+        usedImageUrls.add(url);
       }
     }
 
