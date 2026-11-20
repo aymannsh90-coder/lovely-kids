@@ -141,6 +141,7 @@ function toInsertBody(product: Omit<Product, "id">) {
     price: product.price,
     originalPrice: product.originalPrice ?? null,
     image: product.image,
+    storyImage: product.storyImage?.trim() || null,
     images: product.images ?? [],
     category: product.category,
     ageGroup: product.ageGroup,
