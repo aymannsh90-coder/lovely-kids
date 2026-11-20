@@ -346,9 +346,7 @@ export default function AddProductScreen() {
     setAdditionalBarcodes([
       ...(editProduct.additionalBarcodes ?? []),
     ]);
-    setAdditionalBarcodesExpanded(
-      (editProduct.additionalBarcodes?.length ?? 0) > 0,
-    );
+    setAdditionalBarcodesExpanded(false);
 
     setPrice(editProduct.price?.toString() ?? "");
     setOriginalPrice(
