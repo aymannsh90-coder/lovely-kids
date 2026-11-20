@@ -1,5 +1,5 @@
 import { productsTable } from "@workspace/db/schema";
-import { socialPublishingPhoto, socialPublishingQuantity } from "./social-publishing-photo";
+import { socialPublishingQuantity, socialPublishingStoryPhoto } from "./social-publishing-photo";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -55,6 +55,7 @@ export async function handleFacebookNextStoryRequest(
     nameAr: productsTable.nameAr,
     name: productsTable.name,
     image: productsTable.image,
+    storyImage: productsTable.storyImage,
     stock: productsTable.stock,
     colorVariants: productsTable.colorVariants,
     isHidden: productsTable.isHidden,
@@ -65,7 +66,7 @@ export async function handleFacebookNextStoryRequest(
   if (!product || product.isHidden || product.deletedAt || socialPublishingQuantity(product) === 0) {
     return json({ error: "الموديل غير متوفر بالمخزون أو مخفي أو محذوف" }, 400);
   }
-  const storyImage = socialPublishingPhoto(product, validFacebookNextStoryImage);
+  const storyImage = socialPublishingStoryPhoto(product, validFacebookNextStoryImage);
   if (!validFacebookNextStoryImage(storyImage)) {
     return json({
       error: "قصة فيسبوك تحتاج صورة JPEG أو PNG برابط HTTPS أصلي. لن ننسخ صور R2.",
@@ -83,7 +84,9 @@ export async function handleFacebookNextStoryRequest(
         name: product.nameAr?.trim() || product.name?.trim() || "موديل " + product.id,
         image: storyImage,
       },
-      note: "هذه معاينة للصورة الأصلية فقط. قد يقص فيسبوك الأطراف عند عرض القصة عموديًا. لا توجد صور إضافية على R2 أو ملصقات أو رابط تفاعلي تلقائي.",
+      note: product.storyImage && validFacebookNextStoryImage(product.storyImage)
+        ? "هذه صورة القصص المخصصة لهذا الموديل. لا توجد ملصقات أو روابط تفاعلية تلقائية."
+        : "لا توجد صورة قصص مخصصة صالحة؛ ستُستخدم صورة المنتج المتوفرة. قد يقص فيسبوك أطراف الصور غير العمودية.",
     });
   }
   if (!configured) return json({
