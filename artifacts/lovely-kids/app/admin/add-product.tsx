@@ -8,6 +8,7 @@ import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { startWebBarcodeScanner } from "@/utils/webBarcodeScanner";
+import { assignGalleryImageToStory, canUseGalleryImageForStory } from "@/utils/productStoryImageSelection";
 import {
   createProductQrLabelPreview,
   DEFAULT_QR_LABEL_LAYOUT,
@@ -2044,6 +2045,21 @@ export default function AddProductScreen() {
     if (url) setStoryImage(url);
   };
 
+  const handleAssignGalleryImageToStory = (selectedUrl: string) => {
+    if (uploading || isCompressing || saving) return;
+    // Pure URL transfer: no upload, conversion, or duplicate object on R2.
+    const next = assignGalleryImageToStory({ image, images }, selectedUrl);
+    if (!next) {
+      setErrors(["تعيين صورة من المعرض للقصص يحتاج صورة JPG أو JPEG برابط HTTPS صالح."]);
+      return;
+    }
+
+    setImage(next.image);
+    setImages(next.images);
+    setStoryImage(next.storyImage);
+    setErrors([]);
+  };
+
   const handleAddImage = async () => {
     const url = await uploadImage();
     if (!url) return;
@@ -3437,14 +3453,15 @@ export default function AddProductScreen() {
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.foreground }]}>صور المنتج *</Text>
           <Text style={[styles.hint, { color: colors.mutedForeground, marginBottom: 4 }]}>
-            اختر الصورة الرئيسية بالضغط على ⭐ — يمكنك إضافة حتى 8 صور
+            اختر الصورة الرئيسية بالضغط على ⭐ — يمكنك إضافة حتى 8 صور. زر «للقصة» ينقل الصورة للقصة دون رفعها مرة ثانية.
           </Text>
 
           {/* Image Grid */}
           {images.length > 0 && (
             <View style={styles.imageGrid}>
               {images.map((img, idx) => (
-                <View key={idx} style={[styles.gridItem, { borderColor: image === img ? colors.primary : colors.border }]}>
+                <View key={idx} style={{ width: 112, gap: 6, alignItems: "center" }}>
+                <View style={[styles.gridItem, { borderColor: image === img ? colors.primary : colors.border }]}>
                   {image === img && (
                     <View style={[styles.mainBadge, { backgroundColor: colors.primary }]}>
                       <Text style={styles.mainBadgeText}>رئيسية</Text>
@@ -3491,6 +3508,26 @@ export default function AddProductScreen() {
                       <Ionicons name="trash-outline" size={14} color="#ef4444" />
                     </Pressable>
                   </View>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`تعيين الصورة رقم ${idx + 1} كصورة قصة`}
+                  onPress={() => handleAssignGalleryImageToStory(img)}
+                  disabled={uploading || isCompressing || saving || !canUseGalleryImageForStory(img)}
+                  style={{
+                    width: 108,
+                    flexDirection: "row-reverse", alignItems: "center", justifyContent: "center",
+                    gap: 5, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 4,
+                    borderWidth: 1, borderColor: colors.primary + "60",
+                    backgroundColor: colors.primary + "10",
+                    opacity: uploading || isCompressing || saving || !canUseGalleryImageForStory(img) ? 0.4 : 1,
+                  }}
+                >
+                  <Ionicons name="phone-portrait-outline" size={14} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "800" }}>
+                    {canUseGalleryImageForStory(img) ? "تعيين للقصة" : "JPG فقط"}
+                  </Text>
+                </Pressable>
                 </View>
               ))}
 
@@ -3602,8 +3639,9 @@ export default function AddProductScreen() {
             <Ionicons name="logo-instagram" size={19} color="#C13584" />
           </View>
           <Text style={[styles.hint, { color: colors.mutedForeground, textAlign: "right", marginBottom: 0 }]}>
-            صورة عمودية مستقلة للقصص على فيسبوك وإنستغرام فقط. المقاس المفضل 1080 × 1920 (9:16) بصيغة JPEG.
-            عند اختيار «قصص» سيستخدمها النظام تلقائيًا، ولن تظهر ضمن صور المتجر أو المنشورات العادية.
+            صورة عمودية للقصص على فيسبوك وإنستغرام فقط. المقاس المفضل 1080 × 1920 (9:16) بصيغة JPEG.
+            يمكنك رفعها هنا أو تعيين أي صورة JPG موجودة بمعرض المنتج باستخدام زر «تعيين للقصة»، دون رفعها مرتين.
+            إذا لم تكن الصورة عمودية فقد يتم قص أطرافها عند عرض القصة.
           </Text>
           {storyImage ? (
             <View style={{ alignItems: "center", gap: 10 }}>
@@ -3666,7 +3704,7 @@ export default function AddProductScreen() {
             </Pressable>
           )}
           <Text style={[styles.hint, { color: colors.mutedForeground, textAlign: "right", marginBottom: 0 }]}>
-            بدون صورة مخصصة، يستمر النشر باستخدام صورة المنتج المتوفرة مثل السابق.
+            عند نقل صورة من المعرض، تبقى الصورة الرئيسية للمنتج من الصور المتبقية. إذا كانت الصورة الوحيدة تُستخدم للمنتج والقصة معًا دون تكرار الملف. وبدون صورة قصص يبقى النشر كالمعتاد.
           </Text>
         </View>
 
