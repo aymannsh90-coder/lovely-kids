@@ -1,0 +1,30 @@
+name: Verify product social previews
+
+on:
+  pull_request:
+    paths:
+      - "artifacts/lovely-kids/scripts/product-share-worker.mjs"
+      - "artifacts/lovely-kids/scripts/product-share-worker.test.mjs"
+      - "artifacts/lovely-kids/scripts/install-product-share-preview.cjs"
+      - "artifacts/lovely-kids/package.json"
+      - ".github/workflows/verify-product-social-preview.yml"
+  workflow_dispatch:
+
+jobs:
+  product-social-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify preview metadata and safe fallback
+        run: node --test artifacts/lovely-kids/scripts/product-share-worker.test.mjs
+      - name: Verify the Pages build integration and scoped route
+        shell: bash
+        run: |
+          mkdir -p artifacts/lovely-kids/dist
+          printf '<html><head></head><body></body></html>' > artifacts/lovely-kids/dist/index.html
+          node artifacts/lovely-kids/scripts/install-product-share-preview.cjs
+          test -s artifacts/lovely-kids/dist/_worker.js
+          node -e 'const r=require("./artifacts/lovely-kids/dist/_routes.json"); if(r.version!==1||JSON.stringify(r.include)!==JSON.stringify(["/product/*"])||r.exclude.length!==0)process.exit(1)'
