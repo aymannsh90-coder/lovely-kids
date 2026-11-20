@@ -34,6 +34,7 @@ import { useAuth } from "@/context/AuthContext";
 import { API_BASE } from "@/constants/api";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useColors } from "@/hooks/useColors";
+import { hasAssignedStoryImage } from "@/utils/productStoryImageStatus";
 import { CATEGORY_IDS, AGE_GROUP_IDS, DEFAULT_CATEGORY_LABELS, DEFAULT_AGE_GROUP_LABELS, Product, isSizeOutOfStock } from "@/data/products";
 
 
@@ -190,6 +191,8 @@ export default function AdminProductsScreen() {
     | "trash"
     | "qr_missing"
     | "cost_missing"
+    | "story_assigned"
+    | "story_missing"
   >("all");
   const [search, setSearch] = useState("");
 
@@ -1228,6 +1231,10 @@ export default function AdminProductsScreen() {
     (product) => !productHasGeneratedQr(product),
   ).length;
 
+  // Story counters use the same visible, non-deleted set as the All filter.
+  const storyAssignedCount = visibleProducts.filter(hasAssignedStoryImage).length;
+  const storyMissingCount = allCount - storyAssignedCount;
+
   const missingCostCount =
     user?.isOwner &&
     ownerCostListLoaded
@@ -1289,6 +1296,10 @@ export default function AdminProductsScreen() {
         stockFilter === "qr_missing" &&
         (product.isHidden || productHasGeneratedQr(product))
       ) return false;
+      if (stockFilter === "story_assigned" &&
+          (product.isHidden || !hasAssignedStoryImage(product))) return false;
+      if (stockFilter === "story_missing" &&
+          (product.isHidden || hasAssignedStoryImage(product))) return false;
       if (stockFilter === "out" && !isProductOutOfStock(product)) return false;
       if (stockFilter === "offers" && product.showInOffers !== true) return false;
       if (stockFilter === "pinned" && product.isPinned !== true) return false;
@@ -1455,6 +1466,18 @@ export default function AdminProductsScreen() {
             icon: "qr-code-outline" as const,
             activeColor: "#7c3aed",
           },
+          {
+            key: "story_assigned" as const,
+            label: `مع صورة قصة (${storyAssignedCount})`,
+            icon: "phone-portrait-outline" as const,
+            activeColor: "#c026d3",
+          },
+          {
+            key: "story_missing" as const,
+            label: `بدون صورة قصة (${storyMissingCount})`,
+            icon: "images-outline" as const,
+            activeColor: "#64748b",
+          },
           ...(user?.isOwner
             ? [
                 {
@@ -1577,6 +1600,22 @@ export default function AdminProductsScreen() {
                   <View style={[styles.tag, { backgroundColor: colors.muted }]}>
                     <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{getAgeLabel(item.ageGroup)}</Text>
                   </View>
+
+                  {hasAssignedStoryImage(item) ? (
+                    <View style={[styles.tag, {
+                      backgroundColor: "#fdf4ff",
+                      borderColor: "#f0abfc",
+                      borderWidth: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }]}>
+                      <Ionicons name="checkmark-circle" size={13} color="#a21caf" />
+                      <Text style={[styles.tagText, { color: "#86198f", fontWeight: "800" }]}>
+                        تم تعيين صورة قصة
+                      </Text>
+                    </View>
+                  ) : null}
 
                   {hasGeneratedQr ? (
                     <View
