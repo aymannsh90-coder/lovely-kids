@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { socialPublishingQuantity, socialPublishingPhoto } from "./social-publishing-photo.ts";
+import { socialPublishingQuantity, socialPublishingPhoto, socialPublishingStoryPhoto } from "./social-publishing-photo.ts";
 
 const make = (counts, images = ["https://cdn.example.com/one.jpg", "https://cdn.example.com/two.jpg", "https://cdn.example.com/three.jpg"]) => ({
   image: "https://cdn.example.com/main.jpg",
@@ -33,4 +33,20 @@ test("effective stock matches POS (minimum of tracked totals)",()=>{
  assert.equal(socialPublishingQuantity({...make([0,1,2]),stock:null}),3);
  assert.equal(socialPublishingQuantity({...make([0,1,2]),stock:null,colorVariants:[]}),null);
  assert.equal(socialPublishingQuantity(make([0,0,0])),0);
+});
+
+test("Story publisher prefers dedicated vertical image over default or single available color", () => {
+ const p={...make([0,2,0]),storyImage:"https://media.lovelykids.net/media/r2/story.jpg"};
+ const valid=url=>url.startsWith("https://")&&url.endsWith(".jpg");
+ assert.equal(socialPublishingStoryPhoto(p,valid),p.storyImage);
+ assert.equal(socialPublishingPhoto(p,valid),"https://cdn.example.com/two.jpg");
+});
+
+test("Story fallback remains identical to existing product/color logic when no dedicated image", () => {
+ const p=make([0,2,0]);
+ const valid=url=>url.startsWith("https://")&&url.endsWith(".jpg");
+ assert.equal(socialPublishingStoryPhoto(p,valid),"https://cdn.example.com/two.jpg");
+ assert.equal(socialPublishingStoryPhoto({...p,storyImage:null},valid),"https://cdn.example.com/two.jpg");
+ assert.equal(socialPublishingStoryPhoto({...p,storyImage:"https://cdn.example.com/bad.webp"},valid),"https://cdn.example.com/two.jpg");
+ assert.equal(socialPublishingStoryPhoto({...make([1,2,0]),storyImage:""},valid),"https://cdn.example.com/main.jpg");
 });

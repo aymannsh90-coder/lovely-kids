@@ -168,6 +168,7 @@ export default function AddProductScreen() {
   const [price, setPrice] = useState(editProduct?.price?.toString() ?? "");
   const [originalPrice, setOriginalPrice] = useState(editProduct?.originalPrice?.toString() ?? "");
   const [image, setImage] = useState(editProduct?.image ?? "");
+  const [storyImage, setStoryImage] = useState(editProduct?.storyImage ?? "");
   const [images, setImages] = useState<string[]>(editProduct?.images ?? []);
   const [description, setDescription] = useState(editProduct?.description ?? "");
   const [category, setCategory] = useState(editProduct?.category ?? "clothes");
@@ -354,6 +355,7 @@ export default function AddProductScreen() {
     );
 
     setImage(editProduct.image ?? "");
+    setStoryImage(editProduct.storyImage ?? "");
     setImages([...(editProduct.images ?? [])]);
     setDescription(editProduct.description ?? "");
 
@@ -451,6 +453,7 @@ export default function AddProductScreen() {
 
     // لا ننسخ الصور أو الأكواد أو الباركود أو QR
     setImage("");
+    setStoryImage(""); // Copied products must not reuse the source Story design.
     setImages([]);
     setProductCode("");
     setBarcode("");
@@ -1912,7 +1915,7 @@ export default function AddProductScreen() {
     });
   };
 
-  const uploadImage = async (): Promise<string | null> => {
+  const uploadImage = async (forStory = false): Promise<string | null> => {
     if (uploading || isCompressing) return null;
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -1929,6 +1932,15 @@ export default function AddProductScreen() {
 
     if (result.canceled || !result.assets[0]) return null;
     const asset = result.assets[0];
+    // Dedicated story image must be portrait 9:16, never auto-cropped.
+    // Allow a small export tolerance, but reject square/wide product photos.
+    const storyRatioValid = (w: number, h: number) =>
+      w > 0 && h > 0 && Math.abs(w / h - 9 / 16) <= 0.025;
+    if (forStory && asset.width && asset.height &&
+        !storyRatioValid(asset.width, asset.height)) {
+      setErrors(["صورة القصص لازم تكون عمودية بنسبة 9:16، والأفضل 1080 × 1920 بكسل. عدّل مقاس الصورة ثم ارفعها."]);
+      return null;
+    }
 
     setIsCompressing(true);
     setErrors([]);
@@ -1942,7 +1954,11 @@ export default function AddProductScreen() {
         const compressed = await new Promise<{ base64: string }>((resolve, reject) => {
           const img = new (globalThis as unknown as { Image: new () => HTMLImageElement }).Image();
           img.onload = () => {
-            const MAX = 1200;
+            if (forStory && !storyRatioValid(img.width, img.height)) {
+              reject(new Error("صورة القصص لازم تكون عمودية بنسبة 9:16 (1080 × 1920)."));
+              return;
+            }
+            const MAX = forStory ? 1920 : 1200;
             const scale = Math.min(1, MAX / Math.max(img.width || MAX, img.height || MAX));
             const w = Math.max(1, Math.round((img.width || MAX) * scale));
             const h = Math.max(1, Math.round((img.height || MAX) * scale));
@@ -1952,7 +1968,7 @@ export default function AddProductScreen() {
             const ctx = canvas.getContext("2d");
             if (!ctx) { reject(new Error("canvas غير متوفر")); return; }
             ctx.drawImage(img, 0, 0, w, h);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+            const dataUrl = canvas.toDataURL("image/jpeg", forStory ? 0.85 : 0.75);
             resolve({ base64: dataUrl.split(",")[1] });
           };
           img.onerror = () => reject(new Error("تعذّر تحميل الصورة"));
@@ -1961,9 +1977,12 @@ export default function AddProductScreen() {
         finalBase64 = compressed.base64;
       } else {
         // Native: expo-image-manipulator
-        const MAX = 1200;
+        const MAX = forStory ? 1920 : 1200;
         const w = asset.width ?? MAX;
         const h = asset.height ?? MAX;
+        if (forStory && !storyRatioValid(w, h)) {
+          throw new Error("صورة القصص لازم تكون عمودية بنسبة 9:16 (1080 × 1920).");
+        }
         const actions: Parameters<typeof manipulateAsync>[1] = [];
         if (Math.max(w, h) > MAX) {
           const scale = MAX / Math.max(w, h);
@@ -1972,7 +1991,7 @@ export default function AddProductScreen() {
         const compressed = await manipulateAsync(
           asset.uri,
           actions,
-          { compress: 0.75, format: SaveFormat.JPEG, base64: true },
+          { compress: forStory ? 0.85 : 0.75, format: SaveFormat.JPEG, base64: true },
         );
         if (!compressed.base64) throw new Error("الضغط لم ينتج base64");
         finalBase64 = compressed.base64;
@@ -2018,6 +2037,11 @@ export default function AddProductScreen() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handlePickStoryImage = async () => {
+    const url = await uploadImage(true);
+    if (url) setStoryImage(url);
   };
 
   const handleAddImage = async () => {
@@ -2382,6 +2406,7 @@ export default function AddProductScreen() {
         price: Number(price),
         originalPrice: originalPrice.trim() ? Number(originalPrice) : undefined,
         image: image.trim(),
+        storyImage: storyImage.trim() || null,
         images: images.length > 0 ? images : [image.trim()],
         description: description.trim() || nameAr.trim(),
         category,
@@ -3558,6 +3583,91 @@ export default function AddProductScreen() {
             autoCapitalize="none"
             keyboardType="url"
           />
+        </View>
+
+        {/* Dedicated social Story image, deliberately separate from product gallery. */}
+        <View style={[styles.field, {
+          borderWidth: 1, borderColor: colors.border, borderRadius: 16,
+          backgroundColor: colors.card, padding: 14, gap: 10, marginTop: 6,
+        }]}>
+          <View style={{
+            flexDirection: "row-reverse", alignItems: "center", gap: 8,
+            flexWrap: "wrap",
+          }}>
+            <Ionicons name="phone-portrait-outline" size={23} color={colors.primary} />
+            <Text style={[styles.label, { color: colors.foreground, marginBottom: 0, flex: 1, textAlign: "right" }]}>
+              صورة القصص (اختيارية)
+            </Text>
+            <Ionicons name="logo-facebook" size={19} color="#1877F2" />
+            <Ionicons name="logo-instagram" size={19} color="#C13584" />
+          </View>
+          <Text style={[styles.hint, { color: colors.mutedForeground, textAlign: "right", marginBottom: 0 }]}>
+            صورة عمودية مستقلة للقصص على فيسبوك وإنستغرام فقط. المقاس المفضل 1080 × 1920 (9:16) بصيغة JPEG.
+            عند اختيار «قصص» سيستخدمها النظام تلقائيًا، ولن تظهر ضمن صور المتجر أو المنشورات العادية.
+          </Text>
+          {storyImage ? (
+            <View style={{ alignItems: "center", gap: 10 }}>
+              <View style={{
+                width: 150, height: 266, borderRadius: 12, overflow: "hidden",
+                borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background,
+              }}>
+                <Image source={{ uri: storyImage }} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
+              </View>
+              <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>
+                ✓ صورة القصص جاهزة — تُحفظ مع المنتج عند الضغط على حفظ
+              </Text>
+              <View style={{ flexDirection: "row-reverse", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                <Pressable
+                  accessibilityRole="button" accessibilityLabel="استبدال صورة القصص"
+                  onPress={() => void handlePickStoryImage()}
+                  disabled={uploading || isCompressing || saving}
+                  style={{
+                    flexDirection: "row-reverse", alignItems: "center", gap: 6,
+                    backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 16,
+                    opacity: uploading || isCompressing || saving ? 0.5 : 1,
+                  }}>
+                  <Ionicons name="image-outline" size={17} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>استبدال الصورة</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button" accessibilityLabel="حذف صورة القصص المخصصة"
+                  onPress={() => setStoryImage("")}
+                  disabled={uploading || isCompressing || saving}
+                  style={{
+                    flexDirection: "row-reverse", alignItems: "center", gap: 6,
+                    backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 11, paddingHorizontal: 16,
+                    opacity: uploading || isCompressing || saving ? 0.5 : 1,
+                  }}>
+                  <Ionicons name="trash-outline" size={17} color="#B91C1C" />
+                  <Text style={{ color: "#B91C1C", fontWeight: "700" }}>إزالة الصورة</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button" accessibilityLabel="إضافة صورة القصة"
+              onPress={() => void handlePickStoryImage()}
+              disabled={uploading || isCompressing || saving}
+              style={[styles.uploadBox, {
+                borderColor: colors.primary, backgroundColor: colors.primary + "08",
+                minHeight: 135, opacity: uploading || isCompressing || saving ? 0.5 : 1,
+              }]}>
+              {uploading || isCompressing ? (
+                <ActivityIndicator size="large" color={colors.primary} />
+              ) : (
+                <Ionicons name="images-outline" size={34} color={colors.primary} />
+              )}
+              <Text style={[styles.uploadText, { color: colors.primary }]}>
+                {uploading || isCompressing ? "جارٍ تجهيز صورة القصة..." : "إضافة صورة القصة"}
+              </Text>
+              <Text style={[styles.uploadHint, { color: colors.mutedForeground }]}>
+                صورة واحدة مستقلة — JPG / 9:16
+              </Text>
+            </Pressable>
+          )}
+          <Text style={[styles.hint, { color: colors.mutedForeground, textAlign: "right", marginBottom: 0 }]}>
+            بدون صورة مخصصة، يستمر النشر باستخدام صورة المنتج المتوفرة مثل السابق.
+          </Text>
         </View>
 
         {/* Description */}
