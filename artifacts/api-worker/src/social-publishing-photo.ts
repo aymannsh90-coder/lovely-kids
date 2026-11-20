@@ -28,6 +28,21 @@ export function socialPublishingQuantity(product: SocialPublishingPhotoProduct):
  *
  * An optional validator makes the same rule safe for Instagram JPEG Stories.
  */
+/**
+ * Stories prefer the dedicated portrait image (when valid for that platform).
+ * No conversion, duplication, or mutation; when absent, keep the proven
+ * single-in-stock-color fallback used by the existing social publisher.
+ */
+export function socialPublishingStoryPhoto(
+  product: SocialPublishingPhotoProduct & { storyImage?: string | null },
+  validImage: (url: string) => boolean,
+): string {
+  const dedicated = product.storyImage?.trim();
+  return dedicated && validImage(dedicated)
+    ? dedicated
+    : socialPublishingPhoto(product, validImage);
+}
+
 export function socialPublishingPhoto(
   product: SocialPublishingPhotoProduct,
   validImage: (url: string) => boolean = (url) => {
