@@ -1,5 +1,5 @@
 import { productsTable } from "@workspace/db/schema";
-import { socialPublishingPhoto, socialPublishingQuantity } from "./social-publishing-photo";
+import { socialPublishingQuantity, socialPublishingStoryPhoto } from "./social-publishing-photo";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "./auth";
 import type { Env, openDb } from "./db";
@@ -48,6 +48,7 @@ export async function handleInstagramNextStoryRequest(
     nameAr: productsTable.nameAr,
     name: productsTable.name,
     image: productsTable.image,
+    storyImage: productsTable.storyImage,
     stock: productsTable.stock,
     colorVariants: productsTable.colorVariants,
     isHidden: productsTable.isHidden,
@@ -58,7 +59,7 @@ export async function handleInstagramNextStoryRequest(
   if (!product || product.isHidden || product.deletedAt || socialPublishingQuantity(product) === 0) {
     return json({ error: "الموديل غير متوفر بالمخزون أو مخفي أو محذوف" }, 400);
   }
-  const storyImage = socialPublishingPhoto(product, validInstagramStoryPhotoUrl);
+  const storyImage = socialPublishingStoryPhoto(product, validInstagramStoryPhotoUrl);
   if (!validInstagramStoryPhotoUrl(storyImage)) {
     return json({ error: "تحتاج القصة لصورة JPEG برابط HTTPS عام. لا نعدّل الصور تلقائيًا." }, 400);
   }
@@ -73,7 +74,9 @@ export async function handleInstagramNextStoryRequest(
         name: product.nameAr?.trim() || product.name?.trim() || "موديل " + product.id,
         image: storyImage,
       },
-      note: "هذه صورة معاينة فقط وليست نسخة 9:16 معالجة. قصص إنستغرام لا تتضمن رابط منتج قابلًا للضغط أو ملصقات تلقائية. جرّب قصة واحدة وراجعها على الهاتف.",
+      note: product.storyImage && validInstagramStoryPhotoUrl(product.storyImage)
+        ? "سيُستخدم تصميم القصص المخصص لهذا الموديل. لا توجد ملصقات أو روابط منتجات تفاعلية تلقائية."
+        : "لا توجد صورة قصص مخصصة صالحة؛ ستُستخدم صورة المنتج المتوفرة. يُفضّل مقاس 9:16. لا توجد ملصقات أو روابط تفاعلية.",
     });
   }
   // No fallback to previous Instagram token, the Facebook token, or feed token.
