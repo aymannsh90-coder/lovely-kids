@@ -1,0 +1,155 @@
+name: Verify import draft and cost preflight
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/import-cost-*'
+      - 'artifacts/api-worker/src/import-payment-*'
+      - 'artifacts/api-worker/src/import-supplier-voucher-*'
+      - 'artifacts/api-worker/src/import-direct-payment-*'
+      - 'artifacts/api-worker/src/import-close-*'
+      - 'artifacts/api-worker/src/import-closing-*'
+      - 'artifacts/api-worker/src/import-accounting-close*'
+      - 'artifacts/api-worker/src/import-clearing-*'
+      - 'artifacts/api-worker/src/import-purchase-*'
+      - 'artifacts/api-worker/src/import-purchase-currency-guard*'
+      - 'artifacts/api-worker/src/pos-purchase-routes.ts'
+      - 'artifacts/api-worker/src/db.ts'
+      - 'artifacts/api-worker/src/index.ts'
+      - 'artifacts/lovely-kids-pos/src/pages/purchases/ImportCostPage.tsx'
+      - 'artifacts/lovely-kids-pos/src/app/router.tsx'
+      - 'artifacts/lovely-kids-pos/src/app/navigation.ts'
+      - 'artifacts/lovely-kids-pos/src/lib/api.ts'
+      - 'lib/db/src/schema/import-costs.ts'
+      - 'lib/db/src/schema/index.ts'
+      - 'lib/db/migrations/20261109_create_import_cost_drafts.sql'
+      - 'lib/db/migrations/20261109_import_usd_supplier_advances.sql'
+      - 'lib/db/migrations/20261109_import_direct_cost_payments.sql'
+      - 'lib/db/migrations/20261109_import_purchase_evidence_links.sql'
+      - 'lib/db/migrations/20261109_import_supplier_voucher_claims.sql'
+      - 'lib/db/migrations/20261109_import_accounting_closures.sql'
+      - '.github/workflows/verify-import-cost-reconciliation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-import-costs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: API Worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: POS typecheck
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: POS build
+        run: pnpm --filter @workspace/lovely-kids-pos build
+      - name: Import cost and USD advance FX unit tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/import-cost-reconciliation.test.mjs artifacts/api-worker/src/import-payment-rules.test.mjs artifacts/api-worker/src/import-close-readiness.test.mjs artifacts/api-worker/src/import-purchase-currency-guard.test.mjs artifacts/api-worker/src/import-purchase-evidence.test.mjs artifacts/api-worker/src/import-clearing-settlement.test.mjs artifacts/api-worker/src/import-payment-journal-evidence.test.mjs artifacts/api-worker/src/import-supplier-voucher-claims.test.mjs artifacts/api-worker/src/import-closing-rules.test.mjs
+
+  validate-import-migration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: import_cost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d import_cost_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: import_cost_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create mock referenced tables
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-migration.fixture.sql
+      - name: Apply draft-only migration to disposable database
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_create_import_cost_drafts.sql
+      - name: Verify FK, unique, amount and RLS constraints
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-migration.verify.sql
+      - name: Apply advance posting table migration to disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_usd_supplier_advances.sql
+      - name: Verify supplier advance journal metadata constraints
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-cost-advance-migration.verify.sql
+
+      - name: Apply ILS direct-cost payment schema in ephemeral DB
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_direct_cost_payments.sql
+      - name: Verify direct expense payment FK and immutable settled shipments
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-direct-payment-migration.verify.sql
+
+      - name: Apply evidence-only POS purchase links migration
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_purchase_evidence_links.sql
+      - name: Verify purchase IDs cannot be reused across imports or orphan cost groups
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-purchase-link-migration.verify.sql
+
+      - name: Apply supplier voucher claims in disposable PostgreSQL only
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_supplier_voucher_claims.sql
+      - name: Verify voucher splits, foreign keys, RLS and unique attribution
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-supplier-voucher-claims-migration.verify.sql
+
+      - name: Apply reversible accounting closure schema only to ephemeral PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261109_import_accounting_closures.sql
+      - name: Verify closure audit trail, duplicate guard, reversals, and RLS
+        run: psql -v ON_ERROR_STOP=1 -f artifacts/api-worker/src/import-accounting-closures-migration.verify.sql
+
+
+  validate-import-financial-lifecycle:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: import_close_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d import_close_integration"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: import_close_integration
+      IMPORT_CLOSE_DISPOSABLE_DB: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test real financial journals with close, replay, reversal and re-close (disposable database only)
+        run: node --test artifacts/api-worker/src/import-accounting-close.integration.test.cjs

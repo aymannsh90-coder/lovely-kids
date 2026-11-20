@@ -12,6 +12,10 @@ export interface Env {
   R2_BUCKET?: R2Bucket;
   POS_PURCHASE_API_ENABLED?: string;
   POS_PURCHASE_WRITES_ENABLED?: string;
+  /** Remains disabled until real-bank and supplier clearing integration is verified. */
+  POS_IMPORT_FINANCIAL_POSTING_ENABLED?: string;
+  /** Independent owner-only close/reverse flag; OFF in deployed environments. */
+  POS_IMPORT_CLOSING_ENABLED?: string;
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
   VAPID_SUBJECT?: string;
