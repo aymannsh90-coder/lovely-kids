@@ -752,9 +752,17 @@ export default function HomeScreen() {
     if (Platform.OS !== "web") {
       return (
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            {title}
-          </Text>
+          <Pressable
+            onPress={onPress}
+            accessibilityRole="link"
+            accessibilityLabel={`عرض ${title}`}
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: pressed ? 0.82 : 1 })}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              {title}
+            </Text>
+          </Pressable>
           <Pressable onPress={onPress}>
             <Text style={[styles.seeAll, { color: colors.primary }]}>
               عرض الكل
@@ -771,13 +779,17 @@ export default function HomeScreen() {
           responsiveShellStyle,
         ]}
       >
-        <View
-          style={[
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="link"
+          accessibilityLabel={`عرض ${title}`}
+          style={({ pressed }) => [
             styles.homeBannerTitleBox,
             {
               backgroundColor: colors.card,
               borderColor: animatePill ? "#D8E9F7" : colors.border,
             },
+            pressed ? { opacity: 0.92, transform: [{ scale: 0.99 }] } : null,
           ]}
         >
           {animatePill ? (
@@ -836,7 +848,7 @@ export default function HomeScreen() {
               <Ionicons name="sparkles" color="#3299DC" size={16} />
             </Animated.View>
           ) : null}
-        </View>
+        </Pressable>
 
         <View
           style={[
