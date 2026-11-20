@@ -13,6 +13,9 @@ on:
       - 'artifacts/lovely-kids/utils/productStoryImageSelection.ts'
       - 'artifacts/lovely-kids/utils/productStoryImageSelection.test.mjs'
       - 'artifacts/lovely-kids/app/admin/add-product.tsx'
+      - 'artifacts/lovely-kids/app/admin/products.tsx'
+      - 'artifacts/lovely-kids/utils/productStoryImageStatus.ts'
+      - 'artifacts/lovely-kids/utils/productStoryImageStatus.test.mjs'
       - 'artifacts/api-worker/src/social-publishing-photo.ts'
       - 'artifacts/api-worker/src/social-publishing-photo.test.mjs'
       - 'artifacts/lovely-kids/components/OwnerInstagramNextStoryPilot.tsx'
@@ -35,5 +38,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @workspace/api-worker typecheck
-      - run: node --experimental-strip-types --test artifacts/api-worker/src/facebook-post-composer.test.mjs artifacts/api-worker/src/facebook-page-access-token.test.mjs artifacts/api-worker/src/owner-story-meta-publish.test.mjs artifacts/api-worker/src/instagram-next-story-pilot.test.mjs artifacts/api-worker/src/facebook-next-story-policy.test.mjs artifacts/api-worker/src/social-publishing-photo.test.mjs artifacts/lovely-kids/utils/socialPublishingProductSearch.test.mjs artifacts/lovely-kids/utils/productStoryImageSelection.test.mjs artifacts/lovely-kids-pos/src/lib/scannerKeyboard.test.mjs
+      - run: node --experimental-strip-types --test artifacts/api-worker/src/facebook-post-composer.test.mjs artifacts/api-worker/src/facebook-page-access-token.test.mjs artifacts/api-worker/src/owner-story-meta-publish.test.mjs artifacts/api-worker/src/instagram-next-story-pilot.test.mjs artifacts/api-worker/src/facebook-next-story-policy.test.mjs artifacts/api-worker/src/social-publishing-photo.test.mjs artifacts/lovely-kids/utils/socialPublishingProductSearch.test.mjs artifacts/lovely-kids/utils/productStoryImageSelection.test.mjs artifacts/lovely-kids/utils/productStoryImageStatus.test.mjs artifacts/lovely-kids-pos/src/lib/scannerKeyboard.test.mjs
       - run: pnpm --filter @workspace/lovely-kids typecheck
