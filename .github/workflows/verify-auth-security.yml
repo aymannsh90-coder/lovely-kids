@@ -37,3 +37,79 @@ jobs:
         run: pnpm --filter @workspace/lovely-kids-pos typecheck
       - name: Storefront typecheck
         run: pnpm --filter @workspace/lovely-kids typecheck
+
+  migration-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: testonly
+          POSTGRES_DB: auth_hardening_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d auth_hardening_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: tester
+      PGPASSWORD: testonly
+      PGDATABASE: auth_hardening_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up disposable pre-migration sessions and client roles
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon;
+          CREATE ROLE authenticated;
+          CREATE TABLE public.sessions (
+            token text PRIMARY KEY,
+            user_id integer NOT NULL,
+            created_at timestamp without time zone NOT NULL DEFAULT now()
+          );
+          INSERT INTO public.sessions (token, user_id, created_at)
+          VALUES ('old-session-a', 1, now() - interval '100 days');
+          SQL
+      - name: Apply schema migration twice without changing existing session TTL
+        run: |
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261121_auth_sessions_and_login_failures.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF (SELECT expires_at < now() + interval '29 days' FROM public.sessions
+                WHERE token='old-session-a') THEN
+              RAISE EXCEPTION 'Legacy session was not granted transition window';
+            END IF;
+          END $$;
+          SQL
+          psql -v ON_ERROR_STOP=1 -f lib/db/migrations/20261121_auth_sessions_and_login_failures.sql
+      - name: Verify new session default, RLS and privilege isolation
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.sessions (token,user_id) VALUES ('new-session',2);
+          DO $$
+          BEGIN
+            IF EXISTS (SELECT 1 FROM public.sessions WHERE expires_at IS NULL) THEN
+              RAISE EXCEPTION 'Session expiry missing';
+            END IF;
+            IF (SELECT expires_at < now() + interval '29 days' FROM public.sessions
+                WHERE token='new-session') THEN
+              RAISE EXCEPTION 'Legacy Worker default expiry missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_class
+                WHERE oid='public.auth_login_failures'::regclass AND relrowsecurity) THEN
+              RAISE EXCEPTION 'Login counter table RLS disabled';
+            END IF;
+            IF has_table_privilege('anon', 'public.auth_login_failures', 'SELECT')
+               OR has_table_privilege('authenticated','public.auth_login_failures','SELECT') THEN
+              RAISE EXCEPTION 'Public users can read login counters';
+            END IF;
+          END $$;
+          SQL
