@@ -78,6 +78,10 @@ async function seed(client){
   // Run the actual production migration, but on disposable PostgreSQL.
   await client.query(fs.readFileSync(path.join(root,
     "lib/db/migrations/20261029_create_owner_managed_staff_access.sql"),"utf8"));
+  // New auth handlers require expiring sessions and a private attempt counter.
+  // Exercise the actual additive migration against the same disposable DB.
+  await client.query(fs.readFileSync(path.join(root,
+    "lib/db/migrations/20261121_auth_sessions_and_login_failures.sql"),"utf8"));
   const hash=await bcrypt.hash(OWNER_PWD,10);
   const owner=(await client.query("INSERT INTO users(name,phone,password_hash,is_owner) VALUES($1,$2,$3,true) RETURNING id",
     ["Test owner","0591000001",hash])).rows[0].id;
