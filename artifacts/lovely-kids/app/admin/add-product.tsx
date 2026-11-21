@@ -32,6 +32,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ColorPickerButton } from "@/components/ColorPickerButton";
+import { ColorPickerModal } from "@/components/ColorPickerModal";
 import { useProducts } from "@/context/ProductsContext";
 import { useAppSettings } from "@/context/AppSettingsContext";
 import { useAuth } from "@/context/AuthContext";
@@ -267,6 +268,12 @@ export default function AddProductScreen() {
   const [colorVariants, setColorVariants] = useState<ColorVariant[]>(editProduct?.colorVariants ?? []);
   const [newColorName, setNewColorName] = useState("");
   const [newColorHex, setNewColorHex] = useState("#EF4444");
+  const [colorNameDrafts, setColorNameDrafts] = useState<Record<number, string>>({});
+  const [editingColorIndex, setEditingColorIndex] = useState<number | null>(null);
+  // Keep an identity for each edited color even when another color is removed.
+  const [originalColorNames, setOriginalColorNames] = useState<(string | null)[]>(
+    () => editProduct?.colorVariants?.map((variant) => variant.color) ?? [],
+  );
   const [colorSizeInputs, setColorSizeInputs] = useState<Record<number, string>>({});
   const [colorSizeQtyInputs, setColorSizeQtyInputs] = useState<Record<number, string>>({});
   const [colorSizeNameDrafts, setColorSizeNameDrafts] = useState<Record<string, string>>({});
@@ -377,6 +384,8 @@ export default function AddProductScreen() {
     );
 
     setSizes([...(editProduct.sizes ?? [])]);
+    setOriginalColorNames((editProduct.colorVariants ?? []).map((variant) => variant.color));
+    setColorNameDrafts({});
     setColorVariants(
       (editProduct.colorVariants ?? []).map(
         (variant) => ({
@@ -466,6 +475,8 @@ export default function AddProductScreen() {
     setSizes([...(copyProduct.sizes ?? [])]);
 
     // ننسخ الألوان والمقاسات داخل كل لون، بدون صورة اللون وبدون الكميات
+    setOriginalColorNames((copyProduct.colorVariants ?? []).map(() => null));
+    setColorNameDrafts({});
     setColorVariants(
       (copyProduct.colorVariants ?? []).map((variant) => ({
         color: variant.color,
@@ -1670,7 +1681,7 @@ export default function AddProductScreen() {
   const addColorVariant = () => {
     const name = newColorName.trim();
     if (!name) return;
-    if (colorVariants.some((c) => c.color === name)) { setNewColorName(""); return; }
+    if (colorVariants.some((c) => c.color.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) { setNewColorName(""); return; }
     setColorVariants((prev) => {
       const templateSizes = prev[0]?.sizes.map((s) => ({
         size: s.size,
@@ -1680,6 +1691,7 @@ export default function AddProductScreen() {
 
       return [...prev, { color: name, hex: newColorHex, sizes: templateSizes }];
     });
+    setOriginalColorNames((prev) => [...prev, null]);
     setNewColorName("");
   };
 
@@ -1691,6 +1703,19 @@ export default function AddProductScreen() {
       : false;
 
     setColorVariants((prev) => prev.filter((_, i) => i !== idx));
+    setOriginalColorNames((prev) => prev.filter((_, i) => i !== idx));
+    setColorNameDrafts((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const oldIndex = Number(key);
+        if (oldIndex < idx) next[oldIndex] = value;
+        if (oldIndex > idx) next[oldIndex - 1] = value;
+      });
+      return next;
+    });
+    setEditingColorIndex((current) =>
+      current === null || current < idx ? current : current === idx ? null : current - 1,
+    );
 
     if (removedUrl && !usedByAnotherColor) {
       setImages((prev) => {
@@ -1703,6 +1728,43 @@ export default function AddProductScreen() {
         return updated;
       });
     }
+  };
+
+  const commitColorName = (idx: number) => {
+    const variant = colorVariants[idx];
+    if (!variant) return;
+
+    const previousName = variant.color;
+    const nextName = (colorNameDrafts[idx] ?? previousName).trim();
+
+    setColorNameDrafts((prev) => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+
+    if (!nextName) {
+      setErrors(["اسم اللون لا يمكن أن يكون فارغًا"]);
+      return;
+    }
+
+    if (colorVariants.some((item, i) =>
+      i !== idx && item.color.trim().toLocaleLowerCase() === nextName.toLocaleLowerCase()
+    )) {
+      setErrors([`اللون ${nextName} موجود مسبقًا`]);
+      return;
+    }
+
+    if (nextName === previousName) return;
+
+    setColorVariants((prev) => prev.map((item, i) =>
+      i === idx ? { ...item, color: nextName } : item,
+    ));
+    // Keep the existing barcode/QR value: only its associated color changes.
+    setAdditionalBarcodes((prev) => prev.map((item) =>
+      item.color === previousName ? { ...item, color: nextName } : item,
+    ));
+    setErrors([]);
   };
 
   const addSizeToColor = (idx: number) => {
@@ -2691,6 +2753,13 @@ export default function AddProductScreen() {
           }
         }
 
+        const colorRenames = originalColorNames.flatMap((originalName, idx) => {
+          const currentName = colorVariants[idx]?.color;
+          return originalName && currentName && originalName !== currentName
+            ? [{ from: originalName, to: currentName }]
+            : [];
+        });
+
         await updateProduct(
           {
             ...productData,
@@ -2699,6 +2768,7 @@ export default function AddProductScreen() {
           },
           costInput,
           purchaseDraftLink,
+          colorRenames,
         );
       } else {
         let openingCost:
@@ -3786,6 +3856,21 @@ export default function AddProductScreen() {
             />
           </View>
 
+          {editingColorIndex !== null && colorVariants[editingColorIndex] && (
+            <ColorPickerModal
+              visible
+              initialColor={colorVariants[editingColorIndex].hex}
+              title={`تعديل درجة اللون: ${colorVariants[editingColorIndex].color}`}
+              onClose={() => setEditingColorIndex(null)}
+              onSelect={(hex) => {
+                const selectedIndex = editingColorIndex;
+                setColorVariants((prev) => prev.map((variant, i) =>
+                  i === selectedIndex ? { ...variant, hex } : variant,
+                ));
+              }}
+            />
+          )}
+
           {colorVariants.length > 0 && (
             <View style={{ gap: 12, marginTop: 8 }}>
               {colorVariants.map((cv, idx) => (
@@ -3795,8 +3880,38 @@ export default function AddProductScreen() {
                       <Ionicons name="trash-outline" size={14} color="#ef4444" />
                     </Pressable>
                     <View style={styles.colorCardTitle}>
-                      <Text style={[styles.colorCardName, { color: colors.foreground }]}>{cv.color}</Text>
-                      <View style={[styles.swatch, { backgroundColor: cv.hex, borderColor: colors.border, width: 20, height: 20 }]} />
+                      <TextInput
+                        value={colorNameDrafts[idx] ?? cv.color}
+                        onFocus={() => setColorNameDrafts((prev) => ({ ...prev, [idx]: cv.color }))}
+                        onChangeText={(value) => setColorNameDrafts((prev) => ({ ...prev, [idx]: value }))}
+                        onBlur={() => commitColorName(idx)}
+                        onSubmitEditing={() => commitColorName(idx)}
+                        placeholder="اسم اللون"
+                        placeholderTextColor={colors.mutedForeground}
+                        returnKeyType="done"
+                        selectTextOnFocus
+                        style={[styles.colorCardName, {
+                          color: colors.foreground,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          minWidth: 100,
+                          maxWidth: 220,
+                          textAlign: "right",
+                          backgroundColor: colors.background,
+                        }]}
+                      />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`تغيير درجة لون ${cv.color}`}
+                        onPress={() => setEditingColorIndex(idx)}
+                        hitSlop={10}
+                        style={{ padding: 5 }}
+                      >
+                        <View style={[styles.swatch, { backgroundColor: cv.hex, borderColor: colors.border, width: 24, height: 24 }]} />
+                      </Pressable>
                     </View>
                   </View>
 
