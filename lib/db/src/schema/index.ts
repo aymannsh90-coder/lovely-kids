@@ -3,6 +3,7 @@ export * from "./products";
 export * from "./push-tokens";
 export * from "./users";
 export * from "./sessions";
+export * from "./auth-login-failures";
 export * from "./app-settings";
 export * from "./product-likes";
 export * from "./password-reset-tokens";
