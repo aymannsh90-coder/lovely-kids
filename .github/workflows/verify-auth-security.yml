@@ -1,0 +1,39 @@
+name: Verify customer and POS auth security
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/api-worker/src/auth.ts'
+      - 'artifacts/api-worker/src/auth-routes.ts'
+      - 'artifacts/api-worker/src/auth-security-policy.ts'
+      - 'artifacts/api-worker/src/auth-security-policy.test.mjs'
+      - 'lib/db/src/schema/index.ts'
+      - 'lib/db/src/schema/sessions.ts'
+      - 'lib/db/src/schema/auth-login-failures.ts'
+      - 'lib/db/migrations/20261121_auth_sessions_and_login_failures.sql'
+      - '.github/workflows/verify-auth-security.yml'
+  workflow_dispatch:
+
+jobs:
+  security-auth:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Auth policy tests
+        run: node --experimental-strip-types --test artifacts/api-worker/src/auth-security-policy.test.mjs
+      - name: API Worker typecheck
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: POS typecheck
+        run: pnpm --filter @workspace/lovely-kids-pos typecheck
+      - name: Storefront typecheck
+        run: pnpm --filter @workspace/lovely-kids typecheck
