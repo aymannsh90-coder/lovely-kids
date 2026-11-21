@@ -19,6 +19,11 @@ import { rewriteMediaUrlsForPublic } from "./media-url";
 import { rewriteMediaUrlsForStorage } from "./media-url";
 import { syncManualProductCostQuantity } from "./inventory-cost-engine";
 import { getProductQuantity } from "./product-quantity";
+import {
+  validProductColorRenames,
+  priorVariantsWithRenamedColors,
+  originalColorName,
+} from "./product-color-renames";
 import { validInstagramStoryPhotoUrl } from "./instagram-next-story-pilot";
 import {
   appendProductToSupplierDraft,
@@ -1587,27 +1592,8 @@ async function handleUpdateProduct(
             (lockedCurrent.colorVariants as ColorVariant[] | null) ?? [];
           const nextColorVariants =
             (predictedProduct.colorVariants as ColorVariant[] | null) ?? [];
-          const previousColorNames =
-            new Set(previousColorVariants.map((variant) => variant.color));
-          const nextColorNames =
-            new Set(nextColorVariants.map((variant) => variant.color));
-          const seenOldColorNames = new Set<string>();
-          const seenNewColorNames = new Set<string>();
-
-          for (const { from, to } of colorRenames) {
-            if (
-              from === to ||
-              !previousColorNames.has(from) ||
-              !nextColorNames.has(to) ||
-              previousColorNames.has(to) ||
-              nextColorNames.has(from) ||
-              seenOldColorNames.has(from) ||
-              seenNewColorNames.has(to)
-            ) {
-              return { kind: "invalid_color_rename" } as const;
-            }
-            seenOldColorNames.add(from);
-            seenNewColorNames.add(to);
+          if (!validProductColorRenames(previousColorVariants, nextColorVariants, colorRenames)) {
+            return { kind: "invalid_color_rename" } as const;
           }
 
           const effectiveQuantityAfter =
@@ -1938,17 +1924,10 @@ async function handleUpdateProduct(
         });
       }
 
-      const oldVariants =
-        ((lockedCurrent.colorVariants as
-          | ColorVariant[]
-          | null) ?? []).map((variant) => {
-            const rename = colorRenames.find(
-              (entry) => entry.from === variant.color,
-            );
-            return rename
-              ? { ...variant, color: rename.to }
-              : variant;
-          });
+      const oldVariants = priorVariantsWithRenamedColors(
+        (lockedCurrent.colorVariants as ColorVariant[] | null) ?? [],
+        colorRenames,
+      );
 
       const newVariants =
         (updated.colorVariants as
@@ -2301,10 +2280,7 @@ async function handleUpdateProduct(
           previousVariants
             .find(
               (item) =>
-                item.color === (
-                  colorRenames.find((rename) => rename.to === variant.color)?.from ??
-                  variant.color
-                ),
+                item.color === originalColorName(variant.color, colorRenames),
             )
             ?.sizes?.find(
               (item) =>
