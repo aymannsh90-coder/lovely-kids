@@ -1,5 +1,6 @@
 import { sessionsTable, usersTable } from "@workspace/db/schema";
 import { eq, or } from "drizzle-orm";
+import { isSessionExpired } from "./auth-security-policy";
 import { createHash, randomBytes } from "node:crypto";
 import { getClerkUser, getClerkUserId } from "./clerk";
 import { openDb, type Env } from "./db";
@@ -65,7 +66,7 @@ export async function getUserFromToken(
     .limit(1);
 
   const session = rows[0];
-  if (!session) return null;
+  if (!session || isSessionExpired(session.expiresAt, new Date())) return null;
 
   if (legacy && session.token === token) {
     await db
