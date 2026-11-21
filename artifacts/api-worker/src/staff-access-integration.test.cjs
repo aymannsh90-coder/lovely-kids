@@ -78,6 +78,10 @@ async function seed(client){
   // Run the actual production migration, but on disposable PostgreSQL.
   await client.query(fs.readFileSync(path.join(root,
     "lib/db/migrations/20261029_create_owner_managed_staff_access.sql"),"utf8"));
+  // New auth handlers require expiring sessions and a private attempt counter.
+  // Exercise the actual additive migration against the same disposable DB.
+  await client.query(fs.readFileSync(path.join(root,
+    "lib/db/migrations/20261121_auth_sessions_and_login_failures.sql"),"utf8"));
   const hash=await bcrypt.hash(OWNER_PWD,10);
   const owner=(await client.query("INSERT INTO users(name,phone,password_hash,is_owner) VALUES($1,$2,$3,true) RETURNING id",
     ["Test owner","0591000001",hash])).rows[0].id;
@@ -174,6 +178,35 @@ test("owner-only staff API; login; grant revocation and disabled tokens", {timeo
     assert.equal(enabled.status,200,await enabled.clone().text());
     assert.equal((await h.auth(request("/api/auth/me","GET",s2.token),db,env)).status,401);
     assert.equal((await login()).status,200);
+
+    // Exercise the real login limiter against disposable Postgres. No actual
+    // customer/owner account is contacted and no production rate limit is hit.
+    const throttledRequest=(password)=>new Request("http://127.0.0.1/api/auth/login",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","CF-Connecting-IP":"192.0.2.44"},
+      body:JSON.stringify({phone:sample.phone,password})
+    });
+    for(let i=0;i<8;i++){
+      const failed=await h.auth(throttledRequest("wrong-password"),db,env);
+      assert.equal(failed.status,401,"attempt "+(i+1));
+    }
+    assert.equal((await h.auth(throttledRequest("wrong-password"),db,env)).status,429);
+    assert.equal((await h.auth(throttledRequest(STAFF_PWD),db,env)).status,429);
+    const limiterRow=(await client.query("SELECT count(*)::int AS n FROM auth_login_failures")).rows[0];
+    assert.equal(limiterRow.n,1);
+    // Simulate the one-minute cooldown passing without sleeping.
+    await client.query("UPDATE auth_login_failures SET blocked_until=now()-interval '1 minute'");
+    const unlocked=await h.auth(throttledRequest(STAFF_PWD),db,env);
+    assert.equal(unlocked.status,200,await unlocked.clone().text());
+    const unlockedToken=(await unlocked.json()).token;
+    const expires=(await client.query(
+      "SELECT expires_at,created_at FROM sessions WHERE token=$1",
+      [hashToken(unlockedToken)]
+    )).rows[0];
+    assert.ok(expires.expires_at - expires.created_at > 23*60*60*1000);
+    assert.ok(expires.expires_at - expires.created_at <= 24*60*60*1000+10000);
+    assert.equal((await client.query("SELECT count(*)::int AS n FROM auth_login_failures")).rows[0].n,0);
+
     const sec=(await client.query("SELECT c.relrowsecurity AS rls, has_table_privilege('anon','public.staff_access','SELECT') AS anon_read,has_table_privilege('authenticated','public.staff_access','SELECT') AS auth_read FROM pg_class c WHERE c.oid='public.staff_access'::regclass")).rows[0];
     assert.deepEqual(sec,{rls:true,anon_read:false,auth_read:false});
     const logs=(await client.query("SELECT count(*)::int AS n FROM security_audit_logs WHERE action LIKE 'staff_%'")).rows[0];

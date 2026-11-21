@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { getStaffAccess, getStaffLoginProfile } from "./staff-permissions";
-import { sessionsTable, usersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { authLoginFailuresTable, sessionsTable, usersTable } from "@workspace/db/schema";
+import { eq, sql } from "drizzle-orm";
 import {
   generateToken,
   getBearerToken,
@@ -11,6 +11,15 @@ import {
   toUser,
 } from "./auth";
 import { getClerkUserId } from "./clerk";
+import {
+  LOGIN_COOLDOWN_MS,
+  LOGIN_FAILURE_LIMIT,
+  LOGIN_FAILURE_WINDOW_MS,
+  clientIpFromCloudflare,
+  isLoginTemporarilyBlocked,
+  loginFailureKey,
+  sessionExpiresAt,
+} from "./auth-security-policy";
 import type { Env, openDb } from "./db";
 
 type Db = Awaited<ReturnType<typeof openDb>>["db"];
@@ -18,20 +27,94 @@ type Db = Awaited<ReturnType<typeof openDb>>["db"];
 const json = (data: unknown, status = 200) =>
   Response.json(data, {
     status,
-    headers: { "Access-Control-Allow-Origin": "*" },
+    headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
   });
+
+
+function tooManyLoginsResponse() {
+  return Response.json(
+    { error: "محاولات دخول كثيرة. يرجى الانتظار دقيقة ثم المحاولة مجددًا" },
+    {
+      status: 429,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+        "Retry-After": "60",
+      },
+    },
+  );
+}
+
+// Atomic counter in Postgres: Cloudflare Workers run in multiple isolates, so
+// counters in module memory cannot protect a shared production account.
+async function recordFailedLogin(db: Db, keyHash: string): Promise<void> {
+  const now = new Date();
+  const windowBoundary = new Date(now.getTime() - LOGIN_FAILURE_WINDOW_MS);
+  const cooldownUntil = new Date(now.getTime() + LOGIN_COOLDOWN_MS);
+
+  await db
+    .insert(authLoginFailuresTable)
+    .values({
+      keyHash,
+      failedCount: 1,
+      windowStartedAt: now,
+      lastFailedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: authLoginFailuresTable.keyHash,
+      set: {
+        failedCount: sql`CASE
+          WHEN ${authLoginFailuresTable.windowStartedAt} < ${windowBoundary}::timestamp THEN 1
+          ELSE ${authLoginFailuresTable.failedCount} + 1 END`,
+        windowStartedAt: sql`CASE
+          WHEN ${authLoginFailuresTable.windowStartedAt} < ${windowBoundary}::timestamp
+            THEN ${now}::timestamp
+          ELSE ${authLoginFailuresTable.windowStartedAt} END`,
+        blockedUntil: sql`CASE
+          WHEN ${authLoginFailuresTable.windowStartedAt} < ${windowBoundary}::timestamp THEN NULL
+          WHEN ${authLoginFailuresTable.failedCount} + 1 >= ${LOGIN_FAILURE_LIMIT}
+            THEN ${cooldownUntil}::timestamp
+          ELSE NULL END`,
+        lastFailedAt: now,
+      },
+    });
+}
 
 async function handleLogin(request: Request, db: Db) {
   const body = await request.json().catch(() => null) as {
-    phone?: string;
-    password?: string;
+    phone?: unknown;
+    password?: unknown;
   } | null;
 
-  if (!body?.phone?.trim() || !body.password) {
+  if (
+    typeof body?.phone !== "string" ||
+    typeof body?.password !== "string" ||
+    !body.phone.trim() ||
+    !body.password
+  ) {
     return json({ error: "يرجى تعبئة جميع الحقول" }, 400);
   }
 
+  // Reject unreasonable input before running the expensive bcrypt check.
+  if (body.phone.length > 40 || body.password.length > 256) {
+    return json({ error: "بيانات تسجيل الدخول غير صالحة" }, 400);
+  }
+
   const phone = normalizePhone(body.phone.trim());
+  const clientIp = clientIpFromCloudflare(request);
+  const failureKey = clientIp ? loginFailureKey(phone, clientIp) : null;
+
+  if (failureKey) {
+    const [counter] = await db
+      .select({ blockedUntil: authLoginFailuresTable.blockedUntil })
+      .from(authLoginFailuresTable)
+      .where(eq(authLoginFailuresTable.keyHash, failureKey))
+      .limit(1);
+
+    if (counter && isLoginTemporarilyBlocked(counter.blockedUntil, new Date())) {
+      return tooManyLoginsResponse();
+    }
+  }
 
   const rows = await db
     .select()
@@ -40,39 +123,44 @@ async function handleLogin(request: Request, db: Db) {
     .limit(1);
 
   const user = rows[0];
+  const valid = user?.passwordHash
+    ? await bcrypt.compare(body.password, user.passwordHash)
+    : false;
 
-  if (!user?.passwordHash) {
-    return json(
-      { error: "رقم الجوال أو كلمة المرور غير صحيحة" },
-      401,
-    );
+  if (!valid || !user) {
+    if (failureKey) {
+      await recordFailedLogin(db, failureKey);
+    }
+    return json({ error: "رقم الجوال أو كلمة المرور غير صحيحة" }, 401);
   }
 
-  const valid = await bcrypt.compare(
-    body.password,
-    user.passwordHash,
-  );
-
-  if (!valid) {
-    return json(
-      { error: "رقم الجوال أو كلمة المرور غير صحيحة" },
-      401,
-    );
-  }
-
-  const staffAccess = !user.isOwner && !user.isAdmin ? await getStaffAccess(db, user.id) : null;
+  const staffAccess = !user.isOwner && !user.isAdmin
+    ? await getStaffAccess(db, user.id)
+    : null;
   if (staffAccess && !staffAccess.enabled) {
     return json({ error: "حساب الموظف معطل من المالك" }, 403);
   }
 
-  const token = generateToken();
+  // Successful authentication clears the pair's failed-attempt history.
+  if (failureKey) {
+    await db.delete(authLoginFailuresTable)
+      .where(eq(authLoginFailuresTable.keyHash, failureKey));
+  }
 
+  const token = generateToken();
   await db.insert(sessionsTable).values({
     token: hashSessionToken(token),
     userId: user.id,
+    expiresAt: sessionExpiresAt(
+      new Date(),
+      user.isAdmin || user.isOwner || staffAccess !== null,
+    ),
   });
 
-  return json({ token, user: { ...toUser(user), ...await getStaffLoginProfile(db, user) } });
+  return json({
+    token,
+    user: { ...toUser(user), ...await getStaffLoginProfile(db, user) },
+  });
 }
 
 export async function handleAuthRequest(
@@ -223,6 +311,7 @@ async function handleRegister(request: Request, db: Db) {
   await db.insert(sessionsTable).values({
     token: hashSessionToken(token),
     userId: user.id,
+    expiresAt: sessionExpiresAt(new Date(), false),
   });
 
   return json({ token, user: toUser(user) }, 201);
