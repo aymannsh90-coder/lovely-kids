@@ -91,6 +91,7 @@ interface ProductsContextType {
     product: Product,
     costInput?: StockCostInput,
     purchaseDraftLink?: PurchaseDraftLinkInput,
+    colorRenames?: Array<{ from: string; to: string }>,
   ) => Promise<Product>;
   deleteProduct: (id: string) => Promise<void>;
   setProductHidden: (id: string, hidden: boolean) => Promise<Product>;
@@ -382,6 +383,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     product: Product,
     costInput?: StockCostInput,
     purchaseDraftLink?: PurchaseDraftLinkInput,
+    colorRenames?: Array<{ from: string; to: string }>,
   ) => {
     const headers = await getAdminHeaders();
 
@@ -393,6 +395,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           ...toInsertBody(product),
           ...costInputBody(costInput),
+          ...(colorRenames?.length ? { colorRenames } : {}),
           ...purchaseDraftLinkBody(
             purchaseDraftLink,
           ),

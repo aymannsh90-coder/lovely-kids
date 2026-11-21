@@ -19,6 +19,11 @@ import { rewriteMediaUrlsForPublic } from "./media-url";
 import { rewriteMediaUrlsForStorage } from "./media-url";
 import { syncManualProductCostQuantity } from "./inventory-cost-engine";
 import { getProductQuantity } from "./product-quantity";
+import {
+  validProductColorRenames,
+  priorVariantsWithRenamedColors,
+  originalColorName,
+} from "./product-color-renames";
 import { validInstagramStoryPhotoUrl } from "./instagram-next-story-pilot";
 import {
   appendProductToSupplierDraft,
@@ -1377,6 +1382,37 @@ async function handleUpdateProduct(
     );
   }
 
+  const rawColorRenames = bodyRecord?.colorRenames;
+
+  if (
+    rawColorRenames !== undefined &&
+    (
+      !Array.isArray(rawColorRenames) ||
+      rawColorRenames.length > 50 ||
+      rawColorRenames.some((item) =>
+        !item ||
+        typeof item !== "object" ||
+        Array.isArray(item) ||
+        typeof item.from !== "string" ||
+        typeof item.to !== "string" ||
+        !item.from.trim() ||
+        !item.to.trim() ||
+        item.from.trim().length > 80 ||
+        item.to.trim().length > 80
+      )
+    )
+  ) {
+    return json({ error: "بيانات تعديل أسماء الألوان غير صالحة" }, 400);
+  }
+
+  const colorRenames: Array<{ from: string; to: string }> =
+    Array.isArray(rawColorRenames)
+      ? rawColorRenames.map((item) => ({
+          from: item.from.trim(),
+          to: item.to.trim(),
+        }))
+      : [];
+
   const productBody =
     bodyRecord
       ? { ...bodyRecord }
@@ -1396,6 +1432,7 @@ async function handleUpdateProduct(
     delete cleanProductBody.purchaseEntryMode;
     delete cleanProductBody.purchaseQuantity;
     delete cleanProductBody.purchaseHistoricalSourceKey;
+    delete cleanProductBody.colorRenames;
   }
 
   const parsed =
@@ -1478,6 +1515,7 @@ async function handleUpdateProduct(
 
   let updateResult:
     | { kind: "not_found" }
+    | { kind: "invalid_color_rename" }
     | {
         kind: "cost_error";
         reason: string;
@@ -1546,6 +1584,17 @@ async function handleUpdateProduct(
                 }
               : {}),
           };
+
+          // A rename changes the variant label, not its identity or stock.
+          // Only honor explicit old -> new mappings that are unambiguous
+          // in both the locked row and the submitted product.
+          const previousColorVariants =
+            (lockedCurrent.colorVariants as ColorVariant[] | null) ?? [];
+          const nextColorVariants =
+            (predictedProduct.colorVariants as ColorVariant[] | null) ?? [];
+          if (!validProductColorRenames(previousColorVariants, nextColorVariants, colorRenames)) {
+            return { kind: "invalid_color_rename" } as const;
+          }
 
           const effectiveQuantityAfter =
             getProductQuantity(
@@ -1875,10 +1924,10 @@ async function handleUpdateProduct(
         });
       }
 
-      const oldVariants =
-        (lockedCurrent.colorVariants as
-          | ColorVariant[]
-          | null) ?? [];
+      const oldVariants = priorVariantsWithRenamedColors(
+        (lockedCurrent.colorVariants as ColorVariant[] | null) ?? [],
+        colorRenames,
+      );
 
       const newVariants =
         (updated.colorVariants as
@@ -2114,6 +2163,13 @@ async function handleUpdateProduct(
     );
   }
 
+  if (updateResult.kind === "invalid_color_rename") {
+    return json(
+      { error: "تغيّرت بيانات ألوان المنتج. أعد تحميل المنتج قبل تعديل اسم اللون." },
+      409,
+    );
+  }
+
   if (
     updateResult.kind ===
     "purchase_link_error"
@@ -2224,7 +2280,7 @@ async function handleUpdateProduct(
           previousVariants
             .find(
               (item) =>
-                item.color === variant.color,
+                item.color === originalColorName(variant.color, colorRenames),
             )
             ?.sizes?.find(
               (item) =>

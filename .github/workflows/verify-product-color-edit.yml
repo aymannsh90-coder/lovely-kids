@@ -1,0 +1,32 @@
+name: Verify product color edits
+
+on:
+  pull_request:
+    paths:
+      - "artifacts/lovely-kids/app/admin/add-product.tsx"
+      - "artifacts/lovely-kids/context/ProductsContext.tsx"
+      - "artifacts/api-worker/src/product-routes.ts"
+      - "artifacts/api-worker/src/product-color-renames.ts"
+      - "artifacts/api-worker/src/product-color-renames.test.mjs"
+      - ".github/workflows/verify-product-color-edit.yml"
+  workflow_dispatch:
+
+jobs:
+  color-edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Test color rename accounting
+        run: node --experimental-strip-types --test artifacts/api-worker/src/product-color-renames.test.mjs
+      - name: Check API types
+        run: pnpm --filter @workspace/api-worker typecheck
+      - name: Check product editor types
+        run: pnpm --filter @workspace/lovely-kids typecheck
