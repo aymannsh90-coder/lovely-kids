@@ -91,6 +91,7 @@ interface ProductsContextType {
     product: Product,
     costInput?: StockCostInput,
     purchaseDraftLink?: PurchaseDraftLinkInput,
+    colorRenames?: Array<{ from: string; to: string }>,
   ) => Promise<Product>;
   deleteProduct: (id: string) => Promise<void>;
   setProductHidden: (id: string, hidden: boolean) => Promise<Product>;
